@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.formspec.io/wos-api/actor/v1",
+  "title": "WOS API Actor",
+  "description": "Public API resource schema for WOS actors. An Actor is the addressable representation of a principal in the identity/governance subsystem (VISION §V). The four principal classes are normative and closed: `human | service-account | workload | support`. Identity details live here once and every other api/*.schema.json references actors via the `ActorRef` URN string from `_common.schema.json` (ADR 0082 D-9). This schema is greenfield — the actor resource (not just a reference) is authored as the canonical home of identity-display state used by every consumer. Authentication credentials, key material, attestation chain, and session lifecycle are NOT exposed here: actor-attestation is tracked separately under PLN-0381 (stack identity-attestation ADR, TBD number) and remains out of scope for this domain.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/Actor"
+    },
+    {
+      "$ref": "#/$defs/ActorPage"
+    },
+    {
+      "$ref": "#/$defs/ActorListOptions"
+    }
+  ],
+  "$defs": {
+    "PrincipalClass": {
+      "enum": [
+        "human",
+        "service-account",
+        "workload",
+        "support"
+      ],
+      "description": "Closed VISION §V principal-class taxonomy. `human` = end-user with a personal identity (caseworker, applicant, reviewer). `service-account` = non-human service identity owned by an organization for routine automated tasks. `workload` = service-to-service identity for inter-layer transport (formspec-server / wos-server / trellis-store) — required, never API-key per VISION §V. `support` = reason-coded, time-boxed, audit-by-default break-glass identity distinct from staff. New classes require a major schema bump; vendor extension is intentionally not offered because principal-class semantics are normative.",
+      "examples": [
+        "human",
+        "service-account",
+        "workload",
+        "support"
+      ]
+    },
+    "ActorStatus": {
+      "enum": [
+        "active",
+        "suspended",
+        "retired"
+      ],
+      "description": "Closed lifecycle status of the actor record. `active` = principal may authenticate and act. `suspended` = principal is temporarily blocked; existing tokens are revoked but the record retains scope membership. `retired` = principal is permanently decommissioned; the record is preserved for historical references but cannot authenticate. Closed enum with no extension seam; new states require a schema major bump.",
+      "examples": [
+        "active",
+        "suspended"
+      ]
+    },
+    "ActorScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Closed scope-membership tuple for the actor (VISION §V scope hierarchy: `Tenant -> Organization -> Workspace -> Environment`). The shape is authored here so consumers have a stable contract; the load-bearing semantics are settled by ADR 0068 D-2 / D-3 (tenant and scope composition) which is currently *Proposed* — when ADR 0068 promotes to Accepted, this object becomes the wire form scope is reported in. Until then, server implementations MAY return only the fields they have settled.",
+      "required": [
+        "tenant",
+        "organization",
+        "environment"
+      ],
+      "properties": {
+        "tenant": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Tenant identifier — outermost hosting/commercial boundary (VISION §V; ADR 0068 D-1 (Proposed)). Hosting-tier identity, not user-visible.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "examples": [
+            "tenant-acme",
+            "tenant-formspec-public"
+          ]
+        },
+        "organization": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Organization identifier — product-ownership boundary where forms, cases, and members live (VISION §V; ADR 0068 D-1 (Proposed)). Object-ownership and deletion-follows-org invariants tie retention to this id, not to billing state.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "examples": [
+            "org-state-of-x-dhss"
+          ]
+        },
+        "workspace": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional workspace identifier — sub-scope inside an organization (VISION §V). Omitted when the actor is bound at the organization level.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "examples": [
+            "workspace-snap-eligibility"
+          ]
+        },
+        "environment": {
+          "enum": [
+            "sandbox",
+            "staging",
+            "prod"
+          ],
+          "description": "Closed deployment environment (VISION §V). `sandbox` = dev/test; `staging` = pre-prod; `prod` = live. New environments require a major schema bump."
+        }
+      }
+    },
+    "Actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Public WOS actor resource. The addressable shape of a principal in the identity/governance subsystem. Carries identity-display state used by every consumer (notification feeds, correspondence messages, governance reviews, audit timelines) so those consumers can resolve an `ActorRef` URN to a human-readable name without each implementing its own actor cache. Authentication credentials, attestation chain, and session lifecycle are not exposed here — see PLN-0381 (actor-attestation, separate ADR).",
+      "required": [
+        "id",
+        "principalClass",
+        "displayName",
+        "status",
+        "createdAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Stable public URN for this actor. The entity-type segment MUST be `actor`."
+        },
+        "principalClass": {
+          "$ref": "#/$defs/PrincipalClass",
+          "description": "Closed principal-class taxonomy from VISION §V. MUST equal the principal-class segment of the actor's `ActorRef` (the URN-form alias derived from this resource)."
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable display name suitable for UI rendering, audit timelines, and correspondence summaries. Open prose: distinct names for distinct actors are a UX concern, not a contract concern.",
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "examples": [
+            "Maria Caseworker",
+            "Notice Mailer",
+            "wos-runtime",
+            "agency-admin-42"
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/ActorStatus",
+          "description": "Closed lifecycle status of the actor record."
+        },
+        "scope": {
+          "$ref": "#/$defs/ActorScope",
+          "description": "Scope-membership tuple — Tenant / Organization / Workspace / Environment per VISION §V. Shape gates on ADR 0068 D-2 (Proposed); consumers tolerate the field's absence on early-deployment servers. When present the server MUST report tenant, organization, and environment; workspace is optional."
+        },
+        "actorRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+          "description": "URN-form alias derived from this resource (`actor:<principalClass>:<id-suffix>`). Consumers that already hold an `ActorRef` URN dereference it via this resource; consumers that hold the resource use this field as the canonical reference shape. The principal-class segment of the URN MUST equal `principalClass`."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the actor record was created in the identity/governance subsystem.",
+          "examples": [
+            "2026-05-05T14:20:00Z"
+          ]
+        },
+        "retiredAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the actor was retired. Present iff `status` is `retired`.",
+          "examples": [
+            "2026-12-01T00:00:00Z"
+          ]
+        }
+      }
+    },
+    "ActorListOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Query fields for `GET /api/v1/actors`.",
+      "properties": {
+        "principalClass": {
+          "$ref": "#/$defs/PrincipalClass",
+          "description": "When present, restrict results to actors of this principal class."
+        },
+        "status": {
+          "$ref": "#/$defs/ActorStatus",
+          "description": "When present, restrict results to actors in this lifecycle status."
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque resume token returned by the previous page (ADR 0082 D-7).",
+          "x-wos": {
+            "openStringKind": "opaque-token"
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "description": "Maximum number of actors requested for this page (ADR 0082 D-7)."
+        }
+      }
+    },
+    "ActorPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Cursor-paginated actor page (ADR 0082 D-7). Default ordering is `createdAt` ascending so paginating clients observe a stable monotone walk.",
+      "required": [
+        "items",
+        "hasMore"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "description": "Actor items in this page.",
+          "items": {
+            "$ref": "#/$defs/Actor"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque token for the next page. Omitted when hasMore is false.",
+          "x-wos": {
+            "openStringKind": "opaque-token"
+          }
+        },
+        "hasMore": {
+          "type": "boolean",
+          "description": "True when another page is available from the server."
+        }
+      }
+    }
+  }
+}

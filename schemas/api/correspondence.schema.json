@@ -1,0 +1,810 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.formspec.io/wos-api/correspondence/v1",
+  "title": "WOS API Correspondence",
+  "description": "Public API resource schema for correspondence messages and delivery-template renderings. A CorrespondenceMessage is a single addressable inbound or outbound communication associated with a WOS case instance; a CorrespondenceRendering is the result of rendering a delivery-sidecar notification template into a draft message body. Greenfield per ADR 0082; closed taxonomies project the WOS delivery sidecar (https://wos-spec.org/schemas/delivery/1.0) into the public API surface without redefinition.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/CorrespondenceMessage"
+    },
+    {
+      "$ref": "#/$defs/CorrespondenceMessagePage"
+    },
+    {
+      "$ref": "#/$defs/CorrespondenceListOptions"
+    },
+    {
+      "$ref": "#/$defs/LogCorrespondenceMessageRequest"
+    },
+    {
+      "$ref": "#/$defs/CorrespondenceRendering"
+    },
+    {
+      "$ref": "#/$defs/RenderCorrespondenceRequest"
+    },
+    {
+      "$ref": "#/$defs/BusinessCalendarDate"
+    },
+    {
+      "$ref": "#/$defs/BusinessCalendarDateList"
+    }
+  ],
+  "$defs": {
+    "WorkflowUrn": {
+      "type": "string",
+      "format": "uri",
+      "description": "Absolute URI of the WOS workflow document this correspondence is associated with. Identifies the delivery sidecar that supplies templates and entry-template metadata.",
+      "examples": [
+        "https://agency.gov/workflows/benefits-adjudication"
+      ],
+      "x-wos": {
+        "openStringKind": "uri"
+      }
+    },
+    "MessageDirection": {
+      "description": "Direction of the correspondence message relative to the agency. Closed projection of the delivery sidecar `direction` enum (https://wos-spec.org/schemas/delivery/1.0#/$defs/EntryTemplate/properties/direction).",
+      "$ref": "https://wos-spec.org/schemas/delivery/1.0#/$defs/EntryTemplate/properties/direction"
+    },
+    "MessageChannel": {
+      "oneOf": [
+        {
+          "$ref": "https://wos-spec.org/schemas/delivery/1.0#/$defs/EntryTemplate/properties/channel"
+        },
+        {
+          "type": "string",
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "description": "Communication channel for the correspondence message. Reserved literals project the delivery sidecar `channel` enum (in-person, phone, mail, email, portal, fax). Vendor-prefixed extensions are namespaced per ADR 0082 D-12."
+    },
+    "CorrespondencePartyRole": {
+      "description": "Role of the party who sent or received the correspondence. Closed projection of the delivery sidecar `correspondenceRole` enum (https://wos-spec.org/schemas/delivery/1.0#/$defs/EntryTemplate/properties/correspondenceRole).",
+      "$ref": "https://wos-spec.org/schemas/delivery/1.0#/$defs/EntryTemplate/properties/correspondenceRole"
+    },
+    "MessageStatus": {
+      "enum": [
+        "draft",
+        "queued",
+        "sent",
+        "delivered",
+        "failed",
+        "received",
+        "acknowledged",
+        "cancelled"
+      ],
+      "description": "Delivery lifecycle of the correspondence message. `draft|queued|sent|delivered|failed|cancelled` apply to outbound messages; `received|acknowledged` apply to inbound messages. Closed enum with no extension seam; new states require a schema major bump.",
+      "examples": [
+        "queued",
+        "received"
+      ]
+    },
+    "MessageProducer": {
+      "oneOf": [
+        {
+          "enum": [
+            "agency",
+            "system",
+            "workflow",
+            "applicant-portal",
+            "third-party-intake"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "description": "Producer family that authored or ingested the correspondence message. Reserved literals describe the canonical sources the WOS reference server emits or projects; vendor-prefixed extensions per ADR 0082 D-12.",
+      "examples": [
+        "agency",
+        "applicant-portal"
+      ]
+    },
+    "RenderingCategory": {
+      "description": "Notification template category resolved during rendering. Closed projection of the delivery sidecar `NotificationTemplate.category` enum (https://wos-spec.org/schemas/delivery/1.0#/$defs/NotificationTemplate/properties/category).",
+      "$ref": "https://wos-spec.org/schemas/delivery/1.0#/$defs/NotificationTemplate/properties/category"
+    },
+    "DeliveryChannelKind": {
+      "oneOf": [
+        {
+          "enum": [
+            "postal",
+            "email",
+            "portal",
+            "sms",
+            "in-app"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "description": "Outbound delivery channel declared for a rendered message, projecting the delivery sidecar `deliveryChannels` enum. Distinct from `MessageChannel`, which classifies the underlying communication channel for both inbound and outbound traffic.",
+      "examples": [
+        "postal",
+        "email"
+      ]
+    },
+    "ContentRef": {
+      "type": "string",
+      "format": "uri",
+      "description": "Claim-check pointer to the actual correspondence payload. The payload is never embedded in the API resource; this URI MUST resolve through the bundle service or an authenticated agency document store. Format-restricted to absolute URI to prevent open-string `Record<string, unknown>` style escape hatches.",
+      "examples": [
+        "https://agency.gov/dms/documents/DOC-2026-12345",
+        "wos-blob://benefits-adj/2026-05-05/scan-mail-001.pdf"
+      ],
+      "x-wos": {
+        "openStringKind": "uri"
+      }
+    },
+    "TemplateRef": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Identifier of a delivery-sidecar template (entry template id for inbound logging, notification template key for outbound rendering). Resolution happens against the workflow's delivery sidecar at the server.",
+      "examples": [
+        "inboundMail",
+        "adverseBenefitsDecision"
+      ],
+      "x-wos": {
+        "openStringKind": "identifier"
+      }
+    },
+    "RenderingVariableValue": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "String variable value substituted verbatim into the rendered template.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        {
+          "type": "number",
+          "description": "Numeric variable value (floating-point). Renderers convert to canonical decimal form."
+        },
+        {
+          "type": "integer",
+          "description": "Integer variable value. Renderers convert to canonical decimal form."
+        },
+        {
+          "type": "boolean",
+          "description": "Boolean variable value. Renderers emit `true` or `false` unless the template formats explicitly."
+        },
+        {
+          "type": "null",
+          "$comment": "why-null: explicit null is a legitimate variable value distinct from absence; an absent variable raises `missingVariables`, while null renders to the empty string.",
+          "description": "Explicit null variable value. Renders to the empty string; distinct from omitting the variable entirely."
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "String element of a multi-value variable (e.g., reason codes).",
+            "x-wos": {
+              "openStringKind": "prose"
+            }
+          },
+          "description": "Multi-value string variable (e.g., reason codes). Renderers join elements per template formatting."
+        }
+      ],
+      "description": "Permitted JSON-primitive value types for a rendering variable: string, number, integer, boolean, null, or array of strings. Nested objects are intentionally forbidden so callers cannot smuggle arbitrary case-state shapes through the rendering context."
+    },
+    "RenderingVariable": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Single named variable supplied to the renderer. Closed shape with no `Record<string, unknown>` escape hatch.",
+      "required": [
+        "name",
+        "value"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+          "description": "Variable name matched against `{{name}}` placeholders in the resolved template. Constrained identifier shape to keep the rendering surface narrow.",
+          "examples": [
+            "applicantName",
+            "appealDeadline"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "value": {
+          "$ref": "#/$defs/RenderingVariableValue",
+          "description": "Variable value. Closed JSON-primitive set; nested objects are not expressible by design."
+        }
+      }
+    },
+    "RenderedSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Rendered section of a correspondence message. Mirrors the section ordering of the source delivery template after condition evaluation.",
+      "required": [
+        "id",
+        "contentType",
+        "body"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Source section identifier from the delivery template.",
+          "examples": [
+            "determination",
+            "appealRights"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional section heading rendered above the body.",
+          "examples": [
+            "Decision",
+            "Your Right to Appeal"
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "contentType": {
+          "description": "Closed content-type taxonomy projected from the delivery template `TemplateSection.contentType` (https://wos-spec.org/schemas/delivery/1.0#/$defs/TemplateSection/properties/contentType).",
+          "$ref": "https://wos-spec.org/schemas/delivery/1.0#/$defs/TemplateSection/properties/contentType"
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Rendered section body with placeholders substituted.",
+          "examples": [
+            "Your application for SNAP has been denied."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        }
+      }
+    },
+    "CorrespondenceMessage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Public WOS correspondence message: a single inbound or outbound communication associated with a case instance. The `contentRef` field is a claim-check pointer; payload bytes never travel through this API resource.",
+      "required": [
+        "id",
+        "instanceId",
+        "workflowUrl",
+        "templateRef",
+        "channel",
+        "direction",
+        "partyRole",
+        "status",
+        "producer",
+        "summary",
+        "occurredAt",
+        "recordedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Stable public URN for this correspondence message."
+        },
+        "instanceId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Case instance URN this correspondence belongs to."
+        },
+        "workflowUrl": {
+          "$ref": "#/$defs/WorkflowUrn",
+          "description": "Workflow URI used to resolve the delivery sidecar templates referenced by this message."
+        },
+        "templateRef": {
+          "$ref": "#/$defs/TemplateRef",
+          "description": "Delivery-sidecar template identifier this message conforms to."
+        },
+        "channel": {
+          "$ref": "#/$defs/MessageChannel",
+          "description": "Communication channel for this message."
+        },
+        "direction": {
+          "$ref": "#/$defs/MessageDirection",
+          "description": "Direction of this message relative to the agency."
+        },
+        "partyRole": {
+          "$ref": "#/$defs/CorrespondencePartyRole",
+          "description": "Role of the party who sent or received this message."
+        },
+        "status": {
+          "$ref": "#/$defs/MessageStatus",
+          "description": "Current delivery lifecycle of this message."
+        },
+        "producer": {
+          "$ref": "#/$defs/MessageProducer",
+          "description": "Producer family that authored or ingested this message."
+        },
+        "subject": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional subject line for outbound messages or extracted subject for inbound messages.",
+          "examples": [
+            "Notice of Decision: SNAP Application"
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Required human-readable one-line summary of this correspondence event for case timelines and audit logs.",
+          "examples": [
+            "Adverse benefits decision notice mailed to applicant"
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "contentRef": {
+          "$ref": "#/$defs/ContentRef",
+          "description": "Claim-check pointer to the message payload (rendered notice PDF, scanned mail image, email blob, transcript, etc.)."
+        },
+        "renderingId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "When this message was produced from a delivery-template rendering, the rendering's URN. Absent for raw-logged inbound messages."
+        },
+        "deliveryChannels": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/DeliveryChannelKind"
+          },
+          "description": "Outbound delivery channels the agency intends to use for this message. Omitted for inbound messages."
+        },
+        "relatedTaskId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Optional WOS task URN this correspondence relates to."
+        },
+        "relatedNotificationId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Optional WOS notification URN this correspondence was projected into the user feed under."
+        },
+        "actorRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+          "description": "Actor responsible for sending or recording this message when one applies."
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the correspondence event occurred (mailed, received, phone-call ended).",
+          "examples": [
+            "2026-05-05T14:20:00Z"
+          ]
+        },
+        "recordedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the server recorded this correspondence message.",
+          "examples": [
+            "2026-05-05T14:21:00Z"
+          ]
+        },
+        "expiresAt": {
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "const": "never"
+            }
+          ],
+          "description": "Optional retention horizon. UTC RFC 3339 timestamp or the literal `never` for indefinite retention (ADR 0082 D-10).",
+          "examples": [
+            "never",
+            "2033-05-05T00:00:00Z"
+          ]
+        }
+      }
+    },
+    "CorrespondenceListOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Query fields for listing correspondence messages.",
+      "properties": {
+        "instanceId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "When present, restrict results to this case instance."
+        },
+        "direction": {
+          "$ref": "#/$defs/MessageDirection",
+          "description": "When present, restrict results to this direction."
+        },
+        "status": {
+          "$ref": "#/$defs/MessageStatus",
+          "description": "When present, restrict results to this delivery status."
+        },
+        "channel": {
+          "$ref": "#/$defs/MessageChannel",
+          "description": "When present, restrict results to this communication channel."
+        },
+        "partyRole": {
+          "$ref": "#/$defs/CorrespondencePartyRole",
+          "description": "When present, restrict results to this party role."
+        },
+        "occurredFrom": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Inclusive lower bound for `occurredAt` (UTC RFC 3339)."
+        },
+        "occurredUntil": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Exclusive upper bound for `occurredAt` (UTC RFC 3339)."
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque resume token returned by the previous page (ADR 0082 D-7).",
+          "x-wos": {
+            "openStringKind": "opaque-token"
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "description": "Maximum number of correspondence messages requested for this page (ADR 0082 D-7)."
+        }
+      }
+    },
+    "CorrespondenceMessagePage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Cursor-paginated correspondence message page.",
+      "required": [
+        "items",
+        "hasMore"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "description": "Correspondence messages in this page, ordered by `occurredAt` descending unless the server documents otherwise.",
+          "items": {
+            "$ref": "#/$defs/CorrespondenceMessage"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque token for the next page. Omitted when hasMore is false.",
+          "x-wos": {
+            "openStringKind": "opaque-token"
+          }
+        },
+        "hasMore": {
+          "type": "boolean",
+          "description": "True when another page is available from the server."
+        }
+      }
+    },
+    "LogCorrespondenceMessageRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Request body for recording a correspondence message. The server assigns `id`, `recordedAt`, and any URN-shaped resource references the caller did not supply.",
+      "required": [
+        "instanceId",
+        "workflowUrl",
+        "templateRef",
+        "channel",
+        "direction",
+        "partyRole",
+        "producer",
+        "summary",
+        "occurredAt"
+      ],
+      "properties": {
+        "instanceId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Case instance URN this correspondence belongs to."
+        },
+        "workflowUrl": {
+          "$ref": "#/$defs/WorkflowUrn",
+          "description": "Workflow URI used to resolve the delivery sidecar."
+        },
+        "templateRef": {
+          "$ref": "#/$defs/TemplateRef",
+          "description": "Delivery-sidecar entry-template id (inbound) or notification-template key (outbound)."
+        },
+        "channel": {
+          "$ref": "#/$defs/MessageChannel",
+          "description": "Communication channel for this message."
+        },
+        "direction": {
+          "$ref": "#/$defs/MessageDirection",
+          "description": "Direction of this message relative to the agency."
+        },
+        "partyRole": {
+          "$ref": "#/$defs/CorrespondencePartyRole",
+          "description": "Role of the party who sent or received this message."
+        },
+        "producer": {
+          "$ref": "#/$defs/MessageProducer",
+          "description": "Producer family that authored or ingested this message."
+        },
+        "subject": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional subject line.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Required human-readable one-line summary of this correspondence event.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "contentRef": {
+          "$ref": "#/$defs/ContentRef",
+          "description": "Optional claim-check pointer to the message payload."
+        },
+        "renderingId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Optional rendering URN this message was produced from."
+        },
+        "deliveryChannels": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/DeliveryChannelKind"
+          },
+          "description": "Outbound delivery channels (omitted for inbound)."
+        },
+        "relatedTaskId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Optional related task URN."
+        },
+        "relatedNotificationId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Optional related notification URN."
+        },
+        "actorRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+          "description": "Optional actor reference responsible for sending or recording this message."
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the correspondence event occurred."
+        }
+      }
+    },
+    "RenderCorrespondenceRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Request body for `POST /api/v1/correspondence/renderings`. Renders an outbound delivery-sidecar notification template with placeholder substitution against the supplied closed-shape variable set. Folds in the legacy `POST /api/v1/notifications/{workflowUrl}/render` route per ADR 0082 D-15 step 2.",
+      "required": [
+        "workflowUrl",
+        "templateRef"
+      ],
+      "properties": {
+        "workflowUrl": {
+          "$ref": "#/$defs/WorkflowUrn",
+          "description": "Workflow URI used to resolve the delivery sidecar's `notifications.templates` map."
+        },
+        "templateRef": {
+          "$ref": "#/$defs/TemplateRef",
+          "description": "Notification template key from the delivery sidecar's `notifications.templates`."
+        },
+        "instanceId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Optional case instance URN. When present the server MAY enrich rendering variables from case state per the workflow's delivery sidecar."
+        },
+        "variables": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/RenderingVariable"
+          },
+          "description": "Caller-supplied rendering variables. Closed item shape; no `Record<string, unknown>` escape hatch."
+        }
+      }
+    },
+    "BusinessCalendarDate": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Single calendar-day entry returned by the business-calendar lookup endpoint (delivery sidecar §business-calendar; specs/sidecars/business-calendar.md §3 work week + §4 holiday schedule). Carries the date, its closed-no-extension day kind, and the optional holiday name. Lets a portal display \"is today a business day?\" or \"what's the next business day?\" without re-implementing the workWeek + holidays composition logic.",
+      "required": [
+        "date",
+        "dayKind"
+      ],
+      "properties": {
+        "date": {
+          "type": "string",
+          "format": "date",
+          "description": "ISO 8601 date this entry classifies. Interpreted in the calendar's declared `timezone` (specs/sidecars/business-calendar.md §2.1 timezone)."
+        },
+        "dayKind": {
+          "enum": [
+            "business",
+            "holiday",
+            "weekend"
+          ],
+          "description": "Closed-no-extension classification of the day. `business` matches the §3.3 evaluation (in `workWeek` AND not in `holidays`); `holiday` is in `holidays` regardless of `workWeek` (§4); `weekend` is outside `workWeek` and not declared as a holiday. Closed by design — adding a kind requires a schema major bump.",
+          "examples": [
+            "business",
+            "holiday"
+          ]
+        },
+        "holidayName": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable holiday name from the calendar's `holidays[].name` (specs/sidecars/business-calendar.md §4.1). Present iff `dayKind == \"holiday\"`. Open prose.",
+          "examples": [
+            "Memorial Day",
+            "Independence Day"
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "observed": {
+          "type": "boolean",
+          "description": "True when this entry is the observed-date for a holiday whose nominal date falls on a non-working day (specs/sidecars/business-calendar.md §4.3). Absent or false on non-observed entries."
+        }
+      }
+    },
+    "BusinessCalendarDateList": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Cursor-paginated business-calendar date page (ADR 0082 D-7). Returned by `GET /api/v1/correspondence/calendar/{calendarId}/dates?from=...&to=...`. Days are returned in chronological order by `date` ascending. Calendars with thousands of entries (multi-year ranges) page; small ranges fit a single response.",
+      "required": [
+        "items",
+        "hasMore"
+      ],
+      "properties": {
+        "calendarId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Calendar identifier this page belongs to (matches the `{calendarId}` path parameter and the delivery sidecar's calendar block).",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "timezone": {
+          "type": "string",
+          "minLength": 1,
+          "description": "IANA timezone the calendar declares (specs/sidecars/business-calendar.md §2.1). Surfaced once on the page envelope so consumers do not need to re-resolve the calendar block to interpret day boundaries.",
+          "examples": [
+            "America/New_York",
+            "America/Los_Angeles"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "items": {
+          "type": "array",
+          "description": "Date entries in this page, ordered by `date` ascending. Each entry classifies one calendar day in the requested `from`..`to` range.",
+          "items": {
+            "$ref": "#/$defs/BusinessCalendarDate"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque token for the next page. Omitted when hasMore is false.",
+          "x-wos": {
+            "openStringKind": "opaque-token"
+          }
+        },
+        "hasMore": {
+          "type": "boolean",
+          "description": "True when another page is available."
+        }
+      }
+    },
+    "CorrespondenceRendering": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Result of rendering a delivery-sidecar notification template. Renderings are server-stamped, content-addressable artifacts; producing one does not by itself send a correspondence message. A subsequent `POST /api/v1/correspondence` may reference this rendering's URN via `renderingId` to commit it as a sent outbound message.",
+      "required": [
+        "id",
+        "workflowUrl",
+        "templateRef",
+        "category",
+        "renderedAt",
+        "subject",
+        "sections",
+        "deliveryChannels",
+        "rendered",
+        "resolvedVariables",
+        "missingVariables"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Stable URN for this rendering."
+        },
+        "workflowUrl": {
+          "$ref": "#/$defs/WorkflowUrn",
+          "description": "Workflow URI whose delivery sidecar supplied the template."
+        },
+        "templateRef": {
+          "$ref": "#/$defs/TemplateRef",
+          "description": "Notification template key the renderer resolved."
+        },
+        "category": {
+          "$ref": "#/$defs/RenderingCategory",
+          "description": "Template category resolved from the delivery sidecar (drives due-process validation for adverse-decision notices)."
+        },
+        "renderedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the rendering was produced."
+        },
+        "subject": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Rendered subject line. Empty templates without subjects produce a server-supplied default (e.g., the template description); the field is always present so consumers do not branch on absence.",
+          "examples": [
+            "Notice of Decision: SNAP Application"
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "sections": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/RenderedSection"
+          },
+          "description": "Ordered rendered sections after condition evaluation."
+        },
+        "deliveryChannels": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/DeliveryChannelKind"
+          },
+          "description": "Delivery channels declared by the source template, projected through the closed `DeliveryChannelKind` enum."
+        },
+        "rendered": {
+          "type": "string",
+          "description": "Concatenated full-document rendering (sections joined with newlines) for clients that only need a single body string. Always present even when sections are empty post-condition (renders to the empty string).",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "resolvedVariables": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+            "description": "Name of a template placeholder variable that was resolved during rendering."
+          },
+          "description": "Sorted, deduplicated names of placeholder variables resolved during rendering. Closed shape — only variable names, never values."
+        },
+        "missingVariables": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+            "description": "Name of a template placeholder variable required by the template but not supplied or resolvable from case state."
+          },
+          "description": "Sorted, deduplicated names of required template variables that were not resolved. When non-empty the rendering is advisory only and MUST NOT be referenced by a subsequent `LogCorrespondenceMessageRequest`; the server returns `WOS-1422` if a caller attempts to do so."
+        }
+      }
+    }
+  }
+}

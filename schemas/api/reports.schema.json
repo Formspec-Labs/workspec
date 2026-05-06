@@ -1,0 +1,1060 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.formspec.io/wos-api/reports/v1",
+  "title": "WOS API Reports",
+  "description": "Public API resource schema for WOS report runs. A report run is a typed analytical query parameterised by a closed reportType; runs accrete monotonically and are cursor-paginated. Report runs project governance, AI oversight, equity, and operational telemetry into the public API surface; they are derived read models, not authoritative audit records.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/ReportRun"
+    },
+    {
+      "$ref": "#/$defs/ReportRunPage"
+    },
+    {
+      "$ref": "#/$defs/ReportRowPage"
+    },
+    {
+      "$ref": "#/$defs/ReportRunListOptions"
+    },
+    {
+      "$ref": "#/$defs/CreateReportRunRequest"
+    },
+    {
+      "$ref": "#/$defs/CancelReportRunRequest"
+    }
+  ],
+  "$defs": {
+    "WorkflowUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "Author-time WOS workflow document URL the report scopes to. Omitted to scope across all visible workflows.",
+      "x-wos": {
+        "openStringKind": "uri"
+      },
+      "examples": [
+        "https://workflows.example.gov/benefits-adj"
+      ]
+    },
+    "TimeRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Inclusive UTC RFC 3339 time interval used by report inputs to bound the data set.",
+      "required": [
+        "start",
+        "end"
+      ],
+      "properties": {
+        "start": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Inclusive UTC RFC 3339 lower bound for the report's data window.",
+          "examples": [
+            "2026-04-01T00:00:00Z"
+          ]
+        },
+        "end": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Inclusive UTC RFC 3339 upper bound for the report's data window.",
+          "examples": [
+            "2026-05-01T00:00:00Z"
+          ]
+        }
+      }
+    },
+    "ReportType": {
+      "oneOf": [
+        {
+          "enum": [
+            "decision-drift",
+            "sla-performance",
+            "equity-disparity",
+            "caseload-summary",
+            "ai-override-rate",
+            "timer-breach",
+            "reviewer-engagement",
+            "agent-shadow-mode-divergence"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "description": "Closed report-type taxonomy with vendor-prefixed extension literals. Each reserved literal binds a fixed input shape and a fixed row shape; the report-run schema projects governance, AI oversight, equity, and operational concerns into named report types rather than an open string. Vendor-extension literals are reserved at the wire layer per ADR 0082 D-15 step 2 amendment but are NOT accepted by the v1 input/row contract — extension reports ship their own `schemas/api/<resource>.schema.json` rather than overloading this one.",
+      "examples": [
+        "decision-drift",
+        "agent-shadow-mode-divergence"
+      ]
+    },
+    "ReportStatus": {
+      "enum": [
+        "pending",
+        "running",
+        "succeeded",
+        "failed",
+        "cancelled"
+      ],
+      "description": "Lifecycle status for a report run. Closed enum: pending (queued, not yet started), running (executing), succeeded (completed with rows), failed (terminated with error), cancelled (caller cancelled before completion).",
+      "examples": [
+        "succeeded"
+      ]
+    },
+    "ReportOutputFormat": {
+      "oneOf": [
+        {
+          "enum": [
+            "json",
+            "csv",
+            "parquet"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "description": "Closed output-format taxonomy for exported report runs. JSON is always available; CSV and parquet are produced on demand via the export endpoint.",
+      "examples": [
+        "json"
+      ]
+    },
+    "AggregationGranularity": {
+      "enum": [
+        "day",
+        "week",
+        "month",
+        "quarter"
+      ],
+      "description": "Closed time-bucket granularity for time-series report inputs. Bucket boundaries are aligned to UTC calendar units.",
+      "examples": [
+        "month"
+      ]
+    },
+    "DecisionDriftInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Input parameters for the decision-drift report. Computes per-bucket reviewer override rates and AI confidence trends over the requested time window.",
+      "required": [
+        "reportType",
+        "timeRange",
+        "granularity"
+      ],
+      "properties": {
+        "reportType": {
+          "const": "decision-drift",
+          "description": "Discriminator literal selecting the decision-drift input variant."
+        },
+        "workflowUrl": {
+          "$ref": "#/$defs/WorkflowUrl",
+          "description": "Author-time workflow URL to scope the report to. Omit to span all visible workflows."
+        },
+        "timeRange": {
+          "$ref": "#/$defs/TimeRange",
+          "description": "UTC time window over which decision-drift metrics are computed."
+        },
+        "granularity": {
+          "$ref": "#/$defs/AggregationGranularity",
+          "description": "Time-bucket size for the trend series."
+        },
+        "agentId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Optional agent URN to restrict the report to a single declared agent."
+        }
+      }
+    },
+    "SlaPerformanceInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Input parameters for the SLA performance report. Computes per-task-pattern SLA compliance, breaches, and time-to-decision distributions.",
+      "required": [
+        "reportType",
+        "timeRange"
+      ],
+      "properties": {
+        "reportType": {
+          "const": "sla-performance",
+          "description": "Discriminator literal selecting the SLA performance input variant."
+        },
+        "workflowUrl": {
+          "$ref": "#/$defs/WorkflowUrl",
+          "description": "Author-time workflow URL to scope the report to. Omit to span all visible workflows."
+        },
+        "timeRange": {
+          "$ref": "#/$defs/TimeRange",
+          "description": "UTC time window over which SLA metrics are computed."
+        },
+        "taskPattern": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional task pattern name from the governance task catalogue (Governance S9.1) to scope the report to one task family.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "examples": [
+            "eligibility-review"
+          ]
+        }
+      }
+    },
+    "EquityDisparityInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Input parameters for the equity-disparity report. Projects equity-config disparity calculations (Equity Config S3) into a public read model over the requested time window.",
+      "required": [
+        "reportType",
+        "timeRange",
+        "protectedCategoryId"
+      ],
+      "properties": {
+        "reportType": {
+          "const": "equity-disparity",
+          "description": "Discriminator literal selecting the equity-disparity input variant."
+        },
+        "workflowUrl": {
+          "$ref": "#/$defs/WorkflowUrl",
+          "description": "Author-time workflow URL whose equity-config supplies protected categories and disparity methods."
+        },
+        "timeRange": {
+          "$ref": "#/$defs/TimeRange",
+          "description": "UTC time window over which disparity metrics are computed."
+        },
+        "protectedCategoryId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the equity-config protected category to evaluate. MUST match a protectedCategories[].id declared on the targeted workflow's equity config.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "examples": [
+            "race-ethnicity"
+          ]
+        },
+        "disparityMethodId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional identifier selecting one of the equity-config disparityMethods. When omitted, the equity config's default method is used.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "examples": [
+            "four-fifths-rule"
+          ]
+        }
+      }
+    },
+    "CaseloadSummaryInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Input parameters for the caseload-summary report. Counts open and closed instances grouped by lifecycle outcome and optional workflow scope.",
+      "required": [
+        "reportType",
+        "timeRange"
+      ],
+      "properties": {
+        "reportType": {
+          "const": "caseload-summary",
+          "description": "Discriminator literal selecting the caseload-summary input variant."
+        },
+        "workflowUrl": {
+          "$ref": "#/$defs/WorkflowUrl",
+          "description": "Author-time workflow URL to scope the report to. Omit to span all visible workflows."
+        },
+        "timeRange": {
+          "$ref": "#/$defs/TimeRange",
+          "description": "UTC time window over which caseload counts are aggregated."
+        },
+        "groupByOutcome": {
+          "type": "boolean",
+          "description": "When true, rows are partitioned by terminal outcomeCode (Kernel S6 final-state outcomeCode). When false or omitted, rows aggregate across outcomes."
+        }
+      }
+    },
+    "AiOverrideRateInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Input parameters for the AI override-rate report. Counts reviewer overrides of agent decisions per agent over the requested time window.",
+      "required": [
+        "reportType",
+        "timeRange"
+      ],
+      "properties": {
+        "reportType": {
+          "const": "ai-override-rate",
+          "description": "Discriminator literal selecting the AI override-rate input variant."
+        },
+        "workflowUrl": {
+          "$ref": "#/$defs/WorkflowUrl",
+          "description": "Author-time workflow URL to scope the report to. Omit to span all visible workflows."
+        },
+        "timeRange": {
+          "$ref": "#/$defs/TimeRange",
+          "description": "UTC time window over which override counts are aggregated."
+        },
+        "agentId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Optional agent URN to restrict the report to a single declared agent."
+        }
+      }
+    },
+    "TimerBreachInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Input parameters for the timer-breach report. Lists kernel timer expirations and hold breaches over the requested time window (Kernel S9 timers, Governance S5 holds).",
+      "required": [
+        "reportType",
+        "timeRange"
+      ],
+      "properties": {
+        "reportType": {
+          "const": "timer-breach",
+          "description": "Discriminator literal selecting the timer-breach input variant."
+        },
+        "workflowUrl": {
+          "$ref": "#/$defs/WorkflowUrl",
+          "description": "Author-time workflow URL to scope the report to. Omit to span all visible workflows."
+        },
+        "timeRange": {
+          "$ref": "#/$defs/TimeRange",
+          "description": "UTC time window over which timer-breach events are gathered."
+        }
+      }
+    },
+    "ReviewerEngagementInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Input parameters for the reviewer-engagement report. Computes per-reviewer agreement rates and review depth signals (drift-monitor agreement-rate floor, AI Integration §13).",
+      "required": [
+        "reportType",
+        "timeRange"
+      ],
+      "properties": {
+        "reportType": {
+          "const": "reviewer-engagement",
+          "description": "Discriminator literal selecting the reviewer-engagement input variant."
+        },
+        "workflowUrl": {
+          "$ref": "#/$defs/WorkflowUrl",
+          "description": "Author-time workflow URL to scope the report to. Omit to span all visible workflows."
+        },
+        "timeRange": {
+          "$ref": "#/$defs/TimeRange",
+          "description": "UTC time window over which engagement metrics are computed."
+        },
+        "reviewerId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+          "description": "Optional reviewer actor reference to restrict the report to a single reviewer."
+        }
+      }
+    },
+    "AgentShadowModeDivergenceInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Input parameters for the agent-shadow-mode-divergence report (advanced/advanced-governance.md shadow mode; advanced-governance.md:370-385). Counts and characterises divergence between the shadow agent's outputs and the baseline (human reviewer or production model) over the requested time window.",
+      "required": [
+        "reportType",
+        "timeRange"
+      ],
+      "properties": {
+        "reportType": {
+          "const": "agent-shadow-mode-divergence",
+          "description": "Discriminator literal selecting the agent-shadow-mode-divergence input variant."
+        },
+        "workflowUrl": {
+          "$ref": "#/$defs/WorkflowUrl",
+          "description": "Author-time workflow URL to scope the report to. Omit to span all visible workflows."
+        },
+        "timeRange": {
+          "$ref": "#/$defs/TimeRange",
+          "description": "UTC time window over which divergence comparisons are aggregated."
+        },
+        "agentId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Optional agent URN to restrict the report to a single shadow agent."
+        }
+      }
+    },
+    "ReportInput": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/DecisionDriftInput"
+        },
+        {
+          "$ref": "#/$defs/SlaPerformanceInput"
+        },
+        {
+          "$ref": "#/$defs/EquityDisparityInput"
+        },
+        {
+          "$ref": "#/$defs/CaseloadSummaryInput"
+        },
+        {
+          "$ref": "#/$defs/AiOverrideRateInput"
+        },
+        {
+          "$ref": "#/$defs/TimerBreachInput"
+        },
+        {
+          "$ref": "#/$defs/ReviewerEngagementInput"
+        },
+        {
+          "$ref": "#/$defs/AgentShadowModeDivergenceInput"
+        }
+      ],
+      "discriminator": {
+        "propertyName": "reportType"
+      },
+      "description": "Closed discriminated union over reportType. Each reserved reportType binds a fixed input shape; vendor-extension reportType literals are not accepted by this contract version because the input shape would be unspecified (ADR 0082 D-15 step 2 amendment retains the closed-on-input posture even as the wire `ReportType` enum admits vendor extensions for forward-compat URN minting)."
+    },
+    "DecisionDriftRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-bucket result row for the decision-drift report.",
+      "required": [
+        "reportType",
+        "bucketStart",
+        "decisionsCount",
+        "overrideCount",
+        "overrideRate"
+      ],
+      "properties": {
+        "reportType": {
+          "const": "decision-drift",
+          "description": "Discriminator literal selecting the decision-drift row variant."
+        },
+        "bucketStart": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 inclusive lower bound of the time bucket this row represents."
+        },
+        "agentId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Agent URN this row is attributed to. Omitted on cross-agent aggregate rows."
+        },
+        "decisionsCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of agent decisions observed in this bucket."
+        },
+        "overrideCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of reviewer overrides recorded in this bucket."
+        },
+        "overrideRate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Reviewer override rate in [0,1] for this bucket."
+        },
+        "averageConfidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Mean reported agent confidence across decisions in this bucket. Omitted when no decisions carry confidence."
+        }
+      }
+    },
+    "SlaPerformanceRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-task-pattern result row for the SLA performance report.",
+      "required": [
+        "reportType",
+        "taskPattern",
+        "totalCount",
+        "withinSlaCount",
+        "breachedCount",
+        "complianceRate"
+      ],
+      "properties": {
+        "reportType": {
+          "const": "sla-performance",
+          "description": "Discriminator literal selecting the SLA performance row variant."
+        },
+        "taskPattern": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Task pattern name (Governance S9.1) this row aggregates.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "totalCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total tasks in this pattern within the window."
+        },
+        "withinSlaCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Tasks completed within their declared SLA."
+        },
+        "breachedCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Tasks that breached their declared SLA."
+        },
+        "complianceRate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Within-SLA compliance rate in [0,1] for this task pattern."
+        },
+        "p50DurationSeconds": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Median time-to-decision in seconds for this task pattern."
+        },
+        "p95DurationSeconds": {
+          "type": "number",
+          "minimum": 0,
+          "description": "95th-percentile time-to-decision in seconds for this task pattern."
+        }
+      }
+    },
+    "EquityDisparityRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-protected-group result row for the equity-disparity report.",
+      "required": [
+        "reportType",
+        "protectedCategoryId",
+        "groupId",
+        "decisionsCount",
+        "favourableRate"
+      ],
+      "properties": {
+        "reportType": {
+          "const": "equity-disparity",
+          "description": "Discriminator literal selecting the equity-disparity row variant."
+        },
+        "protectedCategoryId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Equity-config protected-category identifier this row belongs to.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "groupId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier for one group within the protected category.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "disparityMethodId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the equity-config disparityMethod that produced disparityScore for this group.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "decisionsCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of decisions observed for this group within the window."
+        },
+        "favourableRate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Rate of favourable outcomes in [0,1] for this group."
+        },
+        "disparityScore": {
+          "type": "number",
+          "description": "Disparity score produced by the selected disparity method. Sign and scale depend on the method; consult the equity-config disparityMethod definition."
+        },
+        "remediationTriggered": {
+          "type": "boolean",
+          "description": "True when the row crossed an equity-config remediationTrigger threshold."
+        }
+      }
+    },
+    "CaseloadSummaryRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-bucket or per-outcome result row for the caseload-summary report.",
+      "required": [
+        "reportType",
+        "openCount",
+        "closedCount"
+      ],
+      "properties": {
+        "reportType": {
+          "const": "caseload-summary",
+          "description": "Discriminator literal selecting the caseload-summary row variant."
+        },
+        "outcomeCode": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Final-state outcomeCode (Kernel S6) when groupByOutcome was true. Omitted on aggregate rows.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "openCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of instances open at the end of the window for this row."
+        },
+        "closedCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of instances closed within the window for this row."
+        },
+        "newlyOpenedCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of instances newly created within the window for this row."
+        }
+      }
+    },
+    "AiOverrideRateRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-agent result row for the AI override-rate report.",
+      "required": [
+        "reportType",
+        "agentId",
+        "decisionsCount",
+        "overrideCount",
+        "overrideRate"
+      ],
+      "properties": {
+        "reportType": {
+          "const": "ai-override-rate",
+          "description": "Discriminator literal selecting the AI override-rate row variant."
+        },
+        "agentId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Agent URN this row is attributed to."
+        },
+        "decisionsCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of agent decisions observed within the window."
+        },
+        "overrideCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of reviewer overrides recorded for this agent within the window."
+        },
+        "overrideRate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Reviewer override rate in [0,1] for this agent."
+        }
+      }
+    },
+    "TimerBreachRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-event result row for the timer-breach report.",
+      "required": [
+        "reportType",
+        "instanceId",
+        "breachedAt",
+        "breachKind"
+      ],
+      "properties": {
+        "reportType": {
+          "const": "timer-breach",
+          "description": "Discriminator literal selecting the timer-breach row variant."
+        },
+        "instanceId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Case instance URN whose timer or hold breached."
+        },
+        "breachedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp of the breach event."
+        },
+        "breachKind": {
+          "enum": [
+            "timer-fired",
+            "hold-expired"
+          ],
+          "description": "Closed source of the breach event. timer-fired is a kernel timer expiration; hold-expired is a governance hold expiry."
+        },
+        "timerId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Timer URN when breachKind is timer-fired."
+        },
+        "holdId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Hold URN when breachKind is hold-expired."
+        }
+      }
+    },
+    "ReviewerEngagementRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-reviewer result row for the reviewer-engagement report.",
+      "required": [
+        "reportType",
+        "reviewerId",
+        "reviewsCount",
+        "agreementRate"
+      ],
+      "properties": {
+        "reportType": {
+          "const": "reviewer-engagement",
+          "description": "Discriminator literal selecting the reviewer-engagement row variant."
+        },
+        "reviewerId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+          "description": "Reviewer actor reference this row is attributed to."
+        },
+        "reviewsCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of reviews completed within the window."
+        },
+        "agreementRate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Rate at which the reviewer agreed with agent recommendations in [0,1]."
+        },
+        "averageReviewSeconds": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Mean time spent per review in seconds."
+        },
+        "engagementFlagged": {
+          "type": "boolean",
+          "description": "True when agreementRate exceeded the drift-monitor agreement-rate floor configured for the workflow."
+        }
+      }
+    },
+    "AgentShadowModeDivergenceRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-agent result row for the agent-shadow-mode-divergence report (advanced/advanced-governance.md shadow mode; advanced-governance.md:370-385).",
+      "required": [
+        "reportType",
+        "agentId",
+        "comparisonsCount",
+        "divergenceCount",
+        "divergenceRate"
+      ],
+      "properties": {
+        "reportType": {
+          "const": "agent-shadow-mode-divergence",
+          "description": "Discriminator literal selecting the agent-shadow-mode-divergence row variant."
+        },
+        "agentId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Agent URN this row is attributed to."
+        },
+        "baselineModelIdentifier": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the baseline the shadow agent was compared against (`human` for human-reviewer baseline, otherwise a model identifier). Open identifier — projected from the agent's `shadowMode.baselineModelIdentifier`.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "examples": [
+            "human"
+          ]
+        },
+        "comparisonsCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of shadow-vs-baseline comparisons observed within the window."
+        },
+        "divergenceCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of comparisons whose normalized disagreement exceeded the agent's `shadowMode.divergenceThreshold`."
+        },
+        "divergenceRate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Divergence rate in [0,1] for this agent within the window — `divergenceCount / comparisonsCount`."
+        },
+        "averageDivergenceMagnitude": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Mean normalized disagreement magnitude across diverging comparisons. Method-specific units; consult the workflow's shadow-mode declaration."
+        }
+      }
+    },
+    "ReportRow": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/DecisionDriftRow"
+        },
+        {
+          "$ref": "#/$defs/SlaPerformanceRow"
+        },
+        {
+          "$ref": "#/$defs/EquityDisparityRow"
+        },
+        {
+          "$ref": "#/$defs/CaseloadSummaryRow"
+        },
+        {
+          "$ref": "#/$defs/AiOverrideRateRow"
+        },
+        {
+          "$ref": "#/$defs/TimerBreachRow"
+        },
+        {
+          "$ref": "#/$defs/ReviewerEngagementRow"
+        },
+        {
+          "$ref": "#/$defs/AgentShadowModeDivergenceRow"
+        }
+      ],
+      "discriminator": {
+        "propertyName": "reportType"
+      },
+      "description": "Closed discriminated union over reportType. Each reserved reportType binds a fixed row shape; the row reportType MUST match the parent run reportType."
+    },
+    "ReportFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Failure detail attached to a report run when status is failed.",
+      "required": [
+        "wosErrorCode",
+        "title"
+      ],
+      "properties": {
+        "wosErrorCode": {
+          "type": "string",
+          "pattern": "^WOS-[0-9]{4,5}$",
+          "description": "Stable WOS error code from the public error registry that classifies this failure."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Short human-readable failure title.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "detail": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional longer human-readable failure description.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        }
+      }
+    },
+    "ReportRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "A WOS report run resource. The run envelope is reportType-agnostic; reportType variation is confined to the input and rows discriminated unions.",
+      "required": [
+        "id",
+        "reportType",
+        "status",
+        "input",
+        "submittedBy",
+        "queuedAt",
+        "maxDurationSeconds"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Stable public URN for this report run."
+        },
+        "reportType": {
+          "$ref": "#/$defs/ReportType",
+          "description": "Closed report-type taxonomy literal. MUST equal input.reportType and (when rows are present) rows[*].reportType."
+        },
+        "status": {
+          "$ref": "#/$defs/ReportStatus",
+          "description": "Current lifecycle status."
+        },
+        "input": {
+          "$ref": "#/$defs/ReportInput",
+          "description": "Closed parameterisation of the run discriminated by reportType."
+        },
+        "submittedBy": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+          "description": "Actor that submitted the run."
+        },
+        "queuedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the run was accepted onto the queue."
+        },
+        "maxDurationSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400,
+          "description": "REQUIRED resolved timeout ceiling in seconds applied to this run. Server-stamped at queue time so callers can see what was applied: equals `CreateReportRunRequest.maxDurationSeconds` when supplied (clamped to the per-deployment ceiling), otherwise the server default (3600 seconds). Exceeding this ceiling at runtime transitions the run to `status == failed` with `failure.wosErrorCode == \"WOS-1408\"` and the runner records a `reportTimedOut` Facts-tier provenance literal with typed timeout payload."
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when execution began. Omitted while pending."
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the run reached a terminal status. Omitted while pending or running."
+        },
+        "rowCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total result-row count when status is succeeded. Omitted otherwise."
+        },
+        "failure": {
+          "$ref": "#/$defs/ReportFailure",
+          "description": "Failure detail when status is failed. Omitted otherwise."
+        }
+      }
+    },
+    "ReportRunListOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Query fields for listing report runs.",
+      "properties": {
+        "reportType": {
+          "$ref": "#/$defs/ReportType",
+          "description": "Optional reportType filter. When supplied, only runs of that type are returned."
+        },
+        "status": {
+          "$ref": "#/$defs/ReportStatus",
+          "description": "Optional status filter."
+        },
+        "submittedBy": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+          "description": "Optional submitter actor filter."
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque resume token returned by the previous page.",
+          "x-wos": {
+            "openStringKind": "opaque-token"
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "description": "Maximum number of runs requested for this page."
+        }
+      }
+    },
+    "ReportRunPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Cursor-paginated report-run page. Runs are returned newest-first by queuedAt.",
+      "required": [
+        "items",
+        "hasMore"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "description": "Report-run items in this page.",
+          "items": {
+            "$ref": "#/$defs/ReportRun"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque token for the next page. Omitted when hasMore is false.",
+          "x-wos": {
+            "openStringKind": "opaque-token"
+          }
+        },
+        "hasMore": {
+          "type": "boolean",
+          "description": "True when another page is available from the server."
+        }
+      }
+    },
+    "ReportRowPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Cursor-paginated row page for a succeeded report run. The runId and reportType anchor every row to a single run.",
+      "required": [
+        "runId",
+        "reportType",
+        "items",
+        "hasMore"
+      ],
+      "properties": {
+        "runId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Report-run URN this page belongs to."
+        },
+        "reportType": {
+          "$ref": "#/$defs/ReportType",
+          "description": "Report-type literal shared by every row in this page."
+        },
+        "items": {
+          "type": "array",
+          "description": "Row items in this page; each row's reportType MUST match the page reportType.",
+          "items": {
+            "$ref": "#/$defs/ReportRow"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque token for the next page. Omitted when hasMore is false.",
+          "x-wos": {
+            "openStringKind": "opaque-token"
+          }
+        },
+        "hasMore": {
+          "type": "boolean",
+          "description": "True when another row page is available from the server."
+        }
+      }
+    },
+    "CreateReportRunRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Request body for queuing a new report run. The input discriminator selects the report shape; the server rejects vendor-extension reportType literals at this version.",
+      "required": [
+        "input"
+      ],
+      "properties": {
+        "input": {
+          "$ref": "#/$defs/ReportInput",
+          "description": "Closed parameterisation of the requested run."
+        },
+        "maxDurationSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400,
+          "description": "Optional caller-supplied timeout ceiling in seconds for this run. Reports can scan up to `maxResults: 100000` rows, so a stuck runner must not stay `running` indefinitely; this ceiling bounds wall-clock execution. The server enforces a default of 3600 seconds when omitted; callers MAY raise it up to 86400 seconds (24 hours) -- the server applies a per-deployment ceiling and clamps higher requests downward without rejection. The resolved value is server-stamped on the resulting `ReportRun.maxDurationSeconds` so callers can see what was applied. Exceeding the ceiling at runtime transitions the run to `status == failed` with `failure.wosErrorCode == \"WOS-1408\"` (timeout exceeded)."
+        }
+      }
+    },
+    "CancelReportRunRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Request body for cancelling a pending or running report run. An empty body is acceptable; reason is optional context.",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional human-readable cancellation reason recorded with the run.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        }
+      }
+    }
+  }
+}

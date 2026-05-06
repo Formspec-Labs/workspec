@@ -1,0 +1,5718 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "WOS Public API",
+    "version": "1.0.0",
+    "description": "Public REST API contract for WOS case portal, workspec-server, and future SDK consumers."
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "servers": [
+    {
+      "url": "/api/v1",
+      "description": "Current public major version."
+    }
+  ],
+  "paths": {
+    "/api/openapi.json": {
+      "get": {
+        "operationId": "getOpenApiDocument",
+        "summary": "Fetch the committed OpenAPI contract snapshot.",
+        "responses": {
+          "200": {
+            "description": "OpenAPI 3.1 contract document.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://spec.openapis.org/oas/3.1/schema/2022-10-07"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/notifications": {
+      "get": {
+        "operationId": "listNotifications",
+        "summary": "List notifications visible to the caller.",
+        "parameters": [
+          {
+            "name": "includeRead",
+            "in": "query",
+            "required": false,
+            "description": "When true, include read notifications in addition to unread notifications.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque resume token from the previous page (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum page size (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated notification page.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/notification/v1#/$defs/NotificationPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/notifications/unread-count": {
+      "get": {
+        "operationId": "getUnreadNotificationCount",
+        "summary": "Get unread notification count visible to the caller.",
+        "responses": {
+          "200": {
+            "description": "Unread notification count.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/notification/v1#/$defs/UnreadCountResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/notifications/{id}/read": {
+      "post": {
+        "operationId": "markNotificationRead",
+        "summary": "Mark one notification read.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Notification URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional idempotency key (ADR 0082 D-16). RECOMMENDED on naturally-idempotent mutations.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/notification/v1#/$defs/MarkNotificationReadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Notification marked read.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/actors": {
+      "get": {
+        "operationId": "listActors",
+        "summary": "List actors visible to the caller.",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque resume token from the previous page (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum page size (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated actor page.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/actor/v1#/$defs/ActorPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/actors/{urn}": {
+      "get": {
+        "operationId": "getActor",
+        "summary": "Fetch a single actor by URN.",
+        "parameters": [
+          {
+            "name": "urn",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Actor resource.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/actor/v1#/$defs/Actor"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/instances": {
+      "get": {
+        "operationId": "listInstances",
+        "summary": "List case instances visible to the caller.",
+        "parameters": [
+          {
+            "name": "lifecycleState",
+            "in": "query",
+            "required": false,
+            "description": "Filter by closed lifecycle posture (repeating narrows to a posture set).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/LifecycleState"
+            }
+          },
+          {
+            "name": "workflowUrl",
+            "in": "query",
+            "required": false,
+            "description": "Filter to instances of the supplied Workflow Document URL.",
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          {
+            "name": "createdAfter",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive UTC RFC 3339 lower bound on `createdAt` (ADR 0069).",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "createdBefore",
+            "in": "query",
+            "required": false,
+            "description": "Exclusive UTC RFC 3339 upper bound on `createdAt`.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false,
+            "description": "Tenant scope filter (ADR 0068 D-1.1). MUST agree with `X-WOS-Tenant` header.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,62}$"
+            }
+          },
+          {
+            "name": "include",
+            "in": "query",
+            "required": false,
+            "description": "Closed `?include=` aggregation seam (ADR 0082 D-3). Repeated query parameter (`?include=governance&include=tasks`) or comma-separated form. Each value MUST be drawn from the closed enum `governance | tasks | timers | holds | related`.",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/IncludeKind"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque resume token from the previous page (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum page size (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated case instance page.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstancePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createInstance",
+        "summary": "Create a new case instance.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Idempotency key (ADR 0082 D-16). Server retains the request/response pair for at least 24 hours keyed by `(idempotency-key, route, scope)`. A repeat with the same key but a different body for the same route/scope is rejected with `WOS-1409`.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Create a case instance against the supplied workflow.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created (or attached-to) case instance with the resolved intake-handoff outcome.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceCreateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/instances/{id}": {
+      "get": {
+        "operationId": "getInstance",
+        "summary": "Fetch a single case instance, optionally with closed `?include=` subresources.",
+        "description": "Returns `CaseInstance` when no `?include=` parameter is supplied; returns `CaseInstanceWithIncludes` (which embeds `CaseInstance` under the `instance` key) when one or more subresource literals are requested. Clients discriminate on the presence of the `instance` envelope key.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "include",
+            "in": "query",
+            "required": false,
+            "description": "Closed `?include=` aggregation seam (ADR 0082 D-3). Repeated query parameter (`?include=governance&include=tasks`) or comma-separated form. Each value MUST be drawn from the closed enum `governance | tasks | timers | holds | related`.",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/IncludeKind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Case instance projection. The `instance` envelope key carries the base `CaseInstance` shape; subresource keys appear only when `?include=...` requested them.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceWithIncludes"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/instances/{id}/governance": {
+      "get": {
+        "operationId": "getInstanceGovernance",
+        "summary": "Fetch the governance subresource of a case instance.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Governance projection (delegations and review state) for this instance.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceGovernance"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/instances/{id}/tasks": {
+      "get": {
+        "operationId": "listInstanceTasks",
+        "summary": "List tasks scoped to a case instance.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "assignedActor",
+            "in": "query",
+            "required": false,
+            "description": "Filter to tasks currently assigned to the supplied actor URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Filter to tasks in the supplied status (closed `TaskStatus` taxonomy).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskStatus"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "description": "Filter to tasks of the supplied family.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskKind"
+            }
+          },
+          {
+            "name": "deadlineBefore",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive UTC RFC 3339 upper bound on `deadline`.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque resume token from the previous page (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum page size (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated task page scoped to the instance.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/instances/{id}/timers": {
+      "get": {
+        "operationId": "getInstanceTimers",
+        "summary": "Fetch the timers subresource of a case instance.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Timer entries for this instance.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceTimerList"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/instances/{id}/holds": {
+      "get": {
+        "operationId": "getInstanceHolds",
+        "summary": "Fetch the holds subresource of a case instance.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Hold entries for this instance.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceHoldList"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/instances/{id}/related": {
+      "get": {
+        "operationId": "getInstanceRelated",
+        "summary": "Fetch the related-cases subresource of a case instance.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Related case links for this instance.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceRelatedList"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/instances/{id}/provenance": {
+      "get": {
+        "operationId": "listInstanceProvenance",
+        "summary": "List provenance records for a case instance.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "tier",
+            "in": "query",
+            "required": false,
+            "description": "Optional tier filter \u2014 closed `facts | reasoning | counterfactual | narrative` taxonomy.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "facts",
+                "reasoning",
+                "counterfactual",
+                "narrative"
+              ]
+            }
+          },
+          {
+            "name": "recordKindFilter",
+            "in": "query",
+            "required": false,
+            "description": "Optional record-kind filter \u2014 restrict to Facts-tier `recordKind` literals (cross-`$ref`'d from `provenance.schema.json#/$defs/FactsRecordKind`). Repeat the query parameter (`?recordKindFilter=stateTransition&recordKindFilter=caseStateMutation`) to narrow to a kind set; mirrors `ProvenanceListOptions.recordKindFilter`.",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/provenance/v1#/$defs/FactsRecordKind"
+            }
+          },
+          {
+            "name": "timeRange.since",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive UTC RFC 3339 lower bound on `timestamp` (mirrors `ProvenanceTimeRange.since`). Both `timeRange.since` and `timeRange.until` MUST be supplied together when used.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "timeRange.until",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive UTC RFC 3339 upper bound on `timestamp` (mirrors `ProvenanceTimeRange.until`).",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "actorRefFilter",
+            "in": "query",
+            "required": false,
+            "description": "Optional actor URN filter \u2014 repeat the query parameter to narrow to a principal set (mirrors `ProvenanceListOptions.actorRefFilter`).",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque resume token from the previous page (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum page size (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated provenance record page.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/provenance/v1#/$defs/ProvenanceRecordPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/instances/{id}/provenance/{recordId}": {
+      "get": {
+        "operationId": "getInstanceProvenanceRecord",
+        "summary": "Fetch a single provenance record by URN.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "recordId",
+            "in": "path",
+            "required": true,
+            "description": "Provenance record URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Single provenance record (any tier).",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/provenance/v1#/$defs/ProvenanceRecord"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/instances/{id}/explanation": {
+      "get": {
+        "operationId": "getInstanceExplanation",
+        "summary": "Fetch the server-assembled adverse-decision explanation for a case instance.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server-assembled explanation per workflow-governance \u00a73.8.1 deterministic algorithm.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/provenance/v1#/$defs/AssembledExplanation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/instances/{id}/events": {
+      "post": {
+        "operationId": "submitInstanceEvent",
+        "summary": "Submit an authored event against a running case instance.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Idempotency key (ADR 0082 D-16). Server retains the request/response pair for at least 24 hours keyed by `(idempotency-key, route, scope)`. A repeat with the same key but a different body for the same route/scope is rejected with `WOS-1409`.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Authored event for kernel transition algorithm evaluation (Kernel S4.7, S11.3).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/EventSubmissionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Evaluation result wrapping the typed `mutations: CaseStateMutation[]` projection plus the new lifecycle posture.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/EventSubmissionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/instances/{id}/suspend": {
+      "post": {
+        "operationId": "suspendInstance",
+        "summary": "Suspend a running case instance.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Idempotency key (ADR 0082 D-16). Server retains the request/response pair for at least 24 hours keyed by `(idempotency-key, route, scope)`. A repeat with the same key but a different body for the same route/scope is rejected with `WOS-1409`.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Suspend rationale, suspending actor, and optional `holdUntil` expectation.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/SuspendInstanceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated case instance with `lifecycleState == suspended`.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstance"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/instances/{id}/resume": {
+      "post": {
+        "operationId": "resumeInstance",
+        "summary": "Resume a suspended case instance.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Idempotency key (ADR 0082 D-16). Server retains the request/response pair for at least 24 hours keyed by `(idempotency-key, route, scope)`. A repeat with the same key but a different body for the same route/scope is rejected with `WOS-1409`.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Resume rationale and resuming actor.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/ResumeInstanceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated case instance with `lifecycleState == active`.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstance"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/instances/{id}/terminate": {
+      "post": {
+        "operationId": "terminateInstance",
+        "summary": "Terminate a case instance (irreversible per Kernel S11.5).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Idempotency key (ADR 0082 D-16). Server retains the request/response pair for at least 24 hours keyed by `(idempotency-key, route, scope)`. A repeat with the same key but a different body for the same route/scope is rejected with `WOS-1409`.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Termination rationale, closed-with-vendor-extension `terminationKind`, and terminating actor.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/TerminateInstanceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated case instance with `lifecycleState == terminated`.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstance"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/instances/{id}/migrate": {
+      "post": {
+        "operationId": "migrateInstance",
+        "summary": "Migrate a case instance to a new workflow definition version.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Idempotency key (ADR 0082 D-16). Server retains the request/response pair for at least 24 hours keyed by `(idempotency-key, route, scope)`. A repeat with the same key but a different body for the same route/scope is rejected with `WOS-1409`.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Migration target, typed `MigrationMap`, migrating actor, and rationale (Kernel S11.2).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/MigrateInstanceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Migration result with both `instanceMigrated` and `migrationPinChanged` Facts-tier record URNs.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/MigrationResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/tasks": {
+      "get": {
+        "operationId": "listTasks",
+        "summary": "List tasks visible to the caller (default scope: caller's inbox).",
+        "parameters": [
+          {
+            "name": "assignedActor",
+            "in": "query",
+            "required": false,
+            "description": "Filter to tasks currently assigned to the supplied actor URN. Defaults to the calling actor.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Filter to tasks in the supplied status (closed `TaskStatus`).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskStatus"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "description": "Filter to tasks of the supplied family.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskKind"
+            }
+          },
+          {
+            "name": "instanceId",
+            "in": "query",
+            "required": false,
+            "description": "Filter to tasks on the supplied case instance.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "workflowUrl",
+            "in": "query",
+            "required": false,
+            "description": "Filter to tasks on instances of the supplied Workflow Document.",
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          {
+            "name": "deadlineBefore",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive UTC RFC 3339 upper bound on `deadline`.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque resume token from the previous page (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum page size (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated task page.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/tasks/{id}": {
+      "get": {
+        "operationId": "getTask",
+        "summary": "Fetch a single task by URN.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full task projection.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/Task"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/tasks/{id}/draft": {
+      "post": {
+        "operationId": "draftTaskResponse",
+        "summary": "Save a partial task response without committing it.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional idempotency key (ADR 0082 D-16). RECOMMENDED on naturally-idempotent mutations.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Partial response payload conforming to the task's pinned contract.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskDraft"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated task projection with `status == drafted` and refreshed `lastValidationOutcome`.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/Task"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/tasks/{id}/response": {
+      "post": {
+        "operationId": "submitTaskResponse",
+        "summary": "Commit a task's final response (transitions the task to `submitted`).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Idempotency key (ADR 0082 D-16). Server retains the request/response pair for at least 24 hours keyed by `(idempotency-key, route, scope)`. A repeat with the same key but a different body for the same route/scope is rejected with `WOS-1409`.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Final response payload, definition pin, and (when `kind == signature`) `signatureRef` URN.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskSubmission"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated task projection with `status == submitted`.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/Task"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/tasks/{id}/dismiss": {
+      "post": {
+        "operationId": "dismissTask",
+        "summary": "Decline a task without submitting a response (transitions the task to `dismissed`).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional idempotency key (ADR 0082 D-16). RECOMMENDED on naturally-idempotent mutations.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Closed-with-vendor-extension dismissal rationale and optional detail.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskDismissal"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated task projection with `status == dismissed`.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/Task"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/governance/agents": {
+      "get": {
+        "operationId": "listGovernanceAgents",
+        "summary": "List declared agents (cross-case authoritative `AgentView` projections).",
+        "parameters": [
+          {
+            "name": "workflowUrl",
+            "in": "query",
+            "required": false,
+            "description": "Filter to agents declared by the supplied workflow.",
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          {
+            "name": "autonomyLevel",
+            "in": "query",
+            "required": false,
+            "description": "Filter by closed-with-vendor-extension autonomy level.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/governance/v1#/$defs/AutonomyLevel"
+            }
+          },
+          {
+            "name": "driftStatus",
+            "in": "query",
+            "required": false,
+            "description": "Filter by closed-with-vendor-extension drift status.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/governance/v1#/$defs/AgentDriftStatus"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque resume token from the previous page (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum page size (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated agent page.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/governance/v1#/$defs/AgentPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/governance/agents/{urn}": {
+      "get": {
+        "operationId": "getGovernanceAgent",
+        "summary": "Fetch a single agent declaration by URN.",
+        "parameters": [
+          {
+            "name": "urn",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent declaration view.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/governance/v1#/$defs/AgentView"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/governance/delegations": {
+      "get": {
+        "operationId": "listGovernanceDelegations",
+        "summary": "List delegation records (cross-case authoritative `Delegation` shape).",
+        "parameters": [
+          {
+            "name": "delegatorUrn",
+            "in": "query",
+            "required": false,
+            "description": "Filter to delegations granted by this actor URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef"
+            }
+          },
+          {
+            "name": "delegateeUrn",
+            "in": "query",
+            "required": false,
+            "description": "Filter to delegations received by this actor URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef"
+            }
+          },
+          {
+            "name": "authority",
+            "in": "query",
+            "required": false,
+            "description": "Filter by closed-with-vendor-extension delegation authority kind.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/governance/v1#/$defs/DelegationAuthority"
+            }
+          },
+          {
+            "name": "active",
+            "in": "query",
+            "required": false,
+            "description": "When true, restrict to delegations whose `effectiveDate` is past, `expirationDate` is `never` or future, and which are not revoked.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "workflowUrl",
+            "in": "query",
+            "required": false,
+            "description": "Filter to delegations whose `scope.caseTypes` intersect this workflow's case-type taxonomy (best-effort).",
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque resume token from the previous page (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum page size (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated delegation page.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/governance/v1#/$defs/DelegationPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createGovernanceDelegation",
+        "summary": "Create a new delegation record.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Idempotency key (ADR 0082 D-16). Server retains the request/response pair for at least 24 hours keyed by `(idempotency-key, route, scope)`. A repeat with the same key but a different body for the same route/scope is rejected with `WOS-1409`.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Delegation creation request \u2014 server assigns URN and `createdAt`.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/governance/v1#/$defs/DelegationCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created delegation record.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/governance/v1#/$defs/Delegation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/governance/delegations/{urn}": {
+      "get": {
+        "operationId": "getGovernanceDelegation",
+        "summary": "Fetch a single delegation by URN.",
+        "parameters": [
+          {
+            "name": "urn",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Delegation record.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/governance/v1#/$defs/Delegation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/governance/delegations/{urn}/revoke": {
+      "post": {
+        "operationId": "revokeGovernanceDelegation",
+        "summary": "Revoke a delegation (revoked records remain visible for audit).",
+        "parameters": [
+          {
+            "name": "urn",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Idempotency key (ADR 0082 D-16). Server retains the request/response pair for at least 24 hours keyed by `(idempotency-key, route, scope)`. A repeat with the same key but a different body for the same route/scope is rejected with `WOS-1409`.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Free-text revocation rationale; server stamps `revokedAt`/`revokedBy`.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/governance/v1#/$defs/DelegationRevokeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Revoked delegation record.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/governance/v1#/$defs/Delegation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/governance/policies/{policyUrl}/versions": {
+      "get": {
+        "operationId": "listGovernancePolicyVersions",
+        "summary": "List policy parameter versions for a workflow.",
+        "parameters": [
+          {
+            "name": "policyUrl",
+            "in": "path",
+            "required": true,
+            "description": "URL-encoded workflow URL (governance \u00a7S13).",
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          {
+            "name": "active",
+            "in": "query",
+            "required": false,
+            "description": "When true, restrict to the version whose effective period covers the request date. When false, restrict to historical versions.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque resume token from the previous page (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum page size (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated policy version page (default ordering: `effectiveFrom` descending).",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/governance/v1#/$defs/PolicyVersionPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/governance/policies/{policyUrl}/versions/{version}": {
+      "get": {
+        "operationId": "getGovernancePolicyVersion",
+        "summary": "Fetch a single policy parameter version.",
+        "parameters": [
+          {
+            "name": "policyUrl",
+            "in": "path",
+            "required": true,
+            "description": "URL-encoded workflow URL.",
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "description": "Stable policy version label (`PolicyVersion.version`).",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Policy version record.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/governance/v1#/$defs/PolicyVersion"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/correspondence": {
+      "get": {
+        "operationId": "listCorrespondence",
+        "summary": "List correspondence messages visible to the caller.",
+        "parameters": [
+          {
+            "name": "instanceId",
+            "in": "query",
+            "required": false,
+            "description": "Filter to correspondence on this case instance URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "required": false,
+            "description": "Filter by message direction.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/MessageDirection"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Filter by delivery status.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/MessageStatus"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "query",
+            "required": false,
+            "description": "Filter by communication channel.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/MessageChannel"
+            }
+          },
+          {
+            "name": "partyRole",
+            "in": "query",
+            "required": false,
+            "description": "Filter by party role.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/CorrespondencePartyRole"
+            }
+          },
+          {
+            "name": "occurredFrom",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive UTC RFC 3339 lower bound for `occurredAt`.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "occurredUntil",
+            "in": "query",
+            "required": false,
+            "description": "Exclusive UTC RFC 3339 upper bound for `occurredAt`.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque resume token from the previous page (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum page size (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated correspondence message page.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/CorrespondenceMessagePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "logCorrespondenceMessage",
+        "summary": "Record a correspondence message.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Idempotency key (ADR 0082 D-16). Server retains the request/response pair for at least 24 hours keyed by `(idempotency-key, route, scope)`. A repeat with the same key but a different body for the same route/scope is rejected with `WOS-1409`.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Correspondence message recording payload \u2014 server assigns URN and `recordedAt`.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/LogCorrespondenceMessageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created correspondence message.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/CorrespondenceMessage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/correspondence/{id}": {
+      "get": {
+        "operationId": "getCorrespondenceMessage",
+        "summary": "Fetch a single correspondence message by URN.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correspondence message record.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/CorrespondenceMessage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/instances/{instanceId}/correspondence": {
+      "get": {
+        "operationId": "listInstanceCorrespondence",
+        "summary": "List correspondence messages scoped to a case instance.",
+        "parameters": [
+          {
+            "name": "instanceId",
+            "in": "path",
+            "required": true,
+            "description": "Case instance URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "required": false,
+            "description": "Filter by message direction.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/MessageDirection"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Filter by delivery status.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/MessageStatus"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "query",
+            "required": false,
+            "description": "Filter by communication channel.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/MessageChannel"
+            }
+          },
+          {
+            "name": "partyRole",
+            "in": "query",
+            "required": false,
+            "description": "Filter by party role.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/CorrespondencePartyRole"
+            }
+          },
+          {
+            "name": "occurredFrom",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive UTC RFC 3339 lower bound for `occurredAt`.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "occurredUntil",
+            "in": "query",
+            "required": false,
+            "description": "Exclusive UTC RFC 3339 upper bound for `occurredAt`.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque resume token from the previous page (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum page size (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated correspondence message page scoped to the instance.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/CorrespondenceMessagePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/correspondence/renderings": {
+      "post": {
+        "operationId": "renderCorrespondence",
+        "summary": "Render a delivery-sidecar notification template into a correspondence draft.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional idempotency key (ADR 0082 D-16). RECOMMENDED on naturally-idempotent mutations.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Template reference plus closed-shape variable set.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/RenderCorrespondenceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Rendering artifact. Subsequent `POST /correspondence` MAY commit it via `renderingId`.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/CorrespondenceRendering"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/correspondence/renderings/{id}": {
+      "get": {
+        "operationId": "getCorrespondenceRendering",
+        "summary": "Fetch a previously-produced correspondence rendering.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correspondence rendering artifact.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/CorrespondenceRendering"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/correspondence/calendar/{calendarId}/dates": {
+      "get": {
+        "operationId": "listCorrespondenceCalendarDates",
+        "summary": "List business calendar date classifications for a calendar.",
+        "parameters": [
+          {
+            "name": "calendarId",
+            "in": "path",
+            "required": true,
+            "description": "Delivery sidecar calendar identifier.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive ISO 8601 lower bound on the calendar window.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive ISO 8601 upper bound on the calendar window.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque resume token from the previous page (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum page size (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated business calendar date page.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/BusinessCalendarDateList"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/reports/runs": {
+      "get": {
+        "operationId": "listReportRuns",
+        "summary": "List report runs visible to the caller (newest-first by `queuedAt`).",
+        "parameters": [
+          {
+            "name": "reportType",
+            "in": "query",
+            "required": false,
+            "description": "Filter by closed-with-vendor-extension report type.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/reports/v1#/$defs/ReportType"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Filter by closed report run status.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/reports/v1#/$defs/ReportStatus"
+            }
+          },
+          {
+            "name": "submittedBy",
+            "in": "query",
+            "required": false,
+            "description": "Filter by submitter actor URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque resume token from the previous page (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum page size (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated report run page.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/reports/v1#/$defs/ReportRunPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createReportRun",
+        "summary": "Queue a new report run.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Idempotency key (ADR 0082 D-16). Server retains the request/response pair for at least 24 hours keyed by `(idempotency-key, route, scope)`. A repeat with the same key but a different body for the same route/scope is rejected with `WOS-1409`.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Closed discriminated input keyed by `reportType`.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/reports/v1#/$defs/CreateReportRunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Queued report run.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/reports/v1#/$defs/ReportRun"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/reports/runs/{id}": {
+      "get": {
+        "operationId": "getReportRun",
+        "summary": "Fetch a single report run envelope.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Report run envelope.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/reports/v1#/$defs/ReportRun"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/reports/runs/{id}/rows": {
+      "get": {
+        "operationId": "listReportRunRows",
+        "summary": "List a succeeded report run's result rows (cursor-paginated).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque resume token from the previous page (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum page size (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated report row page.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/reports/v1#/$defs/ReportRowPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/reports/runs/{id}/cancel": {
+      "post": {
+        "operationId": "cancelReportRun",
+        "summary": "Cancel a pending or running report run.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional idempotency key (ADR 0082 D-16). RECOMMENDED on naturally-idempotent mutations.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "Optional cancellation rationale.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/reports/v1#/$defs/CancelReportRunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated report run (terminal `cancelled` status, or unmodified terminal run on idempotent retry).",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/reports/v1#/$defs/ReportRun"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/reports/runs/{id}/export": {
+      "get": {
+        "operationId": "exportReportRun",
+        "summary": "Stream a succeeded report run's results in the requested format.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "description": "Output format. Defaults to `json` when omitted (closed-with-vendor-extension `ReportOutputFormat`).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/reports/v1#/$defs/ReportOutputFormat"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Streamed report run results in the requested format.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/reports/v1#/$defs/ReportRowPage"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "application/vnd.apache.parquet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/dashboard/summary": {
+      "get": {
+        "operationId": "getDashboardSummary",
+        "summary": "Composed dashboard rollup (lifecycle, SLA breaches, recent activity).",
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive UTC RFC 3339 lower bound on the rollup event range.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "description": "Exclusive UTC RFC 3339 upper bound on the rollup event range.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "tenantScope",
+            "in": "query",
+            "required": false,
+            "description": "Tenant scope filter (ADR 0068 D-1.1).",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,62}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cached `asOf`-stamped composed dashboard rollup.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/dashboard/v1#/$defs/DashboardSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/dashboard/lifecycle-rollup": {
+      "get": {
+        "operationId": "getDashboardLifecycleRollup",
+        "summary": "Closed map of case counts by lifecycle posture.",
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive UTC RFC 3339 lower bound on the rollup event range.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "description": "Exclusive UTC RFC 3339 upper bound on the rollup event range.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "tenantScope",
+            "in": "query",
+            "required": false,
+            "description": "Tenant scope filter (ADR 0068 D-1.1).",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,62}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cached `asOf`-stamped lifecycle rollup.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/dashboard/v1#/$defs/LifecycleStateRollup"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/dashboard/sla-breaches": {
+      "get": {
+        "operationId": "getDashboardSlaBreaches",
+        "summary": "Counted SLA breaches across cases in the requested range.",
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive UTC RFC 3339 lower bound on the rollup event range.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "description": "Exclusive UTC RFC 3339 upper bound on the rollup event range.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "tenantScope",
+            "in": "query",
+            "required": false,
+            "description": "Tenant scope filter (ADR 0068 D-1.1).",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,62}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cached `asOf`-stamped SLA breach summary.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/dashboard/v1#/$defs/SlaBreachSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/dashboard/recent-activity": {
+      "get": {
+        "operationId": "getDashboardRecentActivity",
+        "summary": "Counts of recent governed events grouped by event class.",
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive UTC RFC 3339 lower bound on the rollup event range.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "description": "Exclusive UTC RFC 3339 upper bound on the rollup event range.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "tenantScope",
+            "in": "query",
+            "required": false,
+            "description": "Tenant scope filter (ADR 0068 D-1.1).",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,62}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cached `asOf`-stamped recent activity summary.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/dashboard/v1#/$defs/RecentActivitySummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/applicant/cases": {
+      "get": {
+        "operationId": "listApplicantCases",
+        "summary": "List the calling applicant's cases.",
+        "parameters": [
+          {
+            "name": "lifecycleState",
+            "in": "query",
+            "required": false,
+            "description": "Filter to applicant cases in the supplied lifecycle posture.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/LifecycleState"
+            }
+          },
+          {
+            "name": "actionNeeded",
+            "in": "query",
+            "required": false,
+            "description": "When true, restrict to cases where at least one applicant-owed task is `pending` or `drafted`.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque resume token from the previous page (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum page size (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated applicant case summary page.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/applicant/v1#/$defs/ApplicantCaseSummaryPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/applicant/cases/{id}": {
+      "get": {
+        "operationId": "getApplicantCase",
+        "summary": "Fetch the applicant's full case detail projection.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Applicant case detail.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/applicant/v1#/$defs/ApplicantCaseDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/applicant/cases/{id}/tasks": {
+      "get": {
+        "operationId": "listApplicantCaseTasks",
+        "summary": "List applicant-owed tasks on a single case (cursor-paginated).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque resume token from the previous page (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum page size (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated applicant task page.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/applicant/v1#/$defs/ApplicantTaskPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/applicant/notifications": {
+      "get": {
+        "operationId": "listApplicantNotifications",
+        "summary": "List the applicant's notification feed.",
+        "parameters": [
+          {
+            "name": "includeRead",
+            "in": "query",
+            "required": false,
+            "description": "When true, include `read` notifications in addition to `unread`.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque resume token from the previous page (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum page size (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated applicant notification page.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/applicant/v1#/$defs/ApplicantNotificationPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "authLogin",
+        "summary": "Issue a bearer token for a credential.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Idempotency key (ADR 0082 D-16). Server retains the request/response pair for at least 24 hours keyed by `(idempotency-key, route, scope)`. A repeat with the same key but a different body for the same route/scope is rejected with `WOS-1409`.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Login credential payload (closed-with-vendor-extension `LoginKind`).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/auth/v1#/$defs/LoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login response (bearer token or pending MFA challenge).",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/auth/v1#/$defs/LoginResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "authLogout",
+        "summary": "Revoke session tokens (this session, or all sessions).",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional idempotency key (ADR 0082 D-16). RECOMMENDED on naturally-idempotent mutations.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Closed-no-extension logout scope.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/auth/v1#/$defs/LogoutRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Logout complete; bearer token (and dependents per scope) revoked.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "operationId": "authRefresh",
+        "summary": "Refresh a bearer token using the refresh token.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional idempotency key (ADR 0082 D-16). RECOMMENDED on naturally-idempotent mutations.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Opaque refresh token to redeem.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/auth/v1#/$defs/RefreshRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Refreshed bearer token.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/auth/v1#/$defs/RefreshResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/auth/scope-swap": {
+      "post": {
+        "operationId": "authScopeSwap",
+        "summary": "Swap the authenticated session's scope (within the current tenant).",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Idempotency key (ADR 0082 D-16). Server retains the request/response pair for at least 24 hours keyed by `(idempotency-key, route, scope)`. A repeat with the same key but a different body for the same route/scope is rejected with `WOS-1409`.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Target scope tuple (Tenant -> Organization -> Workspace? -> Environment).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/auth/v1#/$defs/ScopeSwapRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Re-issued bearer token bound to the new scope.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/auth/v1#/$defs/LoginResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/auth/introspect": {
+      "get": {
+        "operationId": "authIntrospect",
+        "summary": "Introspect the bearer token presented on the request.",
+        "responses": {
+          "200": {
+            "description": "Token introspection (RFC 7662-shaped).",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/auth/v1#/$defs/TokenIntrospection"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/auth/scope": {
+      "get": {
+        "operationId": "authGetScope",
+        "summary": "Fetch the active scope context for the bearer token.",
+        "responses": {
+          "200": {
+            "description": "Active scope context.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/auth/v1#/$defs/ScopeContext"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/bundles": {
+      "get": {
+        "operationId": "listBundles",
+        "summary": "List case-export bundles.",
+        "parameters": [
+          {
+            "name": "instanceId",
+            "in": "query",
+            "required": false,
+            "description": "Filter to bundles for one case instance URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "lifecycleStateAtExport",
+            "in": "query",
+            "required": false,
+            "description": "Filter on the lifecycle state captured at export time.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Filter on the closed bundle status.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/bundle/v1#/$defs/BundleStatus"
+            }
+          },
+          {
+            "name": "createdAfter",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive UTC RFC 3339 lower bound on `requestedAt`.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque resume token from the previous page (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum page size (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated bundle metadata page.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/bundle/v1#/$defs/BundlePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createBundle",
+        "summary": "Kick off a case-export bundle build.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Idempotency key (ADR 0082 D-16). Server retains the request/response pair for at least 24 hours keyed by `(idempotency-key, route, scope)`. A repeat with the same key but a different body for the same route/scope is rejected with `WOS-1409`.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Bundle build request \u2014 server emits Trellis events as the build progresses.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/bundle/v1#/$defs/BundleCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Bundle metadata (typically `status: pending` or `building`).",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/bundle/v1#/$defs/Bundle"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/bundles/{urn}": {
+      "get": {
+        "operationId": "getBundle",
+        "summary": "Fetch a bundle's metadata envelope (never the byte stream).",
+        "parameters": [
+          {
+            "name": "urn",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bundle metadata envelope.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/bundle/v1#/$defs/Bundle"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/bundles/{urn}/download": {
+      "get": {
+        "operationId": "downloadBundle",
+        "summary": "Stream the Trellis-emitted CBOR bundle archive (`trellis-export/1`).",
+        "parameters": [
+          {
+            "name": "urn",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trellis-emitted CBOR export archive byte stream (`trellis-export/1`).",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/cbor": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/audit/queries": {
+      "post": {
+        "operationId": "createAuditQuery",
+        "summary": "Submit a cross-case audit query.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional idempotency key (ADR 0082 D-16). RECOMMENDED on naturally-idempotent mutations.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Cross-case audit query parameters. `Idempotency-Key` REQUIRED when `materialize: true` (ADR 0082 D-16).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/audit/v1#/$defs/AuditQueryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Audit query result envelope (synchronous first page when `materialize: false`; queued query handle otherwise).",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/audit/v1#/$defs/AuditQueryResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/audit/queries/{queryId}": {
+      "get": {
+        "operationId": "getAuditQuery",
+        "summary": "Fetch the current status (and first page) of a materialized audit query.",
+        "parameters": [
+          {
+            "name": "queryId",
+            "in": "path",
+            "required": true,
+            "description": "Server-issued opaque audit query identifier.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit query result envelope with current `status` and first result page.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/audit/v1#/$defs/AuditQueryResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/audit/queries/{queryId}/results": {
+      "get": {
+        "operationId": "listAuditQueryResults",
+        "summary": "Paginate a materialized audit query's result set.",
+        "parameters": [
+          {
+            "name": "queryId",
+            "in": "path",
+            "required": true,
+            "description": "Server-issued opaque audit query identifier.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque resume token from the previous page (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum page size (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit query result page (available only when `status == succeeded`).",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/audit/v1#/$defs/AuditQueryResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/audit/records/{provenanceUrn}": {
+      "get": {
+        "operationId": "getAuditProvenanceRecord",
+        "summary": "Fetch a single provenance record cross-case under audit scope.",
+        "parameters": [
+          {
+            "name": "provenanceUrn",
+            "in": "path",
+            "required": true,
+            "description": "Provenance record URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Provenance record (any tier).",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/provenance/v1#/$defs/ProvenanceRecord"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Notification": {
+        "$ref": "https://schemas.formspec.io/wos-api/notification/v1#/$defs/Notification"
+      },
+      "NotificationPage": {
+        "$ref": "https://schemas.formspec.io/wos-api/notification/v1#/$defs/NotificationPage"
+      },
+      "UnreadCountResponse": {
+        "$ref": "https://schemas.formspec.io/wos-api/notification/v1#/$defs/UnreadCountResponse"
+      },
+      "MarkNotificationReadRequest": {
+        "$ref": "https://schemas.formspec.io/wos-api/notification/v1#/$defs/MarkNotificationReadRequest"
+      },
+      "Problem": {
+        "$ref": "https://schemas.formspec.io/wos-api/error/v1#/$defs/Problem"
+      },
+      "Actor": {
+        "$ref": "https://schemas.formspec.io/wos-api/actor/v1#/$defs/Actor"
+      },
+      "ActorPage": {
+        "$ref": "https://schemas.formspec.io/wos-api/actor/v1#/$defs/ActorPage"
+      },
+      "CaseInstance": {
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstance"
+      },
+      "CaseInstanceWithIncludes": {
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceWithIncludes"
+      },
+      "CaseInstancePage": {
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstancePage"
+      },
+      "CaseInstanceCreateRequest": {
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceCreateRequest"
+      },
+      "CaseInstanceCreateResponse": {
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceCreateResponse"
+      },
+      "CaseInstanceGovernance": {
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceGovernance"
+      },
+      "CaseInstanceTimerList": {
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceTimerList"
+      },
+      "CaseInstanceHoldList": {
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceHoldList"
+      },
+      "CaseInstanceRelatedList": {
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceRelatedList"
+      },
+      "EventSubmissionRequest": {
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/EventSubmissionRequest"
+      },
+      "EventSubmissionResponse": {
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/EventSubmissionResponse"
+      },
+      "SuspendInstanceRequest": {
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/SuspendInstanceRequest"
+      },
+      "ResumeInstanceRequest": {
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/ResumeInstanceRequest"
+      },
+      "TerminateInstanceRequest": {
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/TerminateInstanceRequest"
+      },
+      "MigrateInstanceRequest": {
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/MigrateInstanceRequest"
+      },
+      "MigrationResult": {
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/MigrationResult"
+      },
+      "Task": {
+        "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/Task"
+      },
+      "TaskPage": {
+        "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskPage"
+      },
+      "TaskDraft": {
+        "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskDraft"
+      },
+      "TaskSubmission": {
+        "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskSubmission"
+      },
+      "TaskDismissal": {
+        "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskDismissal"
+      },
+      "ProvenanceRecord": {
+        "$ref": "https://schemas.formspec.io/wos-api/provenance/v1#/$defs/ProvenanceRecord"
+      },
+      "ProvenanceRecordPage": {
+        "$ref": "https://schemas.formspec.io/wos-api/provenance/v1#/$defs/ProvenanceRecordPage"
+      },
+      "AssembledExplanation": {
+        "$ref": "https://schemas.formspec.io/wos-api/provenance/v1#/$defs/AssembledExplanation"
+      },
+      "AgentView": {
+        "$ref": "https://schemas.formspec.io/wos-api/governance/v1#/$defs/AgentView"
+      },
+      "AgentPage": {
+        "$ref": "https://schemas.formspec.io/wos-api/governance/v1#/$defs/AgentPage"
+      },
+      "Delegation": {
+        "$ref": "https://schemas.formspec.io/wos-api/governance/v1#/$defs/Delegation"
+      },
+      "DelegationPage": {
+        "$ref": "https://schemas.formspec.io/wos-api/governance/v1#/$defs/DelegationPage"
+      },
+      "DelegationCreateRequest": {
+        "$ref": "https://schemas.formspec.io/wos-api/governance/v1#/$defs/DelegationCreateRequest"
+      },
+      "DelegationRevokeRequest": {
+        "$ref": "https://schemas.formspec.io/wos-api/governance/v1#/$defs/DelegationRevokeRequest"
+      },
+      "PolicyVersion": {
+        "$ref": "https://schemas.formspec.io/wos-api/governance/v1#/$defs/PolicyVersion"
+      },
+      "PolicyVersionPage": {
+        "$ref": "https://schemas.formspec.io/wos-api/governance/v1#/$defs/PolicyVersionPage"
+      },
+      "CorrespondenceMessage": {
+        "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/CorrespondenceMessage"
+      },
+      "CorrespondenceMessagePage": {
+        "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/CorrespondenceMessagePage"
+      },
+      "LogCorrespondenceMessageRequest": {
+        "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/LogCorrespondenceMessageRequest"
+      },
+      "CorrespondenceRendering": {
+        "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/CorrespondenceRendering"
+      },
+      "RenderCorrespondenceRequest": {
+        "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/RenderCorrespondenceRequest"
+      },
+      "BusinessCalendarDateList": {
+        "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/BusinessCalendarDateList"
+      },
+      "ReportRun": {
+        "$ref": "https://schemas.formspec.io/wos-api/reports/v1#/$defs/ReportRun"
+      },
+      "ReportRunPage": {
+        "$ref": "https://schemas.formspec.io/wos-api/reports/v1#/$defs/ReportRunPage"
+      },
+      "ReportRowPage": {
+        "$ref": "https://schemas.formspec.io/wos-api/reports/v1#/$defs/ReportRowPage"
+      },
+      "CreateReportRunRequest": {
+        "$ref": "https://schemas.formspec.io/wos-api/reports/v1#/$defs/CreateReportRunRequest"
+      },
+      "CancelReportRunRequest": {
+        "$ref": "https://schemas.formspec.io/wos-api/reports/v1#/$defs/CancelReportRunRequest"
+      },
+      "DashboardSummary": {
+        "$ref": "https://schemas.formspec.io/wos-api/dashboard/v1#/$defs/DashboardSummary"
+      },
+      "LifecycleStateRollup": {
+        "$ref": "https://schemas.formspec.io/wos-api/dashboard/v1#/$defs/LifecycleStateRollup"
+      },
+      "SlaBreachSummary": {
+        "$ref": "https://schemas.formspec.io/wos-api/dashboard/v1#/$defs/SlaBreachSummary"
+      },
+      "RecentActivitySummary": {
+        "$ref": "https://schemas.formspec.io/wos-api/dashboard/v1#/$defs/RecentActivitySummary"
+      },
+      "ApplicantCaseSummaryPage": {
+        "$ref": "https://schemas.formspec.io/wos-api/applicant/v1#/$defs/ApplicantCaseSummaryPage"
+      },
+      "ApplicantCaseDetail": {
+        "$ref": "https://schemas.formspec.io/wos-api/applicant/v1#/$defs/ApplicantCaseDetail"
+      },
+      "ApplicantTaskPage": {
+        "$ref": "https://schemas.formspec.io/wos-api/applicant/v1#/$defs/ApplicantTaskPage"
+      },
+      "ApplicantNotificationPage": {
+        "$ref": "https://schemas.formspec.io/wos-api/applicant/v1#/$defs/ApplicantNotificationPage"
+      },
+      "LoginRequest": {
+        "$ref": "https://schemas.formspec.io/wos-api/auth/v1#/$defs/LoginRequest"
+      },
+      "LoginResponse": {
+        "$ref": "https://schemas.formspec.io/wos-api/auth/v1#/$defs/LoginResponse"
+      },
+      "LogoutRequest": {
+        "$ref": "https://schemas.formspec.io/wos-api/auth/v1#/$defs/LogoutRequest"
+      },
+      "RefreshRequest": {
+        "$ref": "https://schemas.formspec.io/wos-api/auth/v1#/$defs/RefreshRequest"
+      },
+      "RefreshResponse": {
+        "$ref": "https://schemas.formspec.io/wos-api/auth/v1#/$defs/RefreshResponse"
+      },
+      "ScopeSwapRequest": {
+        "$ref": "https://schemas.formspec.io/wos-api/auth/v1#/$defs/ScopeSwapRequest"
+      },
+      "ScopeContext": {
+        "$ref": "https://schemas.formspec.io/wos-api/auth/v1#/$defs/ScopeContext"
+      },
+      "TokenIntrospection": {
+        "$ref": "https://schemas.formspec.io/wos-api/auth/v1#/$defs/TokenIntrospection"
+      },
+      "Bundle": {
+        "$ref": "https://schemas.formspec.io/wos-api/bundle/v1#/$defs/Bundle"
+      },
+      "BundlePage": {
+        "$ref": "https://schemas.formspec.io/wos-api/bundle/v1#/$defs/BundlePage"
+      },
+      "BundleCreateRequest": {
+        "$ref": "https://schemas.formspec.io/wos-api/bundle/v1#/$defs/BundleCreateRequest"
+      },
+      "AuditQueryRequest": {
+        "$ref": "https://schemas.formspec.io/wos-api/audit/v1#/$defs/AuditQueryRequest"
+      },
+      "AuditQueryResult": {
+        "$ref": "https://schemas.formspec.io/wos-api/audit/v1#/$defs/AuditQueryResult"
+      }
+    },
+    "responses": {
+      "Problem": {
+        "description": "Problem details error response.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/error/v1#/$defs/Problem"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ]
+}

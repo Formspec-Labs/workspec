@@ -1,0 +1,252 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.formspec.io/wos-api/dashboard/v1",
+  "title": "WOS API Dashboard",
+  "description": "Public API resource schema for read-only WOS dashboard rollups (ADR 0082 D-15 step 6). Carries cached, count-style aggregations across cases — open-cases-by-lifecycle-state, SLA breach summary, recent activity. These are NOT lists: per ADR 0082 D-7, count-style reads use a cached `asOf`-stamped envelope rather than cursor pagination. The aggregation surface is closed by design — section literals and event-class literals are normative; vendor extensions go through the closed-with-vendor-extension `^x-[a-z][a-z0-9-]*$` seam (D-12) only on the per-event taxonomy. Cross-resource shapes (`LifecycleState`) are referenced from `instance.schema.json` per D-14 — no inline redefinition.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/DashboardSummary"
+    },
+    {
+      "$ref": "#/$defs/LifecycleStateRollup"
+    },
+    {
+      "$ref": "#/$defs/SlaBreachSummary"
+    },
+    {
+      "$ref": "#/$defs/RecentActivitySummary"
+    },
+    {
+      "$ref": "#/$defs/DashboardRangeOptions"
+    }
+  ],
+  "$defs": {
+    "WosResourceUrn": {
+      "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+      "description": "Public WOS API resource URN (ADR 0082 D-4). Hoisted to `_common.schema.json` per PLN-0404."
+    },
+    "LifecycleState": {
+      "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/LifecycleState",
+      "description": "Closed instance lifecycle posture, projected from `instance.schema.json#/$defs/LifecycleState` (ADR 0082 D-14 — never redefine). Mirrors the kernel runtime `status` enum; reserved literals `active | suspended | migrating | completed | terminated | stalled` plus `^x-[a-z][a-z0-9-]*$` vendor extensions."
+    },
+    "LifecycleStateCount": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Single (lifecycle-state, count) pair in a `LifecycleStateRollup`. The closed-map shape is expressed as an array of typed pairs rather than `additionalProperties: true` keyed by `LifecycleState` so the closed-with-vendor-extension `LifecycleState` taxonomy stays load-bearing on the wire (a `Record<LifecycleState, integer>` JSON object would lose vendor-extension validation in most consumers).",
+      "required": [
+        "state",
+        "count"
+      ],
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/LifecycleState",
+          "description": "Closed-with-vendor-extension lifecycle posture this row counts."
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of case instances currently in this lifecycle state, computed as of `LifecycleStateRollup.asOf`. Best-effort per ADR 0082 D-7 — counts on append-only logs are cached, not transactionally consistent."
+        }
+      }
+    },
+    "LifecycleStateRollup": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Closed map from `LifecycleState` to count, returned by `GET /api/v1/dashboard/lifecycle-rollup` and embedded in `DashboardSummary.lifecycle`. Per ADR 0082 D-7 the response is a cached `asOf`-stamped envelope rather than a cursor-paginated list — these are aggregate counts, not item lists. A row is present for every lifecycle state the server tracks; states with zero cases MAY be omitted at server discretion.",
+      "required": [
+        "asOf",
+        "items"
+      ],
+      "properties": {
+        "asOf": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp the rollup was computed (ADR 0082 D-7 cached-envelope contract; ADR 0069 wire format).",
+          "examples": [
+            "2026-05-05T14:20:00Z"
+          ]
+        },
+        "items": {
+          "type": "array",
+          "description": "One `LifecycleStateCount` per posture present in the result. Ordered by reserved-literal declaration order, then by vendor-extension ASCII order.",
+          "items": {
+            "$ref": "#/$defs/LifecycleStateCount"
+          }
+        }
+      }
+    },
+    "SlaBreachSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Counted SLA breaches across cases in the requested range, returned by `GET /api/v1/dashboard/sla-breaches` and embedded in `DashboardSummary.slaBreaches`. SLA breach semantics (governance S10.3, S10.4) are workflow-defined; the dashboard projects the count and the timestamp envelope of breach occurrences. Per ADR 0082 D-7 the response is a cached `asOf`-stamped envelope, not a list.",
+      "required": [
+        "asOf",
+        "count"
+      ],
+      "properties": {
+        "asOf": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp the breach summary was computed."
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total SLA breach occurrences in the requested range. Best-effort per ADR 0082 D-7; counts on append-only logs are cached, not transactionally consistent."
+        },
+        "earliestBreachAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp of the earliest SLA breach in the requested range. Omitted when `count` is zero."
+        },
+        "latestBreachAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp of the latest SLA breach in the requested range. Omitted when `count` is zero."
+        }
+      }
+    },
+    "RecentActivityEventClass": {
+      "oneOf": [
+        {
+          "enum": [
+            "case-created",
+            "case-completed",
+            "case-terminated",
+            "task-created",
+            "task-submitted",
+            "task-dismissed",
+            "task-expired",
+            "review-cleared",
+            "review-flagged",
+            "hold-engaged",
+            "hold-released",
+            "delegation-granted",
+            "delegation-revoked",
+            "correspondence-sent",
+            "correspondence-received"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "description": "Closed-with-vendor-extension event-class taxonomy (ADR 0082 D-12) for `RecentActivitySummary`. Reserved literals project the WOS event families a dashboard consumer typically wants to count: case-lifecycle (`case-created | case-completed | case-terminated`), task-lifecycle (`task-created | task-submitted | task-dismissed | task-expired`), review-protocol (`review-cleared | review-flagged`; governance S4), holds (`hold-engaged | hold-released`; governance S12), delegation (`delegation-granted | delegation-revoked`; governance S11), correspondence (`correspondence-sent | correspondence-received`). Vendor extensions MUST use an `^x-[a-z][a-z0-9-]*$` prefix — vendor-specific event classes do not break compatibility.",
+      "examples": [
+        "case-created",
+        "task-submitted"
+      ]
+    },
+    "RecentActivityEventCount": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Single (event-class, count) pair in a `RecentActivitySummary`. The array-of-pairs shape (rather than `additionalProperties: true` keyed by event class) preserves the closed-with-vendor-extension `RecentActivityEventClass` taxonomy on the wire.",
+      "required": [
+        "eventClass",
+        "count"
+      ],
+      "properties": {
+        "eventClass": {
+          "$ref": "#/$defs/RecentActivityEventClass",
+          "description": "Closed-with-vendor-extension event-class this row counts."
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of events of this class observed in the requested range, computed as of `RecentActivitySummary.asOf`. Best-effort per ADR 0082 D-7."
+        }
+      }
+    },
+    "RecentActivitySummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Counts of recent governed events grouped by `RecentActivityEventClass`, returned by `GET /api/v1/dashboard/recent-activity` and embedded in `DashboardSummary.recentActivity`. Per ADR 0082 D-7 the response is a cached `asOf`-stamped envelope rather than a cursor-paginated list — the dashboard surface is count-style.",
+      "required": [
+        "asOf",
+        "items"
+      ],
+      "properties": {
+        "asOf": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp the summary was computed."
+        },
+        "items": {
+          "type": "array",
+          "description": "One `RecentActivityEventCount` per event class observed in the requested range. Event classes with zero observations MAY be omitted at server discretion.",
+          "items": {
+            "$ref": "#/$defs/RecentActivityEventCount"
+          }
+        }
+      }
+    },
+    "DashboardSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Top-level dashboard rollup returned by `GET /api/v1/dashboard/summary`. Composes the three section rollups (`LifecycleStateRollup`, `SlaBreachSummary`, `RecentActivitySummary`) plus a single envelope-level `asOf` timestamp so consumers can decide whether to refresh. Per ADR 0082 D-7 the response is a cached `asOf`-stamped envelope rather than a cursor-paginated list — counts on append-only logs are best-effort and cached aggressively at the server.",
+      "required": [
+        "asOf",
+        "lifecycle",
+        "slaBreaches",
+        "recentActivity"
+      ],
+      "properties": {
+        "asOf": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 envelope-level timestamp the summary was computed (ADR 0082 D-7). Section-level `asOf` fields MAY be earlier than this when the server caches sections at different cadences."
+        },
+        "lifecycle": {
+          "$ref": "#/$defs/LifecycleStateRollup",
+          "description": "Closed map of case counts by lifecycle posture."
+        },
+        "slaBreaches": {
+          "$ref": "#/$defs/SlaBreachSummary",
+          "description": "Count and timestamp envelope of SLA breaches in the requested range."
+        },
+        "recentActivity": {
+          "$ref": "#/$defs/RecentActivitySummary",
+          "description": "Count of recent governed events grouped by `RecentActivityEventClass`."
+        },
+        "tenantScope": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,62}$",
+          "description": "Deployment tenant the rollup was computed for (ADR 0068 D-1.1 — Proposed). Single DNS label: lowercase ASCII letter first, then lowercase letters, digits, or hyphen, length 1 to 63. Echoed from the request when supplied; resolved from `X-WOS-Tenant` otherwise. Omitted only when the server has not yet adopted ADR 0068 scope-stamping."
+        },
+        "since": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 inclusive lower bound the rollup was computed against. Echoed from `DashboardRangeOptions.since` when supplied. Omitted when the server applied its default look-back window."
+        },
+        "until": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 exclusive upper bound the rollup was computed against. Echoed from `DashboardRangeOptions.until` when supplied. Defaults to the server's `asOf` clock when absent."
+        }
+      }
+    },
+    "DashboardRangeOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Query fields for `GET /api/v1/dashboard/summary`, `/lifecycle-rollup`, `/sla-breaches`, and `/recent-activity`. All fields are optional — a request with no parameters returns the server's default look-back window scoped to the calling actor's tenant. The contract carries no `cursor`/`limit` pagination because dashboard responses are count-style cached envelopes (ADR 0082 D-7), not lists.",
+      "properties": {
+        "since": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Inclusive UTC RFC 3339 lower bound on the event range used for `slaBreaches` and `recentActivity` computations (ADR 0069). When omitted the server applies a default look-back window (typically 30 days)."
+        },
+        "until": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Exclusive UTC RFC 3339 upper bound on the event range. Defaults to the server's wall clock when omitted."
+        },
+        "tenantScope": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,62}$",
+          "description": "Deployment tenant scope filter (ADR 0068 D-1.1 — Proposed). MUST agree with the `X-WOS-Tenant` header when both are present; the server rejects mismatches with `WOS-1422`."
+        }
+      }
+    }
+  }
+}

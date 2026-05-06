@@ -1,0 +1,625 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.formspec.io/wos-api/applicant/v1",
+  "title": "WOS API Applicant Views",
+  "description": "Public API resource schema for applicant-facing views of WOS cases (ADR 0082 D-15 step 6). Applicants are the case subjects (or their authorized agents) — distinct from staff caseworkers, reviewers, and adjudicators. The applicant projection narrows the staff `instance.schema.json` and `task.schema.json` shapes to fields the applicant has authority to see: hiding governance internals (delegations, review-state details, hold rationale beyond a flag), exposing only applicant-owed tasks, and surfacing actionable status timelines. Per ADR 0082 D-3 the views are subresource-shaped: a list, a detail, applicant-owed tasks, and the applicant notification feed are separate endpoints. Per ADR 0082 D-14 cross-resource shapes (`LifecycleState`, `WosResourceUrn`) are referenced — never redefined.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/ApplicantCaseSummary"
+    },
+    {
+      "$ref": "#/$defs/ApplicantCaseDetail"
+    },
+    {
+      "$ref": "#/$defs/ApplicantCaseSummaryPage"
+    },
+    {
+      "$ref": "#/$defs/ApplicantCaseListOptions"
+    },
+    {
+      "$ref": "#/$defs/ApplicantTaskSummary"
+    },
+    {
+      "$ref": "#/$defs/ApplicantTaskPage"
+    },
+    {
+      "$ref": "#/$defs/ApplicantNotificationListItem"
+    },
+    {
+      "$ref": "#/$defs/ApplicantNotificationPage"
+    },
+    {
+      "$ref": "#/$defs/ApplicantNotificationListOptions"
+    },
+    {
+      "$ref": "#/$defs/ApplicantStatusTimelineEntry"
+    },
+    {
+      "$ref": "#/$defs/ApplicantAiInvolvementSummary"
+    },
+    {
+      "$ref": "#/$defs/ApplicantAgentSummary"
+    }
+  ],
+  "$defs": {
+    "WosResourceUrn": {
+      "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+      "description": "Public WOS API resource URN (ADR 0082 D-4). Hoisted to `_common.schema.json` per PLN-0404."
+    },
+    "WorkflowUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "Absolute URI of the governing WOS Workflow Document. Together with `workflowVersion` pins the exact author-time document controlling the case lifecycle.",
+      "examples": [
+        "https://agency.gov/workflows/benefits-adjudication"
+      ],
+      "x-wos": {
+        "openStringKind": "uri"
+      }
+    },
+    "LifecycleState": {
+      "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/LifecycleState",
+      "description": "Closed instance lifecycle posture, projected from `instance.schema.json#/$defs/LifecycleState` (ADR 0082 D-14 — never redefine). Reserved literals `active | suspended | migrating | completed | terminated | stalled` plus `^x-[a-z][a-z0-9-]*$` vendor extensions."
+    },
+    "ApplicantTaskSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Subset of staff `task.schema.json#/$defs/TaskListItem` projected for the applicant view. Only applicant-owed tasks are returned by `GET /api/v1/applicant/cases/{id}/tasks`; the contract defends that scope by carrying a closed `TaskKind` subset (`intake`, `correspondence-response`, `signature`, `verification`) covering applicant-actionable families and a closed user-facing `TaskStatus` (`pending | drafted | submitted | dismissed | expired`). Staff-owned task families (`review`, `determination`, `escalation`, `hold-resolution`) are filtered server-side and never appear here.",
+      "required": [
+        "id",
+        "instanceId",
+        "kind",
+        "status",
+        "title",
+        "createdAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Stable public URN for this task."
+        },
+        "instanceId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Case instance URN this task belongs to."
+        },
+        "kind": {
+          "oneOf": [
+            {
+              "enum": [
+                "intake",
+                "correspondence-response",
+                "signature",
+                "verification"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^x-[a-z][a-z0-9-]*$"
+            }
+          ],
+          "description": "Closed-with-vendor-extension task family for applicant-owed work (ADR 0082 D-12). Reserved literals are the applicant-actionable subset of `task.schema.json#/$defs/TaskKind`: `intake` (initial application capture); `correspondence-response` (reply to inbound correspondence); `signature` (signature-profile signer step); `verification` (independent confirmation of a prior mutation). Staff-owned families (`review`, `determination`, `escalation`, `hold-resolution`) are filtered server-side and MUST NOT appear here. Vendor extensions MUST use an `^x-[a-z][a-z0-9-]*$` prefix.",
+          "examples": [
+            "intake"
+          ]
+        },
+        "status": {
+          "oneOf": [
+            {
+              "enum": [
+                "pending",
+                "drafted",
+                "submitted",
+                "dismissed",
+                "expired"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^x-[a-z][a-z0-9-]*$"
+            }
+          ],
+          "description": "Closed user-facing task posture, mirroring `task.schema.json#/$defs/TaskStatus` (ADR 0082 D-12). Reserved literals `pending | drafted | submitted | dismissed | expired`. The `pattern` branch is a forward-compatibility seam only — `task.schema.json#/$defs/TaskStatus` itself is closed-no-extension; vendor extensions are intentionally not exercised here.",
+          "examples": [
+            "pending"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Short human-readable task headline (open prose; rendering concern, not contract).",
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "examples": [
+            "Submit eligibility application"
+          ]
+        },
+        "deadline": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 deadline by which the applicant SHOULD submit the response before SLA breach (governance S10.3)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the task was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the task projection was last refreshed."
+        }
+      }
+    },
+    "ApplicantNotificationListItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Thin applicant-scoped projection of a notification feed item. The full staff `notification.schema.json#/$defs/Notification` shape carries fields (rich actions, internal severity ladder, governance-source classifiers) that exceed the applicant's authority. This projection keeps identity, type, status, headline, body, and case linkage — sufficient to drive an applicant inbox without leaking governance internals. Authoring lives here (rather than a `$ref` to staff notification) because the applicant view is intentionally narrower and uses a smaller closed `kind` taxonomy.",
+      "required": [
+        "id",
+        "kind",
+        "status",
+        "title",
+        "body",
+        "createdAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Stable public URN for this notification."
+        },
+        "kind": {
+          "oneOf": [
+            {
+              "enum": [
+                "task-assigned",
+                "task-deadline-approaching",
+                "case-update",
+                "correspondence-received",
+                "decision-reached"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^x-[a-z][a-z0-9-]*$"
+            }
+          ],
+          "description": "Closed-with-vendor-extension applicant-facing notification family (ADR 0082 D-12). Reserved literals are the applicant-relevant projection of staff event families: `task-assigned` (new applicant-owed task); `task-deadline-approaching` (advance SLA warning); `case-update` (lifecycle posture change visible to the applicant); `correspondence-received` (inbound message addressed to the applicant); `decision-reached` (rights-impacting determination available). Staff-internal categories (`escalation`, `review-activated`, `hold-expired`) are filtered server-side and MUST NOT appear here. Vendor extensions MUST use an `^x-[a-z][a-z0-9-]*$` prefix.",
+          "examples": [
+            "task-assigned"
+          ]
+        },
+        "status": {
+          "enum": [
+            "unread",
+            "read",
+            "archived"
+          ],
+          "description": "Closed applicant-side read status. Closed-no-extension by design — the applicant inbox lifecycle is normative. Note this is a strict subset of `notification.schema.json#/$defs/NotificationStatus`: the staff `dismissed` status is not exposed because applicant notifications are never dismissed administratively, only read or archived by the applicant.",
+          "examples": [
+            "unread"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Short headline suitable for inbox-style display.",
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "examples": [
+            "New task assigned: submit eligibility application"
+          ]
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Notification body text suitable for in-app display.",
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "examples": [
+            "We need additional information to continue your application."
+          ]
+        },
+        "instanceId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Case instance URN this notification relates to. Omitted only for tenant-wide system notifications."
+        },
+        "taskId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Task URN this notification relates to. Present iff `kind` is `task-assigned` or `task-deadline-approaching`."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the notification was created."
+        },
+        "readAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the applicant marked the notification read. Omitted while `status == unread`."
+        }
+      }
+    },
+    "ApplicantAgentSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Single agent's role in this case as projected for the applicant view (EU AI Act Art. 13; OMB M-24-10; ai-integration.md §12.1-§12.2 line 592-604). The applicant has the right to know that AI participated and in what capacity, but NOT to know the model identifier, version, internal autonomy posture, or proprietary configuration. This shape carries only the disclosure-load-bearing fields.",
+      "required": [
+        "displayName",
+        "roleInDecision"
+      ],
+      "properties": {
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Plain-language agent label suitable for applicant rendering (\"Eligibility Assistant\", not `claude-sonnet-4-20250514`). Open prose — the staff `AgentView.modelIdentifier` is intentionally NOT projected here.",
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "examples": [
+            "Eligibility Assistant"
+          ]
+        },
+        "roleInDecision": {
+          "enum": [
+            "advisory",
+            "primary",
+            "fallback"
+          ],
+          "description": "Closed-no-extension role classification matching the disclosure obligation. `advisory` is suggest-only or read-only assistance; `primary` is the agent that produced the determination input (autonomous or supervised); `fallback` is an agent that ran only when an upstream actor failed. The applicant has authority to know which of the three roles the AI played — closed by design so the disclosure cannot drift into vendor-specific labels.",
+          "examples": [
+            "advisory"
+          ]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Reported calibrated confidence of the agent's contribution to this case in [0,1]. Optional — surfaced only when the agent reported a confidence and disclosure policy permits showing it; absent otherwise."
+        }
+      }
+    },
+    "ApplicantAiInvolvementSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Applicant-facing summary disclosing AI involvement on this case (EU AI Act Art. 13 transparency obligation to the affected person; OMB M-24-10; ai-integration.md §12.1-§12.2 line 592-604: \"For `rights-impacting` workflows, `discloseThatAgentAssisted` MUST be `true`\"). Surfaces the FACT of AI involvement and the operational shape that bears on appeal rights — agent count, role, narrative-record count for further inquiry, and whether human review covered every agent decision — without leaking model identifiers, internal model parameters, or the underlying autonomy enum. Present on `ApplicantCaseDetail` iff the governing workflow's `aiOversight.disclosure.discloseThatAgentAssisted` is true.",
+      "required": [
+        "agentsInvolved",
+        "narrativeRecordCount",
+        "humanReviewedAllAgentDecisions"
+      ],
+      "properties": {
+        "agentsInvolved": {
+          "type": "array",
+          "description": "Agents whose actions contributed to this case, ordered by `roleInDecision` (`primary` first, then `advisory`, then `fallback`). Empty when no agent participated despite the workflow declaring AI capability — disclosure on a per-case-actual-involvement basis is the regulatory obligation.",
+          "items": {
+            "$ref": "#/$defs/ApplicantAgentSummary"
+          }
+        },
+        "narrativeRecordCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Count of narrative-tier provenance records on this case (ai-integration.md §13). The applicant uses this as a hint for further inquiry — \"there are 3 narrative records about this case\" — without exposing the record contents themselves at this projection."
+        },
+        "humanReviewedAllAgentDecisions": {
+          "type": "boolean",
+          "description": "True when every agent action on this case was followed by recorded human review per the workflow's review-protocol obligation. False signals that at least one agent action took effect without per-action human review (`autonomous` autonomy with after-the-fact review or sample-based review). Load-bearing for the applicant's ability to assess appeal grounds and for the staff's confidence in the determination chain."
+        }
+      }
+    },
+    "ApplicantStatusTimelineEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Single entry in the applicant-visible status timeline. Each entry is an applicant-scoped projection of a governed event — case-creation, lifecycle-state change, applicant-task assignment, applicant-task submission, decision, correspondence sent or received. Closed-with-vendor-extension `event` taxonomy. The timeline is NOT a cursor-paginated list (entry count is bounded per case); it ships as a small array on `ApplicantCaseDetail.statusTimeline` and not as a standalone endpoint.",
+      "required": [
+        "event",
+        "occurredAt"
+      ],
+      "properties": {
+        "event": {
+          "oneOf": [
+            {
+              "enum": [
+                "case-created",
+                "lifecycle-changed",
+                "applicant-task-assigned",
+                "applicant-task-submitted",
+                "decision-reached",
+                "correspondence-sent",
+                "correspondence-received"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^x-[a-z][a-z0-9-]*$"
+            }
+          ],
+          "description": "Closed-with-vendor-extension applicant-visible event class. Reserved literals project the events the applicant has authority to see; staff-internal events (delegation, review-flagged, hold-engaged rationale) are filtered server-side. Vendor extensions MUST use an `^x-[a-z][a-z0-9-]*$` prefix.",
+          "examples": [
+            "case-created"
+          ]
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the event was recorded server-side."
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Short human-readable summary of the event suitable for timeline rendering. Open prose — rendering concern.",
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "examples": [
+            "Application received"
+          ]
+        },
+        "newLifecycleState": {
+          "$ref": "#/$defs/LifecycleState",
+          "description": "New lifecycle posture entered as a result of this event. Present iff `event == lifecycle-changed`."
+        },
+        "taskId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Task URN this entry relates to. Present iff `event` is `applicant-task-assigned` or `applicant-task-submitted`."
+        }
+      }
+    },
+    "ApplicantCaseSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Lightweight applicant-facing case projection for list views. Distinct from staff `instance.schema.json#/$defs/CaseInstance` — the applicant view hides governance internals (delegations, review state, hold rationale) and surfaces only the fields the applicant has authority to see. Carries the case URN, governing workflow, lifecycle posture, last-update timestamp, and an `actionNeeded` flag indicating whether at least one applicant-owed task is in `pending` or `drafted` status.",
+      "required": [
+        "id",
+        "workflowUrl",
+        "lifecycleState",
+        "actionNeeded",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Stable public URN for this case instance."
+        },
+        "workflowUrl": {
+          "$ref": "#/$defs/WorkflowUrl",
+          "description": "Absolute URI of the governing Workflow Document."
+        },
+        "lifecycleState": {
+          "$ref": "#/$defs/LifecycleState",
+          "description": "Closed lifecycle posture for this case (projected from `instance.schema.json`)."
+        },
+        "actionNeeded": {
+          "type": "boolean",
+          "description": "True when at least one applicant-owed task on this case is currently in `pending` or `drafted` status (i.e. the applicant has work outstanding). Computed server-side."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Short human-readable case label suitable for list rendering. Sourced from the workflow's case-file `caseLabel` mapping when configured; falls back to a workflow-name-based default. Open prose — rendering concern.",
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "examples": [
+            "Application for benefits adjudication"
+          ]
+        },
+        "continuationOfServicesActive": {
+          "type": "boolean",
+          "description": "True when the case is operating under a continuation-of-services policy (governance §3.6 — `AppealMechanism.continuationOfServices`; workflow-governance.md:154-158). Surfaces the existence of the policy without leaking the underlying rationale; the applicant has unambiguous authority to see this fact because it directly bears on whether benefits continue during appeal."
+        },
+        "continuationOfServicesEndsAt": {
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "const": "never"
+            }
+          ],
+          "description": "Absolute UTC RFC 3339 timestamp at which the active continuation-of-services window closes, or the literal `never` for indefinite continuation (governance §3.6; ADR 0082 D-10 sentinel pattern). Present only when `continuationOfServicesActive == true`."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the case was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp of the most recent applicant-visible update."
+        }
+      }
+    },
+    "ApplicantCaseDetail": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Full applicant-visible case projection returned by `GET /api/v1/applicant/cases/{id}`. Wraps a `summary` envelope (the same shape returned by the list endpoint), the applicant-owed open task set, the most recent applicant notifications for this case, and the bounded status timeline. Holds, delegations, review state, governance internals, and other staff-only subresources are NOT exposed; the applicant view is intentionally narrower than staff `CaseInstanceWithIncludes`.",
+      "required": [
+        "summary",
+        "openTasks",
+        "recentNotifications",
+        "statusTimeline"
+      ],
+      "properties": {
+        "summary": {
+          "$ref": "#/$defs/ApplicantCaseSummary",
+          "description": "Case summary envelope — same shape as the list-view item, repeated for self-containment."
+        },
+        "openTasks": {
+          "type": "array",
+          "description": "Applicant-owed tasks currently in `pending` or `drafted` status, ordered by `deadline` ascending then `createdAt` ascending. Bounded set per case; the dedicated subresource `GET /api/v1/applicant/cases/{id}/tasks` is the cursor-paginated form for cases with many historical tasks.",
+          "items": {
+            "$ref": "#/$defs/ApplicantTaskSummary"
+          }
+        },
+        "recentNotifications": {
+          "type": "array",
+          "description": "Most recent applicant notifications scoped to this case, ordered by `createdAt` descending. Bounded by server-side cap (typically the most recent 20). Full feed at `GET /api/v1/applicant/notifications`.",
+          "items": {
+            "$ref": "#/$defs/ApplicantNotificationListItem"
+          }
+        },
+        "statusTimeline": {
+          "type": "array",
+          "description": "Applicant-visible status timeline for this case, ordered by `occurredAt` ascending. Bounded set per case (governed events the applicant has authority to see).",
+          "items": {
+            "$ref": "#/$defs/ApplicantStatusTimelineEntry"
+          }
+        },
+        "aiInvolvement": {
+          "$ref": "#/$defs/ApplicantAiInvolvementSummary",
+          "description": "EU AI Act Art. 13 / OMB M-24-10 disclosure of AI involvement on this case (ai-integration.md §12.1-§12.2 line 592-604). Present iff the governing workflow's `aiOversight.disclosure.discloseThatAgentAssisted` is true. Exposes the FACT of AI involvement and the operational shape (agent count, role, human-review coverage, narrative-record count) — never internal model identifiers or autonomy enums. Closes the structural disclosure gap on the applicant-facing surface."
+        }
+      }
+    },
+    "ApplicantCaseListOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Query fields for `GET /api/v1/applicant/cases` (ADR 0082 D-7). Default scope is the calling applicant's cases — the server filters by the bearer principal's actor URN; admins MAY NOT widen the scope at this endpoint (staff visibility goes through `instance.schema.json` endpoints).",
+      "properties": {
+        "lifecycleState": {
+          "$ref": "#/$defs/LifecycleState",
+          "description": "Filter to cases in the supplied lifecycle posture. Repeating the query parameter narrows to a posture set."
+        },
+        "actionNeeded": {
+          "type": "boolean",
+          "description": "When true, restrict results to cases where at least one applicant-owed task is `pending` or `drafted`."
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque resume token returned by the previous page (ADR 0082 D-7).",
+          "x-wos": {
+            "openStringKind": "opaque-token"
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "description": "Maximum number of cases requested for this page."
+        }
+      }
+    },
+    "ApplicantCaseSummaryPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Cursor-paginated applicant case page (ADR 0082 D-7). Default ordering is `updatedAt` descending so applicants see their most recently active cases first.",
+      "required": [
+        "items",
+        "hasMore"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "description": "Applicant case summaries in this page.",
+          "items": {
+            "$ref": "#/$defs/ApplicantCaseSummary"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque token for the next page. Omitted when hasMore is false.",
+          "x-wos": {
+            "openStringKind": "opaque-token"
+          }
+        },
+        "hasMore": {
+          "type": "boolean",
+          "description": "True when another page is available from the server."
+        }
+      }
+    },
+    "ApplicantTaskPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Cursor-paginated applicant-owed task page returned by `GET /api/v1/applicant/cases/{id}/tasks` (ADR 0082 D-7). Items are `ApplicantTaskSummary` projections — applicant-owed tasks only.",
+      "required": [
+        "items",
+        "hasMore"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "description": "Applicant task summaries in this page.",
+          "items": {
+            "$ref": "#/$defs/ApplicantTaskSummary"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque token for the next page. Omitted when hasMore is false.",
+          "x-wos": {
+            "openStringKind": "opaque-token"
+          }
+        },
+        "hasMore": {
+          "type": "boolean",
+          "description": "True when another page is available from the server."
+        }
+      }
+    },
+    "ApplicantNotificationListOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Query fields for `GET /api/v1/applicant/notifications` (ADR 0082 D-7).",
+      "properties": {
+        "includeRead": {
+          "type": "boolean",
+          "description": "When true, include `read` notifications in addition to `unread`. `archived` notifications are excluded from both modes; archived items are retrievable per-id only."
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque resume token returned by the previous page (ADR 0082 D-7).",
+          "x-wos": {
+            "openStringKind": "opaque-token"
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "description": "Maximum number of notifications requested for this page."
+        }
+      }
+    },
+    "ApplicantNotificationPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Cursor-paginated applicant notification page (ADR 0082 D-7).",
+      "required": [
+        "items",
+        "hasMore"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "description": "Applicant notifications in this page.",
+          "items": {
+            "$ref": "#/$defs/ApplicantNotificationListItem"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque token for the next page. Omitted when hasMore is false.",
+          "x-wos": {
+            "openStringKind": "opaque-token"
+          }
+        },
+        "hasMore": {
+          "type": "boolean",
+          "description": "True when another page is available from the server."
+        }
+      }
+    }
+  }
+}

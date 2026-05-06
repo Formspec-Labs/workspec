@@ -1,0 +1,1521 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.formspec.io/wos-api/instance/v1",
+  "title": "WOS API Case Instance",
+  "description": "Public API resource schema for WOS case instances. Greenfield per ADR 0082 D-15 step 4. The base `CaseInstance` resource carries identity, workflow binding, lifecycle posture, current configuration, and `caseState` only; governance, tasks, timers, holds, and related cross-case links are subresources (D-3). The `?include=` aggregation seam exposes a closed taxonomy of subresources for single-call UI views without re-introducing GraphQL-style open composition. The kernel anti-design `caseStateMutations: Record<string, unknown>` is structurally inexpressible: state-mutation events are projected through `EvaluationResult.mutations: CaseStateMutation[]` with closed `mutationKind` and `verificationLevel` taxonomies (D-6) drawn from `wos-workflow.schema.json#/$defs/MutationSource` and `#/$defs/VerificationLevel`.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/CaseInstance"
+    },
+    {
+      "$ref": "#/$defs/CaseInstanceWithIncludes"
+    },
+    {
+      "$ref": "#/$defs/CaseInstancePage"
+    },
+    {
+      "$ref": "#/$defs/CaseInstanceListOptions"
+    },
+    {
+      "$ref": "#/$defs/CaseInstanceCreateRequest"
+    },
+    {
+      "$ref": "#/$defs/CaseInstanceCreateResponse"
+    },
+    {
+      "$ref": "#/$defs/CaseInstanceGovernance"
+    },
+    {
+      "$ref": "#/$defs/CaseInstanceTimerList"
+    },
+    {
+      "$ref": "#/$defs/CaseInstanceHoldList"
+    },
+    {
+      "$ref": "#/$defs/CaseInstanceRelatedList"
+    },
+    {
+      "$ref": "#/$defs/EvaluationResult"
+    },
+    {
+      "$ref": "#/$defs/EventSubmissionRequest"
+    },
+    {
+      "$ref": "#/$defs/EventSubmissionResponse"
+    },
+    {
+      "$ref": "#/$defs/CorrelationGroupResult"
+    },
+    {
+      "$ref": "#/$defs/PerInstanceCorrelationResult"
+    },
+    {
+      "$ref": "#/$defs/SuspendInstanceRequest"
+    },
+    {
+      "$ref": "#/$defs/ResumeInstanceRequest"
+    },
+    {
+      "$ref": "#/$defs/TerminateInstanceRequest"
+    },
+    {
+      "$ref": "#/$defs/MigrateInstanceRequest"
+    },
+    {
+      "$ref": "#/$defs/MigrationResult"
+    }
+  ],
+  "$defs": {
+    "ActorRef": {
+      "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+      "description": "Stable actor reference from the identity/governance subsystem (ADR 0082 D-9). Hoisted to `_common.schema.json` per PLN-0404."
+    },
+    "WosResourceUrn": {
+      "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+      "description": "Public WOS API resource URN (ADR 0082 D-4). Hoisted to `_common.schema.json` per PLN-0404."
+    },
+    "WorkflowUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "Absolute URI of the governing WOS Workflow Document. Together with `workflowVersion` pins the exact author-time document controlling this instance's lifecycle, case-state schema, and contract bindings.",
+      "examples": [
+        "https://agency.gov/workflows/benefits-adjudication"
+      ],
+      "x-wos": {
+        "openStringKind": "uri"
+      }
+    },
+    "ImpactLevel": {
+      "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/ImpactLevel",
+      "description": "Closed-with-vendor-extension kernel impact-level taxonomy (Kernel S6) cross-`$ref`d from `task.schema.json` per ADR 0082 D-14 (`$ref` kernel/governance types from existing schemas instead of redefining). The kernel makes `impactLevel` REQUIRED on every Workflow Document (`wos-workflow.schema.json#/$defs/ImpactLevel`); this projection surfaces the value at instance scope so clients can branch on rights-/safety-impacting cases without re-fetching the workflow."
+    },
+    "OutcomeCode": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Machine-readable terminal-outcome marker populated only when `lifecycleState == completed` (Kernel S6 final-state `outcomeCode`). Identifier-shaped so downstream systems can branch on completion semantics without parsing state names. Absent on non-completed cases.",
+      "examples": [
+        "approved",
+        "denied",
+        "withdrawn"
+      ],
+      "x-wos": {
+        "openStringKind": "identifier"
+      }
+    },
+    "MilestoneId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable milestone identifier from the workflow document (Kernel S4 milestones; kernel:661-672). Sorted lexicographically when surfaced as a set.",
+      "examples": [
+        "eligibility-confirmed",
+        "intake-complete"
+      ],
+      "x-wos": {
+        "openStringKind": "identifier"
+      }
+    },
+    "ExpirableTimestamp": {
+      "oneOf": [
+        {
+          "type": "string",
+          "format": "date-time"
+        },
+        {
+          "const": "never"
+        }
+      ],
+      "description": "RFC 3339 UTC timestamp or the literal `never` sentinel for indefinite-duration semantics (ADR 0082 D-10). Used by continuation-of-services exits and similar policy-bounded windows."
+    },
+    "DcrConstraintZoneState": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-instance state of one DCR constraint zone declared on a `compound` lifecycle state (advanced/advanced-governance.md §1.2; advanced-governance.md:116-176). Carries the zone identifier, current escalation level (none → caution → breach), and the most recent trigger timestamp. Companion: Agent B's `dcrZoneViolation` Facts record kind on `provenance.schema.json` carries the per-event detail; this $def is the live state projection on `CaseInstance`.",
+      "required": [
+        "zoneId",
+        "currentLevel"
+      ],
+      "properties": {
+        "zoneId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable DCR-zone identifier from the workflow's advanced-governance constraint-zone declaration.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "examples": [
+            "appeal-window-zone"
+          ]
+        },
+        "currentLevel": {
+          "enum": [
+            "none",
+            "caution",
+            "breach"
+          ],
+          "description": "Closed escalation level of the zone. `none` is nominal; `caution` is a warning posture (constraint approaching breach threshold); `breach` is an active constraint violation. Closed-no-extension by design.",
+          "examples": [
+            "caution"
+          ]
+        },
+        "lastTriggered": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp the zone last transitioned out of `none`. Absent when the zone has never triggered."
+        }
+      }
+    },
+    "LifecycleState": {
+      "description": "Closed instance lifecycle posture (ADR 0082 D-12). Byte-aligned mirror of the kernel `InstanceStatus` enum at `wos-workflow.schema.json#/$defs/InstanceStatus` — itself the name-promoted alias of the inline `status` field on `wos-case-instance.schema.json` (ADR 0082 D-13 gate 6 enforces this byte-parity). Closed-no-extension by design: `active` accepts events normally; `suspended` is paused; `migrating` is mid-definition-version-change; `completed` reached a top-level final state; `terminated` was explicitly terminated; `stalled` exhausted the commit retry budget (ADR 0070 D-5). The kernel taxonomy is closed; if a deployment needs new lifecycle postures, the kernel grows them and the API mirror tracks.",
+      "enum": [
+        "active",
+        "suspended",
+        "migrating",
+        "completed",
+        "terminated",
+        "stalled"
+      ],
+      "examples": [
+        "active",
+        "completed",
+        "stalled"
+      ],
+      "x-wos": {
+        "mirror": "wos-workflow.schema.json#/$defs/InstanceStatus"
+      }
+    },
+    "ConfigurationStateId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Single active leaf-state identifier in the kernel lifecycle hierarchy (Kernel S4.2). Dot-separated path of the leaf state within the lifecycle (for example `review.initial`).",
+      "examples": [
+        "intake",
+        "review.initial",
+        "eligibility.income-check"
+      ],
+      "x-wos": {
+        "openStringKind": "identifier"
+      }
+    },
+    "CaseStateValue": {
+      "description": "Current case-file field values, carried as an opaque JSON value (typically an object whose keys are case-file field names declared in the governing Workflow Document's `caseFile.fields` per Kernel S5.2). The case-file shape is workflow-defined, not API-defined: per-workflow structural validation is the reference server's responsibility against the resolved Workflow Document; this contract treats the value as opaque-shaped. Mutation projection is via `CaseStateMutation`, whose `mutationKind` and `verificationLevel` taxonomies are closed (ADR 0082 D-6).",
+      "examples": [
+        {
+          "applicantName": "Jane Doe",
+          "income": 42000,
+          "householdSize": 3
+        }
+      ]
+    },
+    "MutationKind": {
+      "type": "string",
+      "description": "Origin of a case-state mutation (ADR 0082 D-6). Byte-aligned mirror of the kernel `MutationSource` open enum at `wos-workflow.schema.json#/$defs/MutationSource` (ADR 0082 D-13 gate 6). Reserved literals: `agent-extracted` (an agent extracted the value); `system-fetched` (from an external system of record); `human-entered` (direct user entry); `human-corrected` (a corrective edit on a prior value); `computed` (from a derivation expression); `self-attested` (from an applicant assertion). Vendor extensions MUST use an `^x-[a-z][a-z0-9-]*$` prefix per the kernel pattern.",
+      "oneOf": [
+        {
+          "enum": [
+            "human-entered",
+            "human-corrected",
+            "agent-extracted",
+            "system-fetched",
+            "computed",
+            "self-attested"
+          ]
+        },
+        {
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "examples": [
+        "agent-extracted",
+        "human-entered"
+      ],
+      "x-wos": {
+        "mirror": "wos-workflow.schema.json#/$defs/MutationSource"
+      }
+    },
+    "VerificationLevel": {
+      "type": "string",
+      "description": "Verification strength of a case-state mutation (ADR 0082 D-6). Byte-aligned mirror of the kernel `VerificationLevel` open enum at `wos-workflow.schema.json#/$defs/VerificationLevel` (ADR 0082 D-13 gate 6). Reserved literals: `independent` (corroborated by an independent source); `attested` (signed attestation by a named actor); `corroborated` (consistent with at least one other recorded source); `authoritative` (carried by an authoritative source of record). Vendor extensions MUST use an `^x-[a-z][a-z0-9-]*$` prefix per the kernel pattern.",
+      "oneOf": [
+        {
+          "enum": [
+            "independent",
+            "attested",
+            "corroborated",
+            "authoritative"
+          ]
+        },
+        {
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "examples": [
+        "attested"
+      ],
+      "x-wos": {
+        "mirror": "wos-workflow.schema.json#/$defs/VerificationLevel"
+      }
+    },
+    "CaseStateMutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Single field-level case-state mutation event (ADR 0082 D-6). Replaces the explicit anti-design `caseStateMutations: Record<string, unknown>` from the prior `case-portal/src/ports/types.ts`: the wire shape requires `fieldPath`, `newValue`, `mutationKind`, and `verificationLevel`, so an open-taxonomy mutation bag is structurally inexpressible.",
+      "required": [
+        "fieldPath",
+        "newValue",
+        "mutationKind",
+        "verificationLevel"
+      ],
+      "properties": {
+        "fieldPath": {
+          "type": "string",
+          "minLength": 1,
+          "description": "JSON-pointer or dotted path identifying the case-file field this mutation writes (Kernel S5.4).",
+          "examples": [
+            "/applicantName",
+            "income",
+            "/medical/recentEvidence/0"
+          ],
+          "x-wos": {
+            "openStringKind": "pathExpression"
+          }
+        },
+        "previousValue": {
+          "description": "Value at this `fieldPath` immediately before the mutation. Any JSON value, including `null`. Omitted when the field had no prior value (first write)."
+        },
+        "newValue": {
+          "description": "Value at this `fieldPath` immediately after the mutation. Any JSON value, including `null` for an explicit erasure marker."
+        },
+        "mutationKind": {
+          "$ref": "#/$defs/MutationKind",
+          "description": "Closed-with-vendor-extension origin classification."
+        },
+        "verificationLevel": {
+          "$ref": "#/$defs/VerificationLevel",
+          "description": "Closed-with-vendor-extension verification strength."
+        },
+        "actorRef": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor URN that authored or attested the mutation. OPTIONAL when the runtime cannot canonically resolve a single actor (for example a `computed` mutation derived purely from prior case state)."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the mutation was applied (ADR 0069).",
+          "examples": [
+            "2026-04-19T12:00:00Z"
+          ]
+        }
+      }
+    },
+    "EvaluationOutcomeEventName": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Name of an event that fired during the evaluation. Reserved kernel events follow the `$`-prefix convention (Kernel S4.10); document-authored events are bare identifiers.",
+      "examples": [
+        "applicantResponseReceived",
+        "$timeout.task"
+      ],
+      "x-wos": {
+        "openStringKind": "tagLabel"
+      }
+    },
+    "EvaluationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Result of evaluating a single event against an instance (ADR 0082 D-6). Carries the lifecycle configuration before and after the evaluation, the events that fired during the evaluation, and a typed array of case-state mutations. The kernel anti-design `caseStateMutations: Record<string, unknown>` is replaced by `mutations: CaseStateMutation[]`; the closed `mutationKind` and `verificationLevel` taxonomies make the open-bag form structurally inexpressible.",
+      "required": [
+        "previousConfiguration",
+        "newConfiguration",
+        "eventsFired",
+        "mutations"
+      ],
+      "properties": {
+        "previousConfiguration": {
+          "type": "array",
+          "description": "Active leaf-state configuration immediately before the evaluation.",
+          "items": {
+            "$ref": "#/$defs/ConfigurationStateId"
+          }
+        },
+        "newConfiguration": {
+          "type": "array",
+          "description": "Active leaf-state configuration immediately after the evaluation.",
+          "items": {
+            "$ref": "#/$defs/ConfigurationStateId"
+          }
+        },
+        "eventsFired": {
+          "type": "array",
+          "description": "Events that fired during the evaluation, in evaluation order.",
+          "items": {
+            "$ref": "#/$defs/EvaluationOutcomeEventName"
+          }
+        },
+        "mutations": {
+          "type": "array",
+          "description": "Typed array of case-state mutations applied during the evaluation. Empty when no mutations occurred.",
+          "items": {
+            "$ref": "#/$defs/CaseStateMutation"
+          }
+        }
+      }
+    },
+    "CaseInstance": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Public case-instance resource (ADR 0082 D-3). Carries identity, workflow binding, lifecycle posture, current configuration, `impactLevel` (Kernel S6 proportionality index), and `caseState` only; subresources are accessed via dedicated endpoints or the closed `?include=` aggregation seam (`CaseInstanceWithIncludes`). Mirrors structural fields from the kernel runtime artifact `wos-case-instance.schema.json` but is a wire projection: identifiers are URNs (D-4), `lifecycleState` is the closed posture taxonomy (not the kernel raw `status`), and subresource fields (`activeTasks`, `timers`, `holds`, etc.) are intentionally absent.",
+      "required": [
+        "id",
+        "workflowUrl",
+        "workflowVersion",
+        "lifecycleState",
+        "impactLevel",
+        "configuration",
+        "caseState",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Stable public URN for this case instance."
+        },
+        "workflowUrl": {
+          "$ref": "#/$defs/WorkflowUrl",
+          "description": "Absolute URI of the governing WOS Workflow Document."
+        },
+        "workflowVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Version of the Workflow Document pinned at instance creation (Kernel S9.6). Running instances remain on their creation-time version unless explicitly migrated.",
+          "examples": [
+            "1.0.0",
+            "2025.3.0"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "lifecycleState": {
+          "$ref": "#/$defs/LifecycleState",
+          "description": "Closed lifecycle posture for this instance."
+        },
+        "impactLevel": {
+          "$ref": "#/$defs/ImpactLevel",
+          "description": "Closed-with-vendor-extension kernel impact level (Kernel S6; kernel:826) projected from the governing Workflow Document. REQUIRED — the kernel makes `impactLevel` REQUIRED on every Workflow Document and uses it as a proportionality index for governance, AI-oversight, and review-protocol gating; surfacing it on the case projection lets clients branch on `rights-impacting` / `safety-impacting` cases without re-fetching the workflow."
+        },
+        "configuration": {
+          "type": "array",
+          "description": "Ordered active leaf-state configuration at the time of this projection (Kernel S4.2). Empty for terminal instances.",
+          "items": {
+            "$ref": "#/$defs/ConfigurationStateId"
+          }
+        },
+        "stalledSince": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp recording when the instance entered `stalled` posture (ADR 0070 D-5). REQUIRED on the wire whenever `lifecycleState == stalled`; absent otherwise."
+        },
+        "outcomeCode": {
+          "$ref": "#/$defs/OutcomeCode",
+          "description": "Machine-readable terminal-outcome marker. Populated only when `lifecycleState == completed` (Kernel S6 final-state `outcomeCode`); absent on every other lifecycle state."
+        },
+        "milestonesFired": {
+          "type": "array",
+          "description": "Set of milestone identifiers fired on this case so far (Kernel S4 milestones; kernel:661-672). Sorted lexicographically. Companion: Agent B's `milestoneFired` literal on `FactsRecordKind` carries the per-event detail; this field is the cumulative set on the live instance projection.",
+          "items": {
+            "$ref": "#/$defs/MilestoneId"
+          }
+        },
+        "continuationOfServicesActive": {
+          "type": "boolean",
+          "description": "True when the case is operating under a continuation-of-services policy (governance §3.6 — `AppealMechanism.continuationOfServices`; workflow-governance.md:154-158). Surfaces the existence of the policy without leaking the underlying policy rationale; the staff caseworker uses this to avoid premature termination during an active appeal window."
+        },
+        "continuationOfServicesEndsAt": {
+          "$ref": "#/$defs/ExpirableTimestamp",
+          "description": "Absolute UTC RFC 3339 timestamp at which the active continuation-of-services window closes, or the literal `never` for indefinite continuation (governance §3.6). Present only when `continuationOfServicesActive == true`."
+        },
+        "dcrZones": {
+          "type": "array",
+          "description": "Per-instance DCR constraint-zone state (advanced/advanced-governance.md §1.2). Empty when the workflow declares no constraint zones or none have transitioned out of `none`. Cross-cite Agent B's `dcrZoneViolation` Facts record kind for the per-event detail in provenance.",
+          "items": {
+            "$ref": "#/$defs/DcrConstraintZoneState"
+          }
+        },
+        "caseState": {
+          "$ref": "#/$defs/CaseStateValue",
+          "description": "Authoritative case-file snapshot at this projection point (Kernel S5)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the instance was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the projection was last refreshed."
+        },
+        "tenant": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,62}$",
+          "description": "Deployment tenant for this case instance (ADR 0068 D-1.1). Single DNS label: lowercase ASCII letter first, then lowercase letters, digits, or hyphen, length 1 to 63."
+        },
+        "correlationKey": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Cross-case correlation identifier used by the kernel to route events to related instances (Kernel S9.4). OPTIONAL; absent when no correlation is in effect.",
+          "examples": [
+            "household-1234"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        }
+      }
+    },
+    "DelegationEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Single delegation record visible on a case instance (governance S11). Mirrors the WOS governance `Delegation` model; full details live on the `governance` domain when it ratifies (ADR 0082 D-15 step 5). This shape is the minimum projection needed by the case view.",
+      "required": [
+        "id",
+        "delegator",
+        "delegate",
+        "authority"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Stable URN for this delegation."
+        },
+        "delegator": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor granting the delegation."
+        },
+        "delegate": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor receiving the delegated authority."
+        },
+        "authority": {
+          "oneOf": [
+            {
+              "enum": [
+                "signing",
+                "determination",
+                "review",
+                "override"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^x-[a-z][a-z0-9-]*$"
+            }
+          ],
+          "description": "Closed-with-vendor-extension delegation authority kind (governance S11.2). Vendor extensions MUST use an `x-` prefix.",
+          "examples": [
+            "determination"
+          ]
+        },
+        "effectiveDate": {
+          "type": "string",
+          "format": "date",
+          "description": "ISO 8601 date the delegation becomes active. Omitted when not date-bounded."
+        },
+        "expirationDate": {
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "date"
+            },
+            {
+              "const": "never"
+            }
+          ],
+          "description": "ISO 8601 date the delegation expires, or the literal `never` for indefinite delegations (ADR 0082 D-10 sentinel pattern)."
+        },
+        "revoked": {
+          "type": "boolean",
+          "description": "True when the delegation has been revoked. Revoked delegations remain visible for audit but do not authorize new actions."
+        }
+      }
+    },
+    "ReviewState": {
+      "description": "Closed review-protocol posture for a case instance (governance S4). Reserved literals: `none` (no review attached); `pending` (review required but not started); `in-review` (review actively underway); `cleared` (review completed and approved); `flagged` (review identified an issue requiring resolution). Vendor extensions MUST use an `x-` prefix.",
+      "oneOf": [
+        {
+          "enum": [
+            "none",
+            "pending",
+            "in-review",
+            "cleared",
+            "flagged"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "examples": [
+        "in-review"
+      ]
+    },
+    "CaseInstanceGovernance": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Governance subresource for a case instance (ADR 0082 D-3). Returns the active delegation set and the current review-protocol posture. Full delegation/review records live on the dedicated `governance` domain when it ratifies.",
+      "required": [
+        "instanceId",
+        "delegations",
+        "reviewState"
+      ],
+      "properties": {
+        "instanceId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Case instance this governance projection belongs to."
+        },
+        "delegations": {
+          "type": "array",
+          "description": "Delegations currently in effect for this instance, ordered by `effectiveDate` ascending.",
+          "items": {
+            "$ref": "#/$defs/DelegationEntry"
+          }
+        },
+        "reviewState": {
+          "$ref": "#/$defs/ReviewState",
+          "description": "Closed review-protocol posture for this instance."
+        }
+      }
+    },
+    "TimerEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Single durable timer projection for a case instance. Mirrors `wos-case-instance.schema.json#/$defs/TimerState`; `event` retains the kernel raw event name without the API-layer URN rewrite because timers fire kernel events, not API resources.",
+      "required": [
+        "timerId",
+        "deadline",
+        "event"
+      ],
+      "properties": {
+        "timerId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable processor-assigned timer identifier within this instance.",
+          "examples": [
+            "review-deadline"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "deadline": {
+          "type": "string",
+          "format": "date-time",
+          "minLength": 1,
+          "description": "UTC RFC 3339 timestamp at which this timer fires.",
+          "x-wos": {
+            "openStringKind": "timestamp"
+          }
+        },
+        "event": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Kernel event name dispatched when the timer fires. Typically a `$timeout.*` kernel-generated event (Kernel S4.10).",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "scopeState": {
+          "$ref": "#/$defs/ConfigurationStateId",
+          "description": "Lifecycle state at which this timer is scoped. The timer cancels automatically when the scope state is exited (Kernel S9.7)."
+        }
+      },
+      "x-wos": {
+        "mirror": "wos-case-instance.schema.json#/$defs/TimerState"
+      }
+    },
+    "CaseInstanceTimerList": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Timers subresource for a case instance (ADR 0082 D-3). Returns the durable timer set; this is a small, bounded set per instance, so the response is not cursor-paginated.",
+      "required": [
+        "instanceId",
+        "items"
+      ],
+      "properties": {
+        "instanceId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Case instance these timers belong to."
+        },
+        "items": {
+          "type": "array",
+          "description": "Active timers, ordered by `deadline` ascending.",
+          "items": {
+            "$ref": "#/$defs/TimerEntry"
+          }
+        }
+      }
+    },
+    "HoldEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Single typed hold projection on a case instance (governance S12). Carries the hold reason, expected duration (or the literal `indefinite` for legal-hold), and the resume trigger.",
+      "required": [
+        "id",
+        "holdType",
+        "expectedDuration",
+        "engagedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Stable URN for this hold."
+        },
+        "holdType": {
+          "oneOf": [
+            {
+              "enum": [
+                "pending-applicant-response",
+                "pending-external-verification",
+                "pending-legal-review",
+                "pending-legislation",
+                "pending-related-case",
+                "voluntary-hold",
+                "legal-hold"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^x-[a-z][a-z0-9-]*$"
+            }
+          ],
+          "description": "Closed-with-vendor-extension hold reason (governance S12.2). Vendor extensions MUST use an `x-` prefix."
+        },
+        "expectedDuration": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^P(?!$)(?:\\d+Y)?(?:\\d+M)?(?:\\d+D)?(?:\\d+BD)?(?:T(?:\\d+H)?(?:\\d+M)?(?:\\d+S)?)?$"
+            },
+            {
+              "const": "indefinite"
+            }
+          ],
+          "description": "ISO 8601 duration (with the WOS `P<N>BD` business-day extension), or the literal `indefinite` for `legal-hold` policies."
+        },
+        "resumeTrigger": {
+          "$ref": "#/$defs/EvaluationOutcomeEventName",
+          "description": "Kernel event name that resumes the case from this hold. Omitted when `holdType == legal-hold`."
+        },
+        "engagedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the hold was engaged."
+        },
+        "expectedReleaseAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the hold's expected duration elapses. Omitted when `expectedDuration == indefinite`."
+        }
+      }
+    },
+    "CaseInstanceHoldList": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Holds subresource for a case instance (ADR 0082 D-3). Returns active holds; small, bounded set per instance, so not cursor-paginated.",
+      "required": [
+        "instanceId",
+        "items"
+      ],
+      "properties": {
+        "instanceId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Case instance these holds belong to."
+        },
+        "items": {
+          "type": "array",
+          "description": "Engaged holds, ordered by `engagedAt` ascending.",
+          "items": {
+            "$ref": "#/$defs/HoldEntry"
+          }
+        }
+      }
+    },
+    "RelatedCaseLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Single cross-case related-instance link (Kernel S5.5; kernel:775). Lets clients navigate from a case to its parent appeal, sibling household members, replaced predecessor, or freely-labelled `related`/`supersedes` peer per kernel reservations.",
+      "required": [
+        "instanceId",
+        "relationship"
+      ],
+      "properties": {
+        "instanceId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Related case instance URN."
+        },
+        "relationship": {
+          "oneOf": [
+            {
+              "enum": [
+                "parent",
+                "child",
+                "sibling",
+                "predecessor",
+                "successor",
+                "appeals",
+                "appealed-by",
+                "related",
+                "supersedes"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^x-[a-z][a-z0-9-]*$"
+            }
+          ],
+          "description": "Closed-with-vendor-extension relationship kind. Reserved literals reconcile two prior taxonomies: kernel S5.5 reserves `related` and `supersedes`; the API previously carried `predecessor|successor|appeals|appealed-by` plus the family triplet `parent|child|sibling`. The merged set is now authoritative. Vendor extensions MUST use an `x-` prefix.",
+          "examples": [
+            "appeals",
+            "related",
+            "supersedes"
+          ]
+        },
+        "bidirectional": {
+          "type": "boolean",
+          "description": "When true, the relationship is symmetric — a corresponding `RelatedCaseLink` exists on the peer case pointing back at this one (Kernel S5.5; kernel:775). Defaults to `false` when absent: directional links (`predecessor → successor`, `appeals → appealed-by`) are the common case; symmetric kinds like `sibling`/`related` typically set this `true`. The default is implicit-`false`."
+        },
+        "semanticLabel": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Free-form prose label disambiguating the relationship (Kernel S5.5; kernel:775). Open prose — rendering concern, not contract; useful when several `related` links exist on the same case and the operator needs to tell them apart in a UI.",
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "examples": [
+            "Joint application — spouse",
+            "Companion fraud investigation"
+          ]
+        },
+        "establishedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the relationship was established."
+        }
+      }
+    },
+    "CaseInstanceRelatedList": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Related-cases subresource for a case instance (ADR 0082 D-3). Returns the cross-case link set; not cursor-paginated because related-case sets are small.",
+      "required": [
+        "instanceId",
+        "items"
+      ],
+      "properties": {
+        "instanceId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Case instance these links originate from."
+        },
+        "items": {
+          "type": "array",
+          "description": "Outbound related-case links.",
+          "items": {
+            "$ref": "#/$defs/RelatedCaseLink"
+          }
+        }
+      }
+    },
+    "IncludeKind": {
+      "enum": [
+        "governance",
+        "tasks",
+        "timers",
+        "holds",
+        "related"
+      ],
+      "description": "Closed `?include=` aggregation seam for `GET /api/v1/instances/{id}` (ADR 0082 D-3). No vendor extensions: the aggregation surface is closed by design so server cost is bounded and the GraphQL-style open composition the platform thesis rejects stays inexpressible.",
+      "examples": [
+        "governance",
+        "tasks"
+      ]
+    },
+    "CaseInstanceWithIncludes": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Aggregated single-instance response for `GET /api/v1/instances/{id}?include=...` (ADR 0082 D-3). The `instance` envelope is the same `CaseInstance` shape that lives at `GET /api/v1/instances/{id}` with no `?include=`; subresource fields appear only when their literal is present in the query parameter. Per-section limits (for example `tasks(limit=10)`) are enforced server-side; the inline `tasks` shape projects `TaskListItem` from `task.schema.json` so list views inside the aggregation match the standalone task list.",
+      "required": [
+        "instance"
+      ],
+      "properties": {
+        "instance": {
+          "$ref": "#/$defs/CaseInstance",
+          "description": "Base case-instance projection."
+        },
+        "governance": {
+          "$ref": "#/$defs/CaseInstanceGovernance",
+          "description": "Governance subresource. Present only when `include=governance` was requested."
+        },
+        "tasks": {
+          "type": "array",
+          "description": "Task list projection (lighter `TaskListItem` shape from `task.schema.json`). Present only when `include=tasks` was requested. Capped per-section by the server; clients consume the full task list via `GET /api/v1/instances/{id}/tasks` for cursor pagination.",
+          "items": {
+            "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskListItem"
+          }
+        },
+        "timers": {
+          "$ref": "#/$defs/CaseInstanceTimerList",
+          "description": "Timers subresource. Present only when `include=timers` was requested."
+        },
+        "holds": {
+          "$ref": "#/$defs/CaseInstanceHoldList",
+          "description": "Holds subresource. Present only when `include=holds` was requested."
+        },
+        "related": {
+          "$ref": "#/$defs/CaseInstanceRelatedList",
+          "description": "Related-cases subresource. Present only when `include=related` was requested."
+        }
+      }
+    },
+    "CaseInstanceListOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Query fields for `GET /api/v1/instances` (ADR 0082 D-7).",
+      "properties": {
+        "lifecycleState": {
+          "$ref": "#/$defs/LifecycleState",
+          "description": "Filter to instances in the supplied lifecycle posture. Repeating the query parameter narrows to a posture set."
+        },
+        "workflowUrl": {
+          "$ref": "#/$defs/WorkflowUrl",
+          "description": "Filter to instances of the supplied Workflow Document URL."
+        },
+        "createdAfter": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Inclusive UTC RFC 3339 lower bound on `createdAt` (ADR 0069)."
+        },
+        "createdBefore": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Exclusive UTC RFC 3339 upper bound on `createdAt`."
+        },
+        "tenant": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,62}$",
+          "description": "Tenant scope filter (ADR 0068 D-1.1). MUST agree with the `X-WOS-Tenant` header when both are present; the server rejects mismatches with `WOS-1422`."
+        },
+        "include": {
+          "type": "array",
+          "description": "Closed list of subresources to embed (`?include=...`). Repeated query parameter or comma-separated form. Per-section limits are enforced server-side.",
+          "items": {
+            "$ref": "#/$defs/IncludeKind"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque resume token returned by the previous page (ADR 0082 D-7).",
+          "x-wos": {
+            "openStringKind": "opaque-token"
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "description": "Maximum number of instances requested for this page."
+        }
+      }
+    },
+    "CaseInstancePage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Cursor-paginated case-instance page (ADR 0082 D-7).",
+      "required": [
+        "items",
+        "hasMore"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "description": "Case-instance projections in this page.",
+          "items": {
+            "$ref": "#/$defs/CaseInstance"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque token for the next page. Omitted when hasMore is false.",
+          "x-wos": {
+            "openStringKind": "opaque-token"
+          }
+        },
+        "hasMore": {
+          "type": "boolean",
+          "description": "True when another page is available from the server."
+        }
+      }
+    },
+    "CaseInstanceCreateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Request body for `POST /api/v1/instances`. The `Idempotency-Key` HTTP header is REQUIRED (ADR 0082 D-16); a repeat request within the retention window returns the original instance unchanged. Servers create the URN, pin `workflowVersion`, and set the initial `caseState` from the supplied `seedCaseState` after applying the workflow's prefill mapping.",
+      "required": [
+        "workflowUrl"
+      ],
+      "properties": {
+        "workflowUrl": {
+          "$ref": "#/$defs/WorkflowUrl",
+          "description": "Absolute URI of the WOS Workflow Document this instance is created against."
+        },
+        "tenant": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,62}$",
+          "description": "Explicit deployment tenant for this instance (ADR 0068 D-1.1). When omitted, the server resolves it from `X-WOS-Tenant`."
+        },
+        "correlationKey": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional cross-case correlation identifier (Kernel S9.4).",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "seedCaseState": {
+          "$ref": "#/$defs/CaseStateValue",
+          "description": "Optional seed case-state values applied at creation. Field declarations come from the Workflow Document; the server rejects fields not declared in the workflow's `caseFile.fields` with `WOS-1422`."
+        },
+        "intakeHandoffRef": {
+          "type": "string",
+          "format": "uri",
+          "description": "Optional URI reference to a Formspec `IntakeHandoff` artifact that should be applied at create time (ADR 0073). When present, the server validates the handoff against the workflow's intake contract before creating the instance and the response surfaces the resolved `IntakeHandoffOutcome`."
+        }
+      }
+    },
+    "IntakeHandoffOutcome": {
+      "enum": [
+        "accepted",
+        "attachToExistingCase",
+        "deferred"
+      ],
+      "description": "Closed-no-extension outcome of `acceptIntakeHandoff` policy evaluation (ADR 0073 D-7; Kernel S11.4.1 step 5). Reserved literals: `accepted` -- the handoff was accepted and a new governed case was born (corresponds to the kernel `accepted + createGovernedCase` policy decision and emits the `intakeAccepted` + `caseCreated` Facts records); `attachToExistingCase` -- the handoff was accepted and attached to a pre-existing governed case (kernel `accepted + attachToExistingCase`; emits `intakeAccepted` only); `deferred` -- the handoff was received but withheld from governed-case mutation pending later host action (kernel `deferred`; emits `intakeDeferred`). Closed-no-extension because the kernel-defined acceptance vocabulary is normative; vendor extension would create rival case-truth semantics (ADR 0073 D-1).",
+      "examples": [
+        "accepted",
+        "attachToExistingCase",
+        "deferred"
+      ]
+    },
+    "CaseInstanceCreateResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Response body for `POST /api/v1/instances` (ADR 0073 D-7; Kernel S11.4). Carries the freshly-created `CaseInstance` projection alongside the resolved `IntakeHandoffOutcome` so clients see the policy decision space (`accepted | attachToExistingCase | deferred`) the kernel `acceptIntakeHandoff` algorithm reached. When `intakeHandoffRef` is omitted from the request, `outcome` is `accepted` and `attachedToInstanceId` and `deferralReason` are absent.",
+      "required": [
+        "instance",
+        "outcome"
+      ],
+      "properties": {
+        "instance": {
+          "$ref": "#/$defs/CaseInstance",
+          "description": "Created (or attached-to) case-instance projection."
+        },
+        "outcome": {
+          "$ref": "#/$defs/IntakeHandoffOutcome",
+          "description": "Resolved acceptance policy decision per ADR 0073 D-7."
+        },
+        "attachedToInstanceId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "URN of the pre-existing governed-case instance the handoff was attached to. REQUIRED when `outcome == attachToExistingCase`; absent otherwise. The `instance` field carries the full projection of that same case after attachment so clients can render the result without a follow-up GET."
+        },
+        "deferralReason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Free-prose host-supplied reason for deferral. REQUIRED when `outcome == deferred`; absent otherwise. Used to render the operator-facing 'why' on the case-portal pending-intake list. Length-bounded to keep the response shape predictable.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        }
+      }
+    },
+    "EventSubmissionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Request body for `POST /api/v1/instances/{id}/events` (Kernel S4.9 + S11.3 `processEvent`). Submits an authored event for evaluation against the running instance; the server runs the kernel transition algorithm and returns the resulting `EvaluationResult` plus the post-evaluation `lifecycleState`. The `Idempotency-Key` HTTP header is REQUIRED (ADR 0082 D-16); a repeat request within the retention window returns the original `EventSubmissionResponse` unchanged. Submissions to an instance whose `lifecycleState` is not `active` (Kernel S11.5) are rejected with `WOS-1409`.",
+      "required": [
+        "eventName",
+        "actorRef"
+      ],
+      "properties": {
+        "eventName": {
+          "$ref": "#/$defs/EvaluationOutcomeEventName",
+          "description": "Name of the event to deliver. Document-authored events are bare identifiers; kernel-reserved synthetic events (the `$`-prefix family per Kernel S4.10) MUST NOT be submitted by callers -- they are processor-emitted only and the server rejects them with `WOS-1422`."
+        },
+        "payload": {
+          "$ref": "#/$defs/CaseStateValue",
+          "description": "Optional event payload, carried as the same opaque-shaped JSON value used for `caseState`. Workflow-defined: validated by the server against the workflow's declared event-payload schema (when present, per Kernel S4.10) before evaluation; rejection is `WOS-1422`. Reusing `CaseStateValue` keeps the wire envelope closed at the API boundary while the per-payload shape stays workflow-driven."
+        },
+        "actorRef": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor URN authoring this event submission (ADR 0082 D-9). REQUIRED -- every mutation carries an actor for Facts-tier provenance (Kernel S3 + S8.2)."
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Optional client-asserted UTC RFC 3339 timestamp at which the originating real-world event occurred. The server records this verbatim on the resulting `stateTransition` record but uses its own clock for kernel time semantics (ADR 0069). Omitted when the caller has no out-of-band timing claim."
+        },
+        "correlationKey": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional cross-case correlation identifier the server uses to fan out related-instance events (Kernel S9.4). When omitted the server uses the instance's stored `correlationKey` from `CaseInstance.correlationKey`.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        }
+      }
+    },
+    "PerInstanceCorrelationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-instance result of a correlation-keyed event fan-out (Kernel S9.4). Records the outcome the server reached against one related instance when a single submitted event was fanned out across the correlation group. `status` is closed-no-extension because the fan-out outcome space is normative — the kernel either evaluated, refused, or skipped the related instance, and inventing a fourth outcome would create a rival case-truth semantics the platform thesis rejects.",
+      "required": [
+        "instanceId",
+        "status"
+      ],
+      "properties": {
+        "instanceId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Related case instance URN the server attempted to fan out to."
+        },
+        "status": {
+          "enum": [
+            "succeeded",
+            "failed",
+            "skipped"
+          ],
+          "description": "Closed-no-extension outcome of the per-instance evaluation. `succeeded` -- the server evaluated the event against this instance and committed the resulting transition; `failed` -- the server attempted the evaluation and the kernel refused (lifecycle posture, validation, or runtime error -- `failureCode` carries the WOS error code); `skipped` -- the server elected not to evaluate (e.g., the instance was outside the caller's scope per ADR 0068 or the kernel correlation predicate excluded it). New outcomes require a major schema bump.",
+          "examples": [
+            "succeeded",
+            "failed",
+            "skipped"
+          ]
+        },
+        "failureCode": {
+          "$ref": "https://schemas.formspec.io/wos-api/error/v1#/$defs/WosErrorCode",
+          "description": "Stable WOS error code classifying the per-instance failure. REQUIRED when `status == failed`; absent on `succeeded` or `skipped`. Drawn from the public registry (`error-registry.md`) -- typically `WOS-1409` (lifecycle-posture mismatch) or `WOS-1422` (payload validation against the related instance's workflow event schema)."
+        },
+        "evaluatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp at which the per-instance evaluation completed (ADR 0069). Omitted on `skipped` because no evaluation occurred. Drawn from the server clock."
+        }
+      }
+    },
+    "CorrelationGroupResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-event fan-out result envelope reported on `EventSubmissionResponse` when the submitted event triggered a correlation-group fan-out (Kernel S9.4). The server runs the kernel transition algorithm against each related instance independently and reports the typed per-instance outcome here -- best-effort-with-typed-failure semantics, NOT all-or-nothing. When `allSucceeded == false`, callers MUST inspect `perInstanceResults` to determine compensation. The shape makes silent partial-failure structurally impossible: every related instance the server attempted is named, and a missing entry is itself a contract bug.",
+      "required": [
+        "correlationKey",
+        "perInstanceResults",
+        "allSucceeded"
+      ],
+      "properties": {
+        "correlationKey": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Cross-case correlation identifier this fan-out group is keyed on (Kernel S9.4). Equals the resolved correlation key the server used -- either the request's explicit `correlationKey` or the instance's stored `CaseInstance.correlationKey` when the request omitted one.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "perInstanceResults": {
+          "type": "array",
+          "description": "Typed per-instance outcomes, one entry per related instance the server attempted to fan out to. Order follows the kernel's correlation-group enumeration order (deterministic per Kernel S9.4); the originating instance the request targeted MAY be included or omitted at server discretion -- callers MUST NOT depend on its presence here because `EventSubmissionResponse.evaluationResult` already carries that result.",
+          "items": {
+            "$ref": "#/$defs/PerInstanceCorrelationResult"
+          }
+        },
+        "allSucceeded": {
+          "type": "boolean",
+          "description": "Convenience marker -- `true` when every entry in `perInstanceResults` has `status == succeeded`, `false` otherwise. When `false`, callers MUST inspect `perInstanceResults` for the per-instance failure surface to drive compensation (cross-cite ADR 0070 cross-layer failure and compensation when ratified)."
+        }
+      }
+    },
+    "EventSubmissionResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Response body for `POST /api/v1/instances/{id}/events`. Wraps the kernel `EvaluationResult` (which carries `previousConfiguration`, `newConfiguration`, `eventsFired`, `mutations`) plus the post-evaluation lifecycle posture and the URN of the Facts-tier provenance record the evaluation produced. Clients drive the case-portal UI off the embedded `evaluationResult.mutations` typed array (ADR 0082 D-6) -- the kernel anti-design `caseStateMutations: Record<string, unknown>` is structurally inexpressible. When the submission triggered correlation-group fan-out (Kernel S9.4), `correlationGroupResult` carries the typed per-instance outcomes; absence means no fan-out occurred (single-instance evaluation only).",
+      "required": [
+        "evaluationResult",
+        "newLifecycleState",
+        "evaluatedAt"
+      ],
+      "properties": {
+        "evaluationResult": {
+          "$ref": "#/$defs/EvaluationResult",
+          "description": "Result of running the kernel transition algorithm against the supplied event."
+        },
+        "newLifecycleState": {
+          "$ref": "#/$defs/LifecycleState",
+          "description": "Lifecycle posture after this evaluation. Equal to the prior state when the event was unmatched or the transition was within `active`; transitions to `completed` when the firing transition entered a top-level final state (Kernel S11.5)."
+        },
+        "evaluatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp at which the kernel evaluation completed (ADR 0069). Drawn from the server clock, not from the caller's `occurredAt`."
+        },
+        "provenanceRecordId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "URN of the Facts-tier `stateTransition` (or `unmatchedEvent`) provenance record produced by this evaluation (Kernel S11.3). Clients can dereference it via `GET /api/v1/instances/{id}/provenance` for full reasoning/counterfactual/narrative tier data (ADR 0082 D-5). Omitted only when the underlying processor cannot canonically resolve a single producer record (e.g., a no-op evaluation against a `completed` instance is rejected upstream with `WOS-1409` and never reaches this shape)."
+        },
+        "correlationGroupResult": {
+          "$ref": "#/$defs/CorrelationGroupResult",
+          "description": "Typed per-instance fan-out outcomes when the submission triggered a correlation-group fan-out (Kernel S9.4). Present only when fan-out occurred; absent when the event was evaluated against a single instance only. Best-effort-with-typed-failure semantics: when `allSucceeded == false`, callers MUST inspect `perInstanceResults` for compensation."
+        }
+      }
+    },
+    "SuspendInstanceRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Request body for `POST /api/v1/instances/{id}/suspend` (Kernel S11.3 `suspend`). Sets `lifecycleState` to `suspended` and produces an `instanceSuspended` Facts-tier provenance record. The `Idempotency-Key` HTTP header is REQUIRED (ADR 0082 D-16); a repeat request within the retention window returns the original `CaseInstance` unchanged. Submissions to an instance whose `lifecycleState` is not `active` are rejected with `WOS-1409`.",
+      "required": [
+        "reason",
+        "actorRef"
+      ],
+      "properties": {
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Operator-supplied prose reason for the suspension. Length-bounded to keep the wire envelope predictable; surfaced verbatim on the `instanceSuspended` Facts-tier provenance record.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "actorRef": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor URN authorizing the suspension (ADR 0082 D-9). REQUIRED -- every lifecycle-control mutation carries an actor."
+        },
+        "holdUntil": {
+          "$ref": "#/$defs/ExpirableTimestamp",
+          "description": "Optional UTC RFC 3339 timestamp (or the `never` sentinel) at which the suspension is intended to lift. The server uses this to surface an expected resume time on `CaseInstanceHoldList`; it does NOT auto-resume -- `POST /api/v1/instances/{id}/resume` is still required (Kernel S11.3 `resume`). Omitted when no expected lift is known."
+        }
+      }
+    },
+    "ResumeInstanceRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Request body for `POST /api/v1/instances/{id}/resume` (Kernel S11.3 `resume`). Sets `lifecycleState` from `suspended` back to `active` and produces an `instanceResumed` Facts-tier provenance record. Pending events queued during the suspension are evaluated in delivery order after the status flip (Kernel S11.5). The `Idempotency-Key` HTTP header is REQUIRED (ADR 0082 D-16); a repeat request within the retention window returns the original `CaseInstance` unchanged. Submissions to an instance whose `lifecycleState` is not `suspended` are rejected with `WOS-1409`.",
+      "required": [
+        "actorRef"
+      ],
+      "properties": {
+        "actorRef": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor URN authorizing the resume (ADR 0082 D-9). REQUIRED."
+        },
+        "justification": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Optional operator-supplied prose recording why the suspension is being lifted. Length-bounded; surfaced verbatim on the `instanceResumed` Facts-tier provenance record. Omitted when no separate justification is needed beyond the actor identity.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        }
+      }
+    },
+    "TerminationKind": {
+      "description": "Closed-with-vendor-extension classifier for an irreversible `terminate` operation (Kernel S11.3). Reserved literals: `policy-violation` (a governance check determined the case must end without completion); `applicant-withdrawn` (the applicant or authorized agent withdrew the underlying request); `duplicate` (the case was identified as a duplicate of another and the canonical instance carries the work); `error` (the case entered an unrecoverable error posture); `administrative` (operator-initiated closure for a reason outside the other literals). Vendor extensions MUST use an `x-` prefix per ADR 0082 D-12.",
+      "oneOf": [
+        {
+          "enum": [
+            "policy-violation",
+            "applicant-withdrawn",
+            "duplicate",
+            "error",
+            "administrative"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "examples": [
+        "applicant-withdrawn",
+        "duplicate"
+      ]
+    },
+    "TerminateInstanceRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Request body for `POST /api/v1/instances/{id}/terminate` (Kernel S11.3 `terminate`). Sets `lifecycleState` to `terminated` (irreversible per Kernel S11.5) and produces an `instanceTerminated` Facts-tier provenance record. The `Idempotency-Key` HTTP header is REQUIRED (ADR 0082 D-16); a repeat request within the retention window returns the original `CaseInstance` unchanged. Submissions to an instance whose `lifecycleState` is `completed` or already `terminated` are rejected with `WOS-1409`.",
+      "required": [
+        "reason",
+        "terminationKind",
+        "actorRef"
+      ],
+      "properties": {
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Operator-supplied prose reason for the termination. Length-bounded; surfaced verbatim on the `instanceTerminated` Facts-tier provenance record. The `terminationKind` is the machine-readable classifier; `reason` is the free-prose explanation.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "terminationKind": {
+          "$ref": "#/$defs/TerminationKind",
+          "description": "Closed-with-vendor-extension machine-readable classifier (ADR 0082 D-12)."
+        },
+        "actorRef": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor URN authorizing the termination (ADR 0082 D-9). REQUIRED."
+        }
+      }
+    },
+    "FieldPath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_./-]+$",
+      "description": "Case-file field path used by migration-map entries (Kernel S5.4). Dotted or slash-pointer-shaped per workflow; constrained character set keeps the wire envelope predictable.",
+      "examples": [
+        "applicantName",
+        "/medical/recentEvidence/0",
+        "income"
+      ],
+      "x-wos": {
+        "openStringKind": "pathExpression"
+      }
+    },
+    "FieldRename": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Single rename instruction inside a `MigrationMap.fieldRenames` array. Carried as a typed object instead of an open key-value map so D-12 closed-taxonomy discipline holds at the API boundary; the array is ordered, but the kernel migration algorithm applies renames as a set.",
+      "required": [
+        "from",
+        "to"
+      ],
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/FieldPath",
+          "description": "Old case-file field path."
+        },
+        "to": {
+          "$ref": "#/$defs/FieldPath",
+          "description": "New case-file field path."
+        }
+      }
+    },
+    "FieldDefault": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Single default-value instruction inside a `MigrationMap.fieldDefaults` array. Replaces an open key-value map: each entry is a typed `{path, value}` pair where `value` is any JSON shape declared in the new Workflow Document's `caseFile.fields`. The wire envelope stays closed at the API boundary; the value-space is workflow-driven and validated server-side.",
+      "required": [
+        "path"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/FieldPath",
+          "description": "Case-file field path that receives the default."
+        },
+        "value": {
+          "description": "Default value for the keyed field. Any JSON value, including `null` for an explicit null-marker. Shape is constrained by the new Workflow Document's `caseFile.fields` declaration (Kernel S5.2) and validated server-side; the wire envelope leaves the value opaque-shaped to keep the contract workflow-driven."
+        }
+      }
+    },
+    "FieldCoercion": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Single type-coercion instruction inside a `MigrationMap.fieldCoercions` array. The target type is a closed-no-extension JSON type taxonomy because the JSON type system is normatively closed.",
+      "required": [
+        "path",
+        "targetType"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/FieldPath",
+          "description": "Case-file field path whose value is coerced."
+        },
+        "targetType": {
+          "enum": [
+            "string",
+            "number",
+            "integer",
+            "boolean",
+            "array",
+            "object"
+          ],
+          "description": "Closed-no-extension JSON type the existing value is coerced to before the new definition's validation runs. Coercion is best-effort; failure aborts the migration with `WOS-1422` and leaves the instance on its prior version (Kernel S11.2 atomicity)."
+        }
+      }
+    },
+    "MigrationMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Case-state transformation map applied during instance migration (Kernel S11.2 step 2). Mirrors the kernel four-key bag (`fieldRenames | fieldRemovals | fieldDefaults | fieldCoercions`) but exposes each as a typed array of `{path, ...}` objects rather than open key-value maps so D-12 closed-taxonomy discipline holds at the API boundary. Every array is OPTIONAL -- an empty `MigrationMap` is valid and means 'no case-state transformation needed' (the new definition is structurally identical at the case-file level, only behavior changes). The server applies the four operations in fixed order: `fieldRemovals` -> `fieldRenames` -> `fieldDefaults` -> `fieldCoercions`.",
+      "properties": {
+        "fieldRenames": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FieldRename"
+          },
+          "description": "Renames applied after removals so a rename never targets a removed field. Order within the array is preserved on the wire but the migration algorithm applies them as a set (no rename may chain through another rename's `from`)."
+        },
+        "fieldRemovals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FieldPath"
+          },
+          "description": "Field paths to remove from the case-file before the new definition's validation runs. Removed fields are NOT recoverable post-migration; provenance records the original values."
+        },
+        "fieldDefaults": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FieldDefault"
+          },
+          "description": "Default values for case-file fields newly introduced by the target definition. Applied after renames so a default never overwrites a value that was renamed into the path."
+        },
+        "fieldCoercions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FieldCoercion"
+          },
+          "description": "Type coercions applied last so the existing values (post-rename, post-default) match the new definition's `caseFile.fields` types."
+        }
+      },
+      "examples": [
+        {
+          "fieldRenames": [
+            {
+              "from": "applicantName",
+              "to": "applicant.fullName"
+            }
+          ],
+          "fieldRemovals": [
+            "deprecatedFlag"
+          ],
+          "fieldDefaults": [
+            {
+              "path": "newReviewQueue",
+              "value": "default"
+            }
+          ],
+          "fieldCoercions": [
+            {
+              "path": "income",
+              "targetType": "number"
+            }
+          ]
+        }
+      ]
+    },
+    "MigrateInstanceRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Request body for `POST /api/v1/instances/{id}/migrate` (Kernel S11.2 `migrate`; ADR 0071 D-2). Atomically updates the governing Workflow Document version and applies a case-state transformation map; on success produces an `instanceMigrated` Facts-tier record AND a `migrationPinChanged` Facts-tier record (ADR 0071 D-4 -- `migrationPinChanged` is the cross-layer provenance kind that anchors the chain transition for downstream verification). The `Idempotency-Key` HTTP header is REQUIRED (ADR 0082 D-16); a repeat request within the retention window returns the original `MigrationResult` unchanged. Migration is atomic: any step failure leaves the instance on its prior version (Kernel S11.2). Submissions to an instance whose `lifecycleState` is `completed` or `terminated` are rejected with `WOS-1409`; submissions whose target definition lacks a state currently in the configuration are rejected with `WOS-1422` (kernel `stateNotFound`).",
+      "required": [
+        "targetDefinitionVersion",
+        "migrationMap",
+        "actorRef",
+        "justification"
+      ],
+      "properties": {
+        "targetDefinitionUrl": {
+          "$ref": "#/$defs/WorkflowUrl",
+          "description": "Optional absolute URI of a different Workflow Document to migrate to. Omitted when migrating to a newer version of the same `workflowUrl` (the common case). When supplied the server validates that the target document declares the same `correlationKey` family as the source."
+        },
+        "targetDefinitionVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Version string of the target Workflow Document (Kernel S9.6). Pairs with the resolved `targetDefinitionUrl` (or the instance's existing `workflowUrl` when omitted) to pin the new governing document.",
+          "examples": [
+            "1.1.0",
+            "2026.4.0"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "migrationMap": {
+          "$ref": "#/$defs/MigrationMap",
+          "description": "Case-state transformation bag (Kernel S11.2 step 2). MAY be the empty object when no case-state transformation is needed."
+        },
+        "actorRef": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor URN authorizing the migration (ADR 0082 D-9). REQUIRED."
+        },
+        "justification": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Operator-supplied prose justification for the migration. REQUIRED -- migration is a high-impact governance event under ADR 0071, and the audit trail demands a recorded 'why' alongside the actor identity. Surfaced verbatim on the `migrationPinChanged` Facts-tier record.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        }
+      }
+    },
+    "MigrationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Response body for `POST /api/v1/instances/{id}/migrate`. Carries the post-migration `CaseInstance` projection plus the URNs of the two Facts-tier provenance records produced by the operation (`instanceMigrated` per Kernel S11.3 and `migrationPinChanged` per ADR 0071 D-4). Clients can dereference either via `GET /api/v1/instances/{id}/provenance` (ADR 0082 D-5).",
+      "required": [
+        "instance",
+        "migratedAt",
+        "instanceMigratedRecordId",
+        "migrationPinChangedRecordId",
+        "previousWorkflowVersion",
+        "newWorkflowVersion"
+      ],
+      "properties": {
+        "instance": {
+          "$ref": "#/$defs/CaseInstance",
+          "description": "Post-migration case-instance projection. Carries the new `workflowVersion` (and `workflowUrl` when changed)."
+        },
+        "migratedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp at which the migration committed (ADR 0069). Drawn from the server clock."
+        },
+        "instanceMigratedRecordId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "URN of the `instanceMigrated` Facts-tier provenance record (Kernel S11.3)."
+        },
+        "migrationPinChangedRecordId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "URN of the `migrationPinChanged` Facts-tier provenance record (ADR 0071 D-4). Anchors the cross-layer chain transition for offline verifier reconstruction."
+        },
+        "previousWorkflowVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Workflow Document version the instance was on immediately before this migration (Kernel S9.6).",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "newWorkflowVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Workflow Document version the instance is on immediately after this migration.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "previousWorkflowUrl": {
+          "$ref": "#/$defs/WorkflowUrl",
+          "description": "Workflow Document URI the instance was on immediately before this migration. Omitted when the migration stayed on the same URL (the common in-place version-bump case)."
+        },
+        "newWorkflowUrl": {
+          "$ref": "#/$defs/WorkflowUrl",
+          "description": "Workflow Document URI the instance is on immediately after this migration. Omitted when the migration stayed on the same URL."
+        }
+      }
+    }
+  }
+}

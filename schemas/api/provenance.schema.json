@@ -1,0 +1,2107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.formspec.io/wos-api/provenance/v1",
+  "title": "WOS API Provenance",
+  "description": "Public API resource schema for WOS provenance records. ProvenanceRecord is a tier-discriminated union over Facts (kernel S8), Reasoning (governance S6.2), Counterfactual (governance S6.4), and Narrative (AI integration S13). The wire shape is a closed oneOf keyed by `tier` -- each variant is a complete object with no shared envelope, so codegen produces a typed Rust enum and a typed TypeScript discriminated union without hand-edits (ADR 0082 D-5, Notes section). Identity is carried by the URN `actorRef` (D-9); the legacy nested `actor: {id,type,name}` shape is not expressible.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/ProvenanceRecord"
+    },
+    {
+      "$ref": "#/$defs/ProvenanceRecordPage"
+    },
+    {
+      "$ref": "#/$defs/ProvenanceListOptions"
+    },
+    {
+      "$ref": "#/$defs/AssembledExplanation"
+    },
+    {
+      "$ref": "#/$defs/AssertionGateResult"
+    },
+    {
+      "$ref": "#/$defs/ConfidenceReport"
+    }
+  ],
+  "$defs": {
+    "FactsRecordKind": {
+      "description": "Facts-tier record kind. The closed reserved-literal set is aligned with the kernel `FactsTierRecord.recordKind` enum (`wos-workflow.schema.json#/$defs/FactsTierRecord/properties/recordKind`); the `^x-[a-z][a-z0-9-]*$` extension arm is the API projection adding closed-taxonomy vendor extension (ADR 0082 D-12) over the kernel's bare closed enum. Not a Gate 6 mirror because the API shape extends the kernel's shape with the vendor-extension arm; literal-set parity is checked separately via the existing `recordKind` parity script (`scripts/check-recordkind-parity.py`) running on the workspace's `ProvenanceKind` enum.",
+      "oneOf": [
+        {
+          "enum": [
+            "agentStateTransition",
+            "agentVersionChange",
+            "amendmentAuthorized",
+            "appealFiled",
+            "authorizationAttestation",
+            "authorizationRejected",
+            "autonomyDemotion",
+            "autonomyEscalation",
+            "capabilityInvocation",
+            "caseCreated",
+            "caseStateMutation",
+            "circuitBreakerReset",
+            "circuitBreakerTripped",
+            "clockResolved",
+            "clockSkewObserved",
+            "clockStarted",
+            "commitAttemptFailure",
+            "confidenceDecay",
+            "continuationOfServicesActivated",
+            "correctionAuthorized",
+            "cumulativeConfidenceViolation",
+            "dcrZoneViolation",
+            "deonticBypass",
+            "determinationAmended",
+            "determinationRescinded",
+            "driftAlert",
+            "driftReclassification",
+            "equityAlert",
+            "fallbackAttempt",
+            "fallbackTerminal",
+            "fallbackTriggered",
+            "identityAttestation",
+            "instanceMigrated",
+            "instanceResumed",
+            "instanceSuspended",
+            "instanceTerminated",
+            "intakeAccepted",
+            "intakeDeferred",
+            "intakeRejected",
+            "legalHoldDestructionRejected",
+            "legalHoldPlaced",
+            "legalHoldReleased",
+            "migrationPinChanged",
+            "milestoneFired",
+            "noticeSent",
+            "overrideRecorded",
+            "reportTimedOut",
+            "reinstated",
+            "rescissionAuthorized",
+            "samplingDecision",
+            "shadowModeDivergence",
+            "signatureAffirmation",
+            "stateTransition",
+            "timerCancelled",
+            "timerCreated",
+            "timerFired",
+            "zoneSatisfied"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "examples": [
+        "stateTransition",
+        "caseStateMutation"
+      ]
+    },
+    "SourceAuthority": {
+      "type": "string",
+      "enum": [
+        "statute",
+        "regulation",
+        "policy",
+        "guideline"
+      ],
+      "description": "Authority rank for an applied rule (governance S6.2). Closed taxonomy (ADR 0082 D-12). `type: string` matches the kernel `wos-workflow.schema.json#/$defs/RuleReference.properties.sourceAuthority` projection.",
+      "examples": [
+        "statute",
+        "regulation"
+      ]
+    },
+    "EvidenceKind": {
+      "type": "string",
+      "enum": [
+        "caseField",
+        "document",
+        "fact",
+        "externalRecord"
+      ],
+      "description": "Kind of evidence cited in a Reasoning-tier record (governance S6.2). Closed taxonomy. `type: string` matches the kernel `wos-workflow.schema.json#/$defs/EvidenceReference.properties.kind` projection.",
+      "examples": [
+        "caseField",
+        "document"
+      ]
+    },
+    "CounterfactualPolarity": {
+      "enum": [
+        "positive",
+        "negative"
+      ],
+      "description": "Counterfactual polarity (governance S6.4). `positive` records controllable factors that would change the outcome; `negative` records irrelevant factors that did not affect the outcome.",
+      "examples": [
+        "positive"
+      ]
+    },
+    "RuleReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Reference to an authoritative rule applied in a decision. Mirrors `wos-workflow.schema.json#/$defs/RuleReference` (governance S6.2). Inlined at the API layer so codegen does not need a cross-schema resolver; structurally aligned so the API projection is byte-compatible with the kernel definition.",
+      "x-wos": {
+        "mirror": {
+          "source": "wos-workflow.schema.json",
+          "path": "$defs/RuleReference"
+        }
+      },
+      "required": [
+        "ruleId"
+      ],
+      "properties": {
+        "ruleId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Rule identifier (statute section, regulation paragraph, policy ID).",
+          "examples": [
+            "42-cfr-435-916",
+            "snap-eligibility-rule-3.2"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable summary of the rule.",
+          "examples": [
+            "Annual renewal of eligibility required for continued benefit receipt."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "sourceAuthority": {
+          "$ref": "#/$defs/SourceAuthority",
+          "description": "Authority rank (statute > regulation > policy > guideline)."
+        },
+        "citation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Formal citation to the source document.",
+          "examples": [
+            "42 CFR § 435.916"
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        }
+      }
+    },
+    "EvidenceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Reference to a piece of evidence consulted in a Reasoning-tier record. Mirrors `wos-workflow.schema.json#/$defs/EvidenceReference` (governance S6.2). At least one of `caseFieldPath` or `uri` MUST be present so the evidence is locatable; the `anyOf` constraint is a load-bearing structural pin enforced by Gate 6 byte-parity (PLN-0403 path b).",
+      "x-wos": {
+        "mirror": {
+          "source": "wos-workflow.schema.json",
+          "path": "$defs/EvidenceReference"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "anyOf": [
+        {
+          "required": [
+            "caseFieldPath"
+          ]
+        },
+        {
+          "required": [
+            "uri"
+          ]
+        }
+      ],
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/EvidenceKind",
+          "description": "What this reference points to."
+        },
+        "caseFieldPath": {
+          "type": "string",
+          "minLength": 1,
+          "description": "JSON pointer / dotted path into the case file (when `kind` is `caseField`).",
+          "examples": [
+            "/medical/recentEvidence/2026-03-14"
+          ],
+          "x-wos": {
+            "openStringKind": "pathExpression"
+          }
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri",
+          "minLength": 1,
+          "description": "URI of the external document or record (when `kind` is `document` or `externalRecord`).",
+          "examples": [
+            "https://agency.gov/cases/12345/attachments/MED-007.pdf"
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          }
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Short human-readable description of what this evidence shows.",
+          "examples": [
+            "Updated medical assessment from treating physician dated 2026-03-14."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        }
+      }
+    },
+    "CriterionResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Single criterion check recorded in a Reasoning-tier record (governance S6.2).",
+      "required": [
+        "criterion",
+        "satisfied"
+      ],
+      "properties": {
+        "criterion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier or short label for the criterion that was checked.",
+          "examples": [
+            "incomeUnderThreshold"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "satisfied": {
+          "type": "boolean",
+          "description": "True when the criterion was satisfied by the case facts."
+        },
+        "detail": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional human-readable detail for the criterion result.",
+          "examples": [
+            "Reported income $17,500 below SNAP threshold $20,000."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        }
+      }
+    },
+    "DecisionRequirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Required-input and applicable-rule declaration for a decision (governance S6.3).",
+      "required": [
+        "requiredInputs",
+        "applicableRules"
+      ],
+      "properties": {
+        "requiredInputs": {
+          "type": "array",
+          "description": "Data fields required for this decision.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "x-wos": {
+              "openStringKind": "pathExpression"
+            }
+          },
+          "examples": [
+            [
+              "case.income",
+              "case.householdSize"
+            ]
+          ]
+        },
+        "applicableRules": {
+          "type": "array",
+          "description": "Rules governing this decision, with regulatory citations.",
+          "items": {
+            "$ref": "#/$defs/RuleReference"
+          }
+        },
+        "effectiveDate": {
+          "type": "string",
+          "format": "date",
+          "description": "Date as of which rules and thresholds apply.",
+          "examples": [
+            "2026-01-01"
+          ]
+        }
+      }
+    },
+    "Counterfactual": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Single counterfactual entry recorded in a Counterfactual-tier record (governance S6.4).",
+      "required": [
+        "polarity",
+        "factor",
+        "effect"
+      ],
+      "properties": {
+        "polarity": {
+          "$ref": "#/$defs/CounterfactualPolarity",
+          "description": "Whether this counterfactual is positive (would change outcome) or negative (did not affect outcome)."
+        },
+        "factor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Short identifier or label for the factor.",
+          "examples": [
+            "incomeReduction",
+            "applicantRace"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "effect": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable description of the counterfactual effect or non-effect.",
+          "examples": [
+            "If reported income were $1,500 lower, applicant would qualify.",
+            "Applicant race did not factor into the eligibility decision."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        }
+      }
+    },
+    "AssertionGateKind": {
+      "oneOf": [
+        {
+          "enum": [
+            "source-grounded",
+            "arithmetic",
+            "range",
+            "consistency",
+            "format",
+            "cross-document",
+            "temporal"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "description": "Closed-with-vendor-extension assertion-gate kind (governance §5.4 Assertion Gates; workflow-governance.md:293-305). Reserved literals enumerate the seven gate kinds the spec table at §5.4 normates: `source-grounded` (extracted values must appear in source), `arithmetic` (recomputation check), `range` (bounds check), `consistency` (cross-stage non-contradiction), `format` (parse check), `cross-document` (multi-document consistency), `temporal` (date/time ordering). Vendor extensions MUST use an `^x-[a-z][a-z0-9-]*$` prefix per ADR 0082 D-12. A regulator querying \"every pipeline stage that failed an `arithmetic` gate\" reads this taxonomy directly.",
+      "examples": [
+        "arithmetic",
+        "source-grounded"
+      ]
+    },
+    "AssertionGateResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Single assertion-gate evaluation result (governance §5.4; workflow-governance.md:293-305). Each pipeline stage's gate evaluation produces one of these — closed-taxonomy gate kind + pass/fail boolean + structured evidence references. Embedded as an optional array on `ReasoningTierRecord.assertionGates` so an auditor walking the reasoning trace can answer \"which gate kind failed at this stage and what evidence backs the failure?\" without re-deriving from open-prose `criteriaChecked.detail`.",
+      "required": [
+        "gateKind",
+        "gatePassed"
+      ],
+      "properties": {
+        "gateKind": {
+          "$ref": "#/$defs/AssertionGateKind",
+          "description": "Closed-with-vendor-extension classification of which §5.4 gate produced this result."
+        },
+        "gatePassed": {
+          "type": "boolean",
+          "description": "True when the gate's verification method (governance §5.4 third column) returned pass; false when it returned fail. The pipeline's risk profile is determined by the weakest gate (workflow-governance.md:309), so any false here load-bears."
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "description": "Structured evidence references supporting the gate's pass/fail finding (governance §5.4 — \"each gate produces a pass/fail result with structured evidence\"). Empty when the gate verification did not surface specific evidence references (typical for `format` parse checks); populated for `source-grounded`, `cross-document`, and `consistency` gates whose evidence is referenceable.",
+          "items": {
+            "$ref": "#/$defs/EvidenceReference"
+          }
+        },
+        "stageId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional pipeline-stage identifier this gate evaluation belongs to. Useful when multiple gates fire in one stage and consumers want to correlate by stage.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "detail": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional human-readable detail explaining the gate result. Free-form prose for cases where the structured evidence does not carry the full story.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        }
+      }
+    },
+    "ConfidenceReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-output confidence record (ai-integration.md §7.1; ai-integration.md:419-431 — \"Every agent output MUST be accompanied by a ConfidenceReport\"). Closed structural shape carrying the agent's calibrated probability that the output is correct, decay state, and the cumulative-confidence rolling window for multi-step interactions (ai-integration.md §7.7). Embedded as an optional field on Reasoning-tier and Narrative-tier records when an agent produced the output the record describes.",
+      "required": [
+        "outputId",
+        "confidence",
+        "decayApplied"
+      ],
+      "properties": {
+        "outputId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable identifier of the agent output this report covers. Lets a single record carry multiple `ConfidenceReport` instances when an agent emits multiple outputs in one invocation.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "examples": [
+            "extraction-1",
+            "classification-doc-type"
+          ]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Calibrated probability in [0,1] that this output would be accepted without modification by a competent human reviewer (ai-integration.md:430). Floor enforcement compares against `AgentView.confidenceFloor`."
+        },
+        "decayApplied": {
+          "type": "boolean",
+          "description": "True when confidence decay has reduced the effective confidence below the agent's reported confidence (ai-integration.md §7.5). Distinguishes \"agent reported 0.9 and that's the live value\" from \"agent reported 0.95 and decay halved it to 0.475\"."
+        },
+        "method": {
+          "oneOf": [
+            {
+              "enum": [
+                "modelNative",
+                "calibrated",
+                "heuristic",
+                "conformal",
+                "declared"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^x-[a-z][a-z0-9-]*$"
+            }
+          ],
+          "description": "Closed-with-vendor-extension confidence-derivation method (ai-integration.md §7.2; ai-integration.md:434-440). Reserved literals: `modelNative` (model probability estimate), `calibrated` (post-hoc calibration on historical accuracy), `heuristic` (output-structure properties), `conformal` (conformal prediction sets), `declared` (developer-assigned). Vendor extensions MUST use an `^x-[a-z][a-z0-9-]*$` prefix per ADR 0082 D-12."
+        },
+        "cumulativeConfidenceWindow": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Rolling cumulative-confidence state (ai-integration.md §7.7; ai-integration.md:475-477 — \"the cumulative confidence after step n is the product of individual step confidences by default\"). Lets a reviewer query \"is this multi-step session below the confidence floor?\" without re-deriving the product.",
+          "properties": {
+            "stepCount": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Number of steps included in the cumulative product."
+            },
+            "cumulativeConfidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Product of per-step confidences in [0,1]. When this falls below the workflow's `confidenceFloor`, the §7.7 MUST requires the interaction to pause for human review."
+            },
+            "floor": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Confidence floor in [0,1] this window is checked against (ai-integration.md §7.4). Surfaced inline so consumers do not need to resolve `AgentView.confidenceFloor` separately."
+            },
+            "below": {
+              "type": "boolean",
+              "description": "True when `cumulativeConfidence < floor` — the load-bearing observable that triggers the §7.7 pause-for-human-review MUST."
+            }
+          }
+        },
+        "fieldLevel": {
+          "type": "array",
+          "description": "Optional per-field confidence breakdown (ai-integration.md §7.3 Per-Field Confidence; ai-integration.md:443-444). Lets routing logic reference individual output fields rather than the rolled-up `confidence` value.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fieldName",
+              "confidence"
+            ],
+            "properties": {
+              "fieldName": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Output field name this entry covers.",
+                "x-wos": {
+                  "openStringKind": "identifier"
+                }
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "Per-field calibrated confidence in [0,1]."
+              }
+            }
+          }
+        }
+      }
+    },
+    "AssembledExplanation": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Server-assembled adverse-decision explanation (governance §3.8; workflow-governance.md:166-238). The §3.8.1 algorithm's output structure — Reasoning records ordered by authority rank + Counterfactual records partitioned positive/negative + assembly metadata — projected as a typed read-only resource so clients do not re-implement the deterministic-assembly MUST. Returned by `GET /api/v1/instances/{id}/explanation`. Two conformant processors MUST produce the byte-identical assembled explanation from the same provenance log (workflow-governance.md:170).",
+      "required": [
+        "instanceId",
+        "assembledAt",
+        "assembledBy",
+        "narrative",
+        "factsTrace",
+        "rulesApplied"
+      ],
+      "properties": {
+        "instanceId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Case instance URN this explanation was assembled for. Entity-type segment MUST be `instance`."
+        },
+        "assembledAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339 timestamp the assembly algorithm ran (governance §3.8.1 step 5 `assembledAt`).",
+          "x-wos": {
+            "openStringKind": "timestamp"
+          }
+        },
+        "assembledBy": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+          "description": "Actor URN that ran the assembly. Typically a `workload` principal-class actor representing the runtime; manual re-assembly by a human is permitted and would carry that actor's URN."
+        },
+        "narrative": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Structured natural-language explanation rendered from the ordered reasoning + counterfactual material (governance §3.8.3 — \"a JSON structure, not rendered text\" applies to the underlying records; this `narrative` is the rolled-up prose the host renders for the applicant). Open prose.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "factsTrace": {
+          "type": "array",
+          "description": "Ordered URNs of the Facts-tier provenance records the assembly walked (governance §3.8.1 step 1 — `provenanceLog.filter(tier=\"facts\")` ordering preserved). Lets clients verify the explanation's input set against the per-instance provenance feed.",
+          "items": {
+            "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+          }
+        },
+        "rulesApplied": {
+          "type": "array",
+          "description": "Rules applied across the determination, ordered by authority rank descending (governance §3.8.2 — `statute > regulation > policy > guideline`). Cross-`$ref`s `RuleReference` from this same schema rather than redefining (ADR 0082 D-14).",
+          "items": {
+            "$ref": "#/$defs/RuleReference"
+          }
+        },
+        "positiveCounterfactuals": {
+          "type": "array",
+          "description": "Controllable factors that would change the outcome (governance §3.8.1 step 3, §6.4). Empty for non-rights-impacting workflows.",
+          "items": {
+            "$ref": "#/$defs/Counterfactual"
+          }
+        },
+        "negativeCounterfactuals": {
+          "type": "array",
+          "description": "Irrelevant factors — including protected characteristics — that did NOT affect the outcome (governance §3.8.1 step 3, §6.4).",
+          "items": {
+            "$ref": "#/$defs/Counterfactual"
+          }
+        },
+        "transitionId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional identifier of the transition that produced the adverse decision (governance §3.8.3). Surfaced for cross-reference against the instance's lifecycle log; omitted when assembly was triggered outside a single-transition context.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        }
+      }
+    },
+    "CaseFileSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Canonical case-file snapshot captured at determination time (kernel S8.2.1). Mirrors `wos-workflow.schema.json#/$defs/CaseFileSnapshot`.",
+      "x-wos": {
+        "mirror": {
+          "source": "wos-workflow.schema.json",
+          "path": "$defs/CaseFileSnapshot"
+        }
+      },
+      "required": [
+        "value",
+        "jcsCanonical",
+        "sha256"
+      ],
+      "properties": {
+        "value": {
+          "description": "Raw case-file JSON value observed immediately before the determination transition fires."
+        },
+        "jcsCanonical": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Canonical JSON string per JCS (RFC 8785).",
+          "examples": [
+            "{\"eligible\":true,\"income\":17500}"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "Lowercase SHA-256 hex digest of jcsCanonical."
+        }
+      }
+    },
+    "IntegrityDigest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Tamper-detection digest pair for a provenance record (kernel S8.3). Optional; servers SHOULD include it when the runtime stamps digests.",
+      "properties": {
+        "inputDigest": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Cryptographic digest of inputs.",
+          "pattern": "^[a-fA-F0-9]+$"
+        },
+        "outputDigest": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Cryptographic digest of outputs.",
+          "pattern": "^[a-fA-F0-9]+$"
+        },
+        "algorithm": {
+          "oneOf": [
+            {
+              "enum": [
+                "sha-256",
+                "sha-384",
+                "sha-512",
+                "blake3"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^x-[a-z][a-z0-9-]*$"
+            }
+          ],
+          "description": "Digest algorithm. Closed taxonomy with vendor-prefix extension."
+        }
+      }
+    },
+    "FactsTierRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Facts-tier provenance record (kernel S8). Authoritative, immutable layer recording what happened. The wire shape carries the kernel `FactsTierRecord` envelope; the API layer renames `id`, `instanceId`, `actorRef` to URNs (D-4, D-9) and exposes `recordKind` as a closed enum (with vendor extension). Each tier variant is fully self-contained -- no shared envelope or `allOf` composition -- so codegen produces a clean discriminated union.",
+      "required": [
+        "tier",
+        "id",
+        "instanceId",
+        "recordKind",
+        "timestamp",
+        "definitionVersion",
+        "event"
+      ],
+      "properties": {
+        "tier": {
+          "const": "facts",
+          "description": "Discriminator literal for this variant."
+        },
+        "id": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Stable URN for this provenance record."
+        },
+        "instanceId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Case instance URN this record belongs to."
+        },
+        "recordKind": {
+          "$ref": "#/$defs/FactsRecordKind",
+          "description": "Kernel-defined kind of facts record."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the recorded action occurred (ADR 0069).",
+          "examples": [
+            "2026-04-19T12:00:00Z"
+          ]
+        },
+        "definitionVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Version of the governing Kernel Document at append time.",
+          "examples": [
+            "1.0.0"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "actorRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+          "description": "Actor URN responsible for the action (D-9). Omitted when the processor cannot name a concrete actor."
+        },
+        "event": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Triggering event or reserved event literal carried by the record kind.",
+          "examples": [
+            "decide",
+            "case.intake.accepted"
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
+        },
+        "fromState": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Lifecycle state immediately before the recorded transition.",
+          "examples": [
+            "review"
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
+        },
+        "toState": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Lifecycle state immediately after the recorded transition.",
+          "examples": [
+            "decided"
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
+        },
+        "lifecycleState": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Lifecycle state at the time of the action.",
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
+        },
+        "transitionTags": {
+          "type": "array",
+          "description": "Semantic tags copied from the firing transition (kernel S4.9.12). REQUIRED when the firing transition carries tags.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "x-wos": {
+              "openStringKind": "tagLabel"
+            }
+          },
+          "examples": [
+            [
+              "determination"
+            ]
+          ]
+        },
+        "caseFileSnapshot": {
+          "$ref": "#/$defs/CaseFileSnapshot",
+          "description": "Canonical case-file snapshot. REQUIRED when transitionTags include `determination` (kernel S8.2.1)."
+        },
+        "outcome": {
+          "oneOf": [
+            {
+              "enum": [
+                "preconditionNotSatisfied",
+                "convergenceCapReached"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^x-[a-z][a-z0-9-]*$"
+            }
+          ],
+          "description": "Reserved outcome literal recorded by the processor (kernel S8.2.2). Open enum with vendor-prefix extension."
+        },
+        "integrity": {
+          "$ref": "#/$defs/IntegrityDigest",
+          "description": "Tamper-detection digest pair (kernel S8.3)."
+        },
+        "inputs": {
+          "type": "array",
+          "description": "Input entity references used by this activity.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$"
+          }
+        },
+        "outputs": {
+          "type": "array",
+          "description": "Output entity references generated by this activity.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$"
+          }
+        },
+        "data": {
+          "type": "object",
+          "description": "Record-kind-specific structured payload. Discriminated by `recordKind`. Common fields surface here; kind-specific structured contracts are pinned via the dedicated typed sub-shape fields (`overrideRecord`, `noticeSent`) and the kernel `CapabilityInvocationRecord` `invocationBlocked` if/then guard. Carries the AI §3.3.1 `invocationBlocked` discriminator for `capabilityInvocation` records, AI §3.4 `agentVersionChange` `priorVersion` / `newVersion`, AI §5.5 `autonomyDemotion` `trigger` / `newLevel`, AI §7.5 `confidenceDecay` `halfLife` / `effectiveConfidence`, AI §7.7 cumulative-confidence pause `cumulative` / `floor`, governance §7.1 `samplingDecision` `method` / `bucket`, and similar lightweight payloads. Heavier structured contracts (override, notice) MUST use the dedicated typed sub-shape fields above.",
+          "additionalProperties": false,
+          "properties": {
+            "invocationBlocked": {
+              "type": "boolean",
+              "description": "AI §3.3.1: true when the processor declined to invoke the capability because a precondition evaluated false. Pairs with `outcome: \"preconditionNotSatisfied\"` on the parent envelope. Present only when `recordKind == \"capabilityInvocation\"`."
+            },
+            "capabilityId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AI §3.3.1: identifier of the capability being invoked or blocked. Present only when `recordKind == \"capabilityInvocation\"`.",
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
+            },
+            "milestoneId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Kernel S4.13: identifier of the milestone that fired. Present only when `recordKind == \"milestoneFired\"`.",
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
+            },
+            "timerId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Kernel S9.7.7: identifier of the timer. Present only when `recordKind` is `timerCreated`, `timerCancelled`, or `timerFired`.",
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
+            },
+            "priorVersion": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AI §3.4: prior model version string before the change. Present only when `recordKind == \"agentVersionChange\"`.",
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
+            },
+            "newVersion": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AI §3.4: new model version string after the change. Present only when `recordKind == \"agentVersionChange\"`.",
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
+            },
+            "trigger": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AI §5.5 / §7.5: identifier of the trigger that fired (autonomy demotion trigger, confidence decay trigger). Open-string with named seam for codegen.",
+              "x-wos": {
+                "openStringKind": "tagLabel"
+              }
+            },
+            "newLevel": {
+              "type": "string",
+              "enum": [
+                "none",
+                "suggest",
+                "recommend",
+                "act-with-review",
+                "autonomous"
+              ],
+              "description": "AI §5.5: effective autonomy level after demotion. Closed enum mirrors `governance.schema.json#/$defs/AutonomyLevel`."
+            },
+            "halfLife": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AI §7.5: ISO 8601 duration string for the confidence half-life. Present only when `recordKind == \"confidenceDecay\"`.",
+              "x-wos": {
+                "openStringKind": "duration"
+              }
+            },
+            "effectiveConfidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "AI §7.5 / §7.7: effective confidence after decay or cumulative computation. Present on `confidenceDecay` and `cumulativeConfidenceViolation` records."
+            },
+            "cumulative": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "AI §7.7: cumulative-confidence value at the moment of pause. Present only when `recordKind == \"cumulativeConfidenceViolation\"`."
+            },
+            "floor": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "AI §7.4: confidence floor against which `effectiveConfidence` / `cumulative` was compared."
+            },
+            "method": {
+              "oneOf": [
+                {
+                  "enum": [
+                    "random",
+                    "stratified",
+                    "adversarial"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "pattern": "^x-[a-z][a-z0-9-]*$"
+                }
+              ],
+              "description": "Governance §7.1 / AI §11.2: sampling method used to select this case for review. Present only when `recordKind == \"samplingDecision\"`. Closed-with-vendor-extension."
+            },
+            "bucket": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Governance §7.1 / AI §11.2: stratification bucket identifier when `method == \"stratified\"`.",
+              "x-wos": {
+                "openStringKind": "tagLabel"
+              }
+            },
+            "constraintId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AI §4.7: identifier of the deontic constraint being bypassed. Present only when `recordKind == \"deonticBypass\"`.",
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AI §4.7: structured rationale for a deontic bypass. Present only when `recordKind == \"deonticBypass\"`. Distinct from the heavier `OverrideRecord.rationale` which carries citations.",
+              "x-wos": {
+                "openStringKind": "prose"
+              }
+            },
+            "fallbackOption": {
+              "oneOf": [
+                {
+                  "enum": [
+                    "escalateToHuman",
+                    "retry",
+                    "alternateAgent",
+                    "fail"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "pattern": "^x-[a-z][a-z0-9-]*$"
+                }
+              ],
+              "description": "AI §8.2.4: fallback option taken on this attempt. Present only when `recordKind` is `fallbackTriggered`, `fallbackAttempt`, or `fallbackTerminal`."
+            },
+            "attemptIndex": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "AI §8.2.4: zero-based index of this fallback attempt within the chain. Present only when `recordKind == \"fallbackAttempt\"`."
+            },
+            "succeeded": {
+              "type": "boolean",
+              "description": "AI §8.2.4: whether this fallback attempt succeeded. Present only when `recordKind == \"fallbackAttempt\"`."
+            },
+            "zoneId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Advanced §4: identifier of the constraint zone whose satisfaction is being recorded. Present only when `recordKind == \"zoneSatisfied\"`.",
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
+            },
+            "agentRef": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+              "description": "AI / advanced: agent URN this record applies to. Present on AI lifecycle / drift / autonomy / fallback records."
+            }
+          },
+          "patternProperties": {
+            "^x-[a-z]+-": {
+              "$comment": "Vendor-extension fields permitted under the closed-with-vendor-extension stance (ADR 0082 D-12)."
+            }
+          }
+        },
+        "overrideRecord": {
+          "$ref": "#/$defs/OverrideRecord",
+          "description": "Typed payload when `recordKind == \"overrideRecorded\"` (governance §7.3). Carries the structured rationale, authority verification, and supporting evidence required for an override to be auditable. Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting `overrideRecorded` MUST populate this."
+        },
+        "noticeSent": {
+          "$ref": "#/$defs/NoticeSentRecord",
+          "description": "Typed payload when `recordKind == \"noticeSent\"` (governance §3.2, workflow-governance.md:127). Carries the byte-deterministic notice metadata so applicants can retrieve the notice that was actually sent with verifiable hash equality. Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting `noticeSent` MUST populate this."
+        },
+        "authorizationRejectedRecord": {
+          "$ref": "#/$defs/AuthorizationRejectedRecord",
+          "description": "Typed payload when `recordKind == \"authorizationRejected\"` (ADR 0070 D-3). Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting `authorizationRejected` MUST populate this."
+        },
+        "legalHoldRecord": {
+          "$ref": "#/$defs/LegalHoldRecord",
+          "description": "Typed payload when `recordKind` is `legalHoldPlaced`, `legalHoldReleased`, or `legalHoldDestructionRejected` (governance §12 legal holds). Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting any legal-hold literal MUST populate this."
+        },
+        "circuitBreakerEvent": {
+          "$ref": "#/$defs/CircuitBreakerEventRecord",
+          "description": "Typed payload when `recordKind` is `circuitBreakerTripped` or `circuitBreakerReset` (advanced-governance.md circuit breaker). Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting a circuit-breaker literal MUST populate this."
+        },
+        "shadowModeDivergence": {
+          "$ref": "#/$defs/ShadowModeDivergenceRecord",
+          "description": "Typed payload when `recordKind == \"shadowModeDivergence\"` (advanced-governance.md shadow mode). Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting `shadowModeDivergence` MUST populate this."
+        },
+        "dcrZoneViolation": {
+          "$ref": "#/$defs/DcrZoneViolationRecord",
+          "description": "Typed payload when `recordKind == \"dcrZoneViolation\"` (advanced-governance.md DCR constraint zones). Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting `dcrZoneViolation` MUST populate this."
+        },
+        "driftAlert": {
+          "$ref": "#/$defs/DriftAlertRecord",
+          "description": "Typed payload when `recordKind == \"driftAlert\"` (advanced-governance.md drift monitoring). Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting `driftAlert` MUST populate this."
+        },
+        "reportTimedOut": {
+          "$ref": "#/$defs/ReportTimedOutRecord",
+          "description": "Typed payload when `recordKind == \"reportTimedOut\"` (reports.md WOS-1408). Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting `reportTimedOut` MUST populate this."
+        },
+        "quorumReduction": {
+          "$ref": "#/$defs/QuorumReductionRecord",
+          "description": "Typed payload when a governance operation explicitly reduces a quorum requirement. Optional only because the wire envelope is shared across all Facts-tier kinds; servers recording quorum reduction MUST populate this and use an explicit policy-transition `recordKind` rather than silently changing quorum state."
+        }
+      }
+    },
+    "OverrideRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Typed runtime payload appended to `FactsTierRecord` when `recordKind == \"overrideRecorded\"` (governance §7.3, workflow-governance.md:400-407). Mirrors the kernel `OverrideRecord` $def (`wos-workflow.schema.json#/$defs/OverrideRecord`); the API projection uses `caseInstanceRef` (URN per ADR 0082 D-4) rather than the kernel TypeID. Three required structured fields correspond to the three OverrideAuthority policy switches: `requireStructuredRationale → rationale`, `requireAuthorityVerification → authorityVerification`, `requireSupportingEvidence → supportingEvidence`. The audit query `recordKindFilter: [\"overrideRecorded\"]` returns `FactsTierRecord` envelopes carrying this payload in `overrideRecord`.",
+      "required": [
+        "rationale",
+        "authorityVerification",
+        "supportingEvidence"
+      ],
+      "properties": {
+        "rationale": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Structured human-readable rationale explaining the basis for the override. The audit trail always carries a one-line `summary`; agencies MAY cite regulatory authorities under `regulatoryCitations`.",
+          "required": [
+            "summary"
+          ],
+          "properties": {
+            "summary": {
+              "type": "string",
+              "minLength": 1,
+              "description": "One-line human-readable explanation of why the override was issued. Surfaced in audit reports and adverse-decision notices.",
+              "x-wos": {
+                "openStringKind": "prose"
+              }
+            },
+            "regulatoryCitations": {
+              "type": "array",
+              "description": "Optional citations to regulatory authorities, statutes, or policies that support the override. Free-form citation strings.",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "x-wos": {
+                  "openStringKind": "prose"
+                }
+              }
+            }
+          }
+        },
+        "authorityVerification": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Record of how the overriding actor's authority was verified (governance §7.3 item 2). Captures who verified, when, and against which delegation/policy reference. Processors that verify automatically (e.g., role lookup) MUST still populate this so the audit trail is complete.",
+          "required": [
+            "actorRef",
+            "verifiedAt"
+          ],
+          "properties": {
+            "actorRef": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+              "description": "Actor URN that performed the override (D-9)."
+            },
+            "verifiedAt": {
+              "type": "string",
+              "format": "date-time",
+              "description": "RFC 3339 timestamp when the authority was verified.",
+              "x-wos": {
+                "openStringKind": "timestamp"
+              }
+            },
+            "delegationRef": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+              "description": "Optional URN of the delegation grant that authorized this override (governance §11)."
+            }
+          }
+        },
+        "supportingEvidence": {
+          "type": "array",
+          "description": "Evidence references supporting the override (governance §7.3 item 3). At least one entry MUST be present when the OverrideAuthority policy switch `requireSupportingEvidence` is true; conformant servers always populate it.",
+          "items": {
+            "$ref": "#/$defs/EvidenceReference"
+          }
+        },
+        "overriddenRecordRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "URN of the prior provenance record being overridden (e.g., the determination `stateTransition` whose outcome is being reversed)."
+        }
+      }
+    },
+    "NoticeSentRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Typed runtime payload appended to `FactsTierRecord` when `recordKind == \"noticeSent\"` (governance §3.2, workflow-governance.md:127). The byte-deterministic adverse-decision notice obligation requires that an applicant can retrieve the notice that was actually sent and verify hash equality against the Trellis-anchored copy. The four fields here are the load-bearing minimum: kind discriminator, content hash, recipient, and delivery timestamp. The full rendered notice body lives behind a `correspondenceRenderingRef` URN (claim-check pattern — D-3 subresource decomposition).",
+      "required": [
+        "noticeKind",
+        "snapshotSha256",
+        "recipientActorRef",
+        "deliveryTimestamp"
+      ],
+      "properties": {
+        "noticeKind": {
+          "oneOf": [
+            {
+              "enum": [
+                "adverseDecisionNotice",
+                "appealAcknowledgment",
+                "holdNotification",
+                "resumeNotification",
+                "caseStatusUpdate",
+                "slaWarning"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^x-[a-z][a-z0-9-]*$"
+            }
+          ],
+          "description": "Closed-with-vendor-extension notice taxonomy mirroring the delivery-sidecar `NotificationTemplate.category` (correspondence.schema.json `RenderingCategory`). Reserved literals are normative due-process classifiers; vendor-extension form `x-<agency>-<category>` is permitted only when no reserved literal applies."
+        },
+        "snapshotSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "JCS-canonical SHA-256 hex digest of the notice's machine-readable artifact. Identical to the Facts-tier `caseFileSnapshot.sha256` for the determination that produced the notice (workflow-governance.md:127 byte-determinism requirement); applicants verify hash equality against the Trellis-anchored notice copy.",
+          "examples": [
+            "b19f000c0cd497b52c4a78e50641651e4b1e96931a1b1558984d69e722f73f5e"
+          ]
+        },
+        "recipientActorRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+          "description": "Actor URN of the notice recipient (typically the applicant, but may be a delegated representative or guardian per governance §11)."
+        },
+        "deliveryTimestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339 timestamp when the notice was delivered (or when delivery was attempted for asynchronous channels). The transition-firing timestamp is captured separately on the parent `FactsTierRecord.timestamp`.",
+          "x-wos": {
+            "openStringKind": "timestamp"
+          }
+        },
+        "templateRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Optional URN of the notification template used to render the notice (delivery-sidecar `NotificationTemplate`). Surfaced for audit traceability — the template + snapshot + transition-firing timestamp produce byte-identical notice bytes."
+        },
+        "correspondenceRenderingRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Optional URN of the rendered notice content (correspondence.schema.json `CorrespondenceRendering`). Claim-check pointer to the full prose; not inlined here to keep Facts-tier records small."
+        },
+        "appealDeadline": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Optional RFC 3339 appeal-window deadline derived deterministically from policy + transition-firing timestamp + business calendar. Present when the notice kind carries appeal rights (typically `adverseDecisionNotice`).",
+          "x-wos": {
+            "openStringKind": "timestamp"
+          }
+        }
+      }
+    },
+    "AuthorizationRejectedRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Typed public payload for `FactsTierRecord.authorizationRejectedRecord` when `recordKind == \"authorizationRejected\"` (ADR 0070 D-3). Captures who attempted which action against which resource and why policy denied it.",
+      "required": [
+        "attemptedActorRef",
+        "attemptedAction",
+        "targetResourceRef",
+        "rejectionReason"
+      ],
+      "properties": {
+        "attemptedActorRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+          "description": "Actor URN that attempted the rejected action."
+        },
+        "attemptedAction": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Action attempted by the actor, using the runtime's verb:resource convention.",
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
+        },
+        "targetResourceRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Resource URN the rejected action targeted."
+        },
+        "rejectionReason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable reason policy rejected the authorization attempt.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "policyDecisionRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Optional provenance or audit resource URN for the policy-engine decision that denied the attempt."
+        }
+      },
+      "examples": [
+        {
+          "attemptedActorRef": "actor:human:intern-042",
+          "attemptedAction": "transition:approve",
+          "targetResourceRef": "urn:wos:instance:benefits-adj:2026-04-09:a1b2c3d4",
+          "rejectionReason": "actor lacks approval authority"
+        }
+      ]
+    },
+    "LegalHoldRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Typed public payload for legal-hold provenance: `legalHoldPlaced`, `legalHoldReleased`, and `legalHoldDestructionRejected`. Legal holds freeze destruction or adverse mutation until a lawful release occurs.",
+      "required": [
+        "holdRef",
+        "action",
+        "actorRef",
+        "scope",
+        "effectiveAt"
+      ],
+      "properties": {
+        "holdRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Hold resource URN."
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "placed",
+            "released",
+            "destructionRejected"
+          ],
+          "description": "Legal-hold action represented by the parent record kind."
+        },
+        "actorRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+          "description": "Actor URN that placed, released, or enforced the legal hold."
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Case data, documents, or process surface covered by the legal hold.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "effectiveAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the legal-hold action took effect.",
+          "x-wos": {
+            "openStringKind": "timestamp"
+          }
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable basis for the legal hold or release.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "destructionAttemptRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Optional provenance record URN for the destruction attempt blocked by a legal hold."
+        }
+      },
+      "examples": [
+        {
+          "holdRef": "urn:wos:hold:benefits-adj:2026-05-05:h-001",
+          "action": "placed",
+          "actorRef": "actor:human:agency-counsel",
+          "scope": "full case record",
+          "effectiveAt": "2026-05-05T13:00:00Z",
+          "reason": "litigation preservation order"
+        }
+      ]
+    },
+    "CircuitBreakerEventRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Typed public payload for `circuitBreakerTripped` and `circuitBreakerReset` Facts records. Captures the governed agent breaker state transition and the threshold evidence behind it.",
+      "required": [
+        "agentRef",
+        "breakerId",
+        "action",
+        "status"
+      ],
+      "properties": {
+        "agentRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Agent resource URN whose circuit breaker changed state."
+        },
+        "breakerId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the configured circuit breaker.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "tripped",
+            "reset"
+          ],
+          "description": "Circuit-breaker action represented by the parent record kind."
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "closed",
+            "open",
+            "half-open"
+          ],
+          "description": "Breaker status after the action."
+        },
+        "failureRate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Observed failure rate in the evaluation window, when available."
+        },
+        "threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Configured failure-rate threshold that tripped or governed the reset."
+        },
+        "cooldownUntil": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp after which the breaker may attempt half-open recovery.",
+          "x-wos": {
+            "openStringKind": "timestamp"
+          }
+        }
+      },
+      "examples": [
+        {
+          "agentRef": "urn:wos:agent:benefits-adj:2026-05-05:eligibility-agent",
+          "breakerId": "eligibility-agent-breaker",
+          "action": "tripped",
+          "status": "open",
+          "failureRate": 0.32,
+          "threshold": 0.25
+        }
+      ]
+    },
+    "ShadowModeDivergenceRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Typed public payload for `shadowModeDivergence`. Records a material divergence between a shadow-mode agent output and its configured baseline.",
+      "required": [
+        "agentRef",
+        "baseline",
+        "divergenceType",
+        "severity",
+        "summary"
+      ],
+      "properties": {
+        "agentRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Shadow-mode agent resource URN."
+        },
+        "baseline": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Configured baseline the shadow output was compared against, such as human or a production model identifier.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "divergenceType": {
+          "type": "string",
+          "enum": [
+            "outputMismatch",
+            "confidenceDelta",
+            "policyDelta",
+            "latencyDelta"
+          ],
+          "description": "Closed classifier for the observed divergence."
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "info",
+            "warning",
+            "critical"
+          ],
+          "description": "Operational severity assigned to the divergence."
+        },
+        "magnitude": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Normalized divergence magnitude, when the comparison method yields one."
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable summary of the divergence.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        }
+      },
+      "examples": [
+        {
+          "agentRef": "urn:wos:agent:benefits-adj:2026-05-05:shadow-eligibility-agent",
+          "baseline": "human",
+          "divergenceType": "outputMismatch",
+          "severity": "warning",
+          "magnitude": 0.41,
+          "summary": "Shadow agent recommended approval while the baseline reviewer denied."
+        }
+      ]
+    },
+    "DcrZoneViolationRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Typed public payload for `dcrZoneViolation`. Records a Dynamic Condition Response constraint-zone breach on a case instance.",
+      "required": [
+        "zoneId",
+        "activityId",
+        "violationKind",
+        "summary"
+      ],
+      "properties": {
+        "zoneId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the violated DCR constraint zone.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "activityId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Workflow activity whose execution or omission violated the zone.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "violationKind": {
+          "type": "string",
+          "enum": [
+            "condition",
+            "response",
+            "include",
+            "exclude",
+            "milestone"
+          ],
+          "description": "DCR relation or state class that was violated."
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable DCR violation summary.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        }
+      },
+      "examples": [
+        {
+          "zoneId": "appeal-review-zone",
+          "activityId": "issue-final-decision",
+          "violationKind": "condition",
+          "summary": "Final decision attempted before independent appeal review completed."
+        }
+      ]
+    },
+    "DriftAlertRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Typed public payload for `driftAlert`. Records an alert threshold crossing from the workflow's drift monitoring policy.",
+      "required": [
+        "agentRef",
+        "driftStatus",
+        "metric",
+        "observedValue",
+        "threshold"
+      ],
+      "properties": {
+        "agentRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Agent resource URN whose drift monitor produced the alert."
+        },
+        "driftStatus": {
+          "$ref": "https://schemas.formspec.io/wos-api/governance/v1#/$defs/AgentDriftStatus",
+          "description": "Agent drift posture after the alert."
+        },
+        "metric": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Drift metric or alert-threshold identifier.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "observedValue": {
+          "type": "number",
+          "description": "Observed metric value that crossed the threshold."
+        },
+        "threshold": {
+          "type": "number",
+          "description": "Configured alert threshold for the metric."
+        },
+        "policyRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional drift policy reference that produced the alert.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        }
+      },
+      "examples": [
+        {
+          "agentRef": "urn:wos:agent:benefits-adj:2026-05-05:eligibility-agent",
+          "driftStatus": "recalibration-required",
+          "metric": "accuracy",
+          "observedValue": 0.86,
+          "threshold": 0.92,
+          "policyRef": "accuracy-threshold"
+        }
+      ]
+    },
+    "ReportTimedOutRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Typed public payload for `reportTimedOut`. Records that a report run exceeded its server-enforced wall-clock ceiling and failed with WOS-1408.",
+      "required": [
+        "reportRunRef",
+        "maxDurationSeconds",
+        "elapsedSeconds",
+        "wosErrorCode"
+      ],
+      "properties": {
+        "reportRunRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Report-run resource URN that timed out."
+        },
+        "maxDurationSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Resolved timeout ceiling applied to the run."
+        },
+        "elapsedSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Elapsed wall-clock seconds before termination."
+        },
+        "wosErrorCode": {
+          "const": "WOS-1408",
+          "description": "Canonical API error code for timeout exceeded."
+        }
+      },
+      "examples": [
+        {
+          "reportRunRef": "urn:wos:report-run:agency-gov:2026-05-05:r-001",
+          "maxDurationSeconds": 3600,
+          "elapsedSeconds": 3601,
+          "wosErrorCode": "WOS-1408"
+        }
+      ]
+    },
+    "QuorumReductionRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Typed public payload for explicit quorum-reduction provenance. Governance §S4.9 forbids silent quorum reduction; any reduction is a policy transition with a provenance-backed before/after record.",
+      "required": [
+        "delegationRef",
+        "priorRequiredCount",
+        "newRequiredCount",
+        "authorityBasis",
+        "actorRef"
+      ],
+      "properties": {
+        "delegationRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Delegation resource URN whose quorum requirement changed."
+        },
+        "priorRequiredCount": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Prior quorum count before the explicit reduction."
+        },
+        "newRequiredCount": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "New quorum count after the explicit reduction."
+        },
+        "authorityBasis": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Policy, legal instrument, or supervisor authority authorizing the reduction.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "actorRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+          "description": "Actor URN that authorized the quorum reduction."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable operational reason for the reduction.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        }
+      },
+      "examples": [
+        {
+          "delegationRef": "urn:wos:delegation:agency-gov:2026-05-05:d-001",
+          "priorRequiredCount": 3,
+          "newRequiredCount": 2,
+          "authorityBasis": "emergency continuity policy",
+          "actorRef": "actor:human:agency-director",
+          "reason": "one quorum member unavailable under declared emergency operations"
+        }
+      ]
+    },
+    "ReasoningTierRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Reasoning-tier provenance record (governance S6.2). Authoritative interpretive layer recording how a decision was reached: which rules applied, which evidence was consulted, which criteria were checked. REQUIRED for transitions tagged `determination`.",
+      "required": [
+        "tier",
+        "id",
+        "instanceId",
+        "recordKind",
+        "timestamp",
+        "definitionVersion",
+        "event",
+        "rulesApplied",
+        "evidenceConsulted",
+        "criteriaChecked"
+      ],
+      "properties": {
+        "tier": {
+          "const": "reasoning",
+          "description": "Discriminator literal for this variant."
+        },
+        "id": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Stable URN for this provenance record."
+        },
+        "instanceId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Case instance URN this record belongs to."
+        },
+        "recordKind": {
+          "$ref": "#/$defs/FactsRecordKind",
+          "description": "Underlying kernel record kind being interpreted (typically `stateTransition`)."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the reasoning was recorded."
+        },
+        "definitionVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Version of the governing Kernel Document at append time.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "actorRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+          "description": "Actor URN responsible for the recorded reasoning."
+        },
+        "event": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Triggering event for the underlying transition.",
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
+        },
+        "rulesApplied": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Rules applied in this decision, with authority citations.",
+          "items": {
+            "$ref": "#/$defs/RuleReference"
+          }
+        },
+        "evidenceConsulted": {
+          "type": "array",
+          "description": "Evidence references examined during this decision.",
+          "items": {
+            "$ref": "#/$defs/EvidenceReference"
+          }
+        },
+        "criteriaChecked": {
+          "type": "array",
+          "description": "Criteria checked and their results.",
+          "items": {
+            "$ref": "#/$defs/CriterionResult"
+          }
+        },
+        "decisionRequirements": {
+          "$ref": "#/$defs/DecisionRequirements",
+          "description": "Declaration of required inputs and applicable rules (governance S6.3)."
+        },
+        "factsRecordRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "URN of the Facts-tier record this reasoning interprets."
+        },
+        "assertionGates": {
+          "type": "array",
+          "description": "Per-gate assertion results that fired during this reasoning step (governance §5.4 + §5.5; workflow-governance.md:293-309). Empty when the reasoning record did not run through a validation pipeline; populated when one or more gates evaluated. The pipeline's risk profile is determined by the weakest gate that passed (workflow-governance.md:309) — auditors read this array directly.",
+          "items": {
+            "$ref": "#/$defs/AssertionGateResult"
+          }
+        },
+        "confidenceReport": {
+          "$ref": "#/$defs/ConfidenceReport",
+          "description": "Per-output confidence record (ai-integration.md §7.1). Present iff an agent produced the output this reasoning record interprets; absent for human-only reasoning steps."
+        }
+      }
+    },
+    "CounterfactualTierRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Counterfactual-tier provenance record (governance S6.4). Authoritative due-process layer recording what would change the outcome (positive) and which protected characteristics did not affect the outcome (negative). REQUIRED for transitions tagged `adverse-decision` in `rights-impacting` workflows.",
+      "required": [
+        "tier",
+        "id",
+        "instanceId",
+        "recordKind",
+        "timestamp",
+        "definitionVersion",
+        "event",
+        "positiveCounterfactuals",
+        "negativeCounterfactuals"
+      ],
+      "properties": {
+        "tier": {
+          "const": "counterfactual",
+          "description": "Discriminator literal for this variant."
+        },
+        "id": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Stable URN for this provenance record."
+        },
+        "instanceId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Case instance URN this record belongs to."
+        },
+        "recordKind": {
+          "$ref": "#/$defs/FactsRecordKind",
+          "description": "Underlying kernel record kind being interpreted."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the counterfactual was recorded."
+        },
+        "definitionVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Version of the governing Kernel Document at append time.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "actorRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+          "description": "Actor URN responsible for the recorded counterfactual analysis."
+        },
+        "event": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Triggering event for the underlying transition.",
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
+        },
+        "positiveCounterfactuals": {
+          "type": "array",
+          "description": "Controllable factors that would change the outcome (governance S6.4).",
+          "items": {
+            "$ref": "#/$defs/Counterfactual"
+          }
+        },
+        "negativeCounterfactuals": {
+          "type": "array",
+          "description": "Irrelevant factors -- including protected characteristics -- that did NOT affect the outcome.",
+          "items": {
+            "$ref": "#/$defs/Counterfactual"
+          }
+        },
+        "factsRecordRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "URN of the Facts-tier record this counterfactual analyzes."
+        }
+      }
+    },
+    "NarrativeTierRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Narrative-tier provenance record (AI integration S13). Non-authoritative model-generated explanation. MUST carry `authoritative: false`. A conformant implementation MUST NOT treat narrative content as dispositive in adjudicative, audit, or due-process contexts (S13.2).",
+      "required": [
+        "tier",
+        "id",
+        "instanceId",
+        "recordKind",
+        "timestamp",
+        "definitionVersion",
+        "event",
+        "narrative",
+        "authoritative",
+        "modelIdentifier",
+        "modelVersion"
+      ],
+      "properties": {
+        "tier": {
+          "const": "narrative",
+          "description": "Discriminator literal for this variant."
+        },
+        "id": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Stable URN for this provenance record."
+        },
+        "instanceId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Case instance URN this record belongs to."
+        },
+        "recordKind": {
+          "$ref": "#/$defs/FactsRecordKind",
+          "description": "Underlying kernel record kind being narrated."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the narrative was generated."
+        },
+        "definitionVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Version of the governing Kernel Document at append time.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "actorRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+          "description": "Agent URN that generated the narrative."
+        },
+        "event": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Triggering event for the underlying transition.",
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
+        },
+        "narrative": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Model's natural-language explanation (S13.3).",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "authoritative": {
+          "const": false,
+          "description": "MUST be `false`. Explicitly marks this content as non-authoritative (S13.2)."
+        },
+        "modelIdentifier": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the model that generated this narrative.",
+          "examples": [
+            "claude-opus-4-7"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "modelVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Version of the model that generated this narrative.",
+          "examples": [
+            "2026-04-15"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "factsRecordRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "URN of the Facts-tier record this narrative explains."
+        },
+        "confidenceReport": {
+          "$ref": "#/$defs/ConfidenceReport",
+          "description": "Per-output confidence record for the model that generated this narrative (ai-integration.md §7.1 — \"every agent output MUST be accompanied by a ConfidenceReport\"; the narrative IS an agent output even though it is non-authoritative). Surfaced so consumers can gate narrative display on confidence (low-confidence narratives can be suppressed or annotated)."
+        }
+      }
+    },
+    "ProvenanceRecord": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/FactsTierRecord"
+        },
+        {
+          "$ref": "#/$defs/ReasoningTierRecord"
+        },
+        {
+          "$ref": "#/$defs/CounterfactualTierRecord"
+        },
+        {
+          "$ref": "#/$defs/NarrativeTierRecord"
+        }
+      ],
+      "discriminator": {
+        "propertyName": "tier"
+      },
+      "description": "Tier-discriminated provenance record union (ADR 0082 D-5). The four tiers correspond to kernel Facts (S8), governance Reasoning (S6.2) and Counterfactual (S6.4), and AI integration Narrative (S13). The legacy single-envelope shape with four optional tier blocks (current `case-portal` `ProvenanceRecord`) is structurally inexpressible: every variant requires its own `tier` const literal and tier-specific fields are non-optional within their variant."
+    },
+    "ProvenanceTimeRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Inclusive UTC RFC 3339 time-range filter for `ProvenanceListOptions` (ADR 0069 wire format). Bounds the query to records whose `timestamp` falls within `[since, until]`. Mirrors the `AuditQueryRequest.timeRange` shape from `audit.schema.json` so cross-case audit and per-case provenance share the same filter contract.",
+      "required": [
+        "since",
+        "until"
+      ],
+      "properties": {
+        "since": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Inclusive UTC RFC 3339 lower bound for the provenance window. Records with `timestamp >= since` are eligible."
+        },
+        "until": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Inclusive UTC RFC 3339 upper bound for the provenance window. Records with `timestamp <= until` are eligible."
+        }
+      }
+    },
+    "ProvenanceListOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Query fields for `GET /api/v1/instances/{id}/provenance` (ADR 0082 D-7). Filters compose with AND semantics — a record matches when it satisfies every supplied filter independently. Mirrors the `AuditQueryRequest` filter shape from `audit.schema.json` so cross-case audit and per-case provenance use the same query patterns.",
+      "properties": {
+        "tier": {
+          "enum": [
+            "facts",
+            "reasoning",
+            "counterfactual",
+            "narrative"
+          ],
+          "description": "Optional tier filter. When omitted, all tiers are returned."
+        },
+        "recordKindFilter": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Optional record-kind filter — restrict the page to one or more Facts-tier `recordKind` literals (for example `stateTransition`, `caseStateMutation`, `signatureAffirmation`). Cross-`$ref`s the closed-with-vendor-extension `FactsRecordKind` taxonomy declared in this schema. Empty array is forbidden; omit the field to span every record kind. Composes with AND semantics against `tier`, `timeRange`, and `actorRefFilter`.",
+          "items": {
+            "$ref": "#/$defs/FactsRecordKind"
+          },
+          "examples": [
+            [
+              "stateTransition"
+            ],
+            [
+              "caseStateMutation",
+              "signatureAffirmation"
+            ]
+          ]
+        },
+        "timeRange": {
+          "$ref": "#/$defs/ProvenanceTimeRange",
+          "description": "Optional inclusive UTC RFC 3339 time-range filter against the record `timestamp` field. Composes with AND semantics against the other filters; omit the field to span the full retention window."
+        },
+        "actorRefFilter": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Optional actor URN filter — restrict the page to records whose `actorRef` equals one of the supplied principals (ADR 0082 D-9). Cross-`$ref`s the canonical `ActorRef` from `_common.schema.json`. Empty array is forbidden. Composes with AND semantics against the other filters.",
+          "items": {
+            "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef"
+          },
+          "examples": [
+            [
+              "actor:human:caseworker-17"
+            ]
+          ]
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque resume token returned by the previous page (ADR 0082 D-7). Cursor pagination still applies on top of the AND-composed filter set; cursors are opaque, single-use within the issuing deploy.",
+          "x-wos": {
+            "openStringKind": "opaque-token"
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "description": "Maximum number of records requested for this page."
+        }
+      }
+    },
+    "ProvenanceRecordPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Cursor-paginated provenance record page (ADR 0082 D-7).",
+      "required": [
+        "items",
+        "hasMore"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "description": "Tier-discriminated provenance records in this page.",
+          "items": {
+            "$ref": "#/$defs/ProvenanceRecord"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque token for the next page. Omitted when hasMore is false.",
+          "x-wos": {
+            "openStringKind": "opaque-token"
+          }
+        },
+        "hasMore": {
+          "type": "boolean",
+          "description": "True when another page is available from the server."
+        }
+      }
+    }
+  }
+}

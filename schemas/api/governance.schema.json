@@ -1,0 +1,1414 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.formspec.io/wos-api/governance/v1",
+  "title": "WOS API Governance",
+  "description": "Public API resource schema for WOS governance — the cross-case authoritative shapes for agent declarations, delegations, policy versions, and escalation events. Greenfield per ADR 0082 D-15 step 5; depends on the `actor` resource shape (ADR 0082 D-15 step 5 prerequisite — landed). The case-scoped projections (`CaseInstanceGovernance`, `DelegationEntry`, `HoldEntry`, `ReviewState` on `instance.schema.json`) are the per-instance views; this schema authors the cross-case authoritative records that those projections summarize. Identity references use the canonical `ActorRef` URN string from `_common.schema.json` (ADR 0082 D-9, D-14); URNs use the closed `WosResourceUrn` taxonomy (ADR 0082 D-4). Closed-with-vendor-extension enums per D-12 (`AutonomyLevel`, `DelegationAuthority`, `AgentDriftStatus`, `EscalationReason`). Kernel governance shapes (`Delegation`, `DeonticConstraint`) are mirrored byte-aligned via `x-wos.mirror` annotations consumed by Gate 6 (`scripts/check-api-mirror-parity.py`).",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/AgentView"
+    },
+    {
+      "$ref": "#/$defs/AgentPage"
+    },
+    {
+      "$ref": "#/$defs/AgentListOptions"
+    },
+    {
+      "$ref": "#/$defs/Delegation"
+    },
+    {
+      "$ref": "#/$defs/DelegationPage"
+    },
+    {
+      "$ref": "#/$defs/DelegationListOptions"
+    },
+    {
+      "$ref": "#/$defs/DelegationCreateRequest"
+    },
+    {
+      "$ref": "#/$defs/DelegationRevokeRequest"
+    },
+    {
+      "$ref": "#/$defs/PolicyVersion"
+    },
+    {
+      "$ref": "#/$defs/PolicyVersionPage"
+    },
+    {
+      "$ref": "#/$defs/PolicyVersionListOptions"
+    },
+    {
+      "$ref": "#/$defs/EscalationEvent"
+    },
+    {
+      "$ref": "#/$defs/IndependenceVerification"
+    },
+    {
+      "$ref": "#/$defs/QuorumRequirement"
+    },
+    {
+      "$ref": "#/$defs/CascadingInvocationsSpec"
+    },
+    {
+      "$ref": "#/$defs/ConfidenceDecaySpec"
+    },
+    {
+      "$ref": "#/$defs/VolumeConstraintsSpec"
+    },
+    {
+      "$ref": "#/$defs/ShadowModeSpec"
+    },
+    {
+      "$ref": "#/$defs/CircuitBreakerSpec"
+    },
+    {
+      "$ref": "#/$defs/InvokerKind"
+    },
+    {
+      "$ref": "#/$defs/AgentLifecycleState"
+    },
+    {
+      "$ref": "#/$defs/MultiStepSessionState"
+    }
+  ],
+  "$defs": {
+    "ActorRef": {
+      "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+      "description": "Stable actor reference from the identity/governance subsystem (ADR 0082 D-9). Hoisted to `_common.schema.json` per PLN-0404."
+    },
+    "WosResourceUrn": {
+      "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+      "description": "Public WOS API resource URN (ADR 0082 D-4). Hoisted to `_common.schema.json` per PLN-0404."
+    },
+    "WorkflowUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "Absolute URI of the governing WOS Workflow Document. Together with a workflow version pins the exact author-time document this governance record targets (Kernel S9.6).",
+      "examples": [
+        "https://agency.gov/workflows/benefits-adjudication"
+      ],
+      "x-wos": {
+        "openStringKind": "uri"
+      }
+    },
+    "AutonomyLevel": {
+      "description": "Autonomy posture for an agent (governance S2 / agents block). Closed-with-vendor-extension enum (ADR 0082 D-12). Reserved literals draw from the kernel `AgentDeclaration.autonomy` enum (`wos-workflow.schema.json#/$defs/AgentDeclaration/properties/autonomy`) plus the `none` sentinel for agents whose autonomy has been suspended without retiring the declaration: `none` (declared but currently inert), `suggest` (read-only — agent surfaces suggestions humans may consult), `recommend` (assistive — agent recommends an action a human must accept), `act-with-review` (supervised — agent acts but every action is reviewed before commit), `autonomous` (agent acts without per-action human review, capped by impactLevel). Vendor extensions MUST use an `x-` prefix.",
+      "oneOf": [
+        {
+          "enum": [
+            "none",
+            "suggest",
+            "recommend",
+            "act-with-review",
+            "autonomous"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "examples": [
+        "recommend",
+        "act-with-review"
+      ]
+    },
+    "AgentDriftStatus": {
+      "description": "Current drift posture of an agent's deployed model relative to its calibration baseline (governance S2 driftMonitoring). Closed-with-vendor-extension enum (ADR 0082 D-12). Reserved literals: `nominal` (drift signals within calibration window), `watch` (drift trending toward the recalibration threshold but not yet breached), `recalibration-required` (drift exceeded the threshold; agent SHOULD be recalibrated before further use), `demoted` (governance suspended the agent's autonomy until recalibration), `unknown` (no drift observation available — typical for newly-declared agents). Vendor extensions MUST use an `x-` prefix.",
+      "oneOf": [
+        {
+          "enum": [
+            "nominal",
+            "watch",
+            "recalibration-required",
+            "demoted",
+            "unknown"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "examples": [
+        "nominal",
+        "recalibration-required"
+      ]
+    },
+    "DeonticKind": {
+      "enum": [
+        "permission",
+        "prohibition",
+        "obligation",
+        "right"
+      ],
+      "description": "Deontic mode per OASIS LegalRuleML §3 (kernel `DeonticConstraint.kind`). Determines how the processor interprets a satisfied constraint expression. Closed enum — vendor extensions are intentionally not offered because the LegalRuleML mode set is normative.",
+      "x-wos": {
+        "mirror": {
+          "source": "wos-workflow.schema.json",
+          "path": "$defs/DeonticConstraint/properties/kind"
+        }
+      }
+    },
+    "DeonticConstraintSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-agent deontic constraint summary projected from the workflow `agents[].deonticConstraints` block. Mirrors `wos-workflow.schema.json#/$defs/DeonticConstraint` on the load-bearing keys (`kind`, `expression`); `id`, `actor`, `condition`, `defeasible`, and `citationRefs` carry through as the human-facing audit surface. The kernel-only `x-legalruleml-iri` mapping field is not projected at this layer.",
+      "required": [
+        "kind",
+        "expression"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable identifier for this constraint within the workflow document so reviewers, waivers, and amendments can cite a specific clause without fragile positional references.",
+          "examples": [
+            "no-deny-without-notice",
+            "right-to-appeal"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "kind": {
+          "$ref": "#/$defs/DeonticKind",
+          "description": "Deontic mode per OASIS LegalRuleML §3."
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional actor id or role id the constraint binds when it is not implied by the embedding context; matches a declared actor identifier in the governing workflow.",
+          "examples": [
+            "respondent",
+            "agency-adjudicator"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "expression": {
+          "type": "string",
+          "minLength": 1,
+          "description": "FEL expression the kernel evaluates per the constraint's kind. For permission: TRUE allows; for prohibition: TRUE blocks; for obligation: TRUE is the action that MUST be taken; for right: TRUE is the action that MAY be invoked by the rights-holder.",
+          "examples": [
+            "outcome == 'denied' && notice == null"
+          ],
+          "x-wos": {
+            "openStringKind": "fel"
+          }
+        },
+        "condition": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional FEL expression that gates when this constraint applies. When present and FALSE, the constraint is dormant; when TRUE or absent, the kernel evaluates `expression`.",
+          "examples": [
+            "caseFile.appealWindowOpen == true"
+          ],
+          "x-wos": {
+            "openStringKind": "fel"
+          }
+        },
+        "defeasible": {
+          "type": "boolean",
+          "description": "When true, this constraint MAY be overridden by a higher-priority constraint or an explicit waiver. When absent or false, the constraint binds absolutely."
+        },
+        "citationRefs": {
+          "type": "array",
+          "description": "Optional citations to authoritative sources (resolvable IRIs/URNs, agency memo references, or conventional legal citation text) that ground this constraint.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Single citation token — resolvable IRI, URN, or conventional legal citation text.",
+            "x-wos": {
+              "openStringKind": "prose"
+            }
+          }
+        }
+      }
+    },
+    "AgentType": {
+      "oneOf": [
+        {
+          "enum": [
+            "deterministic",
+            "statistical",
+            "generative"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "description": "Closed-with-vendor-extension agent-type taxonomy (ai-integration.md §3.1 line 129; structural discriminator gating governance behavior per §3.2 line 138-144). Reserved literals: `deterministic` (rule-based, no model probability — no calibration MUST); `statistical` (probabilistic model — calibration MUST per §3.2); `generative` (LLM or analogous open-output — Formspec-as-validator essential). Vendor extensions MUST use an `^x-[a-z][a-z0-9-]*$` prefix. Currently absent from kernel `AgentDeclaration`; this projection surfaces it so consumers can branch without re-deriving from `modelIdentifier`.",
+      "examples": [
+        "statistical",
+        "generative"
+      ]
+    },
+    "InvokerKind": {
+      "oneOf": [
+        {
+          "enum": [
+            "anthropic",
+            "claudeAgentSdk",
+            "mcp",
+            "a2a",
+            "http",
+            "stub"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "description": "Closed-with-vendor-extension agent-invoker discriminator (ADR 0064 §2.2 + §2.3 — `AgentInvoker` substrate-neutral port; agents block `invoker` discriminator). Reserved literals enumerate the in-tree adapter crates ADR 0064 lists: `anthropic` (direct Anthropic SDK call — `wos-agent-anthropic`), `claudeAgentSdk` (Claude Agent SDK adapter), `mcp` (MCP server invocation — `wos-agent-mcp`), `a2a` (A2A multi-agent orchestrator — `wos-agent-a2a`), `http` (generic HTTP/OpenAPI service — `wos-agent-http`), `stub` (deterministic in-memory adapter for conformance fixtures — `wos-agent-stub`). Vendor extensions MUST use an `^x-[a-z][a-z0-9-]*$` prefix per ADR 0082 D-12. The substrate is observable at the public-API layer because operability tooling (telemetry, capability planning, multi-agent dispatch) needs to branch on it without inspecting the workflow document.",
+      "examples": [
+        "anthropic",
+        "mcp"
+      ]
+    },
+    "AgentLifecycleState": {
+      "oneOf": [
+        {
+          "enum": [
+            "active",
+            "degraded",
+            "suspended",
+            "retired"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "description": "Closed-with-vendor-extension agent-lifecycle posture (advanced-governance.md §7.1; advanced-governance.md:250-257). Reserved literals — verbatim from the §7.1 four-state machine: `active` (available for invocation), `degraded` (available but operating at reduced autonomy), `suspended` (temporarily unavailable; invocations route to fallback), `retired` (permanently unavailable, configuration preserved for audit; transitions out are forbidden — see §7.2 transition table). Vendor extensions MUST use an `^x-[a-z][a-z0-9-]*$` prefix per ADR 0082 D-12. Distinct from the runtime event literal `agentStateTransition` (provenance.schema.json) which records the per-transition event; this enum carries the declarative current state on `AgentView` so a portal can answer \"show me retired agents\" or \"show me degraded agents\" without reconstructing from the transition stream.",
+      "examples": [
+        "active",
+        "degraded"
+      ]
+    },
+    "MultiStepSessionState": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Multi-step session state projection (advanced-governance.md §5; advanced-governance.md:180-214). Carries the live state of an in-flight multi-step session — current step in the bounded DAG, total steps, the actor running the session, when it started — so reviewers can answer \"which case is parked at a multi-step checkpoint awaiting human review?\" without reconstructing from per-event provenance. Embedded as an optional array on `AgentView.activeSessions` for in-flight sessions on this agent.",
+      "required": [
+        "sessionId",
+        "currentStep",
+        "totalSteps",
+        "actorRef",
+        "startedAt"
+      ],
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Session identifier matching the workflow's `multiStepSessions[].id` declaration (advanced-governance.md §5.2; advanced-governance.md:192).",
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "examples": [
+            "extraction-session-1"
+          ]
+        },
+        "currentStep": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1-based index of the step currently executing or paused. When the session is paused at a checkpoint, this is the step that produced the pause."
+        },
+        "totalSteps": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Total number of declared steps in the session DAG (workflow `multiStepSessions[].steps[]` length). MUST be ≥ `currentStep`."
+        },
+        "actorRef": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor URN currently executing the session — typically the agent whose `AgentView` carries this state. Surfaced explicitly so a session that has been paused for human review (the §5.4 cumulative-confidence pause) can carry the human reviewer's URN here rather than the agent's."
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339 timestamp when the session began (the first step's start). Together with the workflow's `multiStepSessions[].maxDuration` declaration, lets consumers compute remaining session budget.",
+          "x-wos": {
+            "openStringKind": "timestamp"
+          }
+        },
+        "instanceId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Optional case instance URN this session is operating on. Surfaced so a portal showing \"sessions in flight on agent X\" can link each to its case."
+        },
+        "atCheckpoint": {
+          "type": "boolean",
+          "description": "True when the session is currently paused at a checkpoint (advanced-governance.md §5.2 `checkpointPolicy`; §5.4 cumulative-confidence pause). Load-bearing for the §5.4 MUST — clients filter `atCheckpoint == true` to surface sessions awaiting human review."
+        }
+      }
+    },
+    "CascadingInvocationsSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Cascading-autonomous-agents declaration (ai-integration.md §3.7.3 constraint 3 line 194 — \"Cascading autonomous agents (an agent at `autonomous` level invoking another agent at `autonomous` level) MUST be explicitly declared\"). Carries the maximum invocation depth and the closed set of agent types this agent is permitted to invoke at autonomous level. Absent when the agent is not authorized to invoke other autonomous agents.",
+      "required": [
+        "maxDepth",
+        "allowedAgentTypes"
+      ],
+      "properties": {
+        "maxDepth": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum depth of cascading autonomous-agent invocation. `1` permits this agent to invoke one downstream autonomous agent; `2` permits one further hop; etc. Hard cap enforced by the runtime.",
+          "examples": [
+            1,
+            2
+          ]
+        },
+        "allowedAgentTypes": {
+          "type": "array",
+          "description": "Identifiers of downstream agent types this agent may invoke autonomously. Empty when cascading is declared at zero depth (a structural error — schemas should set the field absent in that case). Identifiers match the `agents[]` declaration `type` field on the governing workflow.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "x-wos": {
+              "openStringKind": "identifier"
+            },
+            "examples": [
+              "verification-agent"
+            ]
+          }
+        }
+      }
+    },
+    "ConfidenceDecaySpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-agent confidence-decay projection (ai-integration.md §7.5 line 467 — \"the effective confidence … is multiplied by the factor\"; kernel `agents[].confidenceDecay` at `wos-workflow.schema.json:2320-2329`). Reduced kernel projection: half-life seconds and the floor below which confidence falls invalidate the output and escalate.",
+      "required": [
+        "halfLifeSeconds",
+        "floor"
+      ],
+      "properties": {
+        "halfLifeSeconds": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Half-life of the agent's reported confidence in seconds. After `halfLifeSeconds` elapse without recalibration, the effective confidence is halved.",
+          "examples": [
+            3600,
+            86400
+          ]
+        },
+        "floor": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Confidence floor in [0,1]. When effective confidence falls below this floor the output is invalidated and the action escalates to the fallback chain (ai-integration.md §7.5).",
+          "examples": [
+            0.7
+          ]
+        }
+      }
+    },
+    "VolumeConstraintsSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-agent volume-throttling projection (ai-integration.md §11.1; kernel `aiOversight.volumeConstraints` at `wos-workflow.schema.json:2628-2637` and `agents[].volumeConstraints`). Both fields are optional; absent fields impose no limit at this scope. Breach surfaces as `EscalationReason = agent-volume-exceeded` (governance.schema.json `EscalationReason` reserved literal).",
+      "properties": {
+        "maxInvocationsPerHour": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum autonomous invocations per rolling hour. Absent when no per-hour limit applies."
+        },
+        "maxInvocationsPerCase": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum autonomous invocations per case instance. Absent when no per-case limit applies."
+        }
+      }
+    },
+    "ShadowModeSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Shadow-mode execution declaration on an agent (advanced/advanced-governance.md shadow mode; advanced-governance.md:370-385). When `enabled`, the agent runs in parallel with a baseline (a human reviewer or a production-stable model) without taking authoritative action; divergence above the threshold surfaces as the `agent-shadow-mode-divergence` report row.",
+      "required": [
+        "enabled"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "True when shadow mode is currently active on this agent."
+        },
+        "baselineModelIdentifier": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the baseline model or actor (`human` for human-reviewer baseline, otherwise a model identifier) the shadow agent is compared against.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "examples": [
+            "human",
+            "claude-sonnet-4-20250514"
+          ]
+        },
+        "divergenceThreshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Divergence threshold in [0,1] above which a per-decision shadow-comparison row is emitted. Lower thresholds emit more rows; threshold semantics are method-specific (typically a normalized disagreement rate)."
+        }
+      }
+    },
+    "CircuitBreakerSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Circuit-breaker projection on an agent (advanced/advanced-governance.md circuit breaker; advanced-governance.md:387-400). Tracks per-agent failure thresholds and cooldown so governance can short-circuit invocations after a streak of failures; companion: Agent B's `circuitBreakerTripped` / `circuitBreakerReset` Facts record kinds carry the per-event detail.",
+      "required": [
+        "enabled",
+        "failureThreshold",
+        "cooldownSeconds",
+        "currentStatus"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "True when the circuit breaker is configured and live for this agent."
+        },
+        "failureThreshold": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Consecutive failure count that trips the breaker open. Resets on any success.",
+          "examples": [
+            5,
+            10
+          ]
+        },
+        "cooldownSeconds": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Cooldown duration in seconds after which an open breaker transitions to `half-open` to probe whether downstream is healthy.",
+          "examples": [
+            300
+          ]
+        },
+        "currentStatus": {
+          "enum": [
+            "closed",
+            "open",
+            "half-open"
+          ],
+          "description": "Closed-no-extension live state. `closed` is nominal — invocations flow; `open` blocks invocations during cooldown; `half-open` admits a probe invocation after cooldown.",
+          "examples": [
+            "closed",
+            "open"
+          ]
+        }
+      }
+    },
+    "IndependenceVerification": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Appeal-independence verification record (governance §3.5 item 1; workflow-governance.md:148-152 — \"An appeal MUST be reviewed by a human adjudicator independent of the original determination\"). Carries the verified-independent actor, the closed verification method that produced the independence finding, and the timestamp. Surfaced on `Delegation` so appeals-routing consumers can query \"prove this delegation routes to an actor independent of the original determination\" without re-deriving from per-case provenance.",
+      "required": [
+        "verifiedActorRef",
+        "verificationMethod",
+        "verifiedAt"
+      ],
+      "properties": {
+        "verifiedActorRef": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor URN whose independence from the original determination was verified. Per workflow-governance.md:150, this MUST be a human adjudicator distinct from any actor whose work is under appeal."
+        },
+        "verificationMethod": {
+          "oneOf": [
+            {
+              "enum": [
+                "separation-of-duties-policy",
+                "delegation-graph-walk",
+                "manual-attestation",
+                "organizational-unit-disjoint",
+                "supervisor-attestation"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^x-[a-z][a-z0-9-]*$"
+            }
+          ],
+          "description": "Closed-with-vendor-extension classifier for how the independence was verified (ADR 0082 D-12). Reserved literals: `separation-of-duties-policy` (the workflow's §7.2 separation-of-duties rule excluded the original-determination actor); `delegation-graph-walk` (the runtime walked the delegation graph and confirmed no shared chain-of-command); `manual-attestation` (a supervisor or governance officer manually attested independence); `organizational-unit-disjoint` (the verified actor's organizational unit is structurally disjoint from the original determiner's); `supervisor-attestation` (a chain-of-command supervisor attested per §7.3 authority verification semantics). Vendor extensions MUST use an `^x-[a-z][a-z0-9-]*$` prefix.",
+          "examples": [
+            "separation-of-duties-policy",
+            "delegation-graph-walk"
+          ]
+        },
+        "verifiedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339 timestamp when the independence verification was recorded. Earlier-than-`createdAt` timestamps are valid for delegations created in advance of an anticipated appeal.",
+          "x-wos": {
+            "openStringKind": "timestamp"
+          }
+        },
+        "appealCaseId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Optional case URN of the appeal whose independence was verified. Present when the verification was performed in response to a specific filed appeal; absent for delegations whose independence is verified at delegation-creation time."
+        }
+      }
+    },
+    "QuorumRequirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Quorum-based delegation requirement (governance §S4.9 N-of-M quorum; workflow-governance.md:667-677). Carries the required count `N`, total eligible pool size `M`, the distinct-principal collusion-resistance flag, and a closed array of constraint summaries that bound the deontic envelope. The §S4.9 MUST against silent reduction is enforceable from this shape — a regulator querying \"show me every adverse decision under a 3-of-5 quorum and prove distinct-principal\" can read it directly.",
+      "required": [
+        "requiredCount",
+        "totalEligible",
+        "distinctPrincipalRequired"
+      ],
+      "properties": {
+        "requiredCount": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "N — number of principals from the eligible pool whose attestation is required for the delegation to authorize an action.",
+          "examples": [
+            3
+          ]
+        },
+        "totalEligible": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "M — size of the eligible principal pool. MUST be ≥ `requiredCount`.",
+          "examples": [
+            5
+          ]
+        },
+        "distinctPrincipalRequired": {
+          "type": "boolean",
+          "description": "When true, every attesting principal MUST be distinct (collusion-resistance MUST per workflow-governance.md:673). Setting this false relaxes the constraint — typically a structural error for high-stakes quorums."
+        },
+        "deontic": {
+          "type": "array",
+          "description": "Per-quorum deontic constraints further bounding the authority. Empty when the kernel declaration carries no constraints beyond the parent `Delegation.scope`.",
+          "items": {
+            "$ref": "#/$defs/DeonticConstraintSummary"
+          }
+        }
+      }
+    },
+    "AgentCapability": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Single capability identifier the agent is permitted to exercise (governance S2 capabilities). Plain string identifier matching the workflow's declared `agents[].capabilities[]` token (for example `documentExtraction`, `eligibilityScreening`).",
+      "examples": [
+        "documentExtraction",
+        "eligibilityScreening"
+      ],
+      "x-wos": {
+        "openStringKind": "identifier"
+      }
+    },
+    "AgentView": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Public WOS agent governance view. Projects the kernel `agents[]` declaration into the cross-case authoritative shape consumers (governance review UIs, audit timelines, AI-oversight dashboards) read. The underlying actor identity is referenced via `actorRef` (canonical `Actor` resource at `actor.schema.json`); this view carries the agent-specific operational fields (model identity, autonomy level, deontic constraints summary, confidence floor, drift status, capabilities) that the kernel `agents` block holds. Greenfield projection — kernel `AgentDeclaration` (`wos-workflow.schema.json#/$defs/AgentDeclaration`) is prior art (ADR 0064: agents as first-class actor kind).",
+      "required": [
+        "id",
+        "actorRef",
+        "workflowUrl",
+        "autonomyLevel",
+        "driftStatus",
+        "invokerKind",
+        "lifecycleState"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Stable public URN for this agent declaration. Entity-type segment MUST be `agent`."
+        },
+        "actorRef": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "URN-form reference to the underlying `Actor` (principal-class segment MUST be `service-account` or `workload`). The agent's identity-display state lives on the `actor` resource; this view carries the agent-specific operational state."
+        },
+        "workflowUrl": {
+          "$ref": "#/$defs/WorkflowUrl",
+          "description": "Governing workflow URL — the workflow whose `agents[]` block declares this agent."
+        },
+        "workflowVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Governing workflow version. Together with `workflowUrl` pins the kernel declaration this view projects.",
+          "examples": [
+            "1.0.0",
+            "2025.05"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "modelIdentifier": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Provider or deployment model identifier used for this agent (governance S2 modelIdentifier). Recorded so invocations and provenance can be tied to a concrete model family.",
+          "examples": [
+            "claude-sonnet-4-20250514"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "modelVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Provider or deployment model version used for this agent (governance S2 modelVersion). Recorded so behavior can be audited across upgrades and recalibrations.",
+          "examples": [
+            "2025-05-14"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "autonomyLevel": {
+          "$ref": "#/$defs/AutonomyLevel",
+          "description": "Closed-with-vendor-extension autonomy posture (governance S2 / agents block)."
+        },
+        "deonticConstraints": {
+          "type": "array",
+          "description": "Per-agent deontic constraints projected from the workflow `agents[].deonticConstraints` block (governance S2). Empty when the agent declaration carries no constraints.",
+          "items": {
+            "$ref": "#/$defs/DeonticConstraintSummary"
+          }
+        },
+        "confidenceFloor": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Minimum calibrated confidence the agent must meet before its output may be used at the configured autonomy level (governance S2 confidenceFloor). Omitted when the kernel declaration does not pin a floor.",
+          "examples": [
+            0.86
+          ]
+        },
+        "driftStatus": {
+          "$ref": "#/$defs/AgentDriftStatus",
+          "description": "Current drift posture of the deployed model relative to its calibration baseline (governance S2 driftMonitoring). `unknown` is the cold-start posture for newly-declared agents."
+        },
+        "agentType": {
+          "$ref": "#/$defs/AgentType",
+          "description": "Closed-with-vendor-extension agent-type taxonomy (ai-integration.md §3.1 line 129) — `deterministic | statistical | generative` — gating downstream calibration / validation requirements per ai-integration.md §3.2. Absent when the workflow declaration has not pinned a type."
+        },
+        "invokerKind": {
+          "$ref": "#/$defs/InvokerKind",
+          "description": "REQUIRED closed-with-vendor-extension invoker substrate (ADR 0064 §2.2 / §2.3 — `AgentInvoker` port + agents block `invoker` discriminator). Reserved literals: `anthropic | claudeAgentSdk | mcp | a2a | http | stub`. Operability tooling (telemetry, capability planning, multi-agent dispatch) reads this to branch on the underlying adapter without inspecting the workflow document."
+        },
+        "lifecycleState": {
+          "$ref": "#/$defs/AgentLifecycleState",
+          "description": "REQUIRED closed-with-vendor-extension declarative lifecycle posture (advanced-governance.md §7.1; advanced-governance.md:250-257). Reserved literals: `active | degraded | suspended | retired`. Distinct from the runtime event literal `agentStateTransition` on `provenance.schema.json` which records per-transition events; this field carries the live current state so portals can filter \"show me retired agents\" without reconstructing from the transition stream."
+        },
+        "activeSessions": {
+          "type": "array",
+          "description": "Optional array of in-flight multi-step sessions on this agent (advanced-governance.md §5; advanced-governance.md:180-214). Empty when the agent has no active sessions; populated when one or more sessions are running or paused at a checkpoint. Lets reviewers query \"which agent is parked awaiting human review at a multi-step checkpoint?\" via `activeSessions[].atCheckpoint == true`.",
+          "items": {
+            "$ref": "#/$defs/MultiStepSessionState"
+          }
+        },
+        "cascadingInvocations": {
+          "$ref": "#/$defs/CascadingInvocationsSpec",
+          "description": "Cascading-autonomous-agent declaration (ai-integration.md §3.7.3 line 194). Present iff this agent is declared at `autonomous` level AND authorised to invoke other autonomous agents."
+        },
+        "confidenceDecay": {
+          "$ref": "#/$defs/ConfidenceDecaySpec",
+          "description": "Confidence-decay projection (ai-integration.md §7.5; kernel `agents[].confidenceDecay`). Reduced kernel projection — half-life and floor only. Absent when the kernel declaration does not pin decay."
+        },
+        "volumeConstraints": {
+          "$ref": "#/$defs/VolumeConstraintsSpec",
+          "description": "Volume-throttling projection (ai-integration.md §11.1; kernel `agents[].volumeConstraints`). Absent when the agent has no volume constraints."
+        },
+        "shadowMode": {
+          "$ref": "#/$defs/ShadowModeSpec",
+          "description": "Shadow-mode declaration (advanced/advanced-governance.md:370-385). Present when shadow execution is configured for this agent."
+        },
+        "circuitBreaker": {
+          "$ref": "#/$defs/CircuitBreakerSpec",
+          "description": "Circuit-breaker live state and configuration (advanced/advanced-governance.md:387-400). Cross-cite Agent B's `circuitBreakerTripped` / `circuitBreakerReset` Facts record kinds for the per-event audit. Absent when no breaker is configured."
+        },
+        "capabilities": {
+          "type": "array",
+          "description": "Capability identifiers the agent is permitted to exercise (governance S2 capabilities).",
+          "items": {
+            "$ref": "#/$defs/AgentCapability"
+          }
+        },
+        "fallbackChain": {
+          "type": "array",
+          "description": "Ordered fallback chain (governance S2 fallbackChain). Each entry is an actor identifier (role or individual) the runtime escalates to when this agent cannot act, fails validation, or is demoted by governance policy. For rights-impacting workflows the chain MUST terminate in a human-review actor; this view projects the declaration verbatim — it does not enforce the rights-impacting constraint at the API layer.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Single fallback-actor identifier matching the kernel `agents[].fallbackChain[]` value.",
+            "x-wos": {
+              "openStringKind": "identifier"
+            },
+            "examples": [
+              "humanReviewer"
+            ]
+          }
+        }
+      }
+    },
+    "AgentListOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Query fields for `GET /api/v1/governance/agents`.",
+      "properties": {
+        "workflowUrl": {
+          "$ref": "#/$defs/WorkflowUrl",
+          "description": "When present, restrict results to agents declared by this workflow."
+        },
+        "autonomyLevel": {
+          "$ref": "#/$defs/AutonomyLevel",
+          "description": "When present, restrict results to agents at this autonomy level."
+        },
+        "driftStatus": {
+          "$ref": "#/$defs/AgentDriftStatus",
+          "description": "When present, restrict results to agents in this drift posture (for example `recalibration-required` for the AI-oversight dashboard)."
+        },
+        "cursor": {
+          "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken",
+          "description": "Opaque resume token returned by the previous page (ADR 0082 D-7)."
+        },
+        "limit": {
+          "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit",
+          "description": "Maximum number of agents requested for this page (ADR 0082 D-7)."
+        }
+      }
+    },
+    "AgentPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Cursor-paginated agent page (ADR 0082 D-7). Default ordering is `id` ascending so paginating clients observe a stable monotone walk.",
+      "required": [
+        "items",
+        "hasMore"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "description": "Agent views in this page.",
+          "items": {
+            "$ref": "#/$defs/AgentView"
+          }
+        },
+        "cursor": {
+          "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken",
+          "description": "Opaque token for the next page. Omitted when hasMore is false."
+        },
+        "hasMore": {
+          "type": "boolean",
+          "description": "True when another page is available from the server."
+        }
+      }
+    },
+    "DelegationAuthority": {
+      "description": "Type of authority delegated (governance S11.2). Closed-with-vendor-extension enum (ADR 0082 D-12). Reserved literals mirror the kernel `Delegation.authority` enum (`wos-workflow.schema.json#/$defs/Delegation/properties/authority`): `signing` (authority to sign official determinations), `determination` (authority to make case decisions), `review` (authority to review others' work), `override` (authority to override prior determinations). Vendor extensions MUST use an `x-` prefix. The case-scoped projection at `instance.schema.json#/$defs/DelegationEntry/properties/authority` carries the same closed-with-vendor-extension shape.",
+      "oneOf": [
+        {
+          "enum": [
+            "signing",
+            "determination",
+            "review",
+            "override"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "examples": [
+        "determination",
+        "signing"
+      ]
+    },
+    "DelegationScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Scope limits on a delegation (governance S11.3). Mirrors `wos-workflow.schema.json#/$defs/DelegationScope` on the load-bearing keys; the kernel `patternProperties: {^x-: ...}` vendor seam is not projected at this layer because public-API shapes use the `^x-[a-z][a-z0-9-]*$` enum-extension pattern, not arbitrary `x-` properties on object types.",
+      "properties": {
+        "impactLevels": {
+          "type": "array",
+          "description": "Impact levels this delegation covers. The delegate may only exercise authority for cases at these impact levels.",
+          "items": {
+            "enum": [
+              "rights-impacting",
+              "safety-impacting",
+              "operational",
+              "informational"
+            ],
+            "description": "Closed kernel impact-level taxonomy (Kernel §6).",
+            "examples": [
+              "operational"
+            ]
+          }
+        },
+        "caseTypes": {
+          "type": "array",
+          "description": "Case-type identifiers this delegation covers. The delegate may only exercise authority for cases of these types.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Single case-type identifier matching the workflow's case-type taxonomy.",
+            "examples": [
+              "standard-application",
+              "renewal"
+            ],
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          }
+        },
+        "maxDollarThreshold": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Maximum dollar value for determinations under this delegation.",
+          "examples": [
+            50000
+          ]
+        },
+        "conditions": {
+          "type": "string",
+          "minLength": 1,
+          "description": "FEL expression that further narrows when the delegation applies. Evaluated against the evaluation context; the delegation is active only when this expression evaluates to true.",
+          "examples": [
+            "caseFile.programType = 'supplemental'"
+          ],
+          "x-wos": {
+            "openStringKind": "fel"
+          }
+        }
+      }
+    },
+    "Delegation": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Cross-case authoritative delegation record (governance S11). Distinct from the case-scoped `DelegationEntry` at `instance.schema.json#/$defs/DelegationEntry`: that shape is the per-case projection on a `CaseInstanceGovernance` subresource; this `Delegation` is the cross-case authoritative record an organization holds for the delegate's authority. Mirrors `wos-workflow.schema.json#/$defs/Delegation` on the identifier and authority shape; identifiers project as URNs (ADR 0082 D-4) and actor references project as `ActorRef` URNs (ADR 0082 D-9).",
+      "required": [
+        "id",
+        "delegator",
+        "delegatee",
+        "authority",
+        "scope",
+        "createdAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Stable public URN for this delegation. Entity-type segment MUST be `delegation`."
+        },
+        "delegator": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor URN granting the delegated authority. Mirrors the kernel `Delegation.delegator` field; identifiers project as `ActorRef` URNs at the API layer."
+        },
+        "delegatee": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor URN receiving the delegated authority. Mirrors the kernel `Delegation.delegate` field; renamed `delegatee` at the API layer for symmetry with `delegator`."
+        },
+        "authority": {
+          "$ref": "#/$defs/DelegationAuthority",
+          "description": "Closed-with-vendor-extension type of authority delegated."
+        },
+        "scope": {
+          "$ref": "#/$defs/DelegationScope",
+          "description": "Scope limits on the delegated authority."
+        },
+        "legalInstrument": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Reference to the legal delegation order, memorandum, or statutory citation. Open prose: the legal-instrument value is documentary, not machine-evaluated.",
+          "examples": [
+            "Delegation Order 2026-003",
+            "42 USC 1396a(a)(5)"
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "effectiveDate": {
+          "type": "string",
+          "format": "date",
+          "description": "ISO 8601 date the delegation becomes active. Before this date, the processor MUST NOT honor this delegation."
+        },
+        "expirationDate": {
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "date"
+            },
+            {
+              "const": "never"
+            }
+          ],
+          "description": "ISO 8601 date the delegation expires, or the literal `never` for indefinite delegations (ADR 0082 D-10 sentinel pattern). Replaces the kernel-side `expirationDate?` optional with the explicit sentinel — clients no longer need to disambiguate `null` (not yet known), `null` (not applicable), and `null` (never expires)."
+        },
+        "revocable": {
+          "type": "boolean",
+          "description": "Whether this delegation can be revoked before its expiration (governance S11.4). When absent, the server MAY default to `true` per kernel default; consumers tolerate absence."
+        },
+        "revokedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp the delegation was revoked. Present iff the delegation is revoked; revoked delegations remain visible for audit but do not authorize new actions."
+        },
+        "revokedBy": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor URN that performed the revocation. Present iff `revokedAt` is present."
+        },
+        "revokedReason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Free-text rationale for the revocation. Open prose: the reason value is documentary, not machine-evaluated.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "allowsSubDelegation": {
+          "type": "boolean",
+          "description": "Whether this delegation permits the delegatee to further sub-delegate (governance S11.5). When absent, the server MAY default to `false` per kernel default; consumers tolerate absence."
+        },
+        "quorum": {
+          "$ref": "#/$defs/QuorumRequirement",
+          "description": "Quorum requirement for N-of-M attestation (governance §S4.9; workflow-governance.md:667-677). Present when this delegation requires an N-of-M assembly to authorize an action; absent when the delegation is single-principal."
+        },
+        "independenceVerified": {
+          "$ref": "#/$defs/IndependenceVerification",
+          "description": "Appeal-independence verification record (governance §3.5 item 1; workflow-governance.md:148-152). Present iff this delegation routes appeal review and the runtime has verified that the delegatee is independent of the original determination. Absent on non-appeal delegations and on appeal delegations awaiting verification — a regulator querying \"prove this appeal route is independent\" reads this field directly rather than re-deriving from provenance."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp the delegation record was created."
+        }
+      }
+    },
+    "DelegationListOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Query fields for `GET /api/v1/governance/delegations`.",
+      "properties": {
+        "delegatorUrn": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "When present, restrict results to delegations granted by this actor."
+        },
+        "delegateeUrn": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "When present, restrict results to delegations received by this actor."
+        },
+        "authority": {
+          "$ref": "#/$defs/DelegationAuthority",
+          "description": "When present, restrict results to delegations of this authority kind."
+        },
+        "active": {
+          "type": "boolean",
+          "description": "When `true`, restrict results to delegations whose `effectiveDate` is in the past, whose `expirationDate` is `never` or in the future, and which have not been revoked. When `false`, return only inactive (expired or revoked) delegations. When omitted, both states are returned."
+        },
+        "workflowUrl": {
+          "$ref": "#/$defs/WorkflowUrl",
+          "description": "When present, restrict results to delegations whose `scope.caseTypes` intersects the case-type taxonomy of this workflow. Servers MAY treat this filter as best-effort when scope predicates require runtime evaluation."
+        },
+        "cursor": {
+          "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken",
+          "description": "Opaque resume token returned by the previous page (ADR 0082 D-7)."
+        },
+        "limit": {
+          "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit",
+          "description": "Maximum number of delegations requested for this page (ADR 0082 D-7)."
+        }
+      }
+    },
+    "DelegationPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Cursor-paginated delegation page (ADR 0082 D-7). Default ordering is `createdAt` ascending so paginating clients observe a stable monotone walk.",
+      "required": [
+        "items",
+        "hasMore"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "description": "Delegation records in this page.",
+          "items": {
+            "$ref": "#/$defs/Delegation"
+          }
+        },
+        "cursor": {
+          "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken",
+          "description": "Opaque token for the next page. Omitted when hasMore is false."
+        },
+        "hasMore": {
+          "type": "boolean",
+          "description": "True when another page is available from the server."
+        }
+      }
+    },
+    "DelegationCreateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Request body for `POST /api/v1/governance/delegations`. The `Idempotency-Key` HTTP header is REQUIRED per ADR 0082 D-16; a repeat request within the retention window returns the original `Delegation` unchanged. Server assigns the URN and `createdAt`; clients MUST NOT supply them.",
+      "required": [
+        "delegator",
+        "delegatee",
+        "authority",
+        "scope"
+      ],
+      "properties": {
+        "delegator": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor URN granting the delegated authority. Server verifies the caller has standing to grant this delegation."
+        },
+        "delegatee": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor URN receiving the delegated authority. Server verifies the actor exists and is in the caller's scope."
+        },
+        "authority": {
+          "$ref": "#/$defs/DelegationAuthority",
+          "description": "Closed-with-vendor-extension type of authority being delegated."
+        },
+        "scope": {
+          "$ref": "#/$defs/DelegationScope",
+          "description": "Scope limits on the delegated authority."
+        },
+        "legalInstrument": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Reference to the legal delegation order, memorandum, or statutory citation. Open prose.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "effectiveDate": {
+          "type": "string",
+          "format": "date",
+          "description": "ISO 8601 date the delegation becomes active. When omitted, the server uses the request timestamp's date."
+        },
+        "expirationDate": {
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "date"
+            },
+            {
+              "const": "never"
+            }
+          ],
+          "description": "ISO 8601 date the delegation expires, or the literal `never` for indefinite delegations (ADR 0082 D-10 sentinel pattern). When omitted, the server uses an organization-default expiry."
+        },
+        "revocable": {
+          "type": "boolean",
+          "description": "Whether this delegation can be revoked before its expiration. When omitted, the server uses the kernel default of `true`."
+        },
+        "allowsSubDelegation": {
+          "type": "boolean",
+          "description": "Whether this delegation permits the delegatee to further sub-delegate. When omitted, the server uses the kernel default of `false`."
+        },
+        "quorum": {
+          "$ref": "#/$defs/QuorumRequirement",
+          "description": "Quorum requirement for N-of-M attestation (governance §S4.9; workflow-governance.md:667-677). Present iff this delegation requires an N-of-M assembly to authorize an action; the server validates that `delegatee` references identify a quorum pool of size ≥ `quorum.totalEligible` and that `quorum.requiredCount ≤ quorum.totalEligible`."
+        }
+      }
+    },
+    "DelegationRevokeRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Request body for `POST /api/v1/governance/delegations/{urn}/revoke`. The `Idempotency-Key` HTTP header is REQUIRED per ADR 0082 D-16. Server records `revokedAt`, `revokedBy` (the calling actor), and the supplied `reason`; revoked delegations remain visible for audit but do not authorize new actions. Repeated revoke requests on an already-revoked delegation return the original revoked-state representation.",
+      "required": [
+        "reason"
+      ],
+      "properties": {
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Free-text rationale for the revocation. Open prose; surfaced verbatim on the resulting `Delegation.revokedReason`.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        }
+      }
+    },
+    "PolicyParameterSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Single named policy-parameter projection (governance S13). Mirrors the kernel governance `policyParameters` block content. The kernel inlines parameter values directly under workflow `governance.policyParameters`; this projection carries one named parameter at a time, suitable for display under a `PolicyVersion`.",
+      "required": [
+        "key",
+        "value"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable parameter name as declared on the workflow's governance.policyParameters block.",
+          "examples": [
+            "appealWindowDays",
+            "eligibilityThreshold"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "value": {
+          "description": "Resolved parameter value at the policy version's `effectiveDate`. Any JSON value (string, number, boolean, object, array) — the kernel does not constrain the value shape per parameter."
+        },
+        "resolutionDateRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional case-state field path the runtime uses to resolve this parameter to its date-effective value (governance S13.2). When present, the resolution date is read from `caseFile.<resolutionDateRef>`; when absent, the resolution date defaults to the case-creation date.",
+          "examples": [
+            "applicationDate",
+            "/applicantContext/intakeDate"
+          ],
+          "x-wos": {
+            "openStringKind": "pathExpression"
+          }
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional human-readable description of this parameter. Open prose.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        }
+      }
+    },
+    "PolicyVersion": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Pinned version of a workflow's policy parameters (governance S13). Carries the effective period, parameter hash for tamper-detection, source citation, and the resolved parameter set at this version. The version `string` value is the stable label rendered in adverse-decision notices and audit timelines so an affected individual can reference the exact policy that governed their determination.",
+      "required": [
+        "policyUrl",
+        "version",
+        "effectiveFrom",
+        "parameters",
+        "parameterHash",
+        "createdAt"
+      ],
+      "properties": {
+        "policyUrl": {
+          "$ref": "#/$defs/WorkflowUrl",
+          "description": "URL of the governing workflow whose `governance.policyParameters` this version pins."
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable version label for this pinned policy parameter set. Recommended SemVer 2.0.0 (`major.minor.patch`) so consumers can reason about compatibility, but the public contract treats the value as opaque-but-identifier-shaped.",
+          "examples": [
+            "2026.01.0",
+            "1.4.2"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "effectiveFrom": {
+          "type": "string",
+          "format": "date",
+          "description": "ISO 8601 date this policy version becomes the active version for cases whose resolution date falls in this version's effective period."
+        },
+        "effectiveUntil": {
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "date"
+            },
+            {
+              "const": "never"
+            }
+          ],
+          "description": "ISO 8601 date this policy version stops being active, or the literal `never` for the current version (ADR 0082 D-10 sentinel pattern). Cases with resolution dates strictly before `effectiveUntil` resolve against this version."
+        },
+        "parameters": {
+          "type": "array",
+          "description": "Resolved parameter set for this policy version. Empty when the workflow's governance block declares no policy parameters.",
+          "items": {
+            "$ref": "#/$defs/PolicyParameterSummary"
+          }
+        },
+        "parameterHash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Lower-case hex SHA-256 digest over the canonical JSON serialization of `parameters` (RFC 8785 JCS). Lets clients detect silent parameter drift between identical-looking version labels and lets audit compare against the Trellis-anchored value."
+        },
+        "sourceCitation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Citation to the authoritative source the parameter values were drawn from (statute section, regulatory paragraph, agency memo). Open prose; the value is documentary and surfaced verbatim in adverse-decision notices.",
+          "examples": [
+            "42 CFR § 435.916 (2026 revision)"
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp the policy version was committed to the governance subsystem."
+        },
+        "createdBy": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor URN that committed the policy version. Typically a `human` or `service-account` principal class."
+        }
+      }
+    },
+    "PolicyVersionListOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Query fields for `GET /api/v1/governance/policies/{policyUrl}/versions`.",
+      "properties": {
+        "active": {
+          "type": "boolean",
+          "description": "When `true`, restrict results to the version whose effective period covers the request date. When `false`, restrict to historical (non-current) versions. When omitted, return every version."
+        },
+        "cursor": {
+          "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken",
+          "description": "Opaque resume token returned by the previous page (ADR 0082 D-7)."
+        },
+        "limit": {
+          "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit",
+          "description": "Maximum number of versions requested for this page (ADR 0082 D-7)."
+        }
+      }
+    },
+    "PolicyVersionPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Cursor-paginated policy-version page (ADR 0082 D-7). Default ordering is `effectiveFrom` descending so paginating clients observe newest-first which matches typical version-history rendering.",
+      "required": [
+        "items",
+        "hasMore"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "description": "Policy-version records in this page.",
+          "items": {
+            "$ref": "#/$defs/PolicyVersion"
+          }
+        },
+        "cursor": {
+          "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken",
+          "description": "Opaque token for the next page. Omitted when hasMore is false."
+        },
+        "hasMore": {
+          "type": "boolean",
+          "description": "True when another page is available from the server."
+        }
+      }
+    },
+    "EscalationReason": {
+      "description": "Cause that triggered an escalation event (governance §S6 escalation chains, §10.3 SLA breach policy; ai-integration.md §8 fallback chains, §11.1 volume constraints). Closed-with-vendor-extension enum (ADR 0082 D-12). Reserved literals: `sla-breach` (an SLA window elapsed without completion), `hold-timeout` (a typed-hold expectedDuration elapsed without the resume trigger), `manual` (an operator explicitly escalated), `policy-violation` (a deontic prohibition was attempted), `agent-drift` (an agent's drift status reached `recalibration-required` or `demoted` and policy escalates), `quorum-shortfall` (a quorum-based delegation could not assemble the required count), `appeal-filed` (an adverse-decision appeal was filed and routes to a higher authority), `agent-fallback-terminated` (ai-integration.md §8.4 — a fallback chain reached its terminal level without success and the workflow MUST escalate to human review per §8.2 item 5), `confidence-floor-breach` (ai-integration.md §7.4 — agent output confidence fell below the workflow `confidenceFloor` and `onViolation: escalateToHuman` fired), `agent-volume-exceeded` (ai-integration.md §11.1 — `maxAutonomousPerHour` / `maxAutonomousPerDay` reached so subsequent invocations escalate to human review regardless of confidence). Vendor extensions MUST use an `x-` prefix.",
+      "oneOf": [
+        {
+          "enum": [
+            "sla-breach",
+            "hold-timeout",
+            "manual",
+            "policy-violation",
+            "agent-drift",
+            "quorum-shortfall",
+            "appeal-filed",
+            "agent-fallback-terminated",
+            "confidence-floor-breach",
+            "agent-volume-exceeded"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "examples": [
+        "sla-breach",
+        "agent-drift"
+      ]
+    },
+    "EscalationEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Wire shape for the `escalation` audit-event class (governance §S6 escalation chains; §10.3 SLA breach policy; §12.4 hold timeoutAction). One event is emitted per escalation step the runtime walks (§10.4.4 EscalationStep `level`). The shape is read-only at the public API layer — escalation events are emitted by the runtime when SLA windows breach, holds time out, or operators manually escalate; clients consume them via the audit timeline (ADR 0082 D-15 audit domain, deferred). This $def authors the wire shape so the audit domain can `$ref` it without re-defining.",
+      "required": [
+        "id",
+        "instanceId",
+        "reason",
+        "level",
+        "escalatedAt",
+        "escalatedTo"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Stable public URN for this escalation event. Entity-type segment is `provenance-record` because escalation events are tier-typed provenance records (governance §S6)."
+        },
+        "instanceId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Case instance URN whose governance state escalated. Entity-type segment MUST be `instance`."
+        },
+        "taskId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Optional task URN when the escalation is task-scoped (typical for SLA-breach escalations per §10.3). Entity-type segment MUST be `task`. Omitted for case-level escalations."
+        },
+        "reason": {
+          "$ref": "#/$defs/EscalationReason",
+          "description": "Closed-with-vendor-extension cause that triggered the escalation."
+        },
+        "level": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Step in the escalation chain that fired (governance §10.4.4 EscalationStep `level`). Levels SHOULD be contiguous starting at 1 within an instance/task pair; the processor walks them in ascending order until the task clears, fails, or a ticket is created.",
+          "examples": [
+            1,
+            2
+          ]
+        },
+        "stepId": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$",
+          "description": "Optional stable identifier of the escalation step that fired (governance §10.4.4 EscalationStep `id`). When the workflow's escalation chain declared a named step, this field carries it so audit consumers can correlate the event to the step without pinning to the ordinal `level` (the same indirection the kernel `BreachPolicy.escalationStepId` cross-reference uses).",
+          "examples": [
+            "supervisor",
+            "divisionDirector"
+          ]
+        },
+        "escalatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp the runtime emitted the escalation event."
+        },
+        "escalatedBy": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor URN that triggered the escalation. For automated triggers (SLA breach, hold timeout, drift) this is the `workload` principal-class actor representing the runtime; for manual escalation it is the human or service-account that performed the operation."
+        },
+        "escalatedTo": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor URN the task or case was reassigned to as a result of the escalation step (governance §10.4.4 EscalationStep `assignTo`)."
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Free-text rationale captured when `reason == manual`; surfaced verbatim in audit timelines. Open prose.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "gracePeriod": {
+          "type": "string",
+          "pattern": "^P(?:\\d+BD|(?!$)(?:\\d+Y)?(?:\\d+M)?(?:\\d+W)?(?:\\d+D)?(?:T(?=\\d)(?:\\d+H)?(?:\\d+M)?(?:\\d+S)?)?)$",
+          "description": "ISO 8601 duration the escalated assignee has to resolve the task before this step's `onExhaustion` policy fires (governance §10.4.4 EscalationStep `gracePeriod`). The `P<N>BD` business-day form is the WOS extension resolved against the SLA's declared calendar.",
+          "examples": [
+            "P1D",
+            "PT4H",
+            "P2BD"
+          ]
+        }
+      }
+    }
+  }
+}

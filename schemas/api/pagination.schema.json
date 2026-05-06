@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.formspec.io/wos-api/pagination/v1",
+  "title": "WOS API Pagination",
+  "description": "Cursor pagination primitives for the public WOS REST API. The public contract uses opaque cursors and hasMore instead of page numbers or totals so append-only lists remain stable under concurrent writes.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/PaginationQuery"
+    },
+    {
+      "$ref": "#/$defs/PaginatedResult"
+    }
+  ],
+  "$defs": {
+    "CursorToken": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Opaque server-issued token for resuming a cursor-paginated list. Clients MUST NOT parse, persist across sessions, or share it across users.",
+      "x-wos": {
+        "openStringKind": "opaque-token"
+      },
+      "examples": [
+        "eyJzb3J0S2V5IjoiMjAyNi0wNS0wNVQxMjowMDowMFoifQ"
+      ]
+    },
+    "PageLimit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 200,
+      "description": "Requested page size. Servers MAY apply a lower per-resource maximum but MUST reject values above 200.",
+      "examples": [
+        50
+      ]
+    },
+    "PaginationQuery": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Common cursor pagination query fields used by list endpoints.",
+      "properties": {
+        "cursor": {
+          "$ref": "#/$defs/CursorToken",
+          "description": "Opaque resume token returned by the previous page. Omit on the first request."
+        },
+        "limit": {
+          "$ref": "#/$defs/PageLimit",
+          "description": "Maximum number of items requested for this page."
+        }
+      }
+    },
+    "PaginatedResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Cursor pagination envelope. Resource schemas specialize the item type in their own page definitions.",
+      "required": [
+        "items",
+        "hasMore"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "description": "Page items. Resource-specific schemas narrow this array's item type.",
+          "items": true
+        },
+        "cursor": {
+          "$ref": "#/$defs/CursorToken",
+          "description": "Opaque token for the next page. Omitted when hasMore is false."
+        },
+        "hasMore": {
+          "type": "boolean",
+          "description": "True when another page is available from the server."
+        }
+      }
+    }
+  }
+}

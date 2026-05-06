@@ -1,0 +1,299 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.formspec.io/wos-api/bundle/v1",
+  "title": "WOS API Bundle",
+  "description": "Public API resource schema for case-export bundles. The bundle ITSELF is a Trellis-emitted CBOR archive (`trellis-export/1`; Trellis Core §18 export package layout, ADR 0007 certificate-of-completion composition). This schema defines the metadata + download seam: clients enumerate available bundles, kick off bundle builds, and download the authoritative byte stream. Bundles are derived projections of canonical Trellis events; they are not themselves authoritative — verification runs against the byte stream's COSE_Sign1 signatures and Merkle proofs (Trellis Core §19). Per ADR 0082 D-15 step 6, bundles complete the case-export surface alongside the cross-case `audit` query schema.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/Bundle"
+    },
+    {
+      "$ref": "#/$defs/BundlePage"
+    },
+    {
+      "$ref": "#/$defs/BundleListOptions"
+    },
+    {
+      "$ref": "#/$defs/BundleCreateRequest"
+    }
+  ],
+  "$defs": {
+    "BundleStatus": {
+      "enum": [
+        "pending",
+        "building",
+        "available",
+        "expired",
+        "failed"
+      ],
+      "description": "Closed lifecycle status for a bundle build. `pending` = queued, build not started; `building` = generator running, bytes not yet sealed; `available` = byte stream sealed and downloadable; `expired` = retention window elapsed, bytes purged but metadata retained for audit; `failed` = build terminated with error. Closed enum with no extension seam — new states require a schema major bump.",
+      "examples": [
+        "available",
+        "building"
+      ]
+    },
+    "BundleTierInclusion": {
+      "oneOf": [
+        {
+          "enum": [
+            "facts-only",
+            "facts-reasoning",
+            "full-tier-set"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "description": "Closed tier-inclusion taxonomy for the bundle's provenance projection (ADR 0082 D-12 closed-with-vendor-extension). `facts-only` = Facts-tier records only (Kernel S8); `facts-reasoning` = Facts + Reasoning (Governance S6.2); `full-tier-set` = all four tiers including Counterfactual (Governance S6.4) and Narrative (AI Integration S13). The kernel/governance/AI tier semantics are mirrored from `provenance.schema.json` — bundles compose, they do not redefine.",
+      "examples": [
+        "full-tier-set",
+        "facts-reasoning"
+      ]
+    },
+    "BundleMediaType": {
+      "enum": [
+        "application/cbor"
+      ],
+      "description": "Closed MIME type for the bundle byte stream. Phase 1 ships a single Trellis CBOR export format (`trellis-export/1`; Trellis Core §18.3 `ExportManifestPayload.format`). Future formats register here under a major schema bump rather than a vendor extension — bundle byte format is normative.",
+      "examples": [
+        "application/cbor"
+      ]
+    },
+    "Bundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Bundle metadata resource. Describes a single case-export bundle: identity, the case it exports, when it was sealed, and the digest a verifier uses to confirm byte-stream integrity. The actual archive bytes are downloaded out-of-band via `GET /api/v1/bundles/{urn}/download` and are NOT inlined here — JSON cannot represent Trellis CBOR.",
+      "required": [
+        "id",
+        "instanceId",
+        "status",
+        "lifecycleStateAtExport",
+        "exportedAt",
+        "tierInclusion",
+        "mediaType"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Stable public URN for this bundle. The entity-type segment MUST be `bundle`."
+        },
+        "instanceId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Case instance URN this bundle exports. The entity-type segment MUST be `instance`. One bundle exports exactly one case; multi-case exports are a separate `audit`-domain concern."
+        },
+        "status": {
+          "$ref": "#/$defs/BundleStatus",
+          "description": "Current lifecycle status."
+        },
+        "lifecycleStateAtExport": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Lifecycle state of the case at the moment the bundle was sealed. Captured for audit hygiene — a bundle exported mid-lifecycle is not the same artifact as one sealed at terminal state. Open string keyed against the workflow's lifecycle state catalog (Kernel S4 lifecycle).",
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          },
+          "examples": [
+            "decided",
+            "in-review"
+          ]
+        },
+        "exportedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the bundle byte stream was sealed (status transition `building` -> `available`). Distinct from `requestedAt` — the wait between request and seal can be material on long bundle builds.",
+          "examples": [
+            "2026-05-05T14:30:00Z"
+          ]
+        },
+        "requestedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the bundle build was requested (status `pending`). Omitted when the server does not retain request-time metadata.",
+          "examples": [
+            "2026-05-05T14:25:00Z"
+          ]
+        },
+        "expiresAt": {
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "const": "never"
+            }
+          ],
+          "description": "UTC RFC 3339 expiry timestamp or the literal `never` for retention-indefinite bundles (ADR 0082 D-10 sentinel). After this time the byte stream MAY be purged; metadata is retained, status flips to `expired`."
+        },
+        "tierInclusion": {
+          "$ref": "#/$defs/BundleTierInclusion",
+          "description": "Which provenance tier set is materialized in the byte stream. Picked at request time and recorded here so a verifier can detect mismatch between requested and sealed projections."
+        },
+        "mediaType": {
+          "$ref": "#/$defs/BundleMediaType",
+          "description": "MIME type of the byte stream returned by the download endpoint."
+        },
+        "byteSize": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Size of the sealed byte stream in bytes. Omitted while `status in {pending, building}` because the size is not yet stable. REQUIRED when `status == available`.",
+          "examples": [
+            1572864
+          ]
+        },
+        "certificateOfCompletionDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "Lowercase SHA-256 hex digest of the Trellis certificate-of-completion presentation artifact bound by this bundle (Trellis ADR 0007 `presentation_artifact.content_hash`, computed under domain tag `trellis-presentation-artifact-v1`). Omitted when the case is signing-only / no certificate-of-completion was emitted."
+        },
+        "verifierProfile": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the Trellis verifier profile required to validate the byte stream (e.g., suite-id binding, anchor target). Open identifier; semantics live in the deployment's Posture Declaration (Trellis Core §20). Omitted when the deployment exposes a single default profile.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "examples": [
+            "trellis-phase-1-ed25519",
+            "trellis-phase-1-opentimestamps"
+          ]
+        },
+        "failure": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Failure detail attached when `status == failed`. Carries a stable WOS error code plus human-readable text drawn from the public registry (`error-registry.md`).",
+          "required": [
+            "wosErrorCode",
+            "title"
+          ],
+          "properties": {
+            "wosErrorCode": {
+              "type": "string",
+              "pattern": "^WOS-[0-9]{4,5}$",
+              "description": "Stable WOS error code from the public error registry that classifies this failure."
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Short human-readable failure title.",
+              "x-wos": {
+                "openStringKind": "prose"
+              }
+            },
+            "detail": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Optional longer human-readable failure description.",
+              "x-wos": {
+                "openStringKind": "prose"
+              }
+            }
+          }
+        }
+      }
+    },
+    "BundleListOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Query fields for `GET /api/v1/bundles` (ADR 0082 D-7 cursor pagination).",
+      "properties": {
+        "instanceId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Optional case instance URN filter — list bundles for one case."
+        },
+        "lifecycleStateAtExport": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional filter on the lifecycle state at export. Useful for `find me all bundles sealed at terminal state` audit queries.",
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
+        },
+        "status": {
+          "$ref": "#/$defs/BundleStatus",
+          "description": "Optional status filter. Most common filter is `available` for download-ready bundles."
+        },
+        "createdAfter": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Optional UTC RFC 3339 lower bound on `requestedAt`. Bundles requested before this instant are excluded."
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque resume token returned by the previous page (ADR 0082 D-7).",
+          "x-wos": {
+            "openStringKind": "opaque-token"
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "description": "Maximum number of bundles requested for this page."
+        }
+      }
+    },
+    "BundlePage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Cursor-paginated bundle metadata page (ADR 0082 D-7).",
+      "required": [
+        "items",
+        "hasMore"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "description": "Bundle metadata items in this page, newest-first by `requestedAt`.",
+          "items": {
+            "$ref": "#/$defs/Bundle"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque token for the next page. Omitted when hasMore is false.",
+          "x-wos": {
+            "openStringKind": "opaque-token"
+          }
+        },
+        "hasMore": {
+          "type": "boolean",
+          "description": "True when another page is available from the server."
+        }
+      }
+    },
+    "BundleCreateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Request body for `POST /api/v1/bundles` — kicks off a case-export bundle build. `Idempotency-Key` header is REQUIRED per ADR 0082 D-16 because bundle builds are externally-visible side effects (Trellis events emit, key-registry snapshots, attachment lineage resolution); a repeat request within the retention window returns the original `Bundle` resource unchanged.",
+      "required": [
+        "instanceId"
+      ],
+      "properties": {
+        "instanceId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Case instance URN to export. The entity-type segment MUST be `instance`. The caller MUST have visibility into the instance under the current scope (ADR 0068 D-2)."
+        },
+        "tierFilter": {
+          "$ref": "#/$defs/BundleTierInclusion",
+          "description": "Optional tier-inclusion projection. Defaults to `full-tier-set` when omitted. The chosen value is recorded on the resulting `Bundle.tierInclusion` so a verifier can detect projection mismatch."
+        },
+        "verifierProfile": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional verifier-profile identifier (Trellis Core §20). When omitted, the deployment's default profile is used. Open identifier whose semantics live in the deployment's Posture Declaration.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "examples": [
+            "trellis-phase-1-ed25519"
+          ]
+        }
+      }
+    }
+  }
+}

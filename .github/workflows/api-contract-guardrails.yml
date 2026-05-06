@@ -1,0 +1,143 @@
+name: ADR 0082 D-13 — API contract guardrails
+
+# Cite: ADR 0082 D-13 (work-spec/thoughts/adr/0082-stack-public-api-contract-and-schema-discipline.md).
+# This workflow lands gates 1, 2, 4, and 6. Gate 3 (route coverage) and the
+# server side of gate 5 live in workspec-server's workflow; gate 5's portal
+# side runs under case-portal's vitest suite. Gate 6 enforces API-mirror
+# byte-parity with kernel/governance/AI sources (PLN-0403 path b).
+
+on:
+  pull_request:
+    paths:
+      - "schemas/api/*.schema.json"
+      - "schemas/wos-*.schema.json"
+      - "api/wos-public-api.openapi.json"
+      - "specs/api/**"
+      - "scripts/check-openapi-staleness.py"
+      - "scripts/check-api-mirror-parity.py"
+      - ".github/workflows/api-contract-guardrails.yml"
+  push:
+    branches: [main]
+    paths:
+      - "schemas/api/*.schema.json"
+      - "schemas/wos-*.schema.json"
+      - "api/wos-public-api.openapi.json"
+      - "specs/api/**"
+      - "scripts/check-openapi-staleness.py"
+      - "scripts/check-api-mirror-parity.py"
+      - ".github/workflows/api-contract-guardrails.yml"
+
+jobs:
+  adr-0082-d13-gate-1-schema-validity:
+    name: ADR 0082 D-13 gate 1 — schema validity (ajv compile)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # ADR D-13 names ajv as the schema-validity oracle. Use ajv-cli
+      # (compile mode, draft 2020-12) over every schemas/api/*.schema.json.
+      # No package.json in work-spec/ — install ajv-cli ad-hoc.
+      - name: Install ajv 8 + ajv-formats
+        # ADR D-13 names ajv as the schema-validity oracle. We use the
+        # programmatic ajv API (not ajv-cli) so we can pre-register the
+        # whole WOS schema family (draft-07 + 2020-12 mixed) and resolve
+        # cross-schema $refs cleanly — same posture as the case-portal
+        # validator at `case-portal/src/services/wos-kernel-validator.ts`.
+        run: npm install --no-save ajv@8 ajv-formats@3
+
+      - name: Compile every schemas/api/*.schema.json
+        run: node scripts/check-api-schema-validity.mjs
+
+  adr-0082-d13-gate-2-openapi-discipline:
+    name: ADR 0082 D-13 gate 2 — OpenAPI staleness + ref discipline
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run gate 2 check
+        run: python scripts/check-openapi-staleness.py
+
+  adr-0082-d13-gate-4-breaking-change:
+    name: ADR 0082 D-13 gate 4 — breaking-change detection (oasdiff)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve merge-base copy of OpenAPI doc
+        id: base
+        run: |
+          set -euo pipefail
+          base_ref="${{ github.base_ref }}"
+          git fetch origin "$base_ref" --depth=1
+          if git show "origin/${base_ref}:api/wos-public-api.openapi.json" > /tmp/openapi-base.json 2>/dev/null; then
+            echo "base_present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::no api/wos-public-api.openapi.json on origin/${base_ref}; skipping oasdiff (first introduction)"
+            echo "base_present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: oasdiff — breaking-change check
+        if: steps.base.outputs.base_present == 'true'
+        # Tufin/oasdiff via the official action per ADR 0082 D-13 gate 4.
+        # `fail-on-diff: true` + `fail-on: ERR` returns non-zero on any
+        # breaking change, exactly the gate the ADR mandates.
+        uses: oasdiff/oasdiff-action/breaking@main
+        with:
+          base: /tmp/openapi-base.json
+          revision: api/wos-public-api.openapi.json
+          fail-on-diff: true
+
+      - name: Allow override via PR label
+        # If the breaking-change job above failed but the PR carries the
+        # `breaking-change-allowed` label, treat the run as passing. The
+        # ADR mandates explicit owner sanction for breaking changes; the
+        # label is the discoverable seam.
+        if: failure() && github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          labels=$(jq -r '.pull_request.labels[].name' < "$GITHUB_EVENT_PATH")
+          if echo "$labels" | grep -qx "breaking-change-allowed"; then
+            echo "::notice::ADR 0082 D-13 gate 4: breaking-change-allowed label present; override accepted."
+            exit 0
+          fi
+          echo "::error::ADR 0082 D-13 gate 4 failed (oasdiff detected breaking change). \
+                Apply the 'breaking-change-allowed' label after recording the rationale in \
+                an ADR amendment per ADR 0082 D-2."
+          exit 1
+
+  adr-0082-d13-gate-6-mirror-parity:
+    name: ADR 0082 D-13 gate 6 — API-mirror byte-parity (PLN-0403 path b)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Walks every schemas/api/*.schema.json and asserts every $def carrying
+      # `x-wos.mirror = {source, path}` byte-aligns (on load-bearing keys)
+      # with the named kernel/governance/AI source $def under
+      # schemas/wos-*.schema.json. Catches the dropped-pin class of
+      # silent-divergence bugs (ADR 0082 D-14, "API as projection, not
+      # alternative reality"). Pure stdlib — no install step.
+      - name: Run gate 6 check
+        run: python3 scripts/check-api-mirror-parity.py

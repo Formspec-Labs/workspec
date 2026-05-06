@@ -1,0 +1,844 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.formspec.io/wos-api/task/v1",
+  "title": "WOS API Task",
+  "description": "Public API resource schema for WOS tasks. Greenfield per ADR 0082 D-15 step 4. A `Task` is a single unit of governed actor work created by a kernel `createTask` action (Kernel S9.2) and governed by the Workflow Governance task-management contract (governance S10). The wire shape carries identity, workflow binding, assignment, contract context, lifecycle (closed `TaskStatus`), and the optional draft response. The lighter `TaskListItem` shape is used for list views; the full `Task` is the single-resource shape. Submission is split into a draft (idempotent partial save) and a final response (require `Idempotency-Key`). The kernel runtime artifact `wos-case-instance.schema.json#/$defs/ActiveTask` is prior art; this projection is greenfield (ADR 0082 D-15).",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/Task"
+    },
+    {
+      "$ref": "#/$defs/TaskListItem"
+    },
+    {
+      "$ref": "#/$defs/TaskPage"
+    },
+    {
+      "$ref": "#/$defs/TaskListOptions"
+    },
+    {
+      "$ref": "#/$defs/TaskDraft"
+    },
+    {
+      "$ref": "#/$defs/TaskSubmission"
+    },
+    {
+      "$ref": "#/$defs/TaskDismissal"
+    },
+    {
+      "$ref": "#/$defs/TaskOutcomeEvent"
+    },
+    {
+      "$ref": "#/$defs/TaskDeadline"
+    },
+    {
+      "$ref": "#/$defs/AssignmentRoles"
+    }
+  ],
+  "$defs": {
+    "ActorRef": {
+      "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+      "description": "Stable actor reference from the identity/governance subsystem (ADR 0082 D-9). Hoisted to `_common.schema.json` per PLN-0404."
+    },
+    "WosResourceUrn": {
+      "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+      "description": "Public WOS API resource URN (ADR 0082 D-4). Hoisted to `_common.schema.json` per PLN-0404."
+    },
+    "WorkflowUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "Absolute URI of the governing WOS Workflow Document.",
+      "examples": [
+        "https://agency.gov/workflows/benefits-adjudication"
+      ],
+      "x-wos": {
+        "openStringKind": "uri"
+      }
+    },
+    "TaskStatus": {
+      "enum": [
+        "pending",
+        "drafted",
+        "submitted",
+        "dismissed",
+        "expired"
+      ],
+      "description": "Closed user-facing task lifecycle for the public API (ADR 0082 D-12). The kernel runtime carries a richer `created|assigned|claimed|delegated|escalated` set on `wos-case-instance.schema.json#/$defs/ActiveTask.status` for processor-side bookkeeping; the public API collapses those into the user-visible posture: `pending` (the actor has work to do); `drafted` (a partial response is saved); `submitted` (the actor's final response is committed and the task is no longer actionable); `dismissed` (the actor declined the task per delegation or escalation policy); `expired` (the SLA `targetDuration` elapsed without submission and the breach policy fired). No vendor-extension seam: the user-facing taxonomy is closed by design; richer kernel-side states surface in provenance and on `TaskOutcomeEvent.outcome`.",
+      "examples": [
+        "pending",
+        "drafted"
+      ]
+    },
+    "TaskKind": {
+      "oneOf": [
+        {
+          "enum": [
+            "intake",
+            "review",
+            "determination",
+            "signature",
+            "correspondence-response",
+            "hold-resolution",
+            "escalation",
+            "verification"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "description": "Closed-with-vendor-extension task family (ADR 0082 D-12). Reserved literals: `intake` (initial application capture); `review` (governance review-protocol step); `determination` (rights-impacting decision per Kernel S9.2 / governance S6); `signature` (signature-profile signer step); `correspondence-response` (reply to inbound correspondence); `hold-resolution` (action that resumes a typed hold per governance S12); `escalation` (manual escalation step); `verification` (independent confirmation of a prior mutation, see `verificationLevel` in `instance.schema.json`). Vendor extensions MUST use an `x-` prefix.",
+      "examples": [
+        "review",
+        "determination"
+      ]
+    },
+    "TaskBinding": {
+      "type": "string",
+      "enum": [
+        "formspec",
+        "jsonSchema",
+        "freeform"
+      ],
+      "description": "Closed contract-binding kind for the task body (Kernel S7.2). Byte-aligned mirror of the kernel `ActiveTask.binding` enum at `wos-case-instance.schema.json#/$defs/ActiveTask/properties/binding` (ADR 0082 D-13 gate 6). `formspec` is rendered by Formspec; `jsonSchema` is a generic JSON-Schema-validated payload; `freeform` is a structured task with no machine-validated payload (typical of dismissals or simple acknowledgements). Closed-no-extension at this layer; if a deployment needs new bindings, the kernel grows them and the API mirror tracks.",
+      "examples": [
+        "formspec"
+      ],
+      "x-wos": {
+        "mirror": "wos-case-instance.schema.json#/$defs/ActiveTask/properties/binding"
+      }
+    },
+    "ReviewProtocolKind": {
+      "oneOf": [
+        {
+          "enum": [
+            "independentFirst",
+            "considerOpposite",
+            "calibratedConfidence",
+            "dualBlind",
+            "unassisted"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "description": "Closed-with-vendor-extension review-protocol classification (governance §4.1 Protocol Definitions, §4.2 Protocol Combination; workflow-governance.md:248-260). Reserved literals: `independentFirst` (the reviewer's independent assessment MUST be recorded before any agent/upstream recommendation is accessible — §4.2 enforcement obligation); `considerOpposite` (the reviewer is required to consider the opposite outcome before settling); `calibratedConfidence` (the reviewer's confidence is calibrated against historical accuracy); `dualBlind` (two independent reviewers without cross-visibility); `unassisted` (the reviewer is not exposed to upstream recommendations). Vendor extensions MUST use an `^x-[a-z][a-z0-9-]*$` prefix per ADR 0082 D-12.",
+      "examples": [
+        "independentFirst",
+        "calibratedConfidence"
+      ]
+    },
+    "TaskDeadline": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Single named SLA window on a task (governance §10.4.1 multi-SLA authoring; workflow-governance.md:548-560 — `slaDefinitions: array<SlaDefinition>`). The current single-valued `deadline` field captures only one of `firstResponse` / `fullResolution` / statutory windows; this typed sub-shape exposes the full set so the applicant sees both clocks and the staff portal prioritizes by which window is closer to breach.",
+      "required": [
+        "kind",
+        "at",
+        "severity"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "sla",
+            "statutory",
+            "internal"
+          ],
+          "description": "Closed-no-extension deadline classification. `sla` is a service-level agreement window; `statutory` is a legally-binding regulatory window (typically `enforcing` severity); `internal` is an organizational target (typically `advisory`). Closed by design — adding a new kind requires a schema major bump.",
+          "examples": [
+            "sla",
+            "statutory"
+          ]
+        },
+        "at": {
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "const": "never"
+            }
+          ],
+          "description": "UTC RFC 3339 absolute deadline timestamp, or the literal `never` (ADR 0082 D-10 sentinel pattern). The window expires at this instant; warning notifications fire at workflow-declared lead-time before."
+        },
+        "severity": {
+          "enum": [
+            "advisory",
+            "enforcing"
+          ],
+          "description": "Closed-no-extension severity classification. `advisory` deadlines surface to UI but do not by themselves trigger escalation; `enforcing` deadlines fire the workflow's breach-policy escalation chain on expiry (governance §10.3 + §10.4 escalation chains).",
+          "examples": [
+            "enforcing"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional stable identifier matching the workflow's `slaDefinitions[].id` (governance §10.4.1). Lets clients correlate a deadline with the named window it implements (`firstResponse`, `fullResolution`).",
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "examples": [
+            "firstResponse",
+            "fullResolution"
+          ]
+        }
+      }
+    },
+    "AssignmentRoles": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Five-role task-assignment projection (governance §7.2 separation of duties + §10.2 assignment roles; workflow-governance.md:392-396 + 502-514). Surfaces the kernel's task-management role taxonomy so a staff portal can answer \"who is excluded?\", \"who is the required owner?\", \"which actor pool may claim?\", \"who currently holds the task?\", and \"who delegated it?\" without re-deriving from delegation graphs and provenance. Closed object — adding a new role requires a schema major bump; the precedence rule from workflow-governance.md:514 (`excludedOwner` overrides all other roles) is enforced at the runtime, not in the projection.",
+      "properties": {
+        "excludedOwner": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor URN explicitly excluded from assignment to enforce separation of duties (governance §7.2; workflow-governance.md:512). Per workflow-governance.md:514 this overrides all other roles — an actor appearing here MUST NOT be assigned even if otherwise eligible. Absent when no exclusion applies."
+        },
+        "requiredOwner": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor URN required to be the owner of this task. Maps to the kernel `owner` role (workflow-governance.md:508) when the workflow declaration pins a specific actor; absent when the task uses a pool-based assignment instead."
+        },
+        "eligiblePool": {
+          "type": "array",
+          "description": "Actor URNs in the eligible pool — first-claim-wins per workflow-governance.md:510 (`potentialOwner` role). Empty when the task uses single-actor assignment.",
+          "items": {
+            "$ref": "#/$defs/ActorRef"
+          }
+        },
+        "currentAssignee": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor URN currently responsible for the task (`Task.assignedActor` mirror — projected here for shape symmetry). Updated on delegation or escalation."
+        },
+        "delegatedFrom": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor URN that delegated this task to the current `currentAssignee`. Mirrors `Task.delegatedFrom`; surfaced under `assignmentRoles` so consumers reading the role projection do not need to cross-reference the parent task's top-level fields."
+        },
+        "businessAdministrator": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor URN who can reassign, delegate, or escalate this task without performing it (workflow-governance.md:511). Typically a supervisor or governance officer. Absent when the workflow does not declare a business administrator on this task pattern."
+        }
+      }
+    },
+    "ImpactLevel": {
+      "enum": [
+        "informational",
+        "operational",
+        "rights-impacting",
+        "safety-impacting"
+      ],
+      "description": "Closed kernel impact level (Kernel §6 proportionality index). Byte-aligned mirror of `wos-workflow.schema.json#/$defs/ImpactLevel` (ADR 0082 D-13 gate 6). Defaults to the workflow's declared `impactLevel` when not overridden on the task pattern. Closed-no-extension by design: the four-literal taxonomy is normative across kernel, governance, AI-oversight, and review-protocol gating.",
+      "examples": [
+        "rights-impacting"
+      ],
+      "x-wos": {
+        "mirror": "wos-workflow.schema.json#/$defs/ImpactLevel"
+      }
+    },
+    "ResponseValue": {
+      "description": "Response payload submitted by the actor, carried as an opaque JSON value (typically an object). The structural contract for this value is the workflow's task contract (Kernel S7.2 + governance S10), resolved via the task's `contractRef`, `definitionUrl`, and `definitionVersion`. The reference server validates the payload against the resolved contract at submission time; this contract treats the value as opaque-shaped. The wire posture matches `CaseStateMutation.previousValue` / `newValue` and `EvaluationResult.mutations[].newValue` — any JSON value, validated downstream against the workflow.",
+      "examples": [
+        {
+          "applicantName": "Jane Doe",
+          "income": 42000
+        }
+      ]
+    },
+    "ValidationOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-[a-z][a-z0-9-]*$": {
+          "$comment": "Vendor-extension fields for deployment-local validation metadata."
+        }
+      },
+      "description": "Most recent WOS validation wrapper for a Formspec-backed task response (Kernel §13.6; wos-case-instance.schema.json#/$defs/ValidationOutcome). The three booleans are the validation axes: Formspec response envelope validity, task-pin match, and Formspec definition validation over response.data.",
+      "required": [
+        "envelopeValid",
+        "pinMatch",
+        "definitionValid",
+        "errors"
+      ],
+      "properties": {
+        "envelopeValid": {
+          "type": "boolean",
+          "description": "Whether the response envelope validated against Formspec response.schema.json."
+        },
+        "pinMatch": {
+          "type": "boolean",
+          "description": "Whether response.definitionUrl and response.definitionVersion matched the task's pinned contract reference."
+        },
+        "definitionValid": {
+          "type": "boolean",
+          "description": "Whether Formspec Definition validation over response.data passed."
+        },
+        "errors": {
+          "type": "array",
+          "description": "WOS-level validation errors, including envelope and pin errors. Empty when all three validation axes pass.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Single WOS validation error. Carries a human-readable message plus optional machine-readable code and location.",
+            "required": [
+              "message"
+            ],
+            "properties": {
+              "message": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Human-readable validation failure message.",
+                "x-wos": {
+                  "openStringKind": "prose"
+                }
+              },
+              "code": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Optional deployment or validator error code.",
+                "x-wos": {
+                  "openStringKind": "identifier"
+                }
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Optional JSON Pointer or form path naming the failing response location.",
+                "x-wos": {
+                  "openStringKind": "pathExpression"
+                }
+              }
+            }
+          }
+        },
+        "validationResults": {
+          "type": "array",
+          "description": "Formspec-shaped ValidationResult entries from Definition validation. Omitted when envelope validation or pin validation prevents definition validation from running.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Single Formspec validation result projected through the WOS wrapper.",
+            "required": [
+              "severity",
+              "message"
+            ],
+            "properties": {
+              "severity": {
+                "type": "string",
+                "enum": [
+                  "error",
+                  "warning",
+                  "info"
+                ],
+                "description": "Formspec validation severity."
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Human-readable validation result message.",
+                "x-wos": {
+                  "openStringKind": "prose"
+                }
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Optional Formspec field path or JSON Pointer associated with the validation result.",
+                "x-wos": {
+                  "openStringKind": "pathExpression"
+                }
+              },
+              "code": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Optional Formspec validation rule code.",
+                "x-wos": {
+                  "openStringKind": "identifier"
+                }
+              }
+            }
+          }
+        }
+      },
+      "examples": [
+        {
+          "envelopeValid": true,
+          "pinMatch": true,
+          "definitionValid": false,
+          "errors": [
+            {
+              "message": "Definition validation failed",
+              "code": "DEFINITION_VALIDATION_FAILED"
+            }
+          ],
+          "validationResults": [
+            {
+              "severity": "error",
+              "message": "income is required",
+              "path": "income"
+            }
+          ]
+        }
+      ]
+    },
+    "TaskListItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Lightweight task projection for list views (ADR 0082 D-3). Carries identity, classification, status, deadline, and binding metadata — enough to drive an inbox-style list without forcing the heavier `Task` body. The full `Task` shape is fetched per row on detail navigation.",
+      "required": [
+        "id",
+        "instanceId",
+        "kind",
+        "status",
+        "title",
+        "createdAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Stable public URN for this task."
+        },
+        "instanceId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Case instance URN this task belongs to."
+        },
+        "workflowUrl": {
+          "$ref": "#/$defs/WorkflowUrl",
+          "description": "Absolute URI of the governing Workflow Document."
+        },
+        "kind": {
+          "$ref": "#/$defs/TaskKind",
+          "description": "Closed-with-vendor-extension task family classification."
+        },
+        "status": {
+          "$ref": "#/$defs/TaskStatus",
+          "description": "Closed user-facing task lifecycle posture."
+        },
+        "impactLevel": {
+          "$ref": "#/$defs/ImpactLevel",
+          "description": "Closed-with-vendor-extension impact level."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Short human-readable task headline.",
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "examples": [
+            "Complete eligibility intake"
+          ]
+        },
+        "assignedActor": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor URN currently responsible for this task. Updated on delegation or escalation."
+        },
+        "deadline": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 deadline by which the actor SHOULD submit the response before SLA breach (governance S10.3)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the task was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the task projection was last refreshed."
+        }
+      }
+    },
+    "Task": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Full public task projection (ADR 0082 D-3). Adds contract binding, draft state, and validation outcome to the `TaskListItem` core. The kernel runtime artifact `wos-case-instance.schema.json#/$defs/ActiveTask` is prior art; this is greenfield (ADR 0082 D-15) so the projection diverges intentionally: identifiers are URNs (D-4), `status` is the closed user-facing taxonomy (not the kernel `created|assigned|claimed|...` set), and the form-rendering `context` block is not surfaced (clients fetch the form via `definitionUrl`/`definitionVersion`).",
+      "required": [
+        "id",
+        "instanceId",
+        "kind",
+        "status",
+        "title",
+        "binding",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Stable public URN for this task."
+        },
+        "instanceId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Case instance URN this task belongs to."
+        },
+        "workflowUrl": {
+          "$ref": "#/$defs/WorkflowUrl",
+          "description": "Absolute URI of the governing Workflow Document."
+        },
+        "kind": {
+          "$ref": "#/$defs/TaskKind",
+          "description": "Closed-with-vendor-extension task family classification."
+        },
+        "status": {
+          "$ref": "#/$defs/TaskStatus",
+          "description": "Closed user-facing task lifecycle posture."
+        },
+        "impactLevel": {
+          "$ref": "#/$defs/ImpactLevel",
+          "description": "Closed-with-vendor-extension impact level."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Short human-readable task headline.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional longer-form task description for actor context.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "assignedActor": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor URN currently responsible for this task. Updated on delegation or escalation."
+        },
+        "delegatedFrom": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor URN that delegated this task to the current `assignedActor`. Omitted when the task was directly assigned."
+        },
+        "binding": {
+          "$ref": "#/$defs/TaskBinding",
+          "description": "Closed-with-vendor-extension contract-binding kind."
+        },
+        "contractRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Key into the Workflow Document's `contracts` map identifying which contract governs this task body (Kernel S7.2). REQUIRED when `binding` is `formspec` or `jsonSchema`.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "examples": [
+            "intakeApplication"
+          ]
+        },
+        "definitionUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Form or contract definition URL pinned at task creation. REQUIRED when `binding` is `formspec` or `jsonSchema`. Clients render the body by resolving this URL together with `definitionVersion`."
+        },
+        "definitionVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Form or contract definition version pinned at task creation. REQUIRED when `binding` is `formspec` or `jsonSchema`.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "deadline": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 deadline by which the actor SHOULD submit the response before SLA breach (governance S10.3). DEPRECATED for multi-SLA workflows — use `deadlines` for the full set; this single-valued field is retained for backward compatibility and typically equals `deadlines[0].at` (the earliest enforcing deadline)."
+        },
+        "deadlines": {
+          "type": "array",
+          "description": "Full set of named SLA / statutory / internal deadlines on this task (governance §10.4.1; workflow-governance.md:548-560). Carries `firstResponse` and `fullResolution` for multi-SLA workflows plus any statutory windows. Empty when the workflow declares no deadlines on this task pattern. The legacy single `deadline` field above remains populated for back-compat consumers; new clients SHOULD read `deadlines` and treat `deadline` as `deadlines[0].at` typically.",
+          "items": {
+            "$ref": "#/$defs/TaskDeadline"
+          }
+        },
+        "reviewProtocol": {
+          "$ref": "#/$defs/ReviewProtocolKind",
+          "description": "Closed-with-vendor-extension review-protocol classification (governance §4.1-§4.2; workflow-governance.md:248-260). Surfaces the `independentFirst` / `considerOpposite` / `calibratedConfidence` / `dualBlind` / `unassisted` posture so a staff portal can lock recommendation visibility until the reviewer's independent assessment is recorded. Present iff `kind == review` and the workflow declares a review protocol on this task pattern."
+        },
+        "mustCompleteBeforeContinuationEnds": {
+          "type": "boolean",
+          "description": "When true, this task MUST be completed before the case's `continuationOfServicesEndsAt` window closes (governance §3.6 cross-cut; workflow-governance.md:154-158). Applicant- and staff-facing UIs surface this flag to prioritize work that gates continued service delivery during an appeal window. Absent on tasks unrelated to the continuation policy."
+        },
+        "assignmentRoles": {
+          "$ref": "#/$defs/AssignmentRoles",
+          "description": "Five-role task-assignment projection (governance §7.2 + §10.2; workflow-governance.md:502-514). Surfaces `excludedOwner`/`requiredOwner`/`eligiblePool`/`currentAssignee`/`delegatedFrom`/`businessAdministrator` so a staff portal can render the full role table without re-deriving from delegation graphs. Absent when the task carries no role declarations beyond the top-level `assignedActor`/`delegatedFrom` fields (which mirror `currentAssignee`/`delegatedFrom` on this projection)."
+        },
+        "draftResponse": {
+          "$ref": "#/$defs/ResponseValue",
+          "description": "Most recent draft response saved via `POST /tasks/{id}/draft`. Present only when `status == drafted`."
+        },
+        "draftedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the draft was last saved. Present only when `status == drafted`."
+        },
+        "lastValidationOutcome": {
+          "$ref": "#/$defs/ValidationOutcome",
+          "description": "Most recent validation outcome for the draft or submitted response."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the task was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the task projection was last refreshed."
+        }
+      }
+    },
+    "TaskListOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Query fields for `GET /api/v1/tasks` and `GET /api/v1/instances/{instanceId}/tasks` (ADR 0082 D-7). The default scope is the calling actor's inbox; admins MAY pass `assignedActor` to widen the scope subject to ReBAC checks.",
+      "properties": {
+        "assignedActor": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Filter to tasks currently assigned to the supplied actor. Defaults to the calling actor."
+        },
+        "status": {
+          "$ref": "#/$defs/TaskStatus",
+          "description": "Filter to tasks in the supplied posture. Repeating the query parameter narrows to a posture set."
+        },
+        "kind": {
+          "$ref": "#/$defs/TaskKind",
+          "description": "Filter to tasks of the supplied family."
+        },
+        "instanceId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Filter to tasks on the supplied case instance. Implied (and required to match) when the request is the `/instances/{instanceId}/tasks` subresource."
+        },
+        "workflowUrl": {
+          "$ref": "#/$defs/WorkflowUrl",
+          "description": "Filter to tasks on instances of the supplied Workflow Document."
+        },
+        "deadlineBefore": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Inclusive UTC RFC 3339 upper bound on `deadline`. Useful for surfacing tasks approaching SLA breach."
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque resume token returned by the previous page (ADR 0082 D-7).",
+          "x-wos": {
+            "openStringKind": "opaque-token"
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "description": "Maximum number of tasks requested for this page."
+        }
+      }
+    },
+    "TaskPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Cursor-paginated task page (ADR 0082 D-7). Items are `TaskListItem` projections for inbox-style consumption.",
+      "required": [
+        "items",
+        "hasMore"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "description": "Task list items in this page.",
+          "items": {
+            "$ref": "#/$defs/TaskListItem"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque token for the next page. Omitted when hasMore is false.",
+          "x-wos": {
+            "openStringKind": "opaque-token"
+          }
+        },
+        "hasMore": {
+          "type": "boolean",
+          "description": "True when another page is available from the server."
+        }
+      }
+    },
+    "TaskDraft": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Request body for `POST /api/v1/tasks/{id}/draft`. The endpoint saves a partial response without committing it; repeated drafts overwrite the prior draft. Idempotent on `(taskId, definitionUrl, definitionVersion, response)` — repeated identical drafts return the same drafted-state representation. The server runs the workflow's validation pipeline against the draft and returns the validation outcome on the resulting `Task` projection.",
+      "required": [
+        "definitionUrl",
+        "definitionVersion",
+        "response"
+      ],
+      "properties": {
+        "definitionUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Form or contract definition URL the draft was authored against. MUST match the task's pinned `definitionUrl`; mismatches are rejected with `WOS-1409`."
+        },
+        "definitionVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Form or contract definition version. MUST match the task's pinned `definitionVersion`.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "response": {
+          "$ref": "#/$defs/ResponseValue",
+          "description": "Partial response payload conforming to the task's contract."
+        },
+        "draftedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Optional client-observed UTC RFC 3339 timestamp. The server MAY replace with its own receipt time."
+        }
+      }
+    },
+    "TaskSubmission": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Request body for `POST /api/v1/tasks/{id}/response`. The endpoint commits a final task response. The `Idempotency-Key` HTTP header is REQUIRED (ADR 0082 D-16). Successful submission transitions the task to `submitted`, fires the kernel `taskCompleted` event, and projects the response into case state via the workflow's `responseMappingRef`. Submission against a non-`pending`/`drafted` task is rejected with `WOS-1409`.",
+      "required": [
+        "definitionUrl",
+        "definitionVersion",
+        "response"
+      ],
+      "properties": {
+        "definitionUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Form or contract definition URL the response was authored against. MUST match the task's pinned `definitionUrl`."
+        },
+        "definitionVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Form or contract definition version. MUST match the task's pinned `definitionVersion`.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "response": {
+          "$ref": "#/$defs/ResponseValue",
+          "description": "Final response payload conforming to the task's contract."
+        },
+        "submittedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Optional client-observed UTC RFC 3339 timestamp. The server MAY replace with its own receipt time."
+        },
+        "signatureRef": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Optional URN of a `SignatureAffirmation` provenance record produced by the signature profile. REQUIRED when `kind == signature`."
+        }
+      }
+    },
+    "TaskDismissal": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Request body for `POST /api/v1/tasks/{id}/dismiss`. The endpoint declines the task without submitting a response; the server transitions the task to `dismissed` and fires the kernel `taskSkipped` event with the supplied rationale. Dismissal against a non-`pending`/`drafted` task is rejected with `WOS-1409`. Idempotent on `(taskId, reason)`.",
+      "required": [
+        "reason"
+      ],
+      "properties": {
+        "reason": {
+          "oneOf": [
+            {
+              "enum": [
+                "not-applicable",
+                "delegated-to-other-actor",
+                "duplicate",
+                "in-error",
+                "out-of-scope"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^x-[a-z][a-z0-9-]*$"
+            }
+          ],
+          "description": "Closed-with-vendor-extension dismissal rationale. Vendor extensions MUST use an `x-` prefix.",
+          "examples": [
+            "not-applicable"
+          ]
+        },
+        "detail": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional free-form rationale recorded in provenance.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "dismissedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Optional client-observed UTC RFC 3339 timestamp. The server MAY replace with its own receipt time."
+        }
+      }
+    },
+    "TaskOutcomeKind": {
+      "enum": [
+        "submitted",
+        "dismissed",
+        "expired",
+        "delegated",
+        "escalated",
+        "drafted"
+      ],
+      "description": "Closed wire taxonomy for `TaskOutcomeEvent.outcome` (ADR 0082 D-12). Reserved literals: `submitted` (final response committed); `dismissed` (actor declined); `expired` (SLA breach without submission); `delegated` (assignment changed via delegation); `escalated` (assignment escalated to a higher authority); `drafted` (a draft save event for downstream observers). No vendor-extension seam: these are the outcomes the public API surfaces to clients; richer kernel-side events live in provenance.",
+      "examples": [
+        "submitted"
+      ]
+    },
+    "TaskOutcomeEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Wire shape of a task state change emitted to subscribed observers (notifications domain, server-side projections). Carries the task URN, the new posture, the actor responsible, and the outcome literal — enough for downstream projections to update without re-fetching the task. The structurally-identical `Task` resource is also retrievable; this event is the projection seam for incremental consumers.",
+      "required": [
+        "taskId",
+        "instanceId",
+        "outcome",
+        "occurredAt"
+      ],
+      "properties": {
+        "taskId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Task URN whose posture changed."
+        },
+        "instanceId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Case instance URN this task belongs to."
+        },
+        "outcome": {
+          "$ref": "#/$defs/TaskOutcomeKind",
+          "description": "Closed outcome literal classifying this state change."
+        },
+        "newStatus": {
+          "$ref": "#/$defs/TaskStatus",
+          "description": "Closed user-facing status the task entered as a result of this event."
+        },
+        "actorRef": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Actor URN responsible for this state change. Omitted only for system-driven outcomes (`expired`)."
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the state change took effect server-side."
+        },
+        "provenanceRecordRef": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Optional URN of the provenance record that captures this outcome (Kernel S8). Present when the runtime has stamped the record before emission."
+        }
+      }
+    }
+  }
+}

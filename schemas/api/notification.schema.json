@@ -1,0 +1,510 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.formspec.io/wos-api/notification/v1",
+  "title": "WOS API Notification",
+  "description": "Public API resource schema for the WOS notification feed. Notifications are read-model entries derived from governed workflow events, not authoritative audit records.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/Notification"
+    },
+    {
+      "$ref": "#/$defs/NotificationPage"
+    },
+    {
+      "$ref": "#/$defs/UnreadCountResponse"
+    },
+    {
+      "$ref": "#/$defs/NotificationFeedOptions"
+    },
+    {
+      "$ref": "#/$defs/MarkNotificationReadRequest"
+    }
+  ],
+  "$defs": {
+    "NotificationType": {
+      "oneOf": [
+        {
+          "enum": [
+            "assignment",
+            "sla-warning",
+            "sla-breach",
+            "escalation",
+            "hold-expired",
+            "review-activated",
+            "bundle-completed",
+            "system"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "description": "Closed notification event family with vendor-prefixed extension literals. `bundle-completed` is emitted when a case-export bundle (`bundle.schema.json`) transitions to `available`, `expired`, or `failed` so clients can subscribe to the notification feed instead of polling `Bundle.status`; the carrying `Notification.bundleId` points at the addressable resource (REQUIRED when `type == bundle-completed` per ADR 0082 D-11 conditional-required discipline).",
+      "examples": [
+        "assignment",
+        "bundle-completed"
+      ]
+    },
+    "NotificationSeverity": {
+      "enum": [
+        "info",
+        "success",
+        "warning",
+        "critical"
+      ],
+      "description": "User-facing urgency level for ordering and presentation.",
+      "examples": [
+        "warning"
+      ]
+    },
+    "NotificationStatus": {
+      "enum": [
+        "unread",
+        "read",
+        "archived",
+        "dismissed"
+      ],
+      "description": "Current user-specific read lifecycle for the notification.",
+      "examples": [
+        "unread"
+      ]
+    },
+    "NotificationSource": {
+      "oneOf": [
+        {
+          "enum": [
+            "workflow",
+            "governance",
+            "task",
+            "correspondence",
+            "system"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "description": "Producer family that emitted or projected this notification.",
+      "examples": [
+        "task"
+      ]
+    },
+    "NotificationActionKind": {
+      "oneOf": [
+        {
+          "enum": [
+            "open-instance",
+            "open-task",
+            "open-review",
+            "open-correspondence",
+            "external-url"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "description": "Closed action family available from a notification.",
+      "examples": [
+        "open-task"
+      ]
+    },
+    "NotificationAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Primary action exposed by a notification.",
+      "required": [
+        "kind",
+        "label"
+      ],
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/NotificationActionKind",
+          "description": "Closed action family available from this notification."
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Short human-readable action label.",
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "examples": [
+            "Open task"
+          ]
+        },
+        "resourceId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Target WOS resource for resource-opening actions."
+        },
+        "href": {
+          "type": "string",
+          "format": "uri-reference",
+          "description": "Relative or absolute URI for external-url actions.",
+          "x-wos": {
+            "openStringKind": "uri-reference"
+          },
+          "examples": [
+            "/cases/urn:wos:instance:benefits-adj:2026-04-09:a1b2c3d4"
+          ]
+        }
+      }
+    },
+    "Notification": {
+      "description": "Notification feed item for a single principal within a scoped WOS workspace. The `bundle-completed` variant carries a REQUIRED `bundleId`; every other variant carries `bundleId` optionally. The two variants are split as a closed-discriminated `oneOf` over `type` (PLN-0403 path (a) — typify cannot express `if`/`then`/`else`; the structural discriminator carries the same contract).",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/BundleCompletedNotification"
+        },
+        {
+          "$ref": "#/$defs/StandardNotification"
+        }
+      ]
+    },
+    "BundleCompletedNotification": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Notification arm for `type == bundle-completed`. `bundleId` is REQUIRED — the bundle has transitioned to a terminal lifecycle state (`available`, `expired`, or `failed` per `bundle.schema.json#/$defs/BundleStatus`) and the URN dereferences to `GET /api/v1/bundles/{urn}` for the resolved status.",
+      "required": [
+        "id",
+        "type",
+        "severity",
+        "status",
+        "source",
+        "title",
+        "body",
+        "createdAt",
+        "bundleId"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Stable public URN for this notification."
+        },
+        "type": {
+          "const": "bundle-completed",
+          "description": "Discriminator literal for the bundle-completion arm."
+        },
+        "severity": {
+          "$ref": "#/$defs/NotificationSeverity",
+          "description": "User-facing urgency level for ordering and presentation."
+        },
+        "status": {
+          "$ref": "#/$defs/NotificationStatus",
+          "description": "Current user-specific read lifecycle."
+        },
+        "source": {
+          "$ref": "#/$defs/NotificationSource",
+          "description": "Producer family that emitted or projected this notification."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Short notification headline.",
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "examples": [
+            "Bundle ready"
+          ]
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Notification body text suitable for in-app display.",
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "examples": [
+            "Your case-export bundle is available for download."
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the notification was created.",
+          "examples": [
+            "2026-05-05T14:20:00Z"
+          ]
+        },
+        "readAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the user marked the notification read. Omitted while unread.",
+          "examples": [
+            "2026-05-05T14:25:00Z"
+          ]
+        },
+        "expiresAt": {
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "const": "never"
+            }
+          ],
+          "description": "UTC RFC 3339 expiry timestamp or the literal never for non-expiring notifications.",
+          "examples": [
+            "never"
+          ]
+        },
+        "actorRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+          "description": "Actor associated with this notification when the projection has a single responsible actor."
+        },
+        "instanceId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Case instance resource associated with this notification when applicable."
+        },
+        "taskId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Task resource associated with this notification when applicable."
+        },
+        "bundleId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Bundle resource associated with this notification — REQUIRED on this arm. The entity-type segment MUST be `bundle`."
+        },
+        "action": {
+          "$ref": "#/$defs/NotificationAction",
+          "description": "Primary action the client can expose for this notification."
+        }
+      }
+    },
+    "StandardNotification": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Notification arm for every `type` other than `bundle-completed`. `bundleId` is OPTIONAL (typically absent for non-bundle event families). `type` here is the closed reserved set with `bundle-completed` excluded plus the vendor-prefix extension pattern.",
+      "required": [
+        "id",
+        "type",
+        "severity",
+        "status",
+        "source",
+        "title",
+        "body",
+        "createdAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Stable public URN for this notification."
+        },
+        "type": {
+          "$ref": "#/$defs/StandardNotificationType",
+          "description": "Closed reserved-event-family literal (excluding `bundle-completed`) or the vendor extension form."
+        },
+        "severity": {
+          "$ref": "#/$defs/NotificationSeverity",
+          "description": "User-facing urgency level for ordering and presentation."
+        },
+        "status": {
+          "$ref": "#/$defs/NotificationStatus",
+          "description": "Current user-specific read lifecycle."
+        },
+        "source": {
+          "$ref": "#/$defs/NotificationSource",
+          "description": "Producer family that emitted or projected this notification."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Short notification headline.",
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "examples": [
+            "Task assigned"
+          ]
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Notification body text suitable for in-app display.",
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "examples": [
+            "You have a new eligibility review task."
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the notification was created.",
+          "examples": [
+            "2026-05-05T14:20:00Z"
+          ]
+        },
+        "readAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the user marked the notification read. Omitted while unread.",
+          "examples": [
+            "2026-05-05T14:25:00Z"
+          ]
+        },
+        "expiresAt": {
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "const": "never"
+            }
+          ],
+          "description": "UTC RFC 3339 expiry timestamp or the literal never for non-expiring notifications.",
+          "examples": [
+            "never"
+          ]
+        },
+        "actorRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+          "description": "Actor associated with this notification when the projection has a single responsible actor."
+        },
+        "instanceId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Case instance resource associated with this notification when applicable."
+        },
+        "taskId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Task resource associated with this notification when applicable."
+        },
+        "bundleId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Bundle resource associated with this notification when applicable. Typically absent on non-bundle event families; the `bundle-completed` arm (`BundleCompletedNotification`) makes it REQUIRED."
+        },
+        "action": {
+          "$ref": "#/$defs/NotificationAction",
+          "description": "Primary action the client can expose for this notification."
+        }
+      }
+    },
+    "StandardNotificationType": {
+      "oneOf": [
+        {
+          "enum": [
+            "assignment",
+            "sla-warning",
+            "sla-breach",
+            "escalation",
+            "hold-expired",
+            "review-activated",
+            "system"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^x-[a-z]+-"
+        }
+      ],
+      "description": "Closed reserved set of `NotificationType` literals with `bundle-completed` excluded (that literal is carried by `BundleCompletedNotification` only) plus the vendor extension pattern. Adding a new reserved literal requires editing both `NotificationType` (the closed-family enumeration that consumers may inspect) and this arm-side enum.",
+      "examples": [
+        "assignment",
+        "sla-breach"
+      ]
+    },
+    "NotificationFeedOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Query fields for listing notifications.",
+      "properties": {
+        "includeRead": {
+          "type": "boolean",
+          "description": "When true, include read notifications in addition to unread notifications."
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque resume token returned by the previous page.",
+          "x-wos": {
+            "openStringKind": "opaque-token"
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "description": "Maximum number of notifications requested for this page."
+        }
+      }
+    },
+    "NotificationPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Cursor-paginated notification page.",
+      "required": [
+        "items",
+        "hasMore"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "description": "Notification items in this page.",
+          "items": {
+            "$ref": "#/$defs/Notification"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque token for the next page. Omitted when hasMore is false.",
+          "x-wos": {
+            "openStringKind": "opaque-token"
+          }
+        },
+        "hasMore": {
+          "type": "boolean",
+          "description": "True when another page is available from the server."
+        }
+      }
+    },
+    "MarkNotificationReadRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Request body for marking a notification read.",
+      "properties": {
+        "readAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Client-observed UTC RFC 3339 read timestamp. Server MAY replace with its own receipt time.",
+          "examples": [
+            "2026-05-05T14:25:00Z"
+          ]
+        }
+      }
+    },
+    "UnreadCountResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Unread notification count response.",
+      "required": [
+        "count",
+        "asOf"
+      ],
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Current unread notification count visible to the caller.",
+          "examples": [
+            3
+          ]
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the count was computed.",
+          "examples": [
+            "2026-05-05T14:20:00Z"
+          ]
+        }
+      }
+    }
+  }
+}
