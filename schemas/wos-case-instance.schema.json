@@ -421,6 +421,58 @@
           "stalledSince"
         ]
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "declined"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "declineReason"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "voided"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "voidedBy",
+          "voidedAt"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "expired"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "expiredAt"
+        ]
+      }
     }
   ],
   "$defs": {

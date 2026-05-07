@@ -143,3 +143,106 @@ fn terminal_task_statuses_are_not_active_tasks() {
         );
     }
 }
+
+#[test]
+fn declined_status_carries_decline_reason() {
+    let json = r#"{
+        "instanceId": "urn:wos:test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "definitionUrl": "urn:wos:workflow:test",
+        "definitionVersion": "1.0.0",
+        "configuration": ["intake"],
+        "caseState": {},
+        "provenancePosition": 0,
+        "timers": [],
+        "activeTasks": [],
+        "status": "declined",
+        "declineReason": "Terms not acceptable",
+        "createdAt": "2026-01-01T00:00:00Z",
+        "updatedAt": "2026-01-01T00:00:00Z"
+    }"#;
+
+    let instance: CaseInstance = serde_json::from_str(json).unwrap();
+    assert_eq!(instance.status, wos_core::instance::InstanceStatus::Declined);
+    assert_eq!(instance.decline_reason.as_deref(), Some("Terms not acceptable"));
+    assert!(instance.voided_by.is_none());
+    assert!(instance.voided_at.is_none());
+    assert!(instance.expired_at.is_none());
+}
+
+#[test]
+fn voided_status_carries_voided_by_and_voided_at() {
+    let json = r#"{
+        "instanceId": "urn:wos:test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "definitionUrl": "urn:wos:workflow:test",
+        "definitionVersion": "1.0.0",
+        "configuration": ["intake"],
+        "caseState": {},
+        "provenancePosition": 0,
+        "timers": [],
+        "activeTasks": [],
+        "status": "voided",
+        "voidedBy": "actor::supervisor-42",
+        "voidedAt": "2026-05-07T12:00:00Z",
+        "createdAt": "2026-01-01T00:00:00Z",
+        "updatedAt": "2026-01-01T00:00:00Z"
+    }"#;
+
+    let instance: CaseInstance = serde_json::from_str(json).unwrap();
+    assert_eq!(instance.status, wos_core::instance::InstanceStatus::Voided);
+    assert_eq!(instance.voided_by.as_deref(), Some("actor::supervisor-42"));
+    assert_eq!(instance.voided_at.as_deref(), Some("2026-05-07T12:00:00Z"));
+    assert!(instance.decline_reason.is_none());
+    assert!(instance.expired_at.is_none());
+}
+
+#[test]
+fn expired_status_carries_expired_at() {
+    let json = r#"{
+        "instanceId": "urn:wos:test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "definitionUrl": "urn:wos:workflow:test",
+        "definitionVersion": "1.0.0",
+        "configuration": ["intake"],
+        "caseState": {},
+        "provenancePosition": 0,
+        "timers": [],
+        "activeTasks": [],
+        "status": "expired",
+        "expiredAt": "2026-05-07T23:59:59Z",
+        "createdAt": "2026-01-01T00:00:00Z",
+        "updatedAt": "2026-01-01T00:00:00Z"
+    }"#;
+
+    let instance: CaseInstance = serde_json::from_str(json).unwrap();
+    assert_eq!(instance.status, wos_core::instance::InstanceStatus::Expired);
+    assert_eq!(instance.expired_at.as_deref(), Some("2026-05-07T23:59:59Z"));
+    assert!(instance.decline_reason.is_none());
+    assert!(instance.voided_by.is_none());
+    assert!(instance.voided_at.is_none());
+}
+
+#[test]
+fn stalled_status_still_roundtrips() {
+    let json = r#"{
+        "instanceId": "urn:wos:test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "definitionUrl": "urn:wos:workflow:test",
+        "definitionVersion": "1.0.0",
+        "configuration": ["intake"],
+        "caseState": {},
+        "provenancePosition": 0,
+        "timers": [],
+        "activeTasks": [],
+        "status": "stalled",
+        "stalledSince": "2026-05-07T12:00:00Z",
+        "createdAt": "2026-01-01T00:00:00Z",
+        "updatedAt": "2026-01-01T00:00:00Z"
+    }"#;
+
+    let instance: CaseInstance = serde_json::from_str(json).unwrap();
+    assert_eq!(instance.status, wos_core::instance::InstanceStatus::Stalled);
+    assert_eq!(instance.stalled_since.as_deref(), Some("2026-05-07T12:00:00Z"));
+    // New fields should all be None for stalled status
+    assert!(instance.decline_reason.is_none());
+    assert!(instance.voided_by.is_none());
+    assert!(instance.voided_at.is_none());
+    assert!(instance.expired_at.is_none());
+}
