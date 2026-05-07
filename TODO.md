@@ -102,8 +102,7 @@ Four ADRs (all Accepted 2026-05-06) gate the heavyweight Do-next items. All four
 
 | Item | Decision needed | Stream |
 |------|----------------|--------|
-| §4.5 Structural merges (3 file-moves) | 1 PR or 3 PRs? | D |
-| #7 scope (additionalProperties) | false vs permissive pattern | A |
+| #7 scope (additionalProperties) | false + reconcile 4 missing fields per owner decision | A |
 
 ### Parallelization plan — 5 workstreams
 
@@ -128,10 +127,11 @@ Streams A–D are WOS-internal and fully independent of each other. Stream E coo
 
 **Highest-leverage first moves:**
 1. ~~Ratify ADRs 0066/0067/0070/0092~~ **Done 2026-05-06** — 8 items unblocked
-2. Ratify PLN-0384 (unblocks vendor x-* floor + identity attestation + Trellis item #4)
-3. Start Stream A #6 + Stream C ungated spec items in parallel
-4. Start Stream B governance policies + export alongside Stream A
-5. Spin up Stream D authoring cleanup + Stream E cross-repo coordination
+2. ~~Structural merges (§4.5)~~ **Done 2026-05-07** — assertion-library + due-process-config absorbed
+3. Ratify PLN-0384 (unblocks vendor x-* floor + identity attestation + Trellis item #4)
+4. Start Stream A #6 + Stream C ungated spec items in parallel
+5. Start Stream B governance policies + export alongside Stream A
+6. Spin up Stream D authoring cleanup + Stream E cross-repo coordination
 
 ---
 
@@ -234,15 +234,13 @@ Pick from the top. Each item has a gate (what unblocks it) and a plan or ADR.
 - [ ] **#60 Envelope reference fixtures** `[Imp 5 / Cx 3 / Debt 3]` — Three to five canonical kernel documents under `fixtures/kernel/envelope-*.json` demonstrating the composition patterns: `envelope-2signer-sequential.json`, `envelope-parallel-witness.json`, `envelope-decline-reroute.json`, `envelope-with-approver.json`, `envelope-reminder-expire.json`. Plus matching conformance fixtures exercising the full lifecycle (create → invite → sign → complete; create → invite → decline → void). **Fixture-only work** — no new schema surface, but critical for lock-in: locked patterns prevent divergent re-inventions across vendors building on WOS. Depends on #20 typed events and #30 task-lifecycle for the decline fixture.
 - [ ] **#61 Separation-of-duties conformance fixture batch** `[Imp 5 / Cx 2 / Debt 3]` — Two to three fixtures under `fixtures/conformance/` exercising the AccessControl seam's separation-of-duties rejection path: (1) agent attempts to review its own output → rejected; (2) delegated human attempts to re-review as the original author → rejected; (3) separation-of-duties bypass with authority override → recorded as provenance with `OverrideRecord`. Pairs with #23 OverrideRecord schema landing. Shape of the AccessControl seam is already in wos-core traits; what's missing is the conformance contract that reference processors MUST reject these attempts.
 
-### Structural merges (§4.5) — blocked on owner decision **[Stream: D]**
+### Structural merges (§4.5) — closed 2026-05-07 **[Stream: D]**
 
-Three merges ratified by the 2026-04-20 [sidecar audit](thoughts/reviews/2026-04-20-sidecar-contract-audit.md). **Gate: user decision — one PR or three?** `VISION.md` / practice recommendation: three discrete PRs for review hygiene; audit recommended one. Either is acceptable; owner picks.
+- [x] **Assertion Library → Workflow Governance** — prose absorbed as `workflow-governance.md` §14. `assertion-library.md` deleted.
+- [x] **Verification Report → Advanced Governance** — already absorbed per ADR 0076 D-4; standalone file never existed at HEAD.
+- [x] **Due Process Config partial merge → Workflow Governance** — prose absorbed as `workflow-governance.md` §15. `due-process-config.md` deleted.
 
-- **Assertion Library → Workflow Governance** `[4 / 2 / 5]` (**20**) — `AssertionUse` seam already landed session 8; merge is mechanical file-move.
-- **Verification Report → Advanced Governance** `[3 / 2 / 2]` (**6**) — it's a processor **output**, miscategorized as a sidecar.
-- **Due Process Config partial merge → Workflow Governance** `[5 / 3 / 4]` (**20**) — residual sections duplicate Governance §3.1/§3.5.
-
-Companion decisions from session-9 agent dispatch: M-1 Drift Monitor + Agent Config merge remains BLOCKED (standalone fixture); M-2 Notification Template + Due Process merge remains REJECTED (categories don't align).
+M-1 Drift Monitor + Agent Config merge remains BLOCKED (standalone fixture). M-2 Notification Template + Due Process merge remains REJECTED (categories don't align).
 
 ### Release + benchmarking — ready, lower priority **[Stream: D]**
 
@@ -400,11 +398,13 @@ Per [`VISION.md`](../VISION.md) §XI, Trellis is the integrity layer and owns th
 
 Items that can't move without a verdict or an external trigger.
 
-**Resolved 2026-05-06:** ADRs 0066–0071 (cluster) + 0092 (standalone) ratified. 8 items now unblocked. Remaining open decisions below.
+**Resolved 2026-05-06:** ADRs 0066–0071 (cluster) + 0092 (standalone) ratified. 8 items now unblocked.
 
-### §4.5 PR packaging
+**Resolved 2026-05-07:** §4.5 structural merges (1 PR) — assertion-library and due-process-config absorbed into workflow-governance.md; verification-report already absorbed per ADR 0076 D-4.
 
-`VISION.md` / practice recommends three discrete PRs; sidecar audit recommended one. Owner picks. See Do-next-adjacent "Structural merges" section above.
+### FEL restricted-domain profile (#35/#36)
+
+Cross-repo dependency on fel-core. Not blocking WOS Stream A/B/C. Sequence when fel-core restricted-domain profile ships. See [`VISION.md`](../VISION.md) §X for FEL as the only expression language. See [PLANNING.md](../PLANNING.md) for fel-core coordination.
 
 ### Engine adapters — trigger-gated (commercial request)
 

@@ -133,17 +133,15 @@ Each file below has a paired `.llm.md` (auto-generated, identical content struct
 **Status:** ✅ Canonical Draft (Layer 1).
 **LLM pair:** ✅
 
-#### `specs/governance/assertion-library.md`
+#### `specs/governance/assertion-library.md` — ABSORBED 2026-05-07
 
-**Summary:** Sidecar providing reusable assertion gate library (source-grounded, arithmetic, range, consistency, format, cross-document, temporal). Pipelines reference assertions by identifier across multiple workflows.
-**Relates to:** workflow-governance §5.
-**Status:** ✅ Canonical Sidecar (draft). **LLM pair:** ✅
+**Summary:** Merged into `workflow-governance.md` §14 (Named Assertions). Assertion `$def`s live in `wos-workflow.schema.json`.
+**Status:** ❌ Retired (absorbed).
 
-#### `specs/governance/due-process-config.md`
+#### `specs/governance/due-process-config.md` — ABSORBED 2026-05-07
 
-**Summary:** Sidecar separating operational due-process parameters (notice templates, explanation templates, appeal routing, independence constraints, continuation policies) from governance structure.
-**Relates to:** workflow-governance §3.
-**Status:** ✅ Canonical Sidecar (draft). **LLM pair:** ✅
+**Summary:** Merged into `workflow-governance.md` §15 (Appeal Routing). Schema surface at `Governance.dueProcess` in `wos-workflow.schema.json`.
+**Status:** ❌ Retired (absorbed).
 
 #### `specs/governance/policy-parameters.md`
 
@@ -156,7 +154,7 @@ Each file below has a paired `.llm.md` (auto-generated, identical content struct
 #### `specs/advanced/advanced-governance.md`
 
 **Summary:** Layer 3 spec for formally verifiable constraints, statistical fairness monitoring, adaptive case management, multi-step agent interactions, operational resilience. Declares verifiable constraint subset (SMT-amenable FEL fragment), equity guardrails (disparity monitoring), constraint zones (DCR-style), multi-step sessions with checkpoints, tool-use governance, agent lifecycle state machines, calibration/drift detection, shadow mode, circuit breakers.
-**Relates to:** Kernel v1.0; workflow-governance (Layer 1); ai-integration (Layer 2, extended); equity-config + verification-report sidecars.
+**Relates to:** Kernel v1.0; workflow-governance (Layer 1); ai-integration (Layer 2, extended); equity-config sidecar.
 **Status:** ✅ Canonical Draft (Layer 3). **LLM pair:** ✅
 
 #### `specs/advanced/equity-config.md`
@@ -165,11 +163,10 @@ Each file below has a paired `.llm.md` (auto-generated, identical content struct
 **Relates to:** advanced-governance §3.
 **Status:** ✅ Canonical Sidecar (draft). **LLM pair:** ✅
 
-#### `specs/advanced/verification-report.md`
+#### `specs/advanced/verification-report.md` — ABSORBED (ADR 0076 D-4)
 
-**Summary:** Immutable provenance sidecar recording SMT verification results for deontic constraints — per-constraint result (proven-safe/unsafe/inconclusive), counterexamples, solver metadata, timestamps.
-**Relates to:** advanced-governance §8.
-**Status:** ✅ Canonical Sidecar (draft). **LLM pair:** ✅
+**Summary:** Runtime half absorbed into `wos-provenance-log.schema.json`; standalone spec doc never existed at HEAD.
+**Status:** ❌ Retired (absorbed).
 
 ### AI — `specs/ai/`
 

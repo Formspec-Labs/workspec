@@ -792,6 +792,91 @@ The `url` value is the canonical workflow identifier. Runtime artifacts (`$wosCa
 
 ---
 
+## 14. Named Assertions
+
+> **Source.** Absorbed from the standalone WOS Assertion Gate Library spec (`assertion-library.md`, retired). The `$def`s (`AssertionDefinition`, `AssertionInlineUse`, `AssertionReference`, `AssertionUse`) live in `wos-workflow.schema.json`. Pipeline stages `$ref` `AssertionUse` directly. This section is the normative reference for assertion-type semantics and the cross-document reference protocol.
+
+### 14.1 Assertion Definition
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `id` | string | REQUIRED | Unique assertion identifier. Referenced by pipelines. |
+| `type` | enum | REQUIRED | One of: `source-grounded`, `arithmetic`, `range`, `consistency`, `format`, `cross-document`, `temporal`. |
+| `expression` | string (FEL) | OPTIONAL | FEL expression defining the assertion constraint. |
+| `fields` | array of string | OPTIONAL | Fields subject to this assertion. |
+| `description` | string | REQUIRED | Human-readable description of what this assertion checks. |
+| `rejectionPolicy` | enum | OPTIONAL | Default rejection policy: `retryWithCorrections`, `escalateToSupervisor`, `holdPendingData`, `failWithExplanation`. |
+
+### 14.2 Usage
+
+Pipelines reference library assertions by `id`. The pipeline stage inherits the assertion's type, expression, fields, and rejection policy unless overridden at the stage level.
+
+### 14.3 Cross-Document Reference Protocol
+
+Pipeline stages carry authority to *use* an assertion at a given point via two shapes expressed through `AssertionUse` (a `oneOf` over `AssertionInlineUse` and `AssertionReference`):
+
+**Inline form:**
+```json
+{
+  "type": "arithmetic",
+  "description": "Totals sum cleanly",
+  "expression": "totalIncome = wageIncome + investmentIncome",
+  "assertionId": "totalIncomeArithmetic"
+}
+```
+
+**Reference form:**
+```json
+{
+  "assertionRef": "https://agency.gov/assertion-libraries/income-verification#totalIncomeArithmetic"
+}
+```
+
+The two forms are mutually exclusive at the schema layer. Once `assertionRef` resolves, processors MUST treat the reference identically to a locally-declared inline body with the same fields.
+
+`assertionId` on an inline `AssertionInlineUse` body names the assertion for audit-log stability across inline↔reference rewrites. It does NOT imply a library lookup. An inline body bearing `assertionId: X` is not required to correspond to any library entry; the processor MUST NOT treat an inline `assertionId` as a pointer into the library set.
+
+#### 14.3.1 Resolution Semantics
+
+Resolution happens **at load time**, before any pipeline execution begins:
+
+1. **Source of truth.** The referenced body is drawn from the configured library map whose `url` matches the authority + path portion of `assertionRef`, and whose named assertion `id` equals the key encoded in the reference URI.
+2. **Unresolvable reference.** If no configured library matches, the processor MUST reject the document as a **configuration error** at load time. Lazy resolution at pipeline execution is forbidden.
+3. **Conflicting `id` values.** If two configured libraries declare the same `id`, the processor MUST reject the configuration as an error.
+4. **Self-declared `assertionId`.** If the referenced assertion body carries its own `assertionId`, that value MUST equal the `id` under which the library published the entry. Mismatch is a configuration error.
+
+#### 14.3.2 Override Precedence
+
+Inline bodies and library references MUST NOT be combined on the same item. Schema enforces this via `oneOf` on `AssertionUse` plus `additionalProperties: false` on each branch. Authors who need a variant MUST either publish a new library entry with a distinct `id` or inline the full body.
+
+#### 14.3.3 Lint Follow-up
+
+Lint rule **G-064 `assertion-library-resolution`** checks that: (a) every `assertionRef` URI resolves against the configured library set, (b) no two configured libraries declare colliding `id` values, and (c) when an `assertionRef` resolves to a library body that carries its own `assertionId`, that value MUST match the library `id`.
+
+---
+
+## 15. Appeal Routing
+
+> **Source.** Absorbed from the standalone WOS Due Process Config spec (`due-process-config.md`, retired). The schema surface lives at `Governance.dueProcess` in `wos-workflow.schema.json`. Notice templates are canonically authored in the Notification Template sidecar (`notification-template.md`); `noticeTemplateKey` (Governance §3.1) and `notificationTemplateKey` (Governance §12.2) both resolve through that sidecar.
+
+### 15.1 Properties
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `explanationTemplates` | array of ExplanationTemplate | OPTIONAL | Templates for decision explanations. |
+| `appealRouting` | AppealRouting | OPTIONAL | Detailed appeal routing configuration. |
+| `continuationPolicies` | array of ContinuationPolicy | OPTIONAL | Detailed continuation-of-service policies. |
+
+### 15.2 Appeal Routing
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `defaultReviewerPool` | string | OPTIONAL | Default pool of eligible appeal reviewers. |
+| `independenceConstraint` | string | REQUIRED | How independence from the original determination is ensured. |
+| `escalationPath` | array of string | OPTIONAL | Ordered escalation path if initial appeal review is contested. |
+
+---
+
 ## References
 
 ### Normative References
