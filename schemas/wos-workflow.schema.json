@@ -3749,8 +3749,32 @@
               "compareAgainst": "humanDecision"
             }
           ]
+        },
+        "multiStepSessions": {
+          "description": "Multi-step session definitions that govern ordered agent reasoning sequences with checkpoints and human intervention points. Recovered from pre-ADR-0076 wos-advanced.schema.json.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MultiStepSession"
+          }
+        },
+        "toolGovernance": {
+          "description": "Tool governance configuration: permitted tools, side-effect policy, rate limits. Recovered from pre-ADR-0076 wos-advanced.schema.json.",
+          "$ref": "#/$defs/ToolGovernance"
+        },
+        "agentLifecycle": {
+          "description": "Agent lifecycle state machine: initial state, transitions, degraded autonomy cap, suspension notifications. Recovered from pre-ADR-0076 wos-advanced.schema.json.",
+          "$ref": "#/$defs/AgentLifecycleConfig"
+        },
+        "calibration": {
+          "description": "Confidence calibration method and retraining cadence. Recovered from pre-ADR-0076 wos-advanced.schema.json.",
+          "$ref": "#/$defs/CalibrationConfig"
+        },
+        "driftDetection": {
+          "description": "Statistical drift detection methods and thresholds for agent output monitoring. Recovered from pre-ADR-0076 wos-advanced.schema.json.",
+          "$ref": "#/$defs/DriftDetectionConfig"
         }
-      }
+      },
+      "additionalProperties": false
     },
     "Assurance": {
       "type": "object",
@@ -9204,6 +9228,358 @@
           "defeasible": false
         }
       ]
+    },
+    "AgentLifecycleConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
+      "properties": {
+        "initialState": {
+          "type": "string",
+          "enum": ["active", "degraded", "suspended"],
+          "default": "active",
+          "description": "Initial lifecycle state for agents entering this workflow. 'active': full operation at configured autonomy level. 'degraded': reduced autonomy capped at degradedAutonomyCap. 'suspended': all agent participation blocked pending review.",
+          "examples": ["active", "degraded"]
+        },
+        "transitions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/LifecycleTransition" },
+          "description": "Lifecycle transition triggers. When omitted, transitions are manual-only."
+        },
+        "degradedAutonomyCap": {
+          "type": "string",
+          "enum": ["autonomous", "supervisory", "assistive", "manual"],
+          "default": "assistive",
+          "description": "Maximum autonomy level permitted when an agent is in the degraded lifecycle state. Overrides the task-level autonomy configuration. Default 'assistive' ensures human review of all outputs during degraded operation.",
+          "examples": ["assistive", "supervisory"]
+        },
+        "versionChangeNotification": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to notify suspensionNotifyRoles when the underlying model version changes.",
+          "examples": [true, false]
+        },
+        "suspensionNotifyRoles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "A WOS role identifier whose members are notified when an agent transitions to the suspended lifecycle state.",
+            "examples": ["systemAdministrator", "programDirector"]
+          },
+          "description": "Roles to notify when an agent is suspended."
+        }
+      }
+    },
+    "CalibrationConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["plattScaling", "isotonic", "binning", "custom"],
+          "default": "binning",
+          "description": "Calibration method for aligning agent confidence scores with empirical accuracy (Advanced S9.2). 'plattScaling': logistic regression on scores. 'isotonic': non-parametric monotone regression. 'binning': histogram-based calibration. 'custom': implementation-defined.",
+          "examples": ["binning", "isotonic"]
+        },
+        "minimumSamples": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Minimum number of reviewed agent outputs required before a calibration run is considered statistically valid.",
+          "examples": [100, 50]
+        },
+        "retrainingFrequency": {
+          "type": "string",
+          "description": "How often to recalibrate confidence scores against accumulated reviewed outputs. ISO 8601 duration.",
+          "examples": ["P30D", "P14D"]
+        }
+      }
+    },
+    "DriftDetectionConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
+      "properties": {
+        "methods": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/DriftMethod" },
+          "description": "Configured drift detection methods."
+        }
+      }
+    },
+    "DriftDimension": {
+      "type": "object",
+      "required": ["field", "type"],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
+      "properties": {
+        "field": {
+          "type": "string",
+          "minLength": 1,
+          "description": "FEL path or field name in the agent's output whose distribution is monitored for drift.",
+          "examples": ["extractedIncome", "eligibilityRecommendation"]
+        },
+        "type": {
+          "type": "string",
+          "enum": ["continuous", "categorical"],
+          "description": "Statistical type of this drift dimension. 'continuous': numeric values (use PSI or KS). 'categorical': enumerated values.",
+          "examples": ["continuous", "categorical"]
+        }
+      }
+    },
+    "DriftMethod": {
+      "type": "object",
+      "required": ["method"],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["psi", "ks", "chi2", "accuracy"],
+          "description": "Statistical method for detecting drift in agent output distributions (Advanced S10.2). 'psi': Population Stability Index. 'ks': Kolmogorov-Smirnov test. 'chi2': chi-squared test. 'accuracy': track empirical accuracy against human decisions.",
+          "examples": ["psi", "accuracy"]
+        },
+        "threshold": {
+          "type": "number",
+          "description": "Threshold value at which drift is considered significant. PSI > 0.2; KS p-value < 0.05; accuracy drop > 0.10.",
+          "examples": [0.2, 0.05]
+        },
+        "window": {
+          "type": "string",
+          "description": "Evaluation window for drift statistics. ISO 8601 duration.",
+          "examples": ["P7D", "P30D"]
+        },
+        "dimensions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/DriftDimension" }
+        }
+      }
+    },
+    "LifecycleTransition": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": ["demote", "restore", "suspend", "resume", "retire"],
+          "description": "Lifecycle transition name (Advanced S7.2). 'demote': active to degraded. 'restore': degraded to active. 'suspend': any to suspended. 'resume': suspended to previous state. 'retire': any to retired (terminal).",
+          "examples": ["demote", "suspend"]
+        },
+        "trigger": {
+          "type": "string",
+          "description": "Condition expression that automatically triggers this lifecycle transition. FEL expression evaluated against agent metrics. When omitted, the transition is manual-only.",
+          "examples": ["confidence.overall < 0.7 for P7D", "errorRate > 0.15"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of when and why this lifecycle transition fires.",
+          "examples": ["Sustained low confidence over 7 days triggers demotion to degraded state."]
+        }
+      }
+    },
+    "MultiStepSession": {
+      "type": "object",
+      "required": ["id", "steps"],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique multi-step session identifier within this advanced governance document.",
+          "examples": ["evidenceAnalysis", "documentReview"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what this multi-step session accomplishes.",
+          "examples": ["Multi-step session for analyzing an evidence package: inventories documents, extracts facts, cross-references against case data, and produces findings."]
+        },
+        "maxSteps": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum number of steps the agent may execute in this session before it is forcibly terminated.",
+          "examples": [4, 10]
+        },
+        "maxDuration": {
+          "type": "string",
+          "description": "Maximum wall-clock duration for the entire session. ISO 8601 duration. The processor MUST terminate and record a timeout if exceeded.",
+          "examples": ["PT15M", "PT1H"]
+        },
+        "checkpointPolicy": {
+          "type": "string",
+          "enum": ["afterEachStep", "atInterventionPoints", "onDemand"],
+          "default": "atInterventionPoints",
+          "description": "When to persist session state to durable storage.",
+          "examples": ["atInterventionPoints", "afterEachStep"]
+        },
+        "steps": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/SessionStep" },
+          "minItems": 1,
+          "description": "DAG-ordered steps."
+        }
+      }
+    },
+    "RateLimit": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
+      "properties": {
+        "maxPerMinute": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum number of times this tool may be invoked per minute across all agent sessions.",
+          "examples": [30, 10]
+        },
+        "maxPerHour": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum number of times this tool may be invoked per hour across all agent sessions.",
+          "examples": [500, 100]
+        }
+      }
+    },
+    "SessionStep": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique step identifier within this session. Referenced by other steps' dependsOn lists.",
+          "examples": ["documentInventory", "contentExtraction"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what this step accomplishes.",
+          "examples": ["Catalog all documents in the evidence package and classify by type and relevance."]
+        },
+        "dependsOn": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Identifier of a step that must complete successfully before this step can begin execution.",
+            "examples": ["documentInventory", "contentExtraction"]
+          },
+          "description": "Step identifiers that must complete before this step."
+        },
+        "interventionPoint": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether this step is a human intervention point where execution pauses for review.",
+          "examples": [false, true]
+        },
+        "interventionPrompt": {
+          "type": "string",
+          "description": "Human-readable prompt displayed to the reviewer at this intervention point.",
+          "examples": ["Review the agent's document inventory and extracted facts before it produces the final recommendation."]
+        }
+      }
+    },
+    "ToolDefinition": {
+      "type": "object",
+      "required": ["id", "category", "sideEffects"],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique tool identifier within the tool governance registry.",
+          "examples": ["databaseLookup", "documentParser"]
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Functional category of this tool. Standard categories: 'dataRetrieval', 'computation', 'externalApi'. Custom categories are permitted.",
+          "examples": ["dataRetrieval", "computation", "externalApi"]
+        },
+        "sideEffects": {
+          "type": "boolean",
+          "description": "Whether this tool has external side effects (writes, sends, modifies external state).",
+          "examples": [false, true]
+        },
+        "rateLimit": { "$ref": "#/$defs/RateLimit" },
+        "outputSchema": {
+          "type": "object",
+          "description": "Expected JSON Schema for this tool's output.",
+          "examples": [{ "type": "object", "properties": { "income": { "type": "number" } } }]
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what this tool does.",
+          "examples": ["Queries the internal case management database for prior applications by SSN."]
+        }
+      }
+    },
+    "ToolGovernance": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
+      "properties": {
+        "toolRegistry": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ToolDefinition" },
+          "description": "Registry of permitted tools."
+        },
+        "defaultSideEffectPolicy": {
+          "type": "string",
+          "enum": ["block", "allow", "requireApproval"],
+          "default": "block",
+          "description": "Default policy applied to tools with side effects when the agent is operating at autonomous autonomy level.",
+          "examples": ["block", "requireApproval"]
+        }
+      }
     },
     "WosVersionPin": {
       "type": "object",

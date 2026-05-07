@@ -27,6 +27,7 @@
     }
   },
   "advanced": {
+    "equityGuardrails": {
     "protectedCategories": [
       {
         "id": "geographicRegion",
@@ -121,5 +122,6 @@
         "description": "Critical age-based disparity suspends autonomous processing pending review"
       }
     ]
+    }
   }
 }
