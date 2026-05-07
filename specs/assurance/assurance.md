@@ -39,6 +39,34 @@ Implementations MUST support at minimum the following four-level taxonomy:
 
 Implementations MAY define additional levels; additional levels MUST be declared against the base four.
 
+### 2.4 Impact-Level Minimum Assurance Floor
+
+The WOS Kernel's `impactLevel` determines the minimum assurance level required for facts recorded in the instance:
+
+| Impact Level | Minimum Assurance | Rationale |
+|---|---|---|
+| `operational` | `standard` (≥ L1) | Self-asserted binding sufficient; no external corroboration required. |
+| `rightsImpacting` | `high` (≥ L3) | Binding must be verified against an authoritative source. Rights-impacting decisions demand meaningful identity assurance. |
+| `safetyImpacting` | `high` (≥ L3) | Same floor as rights-impacting; safety-impacting decisions carry equivalent evidentiary weight. |
+
+Implementations MUST reject facts below the minimum assurance floor for the declared impact level. A processor MUST emit a `ConfigurationWarning` provenance record when an identity fact falls below the floor but the workflow author has not declared a remediation path.
+
+Implementations MAY require assurance levels above the floor (e.g., a `safetyImpacting` workflow MAY require L4 in-person verification). The floors above are minimums, not ceilings.
+
+### 2.5 Signature-Class ↔ Assurance-Level Binding
+
+Signature profiles map to assurance levels as follows:
+
+| Signature Class | Assurance Level | Basis |
+|---|---|---|
+| ESIGN / UETA (simple electronic) | L1 | Self-asserted; no external identity proofing required. |
+| eIDAS Advanced Electronic Signature | L3 | Verified against a government-issued credential or equivalent authoritative source. |
+| eIDAS Qualified Electronic Signature (QES) | L4 | In-person or equivalent verification + Qualified Signature Creation Device (QSCD). |
+
+This mapping is normative for WOS Signature Profile deployments that claim compliance with a specific legal framework. A deployment asserting "eIDAS Advanced" compliance MUST record signing identities at L3 or above. A deployment asserting "ESIGN" compliance MAY accept L1 bindings.
+
+Implementations MUST document which signature class they claim for each workflow. The documentation MUST cite this section as the assurance-level authority.
+
 ### 2.2 Assurance Level Is Not Authorization
 
 Assurance level describes how strongly a fact is bound to its subject or actor. It does NOT describe what that subject or actor is authorized to do. Authorization decisions MAY use assurance level as an input but MUST NOT collapse authorization into assurance.
