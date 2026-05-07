@@ -2,7 +2,7 @@
 
 Active backlog. Completed work → [COMPLETED.md](COMPLETED.md). Stack architecture → [`VISION.md`](../VISION.md).
 
-**Last audited:** 2026-05-06 — parallelization analysis: gate-typed every item, mapped ADR status + cross-repo deps, designed 5-workstream plan. See [Gate typology & parallelization plan](#gate-typology--parallelization-plan) below. Scout-swarm validated uncompleted items against HEAD; stale paths/counts/gates corrected. ADR 0082 and ADR 0076 closure history → COMPLETED.md.
+**Last audited:** 2026-05-07 — parallel execution: §4.5 structural merges closed, ADR 0092 TypeID-in-URN core landed (WS-1–4+7), #7 Advanced $defs recovered + additionalProperties:false, #58 envelope status (Declined/Voided/Expired), #43 assurance impact-level floor. Session commits: 494dfb8c → be9bd135.
 
 ## Snapshot
 
@@ -41,10 +41,10 @@ Four ADRs (all Accepted 2026-05-06) gate the heavyweight Do-next items. All four
 
 | Item | Score | Work type | Stream |
 |------|-------|-----------|--------|
-| #7 Multi-step session DAG | 20 | Schema + spec + API endpoint | A |
-| #58 Envelope status extension | 35 | Schema + spec | C |
+| #7 Multi-step session DAG | 20 | Schema + spec + API endpoint | A | ✅ 2026-05-07 |
+| #58 Envelope status extension | 35 | Schema + spec | C | ✅ 2026-05-07 |
 | #26a AccessControl.canRead semantics | 24 | Spec + conformance | C |
-| #43 Assurance × impact-level | 24 | Spec + conformance | C |
+| #43 Assurance × impact-level | 24 | Spec + conformance | C | ✅ 2026-05-07 |
 | #50 EU AI Act alignment | 28 | Spec | C |
 | #38 G-064 Assertion Library lint | 15 | Lint impl | C |
 | #28 Claim-check artifact refs | 20 | Schema + spec | C |
@@ -64,7 +64,7 @@ Four ADRs (all Accepted 2026-05-06) gate the heavyweight Do-next items. All four
 | #3 AuthorizationAttestation actor shape | 35 | ADR 0066 Accepted | B |
 | #4 Amendment/supersession/rescission/correction | 35 | ADR 0066 Accepted | B |
 | #5 Statutory clocks implementation | 35 | ADR 0067 Accepted | B |
-| #6 TypeID-in-URN identity | 35 | ADR 0092 Accepted | A |
+| #6 TypeID-in-URN identity | 35 | ADR 0092 Accepted | A | ⚡ WS-1–4+7 landed 2026-05-07; WS-5–6+8 remaining |
 | #70 AppendFailure typed enum | 30 | ADR 0070 Accepted | B |
 | #71 ReinstatementPolicy + K-A-010 | 24 | ADR 0066 Accepted | B |
 | #72 Cluster variant emission wiring | 24 | ADR 0070 Accepted + #70 | B |
