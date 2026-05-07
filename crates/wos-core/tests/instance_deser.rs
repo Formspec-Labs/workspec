@@ -7,7 +7,7 @@ use wos_core::instance::{ActiveTaskStatus, CaseInstance};
 #[test]
 fn active_formspec_task_round_trips() {
     let json = r#"{
-        "instanceId": "urn:wos:instance:test:1",
+        "instanceId": "urn:wos:test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
         "definitionUrl": "urn:wos:workflow:test",
         "definitionVersion": "1.0.0",
         "configuration": ["intake"],
@@ -26,7 +26,7 @@ fn active_formspec_task_round_trips() {
             "responseMappingRef": "urn:formspec:intake-response:1.0",
             "context": {
                 "taskId": "task-1",
-                "instanceId": "urn:wos:instance:test:1",
+                "instanceId": "urn:wos:test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
                 "contractRef": "intakeApplication",
                 "definitionUrl": "urn:formspec:intake",
                 "definitionVersion": "2.0.0",
@@ -62,7 +62,7 @@ fn active_formspec_task_round_trips() {
     );
     assert_eq!(
         task.context.as_ref().unwrap().instance_id,
-        "urn:wos:instance:test:1"
+        "urn:wos:test_case_01jqrpd32jf8xtx9qxkkv3rqsc"
     );
     assert!(
         !task
@@ -77,7 +77,7 @@ fn active_formspec_task_round_trips() {
         round_trip
             .pointer("/activeTasks/0/context/instanceId")
             .and_then(serde_json::Value::as_str),
-        Some("urn:wos:instance:test:1")
+        Some("urn:wos:test_case_01jqrpd32jf8xtx9qxkkv3rqsc")
     );
     assert_eq!(
         round_trip
@@ -90,7 +90,7 @@ fn active_formspec_task_round_trips() {
 #[test]
 fn missing_active_tasks_is_invalid() {
     let json = r#"{
-        "instanceId": "urn:wos:instance:test:1",
+        "instanceId": "urn:wos:test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
         "definitionUrl": "urn:wos:workflow:test",
         "definitionVersion": "1.0.0",
         "configuration": ["intake"],
@@ -115,7 +115,7 @@ fn terminal_task_statuses_are_not_active_tasks() {
     for terminal_status in ["completed", "failed", "skipped"] {
         let json = format!(
             r#"{{
-                "instanceId": "urn:wos:instance:test:1",
+                "instanceId": "urn:wos:test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
                 "definitionUrl": "urn:wos:workflow:test",
                 "definitionVersion": "1.0.0",
                 "configuration": ["intake"],
