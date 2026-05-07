@@ -330,7 +330,24 @@ Sequenced for module-bottleneck relief, not delayed by it.
 
 Work items, architecture, and adapter sequencing → [`crates/wos-server/TODO.md`](crates/wos-server/TODO.md) and [`crates/wos-server/VISION.md`](crates/wos-server/VISION.md).
 
-**Active:** ADR 0082 wholesale greenfield landing bundle — plan at [`thoughts/plans/2026-05-06-adr0082-wholesale-greenfield-landing.md`](thoughts/plans/2026-05-06-adr0082-wholesale-greenfield-landing.md). Server WS-1 Phases A–C landed (98 utoipa annotations, `domain/` deleted, 210/210 tests green). WS-2 portal rebuild pending.
+**Active:** ADR 0082 wholesale greenfield landing bundle — plan at [`thoughts/plans/2026-05-06-adr0082-wholesale-greenfield-landing.md`](thoughts/plans/2026-05-06-adr0082-wholesale-greenfield-landing.md). Verified 2026-05-07 against the codebase by a 10-agent swarm.
+
+- **WS-1 server (Phase A foundations + Phase B per-domain ratification):**
+  - ✅ **A1+A2** typify+utoipa wiring (`with_derive("utoipa::ToSchema")` + `NonZeroU64`→`u64` post-process; commit `2309797`).
+  - ✅ **A4** `IdempotencyStore` trait + `InMemoryIdempotencyStore` + `require_idempotency_key` middleware (8 MiB cap, `WOS-1422` problem; commit `1f91322`).
+  - ✅ **A5** `emit-openapi` binary writes `target/openapi-emitted.json` — 8 442 lines, 645 KB, 35 paths + 52 schemas registered.
+  - ✅ **B1 Auth** — 6 spec-aligned routes (`/auth/{login,logout,refresh,scope-swap,introspect,scope}`); legacy `/auth/me` + `/auth/has-role` retired; 33 auth tests green.
+  - ✅ **B2 Audit + Dashboard + Applicant** — 12 routes; `audit_service.rs` new; legacy `/dashboard/metrics`, `/dashboard/stage-metrics`, `/applicant/{id}/appeal` retired.
+  - ✅ **B3 Correspondence + Reports + PLN-0402 legacy `/render` deletion** — 7 corr + 6 reports handlers (commit `8e503bf`); `notifications.rs` slimmed to 3 routes; **PLN-0402 server-side blocker satisfied** (PUBLIC-ROUTES.md update + portal contract removal still owed under WS-3).
+  - ⏳ **B4 Bundle + Governance** — 10 routes, 2-way parallel internally.
+  - ⏳ **B5 Task** — 5 routes (depends on B1).
+  - ⏳ **B6 Instance** — 16 routes (last; largest surface).
+  - ⏳ **WS-1 C cleanup** — `domain/*` purge confirmed (the directory is gone), but verification-gate hardening (Gates 4–7) still owed; integration suite at 184/184 today.
+- **WS-2 portal:**
+  - ✅ **WS-2 A** typify-driven type regen (26 modules under `src/types/wos/`); `ports/types.ts` shrank 421→190 lines (commits `c437ab0` + `7e394e8`).
+  - ✅ **WS-2 B** 13 IPort interfaces + HTTP adapter (`NotImplementedError` stubs preserved) + fixture adapter reshape (`mutations: CaseStateMutation[]`); 0 tsc errors; 60/62 vitest pass (2 flaky `AuditViewer` waitFor races).
+  - ✅ **WS-2 C** component sweep (commit `00ea21f`) — 41 component files, 33 `safeCall` boundaries, fixture conformance test in place. 4 legacy type imports remain in components (`WOSKernelDocument`, `FieldDefinition`, signature-profile types, `CaseInstance`); fold judgment into WS-3.
+- **WS-3 cross-stack train (pending):** PLN-0401 utoipa-emit cutover, PLN-0402 PUBLIC-ROUTES.md update + portal contract removal, PLN-0405 closure, parent submodule pointer bump, TODO bookkeeping across stack.
 
 ### Runtime Companion parity **[Stream: B]**
 
