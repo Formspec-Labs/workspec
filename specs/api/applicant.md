@@ -90,9 +90,11 @@ Default scope is the **calling applicant's** cases and tasks — the server filt
 
 ## Identifiers
 
-- `ApplicantCaseSummary.id`, `ApplicantCaseDetail.summary.id`: `urn:wos:instance:...` URN — the same case URN every other surface uses. The applicant view does not mint applicant-specific URNs; it projects the canonical case identity.
-- `ApplicantTaskSummary.id`: `urn:wos:task:...` URN.
-- `ApplicantNotificationListItem.id`: `urn:wos:notification:...` URN.
+- `ApplicantCaseSummary.id`, `ApplicantCaseDetail.summary.id`: `urn:wos:<typeid>` URN — the same case URN every other surface uses per ADR 0092 D-1. The applicant view does not mint applicant-specific URNs; it projects the canonical case identity.
+
+- `ApplicantTaskSummary.id`: `urn:wos:<typeid>` URN. Tasks are sub-resources identified by URL path context.
+
+- `ApplicantNotificationListItem.id`: `urn:wos:<typeid>` URN.
 
 ## Pagination
 

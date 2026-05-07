@@ -13,7 +13,7 @@
 
 `CaseInstance` carries identity, workflow binding, lifecycle posture, current configuration, and the case-file value:
 
-- `id`: `urn:wos:instance:<scope>:<date>:<short-hash>` URN per ADR 0082 D-4.
+- `id`: `urn:wos:<typeid>` URN per ADR 0092 D-1. The namespace-specific string IS the TypeID. The TypeID prefix carries the record family (e.g., `case`).
 - `workflowUrl`, `workflowVersion`: the governing Workflow Document reference (Kernel S9.6).
 - `lifecycleState`: closed posture taxonomy `active | suspended | migrating | completed | terminated | stalled` mirroring the kernel runtime `status` enum at `wos-case-instance.schema.json#/properties/status` (`x-wos.mirror` annotation enables Gate 6 parity).
 - `impactLevel`: REQUIRED closed-with-vendor-extension kernel impact level (Kernel S6; kernel:826) cross-`$ref`d from `task.schema.json#/$defs/ImpactLevel`. Surfaces the workflow's proportionality index at instance scope so clients can branch on `rights-impacting` / `safety-impacting` cases without re-fetching the workflow.
@@ -141,7 +141,7 @@ The kernel-named operation results map to API-side response fields: `instanceMig
 
 ## Identifiers
 
-- `CaseInstance.id`: `urn:wos:instance:<workflow-or-scope-id>:<date>:<short-hash>` URN. The `instance` literal is already in the closed entity-type enum at `_common.schema.json#/$defs/WosResourceUrn` (ADR 0082 D-4).
+- `CaseInstance.id`: `urn:wos:<typeid>` URN per ADR 0092 D-1. The namespace-specific string IS the TypeID. Strip `urn:wos:` to extract the canonical TypeID.
 - `actorRef` fields use the canonical `ActorRef` URN (`actor:(human|service-account|workload|support):...`) hoisted to `_common.schema.json`.
 
 ## Pagination

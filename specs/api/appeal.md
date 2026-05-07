@@ -29,7 +29,7 @@ Appeals do NOT reopen the case — they create a separate cross-case governance 
 
 ## Identifiers
 
-`Appeal.id` is a `urn:wos:appeal:<scope>:<date>:<short-hash>` URN per ADR 0082 D-4. The `appeal` entity-type literal was already admitted in `_common.schema.json` `WosResourceUrn` pattern during Phase 1; this schema consumes it without extension. `Appeal.instanceId` is a `urn:wos:instance:...` URN.
+`Appeal.id` is a `urn:wos:<typeid>` URN per ADR 0092 D-1. `Appeal.instanceId` is a `urn:wos:<typeid>` URN of the owning case.
 
 ## Endpoints
 
@@ -61,7 +61,7 @@ All non-2xx responses use `application/problem+json` per ADR 0082 D-8 and `api/e
 
 - `WOS-1404`: appeal URN does not exist or is not in the caller's scope.
 - `WOS-1409`: appeal filed against a non-completed instance, or appeal state transition attempted from an invalid lifecycle posture.
-- `WOS-1422`: `AppealCreateRequest.instanceId` is not a valid `urn:wos:instance:...` URN, or `groundForAppeal` is empty, or `appellantRef` is not a valid ActorRef.
+- `WOS-1422`: `AppealCreateRequest.instanceId` is not a valid `urn:wos:<typeid>` URN, or `groundForAppeal` is empty, or `appellantRef` is not a valid ActorRef.
 
 ## Closed Taxonomies
 

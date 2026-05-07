@@ -38,7 +38,7 @@ Result rows are NOT carried inline on `ReportRun`. The rows subresource (`GET /a
 
 ## Identifiers
 
-`ReportRun.id` is a `urn:wos:report-run:<scope>:<date>:<short-hash>` URN per ADR 0082 D-4. `report-run` is already in the URN entity-type enum (`api/notification.schema.json` `WosResourceUrn`); this spec consumes it without extension. Submitter actors use the standard `ActorRef` (`actor:(human|service-account|workload|support):...`).
+`ReportRun.id` is a `urn:wos:<typeid>` URN per ADR 0092 D-1. Submitter actors use the standard `ActorRef` (`actor:(human|service-account|workload|support):...`).
 
 ## Endpoints
 

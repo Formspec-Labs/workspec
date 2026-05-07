@@ -31,7 +31,7 @@ Per ADR 0082 D-15 step 6, this domain pairs with `audit.schema.json` (cross-case
 
 ## Identifiers
 
-`Bundle.id` is a `urn:wos:bundle:<scope>:<date>:<short-hash>` URN per ADR 0082 D-4. `bundle` is already in the URN entity-type alternation (`_common.schema.json` `WosResourceUrn`); this spec consumes it without extension. `Bundle.instanceId` is a `urn:wos:instance:...` URN.
+`Bundle.id` is a `urn:wos:<typeid>` URN per ADR 0092 D-1. `Bundle.instanceId` is a `urn:wos:<typeid>` URN of the owning case.
 
 ## Endpoints
 
@@ -79,7 +79,7 @@ All non-2xx responses (except `/download`'s binary stream which uses HTTP status
 - `WOS-1404`: bundle URN does not exist or is not in the caller's scope.
 - `WOS-1409`: download requested before `status == available`, or bundle is `expired` and bytes were purged.
 - `WOS-1410`: cursor expired, or download attempted on an expired bundle.
-- `WOS-1422`: `BundleCreateRequest.instanceId` is not a valid `urn:wos:instance:...` URN, or the requested `tierFilter` is rejected by the deployment posture.
+- `WOS-1422`: `BundleCreateRequest.instanceId` is not a valid `urn:wos:<typeid>` URN, or the requested `tierFilter` is rejected by the deployment posture.
 - `WOS-1503`: bundle build backend (Trellis exporter) unavailable.
 
 ## Greenfield Discipline

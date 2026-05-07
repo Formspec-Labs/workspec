@@ -72,7 +72,7 @@ Closed: `timestamp-asc | timestamp-desc`. No vendor-extension seam — sort orde
 
 ## Identifiers
 
-`AuditQueryResult.queryId` is a server-issued opaque string token (not a `urn:wos:...` URN — query handles are server-internal, not domain entities). `actorRef` filters use the standard `ActorRef` URN from `_common.schema.json` (`actor:(human|service-account|workload|support):...`). `instanceScope` filters use `WosResourceUrn` (`urn:wos:instance:...`). `recordKindFilter` literals use the `FactsRecordKind` cross-`$ref` so adding a new kernel record kind propagates automatically.
+`AuditQueryResult.queryId` is a server-issued opaque string token (not a `urn:wos:...` URN — query handles are server-internal, not domain entities). `actorRef` filters use the standard `ActorRef` URN from `_common.schema.json` (`actor:(human|service-account|workload|support):...`). `instanceScope` filters use `WosResourceUrn` (`urn:wos:<typeid>`). `recordKindFilter` literals use the `FactsRecordKind` cross-`$ref` so adding a new kernel record kind propagates automatically.
 
 ## Endpoints
 

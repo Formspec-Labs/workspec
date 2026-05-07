@@ -17,16 +17,14 @@
     },
     "WosResourceUrn": {
       "type": "string",
-      "pattern": "^urn:wos:(actor|agent|appeal|bundle|correspondence-message|delegation|hold|instance|notification|profile|provenance-record|report-run|signature-ceremony|task|timer):[A-Za-z0-9._:-]+:[0-9]{4}-[0-9]{2}-[0-9]{2}:[A-Za-z0-9._-]+$",
-      "description": "Public WOS API resource URN (ADR 0082 D-4). Shape `urn:wos:<entity-type>:<workflow-or-scope-id>:<date>:<short-hash>`. Entity-type alternation is the closed taxonomy from ADR 0082 D-4; adding a new entity-type literal requires a single edit in this file plus an ADR amendment. Vendor extensions are NOT permitted in the entity-type segment — public WOS resource families are normative.",
+      "pattern": "^urn:wos:[a-z][a-z0-9-]*_(case|prov|gov|ai|assurance|x-[a-z]+-[a-z]+)_[0-9a-hjkmnp-tv-z]{26}$",
+      "description": "Public WOS API resource URN (ADR 0092 D-1). Shape `urn:wos:<typeid>` — 3-segment URN whose namespace-specific string IS the TypeID. Strip `urn:wos:` to extract the canonical TypeID. The TypeID prefix carries the record family (`case | prov | gov | ai | assurance`); sub-resources (tasks, delegations, holds) are identified by URL path context, not independent TypeIDs.",
       "examples": [
-        "urn:wos:instance:benefits-adj:2026-04-09:a1b2c3d4",
-        "urn:wos:task:benefits-adj:2026-04-09:t-001",
-        "urn:wos:notification:benefits-adj:2026-05-05:n-001",
-        "urn:wos:correspondence-message:benefits-adj:2026-05-05:msg-001",
-        "urn:wos:report-run:agency-gov:2026-05-05:r-001",
-        "urn:wos:provenance-record:benefits-adj:2026-04-09:p-001",
-        "urn:wos:actor:agency-gov:2026-05-05:caseworker-17"
+        "urn:wos:sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "urn:wos:default_case_01hw7rm71vfay8vvw14d2pf2db",
+        "urn:wos:agency-gov_prov_01jqrxabcd3f8xtx9qxkkv3raa",
+        "urn:wos:acme-corp_ai_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "urn:wos:sba-poc_assurance_01hw7rm71vfay8vvw14d2pf2db"
       ]
     }
   }

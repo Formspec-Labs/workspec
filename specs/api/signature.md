@@ -31,7 +31,7 @@ The ceremony aggregate lets the case portal answer "who hasn't signed yet?" and 
 
 ## Identifier Scheme
 
-`SignatureCeremony.id` is a `urn:wos:signature-ceremony:<scope>:<date>:<short-hash>` URN per ADR 0082 D-4. `signature-ceremony` is already in the URN entity-type alternation (`_common.schema.json` `WosResourceUrn`); this spec consumes it without extension. `SignatureCeremony.instanceId` is a `urn:wos:instance:...` URN.
+`SignatureCeremony.id` is a `urn:wos:<typeid>` URN per ADR 0092 D-1. `SignatureCeremony.instanceId` is a `urn:wos:<typeid>` URN of the owning case.
 
 ## Endpoints
 

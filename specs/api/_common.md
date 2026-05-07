@@ -19,7 +19,7 @@ URN-form principal reference: `actor:<principalClass>:<id-suffix>`. Principal-cl
 
 ### `WosResourceUrn`
 
-Public WOS API resource URN: `urn:wos:<entity-type>:<workflow-or-scope-id>:<date>:<short-hash>`. Entity-type segment is the closed taxonomy from ADR 0082 D-4: `instance | task | bundle | delegation | appeal | agent | hold | timer | profile | notification | correspondence-message | report-run | provenance-record | signature-ceremony | actor`. Vendor extensions are NOT permitted in the entity-type segment — public WOS resource families are normative.
+Public WOS API resource URN: `urn:wos:<typeid>` — 3-segment URN whose namespace-specific string (NSS) IS the TypeID per ADR 0092 D-1. Strip `urn:wos:` to extract the canonical TypeID. The TypeID prefix carries the record family (`case | prov | gov | ai | assurance`); sub-resources (tasks, delegations, holds) are identified by URL path context, not independent TypeIDs.
 
 ## Cross-Reference Discipline
 
@@ -30,11 +30,13 @@ Every other `api/*.schema.json` referencing these definitions MUST `$ref` the ab
 
 Inline redefinition of either shape is a contract bug — the fix is a single edit in this file plus an ADR amendment when the underlying taxonomy changes.
 
-## Adding a New Entity-Type Literal
+## Adding a New TypeID Record Family
 
-1. Open an ADR amendment to ADR 0082 D-4 declaring the new entity-type literal and its semantics.
-2. Add the literal to the alternation in `_common.schema.json#/$defs/WosResourceUrn`.
-3. Add an example URN under `examples` for the new family.
+Per ADR 0092 D-1/D-2, the URN entity-type alternation is retired. Resources carry `urn:wos:<typeid>` where the TypeID prefix is the record family.
+
+1. Open an ADR amendment declaring the new TypeID prefix and its semantics.
+2. Add the prefix to the reserved set in `_common.schema.json#/$defs/WosResourceUrn`.
+3. Add an example URN under `examples`.
 4. Land the per-domain `api/<resource>.schema.json` and `specs/api/<resource>.md`.
 
 No other api schema file requires editing for the URN change — the `$ref` chain resolves automatically.

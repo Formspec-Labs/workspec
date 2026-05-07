@@ -23,7 +23,7 @@ Provenance records are the public read-shape for the WOS audit trail of a single
 
 Identity uses URNs throughout (ADR 0082 D-4, D-9):
 
-- `id` and `instanceId` are WOS resource URNs (`urn:wos:provenance-record:...`, `urn:wos:instance:...`).
+- `id` and `instanceId` are WOS resource URNs (`urn:wos:<typeid>`) per ADR 0092 D-1.
 - `actorRef` is an `actor:<class>:<id>` URN. The legacy nested `actor: { id, type, name }` shape is not part of this contract; identity details live once in the identity / governance subsystem and every record references them by URN.
 - `factsRecordRef` (on Reasoning, Counterfactual, Narrative variants) points to the Facts-tier record being interpreted, narrated, or analyzed.
 

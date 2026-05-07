@@ -133,7 +133,7 @@ impl WosRuntime {
             .map(String::from)
             .or_else(|| {
                 wos_core::instance::CaseInstance::extract_urn_parts(&instance_id)
-                    .map(|(ns, _, _)| ns.to_string())
+                    .map(String::from)
             });
         let tenant = match (requested_tenant, &type_id_tenant) {
             (Some(explicit), Some(prefix)) => {

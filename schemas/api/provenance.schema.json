@@ -1336,7 +1336,7 @@
         {
           "attemptedActorRef": "actor:human:intern-042",
           "attemptedAction": "transition:approve",
-          "targetResourceRef": "urn:wos:instance:benefits-adj:2026-04-09:a1b2c3d4",
+          "targetResourceRef": "urn:wos:benefits-adj_case_01jqrpd32jf8xtx9qxkkv3rqsc",
           "rejectionReason": "actor lacks approval authority"
         }
       ]
@@ -1401,7 +1401,7 @@
       },
       "examples": [
         {
-          "holdRef": "urn:wos:hold:benefits-adj:2026-05-05:h-001",
+          "holdRef": "urn:wos:benefits-adj_gov_01jqrpd32jf8xtx9qxkkv3rqsc",
           "action": "placed",
           "actorRef": "actor:human:agency-counsel",
           "scope": "full case record",
@@ -1473,7 +1473,7 @@
       },
       "examples": [
         {
-          "agentRef": "urn:wos:agent:benefits-adj:2026-05-05:eligibility-agent",
+          "agentRef": "urn:wos:benefits-adj_ai_01jqrpd32jf8xtx9qxkkv3rqsc",
           "breakerId": "eligibility-agent-breaker",
           "action": "tripped",
           "status": "open",
@@ -1541,7 +1541,7 @@
       },
       "examples": [
         {
-          "agentRef": "urn:wos:agent:benefits-adj:2026-05-05:shadow-eligibility-agent",
+          "agentRef": "urn:wos:benefits-adj_ai_01hw7rm71vfay8vvw14d2pf2db",
           "baseline": "human",
           "divergenceType": "outputMismatch",
           "severity": "warning",
@@ -1653,7 +1653,7 @@
       },
       "examples": [
         {
-          "agentRef": "urn:wos:agent:benefits-adj:2026-05-05:eligibility-agent",
+          "agentRef": "urn:wos:benefits-adj_ai_01jqrxabcd3f8xtx9qxkkv3raa",
           "driftStatus": "recalibration-required",
           "metric": "accuracy",
           "observedValue": 0.86,
@@ -1694,7 +1694,7 @@
       },
       "examples": [
         {
-          "reportRunRef": "urn:wos:report-run:agency-gov:2026-05-05:r-001",
+          "reportRunRef": "urn:wos:agency-gov_gov_01jqrpd32jf8xtx9qxkkv3rqsc",
           "maxDurationSeconds": 3600,
           "elapsedSeconds": 3601,
           "wosErrorCode": "WOS-1408"
@@ -1750,7 +1750,7 @@
       },
       "examples": [
         {
-          "delegationRef": "urn:wos:delegation:agency-gov:2026-05-05:d-001",
+          "delegationRef": "urn:wos:agency-gov_gov_01hw7rm71vfay8vvw14d2pf2db",
           "priorRequiredCount": 3,
           "newRequiredCount": 2,
           "authorityBasis": "emergency continuity policy",

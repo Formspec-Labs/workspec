@@ -14,9 +14,9 @@ The contract carries identity, workflow binding, assignment, contract-binding co
 ## Resource Shape
 
 `Task` carries:
+- `id`: `urn:wos:<typeid>` URN per ADR 0092 D-1. Tasks are sub-resources identified by URL path context; their wire identity uses the parent case TypeID.
 
-- `id`: `urn:wos:task:<scope>:<date>:<short-hash>` URN per ADR 0082 D-4.
-- `instanceId`: `urn:wos:instance:...` URN of the owning case.
+- `instanceId`: `urn:wos:<typeid>` URN of the owning case.
 - `workflowUrl`: governing Workflow Document.
 - `kind`: closed-with-vendor-extension task family (see "Closed taxonomies" below).
 - `status`: closed user-facing posture (no vendor-extension seam — see "Closed taxonomies").
@@ -78,7 +78,7 @@ GET   /api/v1/instances/{instanceId}/tasks           -> TaskPage           (subr
 
 ## Identifiers
 
-- `Task.id`: `urn:wos:task:<workflow-or-scope-id>:<date>:<short-hash>` URN. The `task` literal is already in the closed entity-type enum at `_common.schema.json#/$defs/WosResourceUrn`.
+- `Task.id`: `urn:wos:<typeid>` URN per ADR 0092 D-1. Tasks are sub-resources identified by URL path context; their wire identity uses the parent case TypeID.
 - `actorRef` fields use the canonical `ActorRef` URN.
 - `signatureRef`, `provenanceRecordRef`: `WosResourceUrn` references to provenance / signature records.
 
