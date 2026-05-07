@@ -76,6 +76,26 @@ pub struct CaseInstance {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stalled_since: Option<String>,
 
+    /// Reason provided when a signer or participant declined the envelope.
+    /// MUST be populated when `status == Declined`; otherwise omitted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decline_reason: Option<String>,
+
+    /// Actor identifier of the principal who voided the instance.
+    /// MUST be populated when `status == Voided`; otherwise omitted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub voided_by: Option<String>,
+
+    /// RFC3339 timestamp when the instance was voided.
+    /// MUST be populated when `status == Voided`; otherwise omitted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub voided_at: Option<String>,
+
+    /// RFC3339 timestamp when the instance expired (envelope deadline).
+    /// MUST be populated when `status == Expired`; otherwise omitted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expired_at: Option<String>,
+
     /// Events enqueued but not yet processed.
     #[serde(default)]
     pub pending_events: Vec<PendingEvent>,
@@ -209,6 +229,16 @@ pub enum InstanceStatus {
     /// Adapter-side commit-retry budget exhausted; explicit operator
     /// intervention required (ADR 0070 D-4.1, OQ-2 — no auto-recovery).
     Stalled,
+    /// Envelope signer or participant declined; instance carries
+    /// [`CaseInstance::decline_reason`]. Tasks in the envelope are
+    /// individually cancelled. Irreversible terminal state.
+    Declined,
+    /// Instance explicitly voided; carries [`CaseInstance::voided_by`]
+    /// and [`CaseInstance::voided_at`]. Irreversible terminal state.
+    Voided,
+    /// Instance expired (envelope deadline elapsed); carries
+    /// [`CaseInstance::expired_at`]. Irreversible terminal state.
+    Expired,
 }
 
 /// Pending timer state.

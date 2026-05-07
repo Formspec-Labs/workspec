@@ -278,9 +278,12 @@
         "migrating",
         "completed",
         "terminated",
-        "stalled"
+        "stalled",
+        "declined",
+        "voided",
+        "expired"
       ],
-      "description": "Instance status. 'active': processing events normally. 'suspended': paused, no events processed until resumed. 'migrating': definition version change in progress. 'completed': lifecycle reached a top-level final state. 'terminated': explicitly terminated. 'stalled': commit retry budget exhausted -- instance has emitted commitAttemptFailure records and cannot make further progress until operator intervention (ADR 0070 D-5; reframed per maximalist Q18 as a reserved `InstanceStatus` variant, not a kernel statechart node type). Completed and terminated are irreversible terminal states; stalled is recoverable.",
+      "description": "Instance status. 'active': processing events normally. 'suspended': paused, no events processed until resumed. 'migrating': definition version change in progress. 'completed': lifecycle reached a top-level final state. 'terminated': explicitly terminated. 'stalled': commit retry budget exhausted. 'declined': envelope signer or participant declined; tasks individually cancelled; irreversible terminal. 'voided': explicitly voided; irreversible terminal. 'expired': envelope deadline elapsed; irreversible terminal.",
       "examples": [
         "active",
         "completed",
@@ -297,6 +300,48 @@
       "description": "RFC 3339 timestamp recording when the instance entered `stalled` status (ADR 0070 D-5). REQUIRED when status is `stalled`; absent otherwise. Operators consume this for stuck-instance dashboards and retry-budget reset decisions. The `if/then` guard at the document level enforces the conditional requirement.",
       "examples": [
         "2026-04-28T12:01:00Z"
+      ],
+      "x-wos": {
+        "openStringKind": "timestamp"
+      },
+      "minLength": 1
+    },
+    "declineReason": {
+      "type": "string",
+      "description": "Reason provided when a signer or participant declined the envelope. REQUIRED when status is `declined`; absent otherwise.",
+      "examples": [
+        "Terms not acceptable",
+        "Missing required documentation"
+      ],
+      "minLength": 1
+    },
+    "voidedBy": {
+      "type": "string",
+      "description": "Actor identifier of the principal who voided the instance. REQUIRED when status is `voided`; absent otherwise.",
+      "examples": [
+        "system",
+        "actor::caseworker-17"
+      ],
+      "minLength": 1
+    },
+    "voidedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339 timestamp recording when the instance was voided. REQUIRED when status is `voided`; absent otherwise.",
+      "examples": [
+        "2026-05-07T12:00:00Z"
+      ],
+      "x-wos": {
+        "openStringKind": "timestamp"
+      },
+      "minLength": 1
+    },
+    "expiredAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339 timestamp recording when the instance expired (envelope deadline elapsed). REQUIRED when status is `expired`; absent otherwise.",
+      "examples": [
+        "2026-05-07T23:59:59Z"
       ],
       "x-wos": {
         "openStringKind": "timestamp"
