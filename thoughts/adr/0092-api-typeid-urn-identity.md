@@ -1,6 +1,6 @@
 # ADR 0092: WOS API — TypeID as URN Namespace-Specific String
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-05-06  
 **Scope:** WOS — public REST API identity format (`work-spec/schemas/api/`, `workspec-server`)  
 **Amends:** ADR 0082 D-4 (URN segment structure) and D-14 (URN ref discipline) per [stack ADR 0082](../../../thoughts/adr/0082-stack-public-api-contract-and-schema-discipline.md).  

@@ -1,6 +1,6 @@
 # ADR-0059: Continuous-mode post-mutation re-scan driver
 
-**Status:** Proposed
+**Status:** Landed
 **Date:** 2026-04-20
 **Deciders:** Formspec Working Group
 **Author:** Mike (TealWolf Consulting LLC)

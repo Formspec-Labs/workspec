@@ -1,14 +1,15 @@
 ---
 title: Formspec ↔ WOS Phase 11 — Integration master (gaps, plan, Runtime S15 landing)
 date: 2026-04-11
-status: proposed
+status: landed
 supersedes_as_single_index:
-  - thoughts/archive/specs/2026-04-10-formspec-integration-gaps.md
   - thoughts/archive/specs/2026-04-11-wos-s15-formspec-coprocessor-proposal.md
-  - thoughts/plans/2026-04-11-phase11-coprocessor-fel.md
 note: >-
-  This file merges the three sources above into one narrative. The older inputs
-  live under thoughts/archive/specs/; prefer this document for Phase 11 handoff.
+  This file merges three sources into one narrative. Only the coprocessor
+  proposal lives in this repo's archive/; the other two sources
+  (2026-04-10-formspec-integration-gaps.md and
+  2026-04-11-phase11-coprocessor-fel.md) are in the upstream Formspec repo.
+  Prefer this document for Phase 11 handoff.
 ---
 
 # Formspec ↔ WOS Phase 11 — Integration master
@@ -17,9 +18,9 @@ note: >-
 
 | Source (merged) | Role in this master |
 |-----------------|---------------------|
-| `thoughts/archive/specs/2026-04-10-formspec-integration-gaps.md` | Original gap analysis, coprocessor narrative, FEL gap specs |
-| `thoughts/archive/specs/2026-04-11-wos-s15-formspec-coprocessor-proposal.md` | Refined Runtime §15 / §12.9 draft, executive decisions, pin semantics |
-| `thoughts/plans/2026-04-11-phase11-coprocessor-fel.md` | North star, biases, shipped inventory, sequencing, next actions |
+| `thoughts/archive/specs/2026-04-11-wos-s15-formspec-coprocessor-proposal.md` | Refined Runtime §15 / §12.9 draft, executive decisions, pin semantics (in this repo) |
+| `thoughts/archive/specs/2026-04-10-formspec-integration-gaps.md` | Original gap analysis, coprocessor narrative, FEL gap specs (cross-repo: Formspec repo) |
+| `thoughts/plans/2026-04-11-phase11-coprocessor-fel.md` | North star, biases, shipped inventory, sequencing, next actions (cross-repo: Formspec repo) |
 
 **Normative home:** WOS coprocessor changes now live in `work-spec/` (Runtime Companion §12.9 / §15, Kernel §9.2 / §11.3, kernel schema, case-instance schema, and typed Rust model). Formspec changes live in `specs/` and `schemas/`. This `thoughts/` file is the Phase 11 integration index; use the WOS specs as the behavior source of truth.
 

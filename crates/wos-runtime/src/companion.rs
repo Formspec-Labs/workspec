@@ -14,7 +14,7 @@ use wos_core::event_handler::{self, AdverseDecisionNoticeInput};
 use wos_core::instance::CaseInstance;
 use wos_core::model::ai::{AIIntegrationDocument, ViolationAction};
 use wos_core::model::kernel::{ImpactLevel, KernelDocument, State, Transition, TransitionEvent};
-use wos_core::provenance::{CaseFileSnapshot, ProvenanceKind, ProvenanceRecord};
+use wos_core::provenance::{CaseFileSnapshot, ConfigurationWarningInput, ProvenanceKind, ProvenanceRecord};
 
 use crate::runtime::{CompanionPolicy, RuntimeError, RuntimeEventContext, RuntimeEventDecision};
 
@@ -120,11 +120,23 @@ impl CompanionPolicy for ReferenceCompanionPolicy {
                         ProvenanceKind::AutonomyViolation | ProvenanceKind::ToolViolation
                     )
                 });
+                let drift_policy_ref = data
+                    .get("driftAlert")
+                    .and_then(|drift| drift.get("policyRef"))
+                    .and_then(serde_json::Value::as_str);
                 let mut autonomy_provenance = autonomy_result.provenance;
                 if let Some(policy_ref) =
                     resolve_drift_demotion_policy_ref(actor_id, data, &self.companion_docs)
                 {
                     annotate_autonomy_demotion_policy_ref(&mut autonomy_provenance, &policy_ref);
+                } else if let Some(policy_ref) = drift_policy_ref {
+                    provenance.push(ProvenanceRecord::configuration_warning(
+                        ConfigurationWarningInput {
+                            subject: "drift-monitor.policyRef",
+                            unresolved_ref: Some(policy_ref),
+                            context: None,
+                        },
+                    ));
                 }
                 provenance.extend(autonomy_provenance);
 
@@ -156,6 +168,7 @@ impl CompanionPolicy for ReferenceCompanionPolicy {
             context.now_ms,
             self.governance_json.as_ref(),
             &self.companion_docs,
+            &mut provenance,
         );
         let handler_result = event_handler::evaluate_event(
             &event.event,
@@ -194,6 +207,7 @@ fn deterministic_adverse_decision_notice_input(
     now_ms: u64,
     governance: Option<&serde_json::Value>,
     companion_docs: &HashMap<String, serde_json::Value>,
+    provenance: &mut Vec<ProvenanceRecord>,
 ) -> Option<AdverseDecisionNoticeInput> {
     let policy = governance?
         .pointer("/dueProcess/adverseDecisionPolicy")
@@ -239,9 +253,42 @@ fn deterministic_adverse_decision_notice_input(
         NoticeTemplateResolution::CategoryFallback { key, template } => {
             (Some(*template), Some(key.clone()), "categoryFallback")
         }
-        NoticeTemplateResolution::NotFound => (None, None, "notFound"),
+        NoticeTemplateResolution::NotFound => {
+            if let Some(ref key) = template_key {
+                provenance.push(ProvenanceRecord::configuration_warning(
+                    ConfigurationWarningInput {
+                        subject: "notification-template.key",
+                        unresolved_ref: Some(key.as_str()),
+                        context: None,
+                    },
+                ));
+            }
+            (None, None, "notFound")
+        }
     };
+    let template_is_none = template.is_none();
     let human_readable = render_human_notice(template, &render_context, transition);
+    let used_fallback = template_is_none;
+    if used_fallback {
+        let mut ctx = serde_json::Map::new();
+        if let Some(ref key) = template_key {
+            ctx.insert(
+                "templateKey".to_string(),
+                serde_json::Value::String(key.clone()),
+            );
+        }
+        ctx.insert(
+            "resolution".to_string(),
+            serde_json::Value::String(template_resolution_source.to_string()),
+        );
+        provenance.push(ProvenanceRecord::configuration_warning(
+            ConfigurationWarningInput {
+                subject: "notification-template.render",
+                unresolved_ref: None,
+                context: Some(ctx),
+            },
+        ));
+    }
 
     Some(AdverseDecisionNoticeInput {
         from_state: from_state.to_string(),

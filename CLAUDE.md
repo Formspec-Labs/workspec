@@ -22,7 +22,7 @@ Governance layer between Formspec (intake) and Trellis (integrity). Parent [`../
 | Case initiation cross-spec contract | [`../thoughts/adr/0073-stack-case-initiation-and-intake-handoff.md`](../thoughts/adr/0073-stack-case-initiation-and-intake-handoff.md) |
 | Field-level transparency / class-aware response cross-spec contract | [`../thoughts/adr/0074-formspec-native-field-level-transparency.md`](../thoughts/adr/0074-formspec-native-field-level-transparency.md) |
 | **Embedded-vs-sidecar identity boundary** (no `targetWorkflow` inside embedded blocks; lint `WOS-EMBED-TARGET-001`/`-IDENTITY-001`/`WOS-SIDECAR-TARGET-001`) | [`thoughts/adr/0063-embedded-vs-sidecar-identity-boundary.md`](thoughts/adr/0063-embedded-vs-sidecar-identity-boundary.md) |
-| **Agent as first-class `ActorKind`; `AgentInvoker` port** (substrate-neutral trait + adapter crates: `wos-agent-stub` ships, `wos-agent-anthropic`/`wos-agent-mcp`/`wos-agent-a2a`/`wos-agent-http` are tracked as follow-ups) | [`thoughts/adr/0064-agent-actor-kind-and-invoker-port.md`](thoughts/adr/0064-agent-actor-kind-and-invoker-port.md) |
+| **Agent as first-class `ActorKind`; `AgentInvoker` port** (substrate-neutral trait + adapter crates: `wos-agent-stub` ships, `wos-agent-anthropic`/`wos-agent-mcp`/`wos-agent-a2a`/`wos-agent-http`/`wos-agent-claude-sdk` are skeletons tracked as follow-ups) | [`thoughts/adr/0064-agent-actor-kind-and-invoker-port.md`](thoughts/adr/0064-agent-actor-kind-and-invoker-port.md) |
 
 For public-facing stack framing, see [`../STACK.md`](../STACK.md) — lookup-only.
 
