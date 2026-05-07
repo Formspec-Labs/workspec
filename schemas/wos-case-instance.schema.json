@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://wos-spec.org/schemas/case-instance/1.0",
   "title": "WOS Case Instance",
-  "description": "A WOS CaseInstance document per the WOS Runtime Companion v1.0. A CaseInstance is the serialization format for a running workflow instance -- it captures the complete runtime state needed to resume processing after a crash, migrate between processors, or audit past behavior. This is a runtime artifact (per ADR 0063 §2.3): produced and consumed by processors, not authored by workflow designers. The required `$wosCaseInstance` marker gives runtime artifacts the same identity discipline as author-time documents and lets the lint parser detect them uniformly.",
+  "description": "A WOS CaseInstance document per the WOS Runtime Companion v1.0. A CaseInstance is the serialization format for a running workflow instance -- it captures the complete runtime state needed to resume processing after a crash, migrate between processors, or audit past behavior. This is a runtime artifact (per ADR 0063 \u00a72.3): produced and consumed by processors, not authored by workflow designers. The required `$wosCaseInstance` marker gives runtime artifacts the same identity discipline as author-time documents and lets the lint parser detect them uniformly.",
   "type": "object",
   "required": [
     "$wosCaseInstance",
@@ -20,7 +20,7 @@
   ],
   "patternProperties": {
     "^x-": {
-      "$comment": "Vendor extensions per Kernel spec §10.6 (extensions escape hatch)"
+      "$comment": "Vendor extensions per Kernel spec \u00a710.6 (extensions escape hatch)"
     }
   },
   "additionalProperties": false,
@@ -28,7 +28,7 @@
     "$wosCaseInstance": {
       "type": "string",
       "const": "1.0",
-      "description": "Top-level marker identifying this object as a WOS Case Instance runtime artifact, pinned to the 1.0 line. Required per ADR 0063 §2.3 so the lint parser detects runtime artifacts uniformly with author-time documents.",
+      "description": "Top-level marker identifying this object as a WOS Case Instance runtime artifact, pinned to the 1.0 line. Required per ADR 0063 \u00a72.3 so the lint parser detects runtime artifacts uniformly with author-time documents.",
       "examples": [
         "1.0"
       ]
@@ -40,7 +40,7 @@
       "type": "string",
       "pattern": "^[a-z][a-z0-9-]*_case_[0-9a-hjkmnp-tv-z]{26}$",
       "format": "wos-case-typeid",
-      "description": "TypeID-structured case identifier for this workflow instance. Stable for the lifetime of the instance — never reused or changed after creation. Used for routing events, correlating provenance records, and linking cross-case relationships (Runtime Companion S3.1). Processors assign this at createInstance time; authors do not choose it. Reserved family prefix: `case`.",
+      "description": "TypeID-structured case identifier for this workflow instance. Stable for the lifetime of the instance \u2014 never reused or changed after creation. Used for routing events, correlating provenance records, and linking cross-case relationships (Runtime Companion S3.1). Processors assign this at createInstance time; authors do not choose it. Reserved family prefix: `case`.",
       "examples": [
         "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd",
         "default_case_01hw7rm71vfay8vvw14d2pf2db"
@@ -313,7 +313,10 @@
         "Terms not acceptable",
         "Missing required documentation"
       ],
-      "minLength": 1
+      "minLength": 1,
+      "x-wos": {
+        "openStringKind": "prose"
+      }
     },
     "voidedBy": {
       "type": "string",
@@ -322,7 +325,10 @@
         "system",
         "actor::caseworker-17"
       ],
-      "minLength": 1
+      "minLength": 1,
+      "x-wos": {
+        "openStringKind": "identifier"
+      }
     },
     "voidedAt": {
       "type": "string",
@@ -351,7 +357,7 @@
     "createdAt": {
       "type": "string",
       "format": "date-time",
-      "description": "ISO 8601 timestamp when this instance was created by the processor (Runtime Companion S3.1). Immutable after creation — never updated on transitions or state changes.",
+      "description": "ISO 8601 timestamp when this instance was created by the processor (Runtime Companion S3.1). Immutable after creation \u2014 never updated on transitions or state changes.",
       "examples": [
         "2026-04-09T14:30:00Z"
       ],
@@ -485,7 +491,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -552,7 +558,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -768,7 +774,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -836,7 +842,7 @@
         "binding": {
           "type": "string",
           "const": "formspec",
-          "description": "Task binding discriminator. Always 'formspec' in FormspecTaskContext — identifies this context shape as requiring Formspec rendering.",
+          "description": "Task binding discriminator. Always 'formspec' in FormspecTaskContext \u2014 identifies this context shape as requiring Formspec rendering.",
           "examples": [
             "formspec"
           ]
@@ -951,7 +957,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -1036,7 +1042,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -1074,7 +1080,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -1154,7 +1160,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -1230,7 +1236,7 @@
       "type": "object",
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -1278,7 +1284,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -1372,7 +1378,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -1446,7 +1452,7 @@
       "type": "object",
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -1492,7 +1498,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -1525,7 +1531,7 @@
     },
     "ExtensionsMap": {
       "type": "object",
-      "description": "Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.",
+      "description": "Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel \u00a710.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained \u2014 any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.",
       "examples": [
         {
           "x-acme-audit-ref": "AUD-2026-001"
@@ -1543,7 +1549,7 @@
     "JsonSchemaUri": {
       "type": "string",
       "format": "uri",
-      "description": "Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosWorkflow': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.",
+      "description": "Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosWorkflow': '1.0'). Used for author-time tooling only \u2014 runtime processors MUST ignore this field.",
       "examples": [
         "https://wos-spec.org/schemas/wos-workflow.schema.json"
       ],

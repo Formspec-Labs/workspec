@@ -3,7 +3,7 @@
   "$id": "https://wos-spec.org/schemas/wos-workflow.schema.json",
   "title": "WOS Workflow",
   "description": "Single author-time schema for a WOS workflow. Scales from Forms+ intake (~30 lines) to complex case management (~3000 lines) without changing shape. Required core: impactLevel, actors, lifecycle. Optional embedded blocks (governance, agents, aiOversight, signature, custody, advanced, assurance) appear only when product behavior demands them. Conditional rules require governance for rights-impacting/safety-impacting workflows, agents block for agent-typed actors, and signature block for signature-gated transitions. Deployment-environment configuration (calendars, notification templates, ontology alignment) lives in two sidecars referenced by targetWorkflow URI. See ADR 0076 (merged-envelope consolidation) and ADR 0063 (embedded-vs-sidecar identity boundary).",
-  "$comment": "Promotion status (PLN-0314): top-level core leaves carry full normative description + examples + x-lm.critical annotations on load-bearing nodes. Inner-block leaves under governance/agents/aiOversight/signature/custody/advanced/assurance remain sketch-quality pending the spec absorption pass (PLN-0176..0207); the canonical descriptions for those leaves are owned by kernel/spec.md, governance/spec.md, ai/ai-integration.md, and advanced/spec.md and absorb here once those §-numbered sections land. SCHEMA-DOC-001 is CI-gated at zero violations for the full workflow schema (including inner blocks); PLN-0176..0207 tracks richer normative prose cross-walk from specs into those nodes. The six canonical kernel extension seams (ADR 0077) — actorExtension, contractHook, provenanceLayer, lifecycleHook, custodyHook, extensions/x- keys — remain authoritative; new kernel extension points MUST attach to one of these or be ratified via a new ADR amending Kernel §10. Step 5 ($defs promotion) landed: FactsTierRecord, MutationSource, VerificationLevel, CaseFileSnapshot, CapabilityInvocationRecord live here (plus transitive ProvenanceOutcome); the runtime log schema (wos-provenance-log.schema.json) $refs them at https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/<Name> and layers runtime-record-shape allOf entries (CaseCreated/IntakeAccepted/IntakeRejected/IntakeDeferred/SignatureAffirmation) on top.",
+  "$comment": "Promotion status (PLN-0314): top-level core leaves carry full normative description + examples + x-lm.critical annotations on load-bearing nodes. Inner-block leaves under governance/agents/aiOversight/signature/custody/advanced/assurance remain sketch-quality pending the spec absorption pass (PLN-0176..0207); the canonical descriptions for those leaves are owned by kernel/spec.md, governance/spec.md, ai/ai-integration.md, and advanced/spec.md and absorb here once those \u00a7-numbered sections land. SCHEMA-DOC-001 is CI-gated at zero violations for the full workflow schema (including inner blocks); PLN-0176..0207 tracks richer normative prose cross-walk from specs into those nodes. The six canonical kernel extension seams (ADR 0077) \u2014 actorExtension, contractHook, provenanceLayer, lifecycleHook, custodyHook, extensions/x- keys \u2014 remain authoritative; new kernel extension points MUST attach to one of these or be ratified via a new ADR amending Kernel \u00a710. Step 5 ($defs promotion) landed: FactsTierRecord, MutationSource, VerificationLevel, CaseFileSnapshot, CapabilityInvocationRecord live here (plus transitive ProvenanceOutcome); the runtime log schema (wos-provenance-log.schema.json) $refs them at https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/<Name> and layers runtime-record-shape allOf entries (CaseCreated/IntakeAccepted/IntakeRejected/IntakeDeferred/SignatureAffirmation) on top.",
   "type": "object",
   "required": [
     "$wosWorkflow",
@@ -36,7 +36,7 @@
       "type": "string",
       "format": "uri",
       "minLength": 1,
-      "description": "Canonical URI identifier for this Workflow Document. The URL names the workflow definition, not any particular instance — all versions of the same workflow SHOULD share this URL, and the pair (url, version) SHOULD be globally unique. Sidecars (`wos-delivery`, `wos-ontology-alignment`) join by this URL via `targetWorkflow`. Prefer stable, resolvable URIs under a namespace the authoring organization controls.",
+      "description": "Canonical URI identifier for this Workflow Document. The URL names the workflow definition, not any particular instance \u2014 all versions of the same workflow SHOULD share this URL, and the pair (url, version) SHOULD be globally unique. Sidecars (`wos-delivery`, `wos-ontology-alignment`) join by this URL via `targetWorkflow`. Prefer stable, resolvable URIs under a namespace the authoring organization controls.",
       "examples": [
         "https://agency.gov/workflows/benefits-adjudication",
         "https://procurement.example.gov/workflows/purchase-order-approval"
@@ -52,7 +52,7 @@
     "version": {
       "type": "string",
       "pattern": "^\\d+\\.\\d+\\.\\d+(-[\\w.+]+)?$",
-      "description": "Version string for this Workflow Document. Semantic Versioning (SemVer 2.0.0) is RECOMMENDED so processors and governance layers can reason about compatibility. Instance versioning (Kernel §9.6) pins each running workflow instance to the (url, version) pair of the definition that created it.",
+      "description": "Version string for this Workflow Document. Semantic Versioning (SemVer 2.0.0) is RECOMMENDED so processors and governance layers can reason about compatibility. Instance versioning (Kernel \u00a79.6) pins each running workflow instance to the (url, version) pair of the definition that created it.",
       "examples": [
         "1.0.0",
         "2025.1.0",
@@ -104,7 +104,7 @@
         "rights-impacting",
         "safety-impacting"
       ],
-      "description": "Consequence level classification for decisions made within this workflow (Kernel §6). `rights-impacting`: decisions affect individual legal rights — full due process REQUIRED (governance block MUST be present). `safety-impacting`: decisions affect safety — full due process REQUIRED (governance block MUST be present). `operational`: organizational operations — governance RECOMMENDED. `informational`: no binding decisions — governance OPTIONAL. Drives conditional block requirements via the schema's allOf rules.",
+      "description": "Consequence level classification for decisions made within this workflow (Kernel \u00a76). `rights-impacting`: decisions affect individual legal rights \u2014 full due process REQUIRED (governance block MUST be present). `safety-impacting`: decisions affect safety \u2014 full due process REQUIRED (governance block MUST be present). `operational`: organizational operations \u2014 governance RECOMMENDED. `informational`: no binding decisions \u2014 governance OPTIONAL. Drives conditional block requirements via the schema's allOf rules.",
       "examples": [
         "rights-impacting",
         "operational",
@@ -135,7 +135,7 @@
       ],
       "x-lm": {
         "critical": true,
-        "intent": "Structured case data shape — either inline field declaration or Formspec contract reference"
+        "intent": "Structured case data shape \u2014 either inline field declaration or Formspec contract reference"
       }
     },
     "intake": {
@@ -169,7 +169,7 @@
       ],
       "x-lm": {
         "critical": true,
-        "intent": "Who can act in this workflow — humans, systems, or agents (the agent type is gated by AI Integration block presence per ADR 0076 D-2; cross-ref enforced by lint WOS-AGENT-XREF-001)"
+        "intent": "Who can act in this workflow \u2014 humans, systems, or agents (the agent type is gated by AI Integration block presence per ADR 0076 D-2; cross-ref enforced by lint WOS-AGENT-XREF-001)"
       }
     },
     "lifecycle": {
@@ -203,7 +203,7 @@
       ],
       "x-lm": {
         "critical": true,
-        "intent": "State machine spine — initial state + lifecycle topology that all other concerns attach to"
+        "intent": "State machine spine \u2014 initial state + lifecycle topology that all other concerns attach to"
       }
     },
     "contracts": {
@@ -238,7 +238,7 @@
       ],
       "x-lm": {
         "critical": true,
-        "intent": "Embedded due-process / review / pipeline governance — REQUIRED for rights-impacting/safety-impacting workflows per ADR 0076 D-2"
+        "intent": "Embedded due-process / review / pipeline governance \u2014 REQUIRED for rights-impacting/safety-impacting workflows per ADR 0076 D-2"
       }
     },
     "agents": {
@@ -269,7 +269,7 @@
       ],
       "x-lm": {
         "critical": true,
-        "intent": "Per-agent declarations — REQUIRED when any actor has type='agent' (lint WOS-AGENT-XREF-001 enforces the cross-reference)"
+        "intent": "Per-agent declarations \u2014 REQUIRED when any actor has type='agent' (lint WOS-AGENT-XREF-001 enforces the cross-reference)"
       }
     },
     "aiOversight": {
@@ -287,7 +287,7 @@
       ],
       "x-lm": {
         "critical": true,
-        "intent": "Cross-cutting AI policy — disclosure (EU AI Act Art. 13, OMB M-24-10), drift detection, narrative tier; pairs with agents block"
+        "intent": "Cross-cutting AI policy \u2014 disclosure (EU AI Act Art. 13, OMB M-24-10), drift detection, narrative tier; pairs with agents block"
       }
     },
     "signature": {
@@ -302,12 +302,12 @@
               "actorId": "applicant"
             }
           ],
-            "documents": [
-              {
-                "id": "primaryDoc",
-                "documentRef": "urn:example:documents:application",
-                "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-                "documentHashAlgorithm": "sha-256"
+          "documents": [
+            {
+              "id": "primaryDoc",
+              "documentRef": "urn:example:documents:application",
+              "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+              "documentHashAlgorithm": "sha-256"
             }
           ],
           "signingFlow": {
@@ -323,7 +323,7 @@
               "type": "all-required"
             }
           },
-            "evidence": {
+          "evidence": {
             "recordKind": "signatureAffirmation",
             "requiredFields": [
               "response.signature.acceptedAt",
@@ -345,7 +345,7 @@
       ],
       "x-lm": {
         "critical": true,
-        "intent": "Embedded signature workflow — LOAD-BEARING for DocuSign-tier (signing order IS the workflow); REQUIRED when any transition gates on kind='signature' (lint WOS-SIG-COVER-001 enforces signer coverage)"
+        "intent": "Embedded signature workflow \u2014 LOAD-BEARING for DocuSign-tier (signing order IS the workflow); REQUIRED when any transition gates on kind='signature' (lint WOS-SIG-COVER-001 enforces signer coverage)"
       }
     },
     "custody": {
@@ -368,7 +368,7 @@
       ],
       "x-lm": {
         "critical": true,
-        "intent": "Trellis custody binding — load-bearing whenever a workflow claims anchoring on transitions or signature events"
+        "intent": "Trellis custody binding \u2014 load-bearing whenever a workflow claims anchoring on transitions or signature events"
       }
     },
     "advanced": {
@@ -388,16 +388,52 @@
           {
             "id": "eligibilityTable",
             "inputs": [
-              { "name": "income", "type": "number" },
-              { "name": "householdSize", "type": "integer" }
+              {
+                "name": "income",
+                "type": "number"
+              },
+              {
+                "name": "householdSize",
+                "type": "integer"
+              }
             ],
             "outputs": [
-              { "name": "eligible", "type": "boolean" }
+              {
+                "name": "eligible",
+                "type": "boolean"
+              }
             ],
             "rows": [
-              { "id": "r1", "inputCells": ["income <= 1473", "householdSize == 1"], "outputCells": ["true"], "rationale": "1-person household, monthly gross under federal SNAP threshold." },
-              { "id": "r2", "inputCells": ["income <= 1984", "householdSize == 2"], "outputCells": ["true"], "rationale": "2-person household threshold." },
-              { "id": "rDefault", "inputCells": [], "outputCells": ["false"], "rationale": "Catch-all; income exceeds threshold or household-size unhandled." }
+              {
+                "id": "r1",
+                "inputCells": [
+                  "income <= 1473",
+                  "householdSize == 1"
+                ],
+                "outputCells": [
+                  "true"
+                ],
+                "rationale": "1-person household, monthly gross under federal SNAP threshold."
+              },
+              {
+                "id": "r2",
+                "inputCells": [
+                  "income <= 1984",
+                  "householdSize == 2"
+                ],
+                "outputCells": [
+                  "true"
+                ],
+                "rationale": "2-person household threshold."
+              },
+              {
+                "id": "rDefault",
+                "inputCells": [],
+                "outputCells": [
+                  "false"
+                ],
+                "rationale": "Catch-all; income exceeds threshold or household-size unhandled."
+              }
             ],
             "hitPolicy": "first"
           }
@@ -413,7 +449,7 @@
       "propertyNames": {
         "pattern": "^x-"
       },
-      "description": "Vendor-namespaced extension container realizing Kernel §10.6 (the `extensions` seam — one of the canonical six per ADR 0077). Every key MUST start with `x-`; the prefix `x-wos-` is RESERVED for future normative WOS use (lint K-EXT-002 warns). Values are opaque to the processor; vendors document their own subkeys.",
+      "description": "Vendor-namespaced extension container realizing Kernel \u00a710.6 (the `extensions` seam \u2014 one of the canonical six per ADR 0077). Every key MUST start with `x-`; the prefix `x-wos-` is RESERVED for future normative WOS use (lint K-EXT-002 warns). Values are opaque to the processor; vendors document their own subkeys.",
       "examples": [
         {
           "x-acme-billing-code": "PO-2025"
@@ -443,7 +479,7 @@
       "patternProperties": {
         "^x-": {}
       },
-      "description": "Execution configuration (Kernel §9). Workflow/task/service timeouts, compensability, and instance-versioning policy. Honored by the durable runtime adapter; spec-authoritative semantics live in `wos-runtime`.",
+      "description": "Execution configuration (Kernel \u00a79). Workflow/task/service timeouts, compensability, and instance-versioning policy. Honored by the durable runtime adapter; spec-authoritative semantics live in `wos-runtime`.",
       "properties": {
         "workflowTimeout": {
           "type": "string",
@@ -480,7 +516,7 @@
         },
         "compensable": {
           "type": "boolean",
-          "description": "Whether the workflow scope is compensable under Kernel §9.5, meaning failed side effects require declared compensation behavior.",
+          "description": "Whether the workflow scope is compensable under Kernel \u00a79.5, meaning failed side effects require declared compensation behavior.",
           "examples": [
             true
           ]
@@ -492,7 +528,7 @@
             "migrateable"
           ],
           "default": "pinned",
-          "description": "Instance versioning policy (Kernel §9.6). `pinned` keeps each running instance bound to the (url, version) of the Kernel Document that created it. `migrateable` permits explicit migration to a newer compatible revision when the runtime records the migration. Omitted policy MUST be treated as `pinned` (spec §1483).",
+          "description": "Instance versioning policy (Kernel \u00a79.6). `pinned` keeps each running instance bound to the (url, version) of the Kernel Document that created it. `migrateable` permits explicit migration to a newer compatible revision when the runtime records the migration. Omitted policy MUST be treated as `pinned` (spec \u00a71483).",
           "examples": [
             "pinned",
             "migrateable"
@@ -505,12 +541,12 @@
         "event-driven",
         "continuous"
       ],
-      "description": "Evaluation mode for guards and computed expressions (Kernel §12). `event-driven` (default) re-evaluates on transition events; `continuous` re-evaluates on any case-file mutation."
+      "description": "Evaluation mode for guards and computed expressions (Kernel \u00a712). `event-driven` (default) re-evaluates on transition events; `continuous` re-evaluates on any case-file mutation."
     },
     "maxRelationshipEventDepth": {
       "type": "integer",
       "minimum": 0,
-      "description": "Cascade depth cap for `$related.*` events under Kernel §4.10. Zero disables relationship-event expansion.",
+      "description": "Cascade depth cap for `$related.*` events under Kernel \u00a74.10. Zero disables relationship-event expansion.",
       "examples": [
         3
       ]
@@ -589,7 +625,7 @@
       }
     },
     {
-      "title": "Embedded blocks MUST NOT declare targetWorkflow (ADR 0063 §2.1).",
+      "title": "Embedded blocks MUST NOT declare targetWorkflow (ADR 0063 \u00a72.1).",
       "$comment": "The merged $wosWorkflow envelope is the sole author-time identity boundary. Embedded blocks govern the enclosing workflow; they do not target other workflows. Only sidecars (wos-delivery, wos-ontology-alignment) target workflows by URI. Lint WOS-EMBED-TARGET-001.",
       "allOf": [
         {
@@ -723,7 +759,7 @@
       ]
     },
     {
-      "title": "Embedded blocks MUST NOT declare independent url or version (ADR 0063 §2.1).",
+      "title": "Embedded blocks MUST NOT declare independent url or version (ADR 0063 \u00a72.1).",
       "$comment": "The enclosing $wosWorkflow envelope's url and version are the sole identity. Embedded blocks have no independent identity. Lint WOS-EMBED-IDENTITY-001.",
       "allOf": [
         {
@@ -924,7 +960,7 @@
   ],
   "$defs": {
     "ImpactLevel": {
-      "$comment": "Name-promoted alias of `properties/impactLevel` (Kernel §6 proportionality index). Lifted to `$defs` so consumers — most notably the public API projection in `schemas/api/task.schema.json#/$defs/ImpactLevel` (ADR 0082 D-13 gate 6) — can `$ref` a stable target instead of pointing at the inline `properties` path. Closed enum; the document-level `properties/impactLevel` keeps the inline form for required-key bookkeeping at the root and remains canonical for human authors.",
+      "$comment": "Name-promoted alias of `properties/impactLevel` (Kernel \u00a76 proportionality index). Lifted to `$defs` so consumers \u2014 most notably the public API projection in `schemas/api/task.schema.json#/$defs/ImpactLevel` (ADR 0082 D-13 gate 6) \u2014 can `$ref` a stable target instead of pointing at the inline `properties` path. Closed enum; the document-level `properties/impactLevel` keeps the inline form for required-key bookkeeping at the root and remains canonical for human authors.",
       "enum": [
         "informational",
         "operational",
@@ -933,7 +969,7 @@
       ]
     },
     "InstanceStatus": {
-      "$comment": "Name-promoted alias of the runtime instance-status enum, originally inlined at `wos-case-instance.schema.json#/properties/status` (ADR 0070 D-5 — `stalled` reframed as a reserved `InstanceStatus` variant). Lifted to `$defs` so the public API projection in `schemas/api/instance.schema.json#/$defs/LifecycleState` (ADR 0082 D-13 gate 6) and any future consumer can `$ref` a stable target. Closed enum: `active` accepts events; `suspended` is paused; `migrating` is mid-version-change; `completed`/`terminated` are irreversible terminal states; `stalled` exhausted the commit retry budget and is recoverable via operator intervention.",
+      "$comment": "Name-promoted alias of the runtime instance-status enum, originally inlined at `wos-case-instance.schema.json#/properties/status` (ADR 0070 D-5 \u2014 `stalled` reframed as a reserved `InstanceStatus` variant). Lifted to `$defs` so the public API projection in `schemas/api/instance.schema.json#/$defs/LifecycleState` (ADR 0082 D-13 gate 6) and any future consumer can `$ref` a stable target. Closed enum: `active` accepts events; `suspended` is paused; `migrating` is mid-version-change; `completed`/`terminated` are irreversible terminal states; `stalled` exhausted the commit retry budget and is recoverable via operator intervention.",
       "enum": [
         "active",
         "suspended",
@@ -981,7 +1017,7 @@
           "type": "string",
           "format": "uri",
           "minLength": 1,
-          "description": "URI reference to an external contract document defining the case data shape. Recommended binding is a Formspec Definition (per the canonical `contractHook` seam, ADR 0077 §10.2); JSON Schema is the baseline binding. Mutually exclusive with inline `fields`.",
+          "description": "URI reference to an external contract document defining the case data shape. Recommended binding is a Formspec Definition (per the canonical `contractHook` seam, ADR 0077 \u00a710.2); JSON Schema is the baseline binding. Mutually exclusive with inline `fields`.",
           "examples": [
             "https://agency.gov/contracts/benefits-applicant.json",
             "urn:formspec:medicaid-redetermination/1.0"
@@ -993,7 +1029,7 @@
         "contractVersion": {
           "type": "string",
           "minLength": 1,
-          "description": "Optional version string pin for the referenced contract. When omitted, processors resolve the latest published version of `contractRef`. Pinning is RECOMMENDED for case instances that must replay against archived semantics (Kernel §9.6).",
+          "description": "Optional version string pin for the referenced contract. When omitted, processors resolve the latest published version of `contractRef`. Pinning is RECOMMENDED for case instances that must replay against archived semantics (Kernel \u00a79.6).",
           "examples": [
             "1.0.0",
             "2025.4-rc.1"
@@ -1203,7 +1239,7 @@
           "type": "string",
           "minLength": 1,
           "pattern": "^[_a-zA-Z0-9][a-zA-Z0-9_.-]*$",
-          "description": "Identifier of the lifecycle's initial state — the state instances enter on creation. MUST match a key in `states`. Per Kernel §4.1, every workflow has exactly one initial state.",
+          "description": "Identifier of the lifecycle's initial state \u2014 the state instances enter on creation. MUST match a key in `states`. Per Kernel \u00a74.1, every workflow has exactly one initial state.",
           "examples": [
             "intake",
             "draft",
@@ -1232,7 +1268,7 @@
           "items": {
             "type": "string",
             "minLength": 1,
-            "description": "Semantic tag string attaching governance and policy to this state. Governance attaches via the `lifecycleHook` seam (ADR 0077 §10.4) by matching tags. Common tags: `determination`, `adverse-decision`, `hold`, `appeal`, `terminal`. Custom tags MUST use kebab-case; vendor-specific tags use `x-` prefix.",
+            "description": "Semantic tag string attaching governance and policy to this state. Governance attaches via the `lifecycleHook` seam (ADR 0077 \u00a710.4) by matching tags. Common tags: `determination`, `adverse-decision`, `hold`, `appeal`, `terminal`. Custom tags MUST use kebab-case; vendor-specific tags use `x-` prefix.",
             "examples": [
               "determination",
               "adverse-decision",
@@ -1255,7 +1291,7 @@
           "additionalProperties": {
             "$ref": "#/$defs/State"
           },
-          "description": "Nested substates for compound states (`type=='compound'`). Map of substate identifier to State declaration. Compound states enter their declared `initial` substate; history states (Kernel §4.14) optionally restore the most recently active substate on re-entry.",
+          "description": "Nested substates for compound states (`type=='compound'`). Map of substate identifier to State declaration. Compound states enter their declared `initial` substate; history states (Kernel \u00a74.14) optionally restore the most recently active substate on re-entry.",
           "examples": [
             {
               "reviewing": {
@@ -1272,7 +1308,7 @@
         },
         "regions": {
           "type": "object",
-          "description": "Parallel regions for parallel states (`type=='parallel'`). Map of region identifier to a region object containing its own `initial` and `states`. All regions execute concurrently; the parallel state exits only when join semantics declared by `cancellationPolicy` are satisfied (Kernel §4.8).",
+          "description": "Parallel regions for parallel states (`type=='parallel'`). Map of region identifier to a region object containing its own `initial` and `states`. All regions execute concurrently; the parallel state exits only when join semantics declared by `cancellationPolicy` are satisfied (Kernel \u00a74.8).",
           "examples": [
             {
               "approval": {
@@ -1288,7 +1324,7 @@
         },
         "onEntry": {
           "type": "array",
-          "description": "Ordered list of actions the processor MUST execute on state entry, before any transitions are evaluated. Action shape follows Kernel §9.2 action execution model (invokeService, startTimer, emitEvent, etc.). Actions execute in declaration order; the state is considered entered only after all onEntry actions succeed.",
+          "description": "Ordered list of actions the processor MUST execute on state entry, before any transitions are evaluated. Action shape follows Kernel \u00a79.2 action execution model (invokeService, startTimer, emitEvent, etc.). Actions execute in declaration order; the state is considered entered only after all onEntry actions succeed.",
           "examples": [
             [
               {
@@ -1327,7 +1363,7 @@
           "type": "string",
           "format": "duration",
           "minLength": 1,
-          "description": "ISO 8601 duration after which the processor emits a `$timeout.state` event if the state has not been exited. The lifecycle handles the timeout like any other event (Kernel §4.10). Hold policies (Governance §12) MAY override stateTimeout with policy-specific durations.",
+          "description": "ISO 8601 duration after which the processor emits a `$timeout.state` event if the state has not been exited. The lifecycle handles the timeout like any other event (Kernel \u00a74.10). Hold policies (Governance \u00a712) MAY override stateTimeout with policy-specific durations.",
           "examples": [
             "P30D",
             "PT2H",
@@ -1341,7 +1377,7 @@
           "type": "string",
           "minLength": 1,
           "$comment": "Foreach only. FEL expression yielding a bounded array. ADR 0078.",
-          "description": "Foreach states only (`type=='foreach'`). FEL expression yielding a bounded array. The processor evaluates the expression at state entry, instantiates `body` once per item, and aggregates per `mergeStrategy`. Per ADR 0078, the array MUST be bounded — unbounded collections are rejected.",
+          "description": "Foreach states only (`type=='foreach'`). FEL expression yielding a bounded array. The processor evaluates the expression at state entry, instantiates `body` once per item, and aggregates per `mergeStrategy`. Per ADR 0078, the array MUST be bounded \u2014 unbounded collections are rejected.",
           "examples": [
             "caseFile.attachments",
             "caseFile.applicants",
@@ -1442,7 +1478,7 @@
           "$comment": "Final states only.",
           "minLength": 1,
           "pattern": "^[_a-zA-Z0-9][a-zA-Z0-9_.-]*$",
-          "description": "Final states only (`type=='final'`). Stable code identifying the workflow's terminal outcome. Recorded in Facts-tier provenance and consumed by reporting / case-closure pipelines. Distinct from `tags` (which compose) — outcomeCode is singular.",
+          "description": "Final states only (`type=='final'`). Stable code identifying the workflow's terminal outcome. Recorded in Facts-tier provenance and consumed by reporting / case-closure pipelines. Distinct from `tags` (which compose) \u2014 outcomeCode is singular.",
           "examples": [
             "approved",
             "denied",
@@ -1531,20 +1567,55 @@
     },
     "DecisionTable": {
       "type": "object",
-      "description": "A first-class decision table per Kernel §4.5.1. Inputs and outputs are typed; rows carry FEL boolean predicates per input cell and FEL value expressions per output cell. Document order is significant for `first` and `priority` hit policies. A row matches when every input cell evaluates to `true`; the hit policy resolves multi-match. Cell expressions evaluate in a row-only scope (the declared inputs, bound to the values the referencing DecisionTableGuard's `inputBindings` produced) — they MUST NOT reference `caseFile`, `$event`, or any outer namespace. Transition-guard tables MUST select a `boolean`-typed output column.",
+      "description": "A first-class decision table per Kernel \u00a74.5.1. Inputs and outputs are typed; rows carry FEL boolean predicates per input cell and FEL value expressions per output cell. Document order is significant for `first` and `priority` hit policies. A row matches when every input cell evaluates to `true`; the hit policy resolves multi-match. Cell expressions evaluate in a row-only scope (the declared inputs, bound to the values the referencing DecisionTableGuard's `inputBindings` produced) \u2014 they MUST NOT reference `caseFile`, `$event`, or any outer namespace. Transition-guard tables MUST select a `boolean`-typed output column.",
       "examples": [
         {
           "id": "eligibilityTable",
-          "inputs": [{ "name": "income", "type": "number" }, { "name": "householdSize", "type": "integer" }],
-          "outputs": [{ "name": "eligible", "type": "boolean" }],
+          "inputs": [
+            {
+              "name": "income",
+              "type": "number"
+            },
+            {
+              "name": "householdSize",
+              "type": "integer"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "eligible",
+              "type": "boolean"
+            }
+          ],
           "rows": [
-            { "id": "r1", "inputCells": ["income <= 1473", "householdSize == 1"], "outputCells": ["true"] },
-            { "id": "rDefault", "inputCells": [], "outputCells": ["false"] }
+            {
+              "id": "r1",
+              "inputCells": [
+                "income <= 1473",
+                "householdSize == 1"
+              ],
+              "outputCells": [
+                "true"
+              ]
+            },
+            {
+              "id": "rDefault",
+              "inputCells": [],
+              "outputCells": [
+                "false"
+              ]
+            }
           ],
           "hitPolicy": "first"
         }
       ],
-      "required": ["id", "inputs", "rows", "outputs", "hitPolicy"],
+      "required": [
+        "id",
+        "inputs",
+        "rows",
+        "outputs",
+        "hitPolicy"
+      ],
       "additionalProperties": false,
       "patternProperties": {
         "^x-": {}
@@ -1576,7 +1647,10 @@
           "description": "Typed input parameters of the table. Each input is bound by the referencing DecisionTableGuard's `inputBindings` and exposed inside row cell expressions under its declared `name`.",
           "items": {
             "type": "object",
-            "required": ["name", "type"],
+            "required": [
+              "name",
+              "type"
+            ],
             "additionalProperties": false,
             "properties": {
               "name": {
@@ -1590,7 +1664,15 @@
               },
               "type": {
                 "type": "string",
-                "enum": ["string", "number", "integer", "boolean", "date", "datetime", "duration"],
+                "enum": [
+                  "string",
+                  "number",
+                  "integer",
+                  "boolean",
+                  "date",
+                  "datetime",
+                  "duration"
+                ],
                 "description": "FEL type of the input value. Cell expressions reading this input MUST be type-compatible.",
                 "examples": [
                   "number",
@@ -1617,7 +1699,10 @@
           "description": "Typed output columns. A DecisionTableGuard selects exactly one column by name (`outputColumn`); for transition-guard tables that column MUST be `boolean`-typed.",
           "items": {
             "type": "object",
-            "required": ["name", "type"],
+            "required": [
+              "name",
+              "type"
+            ],
             "additionalProperties": false,
             "properties": {
               "name": {
@@ -1631,7 +1716,15 @@
               },
               "type": {
                 "type": "string",
-                "enum": ["string", "number", "integer", "boolean", "date", "datetime", "duration"],
+                "enum": [
+                  "string",
+                  "number",
+                  "integer",
+                  "boolean",
+                  "date",
+                  "datetime",
+                  "duration"
+                ],
                 "description": "FEL type of the produced output value. Output cell expressions MUST evaluate to this type.",
                 "examples": [
                   "boolean",
@@ -1662,8 +1755,13 @@
         },
         "hitPolicy": {
           "type": "string",
-          "enum": ["unique", "first", "priority", "collect"],
-          "description": "Row-selection rule when zero, one, or many rows match. `unique`: at most one match (>1 → K-052); `first`: first match in document order wins; `priority`: lowest `priority` integer among matches wins (ties → K-052); `collect`: all matches returned to the caller (transition guards reject `collect` per K-053). Authoring SHOULD pick the most restrictive policy that fits — `unique` proves disjointness; `first` documents intentional ordering.",
+          "enum": [
+            "unique",
+            "first",
+            "priority",
+            "collect"
+          ],
+          "description": "Row-selection rule when zero, one, or many rows match. `unique`: at most one match (>1 \u2192 K-052); `first`: first match in document order wins; `priority`: lowest `priority` integer among matches wins (ties \u2192 K-052); `collect`: all matches returned to the caller (transition guards reject `collect` per K-053). Authoring SHOULD pick the most restrictive policy that fits \u2014 `unique` proves disjointness; `first` documents intentional ordering.",
           "examples": [
             "first",
             "unique",
@@ -1679,7 +1777,11 @@
     "DecisionTableRow": {
       "type": "object",
       "description": "One row of a DecisionTable. Matches when every entry of `inputCells` evaluates to `true` against the row scope (the DecisionTable's declared inputs bound to the referencing guard's `inputBindings`).",
-      "required": ["id", "inputCells", "outputCells"],
+      "required": [
+        "id",
+        "inputCells",
+        "outputCells"
+      ],
       "additionalProperties": false,
       "patternProperties": {
         "^x-": {}
@@ -1696,10 +1798,10 @@
         },
         "inputCells": {
           "type": "array",
-          "description": "FEL boolean predicates, one per declared input in declaration order. Each evaluates in row scope (inputs bound to guard `inputBindings`-resolved values). MUST evaluate to a boolean (K-053). An empty array means 'matches always' — the conventional default-row pattern.",
+          "description": "FEL boolean predicates, one per declared input in declaration order. Each evaluates in row scope (inputs bound to guard `inputBindings`-resolved values). MUST evaluate to a boolean (K-053). An empty array means 'matches always' \u2014 the conventional default-row pattern.",
           "items": {
             "type": "string",
-            "description": "Single FEL boolean predicate evaluated in the row scope for the corresponding declared input column; empty string is invalid—use an empty inputCells array on the row for unconditional match.",
+            "description": "Single FEL boolean predicate evaluated in the row scope for the corresponding declared input column; empty string is invalid\u2014use an empty inputCells array on the row for unconditional match.",
             "examples": [
               "income <= 2500",
               "householdSize >= 3 && householdSize <= 4"
@@ -1736,7 +1838,7 @@
           "type": "string",
           "description": "Reviewer-facing rationale for this row, preserved as authoring provenance alongside the table so policy staff can explain why a row exists without reverse-engineering FEL cells.",
           "examples": [
-            "FFY26 SNAP gross income test for one- to two-person households per agency handbook §4.2.",
+            "FFY26 SNAP gross income test for one- to two-person households per agency handbook \u00a74.2.",
             "Default deny row when no higher-priority bracket matches."
           ],
           "x-wos": {
@@ -1747,7 +1849,7 @@
     },
     "DecisionTableGuard": {
       "type": "object",
-      "description": "Structured guard form referencing a top-level `decisionTables[*]` entry. Composes with `Transition.guard` (Kernel §4.5.1). Evaluates by binding the table's declared inputs to the values produced by `inputBindings[*]` (FEL expressions in the full transition context), running the table per its hit policy, and returning the selected row's `outputColumn` value (which MUST be boolean for transition-guard usage).",
+      "description": "Structured guard form referencing a top-level `decisionTables[*]` entry. Composes with `Transition.guard` (Kernel \u00a74.5.1). Evaluates by binding the table's declared inputs to the values produced by `inputBindings[*]` (FEL expressions in the full transition context), running the table per its hit policy, and returning the selected row's `outputColumn` value (which MUST be boolean for transition-guard usage).",
       "examples": [
         {
           "kind": "decisionTable",
@@ -1760,7 +1862,12 @@
           "onNoMatch": "false"
         }
       ],
-      "required": ["kind", "ref", "outputColumn", "inputBindings"],
+      "required": [
+        "kind",
+        "ref",
+        "outputColumn",
+        "inputBindings"
+      ],
       "additionalProperties": false,
       "patternProperties": {
         "^x-": {}
@@ -1819,9 +1926,12 @@
         },
         "onNoMatch": {
           "type": "string",
-          "enum": ["false", "fail"],
+          "enum": [
+            "false",
+            "fail"
+          ],
           "default": "false",
-          "description": "Behavior when zero rows match (and after `unique`/`first`/`priority` short-circuits). `false` (default) treats the guard as `false` — the transition is skipped per §4.6. `fail` rejects per Kernel §4.6/§4.7 transition resolution. Use `fail` when the table is intended to be exhaustive and a no-match represents an authoring error worth halting.",
+          "description": "Behavior when zero rows match (and after `unique`/`first`/`priority` short-circuits). `false` (default) treats the guard as `false` \u2014 the transition is skipped per \u00a74.6. `fail` rejects per Kernel \u00a74.6/\u00a74.7 transition resolution. Use `fail` when the table is intended to be exhaustive and a no-match represents an authoring error worth halting.",
           "examples": [
             "false",
             "fail"
@@ -1830,7 +1940,7 @@
       },
       "x-lm": {
         "critical": true,
-        "intent": "Structured (table-form) guard that preserves DecisionTable authoring fidelity through the substrate — alternative to FEL-string guard"
+        "intent": "Structured (table-form) guard that preserves DecisionTable authoring fidelity through the substrate \u2014 alternative to FEL-string guard"
       }
     },
     "Transition": {
@@ -1841,7 +1951,7 @@
       "properties": {
         "event": {
           "$ref": "#/$defs/TransitionEvent",
-          "description": "Trigger event for this transition. When omitted, the transition is anonymous: it does not match an external event but still participates in continuous-mode guard re-scan (Runtime Companion §10.3)."
+          "description": "Trigger event for this transition. When omitted, the transition is anonymous: it does not match an external event but still participates in continuous-mode guard re-scan (Runtime Companion \u00a710.3)."
         },
         "guard": {
           "oneOf": [
@@ -1886,7 +1996,7 @@
           "items": {
             "type": "string",
             "minLength": 1,
-            "description": "Semantic tag string attaching governance and policy to this transition. Governance attaches via the `lifecycleHook` seam (ADR 0077 §10.4) by matching tags. Common tags: `determination`, `adverse-decision`, `appeal-grant`, `correction`, `rescission`.",
+            "description": "Semantic tag string attaching governance and policy to this transition. Governance attaches via the `lifecycleHook` seam (ADR 0077 \u00a710.4) by matching tags. Common tags: `determination`, `adverse-decision`, `appeal-grant`, `correction`, `rescission`.",
             "examples": [
               "determination",
               "adverse-decision",
@@ -1906,7 +2016,7 @@
           "description": "Actor identifier responsible for performing this transition. MUST match an entry in the workflow's `actors[].id` and MUST use the same lexical pattern as `actors[].id` (ASCII letter first, then letters, digits, `.`, `_`, `-`). Single-actor transitions name one actor; multi-actor (signature-gated) transitions use the `actors` array (lint WOS-SIG-COVER-001 enforces signer coverage). Load-bearing for authority decisions and signature workflow correctness.",
           "x-lm": {
             "critical": true,
-            "intent": "Who acts on the transition — load-bearing for authority decisions, signature coverage (WOS-SIG-COVER-001), and audit traceability"
+            "intent": "Who acts on the transition \u2014 load-bearing for authority decisions, signature coverage (WOS-SIG-COVER-001), and audit traceability"
           },
           "examples": [
             "caseworker",
@@ -1916,7 +2026,7 @@
         },
         "actions": {
           "type": "array",
-          "description": "Ordered list of actions the processor MUST execute as part of this transition, after guard evaluation and before destination state entry. Action shape per Kernel §9.2. Actions execute atomically with the state change — failure rolls back per Kernel §9.5 compensation.",
+          "description": "Ordered list of actions the processor MUST execute as part of this transition, after guard evaluation and before destination state entry. Action shape per Kernel \u00a79.2. Actions execute atomically with the state change \u2014 failure rolls back per Kernel \u00a79.5 compensation.",
           "examples": [
             [
               {
@@ -1948,7 +2058,7 @@
       }
     },
     "TransitionEvent": {
-      "description": "Typed trigger for explicit event delivery on a lifecycle transition (Kernel §4.5). Exactly one of the five discriminated branches MUST match; processors resolve runtime process_event string names per kind-specific rules in §4.9.10 and companion join semantics in §4.8.",
+      "description": "Typed trigger for explicit event delivery on a lifecycle transition (Kernel \u00a74.5). Exactly one of the five discriminated branches MUST match; processors resolve runtime process_event string names per kind-specific rules in \u00a74.9.10 and companion join semantics in \u00a74.8.",
       "oneOf": [
         {
           "$ref": "#/$defs/TransitionEventTimer"
@@ -1970,7 +2080,7 @@
     "Contracts": {
       "type": "object",
       "$comment": "Validation/guard contracts and capability contracts. Pairs with bindings[] per ADR 0080 governed output-commit pipeline.",
-      "description": "Named validation and capability contracts referenced by lifecycle transitions, output bindings, and the governed output-commit pipeline (ADR 0080). Contracts compose with the `contractHook` seam (ADR 0077 §10.2). Concrete shape varies by binding kind; see kernel/spec.md §9.2 for the merged contract surface.",
+      "description": "Named validation and capability contracts referenced by lifecycle transitions, output bindings, and the governed output-commit pipeline (ADR 0080). Contracts compose with the `contractHook` seam (ADR 0077 \u00a710.2). Concrete shape varies by binding kind; see kernel/spec.md \u00a79.2 for the merged contract surface.",
       "examples": [
         {
           "intakeValidation": {
@@ -2039,7 +2149,7 @@
           }
         },
         "mutationSource": {
-          "description": "Provenance origin of the projected mutation under the governed output-commit pipeline (ADR 0080). Recorded in Facts-tier provenance (Kernel §8); load-bearing for audit traceability and rights-impacting decision review. The closed-set values describe canonical provenance origins; vendor-namespaced `x-` values cover origins outside the canonical set.",
+          "description": "Provenance origin of the projected mutation under the governed output-commit pipeline (ADR 0080). Recorded in Facts-tier provenance (Kernel \u00a78); load-bearing for audit traceability and rights-impacting decision review. The closed-set values describe canonical provenance origins; vendor-namespaced `x-` values cover origins outside the canonical set.",
           "examples": [
             "agent-extracted",
             "human-corrected",
@@ -2047,7 +2157,7 @@
           ],
           "x-lm": {
             "critical": true,
-            "intent": "Where the mutation came from — load-bearing audit-traceability claim per ADR 0080 governed output-commit pipeline"
+            "intent": "Where the mutation came from \u2014 load-bearing audit-traceability claim per ADR 0080 governed output-commit pipeline"
           },
           "oneOf": [
             {
@@ -2063,7 +2173,7 @@
             {
               "type": "string",
               "pattern": "^x-",
-              "description": "Vendor-namespaced mutation source identifier under the `x-` prefix per Kernel §10.6 (`extensions` seam). Used when none of the canonical mutation sources (agent-extracted, system-fetched, human-entered, human-corrected, computed, self-attested) describes the actual provenance.",
+              "description": "Vendor-namespaced mutation source identifier under the `x-` prefix per Kernel \u00a710.6 (`extensions` seam). Used when none of the canonical mutation sources (agent-extracted, system-fetched, human-entered, human-corrected, computed, self-attested) describes the actual provenance.",
               "examples": [
                 "x-acme-batch-import",
                 "x-vendor-edi-feed"
@@ -2080,7 +2190,7 @@
           ],
           "x-lm": {
             "critical": true,
-            "intent": "How strongly verified the mutation is — load-bearing for governance gating and fallback-chain integrity (lint WOS-VER-LEVEL-001)"
+            "intent": "How strongly verified the mutation is \u2014 load-bearing for governance gating and fallback-chain integrity (lint WOS-VER-LEVEL-001)"
           },
           "oneOf": [
             {
@@ -2094,7 +2204,7 @@
             {
               "type": "string",
               "pattern": "^x-",
-              "description": "Vendor-namespaced verification level identifier under the `x-` prefix per Kernel §10.6 (`extensions` seam). Used when none of the canonical levels (independent, attested, corroborated, authoritative) describes the binding's verification regime.",
+              "description": "Vendor-namespaced verification level identifier under the `x-` prefix per Kernel \u00a710.6 (`extensions` seam). Used when none of the canonical levels (independent, attested, corroborated, authoritative) describes the binding's verification regime.",
               "examples": [
                 "x-acme-fhe-attested",
                 "x-vendor-dual-control"
@@ -2259,7 +2369,7 @@
           ],
           "x-lm": {
             "critical": true,
-            "intent": "Closed five-mode amendment taxonomy per ADR-0066 D-1 / Q26 maximalist; lint target for taxonomy-mode ↔ record-kind pairing"
+            "intent": "Closed five-mode amendment taxonomy per ADR-0066 D-1 / Q26 maximalist; lint target for taxonomy-mode \u2194 record-kind pairing"
           }
         }
       }
@@ -2326,7 +2436,7 @@
           "items": {
             "$ref": "#/$defs/DeonticConstraint"
           },
-          "description": "Per-agent deontic constraints. Each constraint binds the agent (or a specified sub-actor) to a permission, prohibition, obligation, or right per OASIS LegalRuleML §3. The kernel checks `kind` and `expression` (a FEL string); the optional `actor`, `condition`, `defeasible`, `citationRefs`, and `x-legalruleml-iri` surfaces let governance reviewers carry the legal grounding without re-encoding it elsewhere."
+          "description": "Per-agent deontic constraints. Each constraint binds the agent (or a specified sub-actor) to a permission, prohibition, obligation, or right per OASIS LegalRuleML \u00a73. The kernel checks `kind` and `expression` (a FEL string); the optional `actor`, `condition`, `defeasible`, `citationRefs`, and `x-legalruleml-iri` surfaces let governance reviewers carry the legal grounding without re-encoding it elsewhere."
         },
         "confidenceFloor": {
           "type": "number",
@@ -2674,7 +2784,7 @@
       "patternProperties": {
         "^x-": {}
       },
-      "description": "Signature content embedded in a $wosWorkflow document (Kernel §13 / T4 Signature Profile). Carries roles, signable documents, signing flow, evidence requirements, authentication policies, and policy hooks (reminders, expiry, decline, void, reassignment). Spec authority: `wos-runtime/src/runtime/signature.rs::SignatureProfileDocument`.",
+      "description": "Signature content embedded in a $wosWorkflow document (Kernel \u00a713 / T4 Signature Profile). Carries roles, signable documents, signing flow, evidence requirements, authentication policies, and policy hooks (reminders, expiry, decline, void, reassignment). Spec authority: `wos-runtime/src/runtime/signature.rs::SignatureProfileDocument`.",
       "required": [
         "roles",
         "documents",
@@ -2697,7 +2807,7 @@
         "description": {
           "type": "string",
           "minLength": 1,
-          "description": "Optional human-readable note describing the embedded signature flow. Identity (url, version) is governed by the enclosing $wosWorkflow envelope per ADR 0063 §2.1; legacy `targetWorkflow` / `version` / `title` properties are retired.",
+          "description": "Optional human-readable note describing the embedded signature flow. Identity (url, version) is governed by the enclosing $wosWorkflow envelope per ADR 0063 \u00a72.1; legacy `targetWorkflow` / `version` / `title` properties are retired.",
           "examples": [
             "Applicant and eligibility worker signatures for a benefits determination packet."
           ],
@@ -3167,7 +3277,7 @@
                   ]
                 },
                 "assuranceLevel": {
-                  "description": "Identity-assurance level for the signer binding. Accepts NIST-style `ial1`–`ial3` / `aal1`–`aal3`, ranked `low`–`very-high`, or vendor `x-*` tokens.",
+                  "description": "Identity-assurance level for the signer binding. Accepts NIST-style `ial1`\u2013`ial3` / `aal1`\u2013`aal3`, ranked `low`\u2013`very-high`, or vendor `x-*` tokens.",
                   "examples": [
                     "ial2",
                     "standard"
@@ -3631,7 +3741,9 @@
           "examples": [
             "https://trellis.example/profiles/public-benefits-trust"
           ],
-          "x-wos": { "openStringKind": "uri" }
+          "x-wos": {
+            "openStringKind": "uri"
+          }
         },
         "anchorRequirements": {
           "type": "array",
@@ -3651,7 +3763,9 @@
                 "examples": [
                   "signatureAffirmed"
                 ],
-                "x-wos": { "openStringKind": "tagLabel" }
+                "x-wos": {
+                  "openStringKind": "tagLabel"
+                }
               },
               "anchor": {
                 "enum": [
@@ -3668,7 +3782,9 @@
                 "examples": [
                   "benefitsEvidenceLedger"
                 ],
-                "x-wos": { "openStringKind": "identifier" }
+                "x-wos": {
+                  "openStringKind": "identifier"
+                }
               }
             }
           }
@@ -3681,7 +3797,9 @@
           "examples": [
             "https://agency.gov/wos/export-bundles/benefits-evidence"
           ],
-          "x-wos": { "openStringKind": "uri" }
+          "x-wos": {
+            "openStringKind": "uri"
+          }
         }
       }
     },
@@ -3848,7 +3966,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": true,
@@ -4577,7 +4695,7 @@
     "CapabilityInvocationRecord": {
       "type": "object",
       "$comment": "`not` rejects the vacuous empty object `{}` for standalone `validator_for_def(\"CapabilityInvocationRecord\")` use. Full provenance envelopes require FactsTierRecord core keys (`id`, `recordKind`, `timestamp`, `auditLayer`, `definitionVersion`) at the log item layer; `data` remains optional unless the blocked-invocation if/then arm applies.",
-      "description": "Shape constraint layered on Facts-tier provenance records emitted by the AI §3.3.1 capability-invocation path. A record representing a precondition-blocked invocation (`recordKind == \"capabilityInvocation\"` AND `data.invocationBlocked == true`) MUST carry `outcome: \"preconditionNotSatisfied\"` so audit tooling can distinguish a declarative precondition gate from an agent failure. This `$def` is composed into `FactsTierRecord.allOf` below; runtime provenance logs that `$ref` this schema's `FactsTierRecord` (for example `wos-provenance-log.schema.json`) inherit the same MUST. Records with other `recordKind` values or absent `data.invocationBlocked` fall outside the guard and are unaffected.",
+      "description": "Shape constraint layered on Facts-tier provenance records emitted by the AI \u00a73.3.1 capability-invocation path. A record representing a precondition-blocked invocation (`recordKind == \"capabilityInvocation\"` AND `data.invocationBlocked == true`) MUST carry `outcome: \"preconditionNotSatisfied\"` so audit tooling can distinguish a declarative precondition gate from an agent failure. This `$def` is composed into `FactsTierRecord.allOf` below; runtime provenance logs that `$ref` this schema's `FactsTierRecord` (for example `wos-provenance-log.schema.json`) inherit the same MUST. Records with other `recordKind` values or absent `data.invocationBlocked` fall outside the guard and are unaffected.",
       "not": {
         "type": "object",
         "maxProperties": 0
@@ -4610,7 +4728,7 @@
       "properties": {
         "data": {
           "type": "object",
-          "description": "Record payload for a capability-invocation provenance entry. Carries the AI §3.3.1 `invocationBlocked` flag plus any additional context the processor chooses to record (capability id, resolved precondition value, expression source, etc.).",
+          "description": "Record payload for a capability-invocation provenance entry. Carries the AI \u00a73.3.1 `invocationBlocked` flag plus any additional context the processor chooses to record (capability id, resolved precondition value, expression source, etc.).",
           "examples": [
             {
               "invocationBlocked": true,
@@ -4624,7 +4742,7 @@
           "properties": {
             "invocationBlocked": {
               "type": "boolean",
-              "description": "True when the processor declined to invoke the agent because a capability precondition evaluated to `false` or a non-boolean (AI Integration §3.3.1). The processor MUST then fall through to the fallback chain (AI §8). False (or absent) means the capability was invoked.",
+              "description": "True when the processor declined to invoke the agent because a capability precondition evaluated to `false` or a non-boolean (AI Integration \u00a73.3.1). The processor MUST then fall through to the fallback chain (AI \u00a78). False (or absent) means the capability was invoked.",
               "examples": [
                 true,
                 false
@@ -4836,7 +4954,7 @@
     },
     "CorrectionAuthorizedRecord": {
       "type": "object",
-      "description": "Shape constraint for ADR-0066 D-1 mode 1 (`correction`): a typo-class fix to a prior record's surface that does not change the determination outcome. The authorizing act records who approved the correction, the targeted prior event hash, the field set being corrected, the reason, and the authority basis. Spec MUST source: ADR-0066 §Five-Mode Taxonomy + Authorizing-Act Pair (Q26 maximalist).",
+      "description": "Shape constraint for ADR-0066 D-1 mode 1 (`correction`): a typo-class fix to a prior record's surface that does not change the determination outcome. The authorizing act records who approved the correction, the targeted prior event hash, the field set being corrected, the reason, and the authority basis. Spec MUST source: ADR-0066 \u00a7Five-Mode Taxonomy + Authorizing-Act Pair (Q26 maximalist).",
       "examples": [
         {
           "id": "sba-poc_prov_01jqt0wn4yh3p5q9r2x6t7v8w0",
@@ -4952,7 +5070,7 @@
     },
     "AmendmentAuthorizedRecord": {
       "type": "object",
-      "description": "Shape constraint for ADR-0066 D-1 mode 2 (`amendment`): a substantive change to a prior determination that explicitly references the prior outcome. The authorizing act records who approved the amendment, the targeted prior event hash, the prior determination hash, the reason, and the authority basis. The paired determination-change record is `determinationAmended`. Spec MUST source: ADR-0066 §Five-Mode Taxonomy + Authorizing-Act Pair (Q26 maximalist).",
+      "description": "Shape constraint for ADR-0066 D-1 mode 2 (`amendment`): a substantive change to a prior determination that explicitly references the prior outcome. The authorizing act records who approved the amendment, the targeted prior event hash, the prior determination hash, the reason, and the authority basis. The paired determination-change record is `determinationAmended`. Spec MUST source: ADR-0066 \u00a7Five-Mode Taxonomy + Authorizing-Act Pair (Q26 maximalist).",
       "examples": [
         {
           "id": "sba-poc_prov_01jqt100abc1d2e3f4g5h6i7j8",
@@ -5392,7 +5510,7 @@
     },
     "AuthorizationAttestationRecord": {
       "type": "object",
-      "description": "Shape constraint for ADR-0066's authority-attestation primitive: a free-standing record of who holds amendment / rescission / reinstatement / correction authority under what policy predicate. Authorization attestations stand alone in the chain so policy auditors can verify authority basis without parsing every authorizing-act record. Reserved policyPredicate values are `amendment-authority`, `rescission-authority`, `reinstatement-authority`, `correction-authority`; vendor extensions MUST use `x-` prefix. Spec MUST source: ADR-0066 §Authority-Attestation Primitive.",
+      "description": "Shape constraint for ADR-0066's authority-attestation primitive: a free-standing record of who holds amendment / rescission / reinstatement / correction authority under what policy predicate. Authorization attestations stand alone in the chain so policy auditors can verify authority basis without parsing every authorizing-act record. Reserved policyPredicate values are `amendment-authority`, `rescission-authority`, `reinstatement-authority`, `correction-authority`; vendor extensions MUST use `x-` prefix. Spec MUST source: ADR-0066 \u00a7Authority-Attestation Primitive.",
       "examples": [
         {
           "id": "sba-poc_prov_01jqt150abc1d2e3f4g5h6i7n3",
@@ -6306,7 +6424,7 @@
     },
     "ProvenanceOutcome": {
       "type": "string",
-      "description": "Outcome literal recorded on a Facts-tier provenance record when the processor completes (or declines to complete) an action. Open enum: the listed values are reserved across all tiers; vendor extensions MUST use an `x-` prefix to avoid future conflicts. Reserved literals currently defined: `preconditionNotSatisfied` (AI Integration §3.3.1 -- emitted when a capability precondition FEL expression evaluates to false or non-boolean, blocking agent invocation and falling through to the fallback chain) and `convergenceCapReached` (Runtime §10.3 -- emitted when continuous-mode re-evaluation hits the 100-cycle convergence cap for a single triggering mutation).",
+      "description": "Outcome literal recorded on a Facts-tier provenance record when the processor completes (or declines to complete) an action. Open enum: the listed values are reserved across all tiers; vendor extensions MUST use an `x-` prefix to avoid future conflicts. Reserved literals currently defined: `preconditionNotSatisfied` (AI Integration \u00a73.3.1 -- emitted when a capability precondition FEL expression evaluates to false or non-boolean, blocking agent invocation and falling through to the fallback chain) and `convergenceCapReached` (Runtime \u00a710.3 -- emitted when continuous-mode re-evaluation hits the 100-cycle convergence cap for a single triggering mutation).",
       "examples": [
         "preconditionNotSatisfied",
         "convergenceCapReached",
@@ -6336,7 +6454,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -6356,7 +6474,7 @@
           "type": "string",
           "minLength": 1,
           "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$",
-          "description": "Optional stable external reference key for this assertion. When present, MUST equal `id`; authors use it only to make the cross-document reference contract explicit at the callsite (mirrors the `assertionId` property consumers see on AssertionUse). Processors MUST treat mismatch between `id` and `assertionId` as a configuration error at load time (see assertion-library.md §Cross-Document Reference Protocol).",
+          "description": "Optional stable external reference key for this assertion. When present, MUST equal `id`; authors use it only to make the cross-document reference contract explicit at the callsite (mirrors the `assertionId` property consumers see on AssertionUse). Processors MUST treat mismatch between `id` and `assertionId` as a configuration error at load time (see assertion-library.md \u00a7Cross-Document Reference Protocol).",
           "examples": [
             "incomeSourceGrounded",
             "totalIncomeArithmetic"
@@ -6392,7 +6510,9 @@
             "totalIncome = wageIncome + investmentIncome + otherIncome",
             "filingDate >= fiscalYearStart and filingDate <= fiscalYearEnd"
           ],
-          "x-wos": { "openStringKind": "fel" }
+          "x-wos": {
+            "openStringKind": "fel"
+          }
         },
         "fields": {
           "type": "array",
@@ -6405,7 +6525,9 @@
               "employerName",
               "filingDate"
             ],
-            "x-wos": { "openStringKind": "pathExpression" }
+            "x-wos": {
+              "openStringKind": "pathExpression"
+            }
           },
           "description": "Field paths subject to this assertion. Used with source-grounded and consistency types to declare which data fields must be checked.",
           "examples": [
@@ -6428,7 +6550,9 @@
             "extract",
             "normalize"
           ],
-          "x-wos": { "openStringKind": "identifier" }
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "description": {
           "type": "string",
@@ -6438,7 +6562,9 @@
             "Extracted income values must appear in the source pay stub document",
             "Total income must equal the sum of wage, investment, and other income components"
           ],
-          "x-wos": { "openStringKind": "prose" }
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         },
         "rejectionPolicy": {
           "type": "string",
@@ -6462,7 +6588,7 @@
         "assertionRef"
       ],
       "additionalProperties": false,
-      "description": "Cross-document reference to an assertion declared in a published WOS Assertion Gate Library sidecar. Use this shape when a pipeline stage wants to inherit a library-defined assertion body rather than inlining one. See specs/governance/assertion-library.md §Cross-Document Reference Protocol for resolution semantics, including rejection of unresolvable refs, conflicting `id` declarations, and hybrid inline+ref bodies.",
+      "description": "Cross-document reference to an assertion declared in a published WOS Assertion Gate Library sidecar. Use this shape when a pipeline stage wants to inherit a library-defined assertion body rather than inlining one. See specs/governance/assertion-library.md \u00a7Cross-Document Reference Protocol for resolution semantics, including rejection of unresolvable refs, conflicting `id` declarations, and hybrid inline+ref bodies.",
       "examples": [
         {
           "assertionRef": "https://agency.gov/assertion-libraries/income-verification#incomeSourceGrounded"
@@ -6485,12 +6611,14 @@
             "critical": true,
             "intent": "Cross-document reference URI into a published Assertion Gate Library"
           },
-          "x-wos": { "openStringKind": "uri" }
+          "x-wos": {
+            "openStringKind": "uri"
+          }
         }
       }
     },
     "AssertionUse": {
-      "description": "The shape a pipeline stage item takes when it declares or references an assertion gate. Either an inline assertion body (mirroring AssertionDefinition minus the library-only `id` requirement) OR a single-key reference ({ assertionRef }). Mixing inline body fields with `assertionRef` MUST be rejected as a configuration error — the two shapes are mutually exclusive (see assertion-library.md §Cross-Document Reference Protocol for rationale). Consumers (e.g. wos-workflow-governance PipelineStage.assertions[]) SHOULD $ref this $def to share one canonical inline-vs-reference seam.",
+      "description": "The shape a pipeline stage item takes when it declares or references an assertion gate. Either an inline assertion body (mirroring AssertionDefinition minus the library-only `id` requirement) OR a single-key reference ({ assertionRef }). Mixing inline body fields with `assertionRef` MUST be rejected as a configuration error \u2014 the two shapes are mutually exclusive (see assertion-library.md \u00a7Cross-Document Reference Protocol for rationale). Consumers (e.g. wos-workflow-governance PipelineStage.assertions[]) SHOULD $ref this $def to share one canonical inline-vs-reference seam.",
       "examples": [
         {
           "type": "arithmetic",
@@ -6517,11 +6645,11 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
-      "description": "Inline assertion body carried directly on a pipeline stage. Mirrors AssertionDefinition but omits the library-only `id` requirement and forbids `assertionRef` (mixing is a configuration error). An optional `assertionId` names this inline assertion so downstream tooling can treat it identically to a library-resolved body; when set, `assertionId` MUST match `^[a-zA-Z][a-zA-Z0-9_-]*$` and — if the body is also published in a library under the same key — MUST equal the library `id`.",
+      "description": "Inline assertion body carried directly on a pipeline stage. Mirrors AssertionDefinition but omits the library-only `id` requirement and forbids `assertionRef` (mixing is a configuration error). An optional `assertionId` names this inline assertion so downstream tooling can treat it identically to a library-resolved body; when set, `assertionId` MUST match `^[a-zA-Z][a-zA-Z0-9_-]*$` and \u2014 if the body is also published in a library under the same key \u2014 MUST equal the library `id`.",
       "examples": [
         {
           "type": "arithmetic",
@@ -6542,7 +6670,7 @@
           "type": "string",
           "minLength": 1,
           "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$",
-          "description": "Optional stable identifier for this inline assertion, letting callers correlate it with a library entry and making audit logs stable across inline/reference rewrites. MUST match `^[a-zA-Z][a-zA-Z0-9_-]*$`; processors MUST reject a mismatched library `id` as a configuration error at load time (see assertion-library.md §Cross-Document Reference Protocol).",
+          "description": "Optional stable identifier for this inline assertion, letting callers correlate it with a library entry and making audit logs stable across inline/reference rewrites. MUST match `^[a-zA-Z][a-zA-Z0-9_-]*$`; processors MUST reject a mismatched library `id` as a configuration error at load time (see assertion-library.md \u00a7Cross-Document Reference Protocol).",
           "examples": [
             "wageSourceGrounded",
             "totalIncomeArithmetic"
@@ -6574,7 +6702,9 @@
             "Extracted income values must appear in the source pay stub document",
             "Total income must equal the sum of wage, investment, and other income components"
           ],
-          "x-wos": { "openStringKind": "prose" }
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         },
         "expression": {
           "type": "string",
@@ -6584,7 +6714,9 @@
             "totalIncome = wageIncome + investmentIncome + otherIncome",
             "filingDate >= fiscalYearStart and filingDate <= fiscalYearEnd"
           ],
-          "x-wos": { "openStringKind": "fel" }
+          "x-wos": {
+            "openStringKind": "fel"
+          }
         },
         "fields": {
           "type": "array",
@@ -6596,7 +6728,9 @@
               "applicantIncome",
               "employerName"
             ],
-            "x-wos": { "openStringKind": "pathExpression" }
+            "x-wos": {
+              "openStringKind": "pathExpression"
+            }
           },
           "description": "Field paths subject to this assertion. Used with source-grounded and consistency types to declare which data fields must be checked.",
           "examples": [
@@ -6618,7 +6752,9 @@
             "extract",
             "normalize"
           ],
-          "x-wos": { "openStringKind": "identifier" }
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "rejectionPolicy": {
           "type": "string",
@@ -6638,7 +6774,7 @@
     },
     "ExtensionsMap": {
       "type": "object",
-      "description": "Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.",
+      "description": "Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel \u00a710.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained \u2014 any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.",
       "examples": [
         {
           "x-acme-audit-ref": "AUD-2026-001"
@@ -6657,7 +6793,7 @@
       "type": "string",
       "format": "uri",
       "minLength": 1,
-      "description": "Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosWorkflow': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.",
+      "description": "Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosWorkflow': '1.0'). Used for author-time tooling only \u2014 runtime processors MUST ignore this field.",
       "examples": [
         "https://wos-spec.org/schemas/wos-workflow.schema.json",
         "https://wos-spec.org/schemas/sidecars/wos-delivery.schema.json"
@@ -6670,7 +6806,7 @@
       "type": "object",
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -6696,7 +6832,7 @@
       "type": "object",
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -6794,7 +6930,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -6875,14 +7011,14 @@
         "continuationPolicyRef": {
           "type": "string",
           "minLength": 1,
-          "description": "Reference to a `ContinuationPolicy.id` declared in the targeted Due Process Config sidecar (Governance §3.6). When present AND `continuationOfServices` is true, the named policy's `scope` + `duration` define exactly what services are maintained and for how long — replacing the looser `continuationScope` string. The processor MUST resolve the ref against ContinuationPolicy entries in any Due Process Config sidecar targeting this governance document; an unresolvable ref MUST emit a configuration warning in provenance and fall back to `continuationScope` if present.",
+          "description": "Reference to a `ContinuationPolicy.id` declared in the targeted Due Process Config sidecar (Governance \u00a73.6). When present AND `continuationOfServices` is true, the named policy's `scope` + `duration` define exactly what services are maintained and for how long \u2014 replacing the looser `continuationScope` string. The processor MUST resolve the ref against ContinuationPolicy entries in any Due Process Config sidecar targeting this governance document; an unresolvable ref MUST emit a configuration warning in provenance and fall back to `continuationScope` if present.",
           "examples": [
             "benefitTerminationContinuation",
             "benefitReductionContinuation"
           ],
           "x-lm": {
             "critical": true,
-            "intent": "Resolves continuationOfServices to a typed ContinuationPolicy by id — replaces the loose continuationScope string when present"
+            "intent": "Resolves continuationOfServices to a typed ContinuationPolicy by id \u2014 replaces the loose continuationScope string when present"
           },
           "x-wos": {
             "openStringKind": "identifier"
@@ -6895,7 +7031,7 @@
             "reducedLevel",
             "emergencyOnly"
           ],
-          "description": "Scope of services maintained during the appeal window. Determines what the individual continues to receive while their appeal is pending. Values mirror `ContinuationPolicy.scope` in the Due Process Config sidecar — the loose string fallback resolves to the same vocabulary as the typed `continuationPolicyRef` target. `currentLevel`: maintain services at their pre-decision level. `reducedLevel`: maintain at a reduced but non-zero level. `emergencyOnly`: maintain only emergency-tier services. Used as a fallback when `continuationPolicyRef` is absent or unresolvable (Governance §3.6).",
+          "description": "Scope of services maintained during the appeal window. Determines what the individual continues to receive while their appeal is pending. Values mirror `ContinuationPolicy.scope` in the Due Process Config sidecar \u2014 the loose string fallback resolves to the same vocabulary as the typed `continuationPolicyRef` target. `currentLevel`: maintain services at their pre-decision level. `reducedLevel`: maintain at a reduced but non-zero level. `emergencyOnly`: maintain only emergency-tier services. Used as a fallback when `continuationPolicyRef` is absent or unresolvable (Governance \u00a73.6).",
           "examples": [
             "currentLevel",
             "reducedLevel",
@@ -6912,7 +7048,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -7027,7 +7163,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -7074,7 +7210,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -7167,7 +7303,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -7202,7 +7338,9 @@
             "Extracted income values must appear in the source pay stub",
             "Total income must equal the sum of wage, investment, and other income components"
           ],
-          "x-wos": { "openStringKind": "prose" }
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         },
         "expression": {
           "type": "string",
@@ -7212,7 +7350,9 @@
             "totalIncome = wageIncome + investmentIncome + otherIncome",
             "filingDate >= fiscalYearStart and filingDate <= fiscalYearEnd"
           ],
-          "x-wos": { "openStringKind": "fel" }
+          "x-wos": {
+            "openStringKind": "fel"
+          }
         },
         "fields": {
           "type": "array",
@@ -7225,7 +7365,9 @@
               "employerName",
               "filingDate"
             ],
-            "x-wos": { "openStringKind": "pathExpression" }
+            "x-wos": {
+              "openStringKind": "pathExpression"
+            }
           },
           "description": "Field paths subject to this assertion. Used with source-grounded and consistency types to declare which data fields must be checked.",
           "examples": [
@@ -7247,7 +7389,9 @@
           "examples": [
             "extract"
           ],
-          "x-wos": { "openStringKind": "identifier" }
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "rejectionPolicy": {
           "type": "string",
@@ -7269,7 +7413,7 @@
       "type": "object",
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -7288,7 +7432,7 @@
       "type": "object",
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -7327,7 +7471,7 @@
       "type": "object",
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -7354,7 +7498,7 @@
         "requireProtectedCharacteristics": {
           "type": "boolean",
           "default": true,
-          "description": "When true, negative counterfactuals MUST explicitly address protected characteristics — confirming the decision is independent of any protected class (Governance S6.4).",
+          "description": "When true, negative counterfactuals MUST explicitly address protected characteristics \u2014 confirming the decision is independent of any protected class (Governance S6.4).",
           "examples": [
             true,
             false
@@ -7366,7 +7510,7 @@
       "type": "object",
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -7392,7 +7536,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -7443,7 +7587,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -7492,7 +7636,7 @@
       "description": "Policy controlling what an override action MUST capture (Governance S7.3). The corresponding runtime record shape is defined by `OverrideRecord` in this schema; processors emit one OverrideRecord per accepted override as immutable provenance.",
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -7527,9 +7671,9 @@
       }
     },
     "OverrideRecord": {
-      "$comment": "This $def is intentionally unreachable from the document root. It is a shape-catalog entry: processors and provenance writers consume it out-of-band when serializing override events to the audit log. There is no top-level `overrideRecords` array in this schema by design — overrides are runtime data, not authoring inputs. The 1:1 mapping to OverrideAuthority policy switches is documented in the description and enforced by processors, not by JSON Schema. See thoughts/plans/ for any future work that would plumb this into a typed provenance container.",
+      "$comment": "This $def is intentionally unreachable from the document root. It is a shape-catalog entry: processors and provenance writers consume it out-of-band when serializing override events to the audit log. There is no top-level `overrideRecords` array in this schema by design \u2014 overrides are runtime data, not authoring inputs. The 1:1 mapping to OverrideAuthority policy switches is documented in the description and enforced by processors, not by JSON Schema. See thoughts/plans/ for any future work that would plumb this into a typed provenance container.",
       "type": "object",
-      "description": "Typed runtime record emitted whenever a reviewer overrides a prior decision (Governance S7.3). One OverrideRecord is appended to provenance per accepted override; records are immutable. This $def is the normative shape processors MUST conform to when serializing override events. The three required fields correspond directly to the three OverrideAuthority policy switches: `requireStructuredRationale` → `rationale`, `requireAuthorityVerification` → `authorityVerification`, and `requireSupportingEvidence` → `supportingEvidence` (when the policy switch is true the field MUST be non-empty; when false the field MAY be omitted). `id` and `caseId` carry the custody-bound record and case identifiers pinned by the WOS-Trellis append surface.",
+      "description": "Typed runtime record emitted whenever a reviewer overrides a prior decision (Governance S7.3). One OverrideRecord is appended to provenance per accepted override; records are immutable. This $def is the normative shape processors MUST conform to when serializing override events. The three required fields correspond directly to the three OverrideAuthority policy switches: `requireStructuredRationale` \u2192 `rationale`, `requireAuthorityVerification` \u2192 `authorityVerification`, and `requireSupportingEvidence` \u2192 `supportingEvidence` (when the policy switch is true the field MUST be non-empty; when false the field MAY be omitted). `id` and `caseId` carry the custody-bound record and case identifiers pinned by the WOS-Trellis append surface.",
       "required": [
         "id",
         "caseId",
@@ -7539,7 +7683,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -7564,13 +7708,13 @@
         },
         "rationale": {
           "type": "object",
-          "description": "Structured rationale explaining the basis for the override (Governance S7.3 item 1). The rationale MUST be human-readable and MAY cite regulatory authorities, prior cases, or factual findings. The shape is intentionally permissive — agencies declare their own rationale fields under `extensions` — but `summary` is REQUIRED so the audit trail always carries a one-line explanation.",
+          "description": "Structured rationale explaining the basis for the override (Governance S7.3 item 1). The rationale MUST be human-readable and MAY cite regulatory authorities, prior cases, or factual findings. The shape is intentionally permissive \u2014 agencies declare their own rationale fields under `extensions` \u2014 but `summary` is REQUIRED so the audit trail always carries a one-line explanation.",
           "required": [
             "summary"
           ],
           "patternProperties": {
             "^x-": {
-              "$comment": "Vendor extensions per Kernel spec §10.6"
+              "$comment": "Vendor extensions per Kernel spec \u00a710.6"
             }
           },
           "additionalProperties": false,
@@ -7624,7 +7768,7 @@
           ],
           "patternProperties": {
             "^x-": {
-              "$comment": "Vendor extensions per Kernel spec §10.6"
+              "$comment": "Vendor extensions per Kernel spec \u00a710.6"
             }
           },
           "additionalProperties": false,
@@ -7632,7 +7776,7 @@
             "actorId": {
               "type": "string",
               "minLength": 1,
-              "description": "Identifier of the actor whose authority was verified — the actor issuing the override.",
+              "description": "Identifier of the actor whose authority was verified \u2014 the actor issuing the override.",
               "examples": [
                 "reviewer-alice",
                 "supervisor-007"
@@ -7694,7 +7838,7 @@
         "overriddenDecisionRef": {
           "type": "string",
           "minLength": 1,
-          "description": "Pointer to the prior decision being overridden — typically a provenance record id or case-file path. Optional but strongly recommended so the audit trail can reconstruct the override chain.",
+          "description": "Pointer to the prior decision being overridden \u2014 typically a provenance record id or case-file path. Optional but strongly recommended so the audit trail can reconstruct the override chain.",
           "examples": [
             "provenance/2026-03-14T09:11:00Z/Determination#42"
           ],
@@ -7705,7 +7849,7 @@
         "newDeterminationRef": {
           "type": "string",
           "minLength": 1,
-          "description": "Pointer to the new determination produced by the override — typically a provenance record id. Auditors use this together with `overriddenDecisionRef` to reconstruct the override chain.",
+          "description": "Pointer to the new determination produced by the override \u2014 typically a provenance record id. Auditors use this together with `overriddenDecisionRef` to reconstruct the override chain.",
           "examples": [
             "provenance/2026-03-14T15:42:00Z/Determination#88"
           ],
@@ -7738,7 +7882,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -7801,7 +7945,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -7859,21 +8003,21 @@
         },
         "slaDefinitions": {
           "type": "array",
-          "description": "Named SLA windows declared against this task pattern. Each entry binds an expected duration to a start trigger and a calendar; multiple entries MAY coexist (e.g. a `firstResponse` SLA plus an end-to-end `fullResolution` SLA). Processor obligations for warning emission, breach handling, and escalation are specified in Runtime Companion §10.3.",
+          "description": "Named SLA windows declared against this task pattern. Each entry binds an expected duration to a start trigger and a calendar; multiple entries MAY coexist (e.g. a `firstResponse` SLA plus an end-to-end `fullResolution` SLA). Processor obligations for warning emission, breach handling, and escalation are specified in Runtime Companion \u00a710.3.",
           "items": {
             "$ref": "#/$defs/SlaDefinition"
           }
         },
         "warningThresholds": {
           "type": "array",
-          "description": "Escalating pre-breach alerts for this task pattern. Each threshold fires a notification `beforeBreach` of any matching `slaDefinitions` entry using `templateKey`, routed to the `notify` actors. Ordered independently of breach policy; the processor evaluates every threshold (Runtime Companion §10.3).",
+          "description": "Escalating pre-breach alerts for this task pattern. Each threshold fires a notification `beforeBreach` of any matching `slaDefinitions` entry using `templateKey`, routed to the `notify` actors. Ordered independently of breach policy; the processor evaluates every threshold (Runtime Companion \u00a710.3).",
           "items": {
             "$ref": "#/$defs/WarningThreshold"
           }
         },
         "breachPolicy": {
           "$ref": "#/$defs/BreachPolicy",
-          "description": "Action the processor MUST take when an `slaDefinitions` entry's expected duration elapses without task completion. Composes with `warningThresholds` (pre-breach) and `escalationChain` (post-breach). See Governance §10.3 and Runtime Companion §10.3."
+          "description": "Action the processor MUST take when an `slaDefinitions` entry's expected duration elapses without task completion. Composes with `warningThresholds` (pre-breach) and `escalationChain` (post-breach). See Governance \u00a710.3 and Runtime Companion \u00a710.3."
         },
         "escalationChain": {
           "type": "array",
@@ -7894,7 +8038,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -7927,7 +8071,7 @@
             "wall-clock",
             "business"
           ],
-          "description": "Calendar used when evaluating `expectedDuration`. `wall-clock` advances continuously; `business` advances only during calendar-declared business hours and requires a resolvable `calendarRef` (Runtime Companion §10.3, lint G-023).",
+          "description": "Calendar used when evaluating `expectedDuration`. `wall-clock` advances continuously; `business` advances only during calendar-declared business hours and requires a resolvable `calendarRef` (Runtime Companion \u00a710.3, lint G-023).",
           "examples": [
             "wall-clock",
             "business"
@@ -7953,7 +8097,7 @@
             "activation",
             "custom-event"
           ],
-          "description": "Point in the task lifecycle from which `expectedDuration` is measured. `assignment` = when the task enters state `assigned` (Governance §10.1); `activation` = when a `claimed`/`created` task becomes actionable; `custom-event` = a kernel event named in `startEvent` (required when `startAt` = `custom-event`).",
+          "description": "Point in the task lifecycle from which `expectedDuration` is measured. `assignment` = when the task enters state `assigned` (Governance \u00a710.1); `activation` = when a `claimed`/`created` task becomes actionable; `custom-event` = a kernel event named in `startEvent` (required when `startAt` = `custom-event`).",
           "examples": [
             "assignment",
             "custom-event"
@@ -7963,7 +8107,7 @@
           "type": "string",
           "minLength": 1,
           "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$",
-          "description": "Kernel event name that starts the SLA clock when `startAt` = `custom-event`. MUST match the kernel event-name grammar `^[a-zA-Z][a-zA-Z0-9_-]*$`, which rejects empty strings, whitespace, and any `$`-prefixed kernel-reserved names (for example `$join`, `$timeout.*`, or internal dispatch labels such as `$postMutationRescan`) — those are not valid clock origins. Event-name resolution against the target kernel is enforced by lint G-029.",
+          "description": "Kernel event name that starts the SLA clock when `startAt` = `custom-event`. MUST match the kernel event-name grammar `^[a-zA-Z][a-zA-Z0-9_-]*$`, which rejects empty strings, whitespace, and any `$`-prefixed kernel-reserved names (for example `$join`, `$timeout.*`, or internal dispatch labels such as `$postMutationRescan`) \u2014 those are not valid clock origins. Event-name resolution against the target kernel is enforced by lint G-029.",
           "examples": [
             "applicantResponseReceived",
             "caseReadyForReview"
@@ -7995,7 +8139,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -8003,7 +8147,7 @@
         "beforeBreach": {
           "type": "string",
           "pattern": "^P(?:\\d+BD|(?!$)(?:\\d+Y)?(?:\\d+M)?(?:\\d+W)?(?:\\d+D)?(?:T(?=\\d)(?:\\d+H)?(?:\\d+M)?(?:\\d+S)?)?)$",
-          "description": "Lead time, as an ISO 8601 duration, before any matching `slaDefinitions.expectedDuration` elapses at which this warning fires. Multiple thresholds MAY declare escalating lead times (e.g. `P2D`, `PT4H`, `PT30M`); the processor fires each independently (Runtime Companion §10.3).",
+          "description": "Lead time, as an ISO 8601 duration, before any matching `slaDefinitions.expectedDuration` elapses at which this warning fires. Multiple thresholds MAY declare escalating lead times (e.g. `P2D`, `PT4H`, `PT30M`); the processor fires each independently (Runtime Companion \u00a710.3).",
           "examples": [
             "P2D",
             "PT4H",
@@ -8028,7 +8172,7 @@
           "items": {
             "type": "string",
             "minLength": 1,
-            "description": "Actor identifier (role or individual) receiving the rendered warning notification. Resolved against the kernel actor registry per Governance §10.2 / §11.",
+            "description": "Actor identifier (role or individual) receiving the rendered warning notification. Resolved against the kernel actor registry per Governance \u00a710.2 / \u00a711.",
             "examples": [
               "taskOwner",
               "caseSupervisor"
@@ -8037,7 +8181,7 @@
               "openStringKind": "identifier"
             }
           },
-          "description": "Actor identifiers (roles or individuals) that receive the rendered warning. Actor resolution follows the same rules as Delegation and task assignment (Governance §11, §10.2).",
+          "description": "Actor identifiers (roles or individuals) that receive the rendered warning. Actor resolution follows the same rules as Delegation and task assignment (Governance \u00a711, \u00a710.2).",
           "examples": [
             [
               "taskOwner",
@@ -8057,7 +8201,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -8070,7 +8214,7 @@
             "autoReassign",
             "fail"
           ],
-          "description": "Processor action when an `slaDefinitions` entry's expected duration elapses without completion. `notify`: notify responsible actors, no state change. `escalate`: advance through `escalationChain`. `autoReassign`: rotate to another potentialOwner. `fail`: transition task to `failed` and trigger rejection policy (Governance §10.3, Runtime Companion §10.3).",
+          "description": "Processor action when an `slaDefinitions` entry's expected duration elapses without completion. `notify`: notify responsible actors, no state change. `escalate`: advance through `escalationChain`. `autoReassign`: rotate to another potentialOwner. `fail`: transition task to `failed` and trigger rejection policy (Governance \u00a710.3, Runtime Companion \u00a710.3).",
           "examples": [
             "escalate",
             "autoReassign"
@@ -8119,7 +8263,7 @@
                 "fail",
                 "continue"
               ],
-              "description": "Processor behaviour when a task pattern accumulates repeated SLA breaches. `suspend`: suspend the task. `fail`: transition to `failed` and invoke rejection policy. `continue`: keep escalating without state change (Runtime Companion §10.3).",
+              "description": "Processor behaviour when a task pattern accumulates repeated SLA breaches. `suspend`: suspend the task. `fail`: transition to `failed` and invoke rejection policy. `continue`: keep escalating without state change (Runtime Companion \u00a710.3).",
               "examples": [
                 "suspend",
                 "fail"
@@ -8139,7 +8283,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -8157,7 +8301,7 @@
         "level": {
           "type": "integer",
           "minimum": 1,
-          "description": "Ordered position of this step in the escalation ladder. Levels SHOULD be contiguous starting at 1; the processor walks them in ascending order until the task clears, is failed, or a ticket is created (Governance §10.3).",
+          "description": "Ordered position of this step in the escalation ladder. Levels SHOULD be contiguous starting at 1; the processor walks them in ascending order until the task clears, is failed, or a ticket is created (Governance \u00a710.3).",
           "examples": [
             1,
             2
@@ -8166,7 +8310,7 @@
         "assignTo": {
           "type": "string",
           "minLength": 1,
-          "description": "Actor identifier (role or individual) the task reassigns to when this escalation level fires. Actor resolution follows Governance §10.2 / §11; the processor creates a delegated task in provenance.",
+          "description": "Actor identifier (role or individual) the task reassigns to when this escalation level fires. Actor resolution follows Governance \u00a710.2 / \u00a711; the processor creates a delegated task in provenance.",
           "examples": [
             "teamLead",
             "divisionDirector"
@@ -8211,7 +8355,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -8229,7 +8373,9 @@
             "directorToCaseworker",
             "commissionerToDirector"
           ],
-          "x-wos": { "openStringKind": "identifier" }
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "delegator": {
           "type": "string",
@@ -8239,7 +8385,9 @@
             "divisionDirector",
             "commissioner"
           ],
-          "x-wos": { "openStringKind": "identifier" }
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "delegate": {
           "type": "string",
@@ -8249,7 +8397,9 @@
             "seniorCaseworker",
             "divisionDirector"
           ],
-          "x-wos": { "openStringKind": "identifier" }
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "scope": {
           "$ref": "#/$defs/DelegationScope",
@@ -8281,7 +8431,9 @@
             "Delegation Order 2026-003",
             "42 USC 1396a(a)(5)"
           ],
-          "x-wos": { "openStringKind": "prose" }
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         },
         "effectiveDate": {
           "type": "string",
@@ -8292,7 +8444,9 @@
             "2026-01-01",
             "2025-07-01"
           ],
-          "x-wos": { "openStringKind": "timestamp" }
+          "x-wos": {
+            "openStringKind": "timestamp"
+          }
         },
         "expirationDate": {
           "type": "string",
@@ -8303,7 +8457,9 @@
             "2026-12-31",
             "2027-06-30"
           ],
-          "x-wos": { "openStringKind": "timestamp" }
+          "x-wos": {
+            "openStringKind": "timestamp"
+          }
         },
         "revocable": {
           "type": "boolean",
@@ -8323,7 +8479,9 @@
             "2026-03-15",
             "2025-11-01"
           ],
-          "x-wos": { "openStringKind": "timestamp" }
+          "x-wos": {
+            "openStringKind": "timestamp"
+          }
         },
         "allowsSubDelegation": {
           "type": "boolean",
@@ -8354,7 +8512,9 @@
               "deputyCommissioner",
               "chiefCounsel"
             ],
-            "x-wos": { "openStringKind": "identifier" }
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
           },
           "description": "Eligible authority principal IDs forming the quorum pool (S4.9). Required when quorumCount is set.",
           "examples": [
@@ -8375,7 +8535,7 @@
       "type": "object",
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -8419,7 +8579,9 @@
               "renewal",
               "emergency-request"
             ],
-            "x-wos": { "openStringKind": "identifier" }
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
           },
           "description": "Case types this delegation covers. The delegate may only exercise authority for cases of these types.",
           "examples": [
@@ -8444,11 +8606,13 @@
         "conditions": {
           "type": "string",
           "minLength": 1,
-          "description": "FEL expression (Runtime Companion §8.2) that further narrows when the delegation applies. Evaluated against the evaluation context; the delegation is active only when this expression evaluates to true. Same FEL evaluation contract as `DueProcess.scope`, `ReviewProtocolBinding.scope`, and `HoldPolicy.scope`.",
+          "description": "FEL expression (Runtime Companion \u00a78.2) that further narrows when the delegation applies. Evaluated against the evaluation context; the delegation is active only when this expression evaluates to true. Same FEL evaluation contract as `DueProcess.scope`, `ReviewProtocolBinding.scope`, and `HoldPolicy.scope`.",
           "examples": [
             "caseFile.programType = 'supplemental'"
           ],
-          "x-wos": { "openStringKind": "fel" }
+          "x-wos": {
+            "openStringKind": "fel"
+          }
         }
       }
     },
@@ -8460,7 +8624,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -8528,7 +8692,7 @@
         "resumeTrigger": {
           "type": "string",
           "minLength": 1,
-          "description": "Event name that resumes the case from this hold. The processor listens for this event and resumes the case when it fires — this is NOT a FEL condition polled on a schedule (Governance S12.1).",
+          "description": "Event name that resumes the case from this hold. The processor listens for this event and resumes the case when it fires \u2014 this is NOT a FEL condition polled on a schedule (Governance S12.1).",
           "examples": [
             "applicantResponse",
             "verificationComplete",
@@ -8583,8 +8747,8 @@
           "minLength": 1,
           "description": "Human-readable description of this hold policy and its regulatory or procedural basis. Used in tooling and audit documentation.",
           "examples": [
-            "Hold pending applicant response to information request — 30-day window per APA 5 USC 554.",
-            "Legal hold — no event-based resume; survives terminal workflow states and blocks data retention expiry."
+            "Hold pending applicant response to information request \u2014 30-day window per APA 5 USC 554.",
+            "Legal hold \u2014 no event-based resume; survives terminal workflow states and blocks data retention expiry."
           ],
           "x-wos": {
             "openStringKind": "prose"
@@ -8599,7 +8763,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -8652,8 +8816,8 @@
           "minLength": 1,
           "description": "Formal citation to the authoritative source document for this rule, in standard legal citation format.",
           "examples": [
-            "42 CFR § 435.916",
-            "OMB M-24-10 §3.1"
+            "42 CFR \u00a7 435.916",
+            "OMB M-24-10 \u00a73.1"
           ],
           "x-wos": {
             "openStringKind": "prose"
@@ -8663,7 +8827,7 @@
     },
     "TransitionEventTimer": {
       "type": "object",
-      "description": "Typed transition event branch for durable timer correlation and synthesized $timeout.* runtime delivery (Kernel §4.5, §4.9.10). Authors pair timerId with startTimer actions and select source for the fixed timeout prefix family.",
+      "description": "Typed transition event branch for durable timer correlation and synthesized $timeout.* runtime delivery (Kernel \u00a74.5, \u00a74.9.10). Authors pair timerId with startTimer actions and select source for the fixed timeout prefix family.",
       "additionalProperties": false,
       "required": [
         "kind",
@@ -8677,7 +8841,7 @@
         "timerId": {
           "type": "string",
           "minLength": 1,
-          "description": "Timer correlation identifier within the workflow instance (Kernel §9.2, §9.7). Paired with startTimer and cancelTimer actions. Together with source and optional firesAs it determines which process_event string the runtime delivers when the timer elapses; authors SHOULD reuse the same timerId on the matching startTimer action.",
+          "description": "Timer correlation identifier within the workflow instance (Kernel \u00a79.2, \u00a79.7). Paired with startTimer and cancelTimer actions. Together with source and optional firesAs it determines which process_event string the runtime delivers when the timer elapses; authors SHOULD reuse the same timerId on the matching startTimer action.",
           "examples": [
             "resubmitDeadline",
             "review-deadline",
@@ -8697,7 +8861,7 @@
             "workflow",
             "custom"
           ],
-          "description": "Kernel timer category used when synthesizing the $timeout.* process_event family when firesAs is absent (Kernel §4.9.10). task, service, state, signal, and workflow map to fixed prefixes; custom covers author-specific timer identifiers including dotted names.",
+          "description": "Kernel timer category used when synthesizing the $timeout.* process_event family when firesAs is absent (Kernel \u00a74.9.10). task, service, state, signal, and workflow map to fixed prefixes; custom covers author-specific timer identifiers including dotted names.",
           "examples": [
             "task",
             "custom",
@@ -8708,7 +8872,7 @@
           "type": "string",
           "format": "duration",
           "minLength": 1,
-          "description": "Optional relative ISO 8601 duration carried on timer-kind transition events for authoring parity with embedded timer shapes (Kernel §9.2). Mirrors startTimer duration when authors document the intended expiry window on the transition itself.",
+          "description": "Optional relative ISO 8601 duration carried on timer-kind transition events for authoring parity with embedded timer shapes (Kernel \u00a79.2). Mirrors startTimer duration when authors document the intended expiry window on the transition itself.",
           "examples": [
             "P30D",
             "PT4H",
@@ -8722,7 +8886,7 @@
           "type": "string",
           "format": "date-time",
           "minLength": 1,
-          "description": "Optional absolute deadline as RFC 3339 date-time for timer-kind transition events when modeling fixed clock firing instead of relative duration semantics alone (Kernel §9.2).",
+          "description": "Optional absolute deadline as RFC 3339 date-time for timer-kind transition events when modeling fixed clock firing instead of relative duration semantics alone (Kernel \u00a79.2).",
           "examples": [
             "2026-12-31T23:59:59Z",
             "2027-01-15T12:00:00-05:00"
@@ -8734,7 +8898,7 @@
         "firesAs": {
           "type": "string",
           "minLength": 1,
-          "description": "Exact process_event string emitted when this timer elapses, overriding default $timeout.* synthesis from timerId and source (Kernel §4.9.10). Use for dotted author timer names such as resubmitExpired instead of the synthesized prefix form.",
+          "description": "Exact process_event string emitted when this timer elapses, overriding default $timeout.* synthesis from timerId and source (Kernel \u00a74.9.10). Use for dotted author timer names such as resubmitExpired instead of the synthesized prefix form.",
           "examples": [
             "resubmitExpired",
             "deadline.exceeded",
@@ -8748,7 +8912,7 @@
     },
     "TransitionEventMessage": {
       "type": "object",
-      "description": "Typed transition event branch for author-defined message names delivered through process_event (Kernel §4.5). Message names MUST NOT use a leading $; reserved kernel prefixes use timer, signal, or error branches instead.",
+      "description": "Typed transition event branch for author-defined message names delivered through process_event (Kernel \u00a74.5). Message names MUST NOT use a leading $; reserved kernel prefixes use timer, signal, or error branches instead.",
       "additionalProperties": false,
       "required": [
         "kind",
@@ -8762,7 +8926,7 @@
           "type": "string",
           "minLength": 1,
           "pattern": "^[^$]",
-          "description": "Author-defined message event name for explicit process_event delivery (Kernel §4.5). MUST NOT begin with `$` because reserved kernel prefixes are modeled as other TransitionEvent kinds. Dots are permitted as an informal namespacing convention.",
+          "description": "Author-defined message event name for explicit process_event delivery (Kernel \u00a74.5). MUST NOT begin with `$` because reserved kernel prefixes are modeled as other TransitionEvent kinds. Dots are permitted as an informal namespacing convention.",
           "examples": [
             "applicationComplete",
             "applicant.submitted",
@@ -8772,7 +8936,7 @@
         "correlationKey": {
           "type": "string",
           "minLength": 1,
-          "description": "Optional correlation key for matching async external callbacks to the originating workflow transition (Kernel §4.5, §9.4). Integration profiles surface this through CloudEvents attributes such as woscorrelationkey for callback routing and deduplication.",
+          "description": "Optional correlation key for matching async external callbacks to the originating workflow transition (Kernel \u00a74.5, \u00a79.4). Integration profiles surface this through CloudEvents attributes such as woscorrelationkey for callback routing and deduplication.",
           "examples": [
             "caseId",
             "submissionId",
@@ -8784,7 +8948,7 @@
         },
         "data": {
           "type": "object",
-          "description": "Optional opaque JSON payload carried with the message event for structured integration callbacks and author-defined event contracts (Kernel §4.5 companion). Omitted when producers supply only the event name and correlation metadata is unnecessary.",
+          "description": "Optional opaque JSON payload carried with the message event for structured integration callbacks and author-defined event contracts (Kernel \u00a74.5 companion). Omitted when producers supply only the event name and correlation metadata is unnecessary.",
           "examples": [
             {
               "priority": "expedited"
@@ -8798,7 +8962,7 @@
     },
     "TransitionEventSignal": {
       "type": "object",
-      "description": "Typed transition event branch for signal delivery including kernel sentinels such as $join (Kernel §4.8) and $compensation.complete (LCD §5.9), plus author-defined signal names.",
+      "description": "Typed transition event branch for signal delivery including kernel sentinels such as $join (Kernel \u00a74.8) and $compensation.complete (LCD \u00a75.9), plus author-defined signal names.",
       "additionalProperties": false,
       "required": [
         "kind",
@@ -8812,7 +8976,7 @@
         "name": {
           "type": "string",
           "minLength": 1,
-          "description": "Signal name for lifecycle delivery, including kernel sentinels `$join` (Kernel §4.8) and `$compensation.complete` (LCD §5.9), plus author-defined identifiers. Unlike messages, leading `$` is permitted for kernel-reserved signal identifiers.",
+          "description": "Signal name for lifecycle delivery, including kernel sentinels `$join` (Kernel \u00a74.8) and `$compensation.complete` (LCD \u00a75.9), plus author-defined identifiers. Unlike messages, leading `$` is permitted for kernel-reserved signal identifiers.",
           "examples": [
             "$join",
             "approvalReceived",
@@ -8829,7 +8993,7 @@
             "related",
             "broadcast"
           ],
-          "description": "Delivery scope for signal-kind transition events (Kernel §4.9.10). instance targets the current workflow instance; related targets correlated companion cases; broadcast fans out to subscribed instances according to binding-specific subscription rules.",
+          "description": "Delivery scope for signal-kind transition events (Kernel \u00a74.9.10). instance targets the current workflow instance; related targets correlated companion cases; broadcast fans out to subscribed instances according to binding-specific subscription rules.",
           "examples": [
             "instance",
             "related",
@@ -8840,7 +9004,7 @@
     },
     "TransitionEventCondition": {
       "type": "object",
-      "description": "Typed transition event branch for continuous evaluation mode: FEL predicates that participate in post-mutation guard re-scan without an external process_event name (Kernel §12.3).",
+      "description": "Typed transition event branch for continuous evaluation mode: FEL predicates that participate in post-mutation guard re-scan without an external process_event name (Kernel \u00a712.3).",
       "additionalProperties": false,
       "required": [
         "kind",
@@ -8853,7 +9017,7 @@
         "expression": {
           "type": "string",
           "minLength": 1,
-          "description": "FEL predicate evaluated during continuous evaluation after case-file mutation so the transition competes in guard re-scan ordering without matching an external event name (Kernel §12.3).",
+          "description": "FEL predicate evaluated during continuous evaluation after case-file mutation so the transition competes in guard re-scan ordering without matching an external event name (Kernel \u00a712.3).",
           "examples": [
             "caseFile.application.isComplete = true",
             "caseFile.holdActive = false"
@@ -8866,7 +9030,7 @@
     },
     "TransitionEventError": {
       "type": "object",
-      "description": "Typed transition event branch for synthetic $error class dispatch: runtime process_event uses the literal $error while the typed code carries the discriminant (Kernel §4.5, §4.9.10).",
+      "description": "Typed transition event branch for synthetic $error class dispatch: runtime process_event uses the literal $error while the typed code carries the discriminant (Kernel \u00a74.5, \u00a74.9.10).",
       "additionalProperties": false,
       "required": [
         "kind",
@@ -8881,7 +9045,7 @@
           "minLength": 1,
           "pattern": "^[a-zA-Z][a-zA-Z0-9_.-]*$",
           "$comment": "Reserved finite enum + normative reserved-code table for `TransitionEventError.code` stay trigger-gated until the WG publishes the closed set; until then the pattern-shaped string (plus examples) is the conformance surface.",
-          "description": "Normative error code for synthetic `$error` class dispatch while the runtime boundary still receives the literal process_event name `$error` (Kernel §4.5, §4.9.10). Dot-separated codes align integration failures, contract violations, and processor faults.",
+          "description": "Normative error code for synthetic `$error` class dispatch while the runtime boundary still receives the literal process_event name `$error` (Kernel \u00a74.5, \u00a74.9.10). Dot-separated codes align integration failures, contract violations, and processor faults.",
           "examples": [
             "kernel.error",
             "wos.designer.unspecified",
@@ -8891,7 +9055,7 @@
         "actionPath": {
           "type": "string",
           "minLength": 1,
-          "description": "Optional JSON Pointer to the failing action when the runtime attaches structural context for diagnostics and recovery UX on error-kind transition events (Kernel §4.5). Omit when the error code alone suffices for routing and operator playbooks.",
+          "description": "Optional JSON Pointer to the failing action when the runtime attaches structural context for diagnostics and recovery UX on error-kind transition events (Kernel \u00a74.5). Omit when the error code alone suffices for routing and operator playbooks.",
           "examples": [
             "/lifecycle/states/intake/transitions/0/actions/0",
             "/onEntry/1"
@@ -9182,11 +9346,11 @@
           "items": {
             "type": "string",
             "minLength": 1,
-            "description": "Authoritative legal or policy reference that grounds this deontic constraint: resolvable IRI (regulation URL, URN) or conventional legal citation text (for example '42 CFR § 431.211') for reviewer traceability.",
+            "description": "Authoritative legal or policy reference that grounds this deontic constraint: resolvable IRI (regulation URL, URN) or conventional legal citation text (for example '42 CFR \u00a7 431.211') for reviewer traceability.",
             "examples": [
               "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-C/part-431",
               "urn:agency:memo:phe-extension-2023",
-              "42 CFR § 431.211"
+              "42 CFR \u00a7 431.211"
             ],
             "x-wos": {
               "openStringKind": "prose"
@@ -9234,34 +9398,54 @@
       "additionalProperties": false,
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "properties": {
         "initialState": {
           "type": "string",
-          "enum": ["active", "degraded", "suspended"],
+          "enum": [
+            "active",
+            "degraded",
+            "suspended"
+          ],
           "default": "active",
           "description": "Initial lifecycle state for agents entering this workflow. 'active': full operation at configured autonomy level. 'degraded': reduced autonomy capped at degradedAutonomyCap. 'suspended': all agent participation blocked pending review.",
-          "examples": ["active", "degraded"]
+          "examples": [
+            "active",
+            "degraded"
+          ]
         },
         "transitions": {
           "type": "array",
-          "items": { "$ref": "#/$defs/LifecycleTransition" },
+          "items": {
+            "$ref": "#/$defs/LifecycleTransition"
+          },
           "description": "Lifecycle transition triggers. When omitted, transitions are manual-only."
         },
         "degradedAutonomyCap": {
           "type": "string",
-          "enum": ["autonomous", "supervisory", "assistive", "manual"],
+          "enum": [
+            "autonomous",
+            "supervisory",
+            "assistive",
+            "manual"
+          ],
           "default": "assistive",
           "description": "Maximum autonomy level permitted when an agent is in the degraded lifecycle state. Overrides the task-level autonomy configuration. Default 'assistive' ensures human review of all outputs during degraded operation.",
-          "examples": ["assistive", "supervisory"]
+          "examples": [
+            "assistive",
+            "supervisory"
+          ]
         },
         "versionChangeNotification": {
           "type": "boolean",
           "default": true,
           "description": "Whether to notify suspensionNotifyRoles when the underlying model version changes.",
-          "examples": [true, false]
+          "examples": [
+            true,
+            false
+          ]
         },
         "suspensionNotifyRoles": {
           "type": "array",
@@ -9269,7 +9453,13 @@
             "type": "string",
             "minLength": 1,
             "description": "A WOS role identifier whose members are notified when an agent transitions to the suspended lifecycle state.",
-            "examples": ["systemAdministrator", "programDirector"]
+            "examples": [
+              "systemAdministrator",
+              "programDirector"
+            ],
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
           },
           "description": "Roles to notify when an agent is suspended."
         }
@@ -9280,27 +9470,44 @@
       "additionalProperties": false,
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "properties": {
         "method": {
           "type": "string",
-          "enum": ["plattScaling", "isotonic", "binning", "custom"],
+          "enum": [
+            "plattScaling",
+            "isotonic",
+            "binning",
+            "custom"
+          ],
           "default": "binning",
           "description": "Calibration method for aligning agent confidence scores with empirical accuracy (Advanced S9.2). 'plattScaling': logistic regression on scores. 'isotonic': non-parametric monotone regression. 'binning': histogram-based calibration. 'custom': implementation-defined.",
-          "examples": ["binning", "isotonic"]
+          "examples": [
+            "binning",
+            "isotonic"
+          ]
         },
         "minimumSamples": {
           "type": "integer",
           "minimum": 1,
           "description": "Minimum number of reviewed agent outputs required before a calibration run is considered statistically valid.",
-          "examples": [100, 50]
+          "examples": [
+            100,
+            50
+          ]
         },
         "retrainingFrequency": {
           "type": "string",
           "description": "How often to recalibrate confidence scores against accumulated reviewed outputs. ISO 8601 duration.",
-          "examples": ["P30D", "P14D"]
+          "examples": [
+            "P30D",
+            "P14D"
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         }
       }
     },
@@ -9309,24 +9516,29 @@
       "additionalProperties": false,
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "properties": {
         "methods": {
           "type": "array",
-          "items": { "$ref": "#/$defs/DriftMethod" },
+          "items": {
+            "$ref": "#/$defs/DriftMethod"
+          },
           "description": "Configured drift detection methods."
         }
       }
     },
     "DriftDimension": {
       "type": "object",
-      "required": ["field", "type"],
+      "required": [
+        "field",
+        "type"
+      ],
       "additionalProperties": false,
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "properties": {
@@ -9334,83 +9546,141 @@
           "type": "string",
           "minLength": 1,
           "description": "FEL path or field name in the agent's output whose distribution is monitored for drift.",
-          "examples": ["extractedIncome", "eligibilityRecommendation"]
+          "examples": [
+            "extractedIncome",
+            "eligibilityRecommendation"
+          ],
+          "x-wos": {
+            "openStringKind": "pathExpression"
+          }
         },
         "type": {
           "type": "string",
-          "enum": ["continuous", "categorical"],
+          "enum": [
+            "continuous",
+            "categorical"
+          ],
           "description": "Statistical type of this drift dimension. 'continuous': numeric values (use PSI or KS). 'categorical': enumerated values.",
-          "examples": ["continuous", "categorical"]
+          "examples": [
+            "continuous",
+            "categorical"
+          ]
         }
       }
     },
     "DriftMethod": {
       "type": "object",
-      "required": ["method"],
+      "required": [
+        "method"
+      ],
       "additionalProperties": false,
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "properties": {
         "method": {
           "type": "string",
-          "enum": ["psi", "ks", "chi2", "accuracy"],
+          "enum": [
+            "psi",
+            "ks",
+            "chi2",
+            "accuracy"
+          ],
           "description": "Statistical method for detecting drift in agent output distributions (Advanced S10.2). 'psi': Population Stability Index. 'ks': Kolmogorov-Smirnov test. 'chi2': chi-squared test. 'accuracy': track empirical accuracy against human decisions.",
-          "examples": ["psi", "accuracy"]
+          "examples": [
+            "psi",
+            "accuracy"
+          ]
         },
         "threshold": {
           "type": "number",
           "description": "Threshold value at which drift is considered significant. PSI > 0.2; KS p-value < 0.05; accuracy drop > 0.10.",
-          "examples": [0.2, 0.05]
+          "examples": [
+            0.2,
+            0.05
+          ]
         },
         "window": {
           "type": "string",
-          "description": "Evaluation window for drift statistics. ISO 8601 duration.",
-          "examples": ["P7D", "P30D"]
+          "description": "Evaluation window over which drift statistics are computed. ISO 8601 duration. Shorter windows detect rapid drift; longer windows smooth noise.",
+          "examples": [
+            "P7D",
+            "P30D"
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         },
         "dimensions": {
           "type": "array",
-          "items": { "$ref": "#/$defs/DriftDimension" }
+          "items": {
+            "$ref": "#/$defs/DriftDimension"
+          }
         }
       }
     },
     "LifecycleTransition": {
       "type": "object",
-      "required": ["name"],
+      "required": [
+        "name"
+      ],
       "additionalProperties": false,
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "properties": {
         "name": {
           "type": "string",
-          "enum": ["demote", "restore", "suspend", "resume", "retire"],
+          "enum": [
+            "demote",
+            "restore",
+            "suspend",
+            "resume",
+            "retire"
+          ],
           "description": "Lifecycle transition name (Advanced S7.2). 'demote': active to degraded. 'restore': degraded to active. 'suspend': any to suspended. 'resume': suspended to previous state. 'retire': any to retired (terminal).",
-          "examples": ["demote", "suspend"]
+          "examples": [
+            "demote",
+            "suspend"
+          ]
         },
         "trigger": {
           "type": "string",
           "description": "Condition expression that automatically triggers this lifecycle transition. FEL expression evaluated against agent metrics. When omitted, the transition is manual-only.",
-          "examples": ["confidence.overall < 0.7 for P7D", "errorRate > 0.15"]
+          "examples": [
+            "confidence.overall < 0.7 for P7D",
+            "errorRate > 0.15"
+          ],
+          "x-wos": {
+            "openStringKind": "fel"
+          }
         },
         "description": {
           "type": "string",
           "description": "Human-readable description of when and why this lifecycle transition fires.",
-          "examples": ["Sustained low confidence over 7 days triggers demotion to degraded state."]
+          "examples": [
+            "Sustained low confidence over 7 days triggers demotion to degraded state."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         }
       }
     },
     "MultiStepSession": {
       "type": "object",
-      "required": ["id", "steps"],
+      "required": [
+        "id",
+        "steps"
+      ],
       "additionalProperties": false,
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "properties": {
@@ -9418,34 +9688,63 @@
           "type": "string",
           "minLength": 1,
           "description": "Unique multi-step session identifier within this advanced governance document.",
-          "examples": ["evidenceAnalysis", "documentReview"]
+          "examples": [
+            "evidenceAnalysis",
+            "documentReview"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "description": {
           "type": "string",
           "description": "Human-readable description of what this multi-step session accomplishes.",
-          "examples": ["Multi-step session for analyzing an evidence package: inventories documents, extracts facts, cross-references against case data, and produces findings."]
+          "examples": [
+            "Multi-step session for analyzing an evidence package: inventories documents, extracts facts, cross-references against case data, and produces findings."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         },
         "maxSteps": {
           "type": "integer",
           "minimum": 1,
           "description": "Maximum number of steps the agent may execute in this session before it is forcibly terminated.",
-          "examples": [4, 10]
+          "examples": [
+            4,
+            10
+          ]
         },
         "maxDuration": {
           "type": "string",
           "description": "Maximum wall-clock duration for the entire session. ISO 8601 duration. The processor MUST terminate and record a timeout if exceeded.",
-          "examples": ["PT15M", "PT1H"]
+          "examples": [
+            "PT15M",
+            "PT1H"
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         },
         "checkpointPolicy": {
           "type": "string",
-          "enum": ["afterEachStep", "atInterventionPoints", "onDemand"],
+          "enum": [
+            "afterEachStep",
+            "atInterventionPoints",
+            "onDemand"
+          ],
           "default": "atInterventionPoints",
-          "description": "When to persist session state to durable storage.",
-          "examples": ["atInterventionPoints", "afterEachStep"]
+          "description": "When to persist session state to durable storage. 'afterEachStep': after every step completes. 'atInterventionPoints': only at steps marked as intervention points. 'onDemand': only when explicitly requested.",
+          "examples": [
+            "atInterventionPoints",
+            "afterEachStep"
+          ]
         },
         "steps": {
           "type": "array",
-          "items": { "$ref": "#/$defs/SessionStep" },
+          "items": {
+            "$ref": "#/$defs/SessionStep"
+          },
           "minItems": 1,
           "description": "DAG-ordered steps."
         }
@@ -9456,7 +9755,7 @@
       "additionalProperties": false,
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "properties": {
@@ -9464,23 +9763,31 @@
           "type": "integer",
           "minimum": 0,
           "description": "Maximum number of times this tool may be invoked per minute across all agent sessions.",
-          "examples": [30, 10]
+          "examples": [
+            30,
+            10
+          ]
         },
         "maxPerHour": {
           "type": "integer",
           "minimum": 0,
           "description": "Maximum number of times this tool may be invoked per hour across all agent sessions.",
-          "examples": [500, 100]
+          "examples": [
+            500,
+            100
+          ]
         }
       }
     },
     "SessionStep": {
       "type": "object",
-      "required": ["id"],
+      "required": [
+        "id"
+      ],
       "additionalProperties": false,
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "properties": {
@@ -9488,12 +9795,23 @@
           "type": "string",
           "minLength": 1,
           "description": "Unique step identifier within this session. Referenced by other steps' dependsOn lists.",
-          "examples": ["documentInventory", "contentExtraction"]
+          "examples": [
+            "documentInventory",
+            "contentExtraction"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "description": {
           "type": "string",
-          "description": "Human-readable description of what this step accomplishes.",
-          "examples": ["Catalog all documents in the evidence package and classify by type and relevance."]
+          "description": "Human-readable description of what this step accomplishes and what outputs it produces for subsequent steps in the session.",
+          "examples": [
+            "Catalog all documents in the evidence package and classify by type and relevance."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         },
         "dependsOn": {
           "type": "array",
@@ -9501,7 +9819,13 @@
             "type": "string",
             "minLength": 1,
             "description": "Identifier of a step that must complete successfully before this step can begin execution.",
-            "examples": ["documentInventory", "contentExtraction"]
+            "examples": [
+              "documentInventory",
+              "contentExtraction"
+            ],
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
           },
           "description": "Step identifiers that must complete before this step."
         },
@@ -9509,52 +9833,96 @@
           "type": "boolean",
           "default": false,
           "description": "Whether this step is a human intervention point where execution pauses for review.",
-          "examples": [false, true]
+          "examples": [
+            false,
+            true
+          ]
         },
         "interventionPrompt": {
           "type": "string",
           "description": "Human-readable prompt displayed to the reviewer at this intervention point.",
-          "examples": ["Review the agent's document inventory and extracted facts before it produces the final recommendation."]
+          "examples": [
+            "Review the agent's document inventory and extracted facts before it produces the final recommendation."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         }
       }
     },
     "ToolDefinition": {
       "type": "object",
-      "required": ["id", "category", "sideEffects"],
+      "required": [
+        "id",
+        "category",
+        "sideEffects"
+      ],
       "additionalProperties": false,
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "properties": {
         "id": {
           "type": "string",
           "minLength": 1,
-          "description": "Unique tool identifier within the tool governance registry.",
-          "examples": ["databaseLookup", "documentParser"]
+          "description": "Unique tool identifier within the tool governance registry. Referenced in agent invocation logs and side-effect policy enforcement.",
+          "examples": [
+            "databaseLookup",
+            "documentParser"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "category": {
           "type": "string",
           "minLength": 1,
           "description": "Functional category of this tool. Standard categories: 'dataRetrieval', 'computation', 'externalApi'. Custom categories are permitted.",
-          "examples": ["dataRetrieval", "computation", "externalApi"]
+          "examples": [
+            "dataRetrieval",
+            "computation",
+            "externalApi"
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
         },
         "sideEffects": {
           "type": "boolean",
           "description": "Whether this tool has external side effects (writes, sends, modifies external state).",
-          "examples": [false, true]
+          "examples": [
+            false,
+            true
+          ]
         },
-        "rateLimit": { "$ref": "#/$defs/RateLimit" },
+        "rateLimit": {
+          "$ref": "#/$defs/RateLimit"
+        },
         "outputSchema": {
           "type": "object",
-          "description": "Expected JSON Schema for this tool's output.",
-          "examples": [{ "type": "object", "properties": { "income": { "type": "number" } } }]
+          "description": "Expected JSON Schema for this tool's output. Used by validation tooling to verify that tool outputs conform to declared contracts before they are mapped to case state.",
+          "examples": [
+            {
+              "type": "object",
+              "properties": {
+                "income": {
+                  "type": "number"
+                }
+              }
+            }
+          ]
         },
         "description": {
           "type": "string",
-          "description": "Human-readable description of what this tool does.",
-          "examples": ["Queries the internal case management database for prior applications by SSN."]
+          "description": "Human-readable description of what this tool does, which external systems it connects to, and any data handling or privacy implications.",
+          "examples": [
+            "Queries the internal case management database for prior applications by SSN."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         }
       }
     },
@@ -9563,21 +9931,30 @@
       "additionalProperties": false,
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "properties": {
         "toolRegistry": {
           "type": "array",
-          "items": { "$ref": "#/$defs/ToolDefinition" },
+          "items": {
+            "$ref": "#/$defs/ToolDefinition"
+          },
           "description": "Registry of permitted tools."
         },
         "defaultSideEffectPolicy": {
           "type": "string",
-          "enum": ["block", "allow", "requireApproval"],
+          "enum": [
+            "block",
+            "allow",
+            "requireApproval"
+          ],
           "default": "block",
           "description": "Default policy applied to tools with side effects when the agent is operating at autonomous autonomy level.",
-          "examples": ["block", "requireApproval"]
+          "examples": [
+            "block",
+            "requireApproval"
+          ]
         }
       }
     },

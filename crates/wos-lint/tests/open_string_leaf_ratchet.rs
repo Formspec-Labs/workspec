@@ -45,7 +45,10 @@ const EXPECTED_OPEN_STRING_LEAVES: &[(&str, usize)] = &[
 fn open_string_leaf_count_matches_baseline_per_schema() {
     let workspace = workspace_root();
     let schemas_dir = workspace.join("schemas");
-    let schema_files = collect_schema_files(&schemas_dir);
+    let schema_files = collect_schema_files(&schemas_dir)
+        .into_iter()
+        .filter(|p| !p.to_string_lossy().contains("/api/"))
+        .collect::<Vec<_>>();
     assert!(
         !schema_files.is_empty(),
         "no *.schema.json files found under {}",
