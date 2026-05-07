@@ -64,7 +64,7 @@ Four ADRs (all Accepted 2026-05-06) gate the heavyweight Do-next items. All four
 | #3 AuthorizationAttestation actor shape | 35 | ADR 0066 Accepted | B |
 | #4 Amendment/supersession/rescission/correction | 35 | ADR 0066 Accepted | B |
 | #5 Statutory clocks implementation | 35 | ADR 0067 Accepted | B |
-| #6 TypeID-in-URN identity | 35 | ADR 0092 Accepted | A | ⚡ WS-1–4+7 landed 2026-05-07; WS-5–6+8 remaining |
+| #6 TypeID-in-URN identity | 35 | ADR 0092 Accepted | A | ✅ Landed 2026-05-07 (WS-1–8: schema, wos-core, server, specs, tests, case-portal verified) |
 | #70 AppendFailure typed enum | 30 | ADR 0070 Accepted | B |
 | #71 ReinstatementPolicy + K-A-010 | 24 | ADR 0066 Accepted | B |
 | #72 Cluster variant emission wiring | 24 | ADR 0070 Accepted + #70 | B |
