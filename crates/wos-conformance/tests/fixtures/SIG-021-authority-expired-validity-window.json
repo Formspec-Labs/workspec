@@ -1,8 +1,8 @@
 {
   "binding": "formspec",
-  "id": "SIG-008-notary-in-person-auth",
+  "id": "SIG-021-authority-expired-validity-window",
   "rule": "SIG-RT",
-  "description": "Notary signing requires stronger in-person authentication evidence.",
+  "description": "Notary signerAuthority validUntil precedes signedAt (§2.12.4 step 6) blocks SignatureAffirmation.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/signature-runtime.json",
     "signatureProfile": "../../../../fixtures/profiles/signature-runtime-notary.json"
@@ -36,16 +36,18 @@
               "evidenceBinding": {
                 "evidenceHash": "2222222222222222222222222222222222222222222222222222222222222222",
                 "evidenceHashAlgorithm": "sha-256"
-              }
+              },
+              "validFrom": "2026-01-01T00:00:00Z",
+              "validUntil": "2026-03-01T00:00:00Z"
             }
           },
-          "id": "resp-sig-008-notary-in-person-auth-notaryTask",
+          "id": "resp-sig-021-authority-expired-validity-window-notaryTask",
           "authoredSignatures": [
             {
-              "signatureId": "sig-sig-008-notary-in-person-auth-notaryTask",
+              "signatureId": "sig-sig-021-authority-expired-validity-window-notaryTask",
               "documentId": "application",
               "signingIntent": "urn:wos:signing-intent:notarial-attestation",
-              "signatureValue": "urn:test:signature:SIG-008-notary-in-person-auth:notaryTask",
+              "signatureValue": "urn:test:signature:SIG-021-authority-expired-validity-window:notaryTask",
               "signatureMethod": "provider-managed",
               "signerId": "notary",
               "signerName": "Notary",
@@ -57,8 +59,8 @@
               "signedPayload": {
                 "canonicalization": "formspec-response-signing-v1",
                 "digestAlgorithm": "sha-256",
-                "digest": "3a1a56c56ff8b3ad9fe17b8e244b59e45972e3223f593585bd85b6c8f04842f6",
-                "responseId": "resp-sig-008-notary-in-person-auth-notaryTask",
+                "digest": "cd634abca771dc8015c47727e759149797492487af43ced751b143fdd18cce22",
+                "responseId": "resp-sig-021-authority-expired-validity-window-notaryTask",
                 "definitionUrl": "urn:test:formspec:signature",
                 "definitionVersion": "1.0.0"
               },
@@ -77,23 +79,10 @@
       "from": "draft",
       "target": "signing",
       "event": "start"
-    },
-    {
-      "from": "signing",
-      "target": "complete",
-      "event": "signature.completed"
     }
   ],
-  "expected_provenance": [
-    {
-      "recordKind": "signatureAffirmation",
-      "data": {
-        "roleId": "notaryRole",
-        "identityBinding": {
-          "method": "notary",
-          "assuranceLevel": "very-high"
-        }
-      }
-    }
+  "expected_provenance": [],
+  "expected_errors": [
+    "validUntil"
   ]
 }

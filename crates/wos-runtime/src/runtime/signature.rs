@@ -554,10 +554,6 @@ impl WosRuntime {
             &signature_evidence.signing_intent,
             &identity_binding,
         )?;
-        self.ensure_signer_authority_satisfies_intent(
-            &signature_evidence.signing_intent,
-            signature_evidence.signer_authority.as_ref(),
-        )?;
         self.ensure_document_hash_matches(record, response, &profile.evidence, document)?;
 
         let signed_at = if signature_evidence.signed_at.is_empty() {
@@ -575,6 +571,12 @@ impl WosRuntime {
             .signer_id
             .as_deref()
             .unwrap_or(actor_id);
+        self.ensure_signer_authority_satisfies_intent(
+            &signature_evidence.signing_intent,
+            signature_evidence.signer_authority.as_ref(),
+            Some(signed_at),
+            Some(signer_id),
+        )?;
         let signature_provider = signature_evidence
             .signature_provider
             .as_deref()
@@ -1318,25 +1320,10 @@ impl WosRuntime {
         &self,
         signing_intent: &str,
         signer_authority: Option<&serde_json::Value>,
+        signed_at: Option<&str>,
+        signer_id: Option<&str>,
     ) -> Result<(), RuntimeError> {
-        let Some(allowed_classes) = required_authority_classes(signing_intent) else {
-            return Ok(());
-        };
-        let authority = signer_authority.ok_or_else(|| {
-            RuntimeError::Signature(format!(
-                "signing intent '{signing_intent}' requires signerAuthority"
-            ))
-        })?;
-        let class = authority
-            .get("class")
-            .and_then(serde_json::Value::as_str)
-            .ok_or_else(|| RuntimeError::Signature("signerAuthority.class missing".to_string()))?;
-        if !allowed_classes.contains(&class) {
-            return Err(RuntimeError::Signature(format!(
-                "signerAuthority.class '{class}' does not satisfy signing intent '{signing_intent}'"
-            )));
-        }
-        Ok(())
+        validate_signer_authority(signing_intent, signer_authority, signed_at, signer_id)
     }
 
     fn require_signature_reason(
@@ -1539,6 +1526,233 @@ fn required_authority_classes(signing_intent: &str) -> Option<&'static [&'static
         "urn:wos:signing-intent:agent-as-officer" => Some(&["as-officer-of"]),
         _ => None,
     }
+}
+
+/// Classes that, per Signature Profile §2.12.2, are non-`self` and therefore
+/// require backing evidence (commission, power-of-attorney, board resolution).
+/// `self` is the only floor for which the WOS center admits a claim with no
+/// supporting `evidenceBinding`/`authoritySource` — every other class
+/// represents capacity-to-bind that must trace to a verifiable instrument.
+fn is_non_self_class(class: &str) -> bool {
+    matches!(
+        class,
+        "witness"
+            | "notary-commissioned"
+            | "as-attorney-in-fact"
+            | "as-officer-of"
+    ) || class.starts_with("x-")
+}
+
+/// Classes whose §2.12.2 row marks `principal` as REQUIRED (delegating
+/// classes — the signer is binding someone else's interest). Self-delegation
+/// is rejected: `principal` MUST NOT equal `signerId`.
+fn class_requires_principal(class: &str) -> bool {
+    matches!(class, "as-officer-of" | "as-attorney-in-fact")
+}
+
+/// Classes whose §2.12.2 row marks `authoritySource` as REQUIRED — the URI
+/// of the instrument that grants the capacity (commission certificate,
+/// executed power-of-attorney, board resolution).
+fn class_requires_authority_source(class: &str) -> bool {
+    matches!(
+        class,
+        "as-officer-of" | "as-attorney-in-fact" | "notary-commissioned"
+    )
+}
+
+/// Permitted `evidenceBinding.evidenceHashAlgorithm` per §2.7. `sha-256`
+/// is REQUIRED for Core conformance; future profile revisions or `x-*`
+/// extension policies MAY widen this set.
+fn evidence_hash_algorithm_permitted(algorithm: &str) -> bool {
+    algorithm == "sha-256"
+}
+
+/// Full §2.12.4 signer-authority validation. Replaces the prior class-only
+/// check that admitted any `notary-commissioned` claim regardless of
+/// authoritySource / principal / evidenceBinding presence.
+///
+/// Steps mirror §2.12.4:
+///
+/// 1. If the intent's authority floor is `self`, an absent `signerAuthority`
+///    is admissible; a present claim is still validated for shape.
+/// 2. If the floor is non-`self`, an absent `signerAuthority` is rejected.
+/// 3. `class` must satisfy the floor (existing behavior preserved).
+/// 4. For non-`self` classes: `evidenceBinding.evidenceHash` is REQUIRED and
+///    its algorithm must be permitted by §2.7.
+/// 5. For classes that mandate `authoritySource` (§2.12.2): authoritySource
+///    must be present, non-empty.
+/// 6. For delegating classes (`as-officer-of`, `as-attorney-in-fact`):
+///    `principal` is REQUIRED and MUST NOT equal `signerId`.
+/// 7. `validFrom` / `validUntil` (when present) bracket `signedAt`.
+fn validate_signer_authority(
+    signing_intent: &str,
+    signer_authority: Option<&serde_json::Value>,
+    signed_at: Option<&str>,
+    signer_id: Option<&str>,
+) -> Result<(), RuntimeError> {
+    let allowed_classes = required_authority_classes(signing_intent);
+
+    let Some(authority) = signer_authority else {
+        if allowed_classes.is_some() {
+            return Err(RuntimeError::Signature(format!(
+                "signing intent '{signing_intent}' requires signerAuthority"
+            )));
+        }
+        return Ok(());
+    };
+
+    let class = authority
+        .get("class")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| RuntimeError::Signature("signerAuthority.class missing".to_string()))?;
+
+    if let Some(allowed) = allowed_classes
+        && !allowed.contains(&class)
+    {
+        return Err(RuntimeError::Signature(format!(
+            "signerAuthority.class '{class}' does not satisfy signing intent '{signing_intent}'"
+        )));
+    }
+
+    if is_non_self_class(class) {
+        validate_evidence_binding(authority)?;
+        if class_requires_authority_source(class) {
+            validate_authority_source(authority)?;
+        }
+        if class_requires_principal(class) {
+            validate_principal(authority, signer_id)?;
+        }
+    }
+
+    validate_validity_window(authority, signed_at)?;
+
+    Ok(())
+}
+
+fn validate_authority_source(authority: &serde_json::Value) -> Result<(), RuntimeError> {
+    let value = authority
+        .get("authoritySource")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    if value.is_none() {
+        return Err(RuntimeError::Signature(
+            "signerAuthority.authoritySource is required for this class".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_principal(
+    authority: &serde_json::Value,
+    signer_id: Option<&str>,
+) -> Result<(), RuntimeError> {
+    let principal = authority
+        .get("principal")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            RuntimeError::Signature(
+                "signerAuthority.principal is required for this class".to_string(),
+            )
+        })?;
+    if let Some(signer) = signer_id
+        && signer == principal
+    {
+        return Err(RuntimeError::Signature(format!(
+            "signerAuthority.principal '{principal}' must not equal signerId for a delegating class"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_evidence_binding(authority: &serde_json::Value) -> Result<(), RuntimeError> {
+    let binding = authority.get("evidenceBinding").ok_or_else(|| {
+        RuntimeError::Signature(
+            "signerAuthority.evidenceBinding is required for non-self classes".to_string(),
+        )
+    })?;
+    let hash = binding
+        .get("evidenceHash")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            RuntimeError::Signature(
+                "signerAuthority.evidenceBinding.evidenceHash is required".to_string(),
+            )
+        })?;
+    let hex_ok = !hash.is_empty()
+        && hash.len() >= 64
+        && hash.len() <= 128
+        && hash.chars().all(|character| character.is_ascii_hexdigit());
+    if !hex_ok {
+        return Err(RuntimeError::Signature(format!(
+            "signerAuthority.evidenceBinding.evidenceHash '{hash}' is not a valid hex digest"
+        )));
+    }
+    let algorithm = binding
+        .get("evidenceHashAlgorithm")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            RuntimeError::Signature(
+                "signerAuthority.evidenceBinding.evidenceHashAlgorithm is required".to_string(),
+            )
+        })?;
+    if !evidence_hash_algorithm_permitted(algorithm) {
+        return Err(RuntimeError::Signature(format!(
+            "signerAuthority.evidenceBinding.evidenceHashAlgorithm '{algorithm}' is not permitted by §2.7"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_validity_window(
+    authority: &serde_json::Value,
+    signed_at: Option<&str>,
+) -> Result<(), RuntimeError> {
+    let valid_from = authority.get("validFrom").and_then(serde_json::Value::as_str);
+    let valid_until = authority
+        .get("validUntil")
+        .and_then(serde_json::Value::as_str);
+    if valid_from.is_none() && valid_until.is_none() {
+        return Ok(());
+    }
+    let signed_at = signed_at.ok_or_else(|| {
+        RuntimeError::Signature(
+            "signerAuthority validity window present but signedAt is unavailable".to_string(),
+        )
+    })?;
+    let signed = parse_rfc3339(signed_at, "signedAt")?;
+    if let Some(from_str) = valid_from {
+        let from = parse_rfc3339(from_str, "signerAuthority.validFrom")?;
+        if signed < from {
+            return Err(RuntimeError::Signature(format!(
+                "signedAt '{signed_at}' precedes signerAuthority.validFrom '{from_str}'"
+            )));
+        }
+    }
+    if let Some(until_str) = valid_until {
+        let until = parse_rfc3339(until_str, "signerAuthority.validUntil")?;
+        if signed > until {
+            return Err(RuntimeError::Signature(format!(
+                "signedAt '{signed_at}' follows signerAuthority.validUntil '{until_str}'"
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn parse_rfc3339(
+    value: &str,
+    field: &str,
+) -> Result<chrono::DateTime<chrono::FixedOffset>, RuntimeError> {
+    chrono::DateTime::parse_from_rfc3339(value).map_err(|error| {
+        RuntimeError::Signature(format!("{field} '{value}' is not RFC 3339: {error}"))
+    })
 }
 
 fn resolve_path<'a>(
@@ -1854,5 +2068,237 @@ mod assurance_binding_tests {
             super::identity_binding_meets_policy(&in_person_policy, &in_person_method, "ial1")
                 .is_ok()
         );
+    }
+}
+
+#[cfg(test)]
+mod signer_authority_tests {
+    use super::*;
+    use serde_json::json;
+
+    const VALID_HASH: &str =
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    fn signed_at() -> &'static str {
+        "2026-04-22T14:30:00Z"
+    }
+
+    #[test]
+    fn rejects_non_self_class_without_evidence_binding() {
+        let authority = json!({
+            "class": "notary-commissioned",
+            "authoritySource": "urn:agency.gov:notary-commissions:tx:12345",
+            "principal": "urn:agency.gov:applicants:0001"
+        });
+        let result = validate_signer_authority(
+            "urn:wos:signing-intent:notarial-attestation",
+            Some(&authority),
+            Some(signed_at()),
+            Some("notary-1"),
+        );
+        match result {
+            Err(RuntimeError::Signature(message)) => {
+                assert!(
+                    message.contains("evidenceBinding"),
+                    "expected evidenceBinding error, got: {message}"
+                );
+            }
+            other => panic!("expected Signature error about evidenceBinding, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rejects_signed_at_outside_validity_window() {
+        let authority = json!({
+            "class": "notary-commissioned",
+            "authoritySource": "urn:agency.gov:notary-commissions:tx:12345",
+            "evidenceBinding": {
+                "evidenceHash": VALID_HASH,
+                "evidenceHashAlgorithm": "sha-256"
+            },
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2026-03-01T00:00:00Z"
+        });
+        let result = validate_signer_authority(
+            "urn:wos:signing-intent:notarial-attestation",
+            Some(&authority),
+            Some("2026-05-08T10:00:00Z"),
+            Some("notary-1"),
+        );
+        match result {
+            Err(RuntimeError::Signature(message)) => {
+                assert!(
+                    message.contains("validUntil"),
+                    "expected validUntil error, got: {message}"
+                );
+            }
+            other => panic!("expected Signature validity-window error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rejects_malformed_evidence_hash() {
+        let authority = json!({
+            "class": "notary-commissioned",
+            "authoritySource": "urn:agency.gov:notary-commissions:tx:12345",
+            "evidenceBinding": {
+                "evidenceHash": "not-a-real-hash",
+                "evidenceHashAlgorithm": "sha-256"
+            }
+        });
+        let result = validate_signer_authority(
+            "urn:wos:signing-intent:notarial-attestation",
+            Some(&authority),
+            Some(signed_at()),
+            Some("notary-1"),
+        );
+        match result {
+            Err(RuntimeError::Signature(message)) => {
+                assert!(
+                    message.contains("evidenceHash"),
+                    "expected evidenceHash error, got: {message}"
+                );
+            }
+            other => panic!("expected Signature evidence-hash error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rejects_unpermitted_evidence_hash_algorithm() {
+        let authority = json!({
+            "class": "notary-commissioned",
+            "authoritySource": "urn:agency.gov:notary-commissions:tx:12345",
+            "evidenceBinding": {
+                "evidenceHash": VALID_HASH,
+                "evidenceHashAlgorithm": "md5"
+            }
+        });
+        let result = validate_signer_authority(
+            "urn:wos:signing-intent:notarial-attestation",
+            Some(&authority),
+            Some(signed_at()),
+            Some("notary-1"),
+        );
+        match result {
+            Err(RuntimeError::Signature(message)) => {
+                assert!(
+                    message.contains("evidenceHashAlgorithm"),
+                    "expected algorithm error, got: {message}"
+                );
+            }
+            other => panic!("expected Signature algorithm error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rejects_delegating_class_with_self_principal() {
+        let authority = json!({
+            "class": "as-attorney-in-fact",
+            "principal": "agent-007",
+            "authoritySource": "urn:agency.gov:poa:42",
+            "evidenceBinding": {
+                "evidenceHash": VALID_HASH,
+                "evidenceHashAlgorithm": "sha-256"
+            }
+        });
+        let result = validate_signer_authority(
+            "urn:wos:signing-intent:agent-as-attorney-in-fact",
+            Some(&authority),
+            Some(signed_at()),
+            Some("agent-007"),
+        );
+        match result {
+            Err(RuntimeError::Signature(message)) => {
+                assert!(
+                    message.contains("must not equal signerId"),
+                    "expected self-delegation error, got: {message}"
+                );
+            }
+            other => panic!("expected Signature self-delegation error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn admits_self_class_without_authority_source() {
+        let authority = json!({
+            "class": "self"
+        });
+        let result = validate_signer_authority(
+            "urn:wos:signing-intent:applicant-signature",
+            Some(&authority),
+            Some(signed_at()),
+            Some("applicant-1"),
+        );
+        assert!(
+            result.is_ok(),
+            "self-class without authoritySource must admit, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn admits_full_notary_claim() {
+        let authority = json!({
+            "class": "notary-commissioned",
+            "authoritySource": "urn:agency.gov:notary-commissions:tx:12345",
+            "principal": "urn:agency.gov:applicants:0001",
+            "evidenceBinding": {
+                "evidenceHash": VALID_HASH,
+                "evidenceHashAlgorithm": "sha-256",
+                "evidenceLocation": "urn:agency.gov:notary-commissions:tx:12345:document"
+            },
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2027-01-01T00:00:00Z"
+        });
+        let result = validate_signer_authority(
+            "urn:wos:signing-intent:notarial-attestation",
+            Some(&authority),
+            Some(signed_at()),
+            Some("notary-1"),
+        );
+        assert!(
+            result.is_ok(),
+            "complete notarial claim must admit, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn rejects_missing_signer_authority_when_intent_requires_one() {
+        let result = validate_signer_authority(
+            "urn:wos:signing-intent:notarial-attestation",
+            None,
+            Some(signed_at()),
+            Some("notary-1"),
+        );
+        match result {
+            Err(RuntimeError::Signature(message)) => {
+                assert!(
+                    message.contains("requires signerAuthority"),
+                    "expected requires-signerAuthority error, got: {message}"
+                );
+            }
+            other => panic!("expected Signature missing-authority error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rejects_class_that_does_not_satisfy_floor() {
+        let authority = json!({
+            "class": "self"
+        });
+        let result = validate_signer_authority(
+            "urn:wos:signing-intent:notarial-attestation",
+            Some(&authority),
+            Some(signed_at()),
+            Some("applicant-1"),
+        );
+        match result {
+            Err(RuntimeError::Signature(message)) => {
+                assert!(
+                    message.contains("does not satisfy"),
+                    "expected floor-mismatch error, got: {message}"
+                );
+            }
+            other => panic!("expected Signature floor-mismatch error, got {other:?}"),
+        }
     }
 }

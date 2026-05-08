@@ -910,7 +910,10 @@
           "description": "RFC 3339 date-time at which the authority became effective (§2.12.1). Optional; when present, runtime requires `signedAt >= validFrom`.",
           "examples": [
             "2026-01-01T00:00:00Z"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "timestamp"
+          }
         },
         "validUntil": {
           "type": "string",
@@ -918,12 +921,20 @@
           "description": "RFC 3339 date-time at which the authority expires (§2.12.1). Optional; when present, runtime requires `signedAt <= validUntil`.",
           "examples": [
             "2027-01-01T00:00:00Z"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "timestamp"
+          }
         },
         "extensions": {
           "type": "object",
           "description": "Open extension bag for vendor or deployment-defined authority metadata (§2.12.1). Inner keys MUST follow the `x-*` extension discipline.",
-          "additionalProperties": true
+          "additionalProperties": true,
+          "examples": [
+            {
+              "x-vendor-acme-region": "us-west-2"
+            }
+          ]
         }
       },
       "allOf": [

@@ -1,8 +1,8 @@
 {
   "binding": "formspec",
-  "id": "SIG-008-notary-in-person-auth",
+  "id": "SIG-022-authority-malformed-evidence-hash",
   "rule": "SIG-RT",
-  "description": "Notary signing requires stronger in-person authentication evidence.",
+  "description": "Notary signerAuthority.evidenceBinding.evidenceHash that is not a valid hex digest (§2.12.3) blocks SignatureAffirmation.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/signature-runtime.json",
     "signatureProfile": "../../../../fixtures/profiles/signature-runtime-notary.json"
@@ -34,18 +34,18 @@
               "principal": "applicant",
               "authoritySource": "urn:test:signer-authority:notary-commission",
               "evidenceBinding": {
-                "evidenceHash": "2222222222222222222222222222222222222222222222222222222222222222",
+                "evidenceHash": "not-a-real-hash",
                 "evidenceHashAlgorithm": "sha-256"
               }
             }
           },
-          "id": "resp-sig-008-notary-in-person-auth-notaryTask",
+          "id": "resp-sig-022-authority-malformed-evidence-hash-notaryTask",
           "authoredSignatures": [
             {
-              "signatureId": "sig-sig-008-notary-in-person-auth-notaryTask",
+              "signatureId": "sig-sig-022-authority-malformed-evidence-hash-notaryTask",
               "documentId": "application",
               "signingIntent": "urn:wos:signing-intent:notarial-attestation",
-              "signatureValue": "urn:test:signature:SIG-008-notary-in-person-auth:notaryTask",
+              "signatureValue": "urn:test:signature:SIG-022-authority-malformed-evidence-hash:notaryTask",
               "signatureMethod": "provider-managed",
               "signerId": "notary",
               "signerName": "Notary",
@@ -57,8 +57,8 @@
               "signedPayload": {
                 "canonicalization": "formspec-response-signing-v1",
                 "digestAlgorithm": "sha-256",
-                "digest": "3a1a56c56ff8b3ad9fe17b8e244b59e45972e3223f593585bd85b6c8f04842f6",
-                "responseId": "resp-sig-008-notary-in-person-auth-notaryTask",
+                "digest": "8b2ca040c3ad966cfdb64c2c87042b2eabe4aa35596f72b3cd223261e1a6c9eb",
+                "responseId": "resp-sig-022-authority-malformed-evidence-hash-notaryTask",
                 "definitionUrl": "urn:test:formspec:signature",
                 "definitionVersion": "1.0.0"
               },
@@ -77,23 +77,10 @@
       "from": "draft",
       "target": "signing",
       "event": "start"
-    },
-    {
-      "from": "signing",
-      "target": "complete",
-      "event": "signature.completed"
     }
   ],
-  "expected_provenance": [
-    {
-      "recordKind": "signatureAffirmation",
-      "data": {
-        "roleId": "notaryRole",
-        "identityBinding": {
-          "method": "notary",
-          "assuranceLevel": "very-high"
-        }
-      }
-    }
+  "expected_provenance": [],
+  "expected_errors": [
+    "evidenceHash"
   ]
 }

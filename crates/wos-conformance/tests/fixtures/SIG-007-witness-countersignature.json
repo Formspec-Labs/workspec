@@ -92,7 +92,11 @@
             "signerAuthority": {
               "class": "witness",
               "principal": "applicant",
-              "authoritySource": "urn:test:signer-authority:witness"
+              "authoritySource": "urn:test:signer-authority:witness",
+              "evidenceBinding": {
+                "evidenceHash": "1111111111111111111111111111111111111111111111111111111111111111",
+                "evidenceHashAlgorithm": "sha-256"
+              }
             }
           },
           "id": "resp-sig-007-witness-countersignature-witnessTask",
@@ -113,7 +117,7 @@
               "signedPayload": {
                 "canonicalization": "formspec-response-signing-v1",
                 "digestAlgorithm": "sha-256",
-                "digest": "cc64e9810739714a5bb80f2e851075c0658e73c4a5da00dc05df85f332fae679",
+                "digest": "6ae68262570e2a284f78d81c085f22b3e5ddda0d94469113c3bd7ae2e79502a0",
                 "responseId": "resp-sig-007-witness-countersignature-witnessTask",
                 "definitionUrl": "urn:test:formspec:signature",
                 "definitionVersion": "1.0.0"

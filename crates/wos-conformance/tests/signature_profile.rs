@@ -181,6 +181,53 @@ fn sig019_tampered_signature_method_admits_with_deferred_status() {
 }
 
 #[test]
+fn sig020_authority_missing_evidence_binding_blocks_affirmation() {
+    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let error = run_fixture(
+        &fixture_json("SIG-020-authority-missing-evidence-binding.json"),
+        base_dir.to_str().expect("utf-8 fixture path"),
+    )
+    .expect_err("missing evidenceBinding for non-self class must reject");
+    assert!(
+        error.to_string().contains("evidenceBinding"),
+        "unexpected evidence-binding rejection error: {error}"
+    );
+}
+
+#[test]
+fn sig021_authority_expired_validity_window_blocks_affirmation() {
+    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let error = run_fixture(
+        &fixture_json("SIG-021-authority-expired-validity-window.json"),
+        base_dir.to_str().expect("utf-8 fixture path"),
+    )
+    .expect_err("signedAt outside signerAuthority validity window must reject");
+    assert!(
+        error.to_string().contains("validUntil"),
+        "unexpected validity-window rejection error: {error}"
+    );
+}
+
+#[test]
+fn sig022_authority_malformed_evidence_hash_blocks_affirmation() {
+    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let error = run_fixture(
+        &fixture_json("SIG-022-authority-malformed-evidence-hash.json"),
+        base_dir.to_str().expect("utf-8 fixture path"),
+    )
+    .expect_err("malformed signerAuthority.evidenceBinding.evidenceHash must reject");
+    assert!(
+        error.to_string().contains("evidenceHash"),
+        "unexpected evidence-hash rejection error: {error}"
+    );
+}
+
+#[test]
+fn sig023_authority_self_class_without_source_admits() {
+    assert_signature_fixture_passes("SIG-023-authority-self-class-without-source.json");
+}
+
+#[test]
 fn sig017_stale_response_pin_blocks_affirmation() {
     let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
     let error = run_fixture(
