@@ -343,6 +343,24 @@ pub struct SignatureEvidence {
     pub custody_hook_eligible: bool,
 }
 
+/// Outcome of signature admission for a task submission.
+///
+/// Carries the provenance record produced by admission alongside the verified
+/// `signed_at` and `signer_id` derived from the binding-supplied evidence. The
+/// completion path consumes the same `signed_at` that flowed into the
+/// `SignatureAffirmation` record so the case-ledger entry and the
+/// `x-wos-signature-completions` completion-state entry can never disagree for
+/// a given signature event (review F4).
+#[derive(Debug, Clone)]
+pub(super) struct SignatureAffirmationOutcome {
+    /// Provenance record for `SignatureAffirmation`.
+    pub record: ProvenanceRecord,
+    /// Verified evidence timestamp, authoritative for the completion entry.
+    pub signed_at: String,
+    /// Verified signer id, authoritative for the completion entry.
+    pub signer_id: String,
+}
+
 /// Consent-reference shape.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -509,7 +527,7 @@ impl WosRuntime {
         signature_evidence: Option<&[VerifiedSignatureEvidence]>,
         actor_id: &str,
         signed_at_default: &str,
-    ) -> Result<Option<ProvenanceRecord>, RuntimeError> {
+    ) -> Result<Option<SignatureAffirmationOutcome>, RuntimeError> {
         if !Self::is_signature_task(task) {
             return Ok(None);
         }
@@ -579,6 +597,18 @@ impl WosRuntime {
         } else {
             signature_evidence.signed_at.as_str()
         };
+        // Source of truth = verified evidence record. If the response carries
+        // a separate consent-path `signedAt` (as may appear when bindings stage
+        // consent acceptance and signing acts independently) and it diverges
+        // from the evidence's `signed_at`, fail closed: the provenance record
+        // and the completion-state record would otherwise disagree, and
+        // divergence here is an early signal of tampering or stale state.
+        ensure_signed_at_consistency(
+            signed_at,
+            record,
+            response,
+            &profile.evidence.consent_reference.accepted_at_path,
+        )?;
         let signer_id = signature_evidence
             .signer_id
             .as_deref()
@@ -615,7 +645,7 @@ impl WosRuntime {
             SignatureProfileSelector::Ref(profile_ref) => (Some(profile_ref.as_str()), None),
         };
 
-        let record = ProvenanceRecord::signature_affirmation(SignatureAffirmationInput {
+        let provenance_record = ProvenanceRecord::signature_affirmation(SignatureAffirmationInput {
             signer_id,
             role_id: &role.id,
             role: &role.role,
@@ -643,7 +673,11 @@ impl WosRuntime {
             )
             .map_err(|error| RuntimeError::Signature(error.to_string()))?,
         });
-        Ok(Some(record))
+        Ok(Some(SignatureAffirmationOutcome {
+            record: provenance_record,
+            signed_at: signed_at.to_string(),
+            signer_id: signer_id.to_string(),
+        }))
     }
 
     pub(super) fn record_signature_completion(
@@ -1925,37 +1959,54 @@ fn identity_binding_meets_policy(
     Ok(())
 }
 
-pub(super) fn signed_at_for_response(
+/// Reject a submission whose response carries a consent-path `signedAt` that
+/// disagrees with the verified evidence's `signed_at`.
+///
+/// The verified evidence record is the source of truth for completion timing
+/// (review F4). When the response *also* carries a non-empty consent-path
+/// timestamp, the two MUST byte-equal — otherwise the `SignatureAffirmation`
+/// provenance record and the `x-wos-signature-completions` completion entry
+/// would carry disagreeing timestamps for the same signature event. Treat
+/// that disagreement as evidence of tampering or stale staging and fail
+/// closed.
+///
+/// Absent the consent-path field, no divergence to detect; admission proceeds
+/// with the evidence's `signed_at` as authoritative.
+pub(super) fn ensure_signed_at_consistency(
+    evidence_signed_at: &str,
     record: &RuntimeRecord,
-    task: &ActiveTask,
     response: &serde_json::Value,
-    now_iso: &str,
-    runtime: &WosRuntime,
-) -> Result<String, RuntimeError> {
-    if !WosRuntime::is_signature_task(task) {
-        return Ok(now_iso.to_string());
-    }
-    let (_selector, profile) = runtime.signature_profile_for_task(task)?;
-    Ok(resolve_path(
-        record,
-        response,
-        &profile.evidence.consent_reference.accepted_at_path,
+    consent_accepted_at_path: &str,
+) -> Result<(), RuntimeError> {
+    let consent_signed_at = resolve_path(record, response, consent_accepted_at_path)
+        .and_then(serde_json::Value::as_str);
+    ensure_signed_at_consistency_pure(
+        evidence_signed_at,
+        consent_signed_at,
+        consent_accepted_at_path,
     )
-    .and_then(serde_json::Value::as_str)
-    .unwrap_or(now_iso)
-    .to_string())
 }
 
-pub(super) fn signer_id_for_response<'a>(
-    task: &'a ActiveTask,
-    response: &'a serde_json::Value,
-    actor_id: &'a str,
-) -> &'a str {
-    if WosRuntime::is_signature_task(task) {
-        response_string(response, "signerId").unwrap_or(actor_id)
-    } else {
-        actor_id
+/// Pure form of [`ensure_signed_at_consistency`] for unit testing without a
+/// `RuntimeRecord`. Equivalent semantics: empty / absent consent value =
+/// admission proceeds; non-empty divergent value = fail closed.
+fn ensure_signed_at_consistency_pure(
+    evidence_signed_at: &str,
+    consent_signed_at: Option<&str>,
+    consent_accepted_at_path: &str,
+) -> Result<(), RuntimeError> {
+    let Some(consent_signed_at) = consent_signed_at else {
+        return Ok(());
+    };
+    if consent_signed_at.is_empty() {
+        return Ok(());
     }
+    if consent_signed_at != evidence_signed_at {
+        return Err(RuntimeError::Signature(format!(
+            "evidence signed_at '{evidence_signed_at}' diverges from response consent signedAt '{consent_signed_at}' at '{consent_accepted_at_path}'"
+        )));
+    }
+    Ok(())
 }
 
 pub(super) fn append_signature_task_extensions(
@@ -2446,6 +2497,59 @@ mod deployment_local_intent_tests {
         assert!(
             !mentions_pattern(&scoped_errors),
             "deployment-scoped URI should not trigger the urn:wos: shadow guard, got: {scoped_errors:?}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod signed_at_divergence_tests {
+    use super::*;
+
+    const EVIDENCE_SIGNED_AT: &str = "2026-05-08T11:00:00Z";
+    const PATH: &str = "response.signature.acceptedAt";
+
+    #[test]
+    fn admission_fails_when_evidence_signed_at_diverges_from_response_consent() {
+        let result = ensure_signed_at_consistency_pure(
+            EVIDENCE_SIGNED_AT,
+            Some("2026-05-08T10:00:00Z"),
+            PATH,
+        );
+        match result {
+            Err(RuntimeError::Signature(msg)) => {
+                assert!(
+                    msg.contains("signed_at") || msg.contains("signedAt"),
+                    "expected divergence message, got: {msg}"
+                );
+                assert!(msg.contains(EVIDENCE_SIGNED_AT), "got: {msg}");
+                assert!(msg.contains("2026-05-08T10:00:00Z"), "got: {msg}");
+            }
+            other => panic!("expected divergence rejection, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn admission_succeeds_when_evidence_and_response_signed_at_agree() {
+        let result =
+            ensure_signed_at_consistency_pure(EVIDENCE_SIGNED_AT, Some(EVIDENCE_SIGNED_AT), PATH);
+        assert!(result.is_ok(), "agreeing timestamps must admit, got {result:?}");
+    }
+
+    #[test]
+    fn admission_succeeds_when_response_lacks_consent_signed_at() {
+        let result = ensure_signed_at_consistency_pure(EVIDENCE_SIGNED_AT, None, PATH);
+        assert!(
+            result.is_ok(),
+            "absent consent-path signedAt must admit, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn admission_succeeds_when_response_consent_signed_at_is_empty_string() {
+        let result = ensure_signed_at_consistency_pure(EVIDENCE_SIGNED_AT, Some(""), PATH);
+        assert!(
+            result.is_ok(),
+            "empty consent-path signedAt is treated as absent, got {result:?}"
         );
     }
 }

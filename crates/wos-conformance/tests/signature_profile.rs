@@ -249,6 +249,24 @@ fn sig025_unregistered_non_allowlisted_intent_blocks_affirmation() {
 }
 
 #[test]
+fn sig026_evidence_response_signed_at_divergence_blocks_affirmation() {
+    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let error = run_fixture(
+        &fixture_json("SIG-026-evidence-response-signed-at-divergence.json"),
+        base_dir.to_str().expect("utf-8 fixture path"),
+    )
+    .expect_err(
+        "consent-path signedAt diverging from verified evidence signed_at must reject (review F4)",
+    );
+    assert!(
+        error
+            .to_string()
+            .contains("diverges from response consent signedAt"),
+        "unexpected divergence rejection error: {error}"
+    );
+}
+
+#[test]
 fn sig017_stale_response_pin_blocks_affirmation() {
     let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
     let error = run_fixture(

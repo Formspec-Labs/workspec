@@ -22,7 +22,6 @@ use wos_core::traits::AccessControl;
 use super::{
     contract_validation_record, format_timestamp, impact_level_label, merge_case_state,
     populate_provenance_record_fields,
-    signature::{signed_at_for_response, signer_id_for_response},
     stamp_provenance, PersistDraftResult, RuntimeError, TaskSubmissionResult, WosRuntime,
     COMPLETION_EVENT_EXTENSION_KEY, FAILURE_EVENT_EXTENSION_KEY,
 };
@@ -366,7 +365,7 @@ impl WosRuntime {
             actor_id,
             &now_iso,
         );
-        let signature_record = self
+        let signature_outcome = self
             .signature_affirmation_for_submission(
                 &record,
                 &task,
@@ -375,11 +374,18 @@ impl WosRuntime {
                 actor_id,
                 &now_iso,
             )?;
-        if let Some(signature_record) = signature_record {
-            let signer_id = signer_id_for_response(&task, &response, actor_id).to_string();
-            let signed_at = signed_at_for_response(&record, &task, &response, &now_iso, self)?;
-            self.record_signature_completion(&mut record.instance, &task, &signer_id, &signed_at)?;
-            provenance.push(signature_record);
+        if let Some(outcome) = signature_outcome {
+            // Completion `signed_at` flows from the same verified evidence that
+            // produced the `SignatureAffirmation` record (review F4): the
+            // case-ledger entry and `x-wos-signature-completions` cannot
+            // disagree for a given signature event.
+            self.record_signature_completion(
+                &mut record.instance,
+                &task,
+                &outcome.signer_id,
+                &outcome.signed_at,
+            )?;
+            provenance.push(outcome.record);
         }
         provenance.push(ProvenanceRecord::task_lifecycle(
             ProvenanceKind::TaskCompleted,
