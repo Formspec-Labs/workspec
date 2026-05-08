@@ -184,6 +184,21 @@ The record MUST include:
 - `custodyHookEligible`
 - `signingIntent` — a URI from the registered set in §2.11 naming the legal-effect class of this affirmation. The URI MUST equal the consumed source signature evidence intent; it records WOS governance acceptance of that legal-effect class.
 - `signerAuthority` — a signer-authority claim (§2.12). REQUIRED for any registered intent URI whose §2.11 row sets a non-`self` signer-authority floor. OPTIONAL for `self` floors; when present it MUST validate against §2.12.
+- `primitiveVerification` — a `{ status, reason? }` object reporting the cryptographic-primitive verification outcome from the binding adapter. See §2.8.1 for the contract.
+
+#### 2.8.1 `primitiveVerification`
+
+Each `SignatureAffirmation` MUST carry a `primitiveVerification` object reporting the cryptographic-primitive verification status of the underlying authored-signature evidence at admission time:
+
+| Status | Meaning |
+| ------ | ------- |
+| `verified` | The binding adapter executed and passed the cryptographic signature primitive (canonical-digest + signature-suite check over the binding's signature value/method, e.g. Formspec `signatureValue` / `signatureMethod`). Required for legal-tier deployments that gate on a `verified` posture. |
+| `deferredPendingHelper` | The binding adapter parsed and pre-checked the signature (pins, consent, digest) but did not execute the cryptographic primitive — for example because the canonicalization/signing helper for that binding has not shipped. Admissible at the WOS layer; downstream verifiers and operators decide whether this status meets their proof posture. |
+| `failed` | The cryptographic primitive was attempted and rejected. WOS admission MUST NOT emit `SignatureAffirmation` with status `failed`; instead, admission MUST fail and the binding MUST surface a binding-level rejection. |
+
+When `status` is `deferredPendingHelper` or `failed`, a non-empty `reason` MUST be present and SHOULD identify the cause (e.g. `formspec-signing-helper-pending` for the deferred case while `FORMSPEC-SIGN-HELPER-001` is unshipped). When `status` is `verified`, `reason` MAY be omitted.
+
+A future deployment posture MAY require `verified` for any signing-intent class; until that posture lands, admission accepts `verified` or `deferredPendingHelper`. The reference Formspec binding currently emits `deferredPendingHelper` with reason `formspec-signing-helper-pending` because the cryptographic primitive over `signatureValue` / `signatureMethod` has not yet shipped at the binding; downstream verifiers MUST treat the resulting `SignatureAffirmation` as "pin/consent/digest pre-checked, primitive deferred" rather than "cryptographically verified."
 
 If consent evidence is missing, identity binding is below the role's required policy, the signing-intent URI is unregistered for the deployment, the signer-authority floor for the URI is not met, or required source signature evidence is invalid, the runtime MUST NOT emit `SignatureAffirmation`.
 
