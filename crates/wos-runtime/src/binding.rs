@@ -34,6 +34,43 @@ pub struct CaseMutationBundle {
     pub field_updates: serde_json::Map<String, serde_json::Value>,
 }
 
+/// Cryptographic primitive-verification status reported by the binding for
+/// each authored signature.
+///
+/// `Verified` requires that the signature primitive (canonical-digest +
+/// signature-suite check over the binding's signature value/method, e.g.
+/// Formspec `signatureValue`/`signatureMethod`) actually executed and passed.
+/// Until the Formspec signing helper (`FORMSPEC-SIGN-HELPER-001`) ships, the
+/// reference Formspec binding emits
+/// [`SignaturePrimitiveStatus::DeferredPendingHelper`] because pin/consent/
+/// digest pre-checks have run but the primitive itself has not. `Failed`
+/// indicates the primitive was attempted and rejected; WOS admission MUST NOT
+/// emit a `SignatureAffirmation` whose primitive status is `Failed`.
+///
+/// JSON encoding uses `{ "status": "verified" | "deferredPendingHelper" |
+/// "failed", "reason": "..." }` (the `reason` field is required for the latter
+/// two and absent for `verified`).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum SignaturePrimitiveStatus {
+    /// The cryptographic signature primitive ran and passed.
+    Verified,
+
+    /// The primitive could not run because the signing helper is not
+    /// available; pin, consent, and digest pre-checks succeeded.
+    DeferredPendingHelper {
+        /// Stable machine-readable reason identifier (e.g.
+        /// `formspec-signing-helper-pending`).
+        reason: String,
+    },
+
+    /// The primitive ran and rejected the signature.
+    Failed {
+        /// Stable machine-readable reason identifier.
+        reason: String,
+    },
+}
+
 /// Binding-neutral verified signature evidence for WOS Signature Profile
 /// admission.
 #[derive(Debug, Clone, PartialEq)]
@@ -82,6 +119,16 @@ pub struct SignatureEvidence {
 
     /// WOS signer-authority claim supplied by the source or response.
     pub signer_authority: Option<serde_json::Value>,
+
+    /// Cryptographic primitive-verification status reported by the binding.
+    ///
+    /// Bindings that have not yet executed the cryptographic signature
+    /// primitive (e.g. the reference Formspec binding while
+    /// `FORMSPEC-SIGN-HELPER-001` is unshipped) MUST emit
+    /// [`SignaturePrimitiveStatus::DeferredPendingHelper`] so admission
+    /// records the verification gap honestly. Bindings that have run and
+    /// passed the primitive emit [`SignaturePrimitiveStatus::Verified`].
+    pub primitive_verification: SignaturePrimitiveStatus,
 }
 
 /// Errors produced by binding adapters.

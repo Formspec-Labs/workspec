@@ -8,7 +8,7 @@ use wos_core::{
 };
 use wos_runtime::binding::{
     BindingError, CaseMutationBundle, ContractBindingAdapter, PreparedTask, SignatureEvidence,
-    SubmissionValidation,
+    SignaturePrimitiveStatus, SubmissionValidation,
 };
 use wos_runtime::intake::{
     IntakeAcceptanceAdapter, IntakeAcceptanceOutcome, IntakeAcceptanceRequest,
@@ -17,6 +17,11 @@ use wos_runtime::intake::{
 
 const FORMSPEC_SIGNED_PAYLOAD_CANONICALIZATION: &str = "formspec-response-signing-v1";
 const FORMSPEC_SIGNED_PAYLOAD_DOMAIN: &str = "formspec.response.signed-payload.v1";
+
+/// Stable reason emitted when the reference Formspec binding has parsed and
+/// pre-checked an authored signature but has not yet run the cryptographic
+/// primitive (pending the Formspec signing helper, `FORMSPEC-SIGN-HELPER-001`).
+pub const FORMSPEC_SIGNING_HELPER_PENDING_REASON: &str = "formspec-signing-helper-pending";
 
 /// Case action implied by a Formspec intake handoff.
 ///
@@ -748,6 +753,16 @@ where
                 ceremony_id: Some(signature.ceremony_id),
                 identity_binding: signature.identity_binding,
                 signer_authority: signer_authority.clone(),
+                // The reference Formspec binding parses pins, consent, signing
+                // intent, and the signed-payload digest, but it does not yet
+                // execute the cryptographic primitive over `signatureValue` /
+                // `signatureMethod`. That work ships with
+                // `FORMSPEC-SIGN-HELPER-001`. Until then, the binding reports
+                // `DeferredPendingHelper` so downstream WOS provenance honestly
+                // records that the primitive has not run.
+                primitive_verification: SignaturePrimitiveStatus::DeferredPendingHelper {
+                    reason: FORMSPEC_SIGNING_HELPER_PENDING_REASON.to_string(),
+                },
             });
         }
         Ok(Some(evidence))
@@ -1113,6 +1128,32 @@ mod tests {
         assert_eq!(
             signatures[0].document_hash,
             "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        );
+    }
+
+    #[test]
+    fn signature_evidence_emits_deferred_pending_helper_status() {
+        // The reference Formspec binding does not yet run the cryptographic
+        // primitive over signatureValue / signatureMethod (FORMSPEC-SIGN-
+        // HELPER-001 pending). It MUST therefore emit
+        // SignaturePrimitiveStatus::DeferredPendingHelper so downstream WOS
+        // provenance records the verification gap honestly instead of
+        // implying a verified signature.
+        let adapter = FormspecBinding::new(StubProcessor);
+        let response = signed_response();
+        let evidence = adapter
+            .signature_evidence(&formspec_task(), &response)
+            .expect("signature evidence parses")
+            .expect("signature evidence is present");
+
+        assert_eq!(evidence.len(), 1);
+        assert_eq!(
+            evidence[0].primitive_verification,
+            SignaturePrimitiveStatus::DeferredPendingHelper {
+                reason: FORMSPEC_SIGNING_HELPER_PENDING_REASON.to_string(),
+            },
+            "Formspec binding must emit DeferredPendingHelper while \
+             FORMSPEC-SIGN-HELPER-001 is unshipped"
         );
     }
 

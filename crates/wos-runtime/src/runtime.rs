@@ -1590,6 +1590,10 @@ mod tests {
                     .and_then(|data| data.get("identityBinding"))
                     .cloned(),
                 signer_authority: None,
+                primitive_verification:
+                    crate::binding::SignaturePrimitiveStatus::DeferredPendingHelper {
+                        reason: "test-harness-no-signature-primitive".to_string(),
+                    },
             }]))
         }
     }
@@ -1723,6 +1727,10 @@ mod tests {
                     .and_then(|data| data.get("identityBinding"))
                     .cloned(),
                 signer_authority: None,
+                primitive_verification:
+                    crate::binding::SignaturePrimitiveStatus::DeferredPendingHelper {
+                        reason: "test-harness-no-signature-primitive".to_string(),
+                    },
             }]))
         }
     }
