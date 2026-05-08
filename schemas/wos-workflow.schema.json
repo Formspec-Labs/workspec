@@ -3738,6 +3738,35 @@
               ]
             }
           }
+        },
+        "deploymentLocalSigningIntents": {
+          "type": "array",
+          "description": "Allowlist of deployment-local signing-intent URIs admitted by this workflow in addition to the §2.11.1 registered WOS set. Each URI MUST NOT use the `urn:wos:signing-intent:*` namespace (reserved for the WOS-registered set). Bridge until the WOS Posture Declaration object lands (PLN-0384) — when Posture Declaration ships, deployment-local intents move there and this field becomes deprecated. Runtime admits a SignatureAffirmation whose `signingIntent` is registered OR present in this list; otherwise rejects fail-closed (Signature Profile §2.11.2).",
+          "items": {
+            "type": "string",
+            "format": "uri",
+            "minLength": 1,
+            "description": "Deployment-scoped signing-intent URI admitted by this workflow. MUST NOT use the reserved `urn:wos:signing-intent:*` namespace.",
+            "examples": [
+              "urn:acme:signing-intent:supervisor-approval"
+            ],
+            "not": {
+              "pattern": "^urn:wos:signing-intent:"
+            },
+            "x-wos": {
+              "openStringKind": "uri"
+            }
+          },
+          "uniqueItems": true,
+          "examples": [
+            [
+              "urn:acme:signing-intent:supervisor-approval"
+            ]
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Deployment-local signing-intent allowlist — bridge to Posture Declaration (PLN-0384); admits non-WOS-namespace URIs; schema rejects urn:wos:signing-intent:* shadowing"
+          }
         }
       }
     },

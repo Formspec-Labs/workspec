@@ -228,6 +228,27 @@ fn sig023_authority_self_class_without_source_admits() {
 }
 
 #[test]
+fn sig024_allowlisted_deployment_local_intent_admits() {
+    assert_signature_fixture_passes("SIG-024-allowlisted-deployment-local-intent.json");
+}
+
+#[test]
+fn sig025_unregistered_non_allowlisted_intent_blocks_affirmation() {
+    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let error = run_fixture(
+        &fixture_json("SIG-025-unregistered-non-allowlisted-intent.json"),
+        base_dir.to_str().expect("utf-8 fixture path"),
+    )
+    .expect_err("unregistered, non-allowlisted signingIntent must reject");
+    assert!(
+        error
+            .to_string()
+            .contains("deploymentLocalSigningIntents"),
+        "unexpected unregistered-intent rejection error: {error}"
+    );
+}
+
+#[test]
 fn sig017_stale_response_pin_blocks_affirmation() {
     let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
     let error = run_fixture(

@@ -4066,6 +4066,7 @@ dependencies = [
  "chrono",
  "ciborium",
  "fel-core",
+ "jsonschema",
  "semver",
  "serde",
  "serde_json",

@@ -1,0 +1,91 @@
+{
+  "$wosWorkflow": "1.0",
+  "version": "1.0.0",
+  "title": "signature-runtime-deployment-local",
+  "url": "https://example.test/fixtures/signature-runtime-deployment-local",
+  "signature": {
+    "deploymentLocalSigningIntents": [
+      "urn:acme:signing-intent:supervisor-approval"
+    ],
+    "roles": [
+      {
+        "id": "applicantSigner",
+        "role": "signer",
+        "actorId": "applicant",
+        "authenticationPolicyKey": "emailOtp"
+      }
+    ],
+    "documents": [
+      {
+        "id": "application",
+        "documentRef": "urn:test:document:application",
+        "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "documentHashAlgorithm": "sha-256",
+        "sourceResponseRef": "urn:test:formspec-response:application"
+      }
+    ],
+    "authenticationPolicies": [
+      {
+        "key": "emailOtp",
+        "method": "email-otp",
+        "assuranceLevel": "standard"
+      }
+    ],
+    "signingFlow": {
+      "type": "sequential",
+      "steps": [
+        {
+          "id": "applicantSigns",
+          "roleId": "applicantSigner",
+          "documentId": "application",
+          "signingIntent": "urn:acme:signing-intent:supervisor-approval"
+        }
+      ],
+      "completion": {
+        "type": "all-required"
+      }
+    },
+    "evidence": {
+      "recordKind": "signatureAffirmation",
+      "requiredFields": [
+        "response.signature.acceptedAt",
+        "response.signature.affirmed",
+        "response.signature.documentHash"
+      ],
+      "consentReference": {
+        "consentTextRef": "urn:test:consent:esign",
+        "consentVersion": "1.0.0",
+        "acceptedAtPath": "response.signature.acceptedAt",
+        "affirmationPath": "response.signature.affirmed"
+      },
+      "identityBinding": {
+        "method": "email-otp",
+        "assuranceLevel": "standard"
+      },
+      "custodyHookEligible": true
+    }
+  },
+  "impactLevel": "operational",
+  "actors": [
+    {
+      "id": "applicant",
+      "type": "human"
+    }
+  ],
+  "lifecycle": {
+    "initialState": "_s",
+    "states": {
+      "_s": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "target": "_f"
+          }
+        ]
+      },
+      "_f": {
+        "type": "final"
+      }
+    }
+  }
+}

@@ -174,6 +174,13 @@ pub struct SignatureProfileDocument {
     /// Reassignment policy.
     #[serde(default)]
     pub reassignment_policy: Option<ReassignmentPolicy>,
+    /// Allowlist of deployment-local signing-intent URIs admitted by this
+    /// workflow in addition to the §2.11.1 registered WOS set. Schema lint
+    /// (and a runtime parse-time guard) rejects URIs in the reserved
+    /// `urn:wos:signing-intent:*` namespace. Bridge until the WOS Posture
+    /// Declaration object lands (PLN-0384).
+    #[serde(default)]
+    pub deployment_local_signing_intents: Vec<String>,
     /// Extension data.
     #[serde(default)]
     pub extensions: HashMap<String, serde_json::Value>,
@@ -542,8 +549,13 @@ impl WosRuntime {
         self.ensure_step_can_complete(record, profile, step)?;
         self.ensure_required_evidence_present(record, response, &profile.evidence)?;
         self.ensure_consent_present(record, response, &profile.evidence.consent_reference)?;
-        let signature_evidence =
-            self.signature_evidence_for_submission(signature_evidence, actor_id, step, document)?;
+        let signature_evidence = self.signature_evidence_for_submission(
+            signature_evidence,
+            actor_id,
+            step,
+            document,
+            profile,
+        )?;
         let identity_binding = signature_evidence
             .identity_binding
             .clone()
@@ -1227,6 +1239,7 @@ impl WosRuntime {
         actor_id: &str,
         step: &SigningStep,
         document: &SignatureDocument,
+        profile: &SignatureProfileDocument,
     ) -> Result<VerifiedSignatureEvidence, RuntimeError> {
         let evidence = signature_evidence.ok_or_else(|| {
             RuntimeError::Signature(
@@ -1254,7 +1267,10 @@ impl WosRuntime {
             )));
         }
 
-        ensure_registered_signing_intent(&signature.signing_intent)?;
+        ensure_signing_intent_admitted(
+            &signature.signing_intent,
+            &profile.deployment_local_signing_intents,
+        )?;
         if let Some(expected_intent) = &step.signing_intent
             && signature.signing_intent != *expected_intent
         {
@@ -1492,14 +1508,26 @@ fn response_path<'a>(response: &'a serde_json::Value, path: &str) -> Option<&'a 
     value_at_path(response, path)
 }
 
-fn ensure_registered_signing_intent(signing_intent: &str) -> Result<(), RuntimeError> {
+/// Admit a signingIntent if it is in the §2.11.1 registered WOS set OR in
+/// this workflow's `deploymentLocalSigningIntents` allowlist (§2.11.2 bridge
+/// until the WOS Posture Declaration object lands, PLN-0384). Reject
+/// otherwise — fail-closed.
+fn ensure_signing_intent_admitted(
+    signing_intent: &str,
+    deployment_local_signing_intents: &[String],
+) -> Result<(), RuntimeError> {
     if is_registered_signing_intent(signing_intent) {
-        Ok(())
-    } else {
-        Err(RuntimeError::Signature(format!(
-            "unregistered signingIntent '{signing_intent}'"
-        )))
+        return Ok(());
     }
+    if deployment_local_signing_intents
+        .iter()
+        .any(|allowed| allowed == signing_intent)
+    {
+        return Ok(());
+    }
+    Err(RuntimeError::Signature(format!(
+        "signingIntent '{signing_intent}' is neither registered (urn:wos:signing-intent:*) nor in this workflow's deploymentLocalSigningIntents allowlist"
+    )))
 }
 
 fn is_registered_signing_intent(signing_intent: &str) -> bool {
@@ -2300,5 +2328,124 @@ mod signer_authority_tests {
             }
             other => panic!("expected Signature floor-mismatch error, got {other:?}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod deployment_local_intent_tests {
+    //! Phase K1: deployment-local signing-intent admission. Bridge until the
+    //! WOS Posture Declaration object lands (PLN-0384). Schema enforces that
+    //! `deploymentLocalSigningIntents` items do NOT shadow the reserved
+    //! `urn:wos:signing-intent:*` namespace; runtime admits an intent that is
+    //! either registered or in the workflow's allowlist, fails closed otherwise.
+
+    use super::*;
+    use jsonschema::Validator;
+
+    fn allowlist(items: &[&str]) -> Vec<String> {
+        items.iter().map(|s| (*s).to_string()).collect()
+    }
+
+    fn signature_schema() -> Validator {
+        let raw = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../schemas/wos-workflow.schema.json"
+        ));
+        let root: serde_json::Value = serde_json::from_str(raw).expect("workflow schema parses");
+        // Extract the Signature definition as a standalone schema (drop $defs
+        // refs are not used inside Signature for the field under test).
+        let sig = root
+            .pointer("/$defs/Signature")
+            .cloned()
+            .expect("Signature definition exists in workflow schema");
+        Validator::new(&sig).expect("Signature schema compiles")
+    }
+
+    #[test]
+    fn unregistered_intent_without_allowlist_is_rejected() {
+        let intents = allowlist(&[]);
+        let result = ensure_signing_intent_admitted("urn:acme:custom:intent", &intents);
+        match result {
+            Err(RuntimeError::Signature(msg)) => {
+                assert!(
+                    msg.contains("deploymentLocalSigningIntents"),
+                    "expected fail-closed message about allowlist, got: {msg}"
+                );
+            }
+            other => panic!("expected Signature rejection, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unregistered_intent_with_allowlist_is_admitted() {
+        let intents = allowlist(&["urn:acme:custom:intent"]);
+        let result = ensure_signing_intent_admitted("urn:acme:custom:intent", &intents);
+        assert!(
+            result.is_ok(),
+            "allowlisted deployment-local intent must admit, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn registered_intent_admitted_regardless_of_allowlist() {
+        let intents = allowlist(&[]);
+        let result = ensure_signing_intent_admitted(
+            "urn:wos:signing-intent:applicant-signature",
+            &intents,
+        );
+        assert!(
+            result.is_ok(),
+            "registered WOS intent must admit even with empty allowlist, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn allowlist_cannot_shadow_wos_namespace() {
+        let validator = signature_schema();
+        // Minimal Signature instance: only the field under test, plus the
+        // required structural skeleton needed for jsonschema to even reach
+        // the property. We intentionally violate `required` (roles/documents/
+        // signingFlow/evidence) — the schema MUST reject regardless because
+        // the array item pattern check fires before the required check, but
+        // even if it didn't, the test asserts that the *combined* result is
+        // not-valid, which is what schema-level rejection means.
+        let instance = serde_json::json!({
+            "deploymentLocalSigningIntents": ["urn:wos:signing-intent:fake"]
+        });
+        let report = validator.validate(&instance);
+        assert!(
+            report.is_err(),
+            "schema must reject urn:wos:signing-intent:* in deploymentLocalSigningIntents"
+        );
+        // Sanity: a deployment-scoped URI passes the per-item pattern guard
+        // (the missing required keys still fail the overall instance, but the
+        // failure for THIS item shape is gone).
+        let scoped_instance = serde_json::json!({
+            "deploymentLocalSigningIntents": ["urn:acme:signing-intent:supervisor-approval"]
+        });
+        // Both instances fail overall (required keys missing); we assert the
+        // first instance has at least one error mentioning the urn:wos:
+        // pattern, distinguishing schema-level shadow rejection from the
+        // structural required-fields failure that affects both.
+        let collect_errors = |inst: &serde_json::Value| -> Vec<String> {
+            validator
+                .iter_errors(inst)
+                .map(|e| e.to_string())
+                .collect()
+        };
+        let bad_errors = collect_errors(&instance);
+        let scoped_errors = collect_errors(&scoped_instance);
+        let mentions_pattern = |errs: &[String]| {
+            errs.iter()
+                .any(|e| e.contains("urn:wos:signing-intent:") || e.contains("\"not\""))
+        };
+        assert!(
+            mentions_pattern(&bad_errors),
+            "expected a urn:wos: shadow rejection error, got: {bad_errors:?}"
+        );
+        assert!(
+            !mentions_pattern(&scoped_errors),
+            "deployment-scoped URI should not trigger the urn:wos: shadow guard, got: {scoped_errors:?}"
+        );
     }
 }
