@@ -79,7 +79,11 @@
     {
       "recordKind": "signatureAffirmation",
       "data": {
-        "custodyHookEligible": true
+        "custodyHookEligible": true,
+        "primitiveVerification": {
+          "status": "deferredPendingHelper",
+          "reason": "formspec-signing-helper-pending"
+        }
       }
     }
   ]

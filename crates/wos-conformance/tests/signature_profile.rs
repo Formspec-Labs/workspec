@@ -162,6 +162,25 @@ fn sig016_signer_authority_floor_failure_blocks_affirmation() {
 }
 
 #[test]
+fn sig018_tampered_signature_value_admits_with_deferred_status() {
+    // Until FORMSPEC-SIGN-HELPER-001 ships, the Formspec binding parses pin/
+    // consent/digest pre-checks but does not run the cryptographic primitive
+    // over `signatureValue`. A byte-modified `signatureValue` therefore admits
+    // today and the SignatureAffirmation MUST carry
+    // `primitiveVerification.status = deferredPendingHelper` so the
+    // verification gap is honestly visible. When the helper lands this
+    // fixture flips into a `failed` rejection vector.
+    assert_signature_fixture_passes("SIG-018-tampered-signature-value.json");
+}
+
+#[test]
+fn sig019_tampered_signature_method_admits_with_deferred_status() {
+    // Mirror of SIG-018 for `signatureMethod`. Same admission posture and
+    // same forward path: flips to `failed` when the signing helper ships.
+    assert_signature_fixture_passes("SIG-019-tampered-signature-method.json");
+}
+
+#[test]
 fn sig017_stale_response_pin_blocks_affirmation() {
     let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
     let error = run_fixture(

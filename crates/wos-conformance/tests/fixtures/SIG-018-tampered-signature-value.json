@@ -1,8 +1,8 @@
 {
   "binding": "formspec",
-  "id": "SIG-001-sequential-single-signer",
+  "id": "SIG-018-tampered-signature-value",
   "rule": "SIG-RT",
-  "description": "Sequential single signer emits SignatureAffirmation and completes the signing state.",
+  "description": "Authored signature whose signatureValue has been byte-modified is currently admitted with primitiveVerification.status = deferredPendingHelper because the Formspec signing primitive is not yet executed at the binding (FORMSPEC-SIGN-HELPER-001 unshipped). When the signing helper lands and the binding actually verifies signatureValue/signatureMethod, this fixture flips into a Failed rejection vector and admission MUST block.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/signature-runtime.json",
     "signatureProfile": "../../../../fixtures/profiles/signature-runtime-sequential.json"
@@ -36,7 +36,7 @@
               "signatureId": "sig-sig-001-sequential-single-signer-applicantTask",
               "documentId": "application",
               "signingIntent": "urn:wos:signing-intent:applicant-signature",
-              "signatureValue": "urn:test:signature:SIG-001-sequential-single-signer:applicantTask",
+              "signatureValue": "urn:test:signature:TAMPERED:applicantTask",
               "signatureMethod": "provider-managed",
               "signerId": "applicant",
               "signerName": "Applicant",
