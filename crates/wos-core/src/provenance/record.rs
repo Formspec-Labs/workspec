@@ -419,6 +419,14 @@ pub struct SignatureAffirmationInput<'a> {
     pub signer_authority: Option<serde_json::Value>,
     /// Whether the record is eligible for `custodyHook` admission.
     pub custody_hook_eligible: bool,
+    /// Cryptographic primitive-verification status from the binding's
+    /// signature parser, encoded as the JSON shape of
+    /// `wos_runtime::SignaturePrimitiveStatus`
+    /// (`{ "status": "verified" | "deferredPendingHelper" | "failed",
+    /// "reason"?: "..." }`). Carried forward verbatim onto the
+    /// `SignatureAffirmation` record so downstream verifiers can see whether
+    /// the cryptographic primitive actually executed.
+    pub primitive_verification: serde_json::Value,
 }
 
 /// A single provenance record.
@@ -1021,6 +1029,10 @@ impl ProvenanceRecord {
             (
                 "custodyHookEligible".to_string(),
                 serde_json::Value::Bool(input.custody_hook_eligible),
+            ),
+            (
+                "primitiveVerification".to_string(),
+                input.primitive_verification,
             ),
         ]);
 

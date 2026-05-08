@@ -604,6 +604,10 @@ mod tests {
             source_response_ref: "urn:agency.gov:formspec:responses:benefits:case-2026-0001",
             signer_authority: None,
             custody_hook_eligible: true,
+            primitive_verification: serde_json::json!({
+                "status": "deferredPendingHelper",
+                "reason": "formspec-signing-helper-pending",
+            }),
         });
         let metadata = context()
             .metadata_for_provenance_record(&typeid::mint_case_id(), 0, &record)

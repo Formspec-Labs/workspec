@@ -69,6 +69,10 @@ def _record() -> dict:
                 "urn:agency.gov:formspec:responses:benefits:case-2026-0001"
             ),
             "custodyHookEligible": True,
+            "primitiveVerification": {
+                "status": "deferredPendingHelper",
+                "reason": "formspec-signing-helper-pending",
+            },
         },
     }
 
@@ -115,6 +119,7 @@ def test_signature_affirmation_missing_data_is_rejected(schema):
         "ceremonyId",
         "sourceResponseRef",
         "custodyHookEligible",
+        "primitiveVerification",
     ],
 )
 def test_signature_affirmation_required_data_fields_are_rejected_when_missing(

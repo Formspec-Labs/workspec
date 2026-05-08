@@ -437,7 +437,7 @@
     },
     "SignatureAffirmationRecord": {
       "type": "object",
-      "description": "Shape constraint layered on Facts-tier provenance records emitted by the Signature Profile. A `recordKind == \"signatureAffirmation\"` record MUST carry the signer, role, document, source signature id, signed-payload digest, signing intent, timestamp, identity-binding, consent, provider, ceremony, profile, source response/evidence reference, and custody eligibility fields required by Signature Profile §2.8.",
+      "description": "Shape constraint layered on Facts-tier provenance records emitted by the Signature Profile. A `recordKind == \"signatureAffirmation\"` record MUST carry the signer, role, document, source signature id, signed-payload digest, signing intent, timestamp, identity-binding, consent, provider, ceremony, profile, source response/evidence reference, custody eligibility, and primitive-verification status fields required by Signature Profile §2.8.",
       "examples": [
         {
           "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
@@ -473,7 +473,11 @@
             "ceremonyId": "ceremony-2026-0001",
             "profileRef": "urn:agency.gov:wos:signature-profile:benefits:v1",
             "sourceResponseRef": "urn:agency.gov:formspec:responses:benefits:case-2026-0001",
-            "custodyHookEligible": true
+            "custodyHookEligible": true,
+            "primitiveVerification": {
+              "status": "deferredPendingHelper",
+              "reason": "formspec-signing-helper-pending"
+            }
           }
         }
       ],
@@ -537,7 +541,8 @@
         "signatureProvider",
         "ceremonyId",
         "sourceResponseRef",
-        "custodyHookEligible"
+        "custodyHookEligible",
+        "primitiveVerification"
       ],
       "oneOf": [
         {
@@ -756,6 +761,65 @@
           "description": "SignatureAffirmation records are eligible for WOS custodyHook admission.",
           "examples": [
             true
+          ]
+        },
+        "primitiveVerification": {
+          "type": "object",
+          "description": "Cryptographic primitive-verification status from the binding's authored-signature parser. `verified` requires that the cryptographic signature primitive (canonical-digest + signature-suite check over the binding's signature value/method, e.g. Formspec `signatureValue`/`signatureMethod`) executed and passed; `deferredPendingHelper` indicates the parser ran pin/consent/digest pre-checks but did not run the cryptographic primitive (e.g. Formspec signing helper not yet shipped); `failed` indicates the primitive ran and rejected the signature. WOS admission MUST NOT emit a SignatureAffirmation whose status is `failed`. A future deployment posture MAY require `verified`; until then both `verified` and `deferredPendingHelper` are admissible.",
+          "additionalProperties": false,
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "verified",
+                "deferredPendingHelper",
+                "failed"
+              ],
+              "description": "Primitive-verification outcome reported by the binding adapter that produced this affirmation; closed enum.",
+              "examples": [
+                "deferredPendingHelper"
+              ]
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Stable machine-readable reason identifier; required when status is `deferredPendingHelper` or `failed`.",
+              "examples": [
+                "formspec-signing-helper-pending"
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "deferredPendingHelper",
+                      "failed"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "required": [
+                  "status",
+                  "reason"
+                ]
+              }
+            }
+          ],
+          "examples": [
+            {
+              "status": "deferredPendingHelper",
+              "reason": "formspec-signing-helper-pending"
+            }
           ]
         }
       }

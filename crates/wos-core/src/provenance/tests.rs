@@ -646,6 +646,10 @@ fn signature_affirmation_input() -> SignatureAffirmationInput<'static> {
         source_response_ref: "urn:agency.gov:formspec:responses:benefits:case-2026-0001",
         signer_authority: None,
         custody_hook_eligible: true,
+        primitive_verification: serde_json::json!({
+            "status": "deferredPendingHelper",
+            "reason": "formspec-signing-helper-pending",
+        }),
     }
 }
 
@@ -691,6 +695,33 @@ fn signature_affirmation_constructor_serializes_required_fields() {
         "urn:agency.gov:formspec:responses:benefits:case-2026-0001"
     );
     assert_eq!(json["data"]["custodyHookEligible"], true);
+}
+
+#[test]
+fn signature_affirmation_carries_primitive_verification_deferred() {
+    // The reference Formspec binding emits
+    // SignaturePrimitiveStatus::DeferredPendingHelper while
+    // FORMSPEC-SIGN-HELPER-001 is unshipped. The SignatureAffirmation
+    // provenance record must carry that status forward verbatim into
+    // data.primitiveVerification so downstream verifiers can see the
+    // verification gap rather than be misled by a falsely-confident
+    // affirmation.
+    let mut input = signature_affirmation_input();
+    input.primitive_verification = serde_json::json!({
+        "status": "deferredPendingHelper",
+        "reason": "formspec-signing-helper-pending",
+    });
+    let record = ProvenanceRecord::signature_affirmation(input);
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(
+        json["data"]["primitiveVerification"]["status"],
+        "deferredPendingHelper"
+    );
+    assert_eq!(
+        json["data"]["primitiveVerification"]["reason"],
+        "formspec-signing-helper-pending"
+    );
 }
 
 #[test]

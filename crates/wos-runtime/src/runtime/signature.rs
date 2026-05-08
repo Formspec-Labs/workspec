@@ -622,8 +622,12 @@ impl WosRuntime {
             profile_ref,
             profile_key,
             source_response_ref,
-            signer_authority: signature_evidence.signer_authority,
+            signer_authority: signature_evidence.signer_authority.clone(),
             custody_hook_eligible: profile.evidence.custody_hook_eligible,
+            primitive_verification: serde_json::to_value(
+                &signature_evidence.primitive_verification,
+            )
+            .map_err(|error| RuntimeError::Signature(error.to_string()))?,
         });
         Ok(Some(record))
     }
