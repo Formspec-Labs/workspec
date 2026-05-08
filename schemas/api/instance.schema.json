@@ -138,7 +138,7 @@
     "DcrConstraintZoneState": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Per-instance state of one DCR constraint zone declared on a `compound` lifecycle state (advanced/advanced-governance.md §1.2; advanced-governance.md:116-176). Carries the zone identifier, current escalation level (none → caution → breach), and the most recent trigger timestamp. Companion: Agent B's `dcrZoneViolation` Facts record kind on `provenance.schema.json` carries the per-event detail; this $def is the live state projection on `CaseInstance`.",
+      "description": "Per-instance state of one DCR constraint zone declared on a `compound` lifecycle state (advanced/advanced-governance.md \u00a71.2; advanced-governance.md:116-176). Carries the zone identifier, current escalation level (none \u2192 caution \u2192 breach), and the most recent trigger timestamp. Companion: Agent B's `dcrZoneViolation` Facts record kind on `provenance.schema.json` carries the per-event detail; this $def is the live state projection on `CaseInstance`.",
       "required": [
         "zoneId",
         "currentLevel"
@@ -177,7 +177,9 @@
           "items": {
             "type": "string",
             "minLength": 1,
-            "x-wos": { "openStringKind": "identifier" }
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
           }
         },
         "violatedRelations": {
@@ -186,21 +188,37 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["relationType", "source", "target"],
+            "required": [
+              "relationType",
+              "source",
+              "target"
+            ],
             "properties": {
               "relationType": {
-                "enum": ["condition", "response", "include", "exclude", "milestone"],
+                "enum": [
+                  "condition",
+                  "response",
+                  "include",
+                  "exclude",
+                  "milestone"
+                ],
                 "description": "Closed DCR relation type per advanced-governance.md."
               },
               "source": {
                 "type": "string",
                 "minLength": 1,
-                "x-wos": { "openStringKind": "identifier" }
+                "x-wos": {
+                  "openStringKind": "identifier"
+                },
+                "description": "Identifier of the constraint zone whose relation was violated."
               },
               "target": {
                 "type": "string",
                 "minLength": 1,
-                "x-wos": { "openStringKind": "identifier" }
+                "x-wos": {
+                  "openStringKind": "identifier"
+                },
+                "description": "Identifier of the constraint zone or actor that is the target of the violated relation."
               }
             }
           }
@@ -208,7 +226,7 @@
       }
     },
     "LifecycleState": {
-      "description": "Closed instance lifecycle posture (ADR 0082 D-12). Byte-aligned mirror of the kernel `InstanceStatus` enum at `wos-workflow.schema.json#/$defs/InstanceStatus` — itself the name-promoted alias of the inline `status` field on `wos-case-instance.schema.json` (ADR 0082 D-13 gate 6 enforces this byte-parity). Closed-no-extension by design: `active` accepts events normally; `suspended` is paused; `migrating` is mid-definition-version-change; `completed` reached a top-level final state; `terminated` was explicitly terminated; `stalled` exhausted the commit retry budget (ADR 0070 D-5). The kernel taxonomy is closed; if a deployment needs new lifecycle postures, the kernel grows them and the API mirror tracks.",
+      "description": "Closed instance lifecycle posture (ADR 0082 D-12). Byte-aligned mirror of the kernel `InstanceStatus` enum at `wos-workflow.schema.json#/$defs/InstanceStatus` \u2014 itself the name-promoted alias of the inline `status` field on `wos-case-instance.schema.json` (ADR 0082 D-13 gate 6 enforces this byte-parity). Closed-no-extension by design: `active` accepts events normally; `suspended` is paused; `migrating` is mid-definition-version-change; `completed` reached a top-level final state; `terminated` was explicitly terminated; `stalled` exhausted the commit retry budget (ADR 0070 D-5). The kernel taxonomy is closed; if a deployment needs new lifecycle postures, the kernel grows them and the API mirror tracks.",
       "enum": [
         "active",
         "suspended",
@@ -252,24 +270,37 @@
     "CompensationLogEntry": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Single entry in the kernel compensation log (Kernel §9.5). Appended when the processor initiates a compensation sequence after a partial correlation-group fan-out failure or an explicit revert action. Read-only at the public API layer.",
-      "required": ["compensationId", "status", "startedAt"],
+      "description": "Single entry in the kernel compensation log (Kernel \u00a79.5). Appended when the processor initiates a compensation sequence after a partial correlation-group fan-out failure or an explicit revert action. Read-only at the public API layer.",
+      "required": [
+        "compensationId",
+        "status",
+        "startedAt"
+      ],
       "properties": {
         "compensationId": {
           "type": "string",
           "minLength": 1,
           "description": "Processor-assigned compensation identifier within this instance.",
-          "x-wos": { "openStringKind": "identifier" }
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "status": {
-          "enum": ["pending", "executing", "succeeded", "failed"],
+          "enum": [
+            "pending",
+            "executing",
+            "succeeded",
+            "failed"
+          ],
           "description": "Closed compensation lifecycle. pending: queued but not started. executing: revert steps in progress. succeeded: all revert steps completed. failed: one or more revert steps could not be applied."
         },
         "pivotStep": {
           "type": "string",
           "minLength": 1,
-          "description": "Identifier of the pivot step — the transition or mutation whose rollback triggered this compensation.",
-          "x-wos": { "openStringKind": "identifier" }
+          "description": "Identifier of the pivot step \u2014 the transition or mutation whose rollback triggered this compensation.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "revertSteps": {
           "type": "array",
@@ -277,7 +308,9 @@
           "items": {
             "type": "string",
             "minLength": 1,
-            "x-wos": { "openStringKind": "identifier" }
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
           }
         },
         "startedAt": {
@@ -296,12 +329,17 @@
       "type": "object",
       "additionalProperties": false,
       "description": "Cursor-paginated compensation log page (ADR 0082 D-7).",
-      "required": ["items", "hasMore"],
+      "required": [
+        "items",
+        "hasMore"
+      ],
       "properties": {
         "items": {
           "type": "array",
           "description": "Compensation log entries in this page.",
-          "items": { "$ref": "#/$defs/CompensationLogEntry" }
+          "items": {
+            "$ref": "#/$defs/CompensationLogEntry"
+          }
         },
         "cursor": {
           "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken",
@@ -509,7 +547,7 @@
         },
         "impactLevel": {
           "$ref": "#/$defs/ImpactLevel",
-          "description": "Closed-with-vendor-extension kernel impact level (Kernel S6; kernel:826) projected from the governing Workflow Document. REQUIRED — the kernel makes `impactLevel` REQUIRED on every Workflow Document and uses it as a proportionality index for governance, AI-oversight, and review-protocol gating; surfacing it on the case projection lets clients branch on `rights-impacting` / `safety-impacting` cases without re-fetching the workflow."
+          "description": "Closed-with-vendor-extension kernel impact level (Kernel S6; kernel:826) projected from the governing Workflow Document. REQUIRED \u2014 the kernel makes `impactLevel` REQUIRED on every Workflow Document and uses it as a proportionality index for governance, AI-oversight, and review-protocol gating; surfacing it on the case projection lets clients branch on `rights-impacting` / `safety-impacting` cases without re-fetching the workflow."
         },
         "configuration": {
           "type": "array",
@@ -536,15 +574,15 @@
         },
         "continuationOfServicesActive": {
           "type": "boolean",
-          "description": "True when the case is operating under a continuation-of-services policy (governance §3.6 — `AppealMechanism.continuationOfServices`; workflow-governance.md:154-158). Surfaces the existence of the policy without leaking the underlying policy rationale; the staff caseworker uses this to avoid premature termination during an active appeal window."
+          "description": "True when the case is operating under a continuation-of-services policy (governance \u00a73.6 \u2014 `AppealMechanism.continuationOfServices`; workflow-governance.md:154-158). Surfaces the existence of the policy without leaking the underlying policy rationale; the staff caseworker uses this to avoid premature termination during an active appeal window."
         },
         "continuationOfServicesEndsAt": {
           "$ref": "#/$defs/ExpirableTimestamp",
-          "description": "Absolute UTC RFC 3339 timestamp at which the active continuation-of-services window closes, or the literal `never` for indefinite continuation (governance §3.6). Present only when `continuationOfServicesActive == true`."
+          "description": "Absolute UTC RFC 3339 timestamp at which the active continuation-of-services window closes, or the literal `never` for indefinite continuation (governance \u00a73.6). Present only when `continuationOfServicesActive == true`."
         },
         "dcrZones": {
           "type": "array",
-          "description": "Per-instance DCR constraint-zone state (advanced/advanced-governance.md §1.2). Empty when the workflow declares no constraint zones or none have transitioned out of `none`. Cross-cite Agent B's `dcrZoneViolation` Facts record kind for the per-event detail in provenance.",
+          "description": "Per-instance DCR constraint-zone state (advanced/advanced-governance.md \u00a71.2). Empty when the workflow declares no constraint zones or none have transitioned out of `none`. Cross-cite Agent B's `dcrZoneViolation` Facts record kind for the per-event detail in provenance.",
           "items": {
             "$ref": "#/$defs/DcrConstraintZoneState"
           }
@@ -705,7 +743,9 @@
           "type": "object",
           "additionalProperties": false,
           "description": "Current escalation posture for this instance. Present only when an escalation chain is actively walking. Absent when the instance is not escalated.",
-          "required": ["level"],
+          "required": [
+            "level"
+          ],
           "properties": {
             "level": {
               "type": "integer",
@@ -738,25 +778,42 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["ruleId", "ruleKind", "activatedAt"],
+            "required": [
+              "ruleId",
+              "ruleKind",
+              "activatedAt"
+            ],
             "properties": {
               "ruleId": {
                 "type": "string",
                 "minLength": 1,
-                "x-wos": { "openStringKind": "identifier" }
+                "x-wos": {
+                  "openStringKind": "identifier"
+                },
+                "description": "Stable identifier of the governance rule that is currently active on this instance."
               },
               "ruleKind": {
-                "enum": ["lifecycle-hook", "contract-hook", "review-protocol", "due-process-notice", "assertion-gate"],
+                "enum": [
+                  "lifecycle-hook",
+                  "contract-hook",
+                  "review-protocol",
+                  "due-process-notice",
+                  "assertion-gate"
+                ],
                 "description": "Closed governance rule kind taxonomy."
               },
               "triggerTag": {
                 "type": "string",
                 "minLength": 1,
-                "x-wos": { "openStringKind": "identifier" }
+                "x-wos": {
+                  "openStringKind": "identifier"
+                },
+                "description": "Semantic tag that triggered activation of this governance rule."
               },
               "activatedAt": {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "description": "RFC 3339 timestamp recording when this governance rule became active."
               }
             }
           }
@@ -959,17 +1016,17 @@
         },
         "bidirectional": {
           "type": "boolean",
-          "description": "When true, the relationship is symmetric — a corresponding `RelatedCaseLink` exists on the peer case pointing back at this one (Kernel S5.5; kernel:775). Defaults to `false` when absent: directional links (`predecessor → successor`, `appeals → appealed-by`) are the common case; symmetric kinds like `sibling`/`related` typically set this `true`. The default is implicit-`false`."
+          "description": "When true, the relationship is symmetric \u2014 a corresponding `RelatedCaseLink` exists on the peer case pointing back at this one (Kernel S5.5; kernel:775). Defaults to `false` when absent: directional links (`predecessor \u2192 successor`, `appeals \u2192 appealed-by`) are the common case; symmetric kinds like `sibling`/`related` typically set this `true`. The default is implicit-`false`."
         },
         "semanticLabel": {
           "type": "string",
           "minLength": 1,
-          "description": "Free-form prose label disambiguating the relationship (Kernel S5.5; kernel:775). Open prose — rendering concern, not contract; useful when several `related` links exist on the same case and the operator needs to tell them apart in a UI.",
+          "description": "Free-form prose label disambiguating the relationship (Kernel S5.5; kernel:775). Open prose \u2014 rendering concern, not contract; useful when several `related` links exist on the same case and the operator needs to tell them apart in a UI.",
           "x-wos": {
             "openStringKind": "prose"
           },
           "examples": [
-            "Joint application — spouse",
+            "Joint application \u2014 spouse",
             "Companion fraud investigation"
           ]
         },
@@ -1259,7 +1316,7 @@
     "PerInstanceCorrelationResult": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Per-instance result of a correlation-keyed event fan-out (Kernel S9.4). Records the outcome the server reached against one related instance when a single submitted event was fanned out across the correlation group. `status` is closed-no-extension because the fan-out outcome space is normative — the kernel either evaluated, refused, or skipped the related instance, and inventing a fourth outcome would create a rival case-truth semantics the platform thesis rejects.",
+      "description": "Per-instance result of a correlation-keyed event fan-out (Kernel S9.4). Records the outcome the server reached against one related instance when a single submitted event was fanned out across the correlation group. `status` is closed-no-extension because the fan-out outcome space is normative \u2014 the kernel either evaluated, refused, or skipped the related instance, and inventing a fourth outcome would create a rival case-truth semantics the platform thesis rejects.",
       "required": [
         "instanceId",
         "status"
@@ -1323,45 +1380,51 @@
           "description": "Convenience marker -- `true` when every entry in `perInstanceResults` has `status == succeeded`, `false` otherwise. When `false`, callers MUST inspect `perInstanceResults` for the per-instance failure surface to drive compensation (cross-cite ADR 0070 cross-layer failure and compensation when ratified)."
         }
       }
-  },
-  "CustodyReceipt": {
-    "type": "object",
-    "additionalProperties": false,
-    "description": "Trellis custody-anchoring receipt for a case instance. Projected from the Trellis canonical-event-hash anchor receipt produced when the WOS processor appends provenance records through the custodyHook seam (Kernel §10.5). Read-only at the public API layer — the write path is internal (processor → Trellis via custodyHook).",
-    "required": ["instanceId", "canonicalEventHash", "anchoredAt"],
-    "properties": {
-      "instanceId": {
-        "$ref": "#/$defs/WosResourceUrn",
-        "description": "Case instance URN this custody receipt anchors."
-      },
-      "canonicalEventHash": {
-        "type": "string",
-        "pattern": "^[a-f0-9]{64}$",
-        "description": "SHA-256 hex digest of the Trellis-anchored canonical event. This is the cryptographic proof that the case's provenance records were anchored on Trellis — a verifier recomputes the hash from the provenance byte stream and compares against this value."
-      },
-      "anchoredAt": {
-        "type": "string",
-        "format": "date-time",
-        "description": "RFC 3339 UTC timestamp when the Trellis anchor was confirmed."
-      },
-      "anchorTarget": {
-        "type": "string",
-        "format": "uri",
-        "description": "Trellis anchor target URI (e.g. OpenTimestamps calendar URL, Rekor transparency log entry, Trillian Merkle tree path). Absent when the deployment uses an anchorless Trellis posture."
-      },
-      "provenanceRecordId": {
-        "$ref": "#/$defs/WosResourceUrn",
-        "description": "Optional Facts-tier provenance record URN whose canonical event this receipt anchors. Absent when the receipt covers a batch of records."
-      },
-      "custodyPosture": {
-        "type": "string",
-        "minLength": 1,
-        "description": "Trellis trust-profile label declared in the workflow's custody block (e.g. 'profile-b', 'lightweight'). Matches the trust-profile the custodyHook was configured with at append time.",
-        "x-wos": { "openStringKind": "identifier" }
+    },
+    "CustodyReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Trellis custody-anchoring receipt for a case instance. Projected from the Trellis canonical-event-hash anchor receipt produced when the WOS processor appends provenance records through the custodyHook seam (Kernel \u00a710.5). Read-only at the public API layer \u2014 the write path is internal (processor \u2192 Trellis via custodyHook).",
+      "required": [
+        "instanceId",
+        "canonicalEventHash",
+        "anchoredAt"
+      ],
+      "properties": {
+        "instanceId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Case instance URN this custody receipt anchors."
+        },
+        "canonicalEventHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "SHA-256 hex digest of the Trellis-anchored canonical event. This is the cryptographic proof that the case's provenance records were anchored on Trellis \u2014 a verifier recomputes the hash from the provenance byte stream and compares against this value."
+        },
+        "anchoredAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339 UTC timestamp when the Trellis anchor was confirmed."
+        },
+        "anchorTarget": {
+          "type": "string",
+          "format": "uri",
+          "description": "Trellis anchor target URI (e.g. OpenTimestamps calendar URL, Rekor transparency log entry, Trillian Merkle tree path). Absent when the deployment uses an anchorless Trellis posture."
+        },
+        "provenanceRecordId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Optional Facts-tier provenance record URN whose canonical event this receipt anchors. Absent when the receipt covers a batch of records."
+        },
+        "custodyPosture": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Trellis trust-profile label declared in the workflow's custody block (e.g. 'profile-b', 'lightweight'). Matches the trust-profile the custodyHook was configured with at append time.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        }
       }
-    }
-  },
-  "EventSubmissionResponse": {
+    },
+    "EventSubmissionResponse": {
       "type": "object",
       "additionalProperties": false,
       "description": "Response body for `POST /api/v1/instances/{id}/events`. Wraps the kernel `EvaluationResult` (which carries `previousConfiguration`, `newConfiguration`, `eventsFired`, `mutations`) plus the post-evaluation lifecycle posture and the URN of the Facts-tier provenance record the evaluation produced. Clients drive the case-portal UI off the embedded `evaluationResult.mutations` typed array (ADR 0082 D-6) -- the kernel anti-design `caseStateMutations: Record<string, unknown>` is structurally inexpressible. When the submission triggered correlation-group fan-out (Kernel S9.4), `correlationGroupResult` carries the typed per-instance outcomes; absence means no fan-out occurred (single-instance evaluation only).",
