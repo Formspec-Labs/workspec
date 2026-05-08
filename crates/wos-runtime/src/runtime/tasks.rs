@@ -12,18 +12,18 @@ use crate::milestones::evaluate_milestones;
 use crate::store::{
     ReplayKey, ReplayOperation, ReplayValue, RuntimeRecord, TaskArtifact, TaskArtifactKind,
 };
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine as _;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use wos_core::instance::{ActiveTask, CaseInstance, PendingEvent};
 use wos_core::model::governance::DelegationScope;
-use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
+use wos_core::provenance::{ProvenanceKind, ProvenanceRecord, SignatureAdmissionFailedInput};
 use wos_core::traits::AccessControl;
 
 use super::{
-    contract_validation_record, format_timestamp, impact_level_label, merge_case_state,
-    populate_provenance_record_fields,
-    stamp_provenance, PersistDraftResult, RuntimeError, TaskSubmissionResult, WosRuntime,
-    COMPLETION_EVENT_EXTENSION_KEY, FAILURE_EVENT_EXTENSION_KEY,
+    AdmissionOutcome, COMPLETION_EVENT_EXTENSION_KEY, FAILURE_EVENT_EXTENSION_KEY,
+    PersistDraftResult, RuntimeError, TaskSubmissionResult, WosRuntime, contract_validation_record,
+    format_timestamp, impact_level_label, merge_case_state, populate_provenance_record_fields,
+    stamp_provenance,
 };
 
 impl WosRuntime {
@@ -310,6 +310,76 @@ impl WosRuntime {
         } else {
             None
         };
+        let signature_outcome = self.signature_affirmation_for_submission(
+            &record,
+            &task,
+            &response,
+            signature_evidence.as_deref(),
+            actor_id,
+            &now_iso,
+        )?;
+        if let Some(AdmissionOutcome::AdmissionFailed(failed)) = signature_outcome.as_ref() {
+            let reason = serde_json::to_value(&failed.reason)
+                .ok()
+                .and_then(|value| value.as_str().map(str::to_string))
+                .unwrap_or_else(|| "signature_admission_failed".to_string());
+            provenance.push(ProvenanceRecord::signature_admission_failed(
+                SignatureAdmissionFailedInput {
+                    reason: &reason,
+                    response_id: &failed.evidence_bindings.response_id,
+                    signed_payload_digest: &failed.evidence_bindings.signed_payload_digest,
+                    signature_id: &failed.evidence_bindings.signature_id,
+                    signing_intent: &failed.evidence_bindings.signing_intent,
+                    signer_id: failed.signer_id.as_deref(),
+                    signer_authority: failed.signer_authority.clone(),
+                    failure_context: None,
+                    emitted_at: &failed.emitted_at,
+                },
+            ));
+            provenance.push(ProvenanceRecord::task_lifecycle(
+                ProvenanceKind::TaskFailed,
+                &task.task_id,
+                Some(actor_id),
+                Some(serde_json::json!({
+                    "admissionOutcome": "admissionFailed",
+                    "reason": failed.reason,
+                    "evidenceBindings": failed.evidence_bindings,
+                    "signerId": failed.signer_id,
+                    "signerAuthority": failed.signer_authority,
+                    "emittedAt": failed.emitted_at,
+                })),
+            ));
+            let kernel = self.resolver.resolve_kernel(
+                &record.instance.definition_url,
+                &record.instance.definition_version,
+            )?;
+            populate_provenance_record_fields(
+                &mut provenance,
+                &kernel,
+                &record.instance.definition_version,
+            );
+            stamp_provenance(&mut provenance, &now_iso);
+            record.instance.provenance_position += provenance.len() as u64;
+            record.provenance_log.extend(provenance);
+            record.instance.updated_at = now_iso;
+            let result = TaskSubmissionResult::Failed {
+                code: "signatureAdmissionFailed".to_string(),
+                emitted_event: None,
+            };
+            if let Some(token) = idempotency_token {
+                record.replay_entries.insert(
+                    ReplayKey {
+                        operation: ReplayOperation::SubmitTaskResponse,
+                        task_id: task_id.to_string(),
+                        actor_id: actor_id.to_string(),
+                        token: token.to_string(),
+                    },
+                    ReplayValue::Submission(result.clone()),
+                );
+            }
+            self.store.save_record(record)?;
+            return Ok(result);
+        }
 
         let accepted_artifact = build_artifact(
             &record,
@@ -365,37 +435,46 @@ impl WosRuntime {
             actor_id,
             &now_iso,
         );
-        let signature_outcome = self
-            .signature_affirmation_for_submission(
-                &record,
-                &task,
-                &response,
-                signature_evidence.as_deref(),
-                actor_id,
-                &now_iso,
-            )?;
         if let Some(outcome) = signature_outcome {
-            // Completion `signed_at` flows from the same verified evidence that
-            // produced the `SignatureAffirmation` record (review F4): the
-            // case-ledger entry and `x-wos-signature-completions` cannot
-            // disagree for a given signature event.
-            self.record_signature_completion(
-                &mut record.instance,
-                &task,
-                &outcome.signer_id,
-                &outcome.signed_at,
-            )?;
-            provenance.push(outcome.record);
+            match outcome {
+                AdmissionOutcome::Affirmation(outcome) => {
+                    // Completion `signed_at` flows from the same verified
+                    // evidence that produced the `SignatureAffirmation` record
+                    // (review F4): the case-ledger entry and
+                    // `x-wos-signature-completions` cannot disagree for a given
+                    // signature event.
+                    self.record_signature_completion(
+                        &mut record.instance,
+                        &task,
+                        &outcome.signer_id,
+                        &outcome.signed_at,
+                    )?;
+                    provenance.push(outcome.record);
+                    provenance.push(ProvenanceRecord::task_lifecycle(
+                        ProvenanceKind::TaskCompleted,
+                        task_id,
+                        Some(actor_id),
+                        Some(serde_json::json!({
+                            "artifactId": accepted_artifact.artifact_id,
+                            "caseMutated": case_mutated,
+                        })),
+                    ));
+                }
+                AdmissionOutcome::AdmissionFailed(_) => {
+                    unreachable!("admission failures return before task removal and completion")
+                }
+            }
+        } else {
+            provenance.push(ProvenanceRecord::task_lifecycle(
+                ProvenanceKind::TaskCompleted,
+                task_id,
+                Some(actor_id),
+                Some(serde_json::json!({
+                    "artifactId": accepted_artifact.artifact_id,
+                    "caseMutated": case_mutated,
+                })),
+            ));
         }
-        provenance.push(ProvenanceRecord::task_lifecycle(
-            ProvenanceKind::TaskCompleted,
-            task_id,
-            Some(actor_id),
-            Some(serde_json::json!({
-                "artifactId": accepted_artifact.artifact_id,
-                "caseMutated": case_mutated,
-            })),
-        ));
         populate_provenance_record_fields(
             &mut provenance,
             &kernel,

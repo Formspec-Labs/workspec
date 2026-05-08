@@ -300,6 +300,13 @@ pub enum ProvenanceKind {
     /// `data` carries signer, role, document, identity-binding, consent,
     /// ceremony, profile, source response, and custody eligibility fields.
     SignatureAffirmation,
+    /// Signature admission was rejected by the runtime.
+    ///
+    /// `data` carries `reason`, `evidenceBindings`, `signerId`, `signerAuthority`,
+    /// and `emittedAt`. Counterpart to `SignatureAffirmation`; emitted when a
+    /// signing gate (primitive verification, intent registration, posture floor,
+    /// or adapter availability) rejects the submission.
+    SignatureAdmissionFailed,
 
     // ── Amendment & supersession (ADR 0066) ─────────────────────────
     /// A correction to a non-determination event was authorized (ADR 0066 §1).

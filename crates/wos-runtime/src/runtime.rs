@@ -14,6 +14,7 @@ mod tasks;
 mod timers;
 
 use std::any::Any;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::error::Error as StdError;
 
@@ -43,8 +44,8 @@ pub use provenance::{
 };
 use provenance::{compensation_provenance, contract_validation_record};
 pub use signature::{
-    CompletionRequirementKind, SIGNATURE_PROFILE_KEY_EXTENSION, SIGNATURE_PROFILE_REF_EXTENSION,
-    SIGNATURE_STEP_ID_EXTENSION, SignatureProfileDocument,
+    AdmissionOutcome, CompletionRequirementKind, SIGNATURE_PROFILE_KEY_EXTENSION,
+    SIGNATURE_PROFILE_REF_EXTENSION, SIGNATURE_STEP_ID_EXTENSION, SignatureProfileDocument,
 };
 use support::{
     format_timestamp, impact_level_label, make_task_id, merge_case_state,
@@ -485,6 +486,13 @@ pub struct WosRuntime {
     /// declaration's `invoker` discriminator. Empty by default — runtimes
     /// without agent participation never need to populate it.
     agent_invokers: wos_core::AgentInvokerRegistry,
+    /// Cached Posture Declarations keyed by URI.
+    ///
+    /// **Production note:** `RefCell` makes `WosRuntime` `!Send + !Sync`, which is
+    /// acceptable for the in-memory adapter (single-threaded test oracle) but MUST be
+    /// replaced with an async-aware cache (e.g., `tokio::sync::RwLock`) in the
+    /// production Restate adapter where the runtime crosses async boundaries.
+    posture_declarations: RefCell<HashMap<String, signature::PostureDeclaration>>,
 }
 
 impl WosRuntime {
@@ -528,6 +536,7 @@ impl WosRuntime {
             intake_policy: Box::new(NoopIntakeAcceptancePolicy),
             signature_profiles: Vec::new(),
             agent_invokers: wos_core::AgentInvokerRegistry::new(),
+            posture_declarations: RefCell::new(HashMap::new()),
         }
     }
 
@@ -1561,6 +1570,19 @@ mod tests {
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or_default()
                 .to_string();
+            let primitive_verification = if signature
+                .get("primitiveVerification")
+                .and_then(serde_json::Value::as_str)
+                == Some("failed")
+            {
+                crate::binding::SignaturePrimitiveStatus::Failed {
+                    reason: "test-primitive-failed".to_string(),
+                }
+            } else {
+                crate::binding::SignaturePrimitiveStatus::DeferredPendingHelper {
+                    reason: "test-harness-no-signature-primitive".to_string(),
+                }
+            };
             Ok(Some(vec![crate::binding::SignatureEvidence {
                 source_system: "formspec-test-harness".to_string(),
                 source_signature_id: "sig013-harness".to_string(),
@@ -1573,8 +1595,7 @@ mod tests {
                     .map(str::to_string),
                 signing_intent: "urn:wos:signing-intent:applicant-signature".to_string(),
                 signed_payload_digest:
-                    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-                        .to_string(),
+                    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
                 signed_payload_digest_algorithm: "sha-256".to_string(),
                 signed_at,
                 document_hash,
@@ -1590,10 +1611,7 @@ mod tests {
                     .and_then(|data| data.get("identityBinding"))
                     .cloned(),
                 signer_authority: None,
-                primitive_verification:
-                    crate::binding::SignaturePrimitiveStatus::DeferredPendingHelper {
-                        reason: "test-harness-no-signature-primitive".to_string(),
-                    },
+                primitive_verification,
             }]))
         }
     }
@@ -1698,6 +1716,19 @@ mod tests {
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or_default()
                 .to_string();
+            let primitive_verification = if signature
+                .get("primitiveVerification")
+                .and_then(serde_json::Value::as_str)
+                == Some("failed")
+            {
+                crate::binding::SignaturePrimitiveStatus::Failed {
+                    reason: "test-primitive-failed".to_string(),
+                }
+            } else {
+                crate::binding::SignaturePrimitiveStatus::DeferredPendingHelper {
+                    reason: "test-harness-no-signature-primitive".to_string(),
+                }
+            };
             Ok(Some(vec![crate::binding::SignatureEvidence {
                 source_system: "formspec-test-harness".to_string(),
                 source_signature_id: "sig013-harness".to_string(),
@@ -1710,8 +1741,7 @@ mod tests {
                     .map(str::to_string),
                 signing_intent: "urn:wos:signing-intent:applicant-signature".to_string(),
                 signed_payload_digest:
-                    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-                        .to_string(),
+                    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
                 signed_payload_digest_algorithm: "sha-256".to_string(),
                 signed_at,
                 document_hash,
@@ -1727,10 +1757,7 @@ mod tests {
                     .and_then(|data| data.get("identityBinding"))
                     .cloned(),
                 signer_authority: None,
-                primitive_verification:
-                    crate::binding::SignaturePrimitiveStatus::DeferredPendingHelper {
-                        reason: "test-harness-no-signature-primitive".to_string(),
-                    },
+                primitive_verification,
             }]))
         }
     }
@@ -3268,7 +3295,8 @@ mod tests {
     fn sig013_harness_documents() -> (KernelDocument, SignatureProfileDocument) {
         let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let kernel_path = manifest.join("../../fixtures/kernel/signature-runtime.json");
-        let profile_path = manifest.join("../../fixtures/profiles/signature-runtime-sequential.json");
+        let profile_path =
+            manifest.join("../../fixtures/profiles/signature-runtime-sequential.json");
         let kernel_json = fs::read_to_string(&kernel_path)
             .unwrap_or_else(|e| panic!("read {}: {e}", kernel_path.display()));
         let kernel: KernelDocument =
@@ -3781,15 +3809,15 @@ mod tests {
             .expect_err("open missing in target");
         match err {
             RuntimeError::MigrationRejected(msg) => {
-                assert!(
-                    msg.contains("state not found"),
-                    "unexpected message: {msg}"
-                );
+                assert!(msg.contains("state not found"), "unexpected message: {msg}");
             }
             other => panic!("expected MigrationRejected, got {other:?}"),
         }
         assert_eq!(
-            runtime.load_instance("m-case-2").unwrap().definition_version,
+            runtime
+                .load_instance("m-case-2")
+                .unwrap()
+                .definition_version,
             "1.0.0"
         );
     }
@@ -3938,6 +3966,226 @@ mod tests {
         assert!(
             msg.contains("is below policy 'emailOtp'"),
             "unexpected error (expected policy-floor rejection like SIG-013 conformance): {msg}"
+        );
+    }
+
+    #[test]
+    fn submit_task_response_signature_affirmation_records_primitive_verification() {
+        let (kernel, profile) = sig013_harness_documents();
+        let mut runtime = runtime_with_kernel_sig013_harness(kernel.clone())
+            .with_signature_profile("signatureProfile", profile);
+        let instance_id = "case-sig013-submit-affirmation";
+        runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: instance_id.to_string(),
+                tenant: None,
+                definition_url: kernel.url.clone().unwrap(),
+                definition_version: kernel.version.clone().unwrap(),
+                initial_case_state: None,
+            })
+            .expect("create_instance");
+
+        runtime
+            .enqueue_event(
+                instance_id,
+                PendingEvent {
+                    event: "start".to_string(),
+                    actor_id: Some("applicant".to_string()),
+                    data: None,
+                    timestamp: String::new(),
+                    idempotency_token: Some("sig013-affirmation-start".to_string()),
+                },
+            )
+            .expect("enqueue start");
+        runtime
+            .drain_until_idle(instance_id)
+            .expect("drain after start");
+
+        let instance = runtime.load_instance(instance_id).expect("load instance");
+        let task_id = instance
+            .active_tasks
+            .iter()
+            .find(|t| t.task_ref == "applicantTask")
+            .expect("applicantTask from signature onEntry")
+            .task_id
+            .clone();
+
+        let result = runtime
+            .submit_task_response(
+                &task_id,
+                serde_json::json!({
+                    "status": "completed",
+                    "definitionUrl": "urn:test:formspec:signature",
+                    "definitionVersion": "1.0.0",
+                    "data": {
+                        "signerId": "applicant",
+                        "signatureProvider": "formspec",
+                        "ceremonyId": "ceremony-sequential",
+                        "identityBinding": {
+                            "method": "email-otp",
+                            "assuranceLevel": "standard"
+                        },
+                        "signature": {
+                            "acceptedAt": "2026-04-22T12:00:00Z",
+                            "affirmed": true,
+                            "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                        }
+                    }
+                }),
+                "applicant",
+                Some("sig013-affirmation-submit"),
+            )
+            .expect("signature admission should complete");
+
+        assert!(
+            matches!(result, TaskSubmissionResult::Completed { .. }),
+            "expected completed submission, got {result:?}"
+        );
+
+        let record = runtime.store.load_record(instance_id).expect("load record");
+        let affirmation = record
+            .provenance_log
+            .iter()
+            .find(|record| {
+                record.record_kind == wos_core::provenance::ProvenanceKind::SignatureAffirmation
+            })
+            .expect("signature affirmation provenance must be appended");
+        let data = affirmation
+            .data
+            .as_ref()
+            .expect("signature affirmation carries data");
+        assert_eq!(data["signerId"], serde_json::json!("applicant"));
+        assert_eq!(
+            data["sourceSignatureId"],
+            serde_json::json!("sig013-harness")
+        );
+        assert_eq!(
+            data["primitiveVerification"],
+            serde_json::json!({
+                "status": "deferredPendingHelper",
+                "reason": "test-harness-no-signature-primitive"
+            })
+        );
+    }
+
+    #[test]
+    fn submit_task_response_signature_admission_failed_keeps_task_active() {
+        let (kernel, profile) = sig013_harness_documents();
+        let mut runtime = runtime_with_kernel_sig013_harness(kernel.clone())
+            .with_signature_profile("signatureProfile", profile);
+        let instance_id = "case-sig013-submit-admission-failed";
+        runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: instance_id.to_string(),
+                tenant: None,
+                definition_url: kernel.url.clone().unwrap(),
+                definition_version: kernel.version.clone().unwrap(),
+                initial_case_state: None,
+            })
+            .expect("create_instance");
+
+        runtime
+            .enqueue_event(
+                instance_id,
+                PendingEvent {
+                    event: "start".to_string(),
+                    actor_id: Some("applicant".to_string()),
+                    data: None,
+                    timestamp: String::new(),
+                    idempotency_token: Some("sig013-admission-failed-start".to_string()),
+                },
+            )
+            .expect("enqueue start");
+        runtime
+            .drain_until_idle(instance_id)
+            .expect("drain after start");
+
+        let instance = runtime.load_instance(instance_id).expect("load instance");
+        let task_id = instance
+            .active_tasks
+            .iter()
+            .find(|t| t.task_ref == "applicantTask")
+            .expect("applicantTask from signature onEntry")
+            .task_id
+            .clone();
+
+        let result = runtime
+            .submit_task_response(
+                &task_id,
+                serde_json::json!({
+                    "status": "completed",
+                    "definitionUrl": "urn:test:formspec:signature",
+                    "definitionVersion": "1.0.0",
+                    "data": {
+                        "signerId": "applicant",
+                        "signatureProvider": "formspec",
+                        "ceremonyId": "ceremony-sequential",
+                        "identityBinding": {
+                            "method": "email-otp",
+                            "assuranceLevel": "standard"
+                        },
+                        "signature": {
+                            "acceptedAt": "2026-04-22T12:00:00Z",
+                            "affirmed": true,
+                            "primitiveVerification": "failed",
+                            "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                        }
+                    }
+                }),
+                "applicant",
+                Some("sig013-admission-failed-submit"),
+            )
+            .expect("signature admission failure should be represented as a failed submission");
+
+        assert!(
+            matches!(
+                result,
+                TaskSubmissionResult::Failed {
+                    ref code,
+                    emitted_event: None
+                } if code == "signatureAdmissionFailed"
+            ),
+            "expected failed submission, got {result:?}"
+        );
+
+        let record = runtime.store.load_record(instance_id).expect("load record");
+        assert!(
+            record
+                .instance
+                .active_tasks
+                .iter()
+                .any(|task| task.task_id == task_id),
+            "admission failure must not remove the active signature task"
+        );
+        assert!(
+            record.provenance_log.iter().any(|record| {
+                record.record_kind == wos_core::provenance::ProvenanceKind::SignatureAdmissionFailed
+            }),
+            "admission failure must emit SignatureAdmissionFailed provenance"
+        );
+        assert!(
+            record.provenance_log.iter().any(|record| {
+                record.record_kind == wos_core::provenance::ProvenanceKind::TaskFailed
+                    && record
+                        .data
+                        .as_ref()
+                        .and_then(|data| data.get("taskId"))
+                        .and_then(serde_json::Value::as_str)
+                        == Some(task_id.as_str())
+            }),
+            "admission failure must emit TaskFailed for the attempted task"
+        );
+        assert!(
+            !record.provenance_log.iter().any(|record| {
+                record.record_kind == wos_core::provenance::ProvenanceKind::TaskCompleted
+                    && record
+                        .data
+                        .as_ref()
+                        .and_then(|data| data.get("taskId"))
+                        .and_then(serde_json::Value::as_str)
+                        == Some(task_id.as_str())
+            }),
+            "admission failure must not emit TaskCompleted for the attempted task"
         );
     }
 

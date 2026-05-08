@@ -17,6 +17,7 @@ semver = "1"
 sha2 = "0.10"
 thiserror = "2"
 time = { version = "0.3", features = ["formatting", "parsing"] }
+ureq = { version = "3", features = ["json"] }
 wos-core = { path = "../wos-core" }
 
 [dev-dependencies]

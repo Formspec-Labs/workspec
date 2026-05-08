@@ -309,11 +309,14 @@ pub fn parse_authored_signatures(
     if signatures.is_empty() {
         return Ok(signatures);
     }
-    let response_id = response.get("id").and_then(serde_json::Value::as_str).ok_or_else(|| {
-        BindingError::InvalidInput(
-            "Formspec Response with authoredSignatures requires id".to_string(),
-        )
-    })?;
+    let response_id = response
+        .get("id")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| {
+            BindingError::InvalidInput(
+                "Formspec Response with authoredSignatures requires id".to_string(),
+            )
+        })?;
     let definition_url = response
         .get("definitionUrl")
         .and_then(serde_json::Value::as_str)
@@ -325,7 +328,10 @@ pub fn parse_authored_signatures(
 
     for signature in &signatures {
         ensure_non_empty("authoredSignatures.signatureId", &signature.signature_id)?;
-        ensure_non_empty("authoredSignatures.signingIntent", &signature.signing_intent)?;
+        ensure_non_empty(
+            "authoredSignatures.signingIntent",
+            &signature.signing_intent,
+        )?;
         ensure_non_empty(
             "authoredSignatures.signedPayload.digest",
             &signature.signed_payload.digest,
@@ -383,9 +389,8 @@ fn compute_formspec_signed_payload_digest(
     let canonical = serde_json_canonicalizer::to_string(&signed_payload).map_err(|error| {
         BindingError::InvalidInput(format!("canonicalize Formspec signed payload: {error}"))
     })?;
-    let mut payload = Vec::with_capacity(
-        FORMSPEC_SIGNED_PAYLOAD_DOMAIN.len() + 1 + canonical.as_bytes().len(),
-    );
+    let mut payload =
+        Vec::with_capacity(FORMSPEC_SIGNED_PAYLOAD_DOMAIN.len() + 1 + canonical.as_bytes().len());
     payload.extend_from_slice(FORMSPEC_SIGNED_PAYLOAD_DOMAIN.as_bytes());
     payload.push(0);
     payload.extend_from_slice(canonical.as_bytes());
@@ -1112,11 +1117,11 @@ mod tests {
     #[test]
     fn parse_authored_signatures_accepts_new_formspec_shape() {
         let response = signed_response();
-        let expected_signed_payload_digest = response["authoredSignatures"][0]["signedPayload"]
-            ["digest"]
-            .as_str()
-            .expect("signed-payload digest is present")
-            .to_string();
+        let expected_signed_payload_digest =
+            response["authoredSignatures"][0]["signedPayload"]["digest"]
+                .as_str()
+                .expect("signed-payload digest is present")
+                .to_string();
         let signatures = parse_authored_signatures(&response).unwrap();
 
         assert_eq!(signatures.len(), 1);

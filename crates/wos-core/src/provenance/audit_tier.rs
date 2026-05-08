@@ -157,6 +157,7 @@ impl From<K> for ProvenanceAuditTier {
             | K::ToolInvoked
             | K::PolicyDecision
             | K::SignatureAffirmation
+            | K::SignatureAdmissionFailed
             | K::CorrectionAuthorized
             | K::AmendmentAuthorized
             | K::DeterminationAmended

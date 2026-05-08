@@ -68,6 +68,9 @@
           },
           {
             "$ref": "#/$defs/SignatureAffirmationRecord"
+          },
+          {
+            "$ref": "#/$defs/SignatureAdmissionFailedRecord"
           }
         ]
       }
@@ -519,6 +522,67 @@
         }
       ]
     },
+    "SignatureAdmissionFailedRecord": {
+      "type": "object",
+      "description": "Shape constraint layered on Facts-tier provenance records emitted when a signature is evaluated but not admitted into workflow state (ADR-0089). A `recordKind == \"signatureAdmissionFailed\"` record MUST carry the evidence bindings, reason, and emission timestamp.",
+      "examples": [
+        {
+          "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
+          "recordKind": "signatureAdmissionFailed",
+          "timestamp": "2026-05-08T10:30:00Z",
+          "auditLayer": "facts",
+          "definitionVersion": "1.0.0",
+          "data": {
+            "reason": "primitive_verification_failed",
+            "evidenceBindings": {
+              "responseId": "resp-2026-0001",
+              "signedPayloadDigest": "abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+              "signatureId": "sig-2026-0001",
+              "signingIntent": "urn:wos:signing-intent:applicant-signature"
+            },
+            "failureContext": {},
+            "emittedAt": "2026-05-08T10:30:00Z"
+          }
+        }
+      ],
+      "properties": {
+        "recordKind": {
+          "type": "string",
+          "description": "`signatureAdmissionFailed` selects records emitted when a signature is evaluated but not admitted.",
+          "examples": [
+            "signatureAdmissionFailed"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "minLength": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "signatureAdmissionFailed"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/SignatureAdmissionFailedData"
+              }
+            }
+          }
+        }
+      ]
+    },
     "SignatureAffirmationData": {
       "type": "object",
       "description": "Required payload for a Signature Profile affirmation provenance record. Source signature identity and signed-payload digest fields identify the verified signature evidence that WOS accepted; identity-binding and consent-reference shapes remain provider-neutral so Formspec and external ceremony adapters can map into the same WOS evidence record.",
@@ -765,7 +829,7 @@
         },
         "primitiveVerification": {
           "type": "object",
-          "description": "Cryptographic primitive-verification status from the binding's authored-signature parser. `verified` requires that the cryptographic signature primitive (canonical-digest + signature-suite check over the binding's signature value/method, e.g. Formspec `signatureValue`/`signatureMethod`) executed and passed; `deferredPendingHelper` indicates the parser ran pin/consent/digest pre-checks but did not run the cryptographic primitive (e.g. Formspec signing helper not yet shipped); `failed` indicates the primitive ran and rejected the signature. WOS admission MUST NOT emit a SignatureAffirmation whose status is `failed`. A future deployment posture MAY require `verified`; until then both `verified` and `deferredPendingHelper` are admissible.",
+          "description": "Cryptographic primitive-verification status from the binding's authored-signature parser. `verified` requires that the cryptographic signature primitive (canonical-digest + signature-suite check over the binding's signature value/method, e.g. Formspec `signatureValue`/`signatureMethod`) executed and passed; `deferredPendingHelper` indicates the parser ran pin/consent/digest pre-checks but did not run the cryptographic primitive (e.g. Formspec signing helper not yet shipped). Failed outcomes are now recorded as separate `signatureAdmissionFailed` records per ADR-0089. A future deployment posture MAY require `verified`; until then both `verified` and `deferredPendingHelper` are admissible.",
           "additionalProperties": false,
           "required": [
             "status"
@@ -775,10 +839,9 @@
               "type": "string",
               "enum": [
                 "verified",
-                "deferredPendingHelper",
-                "failed"
+                "deferredPendingHelper"
               ],
-              "description": "Primitive-verification outcome reported by the binding adapter that produced this affirmation; closed enum.",
+              "description": "Primitive-verification outcome reported by the binding adapter that produced this affirmation; closed enum. 'failed' outcomes are now recorded as separate `signatureAdmissionFailed` records per ADR-0089.",
               "examples": [
                 "deferredPendingHelper"
               ]
@@ -786,7 +849,7 @@
             "reason": {
               "type": "string",
               "minLength": 1,
-              "description": "Stable machine-readable reason identifier; required when status is `deferredPendingHelper` or `failed`.",
+              "description": "Stable machine-readable reason identifier; required when status is `deferredPendingHelper`.",
               "examples": [
                 "formspec-signing-helper-pending"
               ],
@@ -800,10 +863,7 @@
               "if": {
                 "properties": {
                   "status": {
-                    "enum": [
-                      "deferredPendingHelper",
-                      "failed"
-                    ]
+                    "const": "deferredPendingHelper"
                   }
                 }
               },
@@ -821,6 +881,49 @@
               "reason": "formspec-signing-helper-pending"
             }
           ]
+        },
+        "verificationReceipt": {
+          "type": "string",
+          "description": "Optional base64-encoded COSE_Sign1 VerificationReceipt bytes. Present when primitiveVerification.status is 'verified' and a verifier ran. Absent when status is 'deferredPendingHelper'.",
+          "examples": ["0oRWoQExiQEFQnNpZ25lZA=="]
+        }
+      }
+    },
+    "SignatureAdmissionFailedData": {
+      "type": "object",
+      "description": "Payload for signatureAdmissionFailed provenance records (ADR-0089). Emitted when a signature is evaluated but not admitted into workflow state.",
+      "required": ["reason", "evidenceBindings", "emittedAt"],
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "type": "string",
+          "enum": ["primitive_verification_failed", "method_unsupported", "method_unregistered", "evidence_divergence", "posture_floor_unmet", "registry_unrecognized_method", "adapter_unavailable"],
+          "description": "Why the signature was not admitted."
+        },
+        "receipt": {
+          "description": "Optional VerificationReceipt when a verifier ran (failed or unsupported)."
+        },
+        "evidenceBindings": {
+          "type": "object",
+          "required": ["responseId", "signedPayloadDigest", "signatureId", "signingIntent"],
+          "additionalProperties": false,
+          "properties": {
+            "responseId": { "type": "string", "minLength": 1 },
+            "signedPayloadDigest": { "type": "string", "minLength": 1 },
+            "signatureId": { "type": "string", "minLength": 1 },
+            "signingIntent": { "type": "string", "format": "uri" }
+          }
+        },
+        "failureContext": {
+          "type": "object",
+          "description": "Reason-specific structured data."
+        },
+        "signerAuthority": { "type": "object" },
+        "signerId": { "type": "string" },
+        "emittedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339 timestamp when the admission decision was emitted."
         }
       }
     },

@@ -9,6 +9,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
+use std::time::Duration;
 
 use fel_core::{evaluate, has_error_diagnostics, parse, types::Value};
 use serde::{Deserialize, Serialize};
@@ -16,7 +17,7 @@ use wos_core::context::EvalContext;
 use wos_core::instance::{ActiveTask, CaseInstance, PendingEvent};
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord, SignatureAffirmationInput};
 
-use crate::binding::SignatureEvidence as VerifiedSignatureEvidence;
+use crate::binding::{SignatureEvidence as VerifiedSignatureEvidence, SignaturePrimitiveStatus};
 use crate::store::RuntimeRecord;
 
 use super::{RuntimeError, TaskSubmissionResult, WosRuntime};
@@ -32,6 +33,8 @@ pub const SIGNATURE_STEP_ID_EXTENSION: &str = "x-wos-signature-step-id";
 
 const SIGNATURE_COMPLETIONS_EXTENSION: &str = "x-wos-signature-completions";
 const SIGNATURE_ASSIGNMENTS_EXTENSION: &str = "x-wos-signature-assignments";
+const POSTURE_DECLARATION_MAX_BYTES: u64 = 64 * 1024;
+const POSTURE_DECLARATION_TIMEOUT_SECS: u64 = 5;
 
 /// Vendor-extension token prefix. Mirrors the schema-side
 /// `^x-[a-z][a-z0-9-]*$` pattern; lowercase-only by design — case-mismatched
@@ -175,12 +178,16 @@ pub struct SignatureProfileDocument {
     #[serde(default)]
     pub reassignment_policy: Option<ReassignmentPolicy>,
     /// Allowlist of deployment-local signing-intent URIs admitted by this
-    /// workflow in addition to the §2.11.1 registered WOS set. Schema lint
+    /// workflow in addition to the §2.13.1 registered WOS set. Schema lint
     /// (and a runtime parse-time guard) rejects URIs in the reserved
     /// `urn:wos:signing-intent:*` namespace. Bridge until the WOS Posture
     /// Declaration object lands (PLN-0384).
     #[serde(default)]
     pub deployment_local_signing_intents: Vec<String>,
+    /// Reference to the deployment's Posture Declaration (ADR-0090).
+    /// Supersedes `deployment_local_signing_intents` when present.
+    #[serde(default)]
+    pub posture_policy: Option<PosturePolicyRef>,
     /// Extension data.
     #[serde(default)]
     pub extensions: HashMap<String, serde_json::Value>,
@@ -352,13 +359,108 @@ pub struct SignatureEvidence {
 /// `x-wos-signature-completions` completion-state entry can never disagree for
 /// a given signature event (review F4).
 #[derive(Debug, Clone)]
-pub(super) struct SignatureAffirmationOutcome {
+pub struct SignatureAffirmationOutcome {
     /// Provenance record for `SignatureAffirmation`.
     pub record: ProvenanceRecord,
     /// Verified evidence timestamp, authoritative for the completion entry.
     pub signed_at: String,
     /// Verified signer id, authoritative for the completion entry.
     pub signer_id: String,
+}
+
+/// Outcome of a failed signature admission.
+#[derive(Debug, Clone)]
+pub struct SignatureAdmissionFailedOutcome {
+    /// Machine-readable failure reason.
+    pub reason: SignatureAdmissionFailedReason,
+    /// Evidence identities that tie the failed admission to the source response,
+    /// signed payload, signature, and signing intent.
+    pub evidence_bindings: EvidenceBindings,
+    /// Signer id from verified evidence (K2 carry-forward), when available.
+    pub signer_id: Option<String>,
+    /// Signer authority claim, when available.
+    pub signer_authority: Option<serde_json::Value>,
+    /// RFC 3339 timestamp when the admission was evaluated.
+    pub emitted_at: String,
+}
+
+/// Closed-enum reason for a signature admission failure.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SignatureAdmissionFailedReason {
+    /// The cryptographic signature primitive ran and rejected the signature.
+    PrimitiveVerificationFailed,
+    /// The identity method is not supported by any registered adapter.
+    MethodUnsupported,
+    /// The identity method is not registered in the WOS method registry.
+    MethodUnregistered,
+    /// Evidence fields in the response diverge from the verified binding evidence.
+    EvidenceDivergence,
+    /// The posture floor for this signing intent × method is not met.
+    PostureFloorUnmet,
+    /// The signing method is not recognized in the method registry.
+    RegistryUnrecognizedMethod,
+    /// The adapter required to verify this method is unavailable.
+    AdapterUnavailable,
+}
+
+/// Evidence identities binding a failed admission to its source.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvidenceBindings {
+    /// The task response id that triggered admission evaluation.
+    pub response_id: String,
+    /// Digest of the signed payload verified by the binding.
+    pub signed_payload_digest: String,
+    /// Source-system signature identifier.
+    pub signature_id: String,
+    /// WOS signing-intent URI carried by the source evidence.
+    pub signing_intent: String,
+}
+
+/// Top-level admission outcome — either admitted or rejected.
+#[derive(Debug, Clone)]
+pub enum AdmissionOutcome {
+    /// Admission succeeded; the signature step is complete.
+    Affirmation(SignatureAffirmationOutcome),
+    /// Admission was rejected; the signature step is not complete.
+    AdmissionFailed(SignatureAdmissionFailedOutcome),
+}
+
+/// Reference to a deployment's Posture Declaration document (ADR-0090).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PosturePolicyRef {
+    pub url: String,
+    #[serde(default)]
+    pub version: Option<String>,
+}
+
+/// A loaded Posture Declaration controlling signature admission policy.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PostureDeclaration {
+    #[serde(rename = "$postureDeclaration")]
+    pub version_marker: String,
+    pub url: String,
+    pub version: String,
+    pub signature_policy: SignaturePolicy,
+    #[serde(default)]
+    pub jurisdictional_posture: Option<serde_json::Value>,
+    #[serde(default)]
+    pub custody_posture: Option<serde_json::Value>,
+}
+
+/// Signature admission policy from a Posture Declaration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SignaturePolicy {
+    pub allowed_methods: Vec<String>,
+    pub minimum_primitive_verification: String,
+    pub receipt_signing_required: bool,
+    #[serde(default)]
+    pub allowed_signing_intents: Vec<String>,
+    #[serde(default)]
+    pub revocation_policy: Option<serde_json::Value>,
 }
 
 /// Consent-reference shape.
@@ -527,7 +629,7 @@ impl WosRuntime {
         signature_evidence: Option<&[VerifiedSignatureEvidence]>,
         actor_id: &str,
         signed_at_default: &str,
-    ) -> Result<Option<SignatureAffirmationOutcome>, RuntimeError> {
+    ) -> Result<Option<AdmissionOutcome>, RuntimeError> {
         if !Self::is_signature_task(task) {
             return Ok(None);
         }
@@ -574,11 +676,35 @@ impl WosRuntime {
             document,
             profile,
         )?;
+        if let Err(_reason) = ensure_signing_intent_admitted(
+            &signature_evidence.signing_intent,
+            &profile.deployment_local_signing_intents,
+        ) {
+            return Ok(Some(AdmissionOutcome::AdmissionFailed(
+                SignatureAdmissionFailedOutcome {
+                    reason: SignatureAdmissionFailedReason::MethodUnsupported,
+                    evidence_bindings: EvidenceBindings {
+                        response_id: task.task_id.clone(),
+                        signed_payload_digest: signature_evidence.signed_payload_digest.clone(),
+                        signature_id: signature_evidence.source_signature_id.clone(),
+                        signing_intent: signature_evidence.signing_intent.clone(),
+                    },
+                    signer_id: signature_evidence.signer_id.clone(),
+                    signer_authority: signature_evidence.signer_authority.clone(),
+                    emitted_at: signed_at_default.to_string(),
+                },
+            )));
+        }
         let identity_binding = signature_evidence
             .identity_binding
             .clone()
             .map(Ok)
             .unwrap_or_else(|| self.identity_binding_for_submission(response, &profile.evidence))?;
+        let signing_method = identity_binding
+            .get("method")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("none")
+            .to_string();
         self.ensure_identity_satisfies_role(profile, role, &identity_binding)?;
         self.ensure_identity_satisfies_signing_intent(
             &signature_evidence.signing_intent,
@@ -609,10 +735,7 @@ impl WosRuntime {
             response,
             &profile.evidence.consent_reference.accepted_at_path,
         )?;
-        let signer_id = signature_evidence
-            .signer_id
-            .as_deref()
-            .unwrap_or(actor_id);
+        let signer_id = signature_evidence.signer_id.as_deref().unwrap_or(actor_id);
         self.ensure_signer_authority_satisfies_intent(
             &signature_evidence.signing_intent,
             signature_evidence.signer_authority.as_ref(),
@@ -645,39 +768,124 @@ impl WosRuntime {
             SignatureProfileSelector::Ref(profile_ref) => (Some(profile_ref.as_str()), None),
         };
 
-        let provenance_record = ProvenanceRecord::signature_affirmation(SignatureAffirmationInput {
-            signer_id,
-            role_id: &role.id,
-            role: &role.role,
-            document_id: &document.id,
-            document_hash: &document.document_hash,
-            document_hash_algorithm: &document.document_hash_algorithm,
-            source_signature_system: &signature_evidence.source_system,
-            source_signature_id: &signature_evidence.source_signature_id,
-            signed_payload_digest: &signature_evidence.signed_payload_digest,
-            signed_payload_digest_algorithm: &signature_evidence.signed_payload_digest_algorithm,
-            signing_intent: &signature_evidence.signing_intent,
-            signed_at,
-            identity_binding,
-            consent_reference: serde_json::to_value(&profile.evidence.consent_reference)
+        let provenance_record =
+            ProvenanceRecord::signature_affirmation(SignatureAffirmationInput {
+                signer_id,
+                role_id: &role.id,
+                role: &role.role,
+                document_id: &document.id,
+                document_hash: &document.document_hash,
+                document_hash_algorithm: &document.document_hash_algorithm,
+                source_signature_system: &signature_evidence.source_system,
+                source_signature_id: &signature_evidence.source_signature_id,
+                signed_payload_digest: &signature_evidence.signed_payload_digest,
+                signed_payload_digest_algorithm: &signature_evidence
+                    .signed_payload_digest_algorithm,
+                signing_intent: &signature_evidence.signing_intent,
+                signed_at,
+                identity_binding,
+                consent_reference: serde_json::to_value(&profile.evidence.consent_reference)
+                    .map_err(|error| RuntimeError::Signature(error.to_string()))?,
+                signature_provider,
+                ceremony_id,
+                profile_ref,
+                profile_key,
+                source_response_ref,
+                signer_authority: signature_evidence.signer_authority.clone(),
+                custody_hook_eligible: profile.evidence.custody_hook_eligible,
+                primitive_verification: serde_json::to_value(
+                    &signature_evidence.primitive_verification,
+                )
                 .map_err(|error| RuntimeError::Signature(error.to_string()))?,
-            signature_provider,
-            ceremony_id,
-            profile_ref,
-            profile_key,
-            source_response_ref,
-            signer_authority: signature_evidence.signer_authority.clone(),
-            custody_hook_eligible: profile.evidence.custody_hook_eligible,
-            primitive_verification: serde_json::to_value(
-                &signature_evidence.primitive_verification,
-            )
-            .map_err(|error| RuntimeError::Signature(error.to_string()))?,
-        });
-        Ok(Some(SignatureAffirmationOutcome {
-            record: provenance_record,
-            signed_at: signed_at.to_string(),
-            signer_id: signer_id.to_string(),
-        }))
+            });
+        let signed_at_owned = signed_at.to_string();
+        let signer_id_owned = signer_id.to_string();
+
+        // Posture Declaration checks (ADR-0090).
+        if let Some(posture_ref) = &profile.posture_policy {
+            let posture = self.load_posture_declaration(&posture_ref.url)?;
+            if !posture
+                .signature_policy
+                .allowed_methods
+                .iter()
+                .any(|m| m == &signing_method)
+            {
+                return Ok(Some(AdmissionOutcome::AdmissionFailed(
+                    SignatureAdmissionFailedOutcome {
+                        reason: SignatureAdmissionFailedReason::MethodUnsupported,
+                        evidence_bindings: EvidenceBindings {
+                            response_id: task.task_id.clone(),
+                            signed_payload_digest: signature_evidence.signed_payload_digest.clone(),
+                            signature_id: signature_evidence.source_signature_id.clone(),
+                            signing_intent: signature_evidence.signing_intent.clone(),
+                        },
+                        signer_id: Some(signer_id_owned),
+                        signer_authority: signature_evidence.signer_authority.clone(),
+                        emitted_at: signed_at_default.to_string(),
+                    },
+                )));
+            }
+            match &signature_evidence.primitive_verification {
+                SignaturePrimitiveStatus::Verified => {}
+                SignaturePrimitiveStatus::DeferredPendingHelper { .. } => {
+                    if posture.signature_policy.minimum_primitive_verification == "verified" {
+                        return Ok(Some(AdmissionOutcome::AdmissionFailed(
+                            SignatureAdmissionFailedOutcome {
+                                reason: SignatureAdmissionFailedReason::PostureFloorUnmet,
+                                evidence_bindings: EvidenceBindings {
+                                    response_id: task.task_id.clone(),
+                                    signed_payload_digest: signature_evidence
+                                        .signed_payload_digest
+                                        .clone(),
+                                    signature_id: signature_evidence.source_signature_id.clone(),
+                                    signing_intent: signature_evidence.signing_intent.clone(),
+                                },
+                                signer_id: Some(signer_id_owned),
+                                signer_authority: signature_evidence.signer_authority.clone(),
+                                emitted_at: signed_at_default.to_string(),
+                            },
+                        )));
+                    }
+                }
+                SignaturePrimitiveStatus::Failed { .. } => {}
+            }
+            // TODO(Phase 3.3): if receipt_signing_required && receipt has no receiptBytes,
+            // return AdmissionFailed(PostureFloorUnmet)
+            // TODO(Phase 3.3): if signing_intent not in allowed_signing_intents,
+            // return AdmissionFailed(MethodUnsupported)
+            // TODO(Phase 3.3): enforce revocation_policy when present
+        }
+
+        match &signature_evidence.primitive_verification {
+            SignaturePrimitiveStatus::Verified => Ok(Some(AdmissionOutcome::Affirmation(
+                SignatureAffirmationOutcome {
+                    record: provenance_record,
+                    signed_at: signed_at_owned,
+                    signer_id: signer_id_owned,
+                },
+            ))),
+            SignaturePrimitiveStatus::DeferredPendingHelper { .. } => Ok(Some(
+                AdmissionOutcome::Affirmation(SignatureAffirmationOutcome {
+                    record: provenance_record,
+                    signed_at: signed_at_owned,
+                    signer_id: signer_id_owned,
+                }),
+            )),
+            SignaturePrimitiveStatus::Failed { .. } => Ok(Some(AdmissionOutcome::AdmissionFailed(
+                SignatureAdmissionFailedOutcome {
+                    reason: SignatureAdmissionFailedReason::PrimitiveVerificationFailed,
+                    evidence_bindings: EvidenceBindings {
+                        response_id: task.task_id.clone(),
+                        signed_payload_digest: signature_evidence.signed_payload_digest.clone(),
+                        signature_id: signature_evidence.source_signature_id.clone(),
+                        signing_intent: signature_evidence.signing_intent.clone(),
+                    },
+                    signer_id: Some(signer_id_owned),
+                    signer_authority: signature_evidence.signer_authority.clone(),
+                    emitted_at: signed_at_default.to_string(),
+                },
+            ))),
+        }
     }
 
     pub(super) fn record_signature_completion(
@@ -1275,6 +1483,7 @@ impl WosRuntime {
         document: &SignatureDocument,
         profile: &SignatureProfileDocument,
     ) -> Result<VerifiedSignatureEvidence, RuntimeError> {
+        let _ = profile;
         let evidence = signature_evidence.ok_or_else(|| {
             RuntimeError::Signature(
                 "signature binding did not provide verified signature evidence".to_string(),
@@ -1310,8 +1519,7 @@ impl WosRuntime {
         {
             return Err(RuntimeError::Signature(format!(
                 "verified signingIntent '{}' does not match signature step '{}'",
-                signature.signing_intent,
-                step.id
+                signature.signing_intent, step.id
             )));
         }
         if signature.document_hash != document.document_hash {
@@ -1457,6 +1665,78 @@ impl WosRuntime {
         record.instance.updated_at = now_iso.to_string();
         Ok(())
     }
+
+    /// Load a Posture Declaration from a URI, caching the result.
+    pub(crate) fn load_posture_declaration(
+        &self,
+        posture_uri: &str,
+    ) -> Result<PostureDeclaration, RuntimeError> {
+        if !posture_uri_allowed(posture_uri) {
+            return Err(RuntimeError::Signature(format!(
+                "posture declaration URI '{posture_uri}' is not allowed; expected https URL or loopback http URL"
+            )));
+        }
+        {
+            let cache = self.posture_declarations.borrow();
+            if let Some(cached) = cache.get(posture_uri) {
+                return Ok(cached.clone());
+            }
+        }
+        let agent = ureq::Agent::config_builder()
+            .timeout_global(Some(Duration::from_secs(POSTURE_DECLARATION_TIMEOUT_SECS)))
+            .build()
+            .new_agent();
+        let mut response = agent.get(posture_uri).call().map_err(|error| {
+            RuntimeError::Signature(format!(
+                "failed to fetch posture declaration from '{posture_uri}': {error}"
+            ))
+        })?;
+        let raw = response
+            .body_mut()
+            .with_config()
+            .limit(POSTURE_DECLARATION_MAX_BYTES)
+            .read_to_string()
+            .map_err(|error| {
+                RuntimeError::Signature(format!(
+                    "failed to read posture declaration body from '{posture_uri}': {error}"
+                ))
+            })?;
+        let declaration: PostureDeclaration = serde_json::from_str(&raw).map_err(|error| {
+            RuntimeError::Signature(format!(
+                "failed to parse posture declaration from '{posture_uri}': {error}"
+            ))
+        })?;
+        self.posture_declarations
+            .borrow_mut()
+            .insert(posture_uri.to_string(), declaration.clone());
+        Ok(declaration)
+    }
+}
+
+fn posture_uri_allowed(uri: &str) -> bool {
+    if let Some(rest) = uri.strip_prefix("https://") {
+        return uri_host(rest).is_some_and(|host| !host.is_empty());
+    }
+    if let Some(rest) = uri.strip_prefix("http://") {
+        return uri_host(rest)
+            .is_some_and(|host| matches!(host, "localhost" | "127.0.0.1" | "::1" | "[::1]"));
+    }
+    false
+}
+
+fn uri_host(uri_without_scheme: &str) -> Option<&str> {
+    let authority = uri_without_scheme
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or_default();
+    if authority.is_empty() || authority.contains('@') {
+        return None;
+    }
+    if authority.starts_with('[') {
+        let end = authority.find(']')?;
+        return Some(&authority[..=end]);
+    }
+    Some(authority.split(':').next().unwrap_or_default())
 }
 
 #[derive(Debug, Clone)]
@@ -1598,10 +1878,7 @@ fn required_authority_classes(signing_intent: &str) -> Option<&'static [&'static
 fn is_non_self_class(class: &str) -> bool {
     matches!(
         class,
-        "witness"
-            | "notary-commissioned"
-            | "as-attorney-in-fact"
-            | "as-officer-of"
+        "witness" | "notary-commissioned" | "as-attorney-in-fact" | "as-officer-of"
     ) || class.starts_with("x-")
 }
 
@@ -1776,7 +2053,9 @@ fn validate_validity_window(
     authority: &serde_json::Value,
     signed_at: Option<&str>,
 ) -> Result<(), RuntimeError> {
-    let valid_from = authority.get("validFrom").and_then(serde_json::Value::as_str);
+    let valid_from = authority
+        .get("validFrom")
+        .and_then(serde_json::Value::as_str);
     let valid_until = authority
         .get("validUntil")
         .and_then(serde_json::Value::as_str);
@@ -2155,8 +2434,7 @@ mod signer_authority_tests {
     use super::*;
     use serde_json::json;
 
-    const VALID_HASH: &str =
-        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    const VALID_HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
     fn signed_at() -> &'static str {
         "2026-04-22T14:30:00Z"
@@ -2440,10 +2718,8 @@ mod deployment_local_intent_tests {
     #[test]
     fn registered_intent_admitted_regardless_of_allowlist() {
         let intents = allowlist(&[]);
-        let result = ensure_signing_intent_admitted(
-            "urn:wos:signing-intent:applicant-signature",
-            &intents,
-        );
+        let result =
+            ensure_signing_intent_admitted("urn:wos:signing-intent:applicant-signature", &intents);
         assert!(
             result.is_ok(),
             "registered WOS intent must admit even with empty allowlist, got {result:?}"
@@ -2479,10 +2755,7 @@ mod deployment_local_intent_tests {
         // pattern, distinguishing schema-level shadow rejection from the
         // structural required-fields failure that affects both.
         let collect_errors = |inst: &serde_json::Value| -> Vec<String> {
-            validator
-                .iter_errors(inst)
-                .map(|e| e.to_string())
-                .collect()
+            validator.iter_errors(inst).map(|e| e.to_string()).collect()
         };
         let bad_errors = collect_errors(&instance);
         let scoped_errors = collect_errors(&scoped_instance);
@@ -2532,7 +2805,10 @@ mod signed_at_divergence_tests {
     fn admission_succeeds_when_evidence_and_response_signed_at_agree() {
         let result =
             ensure_signed_at_consistency_pure(EVIDENCE_SIGNED_AT, Some(EVIDENCE_SIGNED_AT), PATH);
-        assert!(result.is_ok(), "agreeing timestamps must admit, got {result:?}");
+        assert!(
+            result.is_ok(),
+            "agreeing timestamps must admit, got {result:?}"
+        );
     }
 
     #[test]
@@ -2551,5 +2827,144 @@ mod signed_at_divergence_tests {
             result.is_ok(),
             "empty consent-path signedAt is treated as absent, got {result:?}"
         );
+    }
+}
+
+#[cfg(test)]
+mod posture_declaration_tests {
+    use super::*;
+
+    fn minimal_posture_json() -> &'static str {
+        r#"{
+            "$postureDeclaration": "1.0",
+            "url": "https://example.gov/posture/signature-v1.json",
+            "version": "1.0.0",
+            "signaturePolicy": {
+                "allowedMethods": ["urn:formspec:sig-method:ed25519-cose-sign1@1"],
+                "minimumPrimitiveVerification": "verified",
+                "receiptSigningRequired": false
+            }
+        }"#
+    }
+
+    #[test]
+    fn parse_minimal_posture_declaration() {
+        let decl: PostureDeclaration =
+            serde_json::from_str(minimal_posture_json()).expect("must parse");
+        assert_eq!(decl.version_marker, "1.0");
+        assert_eq!(decl.version, "1.0.0");
+        assert_eq!(
+            decl.signature_policy.allowed_methods,
+            vec!["urn:formspec:sig-method:ed25519-cose-sign1@1".to_string()]
+        );
+        assert_eq!(
+            decl.signature_policy.minimum_primitive_verification,
+            "verified"
+        );
+        assert!(!decl.signature_policy.receipt_signing_required);
+    }
+
+    #[test]
+    fn parse_posture_declaration_with_optional_fields() {
+        let json = r#"{
+            "$postureDeclaration": "1.0",
+            "url": "https://example.gov/posture/signature-v1.json",
+            "version": "1.0.0",
+            "signaturePolicy": {
+                "allowedMethods": [
+                    "urn:formspec:sig-method:ed25519-cose-sign1@1",
+                    "urn:formspec:sig-method:ecdsa-p256-cose-sign1@1"
+                ],
+                "minimumPrimitiveVerification": "deferredPendingHelper",
+                "receiptSigningRequired": true,
+                "allowedSigningIntents": ["urn:wos:signing-intent:formal-attestation@1"]
+            },
+            "jurisdictionalPosture": { "framework": "esign" },
+            "custodyPosture": { "requiresTrellisExport": true }
+        }"#;
+        let decl: PostureDeclaration = serde_json::from_str(json).expect("must parse");
+        assert_eq!(decl.signature_policy.allowed_methods.len(), 2);
+        assert_eq!(
+            decl.signature_policy.minimum_primitive_verification,
+            "deferredPendingHelper"
+        );
+        assert!(decl.signature_policy.receipt_signing_required);
+        assert_eq!(decl.signature_policy.allowed_signing_intents.len(), 1);
+        assert!(decl.jurisdictional_posture.is_some());
+        assert!(decl.custody_posture.is_some());
+    }
+
+    #[test]
+    fn reject_posture_declaration_missing_version_marker() {
+        let json = r#"{
+            "url": "https://example.gov/posture/signature-v1.json",
+            "version": "1.0.0",
+            "signaturePolicy": {
+                "allowedMethods": ["urn:formspec:sig-method:ed25519-cose-sign1@1"],
+                "minimumPrimitiveVerification": "verified",
+                "receiptSigningRequired": false
+            }
+        }"#;
+        assert!(
+            serde_json::from_str::<PostureDeclaration>(json).is_err(),
+            "must reject missing $postureDeclaration"
+        );
+    }
+
+    #[test]
+    fn reject_posture_declaration_missing_signature_policy() {
+        let json = r#"{
+            "$postureDeclaration": "1.0",
+            "url": "https://example.gov/posture/signature-v1.json",
+            "version": "1.0.0"
+        }"#;
+        assert!(
+            serde_json::from_str::<PostureDeclaration>(json).is_err(),
+            "must reject missing signaturePolicy"
+        );
+    }
+
+    #[test]
+    fn posture_declaration_roundtrip() {
+        let decl: PostureDeclaration =
+            serde_json::from_str(minimal_posture_json()).expect("must parse");
+        let serialized = serde_json::to_string(&decl).expect("must serialize");
+        let deserialized: PostureDeclaration =
+            serde_json::from_str(&serialized).expect("must deserialize");
+        assert_eq!(decl.url, deserialized.url);
+        assert_eq!(decl.version, deserialized.version);
+        assert_eq!(
+            decl.signature_policy.allowed_methods,
+            deserialized.signature_policy.allowed_methods
+        );
+    }
+
+    #[test]
+    fn posture_uri_policy_allows_https_and_loopback_http() {
+        assert!(posture_uri_allowed(
+            "https://example.gov/posture/signature-v1.json"
+        ));
+        assert!(posture_uri_allowed(
+            "http://127.0.0.1:8080/posture/signature-v1.json"
+        ));
+        assert!(posture_uri_allowed(
+            "http://localhost/posture/signature-v1.json"
+        ));
+        assert!(posture_uri_allowed(
+            "http://[::1]:8080/posture/signature-v1.json"
+        ));
+    }
+
+    #[test]
+    fn posture_uri_policy_rejects_non_https_non_loopback() {
+        assert!(!posture_uri_allowed(
+            "http://example.gov/posture/signature-v1.json"
+        ));
+        assert!(!posture_uri_allowed(
+            "file:///tmp/posture/signature-v1.json"
+        ));
+        assert!(!posture_uri_allowed(
+            "https://user@example.gov/posture/signature-v1.json"
+        ));
     }
 }

@@ -30,7 +30,7 @@ pub use record::{
     ClockStartedInput, CommitAttemptFailureInput, CommitFailureKind, ConfigurationWarningInput,
     CorrectionAuthorizedInput, DeterminationAmendedInput, DeterminationRescindedInput,
     IdentityAttestationInput, InstanceMigratedInput, MigrationPinChangedInput, ProvenanceRecord,
-    ReinstatedInput,
-    RescissionAuthorizedInput, SignatureAffirmationInput,
+    ReinstatedInput, RescissionAuthorizedInput, SignatureAdmissionFailedInput,
+    SignatureAffirmationInput,
 };
 pub use snapshot::CaseFileSnapshot;

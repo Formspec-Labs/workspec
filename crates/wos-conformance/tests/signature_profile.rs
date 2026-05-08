@@ -241,9 +241,7 @@ fn sig025_unregistered_non_allowlisted_intent_blocks_affirmation() {
     )
     .expect_err("unregistered, non-allowlisted signingIntent must reject");
     assert!(
-        error
-            .to_string()
-            .contains("deploymentLocalSigningIntents"),
+        error.to_string().contains("deploymentLocalSigningIntents"),
         "unexpected unregistered-intent rejection error: {error}"
     );
 }

@@ -429,6 +429,31 @@ pub struct SignatureAffirmationInput<'a> {
     pub primitive_verification: serde_json::Value,
 }
 
+/// Signature admission failure provenance input.
+///
+/// Holds the ADR-0089 payload for signatures that were evaluated but not
+/// admitted into workflow state.
+pub struct SignatureAdmissionFailedInput<'a> {
+    /// Machine-readable failure reason.
+    pub reason: &'a str,
+    /// Source response id tied to the failed admission.
+    pub response_id: &'a str,
+    /// Signed-payload digest tied to the failed admission.
+    pub signed_payload_digest: &'a str,
+    /// Source-system signature id tied to the failed admission.
+    pub signature_id: &'a str,
+    /// Signing-intent URI tied to the failed admission.
+    pub signing_intent: &'a str,
+    /// Optional signer id when known.
+    pub signer_id: Option<&'a str>,
+    /// Optional signer-authority claim when present.
+    pub signer_authority: Option<serde_json::Value>,
+    /// Optional reason-specific structured context.
+    pub failure_context: Option<serde_json::Map<String, serde_json::Value>>,
+    /// RFC 3339 timestamp when the admission decision was emitted.
+    pub emitted_at: &'a str,
+}
+
 /// A single provenance record.
 ///
 /// Records carry an RFC 3339 / ISO 8601 `timestamp` populated by the runtime
@@ -1054,6 +1079,50 @@ impl ProvenanceRecord {
 
         let mut record = Self::blank(ProvenanceKind::SignatureAffirmation);
         record.actor_id = Some(input.signer_id.to_string());
+        record.data = Some(serde_json::Value::Object(data));
+        record
+    }
+
+    /// Create a Signature Profile admission-failed record.
+    #[must_use]
+    pub fn signature_admission_failed(input: SignatureAdmissionFailedInput<'_>) -> Self {
+        let mut data = serde_json::Map::from_iter([
+            (
+                "reason".to_string(),
+                serde_json::Value::String(input.reason.to_string()),
+            ),
+            (
+                "evidenceBindings".to_string(),
+                serde_json::json!({
+                    "responseId": input.response_id,
+                    "signedPayloadDigest": input.signed_payload_digest,
+                    "signatureId": input.signature_id,
+                    "signingIntent": input.signing_intent,
+                }),
+            ),
+            (
+                "emittedAt".to_string(),
+                serde_json::Value::String(input.emitted_at.to_string()),
+            ),
+        ]);
+        if let Some(signer_id) = input.signer_id {
+            data.insert(
+                "signerId".to_string(),
+                serde_json::Value::String(signer_id.to_string()),
+            );
+        }
+        if let Some(signer_authority) = input.signer_authority {
+            data.insert("signerAuthority".to_string(), signer_authority);
+        }
+        if let Some(failure_context) = input.failure_context {
+            data.insert(
+                "failureContext".to_string(),
+                serde_json::Value::Object(failure_context),
+            );
+        }
+
+        let mut record = Self::blank(ProvenanceKind::SignatureAdmissionFailed);
+        record.actor_id = input.signer_id.map(String::from);
         record.data = Some(serde_json::Value::Object(data));
         record
     }
