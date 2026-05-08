@@ -91,12 +91,12 @@ Four ADRs (all Accepted 2026-05-06) gate the heavyweight Do-next items. All four
 | #1 T4 COC rendering (T4-10) | Trellis HTML-to-PDF reference renderer | Trellis | Open — byte composition done (Wave 25); rendering not yet landed |
 | #1 T4 Studio UI (T4-11) | formspec-studio 11 items | formspec-studio | Open |
 | #1 T4 vendor x-* floor | PLN-0384 event taxonomy ratification | WOS/Stack | P0 Open |
-| #1 T4 shared fixture bundle (T4-12) | PLN-0067/0068/0069 + Trellis items #2/#3 | Stack/Trellis | P1 Open |
-| Identity attestation shape | PLN-0381 + Trellis item #4 | Stack/Trellis | P0 Open (gated on PLN-0384) |
+| #1 T4 shared fixture bundle (T4-12) | PLN-0067/0068/0069 + Trellis items #1/#2 | Stack/Trellis | P1 Open |
+| Identity attestation shape | PLN-0381 + Trellis item #3 | Stack/Trellis | P0 Open (gated on PLN-0384) |
 | #66f amendment task linkage | WS-072 wos-server ADR 0066 prove-out | workspec-server | Gated on ADR 0066 |
 | #66 clock parity | WS-073/074/075 wos-server | workspec-server | Gated on ADR 0067 |
-| ADR 0066 runtime + conformance | WS-072 + Trellis item #11 + PLN-0050/51/55/56 | workspec-server/Trellis/Formspec | Gated on ADR 0066 acceptance |
-| ADR 0067 runtime + export | WS-073 + Trellis item #12 + PLN-0157/59/60/61 | workspec-server/Trellis/Formspec | Gated on ADR 0067 acceptance |
+| ADR 0066 runtime + conformance | WS-072 + Trellis COMPLETED Waves 40/47 + PLN-0050/51/55/56 | workspec-server/Trellis/Formspec | Gated on ADR 0066 acceptance |
+| ADR 0067 runtime + export | WS-073 + Trellis COMPLETED Wave 39 + PLN-0157/59/60/61 | workspec-server/Trellis/Formspec | Gated on ADR 0067 acceptance |
 
 **Owner-decision-gated — unblocks with verdict:**
 
@@ -128,7 +128,7 @@ Streams A–D are WOS-internal and fully independent of each other. Stream E coo
 **Highest-leverage first moves:**
 1. ~~Ratify ADRs 0066/0067/0070/0092~~ **Done 2026-05-06** — 8 items unblocked
 2. ~~Structural merges (§4.5)~~ **Done 2026-05-07** — assertion-library + due-process-config absorbed
-3. Ratify PLN-0384 (unblocks vendor x-* floor + identity attestation + Trellis item #4)
+3. Ratify PLN-0384 (unblocks vendor x-* floor + identity attestation + Trellis item #3)
 4. Start Stream A #6 + Stream C ungated spec items in parallel
 5. Start Stream B governance policies + export alongside Stream A
 6. Spin up Stream D authoring cleanup + Stream E cross-repo coordination
@@ -171,7 +171,7 @@ Pick from the top. Each item has a gate (what unblocks it) and a plan or ADR.
 
 ### ADR 0066 — execution checklist (WOS center) {#adr-0066-exec-checklist}
 
-**Gate:** [ADR 0066](../thoughts/adr/0066-stack-amendment-and-supersession.md) **Accepted 2026-05-06 (cluster ratification sweep).** Formspec Respondent Ledger work and Trellis vectors/verifier/export stay owned in parent [`TODO-STACK.md`](../TODO-STACK.md) and [`../trellis/TODO.md`](../trellis/TODO.md) item **11**; this block is the **WOS spec + schema + runtime + export** slice.
+**Gate:** [ADR 0066](../thoughts/adr/0066-stack-amendment-and-supersession.md) **Accepted 2026-05-06 (cluster ratification sweep).** Formspec Respondent Ledger work and Trellis vectors/verifier/export stay owned in parent [`TODO-STACK.md`](../TODO-STACK.md) and closed Trellis Waves 40/47 in [`../trellis/COMPLETED.md`](../trellis/COMPLETED.md); this block is the **WOS spec + schema + runtime + export** slice.
 
 1. **Kernel / provenance**
    - [x] Add **seven** `ProvenanceKind` variants (6 + `Reinstated` from maximalist cluster) + schema `recordKind` registrations in `wos-workflow.schema.json` (not `wos-provenance-record.schema.json` — that path no longer exists post-ADR 0076): `correctionAuthorized`, `amendmentAuthorized`, `determinationAmended`, `rescissionAuthorized`, `determinationRescinded`, `reinstated`, `authorizationAttestation`. **Landed** — `crates/wos-core/src/provenance/kind.rs:304-359`, schema $defs at lines 4739-5301.
@@ -198,7 +198,7 @@ Pick from the top. Each item has a gate (what unblocks it) and a plan or ADR.
 
 ### ADR 0067 — execution checklist (WOS center) {#adr-0067-exec-checklist}
 
-**Gate:** [ADR 0067](../thoughts/adr/0067-stack-statutory-clocks.md) **Accepted 2026-05-06 (cluster ratification sweep).** Trellis `open-clocks.json`, verifier advisories, append vectors **043–046**, `verify/018-export-043-open-clocks`, and `tamper/051-clock-calendar-mismatch` stay in parent [`TODO-STACK.md`](../TODO-STACK.md) and [`../trellis/TODO.md`](../trellis/TODO.md) item **12**; Formspec **StatuteClock** origination on respondent acts stays in parent [`TODO-STACK.md`](../TODO-STACK.md); reference-server prove-out is [`crates/wos-server/TODO.md`](crates/wos-server/TODO.md) **WS-073**.
+**Gate:** [ADR 0067](../thoughts/adr/0067-stack-statutory-clocks.md) **Accepted 2026-05-06 (cluster ratification sweep).** Trellis `open-clocks.json`, verifier advisories, append vectors **043–046**, `verify/018-export-043-open-clocks`, and `tamper/051-clock-calendar-mismatch` stay in parent [`TODO-STACK.md`](../TODO-STACK.md) and closed Trellis Wave 39 in [`../trellis/COMPLETED.md`](../trellis/COMPLETED.md); Formspec **StatuteClock** origination on respondent acts stays in parent [`TODO-STACK.md`](../TODO-STACK.md); reference-server prove-out is [`crates/wos-server/TODO.md`](crates/wos-server/TODO.md) **WS-073**.
 
 1. **Kernel / provenance**
    - [x] Add `ProvenanceKind` variants + schema `recordKind` branches in `wos-workflow.schema.json`: `clockStarted`, `clockResolved`. **Landed** — `crates/wos-core/src/provenance/kind.rs:361-377`, schema enum at lines 3857/3859.
