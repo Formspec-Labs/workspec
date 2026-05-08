@@ -389,6 +389,16 @@ pub struct SignatureAffirmationInput<'a> {
     pub document_hash: &'a str,
     /// Digest algorithm used for `document_hash`.
     pub document_hash_algorithm: &'a str,
+    /// Source system that supplied the verified signature evidence.
+    pub source_signature_system: &'a str,
+    /// Source-system signature identifier consumed by WOS.
+    pub source_signature_id: &'a str,
+    /// Source signature evidence signed-payload digest value.
+    pub signed_payload_digest: &'a str,
+    /// Digest algorithm used for `signed_payload_digest`.
+    pub signed_payload_digest_algorithm: &'a str,
+    /// WOS signing-intent URI accepted for this affirmation.
+    pub signing_intent: &'a str,
     /// RFC 3339 timestamp for the signing act.
     pub signed_at: &'a str,
     /// Provider-neutral identity-binding evidence.
@@ -403,8 +413,10 @@ pub struct SignatureAffirmationInput<'a> {
     pub profile_ref: Option<&'a str>,
     /// Package-local Signature Profile key, when resolved in-document.
     pub profile_key: Option<&'a str>,
-    /// URI reference to the canonical Formspec response.
-    pub formspec_response_ref: &'a str,
+    /// URI reference to the source response or evidence artifact.
+    pub source_response_ref: &'a str,
+    /// Signer-authority claim when the accepted signing intent requires one.
+    pub signer_authority: Option<serde_json::Value>,
     /// Whether the record is eligible for `custodyHook` admission.
     pub custody_hook_eligible: bool,
 }
@@ -969,6 +981,26 @@ impl ProvenanceRecord {
                 serde_json::Value::String(input.document_hash_algorithm.to_string()),
             ),
             (
+                "sourceSignatureSystem".to_string(),
+                serde_json::Value::String(input.source_signature_system.to_string()),
+            ),
+            (
+                "sourceSignatureId".to_string(),
+                serde_json::Value::String(input.source_signature_id.to_string()),
+            ),
+            (
+                "signedPayloadDigest".to_string(),
+                serde_json::Value::String(input.signed_payload_digest.to_string()),
+            ),
+            (
+                "signedPayloadDigestAlgorithm".to_string(),
+                serde_json::Value::String(input.signed_payload_digest_algorithm.to_string()),
+            ),
+            (
+                "signingIntent".to_string(),
+                serde_json::Value::String(input.signing_intent.to_string()),
+            ),
+            (
                 "signedAt".to_string(),
                 serde_json::Value::String(input.signed_at.to_string()),
             ),
@@ -983,8 +1015,8 @@ impl ProvenanceRecord {
                 serde_json::Value::String(input.ceremony_id.to_string()),
             ),
             (
-                "formspecResponseRef".to_string(),
-                serde_json::Value::String(input.formspec_response_ref.to_string()),
+                "sourceResponseRef".to_string(),
+                serde_json::Value::String(input.source_response_ref.to_string()),
             ),
             (
                 "custodyHookEligible".to_string(),
@@ -1003,6 +1035,9 @@ impl ProvenanceRecord {
                 "profileKey".to_string(),
                 serde_json::Value::String(profile_key.to_string()),
             );
+        }
+        if let Some(signer_authority) = input.signer_authority {
+            data.insert("signerAuthority".to_string(), signer_authority);
         }
 
         let mut record = Self::blank(ProvenanceKind::SignatureAffirmation);

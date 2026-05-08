@@ -7,12 +7,16 @@ use wos_core::{
     provenance::{ProvenanceKind, ProvenanceRecord},
 };
 use wos_runtime::binding::{
-    BindingError, CaseMutationBundle, ContractBindingAdapter, PreparedTask, SubmissionValidation,
+    BindingError, CaseMutationBundle, ContractBindingAdapter, PreparedTask, SignatureEvidence,
+    SubmissionValidation,
 };
 use wos_runtime::intake::{
     IntakeAcceptanceAdapter, IntakeAcceptanceOutcome, IntakeAcceptanceRequest,
     IntakeCaseDisposition, IntakeCaseIntent, IntakeInterpretation,
 };
+
+const FORMSPEC_SIGNED_PAYLOAD_CANONICALIZATION: &str = "formspec-response-signing-v1";
+const FORMSPEC_SIGNED_PAYLOAD_DOMAIN: &str = "formspec.response.signed-payload.v1";
 
 /// Case action implied by a Formspec intake handoff.
 ///
@@ -118,6 +122,81 @@ pub struct IntakeHandoff {
     pub extensions: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
+/// Formspec signed-payload pin consumed by WOS signature binding code.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FormspecSignedPayloadRef {
+    /// Canonicalization profile used to hash the signed payload.
+    pub canonicalization: String,
+
+    /// Digest algorithm used for `digest`.
+    pub digest_algorithm: String,
+
+    /// Digest of the Formspec Signed Response Payload.
+    pub digest: String,
+
+    /// Response id pinned by the signature.
+    pub response_id: String,
+
+    /// Definition URL pinned by the signature.
+    pub definition_url: String,
+
+    /// Definition version pinned by the signature.
+    pub definition_version: String,
+}
+
+/// Minimal authored-signature shape WOS needs to bind Formspec evidence.
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FormspecAuthoredSignatureRef {
+    /// Stable signature identifier.
+    pub signature_id: String,
+
+    /// Signable document identifier.
+    pub document_id: String,
+
+    /// Legal-effect class authored into the Formspec response.
+    pub signing_intent: String,
+
+    /// Signer display name required by Formspec schema.
+    pub signer_name: String,
+
+    /// Signature timestamp.
+    pub signed_at: String,
+
+    /// Consent flag accepted by the signer.
+    pub consent_accepted: bool,
+
+    /// Consent text reference.
+    pub consent_text_ref: String,
+
+    /// Consent text version.
+    pub consent_version: String,
+
+    /// Signed-payload digest pins.
+    pub signed_payload: FormspecSignedPayloadRef,
+
+    /// Signing-surface or rendered-document hash.
+    pub document_hash: String,
+
+    /// Signing-surface digest algorithm.
+    pub document_hash_algorithm: String,
+
+    /// Provider that supplied the signature ceremony.
+    pub signature_provider: String,
+
+    /// Provider or adapter ceremony identifier.
+    pub ceremony_id: String,
+
+    /// Stable signer identifier, when present.
+    #[serde(default)]
+    pub signer_id: Option<String>,
+
+    /// Provider-neutral identity binding, when Formspec captured it.
+    #[serde(default)]
+    pub identity_binding: Option<serde_json::Value>,
+}
+
 impl IntakeHandoff {
     /// Return the WOS case intent represented by this handoff.
     ///
@@ -204,6 +283,140 @@ impl IntakeHandoff {
 
         Ok(())
     }
+}
+
+/// Parse Formspec `authoredSignatures` and validate their response-pin fields.
+///
+/// The binding crate owns this Formspec-specific shape so WOS runtime and
+/// provenance code do not need to duplicate Formspec JSON field names at every
+/// boundary. Digest recomputation is a separate verifier concern; this parser
+/// checks that the signature pins agree with the Response envelope identity.
+pub fn parse_authored_signatures(
+    response: &serde_json::Value,
+) -> Result<Vec<FormspecAuthoredSignatureRef>, BindingError> {
+    let Some(items) = response.get("authoredSignatures") else {
+        return Ok(Vec::new());
+    };
+    let signatures: Vec<FormspecAuthoredSignatureRef> = serde_json::from_value(items.clone())
+        .map_err(|error| {
+            BindingError::InvalidInput(format!("invalid Formspec authoredSignatures: {error}"))
+        })?;
+    if signatures.is_empty() {
+        return Ok(signatures);
+    }
+    let response_id = response.get("id").and_then(serde_json::Value::as_str).ok_or_else(|| {
+        BindingError::InvalidInput(
+            "Formspec Response with authoredSignatures requires id".to_string(),
+        )
+    })?;
+    let definition_url = response
+        .get("definitionUrl")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    let definition_version = response
+        .get("definitionVersion")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+
+    for signature in &signatures {
+        ensure_non_empty("authoredSignatures.signatureId", &signature.signature_id)?;
+        ensure_non_empty("authoredSignatures.signingIntent", &signature.signing_intent)?;
+        ensure_non_empty(
+            "authoredSignatures.signedPayload.digest",
+            &signature.signed_payload.digest,
+        )?;
+        if signature.signed_payload.canonicalization != FORMSPEC_SIGNED_PAYLOAD_CANONICALIZATION {
+            return Err(BindingError::InvalidInput(format!(
+                "authoredSignatures signedPayload.canonicalization must be {FORMSPEC_SIGNED_PAYLOAD_CANONICALIZATION}"
+            )));
+        }
+        if signature.signed_payload.response_id != response_id {
+            return Err(BindingError::InvalidInput(
+                "authoredSignatures signedPayload.responseId must match Response id".to_string(),
+            ));
+        }
+        if signature.signed_payload.definition_url != definition_url {
+            return Err(BindingError::InvalidInput(
+                "authoredSignatures signedPayload.definitionUrl must match Response definitionUrl"
+                    .to_string(),
+            ));
+        }
+        if signature.signed_payload.definition_version != definition_version {
+            return Err(BindingError::InvalidInput(
+                "authoredSignatures signedPayload.definitionVersion must match Response definitionVersion"
+                    .to_string(),
+            ));
+        }
+        if !signature.consent_accepted {
+            return Err(BindingError::InvalidInput(
+                "authoredSignatures consentAccepted must be true".to_string(),
+            ));
+        }
+        let computed_digest = compute_formspec_signed_payload_digest(
+            response,
+            &signature.signed_payload.digest_algorithm,
+        )?;
+        if computed_digest != signature.signed_payload.digest {
+            return Err(BindingError::InvalidInput(
+                "authoredSignatures signedPayload.digest does not match signed Response payload"
+                    .to_string(),
+            ));
+        }
+    }
+    Ok(signatures)
+}
+
+fn compute_formspec_signed_payload_digest(
+    response: &serde_json::Value,
+    algorithm: &str,
+) -> Result<String, BindingError> {
+    let mut signed_payload = response.clone();
+    let object = signed_payload.as_object_mut().ok_or_else(|| {
+        BindingError::InvalidInput("Formspec response must be a JSON object".to_string())
+    })?;
+    object.remove("authoredSignatures");
+    let canonical = serde_json_canonicalizer::to_string(&signed_payload).map_err(|error| {
+        BindingError::InvalidInput(format!("canonicalize Formspec signed payload: {error}"))
+    })?;
+    let mut payload = Vec::with_capacity(
+        FORMSPEC_SIGNED_PAYLOAD_DOMAIN.len() + 1 + canonical.as_bytes().len(),
+    );
+    payload.extend_from_slice(FORMSPEC_SIGNED_PAYLOAD_DOMAIN.as_bytes());
+    payload.push(0);
+    payload.extend_from_slice(canonical.as_bytes());
+
+    use sha2::{Digest, Sha256, Sha384, Sha512};
+    let digest = match algorithm {
+        "sha-256" => format!("{:x}", Sha256::digest(&payload)),
+        "sha-384" => format!("{:x}", Sha384::digest(&payload)),
+        "sha-512" => format!("{:x}", Sha512::digest(&payload)),
+        other => {
+            return Err(BindingError::InvalidInput(format!(
+                "unsupported Formspec signedPayload.digestAlgorithm '{other}'"
+            )));
+        }
+    };
+    Ok(digest)
+}
+
+fn response_path<'a>(response: &'a serde_json::Value, path: &str) -> Option<&'a serde_json::Value> {
+    if let Some(data) = response.get("data")
+        && let Some(value) = value_at_path(data, path)
+    {
+        return Some(value);
+    }
+    value_at_path(response, path)
+}
+
+fn value_at_path<'a>(root: &'a serde_json::Value, path: &str) -> Option<&'a serde_json::Value> {
+    let mut current = root;
+    for segment in path.split('.') {
+        if segment.is_empty() {
+            return None;
+        }
+        current = current.get(segment)?;
+    }
+    Some(current)
 }
 
 /// Parse and validate a Formspec intake handoff.
@@ -303,7 +516,7 @@ pub fn case_created_provenance(
 fn ensure_non_empty(field: &str, value: &str) -> Result<(), BindingError> {
     if value.trim().is_empty() {
         return Err(BindingError::InvalidInput(format!(
-            "intake handoff {field} must not be empty"
+            "{field} must not be empty"
         )));
     }
     Ok(())
@@ -485,6 +698,59 @@ where
             return Ok(None);
         };
         self.processor.map_response(mapping_ref, response)
+    }
+
+    fn signature_evidence(
+        &self,
+        _task: &ActiveTask,
+        response: &serde_json::Value,
+    ) -> Result<Option<Vec<SignatureEvidence>>, BindingError> {
+        let signatures = parse_authored_signatures(response)?;
+        if signatures.is_empty() {
+            return Ok(None);
+        }
+        let source_response_ref = response
+            .get("sourceResponseRef")
+            .or_else(|| response.get("formspecResponseRef"))
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string);
+        let response_signer_id =
+            response_path(response, "signerId").and_then(serde_json::Value::as_str);
+        let signer_authority = response_path(response, "signerAuthority")
+            .or_else(|| response_path(response, "signature.signerAuthority"))
+            .cloned();
+
+        let mut evidence = Vec::with_capacity(signatures.len());
+        for signature in signatures {
+            if let (Some(response_signer_id), Some(signature_signer_id)) =
+                (response_signer_id, signature.signer_id.as_deref())
+                && response_signer_id != signature_signer_id
+            {
+                return Err(BindingError::InvalidInput(
+                    "authoredSignatures signerId must match response signerId".to_string(),
+                ));
+            }
+            evidence.push(SignatureEvidence {
+                source_system: "formspec".to_string(),
+                source_signature_id: signature.signature_id,
+                source_response_ref: source_response_ref.clone(),
+                document_id: signature.document_id,
+                signer_id: signature
+                    .signer_id
+                    .or_else(|| response_signer_id.map(str::to_string)),
+                signing_intent: signature.signing_intent,
+                signed_payload_digest: signature.signed_payload.digest,
+                signed_payload_digest_algorithm: signature.signed_payload.digest_algorithm,
+                signed_at: signature.signed_at,
+                document_hash: signature.document_hash,
+                document_hash_algorithm: signature.document_hash_algorithm,
+                signature_provider: Some(signature.signature_provider),
+                ceremony_id: Some(signature.ceremony_id),
+                identity_binding: signature.identity_binding,
+                signer_authority: signer_authority.clone(),
+            });
+        }
+        Ok(Some(evidence))
     }
 }
 
@@ -784,6 +1050,83 @@ mod tests {
             .unwrap();
 
         assert_eq!(first.field_updates, second.field_updates);
+    }
+
+    fn signed_response() -> serde_json::Value {
+        let mut response = serde_json::json!({
+            "id": "resp-2026-0001",
+            "status": "completed",
+            "definitionUrl": "urn:formspec:review",
+            "definitionVersion": "1.0.0",
+            "data": { "approved": true },
+            "authoredSignatures": [
+                {
+                    "signatureId": "sig-2026-0001",
+                    "documentId": "benefitsApplication",
+                    "signingIntent": "urn:wos:signing-intent:applicant-signature",
+                    "signatureValue": "urn:test:signature:1",
+                    "signatureMethod": "provider-managed",
+                    "signerId": "applicant",
+                    "signerName": "Ada Lovelace",
+                    "signedAt": "2026-04-22T12:00:00Z",
+                    "consentAccepted": true,
+                    "consentTextRef": "urn:test:consent:v1",
+                    "consentVersion": "1.0.0",
+                    "affirmationText": "I certify this response.",
+                    "signedPayload": {
+                        "canonicalization": "formspec-response-signing-v1",
+                        "digestAlgorithm": "sha-256",
+                        "digest": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                        "responseId": "resp-2026-0001",
+                        "definitionUrl": "urn:formspec:review",
+                        "definitionVersion": "1.0.0"
+                    },
+                    "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                    "documentHashAlgorithm": "sha-256",
+                    "signatureProvider": "formspec",
+                    "ceremonyId": "ceremony-2026-0001"
+                }
+            ]
+        });
+        let digest = compute_formspec_signed_payload_digest(&response, "sha-256").unwrap();
+        response["authoredSignatures"][0]["signedPayload"]["digest"] =
+            serde_json::Value::String(digest);
+        response
+    }
+
+    #[test]
+    fn parse_authored_signatures_accepts_new_formspec_shape() {
+        let response = signed_response();
+        let expected_signed_payload_digest = response["authoredSignatures"][0]["signedPayload"]
+            ["digest"]
+            .as_str()
+            .expect("signed-payload digest is present")
+            .to_string();
+        let signatures = parse_authored_signatures(&response).unwrap();
+
+        assert_eq!(signatures.len(), 1);
+        assert_eq!(signatures[0].signature_id, "sig-2026-0001");
+        assert_eq!(
+            signatures[0].signed_payload.digest,
+            expected_signed_payload_digest
+        );
+        assert_eq!(
+            signatures[0].document_hash,
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        );
+    }
+
+    #[test]
+    fn parse_authored_signatures_rejects_response_pin_mismatch() {
+        let mut response = signed_response();
+        response["authoredSignatures"][0]["signedPayload"]["responseId"] =
+            serde_json::json!("resp-stale");
+
+        let error = parse_authored_signatures(&response).unwrap_err();
+        assert!(
+            error.to_string().contains("signedPayload.responseId"),
+            "unexpected error: {error}"
+        );
     }
 
     fn public_intake_handoff() -> serde_json::Value {

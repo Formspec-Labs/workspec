@@ -24,7 +24,7 @@
       "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "documentHashAlgorithm": "sha-256",
       "renderingRef": "urn:agency.gov:renderings:benefits-application:v1",
-      "formspecResponseRef": "urn:agency.gov:formspec:responses:benefits:case-2026-0001"
+      "sourceResponseRef": "urn:agency.gov:formspec:responses:benefits:case-2026-0001"
     }
   ],
   "authenticationPolicies": [

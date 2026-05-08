@@ -33,7 +33,7 @@
       "documentRef": "urn:agency.gov:documents:vendor-contract:v1",
       "documentHash": "abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
       "documentHashAlgorithm": "sha-256",
-      "formspecResponseRef": "urn:agency.gov:formspec:responses:contracts:case-2026-0007"
+      "sourceResponseRef": "urn:agency.gov:formspec:responses:contracts:case-2026-0007"
     }
   ],
   "authenticationPolicies": [

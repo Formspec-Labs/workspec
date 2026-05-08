@@ -298,7 +298,7 @@ pub enum ProvenanceKind {
     /// A signer affirmed a document under a Signature Profile.
     ///
     /// `data` carries signer, role, document, identity-binding, consent,
-    /// ceremony, profile, Formspec response, and custody eligibility fields.
+    /// ceremony, profile, source response, and custody eligibility fields.
     SignatureAffirmation,
 
     // ── Amendment & supersession (ADR 0066) ─────────────────────────

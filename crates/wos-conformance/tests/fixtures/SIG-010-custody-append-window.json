@@ -29,7 +29,36 @@
               "affirmed": true,
               "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
             }
-          }
+          },
+          "id": "resp-sig-010-custody-append-window-applicantTask",
+          "authoredSignatures": [
+            {
+              "signatureId": "sig-sig-010-custody-append-window-applicantTask",
+              "documentId": "application",
+              "signingIntent": "urn:wos:signing-intent:applicant-signature",
+              "signatureValue": "urn:test:signature:SIG-010-custody-append-window:applicantTask",
+              "signatureMethod": "provider-managed",
+              "signerId": "applicant",
+              "signerName": "Applicant",
+              "signedAt": "2026-04-22T12:10:00Z",
+              "consentAccepted": true,
+              "consentTextRef": "urn:test:consent:esign",
+              "consentVersion": "1.0.0",
+              "affirmationText": "I certify this signing act.",
+              "signedPayload": {
+                "canonicalization": "formspec-response-signing-v1",
+                "digestAlgorithm": "sha-256",
+                "digest": "fbd6fc4f926465d3642b6f26de3d3ebb8fdbd4b30fce557a7dea090b2e5811f6",
+                "responseId": "resp-sig-010-custody-append-window-applicantTask",
+                "definitionUrl": "urn:test:formspec:signature",
+                "definitionVersion": "1.0.0"
+              },
+              "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+              "documentHashAlgorithm": "sha-256",
+              "signatureProvider": "formspec",
+              "ceremonyId": "ceremony-custody"
+            }
+          ]
         }
       }
     }

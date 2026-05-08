@@ -23,7 +23,7 @@ pub mod studio_api;
 
 pub use binding::{
     BindingError, BindingRegistry, CaseMutationBundle, ContractBindingAdapter, PreparedTask,
-    SubmissionValidation,
+    SignatureEvidence, SubmissionValidation,
 };
 pub use companion::ReferenceCompanionPolicy;
 #[doc(inline)]

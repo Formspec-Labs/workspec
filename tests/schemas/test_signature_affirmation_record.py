@@ -45,6 +45,11 @@ def _record() -> dict:
             "documentId": "benefitsApplication",
             "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             "documentHashAlgorithm": "sha-256",
+            "sourceSignatureSystem": "formspec",
+            "sourceSignatureId": "sig-2026-0001",
+            "signedPayloadDigest": "abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+            "signedPayloadDigestAlgorithm": "sha-256",
+            "signingIntent": "urn:wos:signing-intent:applicant-signature",
             "signedAt": "2026-04-22T14:30:00Z",
             "identityBinding": {
                 "method": "email-otp",
@@ -60,7 +65,7 @@ def _record() -> dict:
             "signatureProvider": "urn:agency.gov:signature:providers:formspec",
             "ceremonyId": "ceremony-2026-0001",
             "profileRef": "urn:agency.gov:wos:signature-profile:benefits:v1",
-            "formspecResponseRef": (
+            "sourceResponseRef": (
                 "urn:agency.gov:formspec:responses:benefits:case-2026-0001"
             ),
             "custodyHookEligible": True,
@@ -98,12 +103,17 @@ def test_signature_affirmation_missing_data_is_rejected(schema):
         "documentId",
         "documentHash",
         "documentHashAlgorithm",
+        "sourceSignatureSystem",
+        "sourceSignatureId",
+        "signedPayloadDigest",
+        "signedPayloadDigestAlgorithm",
+        "signingIntent",
         "signedAt",
         "identityBinding",
         "consentReference",
         "signatureProvider",
         "ceremonyId",
-        "formspecResponseRef",
+        "sourceResponseRef",
         "custodyHookEligible",
     ],
 )

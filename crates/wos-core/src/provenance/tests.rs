@@ -622,6 +622,11 @@ fn signature_affirmation_input() -> SignatureAffirmationInput<'static> {
         document_id: "benefitsApplication",
         document_hash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         document_hash_algorithm: "sha-256",
+        source_signature_system: "formspec",
+        source_signature_id: "sig-2026-0001",
+        signed_payload_digest: "abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        signed_payload_digest_algorithm: "sha-256",
+        signing_intent: "urn:wos:signing-intent:applicant-signature",
         signed_at: "2026-04-22T14:30:00Z",
         identity_binding: serde_json::json!({
             "method": "email-otp",
@@ -638,7 +643,8 @@ fn signature_affirmation_input() -> SignatureAffirmationInput<'static> {
         ceremony_id: "ceremony-2026-0001",
         profile_ref: Some("urn:agency.gov:wos:signature-profile:benefits:v1"),
         profile_key: None,
-        formspec_response_ref: "urn:agency.gov:formspec:responses:benefits:case-2026-0001",
+        source_response_ref: "urn:agency.gov:formspec:responses:benefits:case-2026-0001",
+        signer_authority: None,
         custody_hook_eligible: true,
     }
 }
@@ -659,6 +665,17 @@ fn signature_affirmation_constructor_serializes_required_fields() {
         "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
     );
     assert_eq!(json["data"]["documentHashAlgorithm"], "sha-256");
+    assert_eq!(json["data"]["sourceSignatureSystem"], "formspec");
+    assert_eq!(json["data"]["sourceSignatureId"], "sig-2026-0001");
+    assert_eq!(
+        json["data"]["signedPayloadDigest"],
+        "abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+    );
+    assert_eq!(json["data"]["signedPayloadDigestAlgorithm"], "sha-256");
+    assert_eq!(
+        json["data"]["signingIntent"],
+        "urn:wos:signing-intent:applicant-signature"
+    );
     assert_eq!(json["data"]["signedAt"], "2026-04-22T14:30:00Z");
     assert_eq!(
         json["data"]["signatureProvider"],
@@ -670,7 +687,7 @@ fn signature_affirmation_constructor_serializes_required_fields() {
         "urn:agency.gov:wos:signature-profile:benefits:v1"
     );
     assert_eq!(
-        json["data"]["formspecResponseRef"],
+        json["data"]["sourceResponseRef"],
         "urn:agency.gov:formspec:responses:benefits:case-2026-0001"
     );
     assert_eq!(json["data"]["custodyHookEligible"], true);

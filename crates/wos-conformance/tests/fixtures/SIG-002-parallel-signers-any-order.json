@@ -33,7 +33,40 @@
               "affirmed": true,
               "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
             }
-          }
+          },
+          "id": "resp-sig-002-parallel-signers-any-order-agencyTask",
+          "authoredSignatures": [
+            {
+              "signatureId": "sig-sig-002-parallel-signers-any-order-agencyTask",
+              "documentId": "application",
+              "signingIntent": "urn:wos:signing-intent:approval",
+              "signatureValue": "urn:test:signature:SIG-002-parallel-signers-any-order:agencyTask",
+              "signatureMethod": "provider-managed",
+              "signerId": "agency",
+              "signerName": "Agency",
+              "signedAt": "2026-04-22T12:01:00Z",
+              "consentAccepted": true,
+              "consentTextRef": "urn:test:consent:esign",
+              "consentVersion": "1.0.0",
+              "affirmationText": "I certify this signing act.",
+              "signedPayload": {
+                "canonicalization": "formspec-response-signing-v1",
+                "digestAlgorithm": "sha-256",
+                "digest": "b1b3b34a29f10ffd1f91c9679f763881839e13a41c0442eef592ceefdc215049",
+                "responseId": "resp-sig-002-parallel-signers-any-order-agencyTask",
+                "definitionUrl": "urn:test:formspec:signature",
+                "definitionVersion": "1.0.0"
+              },
+              "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+              "documentHashAlgorithm": "sha-256",
+              "signatureProvider": "formspec",
+              "ceremonyId": "ceremony-agency",
+              "identityBinding": {
+                "method": "credential",
+                "assuranceLevel": "high"
+              }
+            }
+          ]
         }
       }
     },
@@ -58,7 +91,40 @@
               "affirmed": true,
               "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
             }
-          }
+          },
+          "id": "resp-sig-002-parallel-signers-any-order-applicantTask",
+          "authoredSignatures": [
+            {
+              "signatureId": "sig-sig-002-parallel-signers-any-order-applicantTask",
+              "documentId": "application",
+              "signingIntent": "urn:wos:signing-intent:applicant-signature",
+              "signatureValue": "urn:test:signature:SIG-002-parallel-signers-any-order:applicantTask",
+              "signatureMethod": "provider-managed",
+              "signerId": "applicant",
+              "signerName": "Applicant",
+              "signedAt": "2026-04-22T12:02:00Z",
+              "consentAccepted": true,
+              "consentTextRef": "urn:test:consent:esign",
+              "consentVersion": "1.0.0",
+              "affirmationText": "I certify this signing act.",
+              "signedPayload": {
+                "canonicalization": "formspec-response-signing-v1",
+                "digestAlgorithm": "sha-256",
+                "digest": "3513ec9021c22d4c0839a260f4684e676660918b635594298c6d2b25fa68b450",
+                "responseId": "resp-sig-002-parallel-signers-any-order-applicantTask",
+                "definitionUrl": "urn:test:formspec:signature",
+                "definitionVersion": "1.0.0"
+              },
+              "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+              "documentHashAlgorithm": "sha-256",
+              "signatureProvider": "formspec",
+              "ceremonyId": "ceremony-applicant",
+              "identityBinding": {
+                "method": "email-otp",
+                "assuranceLevel": "standard"
+              }
+            }
+          ]
         }
       }
     }

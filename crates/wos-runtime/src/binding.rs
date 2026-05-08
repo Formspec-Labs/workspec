@@ -34,6 +34,56 @@ pub struct CaseMutationBundle {
     pub field_updates: serde_json::Map<String, serde_json::Value>,
 }
 
+/// Binding-neutral verified signature evidence for WOS Signature Profile
+/// admission.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SignatureEvidence {
+    /// Binding or provider family that produced the verified evidence.
+    pub source_system: String,
+
+    /// Stable signature id from the source system.
+    pub source_signature_id: String,
+
+    /// Optional source response or evidence artifact reference.
+    pub source_response_ref: Option<String>,
+
+    /// Source document id.
+    pub document_id: String,
+
+    /// Signer id, when supplied by the binding.
+    pub signer_id: Option<String>,
+
+    /// WOS signing-intent URI carried by the source evidence.
+    pub signing_intent: String,
+
+    /// Digest of the signed payload verified by the binding.
+    pub signed_payload_digest: String,
+
+    /// Digest algorithm used for `signed_payload_digest`.
+    pub signed_payload_digest_algorithm: String,
+
+    /// Signing timestamp supplied by the source evidence.
+    pub signed_at: String,
+
+    /// Signing-surface or rendered-document digest.
+    pub document_hash: String,
+
+    /// Digest algorithm for `document_hash`.
+    pub document_hash_algorithm: String,
+
+    /// Source signature provider, when distinct from `source_system`.
+    pub signature_provider: Option<String>,
+
+    /// Provider or adapter ceremony id.
+    pub ceremony_id: Option<String>,
+
+    /// Provider-neutral identity binding.
+    pub identity_binding: Option<serde_json::Value>,
+
+    /// WOS signer-authority claim supplied by the source or response.
+    pub signer_authority: Option<serde_json::Value>,
+}
+
 /// Errors produced by binding adapters.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum BindingError {
@@ -79,6 +129,19 @@ pub trait ContractBindingAdapter: Send + Sync {
         task: &ActiveTask,
         response: &serde_json::Value,
     ) -> Result<Option<CaseMutationBundle>, BindingError>;
+
+    /// Extract verified signature evidence from a completed submission.
+    ///
+    /// Base WOS consumes this binding-neutral evidence when a Signature Profile
+    /// task is admitted. Adapters that do not own signature evidence use the
+    /// default `None`.
+    fn signature_evidence(
+        &self,
+        _task: &ActiveTask,
+        _response: &serde_json::Value,
+    ) -> Result<Option<Vec<SignatureEvidence>>, BindingError> {
+        Ok(None)
+    }
 }
 
 /// Registry of available contract binding adapters.

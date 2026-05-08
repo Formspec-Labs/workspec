@@ -82,7 +82,7 @@ fn workflow_with_signature() -> serde_json::Value {
                     "documentRef": "urn:test:document:application",
                     "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
                     "documentHashAlgorithm": "sha-256",
-                    "formspecResponseRef": "urn:test:response:1"
+                    "sourceResponseRef": "urn:test:response:1"
                 }
             ],
             "authenticationPolicies": [

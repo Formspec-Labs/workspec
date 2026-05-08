@@ -437,7 +437,7 @@
     },
     "SignatureAffirmationRecord": {
       "type": "object",
-      "description": "Shape constraint layered on Facts-tier provenance records emitted by the Signature Profile. A `recordKind == \"signatureAffirmation\"` record MUST carry the signer, role, document, hash, timestamp, identity-binding, consent, provider, ceremony, profile, Formspec response, and custody eligibility fields required by Signature Profile §2.8.",
+      "description": "Shape constraint layered on Facts-tier provenance records emitted by the Signature Profile. A `recordKind == \"signatureAffirmation\"` record MUST carry the signer, role, document, source signature id, signed-payload digest, signing intent, timestamp, identity-binding, consent, provider, ceremony, profile, source response/evidence reference, and custody eligibility fields required by Signature Profile §2.8.",
       "examples": [
         {
           "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
@@ -452,6 +452,11 @@
             "documentId": "benefitsApplication",
             "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             "documentHashAlgorithm": "sha-256",
+            "sourceSignatureSystem": "formspec",
+            "sourceSignatureId": "sig-2026-0001",
+            "signedPayloadDigest": "abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+            "signedPayloadDigestAlgorithm": "sha-256",
+            "signingIntent": "urn:wos:signing-intent:applicant-signature",
             "signedAt": "2026-04-22T14:30:00Z",
             "identityBinding": {
               "method": "email-otp",
@@ -467,7 +472,7 @@
             "signatureProvider": "urn:agency.gov:signature:providers:formspec",
             "ceremonyId": "ceremony-2026-0001",
             "profileRef": "urn:agency.gov:wos:signature-profile:benefits:v1",
-            "formspecResponseRef": "urn:agency.gov:formspec:responses:benefits:case-2026-0001",
+            "sourceResponseRef": "urn:agency.gov:formspec:responses:benefits:case-2026-0001",
             "custodyHookEligible": true
           }
         }
@@ -512,7 +517,7 @@
     },
     "SignatureAffirmationData": {
       "type": "object",
-      "description": "Required payload for a Signature Profile affirmation provenance record. Identity-binding and consent-reference shapes are provider-neutral so Formspec and external ceremony adapters can map into the same WOS evidence record.",
+      "description": "Required payload for a Signature Profile affirmation provenance record. Source signature identity and signed-payload digest fields identify the verified signature evidence that WOS accepted; identity-binding and consent-reference shapes remain provider-neutral so Formspec and external ceremony adapters can map into the same WOS evidence record.",
       "additionalProperties": false,
       "required": [
         "signerId",
@@ -521,12 +526,17 @@
         "documentId",
         "documentHash",
         "documentHashAlgorithm",
+        "sourceSignatureSystem",
+        "sourceSignatureId",
+        "signedPayloadDigest",
+        "signedPayloadDigestAlgorithm",
+        "signingIntent",
         "signedAt",
         "identityBinding",
         "consentReference",
         "signatureProvider",
         "ceremonyId",
-        "formspecResponseRef",
+        "sourceResponseRef",
         "custodyHookEligible"
       ],
       "oneOf": [
@@ -612,6 +622,59 @@
             "sha-256"
           ]
         },
+        "sourceSignatureSystem": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Binding or provider family that supplied the verified signature evidence.",
+          "examples": [
+            "formspec"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "sourceSignatureId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Source-system signature identifier accepted into this WOS governance affirmation.",
+          "examples": [
+            "sig-2026-0001"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "signedPayloadDigest": {
+          "type": "string",
+          "pattern": "^[A-Fa-f0-9]{64,128}$",
+          "description": "Source signature evidence digest for the signer-assented payload. This is distinct from any transferred response-envelope hash.",
+          "examples": [
+            "abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+          ],
+          "x-wos": {
+            "openStringKind": "hash"
+          }
+        },
+        "signedPayloadDigestAlgorithm": {
+          "type": "string",
+          "pattern": "^(sha-256|sha-384|sha-512|x-[a-z0-9][a-z0-9-]*)$",
+          "description": "Digest algorithm used to compute signedPayloadDigest for the signer-assented source payload.",
+          "examples": [
+            "sha-256"
+          ]
+        },
+        "signingIntent": {
+          "type": "string",
+          "format": "uri",
+          "description": "WOS signing-intent URI accepted for this affirmation; it MUST equal the consumed source signature evidence intent.",
+          "examples": [
+            "urn:wos:signing-intent:applicant-signature"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "minLength": 1
+        },
         "signedAt": {
           "type": "string",
           "format": "date-time",
@@ -672,10 +735,10 @@
             "benefitsSignature"
           ]
         },
-        "formspecResponseRef": {
+        "sourceResponseRef": {
           "type": "string",
           "format": "uri",
-          "description": "URI reference to the canonical Formspec response that supplied signature evidence.",
+          "description": "URI reference to the canonical source response or evidence artifact that supplied signature evidence.",
           "examples": [
             "urn:agency.gov:formspec:responses:benefits:case-2026-0001"
           ],
@@ -684,6 +747,9 @@
           },
           "minLength": 1
         },
+        "signerAuthority": {
+          "$ref": "#/$defs/SignatureSignerAuthority"
+        },
         "custodyHookEligible": {
           "type": "boolean",
           "const": true,
@@ -691,6 +757,53 @@
           "examples": [
             true
           ]
+        }
+      }
+    },
+    "SignatureSignerAuthority": {
+      "type": "object",
+      "description": "WOS signer-authority claim required for signing intents whose authority floor is not self.",
+      "required": [
+        "class"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "class": {
+          "type": "string",
+          "enum": [
+            "self",
+            "witness",
+            "notary-commissioned",
+            "as-attorney-in-fact",
+            "as-officer-of"
+          ],
+          "description": "Signer-authority class accepted by the WOS Signature Profile.",
+          "examples": [
+            "witness"
+          ]
+        },
+        "principal": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Principal represented by the signer when the authority class is delegating.",
+          "examples": [
+            "applicant"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "authoritySource": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI reference to the credential, commission, delegation, or registry entry supporting the signer-authority claim.",
+          "examples": [
+            "urn:agency.gov:notary-commissions:tx:12345"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "minLength": 1
         }
       }
     },

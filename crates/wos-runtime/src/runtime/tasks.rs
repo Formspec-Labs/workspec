@@ -306,6 +306,12 @@ impl WosRuntime {
             return Ok(result);
         }
 
+        let signature_evidence = if Self::is_signature_task(&task) {
+            adapter.signature_evidence(&task, &response)?
+        } else {
+            None
+        };
+
         let accepted_artifact = build_artifact(
             &record,
             task_id,
@@ -361,7 +367,14 @@ impl WosRuntime {
             &now_iso,
         );
         let signature_record = self
-            .signature_affirmation_for_submission(&record, &task, &response, actor_id, &now_iso)?;
+            .signature_affirmation_for_submission(
+                &record,
+                &task,
+                &response,
+                signature_evidence.as_deref(),
+                actor_id,
+                &now_iso,
+            )?;
         if let Some(signature_record) = signature_record {
             let signer_id = signer_id_for_response(&task, &response, actor_id).to_string();
             let signed_at = signed_at_for_response(&record, &task, &response, &now_iso, self)?;

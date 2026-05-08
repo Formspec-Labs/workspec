@@ -2977,10 +2977,10 @@
                   "openStringKind": "pathExpression"
                 }
               },
-              "formspecResponseRef": {
+              "sourceResponseRef": {
                 "type": "string",
                 "minLength": 1,
-                "description": "Reference to the Formspec response whose rendered content or data is bound into the signable document.",
+                "description": "Reference to the source response or evidence artifact whose rendered content or data is bound into the signable document.",
                 "examples": [
                   "formspecResponses/application-review"
                 ],
@@ -3054,6 +3054,18 @@
                     "description": "Signable-document identifier this signing step asks the signer to affirm.",
                     "examples": [
                       "benefits-determination"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "identifier"
+                    }
+                  },
+                  "signingIntent": {
+                    "type": "string",
+                    "format": "uri",
+                    "minLength": 1,
+                    "description": "Expected WOS signing-intent URI for this signing step. When present, runtime admission requires consumed source signature evidence to match exactly.",
+                    "examples": [
+                      "urn:wos:signing-intent:applicant-signature"
                     ],
                     "x-wos": {
                       "openStringKind": "identifier"

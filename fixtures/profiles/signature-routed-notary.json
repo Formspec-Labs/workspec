@@ -34,7 +34,7 @@
       "documentHash": "1111111111111111111111111111111111111111111111111111111111111111",
       "documentHashAlgorithm": "sha-256",
       "renderingRef": "urn:agency.gov:renderings:identity-affidavit:v1",
-      "formspecResponseRef": "urn:agency.gov:formspec:responses:identity-affidavit:case-2026-0042"
+      "sourceResponseRef": "urn:agency.gov:formspec:responses:identity-affidavit:case-2026-0042"
     }
   ],
   "authenticationPolicies": [

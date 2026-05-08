@@ -18,7 +18,7 @@
         "documentRef": "urn:test:document:application",
         "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         "documentHashAlgorithm": "sha-256",
-        "formspecResponseRef": "urn:test:formspec-response:application"
+        "sourceResponseRef": "urn:test:formspec-response:application"
       }
     ],
     "authenticationPolicies": [
@@ -35,7 +35,8 @@
           "id": "applicantSigns",
           "roleId": "applicantSigner",
           "documentId": "application",
-          "guard": "caseFile.routeApplicant == true"
+          "guard": "caseFile.routeApplicant == true",
+          "signingIntent": "urn:wos:signing-intent:applicant-signature"
         }
       ],
       "completion": {

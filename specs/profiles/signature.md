@@ -156,7 +156,7 @@ Identity binding answers "who authenticated, and how strongly." It does NOT answ
 
 Each signed document declaration MUST include a document digest and digest algorithm. `sha-256` is REQUIRED for Core conformance. Other algorithms MAY be used only when declared by a future profile revision or an `x-*` extension policy.
 
-The profile MAY reference a rendered document and a Formspec canonical response by URI. WOS consumes those references as evidence inputs; it does not own rendered-document storage.
+The profile MAY reference a rendered document and a source response or evidence artifact by URI. WOS consumes those references as evidence inputs; it does not own rendered-document or source-response storage.
 
 ### 2.8 SignatureAffirmation Provenance
 
@@ -170,20 +170,24 @@ The record MUST include:
 - `documentId`
 - `documentHash`
 - `documentHashAlgorithm`
+- `sourceSignatureSystem` — the binding or provider family that supplied the verified signature evidence.
+- `sourceSignatureId` — the source-system signature id accepted by WOS.
+- `signedPayloadDigest` — the consumed source signature evidence digest for the signer-assented payload. This digest is distinct from any transferred response-envelope hash.
+- `signedPayloadDigestAlgorithm`
 - `signedAt`
 - `identityBinding`
 - `consentReference`
 - `signatureProvider`
 - `ceremonyId`
 - `profileRef` or `profileKey` according to ADR-0060 semantics
-- `formspecResponseRef`
+- `sourceResponseRef`
 - `custodyHookEligible`
-- `signingIntent` — a URI from the registered set in §2.11 naming the legal-effect class of this affirmation. The URI MUST also populate the corresponding Formspec `authoredSignatures[*]` entry per Formspec Core §2.1.6 ("authoredSignatures") on the bound Response; the URI does NOT replace the Formspec field, it co-occupies its semantic slot.
+- `signingIntent` — a URI from the registered set in §2.11 naming the legal-effect class of this affirmation. The URI MUST equal the consumed source signature evidence intent; it records WOS governance acceptance of that legal-effect class.
 - `signerAuthority` — a signer-authority claim (§2.12). REQUIRED for any registered intent URI whose §2.11 row sets a non-`self` signer-authority floor. OPTIONAL for `self` floors; when present it MUST validate against §2.12.
 
-If consent evidence is missing, identity binding is below the role's required policy, the signing-intent URI is unregistered for the deployment, the signer-authority floor for the URI is not met, or the Formspec response is invalid, the runtime MUST NOT emit `SignatureAffirmation`.
+If consent evidence is missing, identity binding is below the role's required policy, the signing-intent URI is unregistered for the deployment, the signer-authority floor for the URI is not met, or required source signature evidence is invalid, the runtime MUST NOT emit `SignatureAffirmation`.
 
-**Binding to Trellis ADR 0010.** The byte-level proof inside a `SignatureAffirmation` is one `UserContentAttestationPayload` per signer/document pair, encoded under the Trellis `trellis.user-content-attestation.v1` event extension (Trellis ADR 0010 §"Wire shape"). The `SignatureAffirmation.signingIntent` URI MUST equal the `signing_intent` field of the corresponding `UserContentAttestationPayload`. The `documentHash` MUST equal the host event's `canonical_event_hash` carried by the payload's `attested_event_hash`. The `signedAt` MUST equal the payload's `attested_at`, which per ADR 0010 MUST equal the envelope's `authored_at`. Field-level binding is normative: a `SignatureAffirmation` whose payload disagrees with these equalities MUST NOT be admitted by `custodyHook`.
+**Binding to Formspec and Trellis.** For Formspec-backed signing, WOS consumes a Formspec `authoredSignatures[*]` record and admits `SignatureAffirmation` only after `signatureId`, `signedPayload.digest`, signed-payload response pins, `documentHash`, `consentAccepted`, `signingIntent`, signer role, signer authority, identity, and posture checks pass. A WOS/Trellis profile MAY additionally require one `UserContentAttestationPayload` per signer/document pair under the Trellis `trellis.user-content-attestation.v1` event extension (Trellis ADR 0010 §"Wire shape") as byte-level proof. That Trellis payload corroborates bytes and chain position; it does not define Formspec signature semantics or WOS signing-intent meaning.
 
 ### 2.9 Decline, Void, Expiry, and Reassignment
 
@@ -241,9 +245,9 @@ The same URI string traverses three layers. Each layer's verifier MUST observe b
 
 1. **Formspec Response.** `authoredSignatures[*].signingIntent` (Formspec Core §2.1.6) carries the URI authored by the signer.
 2. **WOS `SignatureAffirmation`.** `signingIntent` MUST equal the corresponding Formspec `authoredSignatures[*].signingIntent`.
-3. **Trellis `UserContentAttestationPayload`.** `signing_intent` MUST equal the WOS `signingIntent`.
+3. **Trellis `UserContentAttestationPayload`, when required by profile.** `signing_intent` MUST equal the WOS `signingIntent`.
 
-A divergence at any boundary fails the affirmation. WOS lint enforces (1)↔(2); WOS runtime enforces (2)↔(3) at `custodyHook` admission; Trellis verifier enforces (3) is syntactically a URI per RFC 3986.
+A divergence at any required boundary fails the affirmation. WOS lint and runtime enforce (1)↔(2). When a WOS/Trellis profile requires UCA, WOS runtime and the domain verifier enforce (2)↔(3) at `custodyHook` or export-verification admission; Trellis Core verifier enforces only byte-level invariants and URI syntax per RFC 3986.
 
 #### 2.11.4 Open question — notarial commission credential format
 
@@ -372,24 +376,25 @@ The Signature Profile is a profile document. It attaches to a kernel workflow by
 
 ### 3.2 Formspec Composition
 
-Formspec captures signature controls, consent controls, identity-proofing references, and canonical response fields. WOS consumes those fields as evidence inputs. WOS MUST NOT infer a valid signing act from fields that failed Formspec validation.
+Formspec captures signature controls, consent controls, identity-proofing references, and canonical response fields. WOS consumes those fields as evidence inputs. WOS MUST NOT infer a valid signing act from fields that failed Formspec validation or signed-payload verification.
 
-The signing-intent URI authored into Formspec `authoredSignatures[*].signingIntent` (Formspec Core §2.1.6) MUST equal the WOS `SignatureAffirmation.signingIntent` per §2.11.3. The URI populates the Formspec field; it does not replace it.
+The signing-intent URI authored into Formspec `authoredSignatures[*].signingIntent` (Formspec Core §2.1.6) MUST equal the WOS `SignatureAffirmation.signingIntent` per §2.11.3. In a Formspec-backed binding, WOS maps Formspec `signatureId` into `sourceSignatureId`, sets `sourceSignatureSystem` to the binding/provider family, and records `signedPayload.digest` in `signedPayloadDigest`; these identify the authored signature that WOS accepted without making WOS the source of the Formspec signature primitive.
 
 ### 3.3 Trellis Composition
 
 WOS emits `SignatureAffirmation` records through `custodyHook`. Trellis anchors the WOS evidence record and owns certificate-of-completion and export-bundle composition. WOS MUST NOT place Trellis-owned chain fields inside the authored signature record.
 
-The byte-level proof inside a `SignatureAffirmation` is one `UserContentAttestationPayload` per signer/document pair, encoded under Trellis `trellis.user-content-attestation.v1` (ADR 0010). The two specs compose through a **layered verifier contract**:
+A WOS/Trellis profile MAY require the byte-level proof for a `SignatureAffirmation` to include one `UserContentAttestationPayload` per signer/document pair, encoded under Trellis `trellis.user-content-attestation.v1` (ADR 0010). The specs compose through a **layered verifier contract**:
 
 | Layer | What it verifies | Failure mode |
 |---|---|---|
+| Formspec verifier | Response schema; `authoredSignatures[*].signatureId`; `signedPayload.responseId`, `definitionUrl`, and `definitionVersion` pins; `signedPayload.digest`; consent and signature-method/provider checks. | WOS MUST NOT admit `SignatureAffirmation`; runtime records the failure reason. |
 | Trellis ADR 0010 verifier | URI is syntactically valid (RFC 3986); `attested_event_hash` resolves to chain position; `identity_attestation_ref` resolves; signature valid under domain tag `trellis-user-content-attestation-v1`; signing key Active. | `integrity_verified = false` per Core §19 step 6d. |
-| WOS Signature Profile runtime | `signingIntent` is in the registered set (§2.11.1) or the deployment's Posture Declaration; meets the §2.13 floor for the deployment's declared posture; `signerAuthority` claim (§2.12) satisfies the URI's authority floor; `evidenceBinding.evidenceHash` valid; ESIGN §7001(c) consent reference resolves where `esign` posture applies. | `SignatureAffirmation` MUST NOT be admitted at `custodyHook`; runtime records the failure reason. |
+| WOS Signature Profile runtime | `signingIntent` is in the registered set (§2.11.1) or the deployment's Posture Declaration; equals the consumed Formspec `authoredSignatures[*].signingIntent`; meets the §2.13 floor for the deployment's declared posture; `signerAuthority` claim (§2.12) satisfies the URI's authority floor; document-hash and consent evidence valid; ESIGN §7001(c) consent reference resolves where `esign` posture applies. | `SignatureAffirmation` MUST NOT be admitted at `custodyHook`; runtime records the failure reason. |
 
-Both verifiers compose. **Integrity failure at either layer fails the artifact.** Trellis catches byte-level integrity attacks (wrong-position attestation, key-state evasion, cross-family signature confusion); WOS catches semantic-intent attacks (unregistered URI, floor underrun, missing authority claim, wrong posture). Neither layer is sufficient alone; verification is the conjunction.
+The active verifier set composes. **Integrity failure at any required layer fails the artifact.** Formspec catches signed-response attacks; Trellis catches byte-level integrity attacks (wrong-position attestation, key-state evasion, cross-family signature confusion); WOS catches semantic-intent attacks (unregistered URI, floor underrun, missing authority claim, wrong posture). Neither Trellis nor WOS alone creates Formspec signature semantics.
 
-A WOS Signature Profile Runtime MUST run the Trellis verifier first. If Trellis flags integrity failure, the WOS runtime MUST NOT proceed to semantic checks (the byte format is untrusted; running semantic checks against untrusted bytes is a security anti-pattern). If Trellis verifies, the WOS runtime then runs §2.11–§2.13 checks. The Trellis result is reported separately in the runtime's diagnostic stream from any WOS-layer failure.
+A WOS Signature Profile Runtime MUST consume a successful Formspec signature-verification result or perform equivalent Formspec signed-payload checks before semantic WOS admission. If the active profile also requires Trellis UCA, byte-level verification MUST pass before export or custody claims assert Trellis-backed integrity. The Formspec, WOS, and Trellis results are reported separately in the runtime or verifier diagnostic stream.
 
 ### 3.4 Conflict Handling
 
@@ -430,9 +435,9 @@ Complete is a strict superset of Core.
 
 Schema validation checks the document shape, closed enums, URI/reference field shapes, and `x-*` extension discipline. Schema validation MUST also check that any `signingIntent` value declared in a Signature Profile Document is a syntactically valid URI per RFC 3986 (the byte-level check Trellis ADR 0010 also enforces).
 
-Lint checks profile-to-kernel consistency: target workflow resolution, actor resolution, human actor binding, authentication-policy key resolution, role/document/step references, dependency cycles, FEL guard parsing, timer-event mapping, and ADR-0060 naming. Lint additionally checks: every authored `signingIntent` URI is either in §2.11.1 or in the deployment's Posture Declaration registry; every `signerAuthority.class` matches §2.12.1's closed enum (or a `x-*` class declared in the Posture Declaration); the §2.13 floor row for the declared posture is satisfied by the document's authentication policies; Formspec `authoredSignatures[*].signingIntent` equals the corresponding WOS `signingIntent` (§2.11.3 boundary 1↔2).
+Lint checks profile-to-kernel consistency: target workflow resolution, actor resolution, human actor binding, authentication-policy key resolution, role/document/step references, dependency cycles, FEL guard parsing, timer-event mapping, and ADR-0060 naming. Lint additionally checks: every authored `signingIntent` URI is either in §2.11.1 or in the deployment's Posture Declaration registry; every `signerAuthority.class` matches §2.12.1's closed enum (or a `x-*` class declared in the Posture Declaration); the §2.13 floor row for the declared posture is satisfied by the document's authentication policies; Formspec `authoredSignatures[*].signingIntent` equals the corresponding WOS `signingIntent` (§2.11.3 boundary 1↔2); signature steps that declare `signingIntent` use registered or deployment-local URIs.
 
-Runtime conformance checks signing behavior: sequential blocking, parallel completion, routed guard selection, expiry timers, decline paths, reassignment accountability, witness dependencies, notary/in-person authentication, missing-consent rejection, and custody append inclusion. Runtime additionally checks: `signingIntent` registered for the deployment at the time of admission; §2.13 floor satisfied for the declared posture; `signerAuthority` claim present and valid where the URI's floor demands it; `evidenceBinding.evidenceHash` algorithm permitted by §2.7; ESIGN §7001(c) consumer-consent reference resolves under `esign` posture; the layered-verifier contract with Trellis ADR 0010 (§3.3) — Trellis verifier runs first, WOS verifier runs only on Trellis success, both must pass for `custodyHook` admission.
+Runtime conformance checks signing behavior: sequential blocking, parallel completion, routed guard selection, expiry timers, decline paths, reassignment accountability, witness dependencies, notary/in-person authentication, missing-consent rejection, and custody append inclusion. Runtime additionally checks: the consumed Formspec authored signature verifies its `signatureId`, signed-payload digest, response pins, consent, document hash, and `signingIntent`; `signingIntent` is registered for the deployment at the time of admission; §2.13 floor is satisfied for the declared posture; `signerAuthority` claim is present and valid where the URI's floor demands it; `evidenceBinding.evidenceHash` algorithm is permitted by §2.7; ESIGN §7001(c) consumer-consent reference resolves under `esign` posture; any profile-required Trellis UCA verifier passes before WOS/Trellis integrity claims are made.
 
 ### 4.4 Conformance fixture coverage
 

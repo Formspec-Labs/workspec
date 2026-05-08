@@ -18,7 +18,7 @@
         "documentRef": "urn:test:document:application",
         "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         "documentHashAlgorithm": "sha-256",
-        "formspecResponseRef": "urn:test:formspec-response:application"
+        "sourceResponseRef": "urn:test:formspec-response:application"
       }
     ],
     "authenticationPolicies": [
@@ -36,7 +36,8 @@
         {
           "id": "notaryAttests",
           "roleId": "notaryRole",
-          "documentId": "application"
+          "documentId": "application",
+          "signingIntent": "urn:wos:signing-intent:notarial-attestation"
         }
       ],
       "completion": {

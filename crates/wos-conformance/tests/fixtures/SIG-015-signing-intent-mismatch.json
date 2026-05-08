@@ -1,14 +1,11 @@
 {
   "binding": "formspec",
-  "id": "SIG-003-routed-signer-fel-guard",
+  "id": "SIG-015-signing-intent-mismatch",
   "rule": "SIG-RT",
-  "description": "Routed signer path selected by FEL guard emits SignatureAffirmation.",
+  "description": "Signing-intent mismatch between Signature Profile step and Formspec authored signature blocks affirmation.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/signature-runtime.json",
-    "signatureProfile": "../../../../fixtures/profiles/signature-runtime-routed.json"
-  },
-  "initial_case_state": {
-    "routeApplicant": true
+    "signatureProfile": "../../../../fixtures/profiles/signature-runtime-sequential.json"
   },
   "event_sequence": [
     {
@@ -26,24 +23,24 @@
           "data": {
             "signerId": "applicant",
             "signatureProvider": "formspec",
-            "ceremonyId": "ceremony-routed",
+            "ceremonyId": "ceremony-sequential",
             "signature": {
-              "acceptedAt": "2026-04-22T12:03:00Z",
+              "acceptedAt": "2026-04-22T12:00:00Z",
               "affirmed": true,
               "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
             }
           },
-          "id": "resp-sig-003-routed-signer-fel-guard-applicantTask",
+          "id": "resp-sig-001-sequential-single-signer-applicantTask",
           "authoredSignatures": [
             {
-              "signatureId": "sig-sig-003-routed-signer-fel-guard-applicantTask",
+              "signatureId": "sig-sig-001-sequential-single-signer-applicantTask",
               "documentId": "application",
-              "signingIntent": "urn:wos:signing-intent:applicant-signature",
-              "signatureValue": "urn:test:signature:SIG-003-routed-signer-fel-guard:applicantTask",
+              "signingIntent": "urn:wos:signing-intent:approval",
+              "signatureValue": "urn:test:signature:SIG-001-sequential-single-signer:applicantTask",
               "signatureMethod": "provider-managed",
               "signerId": "applicant",
               "signerName": "Applicant",
-              "signedAt": "2026-04-22T12:03:00Z",
+              "signedAt": "2026-04-22T12:00:00Z",
               "consentAccepted": true,
               "consentTextRef": "urn:test:consent:esign",
               "consentVersion": "1.0.0",
@@ -51,39 +48,24 @@
               "signedPayload": {
                 "canonicalization": "formspec-response-signing-v1",
                 "digestAlgorithm": "sha-256",
-                "digest": "1c8972d92904b64d81fbfcb46eb6c89ee78eb0be33bc50c851f098caadbfd363",
-                "responseId": "resp-sig-003-routed-signer-fel-guard-applicantTask",
+                "digest": "39cc22282ffcb5a632635803d838c2517527684533ceb5ae8d2614b050683856",
+                "responseId": "resp-sig-001-sequential-single-signer-applicantTask",
                 "definitionUrl": "urn:test:formspec:signature",
                 "definitionVersion": "1.0.0"
               },
               "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
               "documentHashAlgorithm": "sha-256",
               "signatureProvider": "formspec",
-              "ceremonyId": "ceremony-routed"
+              "ceremonyId": "ceremony-sequential"
             }
           ]
         }
       }
     }
   ],
-  "expected_transitions": [
-    {
-      "from": "draft",
-      "target": "signing",
-      "event": "start"
-    },
-    {
-      "from": "signing",
-      "target": "complete",
-      "event": "signature.completed"
-    }
-  ],
-  "expected_provenance": [
-    {
-      "recordKind": "signatureAffirmation",
-      "data": {
-        "roleId": "applicantSigner"
-      }
-    }
+  "expected_transitions": [],
+  "expected_provenance": [],
+  "expected_errors": [
+    "does not match signature step"
   ]
 }

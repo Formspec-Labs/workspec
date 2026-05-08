@@ -118,6 +118,64 @@ fn sig013_policy_assurance_below_floor_blocks_affirmation() {
 }
 
 #[test]
+fn sig014_signed_payload_digest_mismatch_blocks_affirmation() {
+    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let error = run_fixture(
+        &fixture_json("SIG-014-signed-payload-digest-mismatch.json"),
+        base_dir.to_str().expect("utf-8 fixture path"),
+    )
+    .expect_err("signed-payload digest mismatch must reject");
+    assert!(
+        error
+            .to_string()
+            .contains("signedPayload.digest does not match"),
+        "unexpected digest-mismatch rejection error: {error}"
+    );
+}
+
+#[test]
+fn sig015_signing_intent_mismatch_blocks_affirmation() {
+    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let error = run_fixture(
+        &fixture_json("SIG-015-signing-intent-mismatch.json"),
+        base_dir.to_str().expect("utf-8 fixture path"),
+    )
+    .expect_err("signing-intent mismatch must reject");
+    assert!(
+        error.to_string().contains("does not match signature step"),
+        "unexpected signing-intent rejection error: {error}"
+    );
+}
+
+#[test]
+fn sig016_signer_authority_floor_failure_blocks_affirmation() {
+    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let error = run_fixture(
+        &fixture_json("SIG-016-signer-authority-floor-failure.json"),
+        base_dir.to_str().expect("utf-8 fixture path"),
+    )
+    .expect_err("missing signerAuthority must reject");
+    assert!(
+        error.to_string().contains("requires signerAuthority"),
+        "unexpected signer-authority rejection error: {error}"
+    );
+}
+
+#[test]
+fn sig017_stale_response_pin_blocks_affirmation() {
+    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let error = run_fixture(
+        &fixture_json("SIG-017-stale-response-pin.json"),
+        base_dir.to_str().expect("utf-8 fixture path"),
+    )
+    .expect_err("stale signedPayload response pin must reject");
+    assert!(
+        error.to_string().contains("signedPayload.responseId"),
+        "unexpected stale-pin rejection error: {error}"
+    );
+}
+
+#[test]
 fn sig012_void_cancels_pending_signature_tasks() {
     let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
     let mut fixture: serde_json::Value =

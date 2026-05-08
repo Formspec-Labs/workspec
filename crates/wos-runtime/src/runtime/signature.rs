@@ -16,6 +16,7 @@ use wos_core::context::EvalContext;
 use wos_core::instance::{ActiveTask, CaseInstance, PendingEvent};
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord, SignatureAffirmationInput};
 
+use crate::binding::SignatureEvidence as VerifiedSignatureEvidence;
 use crate::store::RuntimeRecord;
 
 use super::{RuntimeError, TaskSubmissionResult, WosRuntime};
@@ -226,9 +227,9 @@ pub struct SignatureDocument {
     /// Optional rendering URI.
     #[serde(default)]
     pub rendering_ref: Option<String>,
-    /// Optional Formspec response URI.
-    #[serde(default)]
-    pub formspec_response_ref: Option<String>,
+    /// Optional source response URI.
+    #[serde(default, alias = "formspecResponseRef")]
+    pub source_response_ref: Option<String>,
 }
 
 /// Signing flow declaration.
@@ -265,6 +266,9 @@ pub struct SigningStep {
     pub role_id: String,
     /// Document id.
     pub document_id: String,
+    /// Expected WOS signing-intent URI for this step.
+    #[serde(default)]
+    pub signing_intent: Option<String>,
     /// Routed-step guard.
     #[serde(default)]
     pub guard: Option<String>,
@@ -495,6 +499,7 @@ impl WosRuntime {
         record: &RuntimeRecord,
         task: &ActiveTask,
         response: &serde_json::Value,
+        signature_evidence: Option<&[VerifiedSignatureEvidence]>,
         actor_id: &str,
         signed_at_default: &str,
     ) -> Result<Option<ProvenanceRecord>, RuntimeError> {
@@ -537,26 +542,57 @@ impl WosRuntime {
         self.ensure_step_can_complete(record, profile, step)?;
         self.ensure_required_evidence_present(record, response, &profile.evidence)?;
         self.ensure_consent_present(record, response, &profile.evidence.consent_reference)?;
-        let identity_binding = self.identity_binding_for_submission(response, &profile.evidence)?;
+        let signature_evidence =
+            self.signature_evidence_for_submission(signature_evidence, actor_id, step, document)?;
+        let identity_binding = signature_evidence
+            .identity_binding
+            .clone()
+            .map(Ok)
+            .unwrap_or_else(|| self.identity_binding_for_submission(response, &profile.evidence))?;
         self.ensure_identity_satisfies_role(profile, role, &identity_binding)?;
+        self.ensure_identity_satisfies_signing_intent(
+            &signature_evidence.signing_intent,
+            &identity_binding,
+        )?;
+        self.ensure_signer_authority_satisfies_intent(
+            &signature_evidence.signing_intent,
+            signature_evidence.signer_authority.as_ref(),
+        )?;
         self.ensure_document_hash_matches(record, response, &profile.evidence, document)?;
 
-        let signed_at = resolve_path(
-            record,
-            response,
-            &profile.evidence.consent_reference.accepted_at_path,
-        )
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or(signed_at_default);
-        let signer_id = response_string(response, "signerId").unwrap_or(actor_id);
-        let signature_provider =
-            response_string(response, "signatureProvider").unwrap_or("wos-runtime");
-        let ceremony_id = response_string(response, "ceremonyId").unwrap_or(&task.task_id);
-        let formspec_response_ref = response_string(response, "formspecResponseRef")
-            .or(document.formspec_response_ref.as_deref())
+        let signed_at = if signature_evidence.signed_at.is_empty() {
+            resolve_path(
+                record,
+                response,
+                &profile.evidence.consent_reference.accepted_at_path,
+            )
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(signed_at_default)
+        } else {
+            signature_evidence.signed_at.as_str()
+        };
+        let signer_id = signature_evidence
+            .signer_id
+            .as_deref()
+            .unwrap_or(actor_id);
+        let signature_provider = signature_evidence
+            .signature_provider
+            .as_deref()
+            .unwrap_or(&signature_evidence.source_system);
+        let ceremony_id = signature_evidence
+            .ceremony_id
+            .as_deref()
+            .unwrap_or(&task.task_id);
+        let source_response_ref = signature_evidence
+            .source_response_ref
+            .as_deref()
+            .or_else(|| response_string(response, "sourceResponseRef"))
+            .or_else(|| response_string(response, "formspecResponseRef"))
+            .or(document.source_response_ref.as_deref())
             .ok_or_else(|| {
                 RuntimeError::Signature(
-                    "signature document or response must provide formspecResponseRef".to_string(),
+                    "signature document, response, or evidence must provide sourceResponseRef"
+                        .to_string(),
                 )
             })?;
 
@@ -572,6 +608,11 @@ impl WosRuntime {
             document_id: &document.id,
             document_hash: &document.document_hash,
             document_hash_algorithm: &document.document_hash_algorithm,
+            source_signature_system: &signature_evidence.source_system,
+            source_signature_id: &signature_evidence.source_signature_id,
+            signed_payload_digest: &signature_evidence.signed_payload_digest,
+            signed_payload_digest_algorithm: &signature_evidence.signed_payload_digest_algorithm,
+            signing_intent: &signature_evidence.signing_intent,
             signed_at,
             identity_binding,
             consent_reference: serde_json::to_value(&profile.evidence.consent_reference)
@@ -580,7 +621,8 @@ impl WosRuntime {
             ceremony_id,
             profile_ref,
             profile_key,
-            formspec_response_ref,
+            source_response_ref,
+            signer_authority: signature_evidence.signer_authority,
             custody_hook_eligible: profile.evidence.custody_hook_eligible,
         });
         Ok(Some(record))
@@ -1173,6 +1215,126 @@ impl WosRuntime {
         Ok(())
     }
 
+    fn signature_evidence_for_submission(
+        &self,
+        signature_evidence: Option<&[VerifiedSignatureEvidence]>,
+        actor_id: &str,
+        step: &SigningStep,
+        document: &SignatureDocument,
+    ) -> Result<VerifiedSignatureEvidence, RuntimeError> {
+        let evidence = signature_evidence.ok_or_else(|| {
+            RuntimeError::Signature(
+                "signature binding did not provide verified signature evidence".to_string(),
+            )
+        })?;
+        let mut matches = evidence.iter().filter(|candidate| {
+            candidate.document_id == document.id
+                && candidate
+                    .signer_id
+                    .as_deref()
+                    .is_none_or(|signer_id| signer_id == actor_id)
+        });
+
+        let signature = matches.next().ok_or_else(|| {
+            RuntimeError::Signature(format!(
+                "no verified signature evidence matched document '{}' and signer '{}'",
+                document.id, actor_id
+            ))
+        })?;
+        if matches.next().is_some() {
+            return Err(RuntimeError::Signature(format!(
+                "multiple verified signature evidence records matched document '{}' and signer '{}'",
+                document.id, actor_id
+            )));
+        }
+
+        ensure_registered_signing_intent(&signature.signing_intent)?;
+        if let Some(expected_intent) = &step.signing_intent
+            && signature.signing_intent != *expected_intent
+        {
+            return Err(RuntimeError::Signature(format!(
+                "verified signingIntent '{}' does not match signature step '{}'",
+                signature.signing_intent,
+                step.id
+            )));
+        }
+        if signature.document_hash != document.document_hash {
+            return Err(RuntimeError::Signature(format!(
+                "verified signature documentHash does not match profile document '{}'",
+                document.id
+            )));
+        }
+        if signature.document_hash_algorithm != document.document_hash_algorithm {
+            return Err(RuntimeError::Signature(format!(
+                "verified signature documentHashAlgorithm does not match profile document '{}'",
+                document.id
+            )));
+        }
+        Ok(signature.clone())
+    }
+
+    fn ensure_identity_satisfies_signing_intent(
+        &self,
+        signing_intent: &str,
+        identity_binding: &serde_json::Value,
+    ) -> Result<(), RuntimeError> {
+        let method = identity_binding
+            .get("method")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| RuntimeError::Signature("identityBinding.method missing".to_string()))?;
+        match signing_intent {
+            "urn:wos:signing-intent:notarial-attestation" => {
+                if !matches!(method, "notary" | "in-person") {
+                    return Err(RuntimeError::Signature(
+                        "notarial signing intent requires notary or in-person authentication"
+                            .to_string(),
+                    ));
+                }
+            }
+            "urn:wos:signing-intent:agent-as-attorney-in-fact"
+            | "urn:wos:signing-intent:agent-as-officer" => {
+                if !matches!(method, "oidc" | "webauthn" | "credential") {
+                    return Err(RuntimeError::Signature(format!(
+                        "signing intent '{signing_intent}' requires oidc, webauthn, or credential authentication"
+                    )));
+                }
+            }
+            _ => {
+                if method == "none" {
+                    return Err(RuntimeError::Signature(format!(
+                        "signing intent '{signing_intent}' requires an authentication method"
+                    )));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn ensure_signer_authority_satisfies_intent(
+        &self,
+        signing_intent: &str,
+        signer_authority: Option<&serde_json::Value>,
+    ) -> Result<(), RuntimeError> {
+        let Some(allowed_classes) = required_authority_classes(signing_intent) else {
+            return Ok(());
+        };
+        let authority = signer_authority.ok_or_else(|| {
+            RuntimeError::Signature(format!(
+                "signing intent '{signing_intent}' requires signerAuthority"
+            ))
+        })?;
+        let class = authority
+            .get("class")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| RuntimeError::Signature("signerAuthority.class missing".to_string()))?;
+        if !allowed_classes.contains(&class) {
+            return Err(RuntimeError::Signature(format!(
+                "signerAuthority.class '{class}' does not satisfy signing intent '{signing_intent}'"
+            )));
+        }
+        Ok(())
+    }
+
     fn require_signature_reason(
         &self,
         task: &ActiveTask,
@@ -1337,6 +1499,42 @@ fn response_path<'a>(response: &'a serde_json::Value, path: &str) -> Option<&'a 
         return Some(value);
     }
     value_at_path(response, path)
+}
+
+fn ensure_registered_signing_intent(signing_intent: &str) -> Result<(), RuntimeError> {
+    if is_registered_signing_intent(signing_intent) {
+        Ok(())
+    } else {
+        Err(RuntimeError::Signature(format!(
+            "unregistered signingIntent '{signing_intent}'"
+        )))
+    }
+}
+
+fn is_registered_signing_intent(signing_intent: &str) -> bool {
+    matches!(
+        signing_intent,
+        "urn:wos:signing-intent:applicant-signature"
+            | "urn:wos:signing-intent:counter-signature"
+            | "urn:wos:signing-intent:witness-attestation"
+            | "urn:wos:signing-intent:notarial-attestation"
+            | "urn:wos:signing-intent:consent"
+            | "urn:wos:signing-intent:attestation-of-fact"
+            | "urn:wos:signing-intent:agent-as-attorney-in-fact"
+            | "urn:wos:signing-intent:agent-as-officer"
+            | "urn:wos:signing-intent:approval"
+            | "urn:wos:signing-intent:certified-receipt"
+    )
+}
+
+fn required_authority_classes(signing_intent: &str) -> Option<&'static [&'static str]> {
+    match signing_intent {
+        "urn:wos:signing-intent:witness-attestation" => Some(&["witness"]),
+        "urn:wos:signing-intent:notarial-attestation" => Some(&["notary-commissioned"]),
+        "urn:wos:signing-intent:agent-as-attorney-in-fact" => Some(&["as-attorney-in-fact"]),
+        "urn:wos:signing-intent:agent-as-officer" => Some(&["as-officer-of"]),
+        _ => None,
+    }
 }
 
 fn resolve_path<'a>(

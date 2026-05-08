@@ -1541,6 +1541,57 @@ mod tests {
             field_updates.insert("decision".to_string(), response["data"]["approved"].clone());
             Ok(Some(CaseMutationBundle { field_updates }))
         }
+
+        fn signature_evidence(
+            &self,
+            _task: &ActiveTask,
+            response: &serde_json::Value,
+        ) -> Result<Option<Vec<crate::binding::SignatureEvidence>>, BindingError> {
+            let Some(signature) = response.get("data").and_then(|data| data.get("signature"))
+            else {
+                return Ok(None);
+            };
+            let document_hash = signature
+                .get("documentHash")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+            let signed_at = signature
+                .get("acceptedAt")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+            Ok(Some(vec![crate::binding::SignatureEvidence {
+                source_system: "formspec-test-harness".to_string(),
+                source_signature_id: "sig013-harness".to_string(),
+                source_response_ref: Some("urn:test:formspec-response:application".to_string()),
+                document_id: "application".to_string(),
+                signer_id: response
+                    .get("data")
+                    .and_then(|data| data.get("signerId"))
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_string),
+                signing_intent: "urn:wos:signing-intent:applicant-signature".to_string(),
+                signed_payload_digest:
+                    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                        .to_string(),
+                signed_payload_digest_algorithm: "sha-256".to_string(),
+                signed_at,
+                document_hash,
+                document_hash_algorithm: "sha-256".to_string(),
+                signature_provider: Some("formspec".to_string()),
+                ceremony_id: response
+                    .get("data")
+                    .and_then(|data| data.get("ceremonyId"))
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_string),
+                identity_binding: response
+                    .get("data")
+                    .and_then(|data| data.get("identityBinding"))
+                    .cloned(),
+                signer_authority: None,
+            }]))
+        }
     }
 
     /// Same binding name as `TestAdapter`, but treats completed signature task
@@ -1622,6 +1673,57 @@ mod tests {
             let mut field_updates = serde_json::Map::new();
             field_updates.insert("decision".to_string(), response["data"]["approved"].clone());
             Ok(Some(CaseMutationBundle { field_updates }))
+        }
+
+        fn signature_evidence(
+            &self,
+            _task: &ActiveTask,
+            response: &serde_json::Value,
+        ) -> Result<Option<Vec<crate::binding::SignatureEvidence>>, BindingError> {
+            let Some(signature) = response.get("data").and_then(|data| data.get("signature"))
+            else {
+                return Ok(None);
+            };
+            let document_hash = signature
+                .get("documentHash")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+            let signed_at = signature
+                .get("acceptedAt")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+            Ok(Some(vec![crate::binding::SignatureEvidence {
+                source_system: "formspec-test-harness".to_string(),
+                source_signature_id: "sig013-harness".to_string(),
+                source_response_ref: Some("urn:test:formspec-response:application".to_string()),
+                document_id: "application".to_string(),
+                signer_id: response
+                    .get("data")
+                    .and_then(|data| data.get("signerId"))
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_string),
+                signing_intent: "urn:wos:signing-intent:applicant-signature".to_string(),
+                signed_payload_digest:
+                    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                        .to_string(),
+                signed_payload_digest_algorithm: "sha-256".to_string(),
+                signed_at,
+                document_hash,
+                document_hash_algorithm: "sha-256".to_string(),
+                signature_provider: Some("formspec".to_string()),
+                ceremony_id: response
+                    .get("data")
+                    .and_then(|data| data.get("ceremonyId"))
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_string),
+                identity_binding: response
+                    .get("data")
+                    .and_then(|data| data.get("identityBinding"))
+                    .cloned(),
+                signer_authority: None,
+            }]))
         }
     }
 
