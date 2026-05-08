@@ -826,7 +826,7 @@
     },
     "SignatureSignerAuthority": {
       "type": "object",
-      "description": "WOS signer-authority claim required for signing intents whose authority floor is not self.",
+      "description": "WOS signer-authority claim per Signature Profile §2.12. Carries capacity-to-bind evidence: class, optional delegation principal, optional authoritySource URI, optional evidenceBinding (digest of the supporting commission / power-of-attorney / appointment instrument), and optional validity window. Class enum is closed at the WOS center; deployments add `x-*` classes through the Posture Declaration. Per-class field requirements are enforced via the conditional `allOf` block.",
       "required": [
         "class"
       ],
@@ -834,14 +834,8 @@
       "properties": {
         "class": {
           "type": "string",
-          "enum": [
-            "self",
-            "witness",
-            "notary-commissioned",
-            "as-attorney-in-fact",
-            "as-officer-of"
-          ],
-          "description": "Signer-authority class accepted by the WOS Signature Profile.",
+          "pattern": "^(self|witness|notary-commissioned|as-attorney-in-fact|as-officer-of|x-[a-z0-9][a-z0-9-]*)$",
+          "description": "Signer-authority class accepted by the WOS Signature Profile (§2.12.1). Closed enum (`self`, `witness`, `notary-commissioned`, `as-attorney-in-fact`, `as-officer-of`) plus deployment-declared `x-*` classes.",
           "examples": [
             "witness"
           ]
@@ -849,9 +843,9 @@
         "principal": {
           "type": "string",
           "minLength": 1,
-          "description": "Principal represented by the signer when the authority class is delegating.",
+          "description": "URI of the principal whose interest the signer binds (§2.12.2). REQUIRED for `as-officer-of` and `as-attorney-in-fact` (delegating classes); OPTIONAL for `notary-commissioned`/`witness` (the affiant's URI when present); MUST NOT equal `signerId` for delegating classes — runtime rejects self-delegation.",
           "examples": [
-            "applicant"
+            "urn:agency.gov:org:acme-llc"
           ],
           "x-wos": {
             "openStringKind": "identifier"
@@ -860,7 +854,7 @@
         "authoritySource": {
           "type": "string",
           "format": "uri",
-          "description": "URI reference to the credential, commission, delegation, or registry entry supporting the signer-authority claim.",
+          "description": "URI of the credential, commission, or appointment instrument that supports the authority claim (§2.12.2). REQUIRED for `as-officer-of`, `as-attorney-in-fact`, and `notary-commissioned`; OPTIONAL for `self`/`witness`.",
           "examples": [
             "urn:agency.gov:notary-commissions:tx:12345"
           ],
@@ -868,8 +862,132 @@
             "openStringKind": "identifier"
           },
           "minLength": 1
+        },
+        "evidenceBinding": {
+          "type": "object",
+          "description": "Cryptographic binding from the authority claim to its proof (§2.12.3). `evidenceHash` is the digest of the canonical supporting evidence (commission certificate bytes, executed power-of-attorney bytes, board-resolution bytes); `sha-256` is REQUIRED for Core conformance. `evidenceLocation` is an optional URI for retrieval — trust derives from the hash, not from URI resolvability.",
+          "required": [
+            "evidenceHash",
+            "evidenceHashAlgorithm"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "evidenceHash": {
+              "type": "string",
+              "pattern": "^[A-Fa-f0-9]{64,128}$",
+              "description": "Digest of the canonical supporting evidence bytes (§2.12.3). Hex-encoded; length matches the algorithm.",
+              "examples": [
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+              ]
+            },
+            "evidenceHashAlgorithm": {
+              "type": "string",
+              "enum": [
+                "sha-256"
+              ],
+              "description": "Digest algorithm for `evidenceHash`. `sha-256` is REQUIRED for Core conformance per §2.7.",
+              "examples": [
+                "sha-256"
+              ]
+            },
+            "evidenceLocation": {
+              "type": "string",
+              "format": "uri",
+              "minLength": 1,
+              "description": "Optional URI to retrieve the supporting evidence; MAY be a `canonical_event_hash` URI when the evidence is registered as its own ledger event. Retrieval-only — trust derives from `evidenceHash`.",
+              "examples": [
+                "urn:agency.gov:notary-commissions:tx:12345:document"
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
+            }
+          }
+        },
+        "validFrom": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339 date-time at which the authority became effective (§2.12.1). Optional; when present, runtime requires `signedAt >= validFrom`.",
+          "examples": [
+            "2026-01-01T00:00:00Z"
+          ]
+        },
+        "validUntil": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339 date-time at which the authority expires (§2.12.1). Optional; when present, runtime requires `signedAt <= validUntil`.",
+          "examples": [
+            "2027-01-01T00:00:00Z"
+          ]
+        },
+        "extensions": {
+          "type": "object",
+          "description": "Open extension bag for vendor or deployment-defined authority metadata (§2.12.1). Inner keys MUST follow the `x-*` extension discipline.",
+          "additionalProperties": true
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "as-officer-of",
+                  "as-attorney-in-fact"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "required": [
+              "class",
+              "principal",
+              "authoritySource",
+              "evidenceBinding"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "const": "notary-commissioned"
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "required": [
+              "class",
+              "authoritySource",
+              "evidenceBinding"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "const": "witness"
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "required": [
+              "class",
+              "evidenceBinding"
+            ]
+          }
+        }
+      ]
     },
     "SignatureIdentityBinding": {
       "type": "object",
