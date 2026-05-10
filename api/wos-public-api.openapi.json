@@ -5472,6 +5472,389 @@
           }
         }
       }
+    },
+    "/instances/{id}/appeals": {
+      "get": {
+        "operationId": "listInstanceAppeals",
+        "summary": "List appeals filed against a case instance.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Filter to appeals in the supplied status (closed `AppealStatus` taxonomy).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/appeal/v1#/$defs/AppealStatus"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque resume token from the previous page (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum page size (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated appeal page scoped to the instance.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/appeal/v1#/$defs/AppealPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "fileAppeal",
+        "summary": "File an appeal against a closed case instance's adverse determination (governance S3.5).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Idempotency key (ADR 0082 D-16). Server retains the request/response pair for at least 24 hours keyed by `(idempotency-key, route, scope)`. A repeat with the same key but a different body for the same route/scope is rejected with `WOS-1409`.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Appeal filing payload — server assigns URN, `filedAt`, and `createdAt`.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/appeal/v1#/$defs/AppealCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created appeal resource.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/appeal/v1#/$defs/Appeal"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/appeals/{appealId}": {
+      "get": {
+        "operationId": "getAppeal",
+        "summary": "Fetch a single appeal by URN.",
+        "parameters": [
+          {
+            "name": "appealId",
+            "in": "path",
+            "required": true,
+            "description": "Appeal URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Appeal resource.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/appeal/v1#/$defs/Appeal"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/instances/{id}/signature-ceremonies": {
+      "get": {
+        "operationId": "listInstanceSignatureCeremonies",
+        "summary": "List signature ceremonies scoped to a case instance.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Filter by closed `SignatureCeremonyStatus` taxonomy.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/signature/v1#/$defs/SignatureCeremonyStatus"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque resume token from the previous page (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum page size (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated signature ceremony page scoped to the instance.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/signature/v1#/$defs/SignatureCeremonyPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/signature-ceremonies/{ceremonyId}": {
+      "get": {
+        "operationId": "getSignatureCeremony",
+        "summary": "Fetch a single signature ceremony by URN.",
+        "parameters": [
+          {
+            "name": "ceremonyId",
+            "in": "path",
+            "required": true,
+            "description": "Signature ceremony URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Signature ceremony aggregate projection.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/signature/v1#/$defs/SignatureCeremony"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5688,6 +6071,21 @@
       },
       "AuditQueryResult": {
         "$ref": "https://schemas.formspec.io/wos-api/audit/v1#/$defs/AuditQueryResult"
+      },
+      "Appeal": {
+        "$ref": "https://schemas.formspec.io/wos-api/appeal/v1#/$defs/Appeal"
+      },
+      "AppealPage": {
+        "$ref": "https://schemas.formspec.io/wos-api/appeal/v1#/$defs/AppealPage"
+      },
+      "AppealCreateRequest": {
+        "$ref": "https://schemas.formspec.io/wos-api/appeal/v1#/$defs/AppealCreateRequest"
+      },
+      "SignatureCeremony": {
+        "$ref": "https://schemas.formspec.io/wos-api/signature/v1#/$defs/SignatureCeremony"
+      },
+      "SignatureCeremonyPage": {
+        "$ref": "https://schemas.formspec.io/wos-api/signature/v1#/$defs/SignatureCeremonyPage"
       }
     },
     "responses": {

@@ -1,6 +1,6 @@
 # WOS Feature & Requirements Matrix
 
-**Last updated:** 2026-04-14
+**Last updated:** 2026-05-09
 **Spec version:** 1.0.0-draft.1
 **Purpose:** Non-technical reference for evaluating WOS capabilities against competing platforms.
 
@@ -60,9 +60,9 @@ Full 16-competitor ratings reside in the companion spreadsheet (`wos-formspec-co
 | 1.2 | **Hierarchical states (nested, compound)** | Nests sub-states within phases (e.g., internal steps for a "Review" phase) | ✅ | ~ | ~ | ~ | ✔ | ~ | ~ | ✘ | ✘ |
 | 1.3 | **History states** | Resumes previously exited phases at their exact exit point | ✅ | ~ | ~ | ✘ | ~ | ~ | ✔ | ✘ | ✘ |
 | 1.4 | **Parallel regions (orthogonal)** | Progresses concurrent, independent state aspects simultaneously | ✅ | ~ | ~ | ✔ | ✔ | ✔ | ~ | ✘ | ✘ |
-| 1.5 | **Parallel completion policies** | Enforces wait-all, cancel-siblings, or fail-fast policies upon track completion | 🟡 | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| 1.6 | **Declarative constraint zones (DCR-style)** | Manages adaptive cases via condition/response/include/exclude relations | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| 1.7 | **CMMN case management** | Executes discretionary items, sentries, and ad-hoc work within stages | ✅ | ~ | ✔ | ✘ | ✘ | ✔ | ✘ | ~ | ✘ |
+| 1.5 | **Parallel completion policies** | Enforces wait-all, cancel-siblings, or fail-fast policies upon track completion | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| 1.6 | **Declarative constraint zones (DCR-style)** | Manages adaptive cases via condition/response/include/exclude relations | 🟡 ^8 | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| 1.7 | **CMMN case management** | Executes discretionary items, sentries, and ad-hoc work within stages | 🟡 ^9 | ~ | ✔ | ✘ | ✘ | ✔ | ✘ | ~ | ✘ |
 | 1.8 | **Milestones (data-driven checkpoints)** | Fires named conditions when data reaches thresholds, independent of workflow state | ✅ | ~ | ✔ | ✘ | ~ | ~ | ✘ | ~ | ✘ |
 | 1.9 | **Cancellation regions** | Cancels activity sets upon specific completion or failure events | ✅ | ~ | ~ | ✔ | ✔ | ✔ | ~ | ✘ | ✘ |
 | 1.10 | **Process definition as declarative data** | Stores workflow as a JSON document rather than imperative code | ✅ | ✘ | ~ | ✔ | ✔ | ✔ | ✘ | ✘ | ✘ |
@@ -89,20 +89,20 @@ Full 16-competitor ratings reside in the companion spreadsheet (`wos-formspec-co
 
 | # | Requirement | Description | WOS | Pega | Cam | KIE | Flow | Temp | Palnt |
 |---|------------|-------------|-----|------|-----|-----|------|------|-------|
-| 3.1 | **Decision tables (DMN)** | Executes tabular decision logic with hit policies | 🟡 ^1 | ✔ | ✔ | ✔ | ✔ | ✘ | ~ |
+| 3.1 | **Decision tables (DMN)** | Executes tabular decision logic with hit policies | ✅ ^1 | ✔ | ✔ | ✔ | ✔ | ✘ | ~ |
 | 3.2 | **Decision requirement graphs** | Visualizes composition of dependent decisions | 🟡 ^1 | ✔ | ✔ | ✔ | ~ | ✘ | ✘ |
 | 3.3 | **FEEL expression language** | Supports the OMG standard expression language for decisions | ✘ | ~ | ✔ | ✔ | ✔ | ✘ | ✘ |
 | 3.4 | **FEL expression language** | Employs deterministic, side-effect-free expressions with DAG dependency tracking | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 3.5 | **Business rules engine (DRL/Rete)** | Evaluates forward-chaining production rules | ✘ | ✔ | ✘ | ✔ | ✘ | ✘ | ✘ |
-| 3.6 | **Defeasible rules** | Applies general rules with priority-based exceptions | ✅ ^2 | ~ | ✘ | ✘ | ✘ | ✘ | ~ |
+| 3.6 | **Defeasible rules** | Applies general rules with priority-based exceptions | 🟡 ^2 | ~ | ✘ | ✘ | ✘ | ✘ | ~ |
 | 3.7 | **Temporal parameters (date-effective values)** | Applies policy values indexed by effective date based on filing timestamps | ✅ | ✔ | ✘ | ~ | ✘ | ✘ | ✘ |
 | 3.8 | **Regulatory version bindings** | Binds documents to specific versions by date; preserves original versions for old cases | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 3.9 | **Policy change propagation** ^7 | Migrates, reviews, or grandfathers in-flight cases when regulations change | 🟦 | ~ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 3.10 | **Constraint solver / optimization** | Allocates resources using constraint solving (e.g., OptaPlanner) | ✘ | ✘ | ✘ | ✔ | ✘ | ✘ | ✘ |
 
-> ^1 **Decision tables / DRGs:** WOS delegates to external decision services. The spec requires no embedded decision engine.
+> ^1 **Decision tables / DRGs:** WOS embeds a FEL-native decision table construct (not OMG DMN/FEEL) with full schema, typed Rust model, runtime evaluator, and lint validation. Decision requirement graphs are achievable through table composition but have no explicit DRG construct.
 >
-> ^2 **Defeasible rules:** WOS ranks authority (statute > regulation > policy > guideline) and composes override mechanics.
+> ^2 **Defeasible rules:** `sourceAuthority` ranking (statute > regulation > policy > guideline) orders explanations. Runtime priority-based override (Catala-style default logic) is pending — see TODO #24b/#25. The `defeasible` schema field is declarable with no runtime behavioral effect yet.
 >
 > ^7 **Policy change propagation:** Migration is specified (Runtime §11, Governance §2.9) via a manual `migrate` operation with implicit grandfather semantics. A declarative `migrationPolicy` enum with `grandfather | migrateAll | migrateByState | expression` options is **not** specified; operators compose the three modes ad-hoc. See `IDEA_SCRATCH.md` #3 for the proposed declarative enum.
 
@@ -118,7 +118,7 @@ Full 16-competitor ratings reside in the companion spreadsheet (`wos-formspec-co
 | 4.4 | **Separation of duties (four-eyes)** | Ensures decision-maker and reviewer are different people | ✅ | ~ | ✔ | ✘ | ~ | ~ | ✘ | ✘ |
 | 4.5 | **Delegation with accountability chain** | Tracks formal authority chains with legal instrument references and expiration dates | ✅ | ✔ | ✔ | ✘ | ~ | ~ | ✘ | ~ |
 | 4.6 | **Escalation (time + condition based)** | Escalates tasks automatically when deadlines pass or conditions are met | ✅ | ✔ | ✔ | ~ | ✔ | ✔ | ✘ | ✔ |
-| 4.7 | **SLA tracking with deadline actions** | Executes auto-actions (escalate, reassign, notify, extend) on SLA breach | ✅ | ✔ | ✔ | ~ | ~ | ~ | ~ | ✔ |
+| 4.7 | **SLA tracking with deadline actions** | Executes auto-actions (escalate, reassign, notify, extend) on SLA breach | 🟦 | ✔ | ✔ | ~ | ~ | ~ | ~ | ✔ |
 | 4.8 | **Override with structured rationale** | Requires mandatory rationale, authority verification, and immutable audit for decision overrides | ✅ | ~ | ~ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 4.9 | **Quorum-based delegation (N-of-M authorization)** | Requires authorization from N of M distinct authorities for high-stakes operations | ✅ | ~ | ~ | ✘ | ✘ | ✘ | ✘ | ~ |
 
@@ -133,7 +133,7 @@ Full 16-competitor ratings reside in the companion spreadsheet (`wos-formspec-co
 | 5.1 | **Agent registration with type taxonomy** | Registers agents as deterministic, statistical, or generative with model ID and version | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 5.2 | **Agent as untrusted actor** | Enforces all system constraints by treating agent outputs as untrusted input | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 5.3 | **Deontic constraints (POPR)** | Governs agent behavior using the Permission/Prohibition/Obligation/Right framework | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| 5.4 | **SMT-verifiable governance constraints** | Proves constraints hold for all inputs before deployment using SMT | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| 5.4 | **SMT-verifiable governance constraints** | Proves constraints hold for all inputs before deployment using SMT | 🟡 ^10 | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 5.5 | **Four autonomy levels** | Applies autonomous, supervisory, assistive, or manual levels per action | ✅ | ~ | ✘ | ✘ | ~ | ✘ |
 | 5.6 | **Impact-level caps on autonomy** | Caps agent autonomy based on consequence level (rights, safety, operational, info) | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 5.7 | **Dynamic autonomy (escalation/demotion)** | Adjusts autonomy levels based on human approval or performance triggers | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ |
@@ -150,8 +150,8 @@ Full 16-competitor ratings reside in the companion spreadsheet (`wos-formspec-co
 | 5.18 | **Agent disclosure** | Discloses AI participation to affected individuals; mandatory for rights-impacting cases | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 5.19 | **Assist Governance Proxy** | Wraps assistant tools with deontic constraints and provenance | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 5.20 | **CaMeL-compatible trust boundary** | Employs a trust boundary model compatible with dual-LLM security architectures | 🟡 ^4 | ✘ | ✘ | ✘ | ✘ | ✘ |
-| 5.21 | **Equity guardrails (bias monitoring)** | Monitors fairness statistically for human and AI decisions by demographic group | ✅ | ~ | ✘ | ✘ | ~ | ✘ |
-| 5.22 | **Shadow / canary deployment** | Executes model versions in shadow then canary modes before production | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| 5.21 | **Equity guardrails (bias monitoring)** | Monitors fairness statistically for human and AI decisions by demographic group | 🟦 | ~ | ✘ | ✘ | ~ | ✘ |
+| 5.22 | **Shadow / canary deployment** | Executes model versions in shadow then canary modes before production | 🟡 ^11 | ✘ | ✘ | ✘ | ✘ | ✘ |
 
 
 ---
@@ -178,7 +178,7 @@ Full 16-competitor ratings reside in the companion spreadsheet (`wos-formspec-co
 | 7.2 | **Mandatory notice before adverse decisions** | Issues notice containing reasons, appeal rights, and deadlines before decisions take effect | ✅ | ✘ | ✘ | ✘ |
 | 7.3 | **Individualized explanation** | Adverse decisions must include reasons specific to the individual case | ✅ | ✘ | ~ | ✘ |
 | 7.4 | **Counterfactual explanation** | Details both positive factors (what could change) and negative factors (what was irrelevant) | ✅ | ✘ | ✘ | ✘ |
-| 7.5 | **Deterministic adverse-decision notice (dual-form)** ^6 | Specified deterministic algorithm (not model-generated) that derives two co-synchronized outputs from Facts + Reasoning provenance: a machine-readable artifact and a human-prose artifact. Identical inputs MUST produce identical outputs in both forms. | ⚪ | ✘ | ✘ | ✘ |
+| 7.5 | **Deterministic adverse-decision notice (dual-form)** ^6 | Specified deterministic algorithm (not model-generated) that derives two co-synchronized outputs from Facts + Reasoning provenance: a machine-readable artifact and a human-prose artifact. Identical inputs MUST produce identical outputs in both forms. | ✅ | ✘ | ✘ | ✘ |
 | 7.6 | **Appeal with independent adjudicator** | Ensures appeals are reviewed by someone independent of the original decision-maker | ✅ | ✘ | ~ | ✘ |
 | 7.7 | **Continuation of service during appeal** | Freezes adverse impacts and maintains services during the appeal period | ✅ | ✘ | ✘ | ✘ |
 | 7.8 | **Agent disclosure requirement** | Mandates disclosure of AI participation for all rights-impacting workflows | ✅ | ✘ | ✘ | ✘ |
@@ -190,7 +190,7 @@ Full 16-competitor ratings reside in the companion spreadsheet (`wos-formspec-co
 | 7.14 | **OMB M-24-10 compliance support** | Consistent with federal AI guidance on agent disclosure and governance structures | 🟡 | ✘ | ✘ | ~ |
 | 7.15 | **Legal hold (distinct from workflow hold)** | Statutory-override hold that survives terminal state and blocks destruction with explicit release semantics | ✅ | ~ | ~ | ✘ |
 
-> ^6 **Deterministic adverse-decision notice:** Sits at Governance §3.2, distinct from the non-authoritative Narrative tier (AI Integration §13). Not specified as of 2026-04-15; see `IDEA_SCRATCH.md` #2 for framing and scoring (Importance 9, Complexity 9, Tech Debt 8).
+> ^6 **Deterministic adverse-decision notice:** Specified at Governance §3.2 with deterministic assembly contract. Implemented in `wos-runtime` companion with `noticeSent` provenance record (machine-readable artifact + human-readable prose). Conformance fixture G-002.
 
 ---
 
@@ -199,19 +199,31 @@ Full 16-competitor ratings reside in the companion spreadsheet (`wos-formspec-co
 | # | Requirement | Description | WOS | SNow | Pega | Cam | Temp | Palnt |
 |---|------------|-------------|-----|------|------|-----|------|-------|
 | 8.1 | **Facts tier (immutable action records)** | Records every state transition and action: who, what, when, inputs, and outputs | ✅ | ✔ | ✔ | ✔ | ✔ | ✔ |
-| 8.2 | **Reasoning tier** | Records which rules, evidence, and criteria drove every determination | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| 8.3 | **Counterfactual tier** | Records what would have changed the outcome and what did not affect it | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| 8.2 | **Reasoning tier** | Records which rules, evidence, and criteria drove every determination | 🟡 ^13 | ✘ | ✘ | ✘ | ✘ | ✘ |
+| 8.3 | **Counterfactual tier** | Records what would have changed the outcome and what did not affect it | 🟡 ^12 | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 8.4 | **Narrative tier (non-authoritative)** | Records AI-generated explanations separately and marks them non-authoritative | ✅ | ✘ | ✘ | ✘ | ✘ | ~ |
 | 8.5 | **Epistemic status tagging** | Tags assertions as verified facts, system records, agent-generated, or human judgment | ✅ | ✘ | ✘ | ✘ | ✘ | ~ |
 | 8.6 | **Authority-ranked explanations** | Ranks reasoning rules by authority: statute > regulation > policy > guideline | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 8.7 | **Tamper detection** | Verifies input/output integrity using cryptographic digests | ✅ ^5 | ✘ | ✘ | ✘ | ✔ | ~ |
-| 8.8 | **W3C PROV-O export** | Exports provenance records to the standard W3C PROV Ontology format | 🟡 | ✘ | ✘ | ✘ | ✘ | ✘ |
-| 8.9 | **OCEL 2.0 event logging** | Records events in the object-centric event log format for process mining | 🟡 | ✘ | ✘ | ✘ | ✘ | ✘ |
-| 8.10 | **XES process mining export** | Exports provenance to IEEE 1849 XES format for process mining tools | 🟡 | ~ | ~ | ✔ | ✘ | ~ |
+| 8.8 | **W3C PROV-O export** | Exports provenance records to the standard W3C PROV Ontology format | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| 8.9 | **OCEL 2.0 event logging** | Records events in the object-centric event log format for process mining | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| 8.10 | **XES process mining export** | Exports provenance to IEEE 1849 XES format for process mining tools | ✅ | ~ | ~ | ✔ | ✘ | ~ |
 | 8.11 | **Custody seam (custodyHook)** | Named extension seam for custody posture declaration; enables both trust-the-host monolith and distributed-trust bindings | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 8.12 | **Invariant 6 (disclosure ≠ assurance)** | Structurally prevents conflation of identity-revelation level with identity-binding strength | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ |
 
 > ^5 **Tamper detection:** The reference implementation provides per-record digests. Full Merkle tree hash-chaining is a future roadmap item.
+>
+> ^8 **DCR constraint zones:** Spec and schema are complete (Advanced §4: activities, five relation types, evaluation algorithm). Runtime DCR evaluator is not yet implemented in the reference Rust stack.
+>
+> ^9 **CMMN case management:** WOS achieves adaptive case management through DCR constraint zones and statecharts rather than CMMN execution semantics. CMMN-specific constructs (discretionary items, sentries) are not directly specified or implemented.
+>
+> ^10 **SMT-verifiable constraints:** Advanced §8 specifies the verifiable constraint subset (decidable fragment, verification interface, relationship to runtime enforcement). No SMT solver integration or conformance test yet exists in the reference stack; the spec defines the interface for external SMT verification.
+>
+> ^11 **Shadow/canary deployment:** Shadow mode has schema support in the Advanced block. Canary phase deployment sequencing is described in the drift-monitor spec prose but not yet formalized as a schema $def.
+>
+> ^12 **Counterfactual tier:** Specified in the type system and schema (`AuditLayer::Counterfactual`). Runtime emission is pending Layer 1 injection wiring; no `ProvenanceKind` variant or conformance test exercises counterfactual content. Counterfactual *requirements* for adverse decisions are enforced via Governance §3.4.
+>
+> ^13 **Reasoning tier:** Structural support exists (`AuditLayer::Reasoning`, config, lint G-014, `explain.rs` consumer). `ProvenanceAuditTier` only has Facts + Narrative variants; no runtime path stamps `audit_layer = "reasoning"`. Reasoning *content* (deontic evaluations, policy decisions) is recorded in Facts-tier records. Explicit tier label reserved per `audit_tier.rs` comment.
 
 ---
 
@@ -316,4 +328,4 @@ Existing engines define **how** work flows. WOS defines **how work is governed**
 5. **Universal interface contract:** Employs one spec for human forms, agent I/O, decision services, and integrations.
 6. **Constraint zones:** Verifies satisfiability of declarative case management within statecharts.
 7. **Formally verifiable constraints:** Provable governance properties via SMT.
-8. **JSON-LD native:** Every WOS document is a valid RDF graph.
+8. **JSON-LD capable via sidecar:** Every WOS document can be projected as a valid RDF graph through the ontology-alignment sidecar.
