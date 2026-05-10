@@ -161,16 +161,29 @@ Pick from the top. Each item has a gate (what unblocks it) and a plan or ADR.
    SIG-027 (method_unsupported), SIG-028 (posture_floor_unmet), SIG-030 (method_unregistered) fixtures.
    Debt unchanged 4: schema + runtime structure landed; wiring to all reason paths remains.
 
-9. **WOS-SIGNATURE-RECEIPT-CONSUMPTION-001 — VerificationReceipt consumption in wos-formspec-binding** `[6 / 4 / 5]` (**30**)
-   Landed: VerificationReceipt types exist (Rust + TS), wos-formspec-binding references formspec-canonical
-   for digest computation, signature_evidence() signature ready for receipt injection; shared Formspec
+9. **WOS-FORMSPEC-CANONICALIZATION-001 — Consume Formspec canonical signed-payload helper** `[7 / 3 / 6]` (**42**)
+   Stack plan: [`../thoughts/plans/2026-05-09-signature-wire-convergence-plan.md`](../thoughts/plans/2026-05-09-signature-wire-convergence-plan.md).
+   Problem: `wos-formspec-binding` computes Formspec `signedPayload.digest` locally with
+   `serde_json_canonicalizer` and a NUL-separated domain preimage. That disagrees with
+   `formspec-canonical` and the byte-populated cross-stack bundle digests. This is
+   architectural drift, not product value.
+   Remaining: add `formspec-canonical` as the digest source for WOS binding; remove the local
+   clone; add Bundle 001-003 regression tests; add one negative test proving the old preimage
+   is rejected; update conformance expectations if any fixture was accidentally passing under
+   the wrong digest.
+   Done when: WOS binding, Formspec harness, and cross-stack fixture bundles compute identical
+   signed-payload digests and no WOS path owns Formspec canonicalization logic.
+
+10. **WOS-SIGNATURE-RECEIPT-CONSUMPTION-001 — VerificationReceipt consumption in wos-formspec-binding** `[6 / 4 / 5]` (**30**)
+   Landed: VerificationReceipt types exist (Rust + TS), signature_evidence() signature ready for
+   receipt injection; shared Formspec
    COSE helpers and Ed25519 webcrypto/ring/Trellis adapters can verify COSE_Sign1 bytes.
    Remaining: parse authoredSignatures into the WOS binding evidence path, dispatch to the Verifier port,
    produce VerificationReceipt, pass receipt fields into AdmissionOutcome decision logic,
    wire receiptBytes into SignatureAffirmation.verificationReceipt when signature succeeds.
    Debt remains 5: COSE decode is shared, but adapter dispatch + receipt injection remain deep surfaces.
 
-10. **WOS-POSTURE-DECLARATION-CONSUMPTION-001 — Posture Declaration consumption** `[6 / 4 / 5]` (**30**)
+11. **WOS-POSTURE-DECLARATION-CONSUMPTION-001 — Posture Declaration consumption** `[6 / 4 / 5]` (**30**)
     Landed: posturePolicy field in wos-workflow.schema.json (url + optional version),
     deploymentLocalSigningIntents sunset notice, PostureDeclaration schema in both
     formspec/schemas/ and work-spec/schemas/, load_posture_declaration URL fetch/parse/cache path
@@ -180,7 +193,7 @@ Pick from the top. Each item has a gate (what unblocks it) and a plan or ADR.
     (posture_declaration_loaded) positive conformance fixture.
     Debt bumped 4→5: posture loading adds HTTP fetch + cache + version-pinning surface.
 
-11. **WOS-CONFORMANCE-SIG-FIXTURES-001 — SIG-027..030 + re-cast SIG-014..026** `[6 / 4 / 4]` (**24**)
+12. **WOS-CONFORMANCE-SIG-FIXTURES-001 — SIG-027..030 + re-cast SIG-014..026** `[6 / 4 / 4]` (**24**)
     Remaining: 22 existing fixtures with primitiveVerification.status: failed → re-expressed as
     SignatureAdmissionFailed records; 4 new fixtures (SIG-027 method_unsupported, SIG-028 posture_floor_unmet,
     SIG-029 posture_declaration_loaded, SIG-030 method_unregistered); wire into signature_profile.rs;
@@ -188,7 +201,7 @@ Pick from the top. Each item has a gate (what unblocks it) and a plan or ADR.
     Gate: WOS-SIGNATURE-ADMISSION-FAILED-RECORD-001 constructor + WOS-POSTURE-DECLARATION-CONSUMPTION-001
     posture loading must land first.
 
-12. **WORKSPEC-SERVER-SIGNATURE-FIXUP-001 — workspec-server integration test fixup** `[5 / 3 / 3]` (**15**)
+13. **WORKSPEC-SERVER-SIGNATURE-FIXUP-001 — workspec-server integration test fixup** `[5 / 3 / 3]` (**15**)
     Remaining: update workspace-server/crates/wos-server/tests/integration/signature_affirmations.rs
     for SignatureAdmissionFailed records emitted alongside SignatureAffirmation in same workflow flow;
     update wos-server-runtime-local/src/runtime_store.rs CaseInstance literals with current field set;
@@ -359,6 +372,10 @@ The 2026-04-28 cluster ratification landed 14 new `ProvenanceKind` variants + cl
 - **#27 Cancellation regions** `[4 / 6 / 3]` (**12**) — YAWL-style named regions distinct from `cancellationPolicy` join policy.
 - **#29b Milestone reactive transition firing (GSM-style)** `[6 / 5 / 2]` (**12**) — ships after #29a (landed session 4).
 - **#3 Policy-based migration routing** `[5 / 6 / 2]` (**10**) — `migrationPolicy: grandfather | migrateAll | migrateByState | expression`. Tenant-scope sub-question finalizes with `DurableRuntime` tenant contract. **§4.7:** tenant-scope sub-question blocks multi-tenant envelope deployments (Open Q7 refers).
+- **#75 DCR runtime evaluator** `[6 / 5 / 4]` (**24**) — Runtime evaluation of DCR constraint zones (Advanced §4). Schema + provenance record kinds + instance-schema DCR state exist; the actual condition/response/include/exclude/milestone relation evaluation algorithm needs a Rust runtime path. Maps to Feature Matrix 1.6.
+- **#76 SMT verification integration** `[5 / 6 / 3]` (**15**) — Advanced §8 specifies the verifiable constraint subset (decidable fragment, verification interface). At minimum a conformance fixture proving the interface claim; external SMT solver integration. Maps to Feature Matrix 5.4.
+- **#77 Canary deployment schema formalization** `[4 / 3 / 3]` (**12**) — `deploymentSequence` property in drift-monitor spec prose needs schema $def in Advanced block. Shadow mode already has schema; canary phase (canaryPercentage, canaryDuration) is prose-only. Maps to Feature Matrix 5.22.
+- **#78 Counterfactual tier emission** `[6 / 4 / 5]` (**30**) — Add `ProvenanceAuditTier::Counterfactual` variant + dedicated `ProvenanceKind` variant(s). Wire Layer 1 injection path so runtime can stamp `audit_layer = "counterfactual"`. Current: `AuditLayer::Counterfactual` exists for parsing but no runtime emission. Maps to Feature Matrix 8.3. Related to #24b but distinct (reasoning trace vs counterfactual tier).
 
 ### Untracked debt (monorepo audit 2026-05-08)
 
@@ -389,16 +406,16 @@ Work items, architecture, and adapter sequencing → [`crates/wos-server/TODO.md
   - ✅ **A5** `emit-openapi` binary writes `target/openapi-emitted.json` — 8 442 lines, 645 KB, 35 paths + 52 schemas registered.
   - ✅ **B1 Auth** — 6 spec-aligned routes (`/auth/{login,logout,refresh,scope-swap,introspect,scope}`); legacy `/auth/me` + `/auth/has-role` retired; 33 auth tests green.
   - ✅ **B2 Audit + Dashboard + Applicant** — 12 routes; `audit_service.rs` new; legacy `/dashboard/metrics`, `/dashboard/stage-metrics`, `/applicant/{id}/appeal` retired.
-  - ✅ **B3 Correspondence + Reports + PLN-0402 legacy `/render` deletion** — 7 corr + 6 reports handlers (commit `8e503bf`); `notifications.rs` slimmed to 3 routes; **PLN-0402 server-side blocker satisfied** (PUBLIC-ROUTES.md update + portal contract removal still owed under WS-3).
-  - ⏳ **B4 Bundle + Governance** — 10 routes, 2-way parallel internally.
-  - ⏳ **B5 Task** — 5 routes (depends on B1).
-  - ⏳ **B6 Instance** — 16 routes (last; largest surface).
-  - ⏳ **WS-1 C cleanup** — `domain/*` purge confirmed (the directory is gone), but verification-gate hardening (Gates 4–7) still owed; integration suite at 184/184 today.
+  - ✅ **B3 Correspondence + Reports + PLN-0402 legacy `/render` deletion** — 7 corr + 6 reports handlers (commit `8e503bf`); `notifications.rs` slimmed to 3 routes; **PLN-0402 server-side blocker satisfied**. PUBLIC-ROUTES registry sync landed 2026-05-09; portal contract-removal follow-through remains under WS-3.
+  - ◐ **B4 Bundle + Governance** — handlers exist, but non-canonical bundle/governance helper routes are explicitly internal until the ADR 0082 schema paths land.
+  - ✅ **B5 Task** — 5 task routes are public-contract routes and covered by the route registry.
+  - ◐ **B6 Instance** — core instance/task/provenance routes are public-contract routes; explain, provenance verify/export, transitions, drain, and hold-release helpers remain internal until their contract paths land.
+  - ◐ **WS-1 C cleanup** — `domain/*` purge confirmed (the directory is gone); Gate 3 route coverage passed 2026-05-09 with hardened chained-method parser coverage, 47 public routes / 49 internal routes, and 48 registry entries. Verification-gate hardening (Gates 4–7) still owed.
 - **WS-2 portal:**
-  - ✅ **WS-2 A** typify-driven type regen (26 modules under `src/types/wos/`); `ports/types.ts` shrank 421→190 lines (commits `c437ab0` + `7e394e8`).
+  - ✅ **WS-2 A** typify-driven type regen (25 generated files under `src/types/wos/`, including `api-appeal.ts` and `api-signature.ts` as of 2026-05-09); `ports/types.ts` shrank 421→190 lines (commits `c437ab0` + `7e394e8`).
   - ✅ **WS-2 B** 13 IPort interfaces + HTTP adapter (`NotImplementedError` stubs preserved) + fixture adapter reshape (`mutations: CaseStateMutation[]`); 0 tsc errors; 60/62 vitest pass (2 flaky `AuditViewer` waitFor races).
   - ✅ **WS-2 C** component sweep (commit `00ea21f`) — 41 component files, 33 `safeCall` boundaries, fixture conformance test in place. 4 legacy type imports remain in components (`WOSKernelDocument`, `FieldDefinition`, signature-profile types, `CaseInstance`); fold judgment into WS-3.
-- **WS-3 cross-stack train (pending):** PLN-0401 utoipa-emit cutover, PLN-0402 PUBLIC-ROUTES.md update + portal contract removal, PLN-0405 closure, parent submodule pointer bump, TODO bookkeeping across stack.
+- **WS-3 cross-stack train (partial):** Route registry + Gate 3 coverage and portal generated-type freshness landed 2026-05-09. Remaining: PLN-0401 canonical utoipa-emit cutover, PLN-0402 portal contract-removal follow-through, PLN-0405 closure, parent submodule pointer bump, and final TODO bookkeeping across stack.
 
 ### Runtime Companion parity **[Stream: B]**
 
