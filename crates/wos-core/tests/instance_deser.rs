@@ -162,8 +162,14 @@ fn declined_status_carries_decline_reason() {
     }"#;
 
     let instance: CaseInstance = serde_json::from_str(json).unwrap();
-    assert_eq!(instance.status, wos_core::instance::InstanceStatus::Declined);
-    assert_eq!(instance.decline_reason.as_deref(), Some("Terms not acceptable"));
+    assert_eq!(
+        instance.status,
+        wos_core::instance::InstanceStatus::Declined
+    );
+    assert_eq!(
+        instance.decline_reason.as_deref(),
+        Some("Terms not acceptable")
+    );
     assert!(instance.voided_by.is_none());
     assert!(instance.voided_at.is_none());
     assert!(instance.expired_at.is_none());
@@ -239,7 +245,10 @@ fn stalled_status_still_roundtrips() {
 
     let instance: CaseInstance = serde_json::from_str(json).unwrap();
     assert_eq!(instance.status, wos_core::instance::InstanceStatus::Stalled);
-    assert_eq!(instance.stalled_since.as_deref(), Some("2026-05-07T12:00:00Z"));
+    assert_eq!(
+        instance.stalled_since.as_deref(),
+        Some("2026-05-07T12:00:00Z")
+    );
     // New fields should all be None for stalled status
     assert!(instance.decline_reason.is_none());
     assert!(instance.voided_by.is_none());

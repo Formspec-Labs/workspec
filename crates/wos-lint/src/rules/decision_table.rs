@@ -64,10 +64,14 @@ pub fn check(kernel: &KernelDocument, diagnostics: &mut Vec<LintDiagnostic>) {
 
     // Walk every transition guard once, dispatching to per-rule checks
     // on each DecisionTableGuard.
-    for_each_decision_table_guard(&kernel.lifecycle.states, "/lifecycle/states", &mut |path, guard| {
-        check_k051_guard(path, guard, &table_index, diagnostics);
-        check_k053_on_guard(path, guard, &table_index, diagnostics);
-    });
+    for_each_decision_table_guard(
+        &kernel.lifecycle.states,
+        "/lifecycle/states",
+        &mut |path, guard| {
+            check_k051_guard(path, guard, &table_index, diagnostics);
+            check_k053_on_guard(path, guard, &table_index, diagnostics);
+        },
+    );
 
     // K-052 walks the tables themselves (not the guards), once.
     for table in &kernel.decision_tables {
@@ -139,11 +143,7 @@ fn check_k051_guard(
     };
 
     // outputColumn MUST resolve to a declared output.
-    if !table
-        .outputs
-        .iter()
-        .any(|o| o.name == guard.output_column)
-    {
+    if !table.outputs.iter().any(|o| o.name == guard.output_column) {
         let declared: Vec<&str> = table.outputs.iter().map(|o| o.name.as_str()).collect();
         diagnostics.push(LintDiagnostic::t1_error(
             "K-051",
@@ -372,7 +372,7 @@ enum LinearOp {
 
 #[derive(Debug, Clone, Copy)]
 #[allow(dead_code)] // `var` carries the predicated variable name for
-                    // future debug output; no current reader.
+// future debug output; no current reader.
 struct LinearPred<'a> {
     var: &'a str,
     op: LinearOp,
@@ -526,17 +526,33 @@ fn pred_to_interval(p: LinearPred<'_>) -> Interval {
 fn intervals_overlap(a: &Interval, b: &Interval) -> bool {
     match (a, b) {
         (Interval::Equals(v1), Interval::Equals(v2)) => (v1 - v2).abs() < f64::EPSILON,
-        (Interval::Equals(v), Interval::NotEquals(w)) | (Interval::NotEquals(w), Interval::Equals(v)) => {
-            (v - w).abs() >= f64::EPSILON
-        }
+        (Interval::Equals(v), Interval::NotEquals(w))
+        | (Interval::NotEquals(w), Interval::Equals(v)) => (v - w).abs() >= f64::EPSILON,
         (Interval::NotEquals(_), Interval::NotEquals(_)) => true,
-        (Interval::Equals(v), Interval::Bounded { min, min_inclusive, max, max_inclusive })
-        | (Interval::Bounded { min, min_inclusive, max, max_inclusive }, Interval::Equals(v)) => {
+        (
+            Interval::Equals(v),
+            Interval::Bounded {
+                min,
+                min_inclusive,
+                max,
+                max_inclusive,
+            },
+        )
+        | (
+            Interval::Bounded {
+                min,
+                min_inclusive,
+                max,
+                max_inclusive,
+            },
+            Interval::Equals(v),
+        ) => {
             let above_min = if *min_inclusive { v >= min } else { v > min };
             let below_max = if *max_inclusive { v <= max } else { v < max };
             above_min && below_max
         }
-        (Interval::NotEquals(_), Interval::Bounded { .. }) | (Interval::Bounded { .. }, Interval::NotEquals(_)) => {
+        (Interval::NotEquals(_), Interval::Bounded { .. })
+        | (Interval::Bounded { .. }, Interval::NotEquals(_)) => {
             // Bounded interval has infinitely many points (assuming non-empty);
             // removing one point still overlaps.
             true
@@ -640,8 +656,17 @@ mod tests {
             std::iter::once(("elig", &table)).collect();
         let g = make_guard("elig", "eligible");
         let mut diags = Vec::new();
-        check_k051_guard("/lifecycle/states/x/transitions/0/guard", &g, &table_index, &mut diags);
-        assert!(diags.is_empty(), "expected no K-051 diagnostics, got {:?}", diags);
+        check_k051_guard(
+            "/lifecycle/states/x/transitions/0/guard",
+            &g,
+            &table_index,
+            &mut diags,
+        );
+        assert!(
+            diags.is_empty(),
+            "expected no K-051 diagnostics, got {:?}",
+            diags
+        );
     }
 
     #[test]
@@ -651,9 +676,19 @@ mod tests {
             std::iter::once(("elig", &table)).collect();
         let g = make_guard("nonExistentTable", "eligible");
         let mut diags = Vec::new();
-        check_k051_guard("/lifecycle/states/x/transitions/0/guard", &g, &table_index, &mut diags);
-        assert!(diags.iter().any(|d| d.rule_id == "K-051" && d.message.contains("unknown table")),
-            "expected K-051 unknown-table; got {:?}", diags);
+        check_k051_guard(
+            "/lifecycle/states/x/transitions/0/guard",
+            &g,
+            &table_index,
+            &mut diags,
+        );
+        assert!(
+            diags
+                .iter()
+                .any(|d| d.rule_id == "K-051" && d.message.contains("unknown table")),
+            "expected K-051 unknown-table; got {:?}",
+            diags
+        );
     }
 
     #[test]
@@ -663,9 +698,19 @@ mod tests {
             std::iter::once(("elig", &table)).collect();
         let g = make_guard("elig", "approved"); // typo
         let mut diags = Vec::new();
-        check_k051_guard("/lifecycle/states/x/transitions/0/guard", &g, &table_index, &mut diags);
-        assert!(diags.iter().any(|d| d.rule_id == "K-051" && d.message.contains("unknown outputColumn")),
-            "expected K-051 unknown-output; got {:?}", diags);
+        check_k051_guard(
+            "/lifecycle/states/x/transitions/0/guard",
+            &g,
+            &table_index,
+            &mut diags,
+        );
+        assert!(
+            diags
+                .iter()
+                .any(|d| d.rule_id == "K-051" && d.message.contains("unknown outputColumn")),
+            "expected K-051 unknown-output; got {:?}",
+            diags
+        );
     }
 
     #[test]
@@ -680,10 +725,19 @@ mod tests {
             std::iter::once(("elig", &table)).collect();
         let g = make_guard("elig", "eligible"); // only binds 'income'
         let mut diags = Vec::new();
-        check_k051_guard("/lifecycle/states/x/transitions/0/guard", &g, &table_index, &mut diags);
-        assert!(diags.iter().any(|d| d.rule_id == "K-051" && d.message.contains("missing inputBindings entry")
-                                       && d.message.contains("householdSize")),
-            "expected K-051 missing-binding; got {:?}", diags);
+        check_k051_guard(
+            "/lifecycle/states/x/transitions/0/guard",
+            &g,
+            &table_index,
+            &mut diags,
+        );
+        assert!(
+            diags.iter().any(|d| d.rule_id == "K-051"
+                && d.message.contains("missing inputBindings entry")
+                && d.message.contains("householdSize")),
+            "expected K-051 missing-binding; got {:?}",
+            diags
+        );
     }
 
     #[test]
@@ -694,9 +748,19 @@ mod tests {
             std::iter::once(("elig", &table)).collect();
         let g = make_guard("elig", "eligible");
         let mut diags = Vec::new();
-        check_k053_on_guard("/lifecycle/states/x/transitions/0/guard", &g, &table_index, &mut diags);
-        assert!(diags.iter().any(|d| d.rule_id == "K-053" && d.message.contains("MUST select a boolean")),
-            "expected K-053 non-boolean; got {:?}", diags);
+        check_k053_on_guard(
+            "/lifecycle/states/x/transitions/0/guard",
+            &g,
+            &table_index,
+            &mut diags,
+        );
+        assert!(
+            diags
+                .iter()
+                .any(|d| d.rule_id == "K-053" && d.message.contains("MUST select a boolean")),
+            "expected K-053 non-boolean; got {:?}",
+            diags
+        );
     }
 
     #[test]
@@ -706,9 +770,19 @@ mod tests {
             std::iter::once(("elig", &table)).collect();
         let g = make_guard("elig", "eligible");
         let mut diags = Vec::new();
-        check_k053_on_guard("/lifecycle/states/x/transitions/0/guard", &g, &table_index, &mut diags);
-        assert!(diags.iter().any(|d| d.rule_id == "K-053" && d.message.contains("hitPolicy='collect'")),
-            "expected K-053 collect-on-guard; got {:?}", diags);
+        check_k053_on_guard(
+            "/lifecycle/states/x/transitions/0/guard",
+            &g,
+            &table_index,
+            &mut diags,
+        );
+        assert!(
+            diags
+                .iter()
+                .any(|d| d.rule_id == "K-053" && d.message.contains("hitPolicy='collect'")),
+            "expected K-053 collect-on-guard; got {:?}",
+            diags
+        );
     }
 
     #[test]
@@ -732,7 +806,11 @@ mod tests {
         ];
         let mut diags = Vec::new();
         check_k052_table(&table, &mut diags);
-        assert!(diags.is_empty(), "expected no K-052 on disjoint rows; got {:?}", diags);
+        assert!(
+            diags.is_empty(),
+            "expected no K-052 on disjoint rows; got {:?}",
+            diags
+        );
     }
 
     #[test]
@@ -756,8 +834,13 @@ mod tests {
         ];
         let mut diags = Vec::new();
         check_k052_table(&table, &mut diags);
-        assert!(diags.iter().any(|d| d.rule_id == "K-052" && d.message.contains("overlapping")),
-            "expected K-052 overlap; got {:?}", diags);
+        assert!(
+            diags
+                .iter()
+                .any(|d| d.rule_id == "K-052" && d.message.contains("overlapping")),
+            "expected K-052 overlap; got {:?}",
+            diags
+        );
     }
 
     #[test]
@@ -781,8 +864,13 @@ mod tests {
         ];
         let mut diags = Vec::new();
         check_k052_table(&table, &mut diags);
-        assert!(diags.iter().any(|d| d.rule_id == "K-052" && d.message.contains("identical priority")),
-            "expected K-052 priority-tie; got {:?}", diags);
+        assert!(
+            diags
+                .iter()
+                .any(|d| d.rule_id == "K-052" && d.message.contains("identical priority")),
+            "expected K-052 priority-tie; got {:?}",
+            diags
+        );
     }
 
     // Suppress unused-import warning when only some tests reference fel_guard.

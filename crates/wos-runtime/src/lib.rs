@@ -16,8 +16,8 @@ pub mod integration;
 pub mod integration_handlers;
 pub mod milestones;
 pub mod policy_decision;
-pub mod runtime;
 pub mod restate_fixture_support;
+pub mod runtime;
 pub mod store;
 pub mod studio_api;
 
@@ -44,18 +44,18 @@ pub use integration::{
     IntegrationBinding, IntegrationBindingKind, IntegrationContractRef, IntegrationProfileDocument,
     TargetWorkflow,
 };
+pub use restate_fixture_support::{
+    FixtureResolverError, MinimalFixtureFormspecAdapter, SharedInMemoryStore,
+    SignatureFixtureResolver, restate_signature_fixture_bindings,
+    restate_signature_fixture_runtime, signature_runtime_fixture_kernel,
+    signature_runtime_fixture_profile,
+};
 pub use runtime::{
     Clock, CompanionPolicy, CompletionRequirementKind, CreateInstanceRequest, DrainOnceResult,
     MigrationMap, MigrationOutcome, PersistDraftResult, RuntimeError, RuntimeEventContext,
-    RuntimeEventDecision,
-    SIGNATURE_PROFILE_KEY_EXTENSION, SIGNATURE_PROFILE_REF_EXTENSION, SIGNATURE_STEP_ID_EXTENSION,
-    SignatureProfileDocument, SystemClock, TaskSubmissionResult, WosRuntime,
-    populate_provenance_record_fields, stamp_provenance,
-};
-pub use restate_fixture_support::{
-    FixtureResolverError, MinimalFixtureFormspecAdapter, SharedInMemoryStore, SignatureFixtureResolver,
-    restate_signature_fixture_bindings, restate_signature_fixture_runtime,
-    signature_runtime_fixture_kernel, signature_runtime_fixture_profile,
+    RuntimeEventDecision, SIGNATURE_PROFILE_KEY_EXTENSION, SIGNATURE_PROFILE_REF_EXTENSION,
+    SIGNATURE_STEP_ID_EXTENSION, SignatureProfileDocument, SystemClock, TaskSubmissionResult,
+    WosRuntime, populate_provenance_record_fields, stamp_provenance,
 };
 pub use store::{
     InMemoryStore, IntakeRecord, ReplayKey, ReplayOperation, ReplayValue, RuntimeAuxFields,

@@ -967,7 +967,9 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
                   forEach `body` is walked recursively.",
         fixtures: &[],
         graduation: Graduation::Tested,
-        spec_ref: Some("specs/kernel/spec.md §4.1 (lifecycle.initialState) + §4.3 (compound state semantics) + §4.8 (parallel-state region semantics)"),
+        spec_ref: Some(
+            "specs/kernel/spec.md §4.1 (lifecycle.initialState) + §4.3 (compound state semantics) + §4.8 (parallel-state region semantics)",
+        ),
         suggested_fix: Some(
             "Set `lifecycle.initialState` to a key that exists in `lifecycle.states`, OR (for compound states) set the state's `initialState` to a key that exists in its own `states` substate map, OR (for parallel-state regions) set `region.initialState` to a key that exists in `region.states`.",
         ),

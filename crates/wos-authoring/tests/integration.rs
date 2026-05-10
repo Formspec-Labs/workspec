@@ -216,10 +216,9 @@ fn authoring_session_round_trip_with_undo_redo() {
                 == Some("caseFile.amount <= 50000")),
     );
     assert!(
-        approve_transitions
-            .iter()
-            .any(|t| t.guard.as_ref().and_then(Guard::as_fel_str)
-                == Some("caseFile.amount > 50000")),
+        approve_transitions.iter().any(
+            |t| t.guard.as_ref().and_then(Guard::as_fel_str) == Some("caseFile.amount > 50000")
+        ),
     );
 
     // Governance surface.

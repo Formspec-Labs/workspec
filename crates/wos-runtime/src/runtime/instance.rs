@@ -7,7 +7,7 @@
 //! `WosRuntime`, but keeping them separate from the type declarations makes the
 //! adapter boundary easier to audit.
 
-use wos_core::eval::{validate_migration_configuration, Evaluator};
+use wos_core::eval::{Evaluator, validate_migration_configuration};
 use wos_core::instance::{CaseInstance, InstanceStatus, PendingEvent};
 use wos_core::provenance::{InstanceMigratedInput, ProvenanceRecord};
 use wos_core::typeid;
@@ -42,7 +42,8 @@ fn apply_migration_map(
         }
     }
     for (key, default_value) in &map.field_defaults {
-        obj.entry(key.clone()).or_insert_with(|| default_value.clone());
+        obj.entry(key.clone())
+            .or_insert_with(|| default_value.clone());
     }
     for (field, kind) in &map.field_coercions {
         let Some(value) = obj.get_mut(field) else {
@@ -51,11 +52,11 @@ fn apply_migration_map(
         match kind.as_str() {
             "number" => {
                 let n = match &*value {
-                    serde_json::Value::Number(n) => n
-                        .as_f64()
-                        .ok_or_else(|| RuntimeError::MigrationRejected(format!(
+                    serde_json::Value::Number(n) => n.as_f64().ok_or_else(|| {
+                        RuntimeError::MigrationRejected(format!(
                             "fieldCoercion number: field `{field}` is not a finite number"
-                        )))?,
+                        ))
+                    })?,
                     serde_json::Value::String(s) => s.parse::<f64>().map_err(|_| {
                         RuntimeError::MigrationRejected(format!(
                             "fieldCoercion number: cannot parse field `{field}`"
@@ -132,8 +133,7 @@ impl WosRuntime {
         let type_id_tenant = typeid::extract_tenant(&instance_id)
             .map(String::from)
             .or_else(|| {
-                wos_core::instance::CaseInstance::extract_urn_parts(&instance_id)
-                    .map(String::from)
+                wos_core::instance::CaseInstance::extract_urn_parts(&instance_id).map(String::from)
             });
         let tenant = match (requested_tenant, &type_id_tenant) {
             (Some(explicit), Some(prefix)) => {
@@ -389,11 +389,7 @@ impl WosRuntime {
             actor_id: operator_actor_id,
             context: None,
         })];
-        populate_provenance_record_fields(
-            &mut appended,
-            &target_kernel,
-            target_definition_version,
-        );
+        populate_provenance_record_fields(&mut appended, &target_kernel, target_definition_version);
         stamp_provenance(&mut appended, &now_iso);
 
         record.instance.case_state = new_case_state;

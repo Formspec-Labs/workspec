@@ -43,11 +43,14 @@ fn r6_sig013_tier3_conformance_negative_still_observable() {
     let manifest = env!("CARGO_MANIFEST_DIR");
     let path = format!("{manifest}/tests/fixtures/SIG-013-policy-assurance-below-floor.json");
     let base = format!("{manifest}/tests/fixtures");
-    let fixture_json = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("read SIG-013 fixture: {e}"));
+    let fixture_json =
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read SIG-013 fixture: {e}"));
     match wos_conformance::run_fixture(&fixture_json, &base) {
         Ok(result) => {
-            assert!(!result.passed, "SIG-013 should fail closed on low assurance");
+            assert!(
+                !result.passed,
+                "SIG-013 should fail closed on low assurance"
+            );
             assert!(
                 result.failures.iter().any(|f| {
                     f.contains("emailOtp") || f.contains("email-otp") || f.contains("assurance")
@@ -80,10 +83,7 @@ async fn r6_memory_parity_signature_start_drain_matches_reference_runtime() {
     let ref_inst = rt.load_instance(&case_id).expect("reference load");
 
     let adapter = RestateRuntimeAdapter::new();
-    adapter
-        .create_instance(req)
-        .await
-        .expect("adapter create");
+    adapter.create_instance(req).await.expect("adapter create");
     adapter
         .enqueue_event(
             &case_id,
@@ -103,8 +103,7 @@ async fn r6_memory_parity_signature_start_drain_matches_reference_runtime() {
     let ad_inst = adapter.load_instance(&case_id).await.expect("adapter load");
 
     assert_eq!(
-        ref_inst.configuration,
-        ad_inst.configuration,
+        ref_inst.configuration, ad_inst.configuration,
         "R-6.2: configuration after start+drain should match between reference WosRuntime and RestateRuntimeAdapter memory backend"
     );
     assert_eq!(
@@ -137,10 +136,7 @@ async fn r6_c1_full_drain_result_shape_parity() {
     let ref_inst = rt.load_instance(&case_id).expect("reference load");
 
     let adapter = RestateRuntimeAdapter::new();
-    adapter
-        .create_instance(req)
-        .await
-        .expect("adapter create");
+    adapter.create_instance(req).await.expect("adapter create");
     adapter
         .enqueue_event(
             &case_id,
@@ -157,24 +153,18 @@ async fn r6_c1_full_drain_result_shape_parity() {
         .drain_until_idle(&case_id)
         .await
         .expect("adapter drain_until_idle");
-    let ad_inst = adapter
-        .load_instance(&case_id)
-        .await
-        .expect("adapter load");
+    let ad_inst = adapter.load_instance(&case_id).await.expect("adapter load");
 
     let idle_sentinel_count = ad_all
         .iter()
         .filter(|s| s.processed_event.is_none())
         .count();
     assert_eq!(
-        idle_sentinel_count,
-        1,
+        idle_sentinel_count, 1,
         "C.1: Restate adapter must yield exactly one idle drainOnce sentinel from drain_until_idle"
     );
     assert!(
-        ref_steps
-            .iter()
-            .all(|s| s.processed_event.is_some()),
+        ref_steps.iter().all(|s| s.processed_event.is_some()),
         "C.1: reference drain steps must all be non-idle in this slice"
     );
 
@@ -239,16 +229,8 @@ async fn r6_c1_full_drain_result_shape_parity() {
             "C.1 step {i}: emitted_events must match (order-independent)"
         );
 
-        let ref_kinds: Vec<_> = ref_step
-            .provenance
-            .iter()
-            .map(|r| r.record_kind)
-            .collect();
-        let ad_kinds: Vec<_> = ad_step
-            .provenance
-            .iter()
-            .map(|r| r.record_kind)
-            .collect();
+        let ref_kinds: Vec<_> = ref_step.provenance.iter().map(|r| r.record_kind).collect();
+        let ad_kinds: Vec<_> = ad_step.provenance.iter().map(|r| r.record_kind).collect();
         assert_eq!(
             ref_kinds, ad_kinds,
             "C.1 step {i}: provenance kinds must match in order"

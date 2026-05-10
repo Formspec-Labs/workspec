@@ -72,8 +72,7 @@ fn block_severity_serializes_as_block() {
     // Round-trip the severity in isolation (LintDiagnostic carries
     // `rule_id: &'static str` so it can't be deserialized from owned
     // values — the wire-form severity is what matters here).
-    let parsed: LintSeverity =
-        serde_json::from_str("\"block\"").expect("severity round-trip");
+    let parsed: LintSeverity = serde_json::from_str("\"block\"").expect("severity round-trip");
     assert_eq!(parsed, LintSeverity::Block);
 }
 

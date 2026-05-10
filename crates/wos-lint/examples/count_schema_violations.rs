@@ -22,9 +22,7 @@ use std::path::PathBuf;
 fn main() {
     let mut args = env::args().skip(1);
     let Some(path_arg) = args.next() else {
-        eprintln!(
-            "usage: count_schema_violations <schema.json> [--list] [--no-fail]"
-        );
+        eprintln!("usage: count_schema_violations <schema.json> [--list] [--no-fail]");
         std::process::exit(2);
     };
     let mut list = false;

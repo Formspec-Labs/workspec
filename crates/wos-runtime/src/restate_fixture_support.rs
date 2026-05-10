@@ -30,18 +30,30 @@ impl Default for SharedInMemoryStore {
 
 impl RuntimeStore for SharedInMemoryStore {
     fn create_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
-        self.0.lock().expect("store mutex poisoned").create_record(record)
+        self.0
+            .lock()
+            .expect("store mutex poisoned")
+            .create_record(record)
     }
 
     fn load_record(&self, instance_id: &str) -> Result<RuntimeRecord, StoreError> {
-        self.0.lock().expect("store mutex poisoned").load_record(instance_id)
+        self.0
+            .lock()
+            .expect("store mutex poisoned")
+            .load_record(instance_id)
     }
 
     fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
-        self.0.lock().expect("store mutex poisoned").save_record(record)
+        self.0
+            .lock()
+            .expect("store mutex poisoned")
+            .save_record(record)
     }
 
-    fn create_intake_record(&mut self, record: crate::store::IntakeRecord) -> Result<(), StoreError> {
+    fn create_intake_record(
+        &mut self,
+        record: crate::store::IntakeRecord,
+    ) -> Result<(), StoreError> {
         self.0
             .lock()
             .expect("store mutex poisoned")
@@ -96,7 +108,9 @@ impl ContractBindingAdapter for MinimalFixtureFormspecAdapter {
         task: &ActiveTask,
         response: &serde_json::Value,
     ) -> Result<SubmissionValidation, BindingError> {
-        let pin_match = response.get("definitionUrl").and_then(serde_json::Value::as_str)
+        let pin_match = response
+            .get("definitionUrl")
+            .and_then(serde_json::Value::as_str)
             == task.definition_url.as_deref()
             && response
                 .get("definitionVersion")
@@ -223,7 +237,9 @@ impl DocumentResolver for SignatureFixtureResolver {
         _url: &str,
         _version: &str,
     ) -> Result<wos_core::model::governance::GovernanceDocument, Self::Error> {
-        Err(FixtureResolverError("governance not in fixture resolver".into()))
+        Err(FixtureResolverError(
+            "governance not in fixture resolver".into(),
+        ))
     }
 
     fn resolve_sidecar(
@@ -231,7 +247,9 @@ impl DocumentResolver for SignatureFixtureResolver {
         _url: &str,
         _anchor_date: Option<&str>,
     ) -> Result<serde_json::Value, Self::Error> {
-        Err(FixtureResolverError("sidecar not in fixture resolver".into()))
+        Err(FixtureResolverError(
+            "sidecar not in fixture resolver".into(),
+        ))
     }
 }
 

@@ -79,9 +79,7 @@ pub fn lint_schema(schema_json: &str) -> Result<Vec<LintDiagnostic>, LintError> 
 ///
 /// Returns `LintError::Parse` if the input is not valid JSON or lacks
 /// a recognized `$wos*` document type marker.
-pub fn lint_workflow_with_project(
-    workflow_json: &str,
-) -> Result<Vec<LintDiagnostic>, LintError> {
+pub fn lint_workflow_with_project(workflow_json: &str) -> Result<Vec<LintDiagnostic>, LintError> {
     let doc = document::parse(workflow_json)?;
     let mut project = document::WosProject::default();
     project.push(doc);

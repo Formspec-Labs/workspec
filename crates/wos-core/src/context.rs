@@ -107,10 +107,7 @@ impl EvalContext {
                 .iter()
                 .map(|(k, v)| (k.clone(), json_to_fel_value(v)))
                 .collect();
-            fields.insert(
-                "instance".to_string(),
-                Value::Object(instance_map.clone()),
-            );
+            fields.insert("instance".to_string(), Value::Object(instance_map.clone()));
             for (k, v) in &instance_map {
                 fields.insert(format!("instance.{k}"), v.clone());
             }

@@ -17,14 +17,14 @@ use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
 
 use crate::integration::IntegrationBinding;
 use crate::integration_handlers::{
-    dispatch_integration_binding, load_or_invoke_service_result, InvocationContext,
+    InvocationContext, dispatch_integration_binding, load_or_invoke_service_result,
 };
 use crate::store::RuntimeRecord;
 
 use super::{
+    COMPLETION_EVENT_EXTENSION_KEY, FAILURE_EVENT_EXTENSION_KEY, RuntimeError, WosRuntime,
     impact_level_label, make_task_id, normalize_semver_range_expression,
-    signature::append_signature_task_extensions, RuntimeError, WosRuntime,
-    COMPLETION_EVENT_EXTENSION_KEY, FAILURE_EVENT_EXTENSION_KEY,
+    signature::append_signature_task_extensions,
 };
 
 impl WosRuntime {

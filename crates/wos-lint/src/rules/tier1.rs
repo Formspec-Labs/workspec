@@ -416,9 +416,7 @@ fn transition_actor_id_syntax_valid(id: &str) -> bool {
     if !first.is_ascii_alphabetic() {
         return false;
     }
-    chars.all(|c| {
-        c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-')
-    })
+    chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
 }
 
 /// K-001 through K-008: State type semantics (typed model).
@@ -695,7 +693,11 @@ fn check_initial_state_keys_into_states_typed(
         ));
     }
     for (name, state) in &kernel.lifecycle.states {
-        check_compound_initial_state_typed(state, &format!("/lifecycle/states/{name}"), diagnostics);
+        check_compound_initial_state_typed(
+            state,
+            &format!("/lifecycle/states/{name}"),
+            diagnostics,
+        );
     }
 }
 
@@ -2017,7 +2019,9 @@ mod transition_actor_and_initial_state_tests {
         });
         let diags = run_workflow(doc);
         assert!(
-            diags.iter().any(|d| d.rule_id == "K-032" && d.path == "/lifecycle/initialState"),
+            diags
+                .iter()
+                .any(|d| d.rule_id == "K-032" && d.path == "/lifecycle/initialState"),
             "expected K-032 on lifecycle.initialState: {diags:?}"
         );
     }
@@ -2043,7 +2047,9 @@ mod transition_actor_and_initial_state_tests {
         });
         let diags = run_workflow(doc);
         assert!(
-            diags.iter().any(|d| d.rule_id == "K-032" && d.path == "/lifecycle/states/c"),
+            diags
+                .iter()
+                .any(|d| d.rule_id == "K-032" && d.path == "/lifecycle/states/c"),
             "expected K-032 on compound state path: {diags:?}"
         );
     }

@@ -14,7 +14,9 @@ use wos_core::event_handler::{self, AdverseDecisionNoticeInput};
 use wos_core::instance::CaseInstance;
 use wos_core::model::ai::{AIIntegrationDocument, ViolationAction};
 use wos_core::model::kernel::{ImpactLevel, KernelDocument, State, Transition, TransitionEvent};
-use wos_core::provenance::{CaseFileSnapshot, ConfigurationWarningInput, ProvenanceKind, ProvenanceRecord};
+use wos_core::provenance::{
+    CaseFileSnapshot, ConfigurationWarningInput, ProvenanceKind, ProvenanceRecord,
+};
 
 use crate::runtime::{CompanionPolicy, RuntimeError, RuntimeEventContext, RuntimeEventDecision};
 

@@ -81,12 +81,7 @@ fn render_step(step: &TraceStep) -> String {
     };
     out.push_str(&format!(
         "  step {}: {} → {} (event: {}{}){}\n",
-        step_num,
-        step.state_before,
-        step.state_after,
-        step.event.name,
-        actor_part,
-        tick_suffix,
+        step_num, step.state_before, step.state_after, step.event.name, actor_part, tick_suffix,
     ));
 
     // Guards evaluated

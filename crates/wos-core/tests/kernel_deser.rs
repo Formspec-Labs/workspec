@@ -33,8 +33,8 @@ fn workspace_root() -> PathBuf {
 /// Loads and deserializes a kernel fixture by filename.
 fn load_fixture(name: &str) -> KernelDocument {
     let path = workspace_root().join("fixtures/kernel").join(name);
-    let json =
-        fs::read_to_string(&path).unwrap_or_else(|e| panic!("failed to read fixture {}: {e}", path.display()));
+    let json = fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("failed to read fixture {}: {e}", path.display()));
     serde_json::from_str(&json)
         .unwrap_or_else(|e| panic!("failed to deserialize fixture {name}: {e}"))
 }

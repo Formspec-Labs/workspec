@@ -996,7 +996,9 @@ mod tests {
         });
         let diagnostics = lint(schema);
         assert!(
-            !diagnostics.iter().any(|d| d.message.contains("closed vocabulary")),
+            !diagnostics
+                .iter()
+                .any(|d| d.message.contains("closed vocabulary")),
             "unexpected SCHEMA-DOC closed-vocab diagnostic: {diagnostics:?}"
         );
     }
@@ -1065,9 +1067,11 @@ mod tests {
         let diagnostics = lint(schema);
         // `tags` itself is not a leaf (has `items`); the inner string is.
         assert_eq!(diagnostics.len(), 2);
-        assert!(diagnostics
-            .iter()
-            .all(|d| d.path == "/properties/tags/items"));
+        assert!(
+            diagnostics
+                .iter()
+                .all(|d| d.path == "/properties/tags/items")
+        );
     }
 
     #[test]

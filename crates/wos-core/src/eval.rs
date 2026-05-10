@@ -1841,8 +1841,7 @@ impl Evaluator {
                 [] => None,
                 [only] => Some(*only),
                 more => {
-                    let ids: Vec<&str> =
-                        more.iter().map(|i| table.rows[*i].id.as_str()).collect();
+                    let ids: Vec<&str> = more.iter().map(|i| table.rows[*i].id.as_str()).collect();
                     return Err(EvalError::Guard(format!(
                         "K-052: decisionTable '{table_ref}' has hitPolicy=unique but {} rows matched: [{}]",
                         more.len(),
@@ -2810,10 +2809,7 @@ mod tests {
 
         /// Build a kernel doc with a single guarded transition `start --> end`
         /// triggered by event `decide`, plus the supplied decision-table list.
-        fn doc_with_guard(
-            tables: Vec<DecisionTable>,
-            guard: DecisionTableGuard,
-        ) -> KernelDocument {
+        fn doc_with_guard(tables: Vec<DecisionTable>, guard: DecisionTableGuard) -> KernelDocument {
             let mut states = IndexMap::new();
             states.insert(
                 "start".into(),
@@ -3278,7 +3274,10 @@ mod tests {
             match err {
                 EvalError::Guard(msg) => {
                     assert!(msg.contains("K-053"), "expected K-053 in: {msg}");
-                    assert!(msg.contains("output cell"), "expected 'output cell' in: {msg}");
+                    assert!(
+                        msg.contains("output cell"),
+                        "expected 'output cell' in: {msg}"
+                    );
                 }
                 other => panic!("expected EvalError::Guard, got {other:?}"),
             }
@@ -3327,7 +3326,10 @@ mod tests {
             match err {
                 EvalError::Guard(msg) => {
                     assert!(msg.contains("K-053"), "expected K-053 in: {msg}");
-                    assert!(msg.contains("input cell"), "expected 'input cell' in: {msg}");
+                    assert!(
+                        msg.contains("input cell"),
+                        "expected 'input cell' in: {msg}"
+                    );
                 }
                 other => panic!("expected EvalError::Guard, got {other:?}"),
             }
@@ -3432,7 +3434,10 @@ mod tests {
             match err {
                 EvalError::Guard(msg) => {
                     assert!(msg.contains("K-051"), "expected K-051 in: {msg}");
-                    assert!(msg.contains("inputBindings"), "expected 'inputBindings' in: {msg}");
+                    assert!(
+                        msg.contains("inputBindings"),
+                        "expected 'inputBindings' in: {msg}"
+                    );
                 }
                 other => panic!("expected EvalError::Guard, got {other:?}"),
             }

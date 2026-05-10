@@ -136,8 +136,6 @@ pub struct CaseInstance {
     pub extensions: HashMap<String, serde_json::Value>,
 }
 
-
-
 impl CaseInstance {
     /// Extension key where the runtime preserves a creator-supplied identifier
     /// when a canonical case TypeID was minted at `create_instance`.

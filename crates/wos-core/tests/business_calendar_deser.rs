@@ -34,8 +34,8 @@ fn workspace_root() -> PathBuf {
 
 fn load_fixture(name: &str) -> BusinessCalendarDocument {
     let path = workspace_root().join("fixtures/sidecars").join(name);
-    let json =
-        fs::read_to_string(&path).unwrap_or_else(|e| panic!("failed to read fixture {}: {e}", path.display()));
+    let json = fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("failed to read fixture {}: {e}", path.display()));
     let envelope: Value = serde_json::from_str(&json)
         .unwrap_or_else(|e| panic!("failed to parse fixture {name} envelope: {e}"));
     assert_eq!(

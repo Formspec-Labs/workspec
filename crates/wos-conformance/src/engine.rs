@@ -14,14 +14,14 @@
 //! are exercised through the runtime boundary.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::Deserialize;
-use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
-use wos_core::eval::parse_iso_duration_to_ms;
+use time::format_description::well_known::Rfc3339;
 use wos_core::eval::GuardEvaluation;
+use wos_core::eval::parse_iso_duration_to_ms;
 use wos_core::instance::{FormspecTaskContext, PendingEvent};
 use wos_core::model::ai::AIIntegrationDocument;
 use wos_core::model::governance::GovernanceDocument;
@@ -29,15 +29,15 @@ use wos_core::model::kernel::KernelDocument;
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
 use wos_core::traits::{DocumentResolver, TaskPresenter};
 use wos_runtime::{
-    stamp_provenance, BindingRegistry, BusinessCalendarDocument, Clock, CreateInstanceRequest,
-    DrainOnceResult, IntegrationProfileDocument, MigrationMap, ReferenceCompanionPolicy,
-    RuntimeError, WosRuntime,
+    BindingRegistry, BusinessCalendarDocument, Clock, CreateInstanceRequest, DrainOnceResult,
+    IntegrationProfileDocument, MigrationMap, ReferenceCompanionPolicy, RuntimeError, WosRuntime,
+    stamp_provenance,
 };
 
+use crate::ConformanceError;
 use crate::fixture::ConformanceFixture;
 use crate::formspec_processor::FixtureFormspecProcessor;
 use crate::stubs::{StubService, StubValidator};
-use crate::ConformanceError;
 
 const CONFORMANCE_INSTANCE_ID: &str = "conformance-instance";
 

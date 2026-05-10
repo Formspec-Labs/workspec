@@ -32,8 +32,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 
 use fel_core::{
+    Package,
     ast::{BinaryOp, Expr, PathSegment, UnaryOp},
-    builtin_function_catalog, builtin_function_catalog_for, parse, Package,
+    builtin_function_catalog, builtin_function_catalog_for, parse,
 };
 use serde_json::Value;
 
@@ -179,10 +180,7 @@ fn check_capability_preconditions(
                     diagnostics.push(LintDiagnostic::t2_error(
                         "AI-057",
                         path,
-                        fel_parse_failure_message(
-                            "capability precondition is not valid FEL",
-                            &err,
-                        ),
+                        fel_parse_failure_message("capability precondition is not valid FEL", &err),
                     ));
                 }
                 Ok(expr) => {
@@ -447,10 +445,7 @@ fn check_escalation_conditions(
                     diagnostics.push(LintDiagnostic::t2_error(
                         "AI-024",
                         &path,
-                        fel_parse_failure_message(
-                            "escalation condition is not valid FEL",
-                            &err,
-                        ),
+                        fel_parse_failure_message("escalation condition is not valid FEL", &err),
                     ));
                     continue;
                 }
@@ -508,10 +503,7 @@ fn check_smt_expression(
             diagnostics.push(LintDiagnostic::t2_error(
                 "AG-010",
                 path,
-                fel_parse_failure_message(
-                    "verifiable constraint is not valid FEL",
-                    &err,
-                ),
+                fel_parse_failure_message("verifiable constraint is not valid FEL", &err),
             ));
             return;
         }
@@ -661,8 +653,9 @@ fn check_only_builtin_functions(
     path: &str,
     diagnostics: &mut Vec<LintDiagnostic>,
 ) {
-    let builtin_names: HashSet<&str> =
-        builtin_function_catalog_for(Package::Universal).map(|e| e.name).collect();
+    let builtin_names: HashSet<&str> = builtin_function_catalog_for(Package::Universal)
+        .map(|e| e.name)
+        .collect();
 
     walk_expr(expr, &mut |e| {
         if let Expr::FunctionCall { name, .. } = e {

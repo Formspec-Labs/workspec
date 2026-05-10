@@ -2314,8 +2314,7 @@ fn decision_table_guard_routes_to_table_evaluator() {
     // matches r-1or2-person → eligible=true → transition fires.
     {
         let case = serde_json::json!({"monthlyIncome": 1200, "householdSize": 1});
-        let mut eval =
-            Evaluator::with_time_and_case_state(doc.clone(), 0, Some(&case)).unwrap();
+        let mut eval = Evaluator::with_time_and_case_state(doc.clone(), 0, Some(&case)).unwrap();
         assert!(eval.configuration().contains("screening"));
         let fired = eval.process_event("screen", None, None).unwrap();
         assert!(fired, "eligible case should fire the transition");
@@ -2346,8 +2345,7 @@ fn decision_table_guard_routes_to_table_evaluator() {
     // the old `as_fel_str` short-circuit it would have fired regardless.
     {
         let case = serde_json::json!({"monthlyIncome": 1200, "householdSize": 5});
-        let mut eval =
-            Evaluator::with_time_and_case_state(doc.clone(), 0, Some(&case)).unwrap();
+        let mut eval = Evaluator::with_time_and_case_state(doc.clone(), 0, Some(&case)).unwrap();
         let fired = eval.process_event("screen", None, None).unwrap();
         assert!(
             !fired,
@@ -2441,11 +2439,7 @@ fn fel_and_decision_table_guards_agree_on_equivalent_predicates() {
 
     for x in [-1, 0, 1, 100] {
         let case = serde_json::json!({"x": x});
-        let fel_fires = run_with_guard(
-            Guard::Fel("caseFile.x >= 0".to_string()),
-            vec![],
-            &case,
-        );
+        let fel_fires = run_with_guard(Guard::Fel("caseFile.x >= 0".to_string()), vec![], &case);
         let dt_fires = run_with_guard(dt_guard.clone(), vec![table.clone()], &case);
         assert_eq!(
             fel_fires, dt_fires,

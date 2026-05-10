@@ -1,6 +1,6 @@
 //! SCHEMA-OPEN-001 coverage for `x-wos.openStringKind`.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 fn lint(schema: Value) -> Vec<wos_lint::LintDiagnostic> {
     let mut diagnostics = Vec::new();

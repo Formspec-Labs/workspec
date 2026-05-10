@@ -80,9 +80,8 @@ fn load_fixtures(rule_prefix: &str) -> Vec<Fixture> {
             continue;
         }
         let json = std::fs::read_to_string(&path).expect("read fixture");
-        let fx: Fixture = serde_json::from_str(&json).unwrap_or_else(|e| {
-            panic!("parse fixture {name}: {e}")
-        });
+        let fx: Fixture =
+            serde_json::from_str(&json).unwrap_or_else(|e| panic!("parse fixture {name}: {e}"));
         out.push(fx);
     }
     out.sort_by(|a, b| a.id.cmp(&b.id));
@@ -123,8 +122,13 @@ fn assert_fixture_matches(fx: &Fixture, diags: &[LintDiagnostic]) {
             assert!(
                 found,
                 "fixture {} (rule {}): expected_errors substring not found in diagnostics.\n  expected substring: {:?}\n  actual diagnostics: {:#?}",
-                fx.id, fx.rule, expected,
-                diags.iter().map(|d| (&d.rule_id, &d.message)).collect::<Vec<_>>(),
+                fx.id,
+                fx.rule,
+                expected,
+                diags
+                    .iter()
+                    .map(|d| (&d.rule_id, &d.message))
+                    .collect::<Vec<_>>(),
             );
         }
     }
@@ -182,7 +186,11 @@ fn fixtures_well_formed() {
         let fixtures = load_fixtures(rule);
         assert!(!fixtures.is_empty(), "no {rule} fixtures discovered");
         for fx in &fixtures {
-            assert_eq!(fx.rule, *rule, "fixture {} declares rule {}", fx.id, fx.rule);
+            assert_eq!(
+                fx.rule, *rule,
+                "fixture {} declares rule {}",
+                fx.id, fx.rule
+            );
             assert!(
                 fx.inline_documents.kernel.is_some(),
                 "fixture {} missing inline_documents.kernel",
