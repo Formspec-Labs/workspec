@@ -1,277 +1,283 @@
-# Case Management Boundary Refactor: Aggregate Synthesis
+# Case Management Boundary: Synthesis (v2)
 
-**Date:** 2026-05-10
-**Subject:** Synthesis of 5 independent AI consultant reviews and codebase investigations regarding the `Case` vs `CaseProcess` boundary refactor proposal.
+**Date:** 2026-05-11
+**Status:** Fully replaces v1 (2026-05-10). v1 is preserved in git history; this document is the new pre-ADR source of truth.
+**Supersedes:** prior `work-spec/thoughts/adr/0093-case-process-boundary.md` (Proposed, deleted 2026-05-11). Replacement landed at [`work-spec/thoughts/adr/0093-case-is-its-trellis-ledger.md`](../adr/0093-case-is-its-trellis-ledger.md) (Proposed, 2026-05-11). Withdraws ~⅔ of the v1 CASE-SYNTH register.
+**Author intent:** Greenfield re-think. Per owner direction (2026-05-11), every ADR/spec/plan/decision from v1 is treated as disposable. What follows reasons from user value first, then collapses architecture to the minimum that serves it.
 
-**Provenance:** Five reviewers contributed (see §7) — three produced written validation `.md` files on disk (R1, R2, R4); two are live-doc assessments (R3 GPT-5 Codex, R5 Gemini CLI). Convergent review is signal, not proof—each load-bearing claim below should carry file or spec pins when drafting the ADR.
-
-**Integrated validation (2026-05-10):** Cross-read against live artifacts using `Explore` (repo paths, OpenAPI vs server, schemas), `spec-expert` (Formspec Core §2.1.6.1, ADR-0074/0071), `wos-expert` (kernel `spec.md`, `wos-provenance-log.schema.json`, `wos-workflow.schema.json`, ADR-0073/0080), `trellis-expert` (`trellis-core.md` §1.2, §4, §15, §22.4, §23.2–23.4), and `cross-stack-scout` (seams, `GOAL.md`, `VISION.md`, `workspec-server/.../VISION.md`). Outcomes are woven into §2–§5; §7 P0/P1 items remain the dispute register where synthesis intentionally stayed open.
-
-## 1. Executive Summary
-
-The foundational premise of the original consultant proposal is **architecturally correct**: conflating the durable domain `Case` with the workflow execution `CaseInstance` is a critical flaw. `CaseInstance` is a running workflow process; using it as the root product abstraction creates bloated life-cycles and overloaded state containers.
-
-However, the original proposal harbored critical structural blind spots—treating `Case` as a new, parallel authoritative data store, inventing new kernel seams, and violating existing deployment security commitments.
-
-This document synthesizes all reviews and Trellis codebase investigations to establish the corrected, executable architectural boundary. **Post-validation edit:** §2–§3 were tightened so WOS governed-case authority, provenance event literals, kernel section numbers, ADR-0080 vs phantom ADR-0077, and Formspec handoff wording match the stack today.
-
-## 2. The Architectural Triad: Trellis ↔ WOS ↔ Case
-
-The solution is not creating a "fourth center" or a parallel database. The architecture must compose across the three existing layers:
-
-### A. Trellis: The Cryptographic "Case Ledger" (Infrastructure)
-
-Trellis Core defines what the substrate is *not* (not a workflow engine, not Formspec semantics) and what it *is* authoritative for: envelope bytes, hash chain, checkpoint, export, verification—for **nothing else** in the product sense (`trellis/specs/trellis-core.md` §1.1, §1.3, §4). **Implementation check:** `trellis-store-postgres` migrations are event-canonical tables, not casework CRM tables—consistent with “no product case-management schema inside Trellis,” but the concrete “no notes / participants” list is **engineering judgment**, not a quoted Trellis MUST.
-
-Under **Trellis Core §1.2 (Phase 3)**, the **case ledger** is a hash-chained sequence composing **sealed response-ledger heads** (Formspec) with **WOS governance** into one matter (`trellis-core.md` §1.2, §22.4). **Formspec pin:** Intake Handoff binds a **`ledgerHeadRef`** to the **respondent-ledger** head at handoff; Trellis **MAY** anchor that evidence, but the handoff **must not** be treated as case-creation authority—**WOS** owns the governed boundary (`formspec/specs/core/spec.md` §2.1.6.1). Do **not** paraphrase that as “Formspec intake heads” in normative prose; use **respondent-ledger / response-ledger head** language. Stack docs still note a pending **respondent-ledger → case-ledger** spec rename (`work-spec/CLAUDE.md`); Trellis Core already says **case ledger** in §1.2—keep ratified vs doc-drift explicit in the ADR audit trail (CASE-SYNTH-08).
-
-### B. WOS: Process Governance (The Instrument)
-
-WOS governs process transitions, AI oversight, and accountability, and emits governance events that append to the Trellis chain. **Wording discipline:** *“WOS is not the case”* is only safe when **“the case”** means the **integrity spine plus derived projection**—not the **governed case boundary**. Normatively, **WOS owns governed case identity and the `case.created` provenance event** (ADR-0073 D-1; `work-spec/CLAUDE.md` key rules; `wos-provenance-log.schema.json` → `CaseCreatedRecord`). WOS **executes workflow processes in the shell of a governed case**; it does **not** replace Trellis as the commit-order authority for anchored bytes (ADR-0070 D-1).
-
-### C. Case: The Domain Projection (The View)
-
-**CRITICAL CORRECTION:** The product `Case` aggregate is **NOT** a second parallel **source of truth** for governed identity or append order. **Split authorities (post-validation):** (1) **Trellis** — authoritative **linear order** for committed canonical events and integrity artifacts (`trellis-core.md` **§23.2** registry obligations, read with **§15** projection discipline—not a non-existent “§23.2.5” clause label; CASE-SYNTH-20 / §8 swarm `spec-expert`); projections **derive from** canonical truth (§2.1 class 4, §15). (2) **WOS** — **governed case identity** and **`case.created`** emission per ADR-0073 D-1. (3) **`Case` projection** — rebuildable **metadata-first** state in the operator’s `projections` schema (see `workspec-server/crates/wos-server/VISION.md`: `canonical` vs `projections`). The ADR must argue **“Case as projection”** against a credible alternative (e.g. WOS-centered domain model with Trellis anchoring—`wos-core` `CaseInstance` already carries `case_state: serde_json::Value` and provenance paths), not treat projection as the only coherent pattern (CASE-SYNTH-10).
-
-## 3. Critical Corrections to the Original Proposal
-
-Before an ADR can be written, the following flaws in the original proposal must be explicitly resolved:
-
-### 3.1. The ADR-0073 Case Origination Collision
-
-The proposal suggested a Case could be created manually "with zero processes," silently bypassing WOS.
-
-* **The Conflict:** ADR-0073 mandates that *WOS is the only layer that emits `case.created`*.
-* **The Resolution:** Every Case origination MUST emit a provenance record whose **`event` literal is `case.created`** into the canonical ledger—the locked contract today is `wos-provenance-log.schema.json` → `$defs/CaseCreatedRecord` (`const: "case.created"`). A deliberate rename would require coordinated updates to provenance schema, Trellis **`wos.*` event_type** registration, OpenAPI, and fixtures—do not introduce a second string such as `wos.case-created` in prose without that ADR (CASE-SYNTH-16). ADR-0073 (or **`0073-bis`**) must define a **manual case creation** path (no `IntakeHandoff`) that still emits this governed boundary with tenant/class invariants. **Phase 1 step-zero:** any **new** `wos.*` `event_type` values must be **registered in the bound registry** per Trellis **`§23.2` item 2** cross-referencing **`§14`** (namespace rules additionally in **`§23.4`**—do not cite §23.4 alone; CASE-SYNTH-20).
-
-### 3.2. ADR-0074 Per-Class Encryption Violation
-
-The proposal designed the `Case` API to return `notes`, `communications`, and `participants` as flat JSON fields.
-
-* **The Conflict:** These fields represent classified domain content. Serving them as plaintext violates the SBA strict per-class encryption mandate.
-* **The Resolution:** The `Case` projection carries **metadata only**. Domain content (`notes`, `artifacts`, `decisions`) are subresources whose bodies are fetched separately as ciphertext plus wrapped key-bag fragments; **routine read path** stays client-decrypt where the deployment profile demands it. **`GOAL.md`** prod-MVP and **`wos-server/VISION.md`** explicitly allow **audited server-side decryption** for bounded processing—no contradiction **if** the Case API never flattens classified bodies into the projection document (CASE-SYNTH-17). ADR-0074 normatively targets **Formspec Response** wire shape and processing; stack Case API posture should **cite ADR-0074 + deployment profile** together, not collapse them into one sentence.
-
-### 3.3. The "Governed Output Path" Seam
-
-The proposal invented new output paths for workflows to write to the Case (`CaseStateMutation`, `CaseArtifact`, etc.).
-
-* **The Conflict (reframed):** New write paths must not bypass the **governed output commit pipeline** or sprawl unnamed kernel semantics. **`thoughts/adr/0077-canonical-kernel-extension-seams.md` is not present** under stack `thoughts/adr/` (glob empty); an **archived** copy lives under `formspec/thoughts/archive/adr/`. **`work-spec/CLAUDE.md`** still names “ADR 0077” and the **six kernel extension seams** (`actorExtension`, `contractHook`, `provenanceLayer`, `lifecycleHook`, `custodyHook`, `extensions` / `x-` keys)—that list is **verified**. Do **not** conflate those **seams** with ADR-0080’s **six writer surfaces** (capability, service, signal, task, parallel, foreach); that was a **category error** in earlier synthesis wording (CASE-SYNTH-03).
-* **The Resolution:** **Anchor on ADR-0080** (*Governed output commit pipeline*, **Proposed**) and **`work-spec/schemas/wos-workflow.schema.json` → `$defs/OutputBinding`**—today’s object has `on`, `contractRef`, `projection`, `writeScope`, `mutationSource`, `verificationLevel`; there is **no `target` property yet** (proposal-only). Extend **`OutputBinding` / `writeScope` / kernel §5 `caseFile` together** (CASE-SYNTH-21)—kernel **§5.1** still describes a **single** process-scoped `caseState` container until §5 admits process-scoped vs case-scoped partitions. **Kernel citations:** JSONPath profile for binding path *values* is **`§9.2.21.1`**; the workflow **`outputBinding`** property mapping responses → case state paths is **`§9.2.22`** (Arazzo uses **`§9.2.23`**). Saying only “§9.2.21” without **.1** or **§9.2.22** mis-pins readers. Extending **`$defs/OutputBinding`** is **not** inventing a **seventh kernel seam**—it evolves one declarative pipeline shape ADR-0080 already unifies.
-* **Optional discriminator language for the ADR:** e.g. `processCaseState` (today’s case-state writes) vs. `caseArtifact` / `caseDecision` / `caseTimeline`—but treat as **new schema + spec + runtime** work, not a field that already exists in HEAD.
-
-## 4. Identity, Naming, and Blast Radius
-
-The refactor cannot rely on lazy aliases without accruing unacceptable technical debt.
-
-1. **JSON Marker:** Renaming `$wosCaseInstance` → `$wosProcessInstance` is a **coordinated schema + lint + fixture** event (`wos-case-instance.schema.json` requires the marker today; `work-spec/crates/wos-lint/src/document.rs` maps it). **Open choice** (§7 CASE-SYNTH-01): one-shot rename vs keep-as-legacy—the ADR must **argue** the path, not assert it.
-2. **TypeID Prefix:** Today `case_` mints workflow-instance identity. **Prefer (CASE-SYNTH-02):** mint domain **`Case` under a new prefix** (`casefile_` / `matter_` / `cf_`) and reserve `case_` for `CaseProcess`, **or** document a **forced migration** with cut-over—**not** silent in-place reassignment while reusing the `case` URN segment validated by **`work-spec/schemas/api/_common.schema.json`** `WosResourceUrn`.
-3. **caseRelationships:** Do not invent a new relationship taxonomy from scratch. Extend the existing Kernel §5.5 vocabulary (`parent | child | sibling | related | supersedes`) via `x-` prefix extensions.
-
-## 5. Phased Execution Plan (MVP vs. Post-MVP)
-
-To align with `GOAL.md` (prefer work that makes the seed deployment real), the execution must be strictly phased:
-
-### Phase 1: MVP (Structural Realignment)
-
-* **Registry / types (step-zero):** Confirm Trellis **bound `event_type`** registry coverage for any **new** `wos.*` verbs the ADR introduces (`trellis-core.md` **§23.2** + **§14**; **§23.4** for namespace rules).
-* **ADR & Naming:** Rename `$wosCaseInstance` → `$wosProcessInstance` **only after** explicit cost/benefit (§7 CASE-SYNTH-01); if renamed, coordinate `wos-case-instance.schema.json`, `wos-lint`, conformance, fixtures. Define TypeID prefixes per §4.2 / CASE-SYNTH-02 (**prefer new prefix for domain `Case`**, not silent `case_` reassignment).
-* **Governed output:** Ship **`$defs/OutputBinding` + kernel §5** evolution per **ADR-0080** (and kernel **§9.2.21.1 / §9.2.22** citations)—including any **`target`/`writeScope` discriminator** as **net-new schema + spec** work (HEAD has no `target` today).
-* **The Projection:** Define the basic `Case` projection schema (**metadata only**—enumerate fields per CASE-SYNTH-13); materialize from replay with **fixture-backed** idempotency/watermark tests (CASE-SYNTH-23).
-* **1:1 Constraint (deployment profile only):** The seed deployment **may** enforce one active `CaseProcess` per `Case` to reduce orchestration risk, but the **normative** model must still allow **zero or many** processes per ADR-0073 initiation modes—otherwise Phase 1 **re-conflates** Case with process in product behavior (CASE-SYNTH-18). Prefer at least **one asymmetric** acceptance scenario in Phase 1 (manual case with zero processes **or** case open while a bound process completes).
-* **API / server parity:** Phase 1 ADR should either fix or explicitly inherit **OpenAPI vs `workspec-server` route drift** (`/explanation` vs `/explain`, suspend/resume/terminate in OpenAPI but absent from `instances.rs`, tasks path skew—CASE-SYNTH-05/19) and the **9 vs 6 lifecycle enum** projection rule (`wos-case-instance.schema.json` vs public API schema—CASE-SYNTH-06).
-
-### Phase 2: Post-MVP (Full Ontology)
-
-* Support for multiple `CaseProcess` instances per `Case`.
-* Ad-hoc `notes` and `communications` (emitted as WOS events outside a workflow transition).
-* Complex Case splitting and merging logic.
-* Schema evolution for durable case domain data.
-
-## 6. Next Step: The ADR
-
-The assigned engineer must now write **ADR 00XX — Case / Process Boundary and Case Projection Introduction**, incorporating the constraints and resolutions defined in this synthesis document. The ADR must clearly present the **"Case as a Projection"** mechanism as its central architectural decision under an **“Alternatives Considered”** section (projection vs WOS-centered domain model with Trellis anchoring—CASE-SYNTH-10), and must **resolve Case↔ledger cardinality** (CASE-SYNTH-11). **Dual-durable recovery:** acknowledge projection lag vs committed chain when `Case` and `CaseProcess` diverge (CASE-SYNTH-12; compose with ADR-0070 ordering). **CaseArtifacts:** pin **Formspec `definitionUrl` + `definitionVersion`** (and ADR-0074 **profile** when bucketed)—not vague “schema version” alone (CASE-SYNTH-24; Formspec Core §6.4 / §2.1.6.1; ADR-0071 D-1 pins).
+**Validation pass (2026-05-11, post-draft):** An independent code/spec audit (Explore subagent against `work-spec/api/wos-public-api.openapi.json`, `workspec-server/`, `work-spec/specs/kernel/spec.md`, `trellis/specs/trellis-core.md`, `trellis/crates/`) confirmed the architectural spine but caught six precision issues that have been folded back in: (1) the `GET /case/{case_id}` path was fictional — real routes are staff `/api/v1/instances/{id}` and applicant `/api/v1/applicant/cases/{id}`; (2) kernel §5.1's *lifecycle vs case-state independence* rule is real and preserved — what v2 declines is a second `caseState` aggregate boundary, not §5.1 itself; (3) `GOAL.md:48` is general posture, not an ADR-0074 pin — re-anchored to ADR-0074 first; (4) Trellis §14.5 *Registry migration discipline* adds precision to the registry-binding citation; (5) the direct-event-append endpoint exists at `POST /api/v1/instances/{id}/events`, role-gated to `Adjudicator` — `note.added` write surface is named; (6) `case_<ulid>` today mints workflow-instance identity (`mint_case_id`); the transition to ledger identity is named explicitly in the ADR. The architectural claims (case = ledger; one read path; one write path; closed event family) stand unchanged.
 
 ---
 
-## 7. Reviewer Feedback
+## 1. The collapse
 
-### Reviewers
+**A case IS its Trellis ledger.** Nothing more.
 
-* **R1** — Claude Opus 4.7 (Cursor IDE), 2026-05-10 — [`case-management-validation-claude-opus-4.7.md`](./case-management-validation-claude-opus-4.7.md)
-* **R2** — GLM-5.1 (opencode), 2026-05-10 — [`case-management-validation-glm-5.1.md`](./case-management-validation-glm-5.1.md)
-* **R3** — GPT-5 Codex, 2026-05-10 — live-doc assessment against ADR-0073, ADR-0074, ADR-0080, Trellis core, `GOAL.md`, `wos-server/VISION.md`
-* **R4** — Claude Opus 4.7 (1M context, Claude Code), 2026-05-10 — [`case-management-validation-claude-opus-4-7-1m.md`](./case-management-validation-claude-opus-4-7-1m.md); dispatched `spec-expert` + `cross-stack-scout` in parallel against the original, then re-reviewed the synthesis
-* **R5** — Gemini CLI (Agent), 2026-05-10 — live-doc assessment focusing on structural integrity, event-sourced projections, and validation strategy
+- **One entity:** the **case ledger** (Trellis-shaped, hash-chained, append-only, per-class encrypted).
+- **One identity:** `case_<ulid>` — the ledger ID *is* the case ID.
+- **One write path:** append a typed event via `custodyHook`.
+- **One read path:** derive the current view by event replay (or read a denormalized projection — operational, not architectural).
 
-### Preserved (do not regress)
+A **workflow** is a runtime process (Restate / Temporal / in-memory adapter) that **binds** to a ledger and emits events on it. The process is not the case. When the process ends, its events remain on the ledger. The ledger keeps existing.
 
-Case-as-projection with **split Trellis / WOS / projection authorities** (§2.C), **metadata-only Case surface** with **profile-aware** encryption story (§3.2), and **ADR-0080–aligned extension of `$defs/OutputBinding` + kernel §5**—not phantom ADR-0077 / seventh-seam language (§3.3)—are the load-bearing wins. **`target` is a planned discriminator, not a present schema field.** The **1:1** rule stays only as **MVP deployment profile**, per CASE-SYNTH-18.
-
-### P0 — must resolve before ADR drafting
-
-**CASE-SYNTH-01 — Revert §4.1 `$wosCaseInstance` → `$wosProcessInstance` rename, or surface the argument.** *[R1; +1 R2]*
-
-Original memo, `spec-expert`, and validation review all converged on keep-as-legacy. Synthesis flips with a one-sentence claim that doesn't survive scrutiny: `work-spec/crates/wos-lint/src/document.rs:84-90` maps `"$wosCaseInstance"` → `DocumentKind::CaseInstance`; rename is a schema-version-bump event for every fixture, conformance trace, and authored workflow. Pre-release VISION.md §II ("no backwards compatibility / nothing is released") makes one-shot rename defensible — but the argument must be made, not asserted.
-
-**CASE-SYNTH-02 — Replace §4.2 in-place TypeID reassignment with a new prefix for the Case aggregate.** *[R1; +1 R2, R4, R5]*
-
-Reassigning `case_` keeps lexical form while changing the referent — every existing ID in fixtures, Trellis export bundles, and provenance records silently drifts. TypeID prefixes are value-level identifiers embedded in every cross-reference; **`work-spec/schemas/api/_common.schema.json`** `WosResourceUrn.pattern` includes a literal **`case`** segment among allowed families—reuse without migration defeats parse-time safety. Keep `case_` minting workflow instances (→ `CaseProcess`); mint Case under a new family (`casefile_` / `matter_` / `cf_`), or name the reassignment as a forced migration with a cut-over commit. Synthesis treats it as notational; it is not. *(R5: Reusing a prefix is a critical data corruption risk in any event-sourced projection. New prefix is mandatory.)*
-
-**CASE-SYNTH-03 — Fix the ADR-0077 citation in §3.3.** *[R1; +1 R2, R3]*
-
-Normative pins: **`§9.2.21.1`** (JSONPath profile for binding path values), **`§9.2.22`** (workflow `outputBinding` property), **`§9.2.23`** (Arazzo)—not “§9.2.21” alone. **Do not conflate** top-level **`bindings[]`** (each element **`OutputBinding`-shaped**, **`wos-workflow.schema.json` §9.2.18**) with the **`outputBinding`** `{request, response}` object (**§9.2.22**)—both may need ADR-0080 alignment; *[+1 swarm: `wos-expert`]*. The six **kernel extension seams** are exactly `work-spec/CLAUDE.md` heuristic 3; **`thoughts/adr/0077*`** under the stack ADR tree is **empty** (phantom at that path; archived 0077 under `formspec/`). **ADR-0080** + **`$defs/OutputBinding`** are the governed-output anchor; reframe as “extend the existing pipeline object and kernel §5, do not invent a new seam.”
-
-**CASE-SYNTH-04 — Carve §3.1 manual case creation into a follow-up ADR (`0073-bis`).** *[R1; +1 R3, R4, R5]*
-
-Amendment is non-trivial: actor surface (no `ActorRef` for a UI caseworker today), authority chain (acceptance policy exists; ad-hoc creation needs an analog), tenant/scope source absent `IntakeHandoff`, and a **`case.created`** payload shape admitting "no WorkflowDocument bound." Folding all four into a one-line ADR-0073 amendment smuggles four real seam decisions into a one-line exception.
-
-> **Addendum (was CASE-SYNTH-16) — Normalize the case-creation event name before drafting.** *[R3; +1 R4]* §3.1 introduces `wos.case-created` while ADR-0073 and `wos-provenance-log.schema.json $defs/CaseCreatedRecord` use `case.created`. Keep the existing contract name or propose a deliberate rename in the same ADR; do not start with accidental event-contract drift.
-
-**CASE-SYNTH-10 — Present Case-as-projection as a design decision with alternatives, not self-evident truth.** *[R2; +1 R3, R4]*
-
-Synthesis asserts "the only authoritative store is the Trellis ledger, therefore Case is a projection." Both clauses overstate. (R3) Trellis owns integrity/audit authority; WOS still owns governed case-identity emission per ADR-0073 D-1, and server-side canonical event storage exists operationally. (R4) §2.B reads WOS as pure instrument; it is also the case-boundary authority — tighten wording. (R2) Alternative: Case is a WOS-center domain model whose mutations produce Trellis events — the pattern `CaseInstance` already follows (Rust struct has `case_state: serde_json::Value`, emits provenance through `custodyHook`). Both are consistent with zero-trust. The ADR's "Alternatives Considered" must show why projection beats domain-model. Synthesis skips this analysis entirely.
-
-> **Addendum (was CASE-SYNTH-11) — Define Case-to-Trellis-case-ledger cardinality and binding.** *[R2; +1 R3]* One Case = one ledger? Can a Case span ledgers? Does case split create a new ledger? Determines whether mutations flow through `custodyHook` and how the projection proves it replayed the right ledger scope. Blocking design choice — flagged independently by R2 and R3.
-
-**CASE-SYNTH-12 — Address dual-state crash recovery for Case + CaseProcess as separate durable artifacts.** *[R2]*
-
-ADR-0070 defines crash recovery for a single `CaseInstance`. With Case and CaseProcess as separate durable artifacts, a process crash mid-`CaseStateMutation` can leave the Trellis chain committed but the Case projection stale. New failure mode the synthesis doesn't mention. Phase 1's 1:1 constraint should at minimum acknowledge the risk even if the full solution is post-MVP. *[+1 swarm: `formspec-service-designer`, `test-engineer`, `formspec-scout`]*
-
-> **Addendum (swarm — `formspec-service-designer`):** Specify **read-path UX/API semantics** when the chain is ahead of the projection (stale reads, explicit “syncing” or safe defaults—avoid silent wrong answers). **Addendum (swarm — `test-engineer`):** Add a **red** fixture where the projection **intentionally lags** the committed chain and clients must converge. **Addendum (swarm — `formspec-scout`):** If any path **dual-writes** canonical + projection without a single writer rule, name it as an explicit seam risk in the ADR (violates projection purity).
-
-**CASE-SYNTH-20 — List Trellis event-type registry binding as Phase 1 step-zero.** *[R4]*
-
-Phase 1 cannot emit **new** `wos.*` event types (e.g. additional lifecycle or artifact verbs beyond what the bound registry already lists) until each identifier is **registered in the bound registry**—the hard MUST is **`trellis-core.md §23.2` item 2** + **`§14`**, with namespace discipline in **`§23.4`** (do not cite §23.4 alone). No byte change in Trellis to “wish” types into existence; cross-stack dependency surfaces in WOS + Trellis docs together. If unlisted, it is discovered mid-implementation. **Ownership:** registry edits land in the **Trellis repo** (Trellis Core §23.2 is normative authority over the bound registry); the WOS-side ADR must enumerate the `wos.*` identifiers it depends on and reference the corresponding Trellis PR or follow-up issue, not silently assume WOS-side self-registration.
-
-**CASE-SYNTH-21 — Bifurcate kernel §5 `caseState` semantics alongside the `outputBinding.target` work.** *[R4]*
-
-§3.3 *proposes adding* a `target` discriminator with values `processCaseState | caseArtifact | caseDecision | caseTimeline` (no such field in HEAD — see §3.3 hedge); but kernel §5 today defines only one notion of `caseState` (workflow business data, append-only log per §5.1). The proposed targets are nameless until §5 admits a process-scoped vs case-scoped distinction. ADR must pair the schema change with the kernel §5 extension, or the targets reference nothing.
-
-### P1 — required for executable ADR
-
-**CASE-SYNTH-07 — Preserve original memo's 35-edge-case matrix (lines 622-799) as Phase 1 failing-fixture skeleton.** *[R1]*
-
-"1:1 MVP, splitting/merging Post-MVP" decides *when* cases land, not *whether they're covered*. Failing fixtures for deferred cases keep the test surface honest and prevent silent scope creep.
-
-> **Addendum (was CASE-SYNTH-15) — Preserve the original's 15 invariants and 12 acceptance criteria as ADR input.** *[R2]* Several survived all three validations without challenge (invariant 4: CaseProcess lifecycle MUST NOT be treated as Case status; invariant 6: process completion MUST NOT imply Case closure). Inherit; do not re-derive.
-
-**CASE-SYNTH-13 — Enumerate the "metadata only" projection schema fields explicitly.** *[R2]*
-
-Phase 1 line 71 says "define the basic Case projection schema (metadata only)" without enumerating fields. Original analysis proposed ~25 (id, caseType, title, status, subjects, participants, processes[], timestamps, etc.). Which are metadata vs content requiring per-class encryption? Without this, Phase 1 scope is unbounded. *[+1 swarm: `test-engineer`]*
-
-> **Addendum (swarm — `test-engineer`):** Until the field list exists, “metadata-only projection” is **not falsifiable**—treat enumeration as **blocking** for any “projection” completion claim.
-> **Addendum (was CASE-SYNTH-14) — Add Case projection schema evolution to Phase 2 scope.** *[R2]* When Case is a projection materialized from event replay, what happens when the projection schema adds a field that didn't exist at emission? ADR-0071 covers WorkflowDocument version pins; projection schema evolution is a distinct concern.
-
-**CASE-SYNTH-17 — Split end-state privacy from prod-MVP privacy posture.** *[R3]*
-
-§3.2 requires client-side decryption for Case subresources, but `GOAL.md` permits audited server-side decryption for prod-MVP. Preserve the ADR-0074 target while stating which deployment profile must satisfy it now.
-
-**CASE-SYNTH-18 — Recast the 1:1 Case/CaseProcess rule as an MVP deployment profile, not ontology.** *[R3; +1 R4, R5]*
-
-Enforce 1:1 in the seed flow if useful, but the normative model must still allow zero/many processes per Case. Otherwise the refactor recreates Case = CaseProcess through product behavior. (R4) Phase 1's 1:1 enforces *exactly the conflation the refactor exists to break* — minimum-viable validation is at least (a) manual Case origination with zero processes, or (b) Case open while bound CaseProcess is completed. Pick one for Phase 1, defer the rest, or Phase 1 is theater. *(R5: A 1:1 constraint in Phase 1 provides false confidence. MVP must include at least one asymmetric state to prove boundary isolation.)* *[+1 swarm: `senior-product-advisor`, `test-engineer`]*
-
-> **Addendum (swarm — `senior-product-advisor`):** If Phase 1 cannot show a **measurable** advance on `GOAL.md` acceptance (rights-impacting path, proof posture), treat 1:1-only work as **CUT** or merge into an existing epic—avoid boundary theater. **Addendum (swarm — `test-engineer`):** Replace “prefer (a) or (b)” with a **hard acceptance gate**: at least one of (a) or (b) **must** ship in Phase 1 or drop the boundary claim from release criteria.
-> **Addendum (was CASE-SYNTH-22) — Phase 1 must explicitly defer the multi-process write-conflict policy.** *[R4]* Original-proposal edge case 20: two processes write the same Case field. Phase 1's 1:1 sidesteps it; Phase 2 inherits a versioned-mutation / conflict-detection design problem the synthesis never names.
-
-**CASE-SYNTH-19 — Add a Phase 1 API compatibility checklist.** *[R3]*
-
-ADR must name OpenAPI, schema, spec, and server consequences: `/instances` aliases/deprecations, exported `oneOf` models, appeal migration semantics, route registry changes, parity tests. *[+1 swarm: `test-engineer`]*
-
-> **Addendum (swarm — `test-engineer`):** Checklist is necessary but not sufficient—add **automated parity tests** (OpenAPI paths ↔ Rust route table ↔ generated clients) so drift regresses CI, not discovery.
-> **Addendum (was CASE-SYNTH-05) — Resolve workspec-server ↔ OpenAPI drift in scope or explicitly defer.** *[R1]* `suspend`/`resume`/`terminate` in OpenAPI but missing from `workspec-server/crates/wos-server/src/http/instances.rs`; `/explanation` (OpenAPI) ≠ `/explain` (server); tasks routing inconsistent (`/tasks` vs `/instances/{id}/tasks`). Refactor inherits this drift silently if unaddressed.
-> **Addendum (was CASE-SYNTH-06) — Resolve kernel-vs-API lifecycle enum mismatch.** *[R1]* `wos-case-instance.schema.json:273-285` has 9 status values (adds `declined`, `voided`, `expired`); public API `LifecycleState` has 6. `CaseProcess` schema must pick a truth and document the projection rule.
-
-### P2 — discipline / process
-
-**CASE-SYNTH-08 — Add citation discipline (file:line) throughout; verify Trellis "Case Ledger" status.** *[R1; +1 R4]*
-
-Stack [`CLAUDE.md`](../../../CLAUDE.md) notes the `respondent-ledger-spec.md` → `case-ledger-spec.md` rewrite is *pending*. §2.A presents §1.2 / "Phase 3" / "Case Ledger" as established. Distinguish ratified vs proposed in the audit trail.
-
-**CASE-SYNTH-09 — Name the source reviews in a §0 provenance block.** *[R1; +1 R2, R4]* **(resolved — see top-matter Provenance block)**
-
-Aggregation claims require provenance. Top-matter now distinguishes 3 written validations on disk (R1, R2, R4) from 2 live-doc assessments (R3, R5); §7 reviewer registry pins each. Convergent AI reviews on the wrong axis are amplified bias, not validated truth — each load-bearing claim still needs file/spec pins when drafting the ADR.
-
-**CASE-SYNTH-23 — Define empirical validation strategy for the projection mechanism.** *[R5; +1 swarm: `test-engineer`]*
-If Case is a projection, Phase 1 must include fixture tests that assert the projection accurately rebuilds state from a mocked Trellis event stream, demonstrating idempotency (e.g. handling duplicate or out-of-order events securely). Without this, the "projection" is just a buzzword.
-
-> **Addendum (swarm — `test-engineer`):** Formalize **tiers**: (1) golden replay from fixture streams, (2) **property-based** perturbations (reorder/duplicate within allowed window), (3) **idempotency keys** for apply side effects. Avoid circular “tests prove projection because we defined projection as what the tests assert.”
-
-**CASE-SYNTH-24 — Explicitly map Formspec versioning in CaseArtifacts.** *[R5]* **(spec-expert: tighten wording)**
-
-Since `CaseArtifact`s will encapsulate Formspec responses, the projection logic must record the **`definitionUrl` + `definitionVersion`** pin (Formspec Core Response / Intake Handoff—VP-01), plus **Privacy Profile** fields when ADR-0074 bucketed shape applies—not the vague phrase “schema version” alone. ADR-0071 **D-1** case-open pins are the cross-layer precedent for “which semantics at replay.” Projections fail replay if definitions drift without those pins in the event payload.
-
-> **Addendum (swarm — `spec-expert`):** Intake Handoff normatively pins **`definitionRef.url`** + **`definitionRef.definitionVersion`** (and related); **Response** uses **`definitionUrl` / `definitionVersion`**. ADR text must **name both** when CaseArtifacts may wrap handoff vs response payloads—do not collapse to one pair without mapping.
-
-### Source-of-truth cleanup before continuing
-
-These are not new architecture objections. They are cleanup gates before this synthesis can serve as the ADR source of truth instead of a review accumulator.
-
-| ID | Priority | Action | Rationale |
-|---|---|---|---|
-| CASE-SYNTH-25 | P0 | Reconcile reviewer provenance and links for R3/R5 | §0 and §7 currently describe R3/R5 as live-doc assessments, but the corpus now includes `case-management.validation-gpt-5-codex.md` and tracked `case-management-gemini-validation.md`. Either link both files and treat them as written validations, or explicitly exclude one from the source corpus. |
-| CASE-SYNTH-26 | P0 | Add a compact "Current Source-of-Truth Decisions" block before the feedback register | The body contains the decisions, but ADR authors need the settled spine in one place: Case is metadata-first projection; WOS owns governed case identity and `case.created`; Trellis owns integrity/order/registry-bound event typing/export verification; `OutputBinding.target` is future schema/spec/runtime work; 1:1 is deployment profile only. |
-| CASE-SYNTH-27 | P0 | Resolve the Phase 1 asymmetric-proof sequencing conflict | §5 says Phase 1 may prove asymmetry through manual zero-process Case, while CASE-SYNTH-04 says manual origination needs `0073-bis`. Pick one: make `0073-bis` a Phase 1 prerequisite, or prove asymmetry with "Case remains open after bound CaseProcess completes." |
-| CASE-SYNTH-28 | P1 | Add dispositions to every `CASE-SYNTH-*` item | Mark each item `Accepted`, `Resolved`, `Deferred`, or `Open`. Several items are already incorporated in §§2-5 but still read as open feedback. Without dispositions, the register is useful evidence but not an execution surface. |
-| CASE-SYNTH-29 | P1 | Tighten the source-authority map | Formspec Core is the direct authority for `definitionUrl` / `definitionVersion` and Intake Handoff `definitionRef`; ADR-0071 is precedent for replay/version pins, not the primary authority. ADR-0080 anchors output commits; Trellis §14/§23 anchors `wos.*` event registry binding. |
-| CASE-SYNTH-30 | P1 | End the synthesis with an explicit ADR-writing contract | Before drafting ADR 00XX, resolve the P0s: prefix identity, marker rename stance, manual-origination sequencing, Case↔ledger cardinality, dual-durable recovery, and `OutputBinding` / kernel §5 split. This prevents the ADR from inheriting unresolved review notes as architecture. |
+There is no separate `Case` aggregate. There is no `CaseProcess` domain type. There is no second source of truth. There is no projection-vs-canonical distinction at the type layer — only at the operational layer, where projections are rebuild-on-demand views.
 
 ---
 
-## 7. Current Source-of-Truth Decisions (Pre-ADR)
+## 2. Why this is true (user-value derivation)
 
-Before drafting the ADR or beginning implementation, the following decisions are locked in as the source of truth for the Case / Process boundary:
+Working backwards from what users actually need:
 
-1. **Architecture Model:** `Case` is a metadata-first projection materialized from the Trellis Case Ledger. It is not an authoritative database store. 
-2. **Authority Split:** Trellis owns cryptographic integrity, event ordering, and registry-bound event typing. WOS owns governed case identity and the emission of `case.created`. 
-3. **Cardinality & Ledger Binding:** One `Case` maps to exactly one Trellis Ledger. All bound `CaseProcess` executions (and ad-hoc events) interleave their provenance events into this single ledger stream.
-4. **TypeID Identity:** The new Case aggregate MUST use a net-new prefix (e.g., `casefile_`, `matter_`). The `case_` prefix remains bound to workflow instances (`CaseProcess`) to prevent parse-time safety failure and historical drift.
-5. **Phase 1 Validation:** The MVP deployment profile may default to a 1:1 `Case`:`CaseProcess` mapping for simplicity, but Phase 1 *must* include at least one asymmetric acceptance test (either a manual case with zero processes, or a case that remains open after its bound process completes) to prove boundary isolation.
-6. **Governed Output Pipeline:** Processes will mutate the Case domain via the `OutputBinding` mechanism (ADR-0080), which will be extended with a `target` discriminator (future schema/spec/runtime work). We will *not* invent a "seventh kernel seam."
+| Actor | Story | Satisfied by |
+|-------|-------|--------------|
+| **Applicant** | "I submit a benefits form. Three months later I appeal. The system knows it's the same matter." | One ledger ID per matter; survives all workflow lifecycles. |
+| **Caseworker** | "I open Jane's case. I see her notes, history, every decision, regardless of which workflow ran." | Replay or projection of the ledger. |
+| **Caseworker** | "I add a note. It persists after the intake workflow ended." | Direct event append (`note.added`). |
+| **Caseworker** | "Jane's appeal starts. I attach a new workflow to her existing case." | Bind a new process to the existing ledger. |
+| **Regulator** | "Hand me Jane's full case file. Verify integrity. Show ordering." | Trellis export bundle = the ledger. |
+| **Developer** | "I write a workflow that updates `determination`. There's exactly one way to do that." | Typed event append; single read-side API. |
 
-## 8. Dispositions for CASE-SYNTH Items
-
-* **CASE-SYNTH-01:** [RESOLVED] Retain `$wosCaseInstance` as a legacy marker for Phase 1 to avoid massive schema churn.
-* **CASE-SYNTH-02:** [RESOLVED] Mint new domain `Case` under a net-new prefix (e.g., `casefile_`). Retain `case_` for `CaseProcess`.
-* **CASE-SYNTH-03:** [RESOLVED] Anchor governed output pipeline entirely on ADR-0080 (`$defs/OutputBinding`). Do not invent a seventh kernel seam.
-* **CASE-SYNTH-04:** [ACCEPTED] Manual case creation requires its own follow-up ADR (`ADR-0073-bis`).
-* **CASE-SYNTH-05/06/19:** [ACCEPTED] Phase 1 requires API parity tests and resolving the 9 vs 6 lifecycle enum schema mismatch.
-* **CASE-SYNTH-10:** [RESOLVED] Formally defended Case-as-projection vs. WOS-centered domain model in ADR.
-* **CASE-SYNTH-11:** [RESOLVED] 1 Case maps to 1 Trellis Ledger.
-* **CASE-SYNTH-12:** [ACCEPTED] Explicitly handle projection lag and dual-state crash recovery in Phase 2 documentation.
-* **CASE-SYNTH-13:** [RESOLVED] "Metadata only" fields explicitly defined as ID, case type, status, timestamps, and TypeID links.
-* **CASE-SYNTH-17:** [ACCEPTED] Distinguish client-side decryption vs audited server-side decryption per GOAL.md.
-* **CASE-SYNTH-18/27:** [RESOLVED] Prove Phase 1 boundary isolation via a Case remaining open after its `CaseProcess` completes (deferring manual creation to ADR-0073-bis).
-* **CASE-SYNTH-20:** [ACCEPTED] Must register new `wos.*` types in Trellis registry before Phase 1 emission.
-* **CASE-SYNTH-21:** [ACCEPTED] Extend kernel §5 alongside schema updates.
-* **CASE-SYNTH-23:** [ACCEPTED] Phase 1 must feature Golden Replay fixture tests for projection materialization.
-* **CASE-SYNTH-24/29:** [RESOLVED] Formspec versioning pinned explicitly to `definitionUrl` and `definitionVersion`.
-* **CASE-SYNTH-25:** [RESOLVED] All 5 reviewers are now explicitly logged as generating persistent validation artifacts.
+Every story is satisfied by **the single primitive we already have**: a Trellis case ledger. No story requires a separate `Case` aggregate. The reverse — modeling `Case` separately — *creates* failure modes (dual-state crash recovery, projection-lag-as-bug, two-source-of-truth ambiguity) without serving any story.
 
 ---
 
-## 9. Red-team swarm (integrated, 2026-05-10)
+## 3. The architecture
 
-**Dispatch:** Eight Cursor **`Task`** subagents (product/technical red-team only; no security track), run in parallel against this synthesis + live stack context.
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                      Case Ledger (Trellis, durable)                  │
+│                          — hash-chained                              │
+│                          — per-class encrypted (ADR-0074)            │
+│                          — one ID: case_<ulid>                       │
+│                                                                      │
+│   case.created → process.started → note.added → process.transitioned │
+│   → artifact.attached → decision.recorded → process.completed →      │
+│   process.started (appeal) → ... → case.closed                       │
+└──────────────────────────────────────────────────────────────────────┘
+              ▲                                          │
+              │ (typed event append via custodyHook)     │ (replay or read)
+              │                                          ▼
+┌──────────────────────────────┐         ┌──────────────────────────────┐
+│  Workflow runtime            │         │  Read-side projection        │
+│  (Restate / Temporal /       │         │  (operational, rebuildable,  │
+│   in-memory adapter)         │         │   plaintext-content-free per │
+│  — ephemeral state           │         │   wos-server VISION.md:98–101│
+│  — crash-recoverable         │         │   canonical/projections split│
+│  — emits ledger events       │         │  )                           │
+│    via $defs/OutputBinding   │         │  Staff: GET /instances/{id}  │
+│  Direct surface (today):     │         │  Applicant: GET /applicant/  │
+│   POST /instances/{id}/events│         │           cases/{id}         │
+│   (role: Adjudicator)        │         │                              │
+└──────────────────────────────┘         └──────────────────────────────┘
+```
 
-**Model / host note:** The IDE does not echo per-subagent **LLM model slugs** in the parent thread. Unless transcripts are consulted, attribute findings below by **subagent type** (stable) and **host** (Cursor `Task`, 2026-05-10). If a future pass needs exact models, read the session’s agent transcripts or UI metadata.
+Three tiers, two of them operational:
 
-### 8.1 By subagent (unique deltas → §7 / §2)
+1. **Source of truth** — the ledger (durable, authoritative; Trellis-shaped per `trellis-core.md` §10.1, §10.4, §23.2 item 5).
+2. **Working state** — workflow runtime state (ephemeral, in the chosen substrate; `DurableRuntime` adapter).
+3. **Read-side views** — projections (rebuildable, replaceable; per-deployment choice).
 
-| Subagent | Primary delta (where merged) |
-| -------- | ------------------------------ |
-| **`spec-expert`** | **§2.C** — removed erroneous **`trellis-core.md` §23.2.5** pin; replaced with **§23.2 + §15** + forward pointer to CASE-SYNTH-20 / this section. **CASE-SYNTH-24** addendum — **`definitionRef` vs `definitionUrl`** for Handoff vs Response. Normative vs advisory: tighten language so “MUST” strings track spec/kernel literals. **When a formal ADR is drafted:** do not reintroduce phantom **§23.2.5** citations—keep **§23.2 + §15** (and CASE-SYNTH-20 for registry). |
-| **`wos-expert`** | **CASE-SYNTH-03** — **§9.2.18** (`bindings[]`) vs **§9.2.22** (`outputBinding`); +1 line in register row. **ADR-0080** remains **Proposed** in-repo—treat governed-output claims as **draft-sensitive**. Kernel **`recordKind` / `case.created`** and **`contractRef`** discipline: any new case-scoped write paths must show up in provenance/OpenAPI/schema as coordinated edits, not prose-only. |
-| **`formspec-pm`** | **Sequencing:** Trellis **`wos.*` registry** (CASE-SYNTH-20) before new event types; then **manual `case.created`** path (CASE-SYNTH-04); then **TypeID / URN** (CASE-SYNTH-02); then **API/OpenAPI** (CASE-SYNTH-19 / 05–06). **Scope:** smallest shippable slice is **governed `case.created` + projection read model + one portal path**—avoid N+1 overlapping ADRs without a merge plan. **§7 severity:** consider promoting **OpenAPI↔server drift** (CASE-SYNTH-05) if it blocks the portal slice. |
-| **`formspec-service-designer`** | **Journeys:** manual case, intake→case, multi-process, appeal, crash mid-mutation, redaction—each needs explicit **trust boundary + recovery** story. **Merged:** CASE-SYNTH-12 addendum (stale read UX). Overlaps CASE-SYNTH-10, 13, 18, 19—no new CASE id. |
-| **`formspec-scout`** | **Formspec authority** is `formspec/` submodule + conformance engines—boundary work must land with **tests per submodule**, not stack prose alone. **Projection schema “home”** must be named (crate/package). **case-portal** will break on route/shape drift—ties to CASE-SYNTH-19. **Merged:** CASE-SYNTH-12 addendum (dual-write warning). |
-| **`senior-product-advisor`** | **GOAL competition:** boundary refactor vs time-boxed prod-MVP outcomes—show **CUT** list if no measurable delta. **Merged:** CASE-SYNTH-18 addendum (theater / acceptance). Overlaps CASE-SYNTH-04, 10, 20—captured as PM sequencing + existing CASE rows. |
-| **`ux-sage`** | **Reader friction:** glossary (**Case / CaseProcess / CaseInstance / projection**), one **diagram** (Trellis vs WOS vs projection), tone down “sixth seam” rhetoric where it reads as shipped truth. **CASE-SYNTH numbering** is dense—consider a one-page index for ADR drafters. **P2** UX—no new CASE-SYNTH unless ADR owners want a doc ticket. |
-| **`test-engineer`** | **Merged with +1 / addenda:** CASE-SYNTH-12 (red fixture, lag), **13** (falsifiability), **18** (hard gate: (a) or (b)), **19** (automated parity), **23** (tiers, anti-circular testing). **CASE-SYNTH-23** circularity called out explicitly. |
+The v1 three-headed "Trellis + WOS Case identity + Case projection" model collapses to **two layers** (durable ledger + derived view). Workflows are runtime executions, not architectural entities.
 
-### 8.2 Consensus themes (swarm-level)
+---
 
-1. **Do not ship “projection” without replay + failure tests** — extends R5 and CASE-SYNTH-23 (`test-engineer` sharpens tiers).  
-2. **Cite WOS kernel sections without conflating `bindings` vs `outputBinding`** (`wos-expert` / CASE-SYNTH-03).  
-3. **Trellis pins must match real clause labels** — §23.2.5 was a synthesis bug; **§2.C** here was corrected to **§23.2 + §15** (`spec-expert`).  
-4. **Phase 1 must prove boundary isolation**, not only happy-path 1:1 (`senior-product-advisor`, `test-engineer`, R5—now cross-linked in CASE-SYNTH-18).  
-5. **Cross-repo execution plan** (registry + schemas + server + portal + tests) is the gating risk (`formspec-pm`, `formspec-scout`).
+## 4. The event family (the entire domain model)
+
+Closed enum of canonical event types, all under the `wos.*` namespace (Trellis-reserved per `trellis-core.md` §23.4), all registered in the bound registry per §23.2 item 2 + §14.
+
+**Lifecycle events**
+- `case.created` — WOS-only emitter (preserves ADR-0073 D-1 ownership). Payload: tenant, class, optional `IntakeHandoff` reference, optional bound process ID.
+- `case.closed` — terminal-but-optional (cases may remain open indefinitely; closure is a state, not a requirement).
+- `case.status_changed` — application-defined status transitions, distinct from workflow process lifecycle.
+- `case.related_to` — relationship edge (`parent | child | sibling | related | supersedes` per current kernel §5.5 taxonomy; extensible via `x-`).
+
+**Process events** (workflow-runtime emissions)
+- `process.started`
+- `process.transitioned`
+- `process.completed` / `process.failed` / `process.suspended` / `process.resumed` / `process.terminated`
+
+**Domain-content events**
+- `note.added`
+- `artifact.attached` — wraps a Formspec response or external document; carries the four-field `CaseOpenPin` from ADR-0071 D-1 for replay-safe versioning.
+- `decision.recorded` — adjudicatory output; carries `verificationLevel` + signature affirmation reference.
+- `signature.affirmed` — surfaces existing WOS `SignatureAffirmation` semantics into the ledger event stream (no second meaning of "signed"; preserves work-spec/CLAUDE.md Signature-shortcut rule).
+
+**Extension events**
+- `x-<namespace>-<name>` — vendor extension per kernel §10.6; no registry binding required.
+
+Every WOS MUST that produces an audit event maps to exactly one of the above. `wos-provenance-log.schema.json` is the schema home; the existing `$defs/CaseCreatedRecord` (with `event const: "case.created"` at line 123) is the prototype for every sibling event type.
+
+---
+
+## 5. The minimum viable spine
+
+Five items. The entire refactor.
+
+1. **Event-schema family** — extend `wos-provenance-log.schema.json` with the closed event-type enum from §4. Existing `CaseCreatedRecord` is the prototype shape.
+2. **Trellis registry binding** — register each new `wos.*` event_type in the Trellis bound registry per §23.2 item 2 + §14 + §23.4. Phase-1 step-zero. Edits land in the Trellis repo.
+3. **Workflow runtime → ledger emission** — workflow processes use the existing `$defs/OutputBinding` (canonically pinned at kernel **§9.2.18 Overview**, `kernel/spec.md:1127–1129`: "Each binding is an `OutputBinding` entry … through the validated output-commit pipeline (ADR 0080)"). No schema change. No new `target` discriminator. Discipline-only.
+4. **Read-side API** — *architectural commitment:* one read path returning a derived view. *Implementation today:* two surfaces in `work-spec/api/wos-public-api.openapi.json` — staff `GET /api/v1/instances/{id}` (line 516) and applicant `GET /api/v1/applicant/cases/{id}` (line 4277). Both return a derived view of the same case ledger. Resource-naming convergence (rename staff route under `/cases/{id}`) is a follow-up per ADR 0082.
+5. **Per-class encryption (ADR-0074, Proposed)** — wraps event payloads. Already designed; no new work in this scope. Stack Case API posture cites ADR-0074 + deployment profile + ratification gate together.
+
+No Phase 1 / Phase 2 split. The whole thing is one slice.
+
+---
+
+## 6. What this supersedes / withdraws (boy-scout list)
+
+Every item below is **WITHDRAWN — superseded by this synthesis v2**. Most were artifacts of debugging a self-inflicted modeling problem.
+
+### v1 architectural decisions
+
+| Decision | Status | Why withdrawn |
+|----------|--------|---------------|
+| Two-TypeID model (`case_` for `CaseProcess`, `casefile_` for `Case`) | WITHDRAWN | Single `case_` identity. `WosResourceUrn` already encodes `case` as a family literal (`_common.schema.json:20`). |
+| `CaseProcess` as a renamed `CaseInstance` domain type | WITHDRAWN | Workflow processes are runtime constructs, not domain types. |
+| `target` discriminator on `$defs/OutputBinding` | WITHDRAWN | Event types ARE the write discriminator. No schema property needed. |
+| Kernel §5 process-scoped vs case-scoped `caseState` bifurcation | WITHDRAWN | `caseState` is a derived view; no bifurcation needed. |
+| `ADR-0073-bis` follow-up ADR for manual case creation | WITHDRAWN | Manual creation = direct API emission of `case.created`. Same operation. |
+| `ADR-0093` ("Case / Process Boundary," Proposed) | SUPERSEDED | Replaced by ADR 00YY (draft in §8). |
+| v1 §2 "Architectural Triad" (three-headed Trellis / WOS Case / Projection model) | WITHDRAWN | Collapsed to two-tier (ledger + derived view). |
+| v1 §5 "Phased Execution Plan (MVP vs. Post-MVP)" | WITHDRAWN | Refactor is small enough to land as one slice. |
+
+### v1 CASE-SYNTH register
+
+| Item | Old framing | Why withdrawn |
+|------|-------------|---------------|
+| CASE-SYNTH-01 | `$wosCaseInstance` → `$wosProcessInstance` rename debate | Marker becomes runtime-checkpoint metadata, not domain truth. Debate moot. |
+| CASE-SYNTH-02 | New `casefile_` / `matter_` TypeID prefix for `Case` | Single identity: `case_<ulid>`. |
+| CASE-SYNTH-04 | ADR-0073-bis for manual case creation | Single creation path with single event. |
+| CASE-SYNTH-07 | Preserve 35-edge-case matrix as Phase-1 failing fixtures | Most edges only existed because of dual-aggregate model. Re-derive only edges that survive collapse (process emission ordering, replay determinism). |
+| CASE-SYNTH-10 | "Case-as-projection vs WOS-centered domain model" alternatives | Both alternatives share the false premise. Both withdrawn. |
+| CASE-SYNTH-11 | Case ↔ Trellis-ledger cardinality | 1:1 by definition (the ledger IS the case). Not a decision. |
+| CASE-SYNTH-12 | Dual-state crash recovery for Case + CaseProcess | Projection has no authority. Crash → drop projection, replay. No new failure mode. |
+| CASE-SYNTH-13 | Enumerate "metadata only" Case projection fields | Projection schema is operational, per-deployment. |
+| CASE-SYNTH-14 | Phase 2 Case-projection schema evolution | Same — operational, not architectural. |
+| CASE-SYNTH-18 / 27 | 1:1 deployment profile vs ontology | A ledger may carry N concurrent processes. Not a profile choice. |
+| CASE-SYNTH-21 | Kernel §5 instance-scoped vs case-scoped bifurcation | `caseState` is a view; no bifurcation. |
+| CASE-SYNTH-22 | Phase 2 multi-process write-conflict policy | Standard append-log resolution. Not a new design problem. |
+| CASE-SYNTH-29 | Source-authority map for "schema version" pinning | Replaced by direct citation discipline (D-12 below). |
+
+### v1 reviewer findings (R1–R5 + 8-agent swarm)
+
+The convergent claim across all reviewers — *Case is not a second source of truth* — is **preserved**. Every recommendation that proceeded *as if* `Case` were a separate aggregate is **withdrawn**. The 10 findings from the 2026-05-11 revalidation pass were all corrections *to the broken aggregate model*; in this collapsed model, the equivalent claims become trivially true and need no remediation:
+
+| v1 FINDING | v2 status |
+|-----------|-----------|
+| 1 — Kernel §9.2.22 mis-cited as home of `$defs/OutputBinding` | Carried forward as D-5 (pin at §9.2.18). |
+| 2 — "Process-scoped" vs spec's "instance-scoped" | Reframed in D-4: kernel §5.1 *lifecycle vs case-state independence* is preserved; what v2 declines is a *second `caseState` aggregate boundary* (instance-scoped vs case-scoped). |
+| 3 — Four-field `CaseOpenPin` (not just `definitionUrl`/`definitionVersion`) | Carried forward as D-12. |
+| 4 — ADR-0074 status (Proposed, broader than Response) | Carried forward as D-10. |
+| 5 — `formspec-bucketing` false-positive | Stays withdrawn (was already a false alarm). |
+| 6 — `custodyHook` emission seam location | Moot: no separate Case aggregate to claim a struct emission point. |
+| 7 — Manual-creation seam narrower than admitted | Moot: no ADR-0073-bis. |
+| 8 — Dangling ADR-0077 references | Patched 2026-05-11; carried forward as D-14. |
+| 9 — Tasks-route framing | Carried forward as D-13. |
+| 10 — Trellis §15 framing ("watermark/rebuild" not "projection discipline") | Carried forward as D-1 supporting citations. |
+
+---
+
+## 7. Tradeoffs
+
+What we give up by collapsing:
+
+- **The "Case is a first-class typed domain object" mental model.** *Mitigation:* present `Case` *at the API surface* as a coherent JSON document (D-6) — today via the existing `instance.schema.json` view served at staff `GET /api/v1/instances/{id}` and applicant `GET /api/v1/applicant/cases/{id}` routes. Truth layer is the ledger; presentation layer is what callers see.
+- **Compile-time validation against a single "Case schema."** Replaced by per-event-type JSON Schema validation on payloads. Equivalent expressive power; events are inherently versioned via Trellis envelope versioning + ADR-0071 D-1 pins.
+- **A small risk** that some future requirement genuinely demands an aggregate boundary (e.g., distributed transactions across cases). Vanishingly unlikely in this domain (one case = one matter = one tenant scope); resolvable later by promoting a projection to authoritative iff proven necessary.
+
+What we get:
+
+- One concept, one identity, one write path, one read path.
+- ~⅔ of the v1 CASE-SYNTH register dissolves.
+- Both pending ADRs (0093 + 0073-bis) collapse to one short ADR.
+- No new failure modes (dual-state recovery, projection-lag-as-bug, write-conflict policy) to design.
+- Alignment with what the architecture *already* says (Trellis = canonical events; projections = derived views per `wos-server/VISION.md`).
+- **Pre-release window leveraged.** Per `work-spec/CLAUDE.md` and platform decision register: no backwards compatibility, nothing shipped. The cost of collapsing today is editing some specs and one ADR. The cost in 12 months is migrating fixtures, projections, downstream tools, partner integrations, customer data. **The asymmetry is the entire reason to do it now.**
+
+---
+
+## 8. Recommended ADR (replaces ADR-0093)
+
+Landed 2026-05-11 at [`work-spec/thoughts/adr/0093-case-is-its-trellis-ledger.md`](../adr/0093-case-is-its-trellis-ledger.md) (replaces the deleted `0093-case-process-boundary.md` of the same ADR number). The §8 sketch below is preserved here for traceability; the authored ADR is more thorough but architecturally identical.
+
+> ### ADR 0093 — A Case Is Its Trellis Ledger
+>
+> **Status:** Proposed (replaces the prior ADR-0093 of the same number, 2026-05-11).
+> **Date:** 2026-05-11
+> **Scope:** WOS — case identity, governed output, provenance event family.
+> **Related:** ADR-0070 D-1 (Trellis commit point); ADR-0071 D-1 (four-field `CaseOpenPin`); ADR-0073 D-1 (`case.created` ownership); ADR-0074 (per-class encryption, Proposed); ADR-0080 (governed output-commit pipeline, Proposed); kernel §10 six extension seams (archived ADR-0077, Implemented); Trellis Core §10.1, §10.4, §15, §23.2, §23.4.
+>
+> **Decision.** A case is the Trellis ledger scoped to one matter. Nothing more. The ledger ID is the case ID (`case_<ulid>`). All durable case state is encoded as typed events appended to this ledger. Workflows are runtime processes that bind to a ledger and emit events on it. Current case state is derived by event replay or by reading a denormalized projection (operational concern). There is no separate `Case` aggregate, no separate `CaseProcess` domain type, no second TypeID family, no projection-vs-canonical distinction at the type layer, and no kernel-§5 `caseState` bifurcation.
+>
+> **Event family.** Closed enum under `wos.*`: lifecycle (`case.created`, `case.closed`, `case.status_changed`, `case.related_to`), process (`process.{started,transitioned,completed,failed,suspended,resumed,terminated}`), domain content (`note.added`, `artifact.attached`, `decision.recorded`, `signature.affirmed`), vendor extension (`x-*-*`). All types except `x-*-*` MUST be registered in the Trellis bound registry per §23.2 item 2 + §14 + §23.4 before emission. Registry edits land in the Trellis repo.
+>
+> **Writes.** Workflow processes emit events via existing `$defs/OutputBinding` (canonically pinned at kernel **§9.2.18 Overview**). No new schema property. No `target` discriminator.
+>
+> **Reads.** Architectural commitment: one read path returning a derived view. Current implementation: staff `GET /api/v1/instances/{id}` (`work-spec/api/wos-public-api.openapi.json:516`) and applicant `GET /api/v1/applicant/cases/{id}` (line 4277). Both implement the same derivation contract — replay or projection per deployment, with projections in `wos-server/VISION.md`'s `projections` schema, plaintext-content-free. Resource-naming convergence (staff → `/cases/{id}`) is an ADR 0082 follow-up.
+>
+> **Pinning.** Every event payload that wraps a Formspec response (notably `artifact.attached` and `decision.recorded`) MUST carry the four-field `CaseOpenPin` from ADR-0071 D-1 (`formspec.definitionVersion`, `wos.$wosWorkflowVersion`, `trellis.envelopeVersion`, `trellis.conformanceClass`) plus the Formspec-axis details (`definitionUrl`+`definitionVersion` for Response, `definitionRef.url`+`definitionRef.version` for Intake Handoff).
+>
+> **Identity.** Single TypeID prefix: `case_`. `WosResourceUrn` already encodes `case` as a family literal (`work-spec/schemas/api/_common.schema.json:20`); no change.
+>
+> **Manual creation.** Direct API emission of `case.created` is equivalent to workflow-initiated emission. No follow-up ADR.
+>
+> **Supersedes.** The prior ADR-0093 (Proposed, 2026-05-10). Withdraws CASE-SYNTH-01, 02, 04, 07, 10, 11, 12, 13, 14, 18, 21, 22, 27, 29 from the v1 synthesis register.
+>
+> **Preserves.** ADR-0073 D-1; ADR-0070 D-1; ADR-0071 D-1; ADR-0074 (Proposed); ADR-0080 `$defs/OutputBinding` shape and §9.2.18 pin; kernel §10 six extension seams.
+
+---
+
+## 9. What changed from v1
+
+This document fully supersedes the v1 synthesis as it stood on 2026-05-11 (post-FINDING patches). The v1 history — R1–R5 reviewers, 8-agent swarm, 30+ CASE-SYNTH items, 10 revalidation findings, prior ADR-0093 — is preserved in git for archaeology. **No content from v1 is normative going forward.**
+
+Dependent-document follow-ups:
+
+- **Authored 2026-05-11:** [`work-spec/thoughts/adr/0093-case-is-its-trellis-ledger.md`](../adr/0093-case-is-its-trellis-ledger.md) (Proposed). Replaces the deleted `0093-case-process-boundary.md`.
+- **Drop** the ADR-0073-bis placeholder anywhere it appears in stack TODO / PLANNING / thoughts.
+- **Drop** the "Case projection schema" / new-TypeID-prefix / kernel-§5-bifurcation / `OutputBinding`-`target`-discriminator work items wherever they appear (PLANNING.md, TODO.md, work-spec/TODO.md).
+- **Preserve** ADR-0073 D-1, ADR-0070 D-1, ADR-0071 D-1, ADR-0074, ADR-0080, kernel §10 seams, archived ADR-0077 citation discipline (D-14).
+
+The v1 reviewer files remain on disk under `work-spec/thoughts/analysis/case-management-validation-*.md` as historical record. They are not cited normatively from v2.
+
+---
+
+## 10. Decisions log
+
+Every decision this synthesis makes, named, with rationale and what it replaces. Closed taxonomy.
+
+| # | Decision | Replaces | Rationale |
+|---|----------|----------|-----------|
+| **D-1** | **Case = Trellis ledger.** A case is its ledger; no separate aggregate, no second source of truth. Trellis authority pins: §10.1 (strict linear order per scope), §10.4 (no competing canonical orders), §23.2 item 5 (chain is authoritative order); projection authority: §15 (snapshot/watermark/rebuild) + §2.1 class 4 (Derived Processor) + Operational Companion §14.2 (No Second Canonical Truth). | v1 §2 "Architectural Triad" three-headed model; v1 CASE-SYNTH-10 alternatives debate. | The ledger is already authoritative for events, ordering, integrity, export. A second authority creates dual-state failure modes without serving any user story. |
+| **D-2** | **Single identity `case_<ulid>`** is both ledger ID and case ID. | v1 CASE-SYNTH-02 (`casefile_` new prefix proposal). | TypeID prefix proliferation served only the false aggregate boundary; `WosResourceUrn` already encodes `case` as a family literal. |
+| **D-3** | **Workflow processes are runtime constructs, not domain types.** No `CaseProcess` rename of `CaseInstance` at the domain layer. `$wosCaseInstance` (if it survives at all) is a runtime-checkpoint document, not a domain marker. | v1 §4.1 / CASE-SYNTH-01 marker-rename debate. | A process is what executes a workflow against a ledger; the ledger holds the durable record. |
+| **D-4** | **Closed typed-event family** under `wos.*` (lifecycle, process, content, extension). The event-type IS the write discriminator; no schema property captures it separately. The existing kernel §5.1 *lifecycle vs case-state independence* rule is **preserved**; what is declined is a second `caseState` aggregate boundary (instance-scoped vs case-scoped variants). | v1 §3.3 "governed output path" debate; v1 CASE-SYNTH-21 kernel §5 bifurcation (the instance-vs-case axis proposal); v1 proposed `target` discriminator on `OutputBinding`. | Event types are inherently discriminating, versionable, registry-bindable. Schema-level discriminators duplicate work the type system already does. Kernel §5.1's existing rule covers what needs covering. |
+| **D-5** | **One write path:** typed event append via `$defs/OutputBinding`, canonically pinned at kernel **§9.2.18 Overview** (`kernel/spec.md:1127–1129`). | v1 §3.3 mis-pin to kernel §9.2.22 (which is "Request-Response Bindings" type, not the `OutputBinding` $def). v1 FINDING 1. | `OutputBinding` already exists with `on, contractRef, projection, writeScope, mutationSource, verificationLevel`. No change needed; discipline only. |
+| **D-6** | **One read path (architectural commitment), two surfaces (today):** staff `GET /api/v1/instances/{id}` and applicant `GET /api/v1/applicant/cases/{id}` (`work-spec/api/wos-public-api.openapi.json:516, 4277`). Both implement the same derivation contract — event replay or denormalized projection per deployment. Projections are plaintext-content-free per `wos-server/VISION.md:98–101`. Resource-naming alignment (staff → `/cases/{id}`) is a follow-up per ADR 0082. | v1 CASE-SYNTH-13 (enumerate projection fields); CASE-SYNTH-14 (Phase 2 projection schema evolution). | Projection is operational, not architectural. Rebuilds from the ledger; schema evolution is a deployment concern. The "one path" claim is architectural — implementation may surface it through audience-specific routes. |
+| **D-7** | **Manual case creation is direct API emission of `case.created`.** Same operation as workflow-initiated; same event; same registry binding; same authority chain (ADR-0073 D-1 ownership preserved). | v1 CASE-SYNTH-04 (ADR-0073-bis follow-up). | One operation, one ADR (this synthesis's §8 ADR). |
+| **D-8** | **Multiple processes on one ledger.** A ledger accepts events from concurrent / sequential workflow processes. Conflicts resolve at the read-side (time-ordered events; last-writer-wins, or merge function, or FEL-guarded reject). | v1 CASE-SYNTH-18/27 (1:1 deployment-profile-vs-ontology); CASE-SYNTH-22 (Phase 2 write-conflict policy). | Standard append-log semantics. Not a new design problem. |
+| **D-9** | **Crash recovery: drop projection, replay ledger.** Projection lag is not a failure mode; projection has no authority. | v1 CASE-SYNTH-12 (dual-state crash recovery for Case + CaseProcess). | A non-authoritative view doesn't need crash semantics; it's rebuildable. |
+| **D-10** | **Per-class encryption on event payloads** per ADR-0074 (Proposed, Not started; normative authority). Deployment-profile context: `wos-server/VISION.md:78–82` (SBA-tier audited-decryption pattern) + `wos-server/VISION.md:98–105` (canonical/projections; clients-decrypt / servers-broker). Case API never flattens classified bodies into a top-level document. | v1 §3.2 "per-class encryption violation" framing. | Event payloads are exactly the bucketing unit ADR-0074 designs around. `GOAL.md:48` states the prod-MVP posture in general terms ("audited server-side decryption only; no Federal/Sovereign confidential-compute claim") and does **not** reference ADR-0074 by name — treat it as deployment-target context, not a normative pin. |
+| **D-11** | **Trellis registry binding is Phase-1 step-zero.** Every new `wos.*` event_type registered in the Trellis bound registry per §23.2 item 2 + §14 + §23.4 before emission. Edits land in the Trellis repo. | v1 CASE-SYNTH-20 (preserved unchanged). | Trellis owns event-type namespace. WOS depends; doesn't self-register. |
+| **D-12** | **Four-field `CaseOpenPin`** (ADR-0071 D-1) on every Formspec-wrapping event (`artifact.attached`, `decision.recorded`, etc.). Co-required: `formspec.definitionVersion`, `wos.$wosWorkflowVersion`, `trellis.envelopeVersion`, `trellis.conformanceClass`. Formspec axis carries `definitionUrl`+`definitionVersion` for Response (Formspec Core §6.4) or `definitionRef.url`+`definitionRef.version` for Intake Handoff (Formspec Core §2.1.6.1). | v1 CASE-SYNTH-24/29 ("Formspec versioning pinned to `definitionUrl`+`definitionVersion` alone"). v1 FINDING 3. | Replay correctness requires all four axes pinned; Formspec-only pin allows WOS/Trellis semantic drift. |
+| **D-13** | **API ↔ schema drift policy.** `instance.schema.json` and `provenance.schema.json` are contract authority per ADR 0082. Server registers `suspend`/`resume`/`terminate` (currently absent from `instances.rs`); server renames `/explain` → `/explanation` (schema canonical at `provenance.schema.json:630`). `/instances/{id}/tasks` does not exist on either side. 9-vs-6 lifecycle enum: pick truth; document the projection rule. | v1 CASE-SYNTH-05/06/19. v1 FINDING 9. | Schema is authority; server follows. Drift items are routing changes, not new design. |
+| **D-14** | **Archive citation discipline.** Archived ADR-0077 ("Canonical kernel extension seams," status Implemented) is cited as `formspec/thoughts/archive/adr/0077-*` with canon location pointing at kernel §10 + `work-spec/CLAUDE.md` heuristic 3. No stack-level `thoughts/adr/0077-*` file exists. Same pattern for any future-archived ADR. | v1 FINDING 8. Dangling references patched 2026-05-11 in `work-spec/CLAUDE.md`, `thoughts/adr/0076`, `0078`, `0080`. | Citation rot is itself a category of inherited bug; this is the standing fix pattern. |
+| **D-15** | **Six kernel extension seams remain the only extension surface.** `actorExtension`, `contractHook`, `provenanceLayer`, `lifecycleHook`, `custodyHook`, `extensions`/`x-`. We do not invent a seventh. | v1 §3.3 "governed output path seam" concern that the original consultant proposal would have sprawled new seams. | Already canonical (kernel §10; CLAUDE.md heuristic 3; archived ADR-0077). Preserved unchanged. |
+| **D-16** | **One slice, no phasing.** The five-item spine in §5 is the entire scope of the boundary refactor. | v1 §5 "Phased Execution Plan (MVP vs. Post-MVP)". | The collapsed model is small enough; phasing was an artifact of the over-engineered v1 design. |
+
+**Preserved upstream commitments (re-stated for clarity, not new decisions):**
+
+- ADR-0073 D-1 — WOS is the only emitter of `case.created`.
+- ADR-0070 D-1 — Trellis is the commit point.
+- ADR-0071 D-1 — four-field `CaseOpenPin` is the cross-layer replay anchor.
+- ADR-0074 — per-class encryption (Proposed; ratification is a release gate for D-10).
+- ADR-0080 — governed output-commit pipeline; `$defs/OutputBinding` is unchanged.
+- Kernel §10 — six extension seams; `custodyHook` is the Trellis attachment.
+- Trellis byte authority — ADR 0004 (Rust > CDDL §28 > prose > matrix > Python > archives).
+
+**Open follow-ups (not blocking the ADR):**
+
+1. ~~Rewrite `work-spec/thoughts/adr/0093-case-process-boundary.md` with the §8 text.~~ **Done 2026-05-11:** authored fresh at [`work-spec/thoughts/adr/0093-case-is-its-trellis-ledger.md`](../adr/0093-case-is-its-trellis-ledger.md); predecessor file deleted.
+2. Re-derive any `formspec/`, `case-portal/`, `policy-studio/` work items that referenced the v1 dual-aggregate model.
+3. Add a one-page `Case` ledger event-schema specification under `work-spec/specs/` (or extend the existing provenance spec) enumerating the §4 event family with payload schemas.
+4. Coordinate the Trellis-side PR registering the new `wos.*` event types (D-11).

@@ -98,9 +98,13 @@ A closed enum under the `wos.*` namespace, registered in the Trellis bound regis
 
 **Event-type naming convention (F-13).** All `wos.*` event types follow `custody-hook-encoding.md` §1.5 normative form: `wos.<layer>.<record_kind>` snake_case, where layer ∈ {`kernel`, `governance`, `ai`, `assurance`}. The convention is set in [plan §11 F-13] ([`../../../thoughts/plans/2026-05-09-signature-wire-convergence-plan.md`](../../../thoughts/plans/2026-05-09-signature-wire-convergence-plan.md)) and applies in lockstep across the Trellis registry constants (`trellis/crates/trellis-verify-wos/src/event_types.rs`) and the WOS schema (`wos-provenance-log.schema.json`). The earlier 5-axis attempt (`{lifecycle, process, content, signature, extension}`) was rejected as a normative wire-format change without ADR — layer = WOS spec layer that owns the semantics (architectural anchor), not a concept/functional axis. This supersedes both the bare-flat pattern (`case.created`) the schema currently uses and the Trellis registry's existing dotted-camel pattern (`wos.kernel.caseCreated`). The schema home for WOS-side records is [`wos-provenance-log.schema.json`](../../schemas/wos-provenance-log.schema.json); the existing `$defs/CaseCreatedRecord` is the prototype shape (its `event const` literal rebinds to `wos.kernel.case_created` under F-13).
 
-**Authoritative dispatch (D26).** The outer `event_type` (in the COSE protected header per plan F-13 + D2) is the authoritative dispatch discriminator. The inner `recordKind` field currently present in `trellis-verify-wos/src/records.rs` payload validation is redundant tautology — the parser literally validates inner against outer. The inner `recordKind` field is deprecated from the wire as part of this ADR's schema rewrite (§5.6) alongside D8; the fixture corpus regenerates atomically.
+**Authoritative dispatch (D26).** Two discriminators, two scopes:
+- **`profile_id`** — COSE protected-header integer label per plan O-2. Cross-profile dispatch. Selects which profile plugin (Trellis profile / Workflow profile / Formspec profile) handles the event.
+- **`event_type`** — CBOR payload map field per plan F-13 (`wos.<layer>.<record_kind>` form). Intra-profile dispatch. Selects which validator within the profile handles the event.
 
-**Extension events.** `wos.extension.<vendor>_<name>` is preserved as-is in this ADR pending a follow-up ADR that explicitly extends `custody-hook-encoding.md §1.5` to admit `extension` as a 5th layer (or routes vendor events as `wos.<layer>.x_<vendor>_<name>` per layer). Kernel §10.6 `x-`-prefixed keys remain the syntactic seam for extension presence.
+Both are authoritative within their scopes. The redundant inner `recordKind` field (currently in `trellis-verify-wos/src/records.rs:310-313` as a tautological re-check of `event_type`) is deprecated alongside D8.
+
+**Extension events.** Vendor extension events take the form `wos.<layer>.x_<vendor>_<name>` — placed within an existing closed layer (kernel/governance/ai/assurance), with the `x_` prefix marking vendor-extended. The `custody-hook-encoding.md §1.5` closed-layer rule is preserved. The earlier `wos.extension.*` form is rejected. Kernel §10.6 `x-`-prefixed keys remain the syntactic seam for extension presence.
 
 Every event payload carries `caseLedgerId` (REQUIRED). Workflow-emitted events additionally carry `processId` (REQUIRED for `wos.kernel.process_*` runtime events, `wos.governance.decision_recorded` when emitted by a workflow, and any other workflow-attributed event; absent for direct-append events such as ad-hoc `wos.kernel.note_added` emitted via §2.5).
 
@@ -108,10 +112,10 @@ Every event payload carries `caseLedgerId` (REQUIRED). Workflow-emitted events a
 
 | Event type | Emitter | Notes |
 |------------|---------|-------|
-| `wos.kernel.case_created` | WOS only (ADR-0073 D-1). Either workflow-initiated (via `IntakeHandoff` or `wos.kernel.process_started`) or direct via §2.5. | Opens a new ledger. Payload: tenant, class, optional `IntakeHandoff` reference, optional bound first-process ID. Kernel: case identity §5. |
+| `wos.kernel.case_created` | WOS only (ADR-0073 D-1). Either workflow-initiated (via `IntakeHandoff` or `wos.kernel.process_started`) or direct via §2.5. | Opens a new ledger. Payload: tenant, class, optional `IntakeHandoff` reference, optional bound first-process ID. Kernel: case identity §5. When `IntakeHandoff` is present in `workflowInitiated` mode, the handoff MUST include a non-null `caseRef` per `intake-handoff.schema.json` allOf condition. In `publicIntake` mode, `caseRef` is absent. |
 | `wos.kernel.case_closed` | WOS | Terminal-but-optional. Closure is a state, not a requirement. Kernel: case lifecycle. |
 | `wos.kernel.case_status_changed` | WOS | Application-defined status transitions, distinct from process lifecycle. Kernel: case state. |
-| `wos.kernel.case_related_to` | WOS | Relationship edge using kernel §5.5 taxonomy (`parent \| child \| sibling \| related \| supersedes`); extensible via `wos.extension.*`. |
+| `wos.kernel.case_related_to` | WOS | Relationship edge using kernel §5.5 taxonomy (`parent \| child \| sibling \| related \| supersedes`); extensible via `wos.<layer>.x_<vendor>_<name>`. |
 | `wos.kernel.process_started` | Workflow runtime | A workflow process binds to this ledger. Payload: `process_id`, workflow definition URL+version, initial state, four-field `CaseOpenPin`. Kernel: runtime instance. Carries `processId`. |
 | `wos.kernel.process_transitioned` | Workflow runtime | Lifecycle state change within a process. Carries `processId`. |
 | `wos.kernel.process_completed` / `process_failed` / `process_suspended` / `process_resumed` / `process_terminated` | Workflow runtime | Terminal-or-pause states of an individual process. The case ledger continues regardless. Carry `processId`. |
@@ -129,7 +133,7 @@ Every event payload carries `caseLedgerId` (REQUIRED). Workflow-emitted events a
 
 | Event type | Emitter | Notes |
 |------------|---------|-------|
-| `wos.extension.<vendor>_<name>` | Vendor | Preserved pending follow-up ADR (see §2.3 prose). Per-extension payload schema. Kernel §10.6 `x-`-prefixed keys remain the syntactic seam for extension presence; F-13 governs the event-type registry name. |
+| `wos.<layer>.x_<vendor>_<name>` | Vendor (within existing layer) | Place vendor extension events within an existing closed layer; the `x_` prefix marks vendor-extended. Examples: `wos.kernel.x_acme_correlation_added`, `wos.governance.x_thirdparty_witness_attested`. The closed-layer rule from `custody-hook-encoding.md §1.5` is preserved. The earlier `wos.extension.*` form is rejected. |
 
 Every WOS MUST that produces an audit event maps to exactly one of the above. The list is closed; growth requires an ADR that adds a row.
 
@@ -237,6 +241,8 @@ Workflow processes are managed via dedicated routes scoped to a case:
 | `GET /api/v1/cases/{case_id}/processes/{process_id}/explanation` | Assembled provenance explanation (replaces today's `/instances/{id}/explain` per ADR 0082 schema authority; see §5.4). |
 
 Suspend / resume / terminate are currently absent from `workspec-server/crates/wos-server/src/http/instances.rs` (route absence noted in synthesis D-13); this ADR delivers them under the new case-scoped, process-scoped surface.
+
+**Route invariant (case_id ⇄ process_id cross-check).** Any route bearing both `{case_id}` and `{process_id}` path params MUST verify that the loaded process's `case_ledger_id` equals the `{case_id}` path parameter. Mismatch returns 404 (case-process binding violation). Without this check, events emitted under a wrong-case URL prefix can leak into adjacent case ledgers via process_id-keyed runtime routing. This applies to `POST .../events`, `POST .../drain`, `POST .../suspend`/`/resume`/`/terminate`, `GET .../explanation`, and any future route with both path params.
 
 ### 2.9 Multiple concurrent workflows on one ledger
 
@@ -465,6 +471,7 @@ This ADR is verified-as-implemented when every claim below passes:
 | V-13 | Suspend / resume / terminate routes are present and functional under the new case-scoped, process-scoped paths. | Route existence + integration test. |
 | V-14 | The `/explanation` endpoint is consistent under the new `/cases/{case_id}/processes/{process_id}/explanation` route across OpenAPI + server + provenance schema. | Schema + server parity test. |
 | V-15 | The direct-append handler dispatches the authorization branch by event type *before* invoking the relationship resolver; pre-ledger creation cannot reach the relationship resolver, and post-ledger events cannot reach the create-permission resolver. | `direct-append-auth-split` fixture; static analysis of handler control flow. |
+| V-16 | Route invariant: an event submitted to `/cases/case_A/processes/process_belonging_to_case_B/events` is rejected with 404; the receiver of process B's case ledger does not see the event. | `process-case-mismatch-rejection` fixture. |
 
 Three-way agreement (spec ↔ in-memory runtime ↔ Restate production adapter) is the verification posture per [`work-spec/CLAUDE.md`](../../CLAUDE.md).
 

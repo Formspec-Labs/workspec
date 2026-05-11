@@ -62,7 +62,7 @@ Single top-level version marker: `$wosWorkflow`. Stream identity (governance, ag
 
 Specs do not physically merge: `kernel/spec.md`, `governance/spec.md`, `ai/ai-integration.md`, `advanced/spec.md` stay as separate documents with existing §-numbering preserved (citations like "Kernel §10.3" remain valid). Only the schema references inside each spec update to `wos-workflow.schema.json`.
 
-Six canonical kernel seams remain the only extension surface (ADR 0077): `actorExtension`, `contractHook`, `provenanceLayer`, `lifecycleHook`, `custodyHook`, `extensions` / `x-` keys. Inlining governance, agents, signature, and advanced into the core schema does not alter how higher-layer concerns attach.
+Six canonical kernel seams remain the only extension surface (Kernel §10; canon also reproduced in [Decision heuristics §3](#decision-heuristics) below; archived [`formspec/thoughts/archive/adr/0077-canonical-kernel-extension-seams.md`](../formspec/thoughts/archive/adr/0077-canonical-kernel-extension-seams.md), status **Implemented**, retained for historical context — do not cite as a stack-level ADR since it is not present at `thoughts/adr/0077-*`): `actorExtension`, `contractHook`, `provenanceLayer`, `lifecycleHook`, `custodyHook`, `extensions` / `x-` keys. Inlining governance, agents, signature, and advanced into the core schema does not alter how higher-layer concerns attach.
 
 ## Decision heuristics
 
