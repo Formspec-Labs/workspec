@@ -242,7 +242,7 @@ fn runtime_formspec_intake_workflow_attach_uses_case_ledger_identity() {
     .with_intake_acceptors(intake);
 
     let created = runtime
-        .create_instance_bound_to_case(
+        .create_process_bound_to_case(
             CreateInstanceRequest {
                 process_id: TEST_PROCESS_ID.to_string(),
                 tenant: None,
@@ -252,7 +252,7 @@ fn runtime_formspec_intake_workflow_attach_uses_case_ledger_identity() {
             },
             TEST_CASE_LEDGER_ID.to_string(),
         )
-        .expect("create_instance");
+        .expect("create_process");
 
     let decision = runtime
         .accept_intake_handoff(
@@ -350,7 +350,7 @@ fn runtime_formspec_intake_public_create_uses_governed_case_ref() {
     assert_eq!(canonical, TEST_CASE_LEDGER_ID);
 
     let by_case = runtime
-        .load_instance(&canonical)
+        .load_process(&canonical)
         .expect("load by governed_case_ref");
     assert_eq!(by_case.case_ledger_id, canonical);
     assert_ne!(by_case.process_id, by_case.case_ledger_id);

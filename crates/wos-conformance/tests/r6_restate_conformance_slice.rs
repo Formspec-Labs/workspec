@@ -76,11 +76,11 @@ async fn r6_memory_parity_signature_start_drain_matches_reference_runtime() {
 
     let shared = SharedInMemoryStore(Arc::new(Mutex::new(InMemoryStore::new())));
     let mut rt = restate_signature_fixture_runtime(shared.clone());
-    rt.create_instance(req.clone()).expect("reference create");
+    rt.create_process(req.clone()).expect("reference create");
     rt.enqueue_event(&process_id, start_pending())
         .expect("reference enqueue");
     rt.drain_until_idle(&process_id).expect("reference drain");
-    let ref_inst = rt.load_instance(&process_id).expect("reference load");
+    let ref_inst = rt.load_process(&process_id).expect("reference load");
 
     let adapter = RestateRuntimeAdapter::new();
     adapter.create_instance(req).await.expect("adapter create");
@@ -130,13 +130,13 @@ async fn r6_c1_full_drain_result_shape_parity() {
 
     let shared = SharedInMemoryStore(Arc::new(Mutex::new(InMemoryStore::new())));
     let mut rt = restate_signature_fixture_runtime(shared.clone());
-    rt.create_instance(req.clone()).expect("reference create");
+    rt.create_process(req.clone()).expect("reference create");
     rt.enqueue_event(&process_id, start_pending())
         .expect("reference enqueue");
     let ref_steps = rt
         .drain_until_idle(&process_id)
         .expect("reference drain_until_idle");
-    let ref_inst = rt.load_instance(&process_id).expect("reference load");
+    let ref_inst = rt.load_process(&process_id).expect("reference load");
 
     let adapter = RestateRuntimeAdapter::new();
     adapter.create_instance(req).await.expect("adapter create");

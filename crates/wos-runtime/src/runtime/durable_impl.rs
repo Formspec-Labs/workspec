@@ -20,15 +20,15 @@ use super::{
 };
 
 impl DurableRuntime for WosRuntime {
-    fn create_instance(
+    fn create_process(
         &mut self,
         request: CreateInstanceRequest,
     ) -> Result<WorkflowProcess, RuntimeError> {
-        WosRuntime::create_instance(self, request)
+        WosRuntime::create_process(self, request)
     }
 
-    fn load_instance(&self, process_id: &str) -> Result<WorkflowProcess, RuntimeError> {
-        WosRuntime::load_instance(self, process_id)
+    fn load_process(&self, process_id: &str) -> Result<WorkflowProcess, RuntimeError> {
+        WosRuntime::load_process(self, process_id)
     }
 
     fn enqueue_event(&mut self, process_id: &str, event: PendingEvent) -> Result<(), RuntimeError> {

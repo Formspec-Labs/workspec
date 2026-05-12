@@ -21,21 +21,21 @@ use crate::runtime::{
 /// spec-facing command surface without committing callers to the current
 /// in-memory `WosRuntime` implementation.
 pub trait DurableRuntime {
-    /// Creates and persists a new workflow instance.
+    /// Creates and persists a new workflow process.
     ///
     /// # Errors
-    /// Returns an error when instance creation, kernel resolution, evaluation,
+    /// Returns an error when process creation, kernel resolution, evaluation,
     /// or persistence fails.
-    fn create_instance(
+    fn create_process(
         &mut self,
         request: CreateInstanceRequest,
     ) -> Result<WorkflowProcess, RuntimeError>;
 
-    /// Loads the canonical instance state.
+    /// Loads the canonical workflow process state.
     ///
     /// # Errors
-    /// Returns an error when the instance cannot be found or loaded.
-    fn load_instance(&self, process_id: &str) -> Result<WorkflowProcess, RuntimeError>;
+    /// Returns an error when the process cannot be found or loaded.
+    fn load_process(&self, process_id: &str) -> Result<WorkflowProcess, RuntimeError>;
 
     /// Appends an event to the durable queue.
     ///

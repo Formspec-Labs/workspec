@@ -351,7 +351,7 @@ impl WorkflowEngine {
         fixture: &ConformanceFixture,
     ) -> Result<crate::ConformanceResult, ConformanceError> {
         self.runtime
-            .create_instance(CreateInstanceRequest {
+            .create_process(CreateInstanceRequest {
                 process_id: CONFORMANCE_INSTANCE_ID.to_string(),
                 tenant: None,
                 definition_url: self.definition_url.clone(),
@@ -570,7 +570,7 @@ impl WorkflowEngine {
 
         let instance = self
             .runtime
-            .load_instance(CONFORMANCE_INSTANCE_ID)
+            .load_process(CONFORMANCE_INSTANCE_ID)
             .map_err(|error| ConformanceError::Engine(error.to_string()))?;
         let task = instance
             .active_tasks
@@ -646,7 +646,7 @@ impl WorkflowEngine {
 
         let before_instance = self
             .runtime
-            .load_instance(CONFORMANCE_INSTANCE_ID)
+            .load_process(CONFORMANCE_INSTANCE_ID)
             .map_err(|error| ConformanceError::Engine(error.to_string()))?;
         let previous_definition_version = before_instance.definition_version.clone();
         let provenance_before = self.load_runtime_provenance_window(0, usize::MAX)?.len();
@@ -665,7 +665,7 @@ impl WorkflowEngine {
             Err(RuntimeError::MigrationRejected(message)) => {
                 let after_instance = self
                     .runtime
-                    .load_instance(CONFORMANCE_INSTANCE_ID)
+                    .load_process(CONFORMANCE_INSTANCE_ID)
                     .map_err(|error| ConformanceError::Engine(error.to_string()))?;
                 if after_instance.definition_version != previous_definition_version {
                     return Err(ConformanceError::Engine(format!(
@@ -710,7 +710,7 @@ impl WorkflowEngine {
 
         let after_instance = self
             .runtime
-            .load_instance(CONFORMANCE_INSTANCE_ID)
+            .load_process(CONFORMANCE_INSTANCE_ID)
             .map_err(|error| ConformanceError::Engine(error.to_string()))?;
         if after_instance.definition_version != migration.target_definition_version {
             return Err(ConformanceError::Engine(format!(

@@ -197,7 +197,7 @@ impl WosRuntime {
                             existing.instance
                         }
                         Err(RuntimeError::Store(StoreError::NotFound(_))) => self
-                            .create_instance_bound_to_case(
+                            .create_process_bound_to_case(
                                 CreateInstanceRequest {
                                     process_id: String::new(),
                                     tenant: None,

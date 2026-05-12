@@ -168,6 +168,14 @@ pub trait RuntimeStore {
         Err(StoreError::NotFound(case_ledger_id.to_string()))
     }
 
+    /// Return the `process_id`s of every record bound to `case_ledger_id`.
+    ///
+    /// Empty vector when no records match. Default implementation returns
+    /// empty; in-memory and storage-backed adapters override.
+    fn processes_for_case(&self, _case_ledger_id: &str) -> Vec<String> {
+        Vec::new()
+    }
+
     /// Atomically replace an instance record.
     fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError>;
 
@@ -226,6 +234,14 @@ impl RuntimeStore for InMemoryStore {
             .find(|record| record.instance.case_ledger_id == case_ledger_id)
             .cloned()
             .ok_or_else(|| StoreError::NotFound(case_ledger_id.to_string()))
+    }
+
+    fn processes_for_case(&self, case_ledger_id: &str) -> Vec<String> {
+        self.records
+            .values()
+            .filter(|record| record.instance.case_ledger_id == case_ledger_id)
+            .map(|record| record.instance.process_id.clone())
+            .collect()
     }
 
     fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {

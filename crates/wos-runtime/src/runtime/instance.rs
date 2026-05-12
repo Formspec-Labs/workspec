@@ -119,27 +119,27 @@ impl WosRuntime {
     /// # Errors
     /// Returns an error when kernel resolution, evaluation, task staging, or
     /// persistence fails.
-    pub fn create_instance(
+    pub fn create_process(
         &mut self,
         request: CreateInstanceRequest,
     ) -> Result<WorkflowProcess, RuntimeError> {
-        self.create_instance_inner(request, None)
+        self.create_process_inner(request, None)
     }
 
     /// Create and persist a new workflow process bound to an existing case ledger.
     ///
     /// # Errors
     /// Returns an error when the case ledger id is invalid, its tenant disagrees
-    /// with the process id, or normal instance creation fails.
-    pub fn create_instance_bound_to_case(
+    /// with the process id, or normal process creation fails.
+    pub fn create_process_bound_to_case(
         &mut self,
         request: CreateInstanceRequest,
         case_ledger_id: String,
     ) -> Result<WorkflowProcess, RuntimeError> {
-        self.create_instance_inner(request, Some(case_ledger_id))
+        self.create_process_inner(request, Some(case_ledger_id))
     }
 
-    fn create_instance_inner(
+    fn create_process_inner(
         &mut self,
         request: CreateInstanceRequest,
         bound_case_ledger_id: Option<String>,
@@ -319,11 +319,23 @@ impl WosRuntime {
     /// Load the canonical workflow process state.
     ///
     /// # Errors
-    /// Returns an error when the instance cannot be found or loaded.
-    pub fn load_instance(&self, process_id: &str) -> Result<WorkflowProcess, RuntimeError> {
+    /// Returns an error when the process cannot be found or loaded.
+    pub fn load_process(&self, process_id: &str) -> Result<WorkflowProcess, RuntimeError> {
         Ok(self
             .load_record_by_process_or_case_ref(process_id)?
             .instance)
+    }
+
+    /// Return the `process_id` of every workflow process bound to the given
+    /// case ledger.
+    ///
+    /// In-memory N:1 traversal — iterates the runtime's store and filters
+    /// by `case_ledger_id`. Returns an empty vector when no processes are
+    /// bound (including when the case ledger does not exist). Order is
+    /// insertion order in the in-memory adapter; callers MUST NOT depend on
+    /// ordering.
+    pub fn processes_for_case(&self, case_ledger_id: &str) -> Vec<String> {
+        self.store.processes_for_case(case_ledger_id)
     }
 
     pub(super) fn load_record_by_process_or_case_ref(
