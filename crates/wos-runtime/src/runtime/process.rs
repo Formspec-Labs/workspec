@@ -1,11 +1,14 @@
 // Rust guideline compliant 2026-02-21
 
-//! Instance lifecycle commands for the reference runtime.
+//! Workflow process lifecycle commands for the reference runtime.
 //!
 //! This module owns the durable command methods that create, load, enqueue,
-//! and expose append windows for workflow processes. The methods still operate on
-//! `WosRuntime`, but keeping them separate from the type declarations makes the
-//! adapter boundary easier to audit.
+//! and expose append windows for workflow processes. The methods still operate
+//! on `WosRuntime`, but keeping them separate from the type declarations makes
+//! the adapter boundary easier to audit. Every persisted `RuntimeRecord` carries
+//! `case_ledger_id` via its inner `WorkflowProcess`; the runtime keys command
+//! input on `process_id` while the storage row binds the durable case-ledger
+//! foreign key — see case-boundary report §4.3 and ADR-0093 §5.
 
 use wos_core::eval::{Evaluator, validate_migration_configuration};
 use wos_core::instance::{InstanceStatus, PendingEvent, WorkflowProcess};

@@ -5,8 +5,8 @@
 mod actions;
 mod drain;
 mod durable_impl;
-mod instance;
 mod intake;
+mod process;
 mod provenance;
 mod signature;
 mod support;
