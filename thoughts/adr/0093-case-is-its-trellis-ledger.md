@@ -71,6 +71,8 @@ A case is the Trellis ledger scoped to one matter. All durable case state is enc
 
 There is no separate `Case` aggregate. There is no projection-vs-canonical distinction at the type layer. There is no second `caseState` aggregate boundary. Kernel §5.1's existing rule — *lifecycle state and case state are independent* — is preserved; what this ADR declines to add is a second `caseState` axis (instance-scoped vs case-scoped variants) on top of it.
 
+**Case-ledger composition (Phase 1 vs Phase 3).** The seed deployment emits Phase-1 Trellis event bytes scoped under the case ledger; ADR-0093's closed `wos.*` enum (§2.3) closes the `wos.*` namespace inside this ledger, **not** the whole case-ledger composition surface. Phase-3 case-ledger composition (per `trellis-core.md` §1.2, sealed response-ledger heads composed with WOS governance events) is a **strict superset** of what this ADR enumerates: `trellis.response-head` and other Trellis-owned admission events coexist with `wos.*` events on the same ledger. Closing the WOS namespace does not foreclose Trellis-owned admission, nor does it require ADR-0093 to enumerate Trellis-side event types — they remain owned by their respective Trellis specs.
+
 ### 2.2 Identity: two URN families
 
 Two first-class identifiers, with distinct purposes and lifetimes:
@@ -88,7 +90,8 @@ A workflow process is bound to a case ledger at `wos.kernel.process_started` tim
 - A new `mint_process_id()` returns `process_<ulid>` for workflow instances.
 - The `CaseInstance` struct in [`work-spec/crates/wos-core/src/instance.rs`](../../crates/wos-core/src/instance.rs) is renamed `WorkflowProcess`; its `instance_id` field becomes `process_id`; it gains a `case_ledger_id` foreign-key field bound at process start.
 - The `$wosCaseInstance` schema marker becomes `$wosProcess` ([`work-spec/schemas/wos-case-instance.schema.json`](../../schemas/wos-case-instance.schema.json) renamed to `wos-process.schema.json`).
-- [`work-spec/schemas/api/_common.schema.json`](../../schemas/api/_common.schema.json:20) `WosResourceUrn.pattern` adds `process` as a family literal alongside the existing `case`, `prov`, `gov`, `ai`, `assurance`, and `x-<vendor>-<name>`.
+- [`work-spec/schemas/api/_common.schema.json`](../../schemas/api/_common.schema.json) `WosResourceUrn.pattern` adds `process` as a family literal alongside the existing `case`, `prov`, `gov`, `ai`, `assurance`, and `x-<vendor>-<name>`.
+- **Family-registry alignment (broader than the URN schema file alone).** Custody-hook **§1.4** reserved-prefix family registry adds `process`; **wos-core typeid helpers** (`work-spec/crates/wos-core/src/typeid.rs`) add `PROCESS_PREFIX = "process"`, `mint_process_id()`, `is_process_id()`, `parse_process_id()`. The URN schema, the family registry, and the typeid helpers move in lockstep — any one of them in isolation produces split admission.
 
 The pre-release context absorbs the fixture-and-test rewrites that follow; no customer data exists to migrate.
 
@@ -96,13 +99,21 @@ The pre-release context absorbs the fixture-and-test rewrites that follow; no cu
 
 A closed enum under the `wos.*` namespace, registered in the Trellis bound registry per `trellis-core.md` **§23.2 item 2** + **§14** (namespace rules in **§23.4**; registration-precedes-emission discipline in **§14.5** *Registry migration discipline*).
 
-**Event-type naming convention (F-13).** All `wos.*` event types follow `custody-hook-encoding.md` §1.5 normative form: `wos.<layer>.<record_kind>` snake_case, where layer ∈ {`kernel`, `governance`, `ai`, `assurance`}. The convention is set in [plan §11 F-13] ([`../../../thoughts/plans/2026-05-09-signature-wire-convergence-plan.md`](../../../thoughts/plans/2026-05-09-signature-wire-convergence-plan.md)) and applies in lockstep across the Trellis registry constants (`trellis/crates/trellis-verify-wos/src/event_types.rs`) and the WOS schema (`wos-provenance-log.schema.json`). The earlier 5-axis attempt (`{lifecycle, process, content, signature, extension}`) was rejected as a normative wire-format change without ADR — layer = WOS spec layer that owns the semantics (architectural anchor), not a concept/functional axis. This supersedes both the bare-flat pattern (`case.created`) the schema currently uses and the Trellis registry's existing dotted-camel pattern (`wos.kernel.caseCreated`). The schema home for WOS-side records is [`wos-provenance-log.schema.json`](../../schemas/wos-provenance-log.schema.json); the existing `$defs/CaseCreatedRecord` is the prototype shape (its `event const` literal rebinds to `wos.kernel.case_created` under F-13).
+**Event-type naming convention (F-13 — coordinated amendment, not verbatim adoption).** Target form: `wos.<layer>.<record_kind>` snake_case, layer ∈ {`kernel`, `governance`, `ai`, `assurance`}. The convention is set in [plan §11 F-13] ([`../../../thoughts/plans/2026-05-09-signature-wire-convergence-plan.md`](../../../thoughts/plans/2026-05-09-signature-wire-convergence-plan.md)).
 
-**Authoritative dispatch (D26).** Two discriminators, two scopes:
-- **`profile_id`** — COSE protected-header integer label per plan O-2. Cross-profile dispatch. Selects which profile plugin (Trellis profile / Workflow profile / Formspec profile) handles the event.
+Live sources currently carry three different forms simultaneously: (i) `wos.<layer>.<recordKind>` camelCase in `custody-hook-encoding.md §1.5` prose; (ii) dotted-camel Trellis constants in `trellis/crates/trellis-verify-wos/src/event_types.rs` (e.g. `"wos.kernel.caseCreated"`); (iii) bare-flat WOS schema literals (`"case.created"`). F-13 **amends** `custody-hook-encoding.md §1.5` (snake_case spelling), **renames** the Trellis registry constants, and **rewrites** the WOS schema literals in a single coordinated cross-repo change train (see §5.9). Earlier framings that described F-13 as "adopting §1.5 verbatim" misrepresent both the work and §1.5 prose at HEAD. The closed layer set {`kernel`, `governance`, `ai`, `assurance`} is preserved — that part is the shipped invariant; the snake_case spelling is the corrective.
+
+The earlier 5-axis attempt (`{lifecycle, process, content, signature, extension}`) was rejected as a normative wire-format change without ADR — layer = WOS spec layer that owns the semantics (architectural anchor), not a concept/functional axis. The schema home for WOS-side records is [`wos-provenance-log.schema.json`](../../schemas/wos-provenance-log.schema.json); the existing `$defs/CaseCreatedRecord` is the prototype shape (its `event const` literal rebinds to `wos.kernel.case_created` under F-13).
+
+**Identity-layer collision resolution.** Trellis currently pins `wos.identity.identityAttestation` at `trellis-core.md §23.4:2441` and at `trellis-verify-wos/src/event_types.rs:13`. The F-13 closed layer set has no `identity` layer. Take the amendment path: rename to `wos.assurance.identity_attestation` in lockstep across `trellis-core.md` §23.4, `trellis-verify-wos/src/event_types.rs`, and every fixture-vector directory whose golden bytes embed the identity-attestation event type. Placement rationale (by elimination given the closed set, not positive ownership): identity attestation is not kernel (not lifecycle), not governance (not adjudicatory), not ai (not agent-emitted) — assurance is the only remaining layer. Do not substitute a manufactured positive-ownership claim. [`thoughts/adr/0068-stack-tenant-and-scope-composition.md`](../../../thoughts/adr/0068-stack-tenant-and-scope-composition.md) D-3.1 defines the `IdentityAttestation` record shape only; it makes no layer-ownership claim. Reopening the closed layer set to admit `identity` would undo a confirmed commitment to dodge a one-line prose amendment.
+
+**Authoritative dispatch (D26 — greenfield, replace-only).** Two discriminators, two scopes:
+- **`profile_id`** — COSE protected-header integer label per plan O-2. Cross-profile dispatch. Selects which profile plugin (Trellis profile / Workflow profile / Formspec profile) handles the event. *Substrate state: not yet allocated in normative `trellis-core.md` Core; allocation procedure lives in §7.4 Label rationale paragraph (line 421). See §5.9.*
 - **`event_type`** — CBOR payload map field per plan F-13 (`wos.<layer>.<record_kind>` form). Intra-profile dispatch. Selects which validator within the profile handles the event.
 
-Both are authoritative within their scopes. The redundant inner `recordKind` field (currently in `trellis-verify-wos/src/records.rs:310-313` as a tautological re-check of `event_type`) is deprecated alongside D8.
+The inner `recordKind` field is **replaced**, not "deprecated but kept." The migration is a single coordinated train enumerated against [`work-spec/schemas/record-kind-registry.json`](../../schemas/record-kind-registry.json) (131 kinds; 21 with schema-validated overlays; 110 flat). Drop the inner field, regenerate fixtures, route all dispatch through outer `event_type`. Parser evidence at `trellis-verify-wos/src/records.rs:310-313` supports "payload parsers check local `recordKind` literals after dispatch"; it does not prove an inner-vs-outer comparison everywhere — the migration scope is the registry, not a single parser line. **Greenfield discipline:** no permanent parallel "deprecated but read" discriminator; replace once, atomically with the fixture regeneration.
+
+**Governance migration envelope.** When reshaping provenance / workflow schemas around dispatch, cite [`work-spec/specs/governance/workflow-governance.md`](../../specs/governance/workflow-governance.md) §2.9 (schema upgrade as a named lifecycle operation) as the normative envelope for breaking taxonomy changes. Even under greenfield discipline, a product that retains history MUST record the migration as an explicit fact; silent reinterpretation of historical records under new rules is not permitted.
 
 **Extension events.** Vendor extension events take the form `wos.<layer>.x_<vendor>_<name>` — placed within an existing closed layer (kernel/governance/ai/assurance), with the `x_` prefix marking vendor-extended. The `custody-hook-encoding.md §1.5` closed-layer rule is preserved. The earlier `wos.extension.*` form is rejected. Kernel §10.6 `x-`-prefixed keys remain the syntactic seam for extension presence.
 
@@ -122,12 +133,13 @@ Every event payload carries `caseLedgerId` (REQUIRED). Workflow-emitted events a
 | `wos.kernel.note_added` | Authorized role (via §2.5 direct append) or Workflow runtime (via §2.4) | Free-form annotation. Kernel: attachment surface. |
 | `wos.kernel.artifact_attached` | Authorized role or Workflow runtime | Wraps a Formspec response or external document. Carries the four-field `CaseOpenPin` (§2.7). Kernel: attachment surface. |
 | `wos.kernel.signature_affirmation` | WOS Signature Profile processor | Surfaces existing WOS `SignatureAffirmation` semantics into the ledger. Signature Profile is a *profile*, not a *layer*; the emission is a kernel-layer record per `custody-hook-encoding.md §1.5`. No second meaning of "signed." Preserves `work-spec/CLAUDE.md` Signature-shortcut rule. |
+| `wos.kernel.iteration_started` / `iteration_completed` / `iteration_failed` / `iteration_skipped` | Workflow runtime | ADR-0078 §D-3 iteration-topology kinds, routed through the closed enum. Carry `processId`; payload includes the iteration cursor / index per ADR-0078. Added in lockstep with the F-13 rename train. |
 
 **Governance** (adjudicatory outputs)
 
 | Event type | Emitter | Notes |
 |------------|---------|-------|
-| `wos.governance.decision_recorded` | Workflow runtime or authorized role | Adjudicatory output. Carries `verificationLevel` + signature affirmation reference. Governance: adjudicatory outputs (Kernel §13.9 amendment taxonomy). |
+| `wos.governance.decision_recorded` | Workflow runtime or authorized role | Adjudicatory output. Carries `verificationLevel` + signature affirmation reference. Governance: adjudicatory outputs (see [`work-spec/specs/governance/workflow-governance.md`](../../specs/governance/workflow-governance.md)). Kernel §13.9 is amendment-taxonomy configuration, not decision-record semantics; do not cite §13.9 here. |
 
 **Vendor extension**
 
@@ -144,12 +156,16 @@ Workflow processes emit events via the existing **`$defs/OutputBinding`**, canon
 The HTTP surface for workflow event submission is:
 
 ```
-POST /api/v1/cases/{case_id}/processes/{process_id}/events
+POST /api/v1/cases/{case_id}/processes/{process_id}/inputs
 ```
 
-The handler routes the event into the specified process's runtime queue (`enqueue_event(process_id, …)`), drains that process, and the binding emissions append to the case ledger via `custodyHook` (kernel §10.5, four-field append shape). Each binding emission produces exactly one ledger event whose payload carries `caseLedgerId = case_id` and `processId = process_id`, with `event` literal per the F-13 convention.
+Two routes, two verbs, two semantics:
+- **`POST .../inputs`** — workflow event submission. The handler routes into the specified process's runtime queue (`enqueue_event(process_id, …)`), drains that process, and the binding emissions append to the case ledger via `custodyHook` (kernel §10.5, four-field append shape). Each binding emission produces exactly one ledger event whose payload carries `caseLedgerId = case_id` and `processId = process_id`, with `event` literal per the F-13 convention.
+- **`POST /api/v1/cases/{case_id}/events`** — direct ledger append (see §2.5). Distinct verb, distinct authorization model.
 
-The current `/instances/{id}/events` route is **replaced** by the route above. Pre-release allows hard replacement; an alias may exist transitionally for fixtures but does not survive to first release.
+The rename of the prior workflow-submission route from `.../events` to `.../inputs` removes the head-on collision with the direct-append surface — submitting *inputs* to a process is semantically different from appending an *event* to a ledger. Cost is one OpenAPI edit + one server route + one conformance fixture rename. **Greenfield: hard replacement, not aliased coexistence.**
+
+The current `/instances/{id}/events` route is **replaced** by the route above. Pre-release allows hard replacement.
 
 ### 2.5 Direct ledger append writes
 
@@ -161,7 +177,7 @@ POST /api/v1/cases/{case_id}/events
 
 **Authorization model.** Two distinct authorization rules, applied per the event type being emitted:
 
-- **Pre-ledger creation** (only for `wos.kernel.case_created`): authorizes on **tenant scope + role + create-permission**. There is no existing case ledger to relate to; relationship-based ReBAC checks are not applicable. The current `/instances` create handler in [`workspec-server/crates/wos-server/src/http/instances.rs`](../../../workspec-server/crates/wos-server/src/http/instances.rs:228) uses `RequireRole<Supervisor>` for exactly this reason; the new surface generalizes to *tenant + role + create-permission per OpenFGA tuple*. The handler MUST reject `wos.kernel.case_created` if a ledger at `case_id` already exists.
+- **Pre-ledger creation** (only for `wos.kernel.case_created`): authorizes on **tenant scope + role + create-permission**. There is no existing case ledger to relate to; relationship-based ReBAC checks are not applicable. The current `/instances` create handler in [`workspec-server/crates/wos-server/src/http/instances.rs`](../../../workspec-server/crates/wos-server/src/http/instances.rs) (the `create` function — anchor by function name, not line number; HEAD has `RequireRole<Supervisor>` at line 227, drifted from the prior `:228` pin) uses `RequireRole<Supervisor>` for exactly this reason; the new surface generalizes to *tenant + role + create-permission per OpenFGA tuple*. The handler MUST reject `wos.kernel.case_created` if a ledger at `case_id` already exists.
 - **Post-ledger append** (every other event type via this surface): authorizes on **role + ReBAC relationship to the existing case** + the event-type contract's permission policy. Relationship checks resolve against the ledger that already exists at `case_id`.
 
 The two rules are mechanically distinct: pre-creation cannot consult a relationship to a not-yet-existing entity. Implementations MUST split the authorization branch by event type *before* the relationship check is attempted; collapsing them risks either authorizing creation against a phantom relationship or denying creation that has no relationship to check against.
@@ -170,7 +186,7 @@ The two rules are mechanically distinct: pre-creation cannot consult a relations
 
 - **Validates** request body against the event-type contract (lookup by `event` literal in the F-13-named closed enum from §2.3).
 - **Checks** Trellis bound-registry presence for the event type (`trellis-verify-wos/src/event_types.rs` constants).
-- **Enforces idempotency** via `idempotency_token` (cached per `(case_id, token)` for post-ledger; per `(tenant, token)` for pre-ledger).
+- **Enforces idempotency** via `idempotency_token` (cached per `(case_id, token)` for post-ledger; per `(tenant, token)` for pre-ledger). **Three strands, do not merge:** (1) custody-hook **§1.9** already names domain tag `trellis-wos-idempotency-v1` for the **custody** idempotency map (WOS-owned input → Trellis bytes); (2) the pre-ledger `(tenant, token)` cache here is a **separate** operational story for substrate-genesis uniqueness; (3) `trellis-core.md` **§23.5 + §9.1** anchor the recommended `idempotency_key` construction with domain separation, and **§9.8** holds the closed named-tag list. Disposition for (2) — either (a) register a dedicated §9.8 tag for the `(tenant, token)` construction and route pre-ledger genesis through **§17.3** substrate uniqueness (LEAN: greenfield bias favors (a) so the pre-ledger seam is not permanently weaker than custody), or (b) document an explicit WOS-layer operational seam outside Trellis substrate uniqueness with explicit failure-mode notes for crash mid-write, tenant rename, and cross-region replica. **Append idempotency is not HTTP dedup.** Do not blur §17.3 substrate uniqueness with HTTP-layer dedup caches that the Operational Companion §18 defers; Core insists §17.3 is not relaxed by TTL policy.
 - For `wos.kernel.case_created` specifically: requires the case ledger to NOT yet exist; creates the ledger as the genesis event. WOS authority (ADR-0073 D-1) is preserved — the API caller is acting as a WOS-boundary actor with create-permission authorization.
 - For all other events: requires the case ledger to exist.
 - **Emits** the event directly via `custodyHook` (no runtime drain; no workflow state machine).
@@ -233,7 +249,7 @@ Workflow processes are managed via dedicated routes scoped to a case:
 | `POST /api/v1/cases/{case_id}/processes` | Start a new workflow on a case. Body: workflow definition URL+version, initial bindings. Returns `process_id`. Emits `wos.kernel.process_started`. |
 | `GET /api/v1/cases/{case_id}/processes` | List processes bound to a case (current and historical). |
 | `GET /api/v1/cases/{case_id}/processes/{process_id}` | Read process state (lifecycle, configuration, pending tasks). |
-| `POST /api/v1/cases/{case_id}/processes/{process_id}/events` | Submit a workflow event (§2.4). |
+| `POST /api/v1/cases/{case_id}/processes/{process_id}/inputs` | Submit a workflow input (§2.4). Distinct from `POST /api/v1/cases/{case_id}/events` (direct ledger append, §2.5). |
 | `POST /api/v1/cases/{case_id}/processes/{process_id}/drain` | Drain pending events. |
 | `POST /api/v1/cases/{case_id}/processes/{process_id}/suspend` | Suspend the process. Emits `wos.kernel.process_suspended`. |
 | `POST /api/v1/cases/{case_id}/processes/{process_id}/resume` | Resume a suspended process. Emits `wos.kernel.process_resumed`. |
@@ -242,7 +258,7 @@ Workflow processes are managed via dedicated routes scoped to a case:
 
 Suspend / resume / terminate are currently absent from `workspec-server/crates/wos-server/src/http/instances.rs` (route absence noted in synthesis D-13); this ADR delivers them under the new case-scoped, process-scoped surface.
 
-**Route invariant (case_id ⇄ process_id cross-check).** Any route bearing both `{case_id}` and `{process_id}` path params MUST verify that the loaded process's `case_ledger_id` equals the `{case_id}` path parameter. Mismatch returns 404 (case-process binding violation). Without this check, events emitted under a wrong-case URL prefix can leak into adjacent case ledgers via process_id-keyed runtime routing. This applies to `POST .../events`, `POST .../drain`, `POST .../suspend`/`/resume`/`/terminate`, `GET .../explanation`, and any future route with both path params.
+**Route invariant (case_id ⇄ process_id cross-check).** Any route bearing both `{case_id}` and `{process_id}` path params MUST verify that the loaded process's `case_ledger_id` equals the `{case_id}` path parameter. Mismatch returns 404 (case-process binding violation). Without this check, inputs submitted under a wrong-case URL prefix can leak into adjacent case ledgers via process_id-keyed runtime routing. This applies to `POST .../inputs`, `POST .../drain`, `POST .../suspend`/`/resume`/`/terminate`, `GET .../explanation`, and any future route with both path params.
 
 ### 2.9 Multiple concurrent workflows on one ledger
 
@@ -432,15 +448,27 @@ New fixtures in `work-spec/crates/wos-conformance`:
 
 Three-way agreement (spec ↔ in-memory runtime ↔ Restate production adapter) per `work-spec/CLAUDE.md`. Restate's process state needs the same `process_id` keying as the in-memory runtime; durable timers and tasks need `process_id`-scoped routing.
 
-### 5.9 Trellis-side registry binding (cross-repo prerequisite)
+### 5.9 Trellis-side registry binding (cross-repo prerequisite — coordinated amendment list)
 
-Coordinated PR to the [`trellis/`](../../../trellis/) repo. **This is logically prior to WOS emission of any new event types** — Trellis §14.5 *Registry migration discipline*: events using a new interpretation MUST NOT be admitted before the registry update lands.
+Coordinated PR(s) to the [`trellis/`](../../../trellis/) repo plus accompanying stack-root and WOS edits. **This is logically prior to WOS emission of any new event types** — Trellis §14.5 *Registry migration discipline*: events using a new interpretation MUST NOT be admitted before the registry update lands. Constants and CI alone are not enough; `RegistryBinding` (`trellis-core.md` §14.3–§14.5) governs interpretation changes, and F-13 byte changes require **fixture regeneration** under `trellis/fixtures/vectors/**` plus stranger-test parity as CI defines it.
 
-- Add `WOS_<EVENT>_EVENT_TYPE` constants to [`trellis/crates/trellis-verify-wos/src/event_types.rs`](../../../trellis/crates/trellis-verify-wos/src/event_types.rs) for every F-13-named event type from §2.3. Existing dotted-camel constants (`wos.kernel.caseCreated` etc.) rename to F-13 form in lockstep with the WOS schema rename.
-- Add accompanying conformance fixtures on the Trellis side.
-- Per `trellis-core.md` §23.2 item 2 + §14 + §23.4 + §14.5.
+Concrete cross-repo amendment list:
 
-Until that PR lands, WOS-side emission of the new event types MUST remain disabled. CI gate: a check that every `wos.*` event type emitted by `wos-export` resolves to a registered constant; an unregistered emission fails the build.
+- **Custody-hook §1.5 spelling amendment.** `work-spec/specs/kernel/custody-hook-encoding.md` §1.5 — rename canonical-form variable `<recordKind>` → `<record_kind>` (snake_case).
+- **Custody-hook §1.4 family registry.** Add `process` to the reserved-prefix registry alongside `case`, `prov`, `gov`, `ai`, `assurance`.
+- **Trellis §23.4 identity pin amendment.** `trellis/specs/trellis-core.md` §23.4 — rename `wos.identity.identityAttestation` → `wos.assurance.identity_attestation`.
+- **Trellis §19 step 6d (WOS-aware user-content-attestation identity resolution).** §23.4 explicitly cites §19 step 6d as the admission seam; both sections move in lockstep.
+- **Trellis §7.4 protected-header allocation for `profile_id`.** `profile_id` is **not yet allocated** in normative Core (current §7.4 names exactly `alg` (1), `kid` (4), `suite_id` (-65537), and optional `artifact_type` (-65538)). Allocate per the **§7.4 Label rationale paragraph (line 421)**: a sequentially-descending integer label below -65538, registered alongside the `suite_id` registry. Allocation comprises: (i) §7.4 prose amendment naming `profile_id` with its integer label; (ii) **§28** CDDL pin; (iii) `trellis-cose` Rust code constant; (iv) Sig_structure golden vector. **§26.2** is cited only where the suite-registry coupling is load-bearing; the home of the allocation is §7.4.
+- **`RegistryBinding` / §14.3–§14.5 migration discipline.** Use the `RegistryBinding` vocabulary, not a vague "registry binding event"; F-13 byte changes are a registry migration in the §14.3–§14.5 sense.
+- **Trellis fixture regeneration.** `trellis/fixtures/vectors/**` for every fixture directory whose golden bytes embed renamed `event_type` or renamed protected-header material — full corpus regeneration per CI; do not pin a fixed file count.
+- **ADR-0073 D-1.** `case.created` → `wos.kernel.case_created` in the ADR text.
+- **ADR-0078 §D-3 iteration kinds** added to the closed enum (`wos.kernel.iteration_started` / `iteration_completed` / `iteration_failed` / `iteration_skipped`).
+- **Kernel instance / provenance effect literals.** `work-spec/specs/kernel/spec.md` — instance operations + provenance effect literals (anchor by **current section titles**; ADR 0076 renumbered the prior §11, so stale §11 pins do not resolve).
+- **WOS schema + registry alignment.** `wos-workflow.schema.json`, `wos-provenance-log.schema.json`, and `work-spec/schemas/record-kind-registry.json` (131 kinds; 21 schema-validated; 110 flat) — overlays, enums, and guards rebind to snake_case `event` literals; inner `recordKind` field drops per D26.
+- **`trellis-verify-wos` constants.** [`trellis/crates/trellis-verify-wos/src/event_types.rs`](../../../trellis/crates/trellis-verify-wos/src/event_types.rs) — seven WOS-prefixed string constants (`WOS_SIGNATURE_AFFIRMATION_EVENT_TYPE`, `WOS_INTAKE_ACCEPTED_EVENT_TYPE`, `WOS_CASE_CREATED_EVENT_TYPE`, `WOS_IDENTITY_ATTESTATION_EVENT_TYPE` → `WOS_ASSURANCE_IDENTITY_ATTESTATION_EVENT_TYPE`, `WOS_GOVERNANCE_DETERMINATION_PREFIX`, `WOS_GOVERNANCE_DETERMINATION_RESCINDED_EVENT_TYPE` (single declaration spanning two physical lines), `WOS_GOVERNANCE_REINSTATED_EVENT_TYPE`) — rename to snake_case literals in lockstep.
+- **OpenAPI + `wos-server` route replacement.** `work-spec/api/wos-public-api.openapi.json` and the `wos-server` HTTP module set — **replace** `/instances/...` with case/process routes + `/inputs` per §2.4/§2.8. Greenfield discipline: no permanent parallel API. Use `rg -l 'api/v1/instances' workspec-server/` for the full file list (~20 files including six HTTP modules, route-coverage tests, services, and ~13 integration test files) before scoping the rename PR.
+
+Until the registry binding lands, WOS-side emission of the new event types MUST remain disabled. CI gate: a check that every `wos.*` event type emitted by `wos-export` resolves to a registered constant; an unregistered emission fails the build.
 
 ### 5.10 Out of scope for this ADR
 
@@ -456,7 +484,7 @@ This ADR is verified-as-implemented when every claim below passes:
 
 | # | Claim | Verification |
 |---|-------|--------------|
-| V-1 | Every §2.3 event type is registered in the Trellis bound registry under F-13 naming. | `wos-conformance` registry-gate fixture; cross-repo CI. |
+| V-1 | Every §2.3 event type is registered in the Trellis bound registry under F-13 naming **and** the Trellis fixture-vector corpus is regenerated for every directory whose golden bytes embed renamed `event_type` or renamed protected-header material; stranger-test parity passes per CI. | `wos-conformance` registry-gate fixture; cross-repo CI; full `trellis/fixtures/vectors/**` regen with stranger-test parity. |
 | V-2 | A single workflow can run end-to-end on a case and emit `wos.kernel.process_started` → `wos.kernel.process_transitioned`* → `wos.kernel.process_completed`. | `one-to-one-baseline` fixture, in-memory + Restate runtimes. |
 | V-3 | Two concurrent workflow processes can run on one case ledger and both contribute attributed events. | `n-to-one-concurrent` fixture. |
 | V-4 | A `wos.kernel.note_added` event emitted via `POST /api/v1/cases/{case_id}/events` (no workflow context) appears in `GET /api/v1/cases/{case_id}` (staff) and `GET /api/v1/applicant/cases/{case_id}` (applicant, as access controls permit). | `direct-append-note` fixture + E2E test in `workspec-server`. |
@@ -470,8 +498,8 @@ This ADR is verified-as-implemented when every claim below passes:
 | V-12 | An event submitted to process A's route routes to process A's runtime queue, not process B's. | `n-to-one-routing` fixture. |
 | V-13 | Suspend / resume / terminate routes are present and functional under the new case-scoped, process-scoped paths. | Route existence + integration test. |
 | V-14 | The `/explanation` endpoint is consistent under the new `/cases/{case_id}/processes/{process_id}/explanation` route across OpenAPI + server + provenance schema. | Schema + server parity test. |
-| V-15 | The direct-append handler dispatches the authorization branch by event type *before* invoking the relationship resolver; pre-ledger creation cannot reach the relationship resolver, and post-ledger events cannot reach the create-permission resolver. | `direct-append-auth-split` fixture; static analysis of handler control flow. |
-| V-16 | Route invariant: an event submitted to `/cases/case_A/processes/process_belonging_to_case_B/events` is rejected with 404; the receiver of process B's case ledger does not see the event. | `process-case-mismatch-rejection` fixture. |
+| V-15 | The direct-append handler dispatches the authorization branch by event type *before* invoking the relationship resolver; pre-ledger creation cannot reach the relationship resolver, and post-ledger events cannot reach the create-permission resolver. | `direct-append-auth-split` fixture **plus** negative behavioral fixtures: (i) pre-ledger creation with `wos.kernel.case_created` literal but no create-permission tuple → 403 from the create-permission resolver; the relationship resolver is mocked to fail loudly on call and the fixture asserts it was never invoked. **plus** (ii) post-ledger event (any literal other than `wos.kernel.case_created`) with no relationship tuple → 403 from the relationship resolver; the create-permission resolver is mocked to fail loudly on call and the fixture asserts it was never invoked. Replaces the prior unnamed "static analysis" claim with named behavioral fixtures. |
+| V-16 | Route invariant: an input submitted to `/cases/case_A/processes/process_belonging_to_case_B/inputs` is rejected with 404; the receiver of process B's case ledger does not see the input. Text landed in ADR; implementation pending. | `process-case-mismatch-rejection` fixture. |
 
 Three-way agreement (spec ↔ in-memory runtime ↔ Restate production adapter) is the verification posture per [`work-spec/CLAUDE.md`](../../CLAUDE.md).
 

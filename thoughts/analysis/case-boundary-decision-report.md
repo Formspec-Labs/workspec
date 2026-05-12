@@ -3,6 +3,7 @@
 **Date:** 2026-05-11
 **Decision:** Option B — dual identity (`case_<ulid>` ledger + `process_<ulid>` runtime) from day one.
 **Status:** Decision made and applied to ADR-0093 + the v2 synthesis (within their respective scopes). Implementation work to follow per ADR-0093 §5.
+**Working-tree truth note:** statements describing v3.1 corrections as "applied" refer to **working-tree state**, not to commits beyond parent `1d2cd72` / work-spec `56f78473`. Where commit state is mentioned in this report, treat as current evidence in the working tree; the git history is the authoritative record.
 **Scope:** Captures the full session's exploration arc, the chosen path, implementation implications, and the meta-lessons that justify pinning them now while the context is fresh.
 **Authority note:** This report is THE source of truth for all case-management decisions (D-1..D-4 + D-17 closed taxonomy). Its authority is permanent — not contingent on whether ADR-0093, the v2 synthesis, or any downstream artifact has been patched into alignment. Other artifacts derive their position from this report; this report does not derive its position from them. When a downstream artifact disagrees with the decisions recorded here, the downstream artifact is wrong and needs patching, not the report.
 **Companion artifact:** `thoughts/plans/2026-05-09-signature-wire-convergence-plan.md` (Integrity Stack Primitive Extraction Plan, recast 2026-05-11) — byte-primitive scope sibling. Both artifacts are **platform-critical at different architectural scopes**: this report owns the workflow-domain layer (dual identity, case-as-ledger, direct-append surface); the plan owns the byte-primitive layer (`integrity-stack/` extraction, profile-spec rebinding, verifier plugin host). They reconcile at four explicit pins — **plan F-11** (identity profile-payload scope), **F-12** (direct-append shape), **F-13** (event-type naming convention), and **plan §17 step 0a** (sequencing interlock). Both are required for v1; neither supersedes the other. See §6.7 for the full alignment block.
@@ -15,7 +16,7 @@ The session started with v1 of `case-management-aggregate-synthesis.md` carrying
 
 - **Architectural truth:** A case *is* its Trellis ledger. No second source of truth, no parallel `Case` aggregate.
 - **Identity model:** Dual URN family. `case_<ulid>` is the ledger (durable, outlives any workflow). `process_<ulid>` is the runtime workflow execution (ephemeral; N per case allowed from day one).
-- **Write paths:** Two surfaces. Workflow processes emit events via `$defs/OutputBinding` per ADR-0080. A separate direct-ledger-append API handles non-workflow emissions (ad-hoc notes, manual `case.created`).
+- **Write paths:** Two surfaces. Workflow processes emit events via `$defs/OutputBinding` per ADR-0080. A separate direct-ledger-append API handles non-workflow emissions (ad-hoc notes, manual `wos.kernel.case_created`).
 - **Read path:** One architectural commitment, two audience-appropriate routes (staff `/cases/{case_id}`, applicant `/applicant/cases/{case_id}`). Implementation per deployment (replay or projection).
 
 The supporting documents are: synthesis v2 (`case-management-aggregate-synthesis.md`), ADR (`0093-case-is-its-trellis-ledger.md`, rewritten 2026-05-11 to encode Option B from scratch), five reviewer-validation files, this report. The implementation plan in §4 describes the work surfaces; the pre-release window absorbs the migration surface (no customer data dependent on the current single-identity shape).
@@ -151,7 +152,7 @@ Two URN families, both first-class:
 | `case_<ulid>` | **Case ledger identity.** Durable. The thing callers reference as "the matter." Survives all workflows. | Years (matter lifetime) | 1 per case |
 | `process_<ulid>` | **Workflow runtime instance identity.** Ephemeral relative to the ledger; durable relative to runtime substrate. What the runtime keys on for event routing, timers, tasks, callbacks. | Days to months (workflow execution lifetime) | N per case (0..many) |
 
-A workflow process is bound to a case ledger at `process.started` time. The process emits events into the bound ledger. The process_id is recorded on every workflow-emitted event payload (for audit traceability and runtime routing). The case ledger persists independently of any process; processes complete, fail, or are terminated; the ledger keeps existing.
+A workflow process is bound to a case ledger at `wos.kernel.process_started` time. The process emits events into the bound ledger. The process_id is recorded on every workflow-emitted event payload (for audit traceability and runtime routing). The case ledger persists independently of any process; processes complete, fail, or are terminated; the ledger keeps existing.
 
 **Identity transitions from the current codebase:**
 
@@ -246,7 +247,7 @@ Migration is pre-release so destructive DROP+CREATE is acceptable.
 - `workspec-server/crates/wos-server/src/http/instances.rs` → renamed (or sibling) `processes.rs`. Routes:
   - `POST /api/v1/cases/{case_id}/processes` — start a new workflow on a case. Returns `process_id`. Replaces today's case-instance-create path.
   - `GET /api/v1/cases/{case_id}/processes/{process_id}` — read process state.
-  - `POST /api/v1/cases/{case_id}/processes/{process_id}/events` — submit a workflow event. Replaces today's `POST /instances/{id}/events`.
+  - `POST /api/v1/cases/{case_id}/processes/{process_id}/inputs` — submit a workflow input (per ADR-0093 §2.4/§2.8: two routes, two verbs, two semantics — `/inputs` is the workflow-submission surface, `/events` is direct-append). Replaces today's `POST /instances/{id}/events`.
   - `POST /api/v1/cases/{case_id}/processes/{process_id}/drain` — drain. Replaces today's `POST /instances/{id}/drain`.
   - `POST /api/v1/cases/{case_id}/processes/{process_id}/suspend|resume|terminate` — process lifecycle. Replaces today's instance-keyed equivalents (which are currently absent from `instances.rs` despite being in OpenAPI per ADR-0093 §5.6).
   - `GET /api/v1/cases/{case_id}` — the case view (the read-side route the architectural commitment requires; replaces today's `GET /instances/{id}` semantic-wise for staff).
@@ -273,7 +274,7 @@ The Codex Finding 1 fix. ADR-0093 §2.4 currently misrepresents `/instances/{id}
 
 **Authorization model — two branches, dispatched by event type before any check runs:**
 
-- **Pre-ledger creation** (only `wos.kernel.case_created`): authorizes on **tenant scope + role + create-permission**. There is no existing case ledger to relate to; relationship-based ReBAC checks are not applicable and MUST NOT be invoked. The existing `/instances` create handler at [`workspec-server/crates/wos-server/src/http/instances.rs:228`](../../../workspec-server/crates/wos-server/src/http/instances.rs) uses `RequireRole<Supervisor>` for exactly this reason; the new surface generalizes to *tenant + role + create-permission* via OpenFGA tuple. Handler MUST reject `wos.kernel.case_created` if a ledger already exists at the URN.
+- **Pre-ledger creation** (only `wos.kernel.case_created`): authorizes on **tenant scope + role + create-permission**. There is no existing case ledger to relate to; relationship-based ReBAC checks are not applicable and MUST NOT be invoked. The existing `/instances` create handler in [`workspec-server/crates/wos-server/src/http/instances.rs`](../../../workspec-server/crates/wos-server/src/http/instances.rs) (the `create` function — anchor by function name; HEAD has `RequireRole<Supervisor>` at line 227, drifted from the prior `:228` pin) uses `RequireRole<Supervisor>` for exactly this reason; the new surface generalizes to *tenant + role + create-permission* via OpenFGA tuple. Handler MUST reject `wos.kernel.case_created` if a ledger already exists at the URN.
 - **Post-ledger append** (every other event type): authorizes on **role + ReBAC relationship to the existing case** + the event-type contract's permission policy. The relationship resolves against the ledger that already exists at `case_id`.
 
 The two branches are mechanically distinct. Collapsing them risks either (a) authorizing creation against a phantom relationship, or (b) denying creation because there is no relationship to check against. Handler control flow MUST dispatch the branch by event type *before* invoking the relationship resolver.
@@ -300,8 +301,8 @@ The two branches are mechanically distinct. Collapsing them risks either (a) aut
 New conformance fixtures required:
 
 - **N:1 fixture:** two processes started on one case ledger, both emit events, events interleave time-ordered correctly, view rebuild reflects both contributions.
-- **Direct-append fixture:** `POST /cases/{case_id}/events` for `note.added`, event appears in the view without going through any workflow drain.
-- **Manual `case.created` fixture:** `POST /cases/{case_id}/events` with `case.created` payload creates the ledger and is verifiable as the genesis event.
+- **Direct-append fixture:** `POST /cases/{case_id}/events` for `wos.kernel.note_added`, event appears in the view without going through any workflow drain.
+- **Manual `wos.kernel.case_created` fixture:** `POST /cases/{case_id}/events` with `wos.kernel.case_created` payload creates the ledger and is verifiable as the genesis event.
 - **Cross-process audit fixture:** events from process A and process B both carry distinct `processId` values, view correctly attributes each event to its emitting process.
 - **Replay-vs-projection fixture:** for the same case_id, reading via replay and reading via projection return byte-identical case-view JSON (modulo audience field projection).
 - **Crash recovery fixture:** kill projection materializer mid-run; restart; projection converges.
@@ -374,7 +375,7 @@ The ADR-0093 went through three major versions in one day: predecessor (Case as 
 ### 5.8 Greenfield ≠ blank slate
 
 Even when owner declared "every ADR/SPEC/PLAN is disposable," upstream commitments shaped the answer:
-- ADR-0073 D-1 (WOS owns `case.created`) — preserved verbatim.
+- ADR-0073 D-1 (WOS owns case-creation; literal `case.created` in the ADR text rebinds to `wos.kernel.case_created` under F-13 in the same rename train — see §6.7) — ownership commitment preserved; literal updated.
 - ADR-0074 (per-class encryption) — preserved as the encryption pattern for event payloads.
 - ADR-0080 (governed output-commit pipeline; `$defs/OutputBinding`) — preserved without schema changes.
 - Kernel §10 six extension seams — preserved.
@@ -419,14 +420,14 @@ In dependency order:
 The ADR was rewritten from scratch on 2026-05-11 (predecessor file deleted; new file authored at the same path `work-spec/thoughts/adr/0093-case-is-its-trellis-ledger.md`) to fully encode Option B. The rewrite incorporated, in their final form:
 
 1. **§2.2 Identity:** dual URN families (`case_<ulid>` ledger + `process_<ulid>` workflow runtime), with the rename plan for `mint_case_id` → `mint_case_ledger_id` and addition of `mint_process_id` named explicitly.
-2. **§2.4 Workflow writes + §2.5 Direct ledger append writes:** two distinct write surfaces named clearly. `POST /api/v1/cases/{case_id}/processes/{process_id}/events` for workflow events; `POST /api/v1/cases/{case_id}/events` for direct ledger appends. The Codex Finding-1 misrepresentation removed.
+2. **§2.4 Workflow writes + §2.5 Direct ledger append writes:** two routes, two verbs, two semantics. `POST /api/v1/cases/{case_id}/processes/{process_id}/inputs` for workflow submission; `POST /api/v1/cases/{case_id}/events` for direct ledger appends. The Codex Finding-1 misrepresentation removed.
 3. **§2.5 Authorization split** (post-Codex critique): pre-ledger creation authorizes on tenant + role + create-permission; post-ledger append authorizes on role + ReBAC relationship to the existing case. Two branches dispatched by event type before any resolver runs.
 4. **§2.9 Multiple concurrent workflows:** lifted from claim-with-hand-wave to load-bearing commitment with §5 implementation pointers.
 5. **§5 Implementation:** ten work-surface subsections describing what changes; time and effort assertions removed from the ADR body per owner directive (decision-basis and sequencing carried here in §4 and in the convergence-plan §17 / step 0a).
 6. **§6 Verification:** fifteen claims (V-1 through V-15), including V-15 covering the authorization-branch dispatch.
 7. **§2.3 Event family:** F-13 naming convention (`wos.<layer>.<record_kind>` snake_case, layer ∈ {`kernel`, `governance`, `ai`, `assurance`} per `custody-hook-encoding.md §1.5`) applied throughout, in lockstep with the convergence-plan's F-13 commitment.
 
-No further patches are queued against ADR-0093 as of 2026-05-11. Future modifications track through this report's §6 or through the convergence-plan §17 sequencing artifacts, not through this row.
+Additional v3.2 amendments to ADR-0093 are queued in [`thoughts/analysis/2026-05-11-proof-stack-five-reviewer-aggregate.md`](../../../thoughts/analysis/2026-05-11-proof-stack-five-reviewer-aggregate.md) (the source-of-truth patch driver) — covering F-13 amendment framing, identity-collision resolution, `/inputs` route rename, idempotency three-strand disambiguation, the §5.9 cross-repo amendment list, and V-15 negative-fixture replacement for unnamed static analysis. Future modifications track through that patch driver, through this report's §6, or through the convergence-plan §17 sequencing artifacts.
 
 ### 6.2 Synthesis update
 
@@ -440,9 +441,18 @@ Update `case-management-aggregate-synthesis.md`:
 
 `work-spec/thoughts/analysis/case-management.md` gets a top-of-file supersession banner pointing at ADR-0093 + the v2 synthesis. Or move to `thoughts/archive/`. Either fixes Codex Finding 3.
 
-### 6.4 Trellis-side registry PR (cross-repo, blocking)
+### 6.4 Trellis-side registry binding (cross-spec amendment + fixture regeneration, blocking)
 
-Coordinated PR to `trellis/` registering each new `wos.*` event type in `trellis-verify-wos/src/event_types.rs`. Per Trellis Core §23.2 item 2 + §14 + §14.5. Blocking for any WOS-side emission of the new types. Approximately 1-2 days of Trellis-side work.
+Coordinated change train across `trellis/`, `work-spec/`, and the stack root. Scope is broader than constants alone — the work is a **`RegistryBinding`** migration per `trellis-core.md` §14.3–§14.5, not just a constants file edit. Includes:
+
+- Rename Trellis registry constants in [`trellis/crates/trellis-verify-wos/src/event_types.rs`](../../../trellis/crates/trellis-verify-wos/src/event_types.rs) (seven WOS-prefixed strings) to F-13 snake_case literals.
+- Amend `custody-hook-encoding.md` §1.5 spelling (`<recordKind>` → `<record_kind>`) and §1.4 family registry (add `process`).
+- Amend `trellis-core.md` §23.4 (identity pin: `wos.identity.identityAttestation` → `wos.assurance.identity_attestation`) and §19 step 6d (the cited admission seam) in lockstep.
+- Allocate `profile_id` in `trellis-core.md` §7.4 per the Label rationale paragraph (line 421) — prose + §28 CDDL + `trellis-cose` constant + Sig_structure golden vector.
+- Regenerate `trellis/fixtures/vectors/**` for every fixture directory whose golden bytes embed renamed `event_type` or renamed protected-header material — full corpus regen per CI; stranger-test parity passes.
+- Align `wos-provenance-log.schema.json`, `wos-workflow.schema.json`, and `record-kind-registry.json` (131 kinds; 21 schema-validated; 110 flat) — overlays and per-event-type guards rebind to snake_case `event` literals; inner `recordKind` field drops per D26.
+
+Per Trellis Core §23.2 item 2 + §14 + §14.5. Blocking for any WOS-side emission of the new types. Effort estimate prior framing ("1-2 days") was scoped to constants alone; the cross-spec amendment + fixture regen + `profile_id` allocation work is materially larger and lands as its own change train.
 
 ### 6.5 Implementation work (per §4 above)
 
@@ -473,19 +483,23 @@ The byte-primitive scope companion is `thoughts/plans/2026-05-09-signature-wire-
   - `wos.kernel.caseCreated` → `wos.kernel.case_created`
   - `wos.kernel.signatureAffirmation` → `wos.kernel.signature_affirmation`
   - `wos.kernel.intakeAccepted` → `wos.kernel.intake_accepted`
-  - `wos.identity.identityAttestation` → `wos.assurance.identity_attestation` (Assurance owns identity per ADR 0068 D-3.1)
+  - `wos.identity.identityAttestation` → `wos.assurance.identity_attestation` (placement by elimination given the closed layer set {kernel, governance, ai, assurance}; ADR-0068 D-3.1 defines the `IdentityAttestation` record shape only and makes no layer-ownership claim — see ADR-0093 §2.3 identity-collision resolution)
   - `wos.governance.determinationRescinded` → `wos.governance.determination_rescinded`
   - `wos.governance.reinstated` → `wos.governance.reinstated`
 
   **This convention is a hard prerequisite for §6.4's cross-repo Trellis registration PR** — both source naming patterns rename in lockstep.
 - **Plan §17 step 0a interlock.** Report weeks 1-2 (identity + storage + runtime) interleave with plan steps 1-4 (lift-only primitives) since file sets are disjoint; report weeks 3-4 (API + conformance) interleave with plan steps 5-7; plan steps 11-12 (profile spec rewrites + adapter stratification) **gate on report renames being settled**.
 
-**Follow-up patches needed:**
+**Blocker-grade (profile/schema/vector correctness, not hygiene):**
+
+- **SHA-256 vector pin (A1).** Prod-MVP golden vectors pin `digestAlgorithm = "sha-256"` even though `response.schema.json` admits sha-256/sha-384/sha-512/x-*. Distinguish the schema-visible profile name `formspec-response-signing-v1` from the substrate primitive `integrity-canonical-json-v1` (Q-14 — same bytes, two layered names). Until the vector pin lands, A1 is not closeable.
+- **`recordKind` migration enumerated against `record-kind-registry.json`.** D26 commits replace-only dispatch through outer `event_type`; the migration is **enumerated against** [`work-spec/schemas/record-kind-registry.json`](../../schemas/record-kind-registry.json) (131 kinds; 21 schema-validated; 110 flat), not via ripgrep heuristics. Until the schema/overlay edits land atomically with fixture regeneration, dispatch unsafety persists.
+- **V-15 verification.** Replace ADR-0093's "static analysis" placeholder with named negative behavioral fixtures (pre-ledger creation with no create-permission tuple → 403 from create-permission resolver with relationship resolver mocked-and-unreached; post-ledger event with no relationship tuple → 403 from relationship resolver with create-permission resolver mocked-and-unreached) OR a named lint rule + tool. Unnamed static analysis is not a verification path.
+
+**Forward promises (queued, not blocker-grade):**
 
 - This report's §4.5 should adopt F-13 for the closed event-type enum naming when next touched. The synthesis's §4 and D-4 should adopt F-13 in place of the current bare-flat enum, alongside the §6.2 D-2 amendment + D-17 addition. The synthesis's D-3 hedge (*"`$wosCaseInstance` (if it survives at all)"*) should be reconciled with this report's §4.1 (which assumes it survives and renames it to `$wosProcess`).
-
 - **Q-14 — Canonical-bytes substrate-vs-profile-shape split.** Substrate owns the `integrity-canonical-json-v1` primitive (full JCS + NUL framing + domain prefix). Formspec owns the `formspec-response-signing-v1` profile shape (strip `authoredSignatures`, domain-tag with `formspec.response.signed-payload.v1`, digest). Without this split, the D1 collapse lands in the wrong dependency direction. The Formspec profile shape lives in the Formspec layer and consumes the substrate primitive.
-
 - **D26 — `event_type` is authoritative dispatch; deprecate inner `recordKind` field.** The current `WosRecordKind` discriminator inside payload bytes is redundant — the parser at `trellis-verify-wos/src/records.rs:310-313` literally validates the inner against the outer. Drop the inner field; rely on the COSE protected-header `profile_id` (plan O-2) for cross-profile dispatch and `event_type` for intra-profile dispatch. The migration is atomic with fixture regeneration.
 
 ### 6.8 Sister-artifact banner-mark reminder (M-3 follow-up)
@@ -508,9 +522,11 @@ The session's working set, as of 2026-05-11:
 
 | File | Status | Role |
 |------|--------|------|
-| `work-spec/thoughts/adr/0093-case-is-its-trellis-ledger.md` | Proposed | The ADR. Decision basis for this report; §6.1 patches applied 2026-05-11. |
+| `work-spec/thoughts/adr/0093-case-is-its-trellis-ledger.md` | Proposed | The ADR. Decision basis for this report; §6.1 patches applied 2026-05-11. v3.2 amendments pending per the patch driver below. |
 | `work-spec/thoughts/analysis/case-management-aggregate-synthesis.md` | v2 (current) | Synthesis. Needs §6.2 update. |
-| `work-spec/thoughts/analysis/case-boundary-decision-report.md` | This file | Final session report. Durable. |
+| `work-spec/thoughts/analysis/case-boundary-decision-report.md` | This file | Source-of-truth report for D-1..D-4 + D-17 case-management decisions. Durable. |
+| `thoughts/analysis/2026-05-11-proof-stack-five-reviewer-aggregate.md` | Patch driver (not source of truth) | Validated patch queue across this report, ADR-0093, the convergence plan, and the cross-cutting findings. Treat as execution artifact; not a parallel decision authority. |
+| `thoughts/analysis/2026-05-11-proof-stack-five-reviewer-aggregate-archive.md` | Archive | Prior reviewer-aggregate narrative; preserved for history. Not execution input. |
 
 ### Historical (validation corpus)
 
