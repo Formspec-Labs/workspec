@@ -8,7 +8,7 @@
 
 ## Purpose
 
-Correspondence messages are addressable inbound and outbound communications associated with a WOS case instance: physical mail, phone calls, emails, portal submissions, fax, in-person interactions, and the agency notices the workflow renders and sends back. The API surface projects the WOS delivery sidecar's correspondence and notification-template vocabularies into a public REST shape; it does not redefine those vocabularies. Payload bytes are never embedded — `contentRef` is a claim-check pointer.
+Correspondence messages are addressable inbound and outbound communications associated with a WOS workflow process: physical mail, phone calls, emails, portal submissions, fax, in-person interactions, and the agency notices the workflow renders and sends back. The API surface projects the WOS delivery sidecar's correspondence and notification-template vocabularies into a public REST shape; it does not redefine those vocabularies. Payload bytes are never embedded — `contentRef` is a claim-check pointer.
 
 This spec also covers the rendering subresource that turns a delivery-sidecar notification template into a draft correspondence body. Rendering is delivery preparation: the legacy `POST /api/v1/notifications/{workflowUrl}/render` route folds into this domain because it produces a correspondence artifact, not a notification-feed entry.
 
@@ -17,7 +17,7 @@ This spec also covers the rendering subresource that turns a delivery-sidecar no
 `CorrespondenceMessage` is the addressable resource. Required fields:
 
 - `id` — correspondence-message URN (ADR 0082 D-4).
-- `instanceId` — case instance URN this message belongs to.
+- `processId` — workflow process URN this message belongs to.
 - `workflowUrl` — workflow URI used to resolve the delivery sidecar.
 - `templateRef` — delivery-sidecar entry-template id (inbound) or notification-template key (outbound).
 - `channel` — communication channel (closed projection of delivery `EntryTemplate.channel`, vendor-extensible).
@@ -42,7 +42,7 @@ URNs follow ADR 0082 D-4: `urn:wos:<entity-type>:<workflow-or-scope-id>:<date>:<
 
 `GET /api/v1/correspondence`
 
-Query fields per `CorrespondenceListOptions`: `instanceId`, `direction`, `status`, `channel`, `partyRole`, `occurredFrom`, `occurredUntil`, `cursor`, `limit`. Returns `CorrespondenceMessagePage` (`items`, optional `cursor`, `hasMore`). Cursor pagination per ADR 0082 D-7. Default ordering is `occurredAt` descending.
+Query fields per `CorrespondenceListOptions`: `processId`, `direction`, `status`, `channel`, `partyRole`, `occurredFrom`, `occurredUntil`, `cursor`, `limit`. Returns `CorrespondenceMessagePage` (`items`, optional `cursor`, `hasMore`). Cursor pagination per ADR 0082 D-7. Default ordering is `occurredAt` descending.
 
 ### Read one correspondence message
 
@@ -52,15 +52,15 @@ Returns the `CorrespondenceMessage`. Responds `WOS-1404` when the URN is not vis
 
 ### Instance-scoped correspondence subresource
 
-`GET /api/v1/instances/{instanceId}/correspondence`
+`GET /api/v1/instances/{processId}/correspondence`
 
-Per ADR 0082 D-3 (composition over flattening). Same `CorrespondenceListOptions` query fields except `instanceId` is implicit from the path. Same `CorrespondenceMessagePage` envelope. The instance aggregation endpoint at `GET /api/v1/instances/{id}?include=correspondence` extends the closed `?include=` enum (D-3) with the literal `correspondence`; consumers that want a count alongside the embedded slice request `?include=correspondence(limit=10)` per the existing aggregation grammar.
+Per ADR 0082 D-3 (composition over flattening). Same `CorrespondenceListOptions` query fields except `processId` is implicit from the path. Same `CorrespondenceMessagePage` envelope. The instance aggregation endpoint at `GET /api/v1/instances/{id}?include=correspondence` extends the closed `?include=` enum (D-3) with the literal `correspondence`; consumers that want a count alongside the embedded slice request `?include=correspondence(limit=10)` per the existing aggregation grammar.
 
 ### Case/process-scoped correspondence subresource
 
 `GET /api/v1/cases/{case_id}/processes/{process_id}/correspondence`
 
-Case/process bridge for ADR 0093 dual identity. Same `CorrespondenceListOptions` query fields except `instanceId` is implicit from the bound process path. The server validates that `{process_id}` belongs to `{case_id}` before listing the same `CorrespondenceMessagePage`; mismatch returns `WOS-1404`/404 and does not fall back to the process alone.
+Case/process bridge for ADR 0093 dual identity. Same `CorrespondenceListOptions` query fields except `processId` is implicit from the bound process path. The server validates that `{process_id}` belongs to `{case_id}` before listing the same `CorrespondenceMessagePage`; mismatch returns `WOS-1404`/404 and does not fall back to the process alone.
 
 ### Log a correspondence message
 
@@ -119,7 +119,7 @@ Cursor-based per ADR 0082 D-7 with the `CorrespondenceMessagePage` envelope. No 
 
 ## Aggregation Include
 
-The case-instance aggregation endpoint extends its closed `?include=` enum (ADR 0082 D-3) with the literal `correspondence`. The embedded slice carries up to the negotiated `correspondence(limit=N)` cap (server enforces a maximum); clients that need the full feed page through `GET /api/v1/instances/{instanceId}/correspondence`.
+The workflow-process aggregation endpoint extends its closed `?include=` enum (ADR 0082 D-3) with the literal `correspondence`. The embedded slice carries up to the negotiated `correspondence(limit=N)` cap (server enforces a maximum); clients that need the full feed page through `GET /api/v1/instances/{processId}/correspondence`.
 
 ## Closed Taxonomies
 

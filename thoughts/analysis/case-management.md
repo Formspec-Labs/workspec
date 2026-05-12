@@ -18,12 +18,12 @@ We analyzed the current work-spec architecture and found:
    - A real-world Case: the durable domain object representing a matter, request, investigation, benefit application, grant, complaint, permit, intervention, appeal, inspection, etc.
    - A workflow/process instance: the runtime execution of a WOS WorkflowDocument.
 
-3. The current `CaseInstance` model is actually a workflow instance:
+3. The current `WorkflowProcess` model is actually a workflow instance:
    - It contains `definition_url`, `definition_version`, lifecycle `configuration`, `case_state`, active tasks, timers, pending events, status, governance state, volume counters, and provenance position.
    - Its own docs describe it as a running workflow instance.
    - This is fine for a workflow runtime artifact, but dangerous as the root product abstraction for case management.
 
-4. The public API currently exposes `CaseInstance` as the public projection of a running WOS workflow instance:
+4. The public API currently exposes `WorkflowProcess` as the public projection of a running WOS workflow instance:
    - It carries workflow binding, lifecycle posture, active configuration, and `caseState`.
    - Tasks, timers, holds, governance, related cases, and provenance are subresources.
    - This is sensible as a runtime/process API, but too narrow for a true case-management product API.
@@ -48,7 +48,7 @@ Do NOT absorb all case-management concepts into WOS.
 
 Do perform a targeted architectural refactor:
 
-    Case != CaseInstance
+    Case != WorkflowProcess
 
     Case is the durable domain aggregate.
     CaseProcess, WorkflowInstance, or GovernedProcessInstance is the WOS runtime/process instance attached to a Case.
@@ -63,7 +63,7 @@ Preferred vocabulary:
 
     CaseProcess:
       Runtime execution of a WorkflowDocument attached to a Case.
-      This is what current `CaseInstance` mostly represents.
+      This is what current `WorkflowProcess` mostly represents.
 
     CaseArtifact:
       Durable item attached to a Case: form response, evidence, document, note, message, decision, signature, external record, generated notice, etc.
@@ -157,7 +157,7 @@ Suggested API direction:
     GET  /api/v1/cases/{caseId}/timeline
     GET  /api/v1/cases/{caseId}/related
 
-Existing `/instances` or `CaseInstance` endpoints should be reframed as process/runtime endpoints:
+Existing `/instances` or `WorkflowProcess` endpoints should be reframed as process/runtime endpoints:
 
     GET  /api/v1/case-processes/{processId}
     POST /api/v1/casease-processes/{processId}/suspend
@@ -190,7 +190,7 @@ The ADR should include:1. Status
 
 2. Context
    - WOS currently has strong workflow/process semantics.
-   - `CaseInstance` currently represents a running workflow instance.
+   - `WorkflowProcess` currently represents a running workflow instance.
    - This creates a product-domain risk when building case management.
    - True cases can have zero, one, or many workflows/processes.
    - A workflow process can complete while the case remains open.
@@ -198,7 +198,7 @@ The ADR should include:1. Status
 
 3. Decision
    - Introduce `Case` as a first-class durable domain aggregate.
-   - Reframe current `CaseInstance` as `CaseProcess`, `WorkflowInstance`, or `GovernedProcessInstance`.
+   - Reframe current `WorkflowProcess` as `CaseProcess`, `WorkflowInstance`, or `GovernedProcessInstance`.
    - Prefer `CaseProcess` unless owner chooses otherwise.
    - A Case MAY have zero or more CaseProcesses.
    - A CaseProcess MUST reference exactly one Case.
@@ -214,10 +214,10 @@ The ADR should include:1. Status
    - Allows manual/ad hoc casework outside workflows.
    - Preserves WOS kernel investments.
    - Requires new schemas, API resources, generated types, and tests.
-   - May require temporary aliases for `CaseInstance`.
+   - May require temporary aliases for `WorkflowProcess`.
 
 5. Alternatives considered
-   - Keep `CaseInstance` as the case root:
+   - Keep `WorkflowProcess` as the case root:
      Rejected because it conflates process execution with real-world case context.
    - Rename only:
      Rejected because the structural relationship must change, not only the name.
@@ -300,11 +300,11 @@ It should include:
 7. Migration stance
    - Because this is pre-release, prefer clean naming where possible.
    - But to minimize code churn, allow Rust/internal aliases temporarily:
-       pub type CaseInstance = CaseProcess;
+       pub type WorkflowProcess = CaseProcess;
    - Public API should be corrected earlier than internal implementation.
 
 8. Compatibility stance
-   - Identify whether existing `$wosCaseInstance` marker remains for now.
+   - Identify whether existing `$wosProcess` marker remains for now.
    - Recommended: keep runtime artifact marker initially, add `caseId`, and document it as legacy-named process artifact until a later ADR renames the marker.
    - Avoid large marker rename unless owner wants a greenfield break.
 
@@ -322,7 +322,7 @@ Suggested phases:
 Phase A — ADR + vocabulary
   - Land ADR.
   - Update high-level docs to state:
-      Case != CaseInstance.
+      Case != WorkflowProcess.
       CaseProcess  the process runtime object.
   - Add glossary entries.
 
@@ -339,7 +339,7 @@ Phase C — Schemas
   - Add process/link fields to existing instance schema:
       `caseId`
       `processKind` or `workflowBinding`
-      possibly rename public `$defs/CaseInstance` to `CaseProcess` or add alias.
+      possibly rename public `$defs/WorkflowProcess` to `CaseProcess` or add alias.
   - Preserve closed taxonomy discipline.
   - Use TypeID-in-URN identity discipline.
   - Ensure tenant consistency between Case and CaseProcess.
@@ -358,9 +358,9 @@ Phase E — Rust/core model updates
       CaseDecision
       CaseRelationship
       CaseTimelineEvent
-  - Decide whether to rename `CaseInstance` internally.
+  - Decide whether to rename `WorkflowProcess` internally.
   - If not renaming immediately, add:
-      pub type CaseProcess = CaseInstance;
+      pub type CaseProcess = WorkflowProcess;
     or the inverse depending on owner decision.
   - Add `case_id` to runtime/process instance.
   - Enforce tenant consistency.
@@ -607,14 +607,14 @@ Add or update process schema fields:
     createdAt
     updatedAt
 
-If current schema still names this `$defs/CaseInstance`, decide whether to:
+If current schema still names this `$defs/WorkflowProcess`, decide whether to:
   - rename to `$defs/CaseProcess`, or
-  - add `$defs/CaseProcess` and keep `$defs/CaseInstance` as deprecated alias/projection.
+  - add `$defs/CaseProcess` and keep `$defs/WorkflowProcess` as deprecated alias/projection.
 
 Recommended low-risk option:
   - Add `$defs/CaseProcess`.
-  - Keep `$defs/CaseInstance` only as a temporary compatibility alias or legacy name.
-  - Update docs to say `CaseInstance` is legacy process-runtime naming.
+  - Keep `$defs/WorkflowProcess` only as a temporary compatibility alias or legacy name.
+  - Update docs to say `WorkflowProcess` is legacy process-runtime naming.
 
 Edge cases to explore before implementation
 ===========================================
@@ -828,7 +828,7 @@ Start by inspecting these repo files:
 - README.md
 - specs/kernel/spec.md
 - specs/api/instance.md
-- schemas/wos-case-instance.schema.json
+- schemas/wos-process.schema.json
 - schemas/api/instance.schema.json
 - crates/wos-core/src/instance.rs
 - crates/wos-core/src/model/kernel.rs
@@ -846,7 +846,7 @@ Use this reasoning in the ADR and design docs:
 
 - WOS is strongest when treated as a governed process substrate.
 - Case management is a broader product/domain concern than workflow execution.
-- Treating `CaseInstance` as the root Case will force real-world case complexity into lifecycle states and `caseState`.
+- Treating `WorkflowProcess` as the root Case will force real-world case complexity into lifecycle states and `caseState`.
 - That produces brittle workflows, giant status taxonomies, overloaded `caseState`, and UI/API confusion.
 - The system already has strong runtime/process machinery; preserve it.
 - The missing abstraction is not more workflow sophistication; it is a durable Case aggregate above WOS.
@@ -917,7 +917,7 @@ Before finalizing the ADR, identify these decisions explicitly:
    Recommendation: introduce `/case-processes`; keep `/instances` temporarily only if churn is too high.
 
 3. Runtime marker:
-   - Keep `$wosCaseInstance` temporarily.
+   - Keep `$wosProcess` temporarily.
    - Rename to `$wosProcessInstance` now.
    - Add alias marker support.
 

@@ -118,7 +118,7 @@ The core loop: receive events, evaluate governance, execute actions, persist pro
 
 use temporal_sdk::{WfContext, Signal, ActivityOptions};
 use wos_core::{
-    Evaluator, CaseInstance, KernelDocument, GovernanceDocument,
+    Evaluator, WorkflowProcess, KernelDocument, GovernanceDocument,
     AIIntegrationDocument, EvalResult, Action, ProvenanceRecord,
 };
 
@@ -146,7 +146,7 @@ pub enum WosQuery {
     GovernanceState,
 }
 
-/// One Temporal workflow instance = one WOS case instance.
+/// One Temporal workflow instance = one WOS workflow process.
 ///
 /// Temporal handles: crash recovery, timer durability, signal queuing,
 /// deterministic replay, event history.
@@ -172,7 +172,7 @@ pub async fn wos_case_workflow(
         activity_options(Duration::from_secs(30)),
     ).await?;
 
-    // ── Phase 2: Initialize evaluator and case instance ──────
+    // ── Phase 2: Initialize evaluator and workflow process ──────
     let mut evaluator = Evaluator::new(&docs.kernel);
     if let Some(ref gov) = docs.governance {
         evaluator.attach_governance(gov);
@@ -181,9 +181,9 @@ pub async fn wos_case_workflow(
         evaluator.attach_ai_integration(ai);
     }
 
-    let mut instance = CaseInstance::create(
+    let mut instance = WorkflowProcess::create(
         &docs.kernel,
-        input.instance_id,
+        input.process_id,
         input.initial_case_file,
     );
 
@@ -276,7 +276,7 @@ The heart of the integration: wos-core evaluates, Temporal executes durably.
 async fn process_wos_event(
     ctx: &WfContext,
     evaluator: &mut Evaluator,
-    instance: &mut CaseInstance,
+    instance: &mut WorkflowProcess,
     docs: &LoadedDocuments,
     event: WosEvent,
 ) -> Result<(), WorkflowError> {
@@ -344,7 +344,7 @@ Each WOS action type maps to a Temporal activity.
 async fn execute_action(
     ctx: &WfContext,
     evaluator: &mut Evaluator,
-    instance: &mut CaseInstance,
+    instance: &mut WorkflowProcess,
     docs: &LoadedDocuments,
     action: &Action,
 ) -> Result<(), WorkflowError> {
@@ -434,7 +434,7 @@ async fn execute_action(
             let path = action.path().unwrap();
             let value = action.value().unwrap();
             instance.set_data(path, value.clone());
-            // Mutation history recorded automatically by CaseInstance.
+            // Mutation history recorded automatically by WorkflowProcess.
         }
 
         // ── emitEvent: fire another event into this workflow ─
@@ -507,7 +507,7 @@ The full governance pipeline for an AI agent call: deontic evaluation, contract 
 async fn invoke_governed_agent(
     ctx: &WfContext,
     evaluator: &mut Evaluator,
-    instance: &mut CaseInstance,
+    instance: &mut WorkflowProcess,
     docs: &LoadedDocuments,
     action: &Action,
 ) -> Result<(), WorkflowError> {
@@ -693,7 +693,7 @@ WOS S8: every agent must have a fallback chain that terminates in a human task o
 async fn execute_fallback_chain(
     ctx: &WfContext,
     evaluator: &mut Evaluator,
-    instance: &mut CaseInstance,
+    instance: &mut WorkflowProcess,
     action: &Action,
     reason: FallbackReason,
 ) -> Result<(), WorkflowError> {
@@ -778,13 +778,13 @@ async fn execute_fallback_chain(
 
 ## 8. The Coprocessor
 
-The handoff between Formspec submissions and WOS case instances. This is the critical gap identified in TODO.md.
+The handoff between Formspec submissions and WOS workflow processes. This is the critical gap identified in TODO.md.
 
 ```rust
 // coprocessor.rs
 
 use formspec_engine::Response;  // Formspec response struct
-use wos_core::{KernelDocument, CaseInstance, CaseFile};
+use wos_core::{KernelDocument, WorkflowProcess, CaseFile};
 
 /// Map a completed Formspec Response to WOS case file fields.
 ///
@@ -826,7 +826,7 @@ pub async fn validate_and_fire(
     ctx: &WfContext,
     submission: &SubmissionPayload,
     kernel: &KernelDocument,
-    instance: &mut CaseInstance,
+    instance: &mut WorkflowProcess,
 ) -> Result<WosEvent, CoprocessorError> {
 
     // Validate response against the Formspec Definition contract.
@@ -865,7 +865,7 @@ pub async fn validate_and_fire(
 /// creating a tamper-evidence chain from form to workflow.
 pub fn link_respondent_ledger(
     submission: &SubmissionPayload,
-    instance: &CaseInstance,
+    instance: &WorkflowProcess,
 ) -> ProvenanceRecord {
     ProvenanceRecord::ledger_link(
         instance,
@@ -981,9 +981,9 @@ Read-only access to case state for the dashboard and API.
 /// Queries are read-only and do not advance the workflow.
 
 #[query_handler(WosQuery::CaseStatus)]
-fn case_status(instance: &CaseInstance) -> CaseStatusResponse {
+fn case_status(instance: &WorkflowProcess) -> CaseStatusResponse {
     CaseStatusResponse {
-        instance_id: instance.id().to_string(),
+        process_id: instance.id().to_string(),
         status: instance.status(),
         active_states: instance.configuration().to_vec(),
         created_at: instance.created_at(),
@@ -992,12 +992,12 @@ fn case_status(instance: &CaseInstance) -> CaseStatusResponse {
 }
 
 #[query_handler(WosQuery::CaseFile)]
-fn case_file(instance: &CaseInstance) -> serde_json::Value {
+fn case_file(instance: &WorkflowProcess) -> serde_json::Value {
     instance.case_file().to_json()
 }
 
 #[query_handler(WosQuery::GovernanceState)]
-fn governance_state(instance: &CaseInstance) -> GovernanceStateResponse {
+fn governance_state(instance: &WorkflowProcess) -> GovernanceStateResponse {
     GovernanceStateResponse {
         active_holds: instance.governance_state().active_holds.clone(),
         active_delegations: instance.governance_state().active_delegations.clone(),
@@ -1028,7 +1028,7 @@ async function handleSubmission(req: Request): Promise<Response> {
   // Resolve which WOS documents govern this workflow.
   const workflowConfig = await resolveWorkflowConfig(submission.definitionRef);
 
-  // Start a Temporal workflow = create a WOS case instance.
+  // Start a Temporal workflow = create a WOS workflow process.
   const handle = await temporal.workflow.start('wos_case_workflow', {
     taskQueue: 'wos-worker',
     workflowId: `case-${submission.id}`,  // Case ID = Workflow ID
@@ -1037,7 +1037,7 @@ async function handleSubmission(req: Request): Promise<Response> {
       governance_url: workflowConfig.governanceUrl,
       ai_url: workflowConfig.aiUrl,
       sidecar_urls: workflowConfig.sidecarUrls,
-      instance_id: `case-${submission.id}`,
+      process_id: `case-${submission.id}`,
       initial_case_file: null,  // Coprocessor maps this from submission
       submission: {
         response_data: submission.data,
@@ -1173,4 +1173,4 @@ linc_prov_01j5e8h2m7rwy4bpnk0a3t05s    -- Lincoln County, provenance record
 
 **Why tenant prefix:** Enables routing and isolation without a lookup. A shared Temporal namespace can partition work by tenant using workflow ID prefix. Provenance queries filter by tenant without joining a separate table. Multi-tenant Postgres can route by prefix if sharding becomes necessary.
 
-**Temporal workflow ID = case ID.** `linc_case_01j5e8g7k3...` is both the WOS case instance identifier and the Temporal workflow ID. One identifier, zero mapping.
+**Temporal workflow ID = case ID.** `linc_case_01j5e8g7k3...` is both the WOS workflow process identifier and the Temporal workflow ID. One identifier, zero mapping.

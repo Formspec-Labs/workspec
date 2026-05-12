@@ -10,7 +10,7 @@
 use semver::{Version, VersionReq};
 use wos_core::eval::ObservedAction;
 use wos_core::instance::{
-    ActiveTask, ActiveTaskStatus, CaseInstance, FormspecTaskContext, PendingEvent,
+    ActiveTask, ActiveTaskStatus, FormspecTaskContext, PendingEvent, WorkflowProcess,
 };
 use wos_core::model::kernel::{ActionKind, KernelDocument};
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
@@ -233,7 +233,7 @@ impl WosRuntime {
     pub(super) fn validate_integration_profile_target(
         &self,
         kernel: &KernelDocument,
-        instance: &CaseInstance,
+        instance: &WorkflowProcess,
     ) -> Result<(), RuntimeError> {
         let Some(profile) = self.integration_profile.as_ref() else {
             return Ok(());
@@ -339,7 +339,7 @@ impl WosRuntime {
         })?;
         let task_sequence = record.instance.next_task_sequence + 1;
         record.instance.next_task_sequence = task_sequence;
-        let task_id = make_task_id(&record.instance.instance_id, task_sequence, &task_ref);
+        let task_id = make_task_id(&record.instance.process_id, task_sequence, &task_ref);
 
         let mut task = ActiveTask {
             task_id,
@@ -406,7 +406,7 @@ impl WosRuntime {
                 let prepared = adapter.prepare_task(&task, &record.instance.case_state)?;
                 task.context = Some(FormspecTaskContext {
                     task_id: task.task_id.clone(),
-                    instance_id: record.instance.instance_id.clone(),
+                    process_id: record.instance.process_id.clone(),
                     contract_ref: contract_key.clone(),
                     definition_url: task.definition_url.clone().unwrap_or_default(),
                     definition_version: task.definition_version.clone().unwrap_or_default(),

@@ -1,13 +1,14 @@
 // Rust guideline compliant 2026-02-21
 
-//! Round-trip deserialization tests for WOS CaseInstance documents.
+//! Round-trip deserialization tests for WOS WorkflowProcess documents.
 
-use wos_core::instance::{ActiveTaskStatus, CaseInstance};
+use wos_core::instance::{ActiveTaskStatus, WorkflowProcess};
 
 #[test]
 fn active_formspec_task_round_trips() {
     let json = r#"{
-        "instanceId": "urn:wos:test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "processId": "test_process_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "caseLedgerId": "test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
         "definitionUrl": "urn:wos:workflow:test",
         "definitionVersion": "1.0.0",
         "configuration": ["intake"],
@@ -26,7 +27,7 @@ fn active_formspec_task_round_trips() {
             "responseMappingRef": "urn:formspec:intake-response:1.0",
             "context": {
                 "taskId": "task-1",
-                "instanceId": "urn:wos:test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+                "processId": "test_process_01jqrpd32jf8xtx9qxkkv3rqsc",
                 "contractRef": "intakeApplication",
                 "definitionUrl": "urn:formspec:intake",
                 "definitionVersion": "2.0.0",
@@ -49,7 +50,7 @@ fn active_formspec_task_round_trips() {
         "updatedAt": "2026-04-11T14:05:00Z"
     }"#;
 
-    let instance: CaseInstance = serde_json::from_str(json).unwrap();
+    let instance: WorkflowProcess = serde_json::from_str(json).unwrap();
     let task = &instance.active_tasks[0];
 
     assert_eq!(task.task_id, "task-1");
@@ -61,8 +62,8 @@ fn active_formspec_task_round_trips() {
         Some("urn:formspec:intake-response:1.0")
     );
     assert_eq!(
-        task.context.as_ref().unwrap().instance_id,
-        "urn:wos:test_case_01jqrpd32jf8xtx9qxkkv3rqsc"
+        task.context.as_ref().unwrap().process_id,
+        "test_process_01jqrpd32jf8xtx9qxkkv3rqsc"
     );
     assert!(
         !task
@@ -75,9 +76,9 @@ fn active_formspec_task_round_trips() {
     let round_trip = serde_json::to_value(&instance).unwrap();
     assert_eq!(
         round_trip
-            .pointer("/activeTasks/0/context/instanceId")
+            .pointer("/activeTasks/0/context/processId")
             .and_then(serde_json::Value::as_str),
-        Some("urn:wos:test_case_01jqrpd32jf8xtx9qxkkv3rqsc")
+        Some("test_process_01jqrpd32jf8xtx9qxkkv3rqsc")
     );
     assert_eq!(
         round_trip
@@ -90,7 +91,6 @@ fn active_formspec_task_round_trips() {
 #[test]
 fn dual_identity_fields_round_trip() {
     let json = r#"{
-        "instanceId": "test_process_01jqrpd32jf8xtx9qxkkv3rqsc",
         "processId": "test_process_01jqrpd32jf8xtx9qxkkv3rqsc",
         "caseLedgerId": "test_case_01jqrpd32jf8xtx9qxkkv3rqsd",
         "definitionUrl": "urn:wos:workflow:test",
@@ -105,14 +105,14 @@ fn dual_identity_fields_round_trip() {
         "updatedAt": "2026-04-11T14:05:00Z"
     }"#;
 
-    let instance: CaseInstance = serde_json::from_str(json).unwrap();
+    let instance: WorkflowProcess = serde_json::from_str(json).unwrap();
 
     assert_eq!(
-        instance.effective_process_id(),
+        instance.process_id,
         "test_process_01jqrpd32jf8xtx9qxkkv3rqsc"
     );
     assert_eq!(
-        instance.effective_case_ledger_id(),
+        instance.case_ledger_id,
         "test_case_01jqrpd32jf8xtx9qxkkv3rqsd"
     );
     let round_trip = serde_json::to_value(&instance).unwrap();
@@ -133,7 +133,8 @@ fn dual_identity_fields_round_trip() {
 #[test]
 fn missing_active_tasks_is_invalid() {
     let json = r#"{
-        "instanceId": "urn:wos:test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "processId": "test_process_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "caseLedgerId": "test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
         "definitionUrl": "urn:wos:workflow:test",
         "definitionVersion": "1.0.0",
         "configuration": ["intake"],
@@ -145,7 +146,7 @@ fn missing_active_tasks_is_invalid() {
         "updatedAt": "2026-04-11T14:05:00Z"
     }"#;
 
-    let error = serde_json::from_str::<CaseInstance>(json).unwrap_err();
+    let error = serde_json::from_str::<WorkflowProcess>(json).unwrap_err();
 
     assert!(
         error.to_string().contains("activeTasks"),
@@ -158,7 +159,8 @@ fn terminal_task_statuses_are_not_active_tasks() {
     for terminal_status in ["completed", "failed", "skipped"] {
         let json = format!(
             r#"{{
-                "instanceId": "urn:wos:test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+                "processId": "test_process_01jqrpd32jf8xtx9qxkkv3rqsc",
+                "caseLedgerId": "test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
                 "definitionUrl": "urn:wos:workflow:test",
                 "definitionVersion": "1.0.0",
                 "configuration": ["intake"],
@@ -178,7 +180,7 @@ fn terminal_task_statuses_are_not_active_tasks() {
             }}"#
         );
 
-        let error = serde_json::from_str::<CaseInstance>(&json).unwrap_err();
+        let error = serde_json::from_str::<WorkflowProcess>(&json).unwrap_err();
 
         assert!(
             error.to_string().contains("unknown variant"),
@@ -190,7 +192,8 @@ fn terminal_task_statuses_are_not_active_tasks() {
 #[test]
 fn declined_status_carries_decline_reason() {
     let json = r#"{
-        "instanceId": "urn:wos:test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "processId": "test_process_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "caseLedgerId": "test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
         "definitionUrl": "urn:wos:workflow:test",
         "definitionVersion": "1.0.0",
         "configuration": ["intake"],
@@ -204,7 +207,7 @@ fn declined_status_carries_decline_reason() {
         "updatedAt": "2026-01-01T00:00:00Z"
     }"#;
 
-    let instance: CaseInstance = serde_json::from_str(json).unwrap();
+    let instance: WorkflowProcess = serde_json::from_str(json).unwrap();
     assert_eq!(
         instance.status,
         wos_core::instance::InstanceStatus::Declined
@@ -221,7 +224,8 @@ fn declined_status_carries_decline_reason() {
 #[test]
 fn voided_status_carries_voided_by_and_voided_at() {
     let json = r#"{
-        "instanceId": "urn:wos:test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "processId": "test_process_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "caseLedgerId": "test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
         "definitionUrl": "urn:wos:workflow:test",
         "definitionVersion": "1.0.0",
         "configuration": ["intake"],
@@ -236,7 +240,7 @@ fn voided_status_carries_voided_by_and_voided_at() {
         "updatedAt": "2026-01-01T00:00:00Z"
     }"#;
 
-    let instance: CaseInstance = serde_json::from_str(json).unwrap();
+    let instance: WorkflowProcess = serde_json::from_str(json).unwrap();
     assert_eq!(instance.status, wos_core::instance::InstanceStatus::Voided);
     assert_eq!(instance.voided_by.as_deref(), Some("actor::supervisor-42"));
     assert_eq!(instance.voided_at.as_deref(), Some("2026-05-07T12:00:00Z"));
@@ -247,7 +251,8 @@ fn voided_status_carries_voided_by_and_voided_at() {
 #[test]
 fn expired_status_carries_expired_at() {
     let json = r#"{
-        "instanceId": "urn:wos:test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "processId": "test_process_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "caseLedgerId": "test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
         "definitionUrl": "urn:wos:workflow:test",
         "definitionVersion": "1.0.0",
         "configuration": ["intake"],
@@ -261,7 +266,7 @@ fn expired_status_carries_expired_at() {
         "updatedAt": "2026-01-01T00:00:00Z"
     }"#;
 
-    let instance: CaseInstance = serde_json::from_str(json).unwrap();
+    let instance: WorkflowProcess = serde_json::from_str(json).unwrap();
     assert_eq!(instance.status, wos_core::instance::InstanceStatus::Expired);
     assert_eq!(instance.expired_at.as_deref(), Some("2026-05-07T23:59:59Z"));
     assert!(instance.decline_reason.is_none());
@@ -272,7 +277,8 @@ fn expired_status_carries_expired_at() {
 #[test]
 fn stalled_status_still_roundtrips() {
     let json = r#"{
-        "instanceId": "urn:wos:test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "processId": "test_process_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "caseLedgerId": "test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
         "definitionUrl": "urn:wos:workflow:test",
         "definitionVersion": "1.0.0",
         "configuration": ["intake"],
@@ -286,7 +292,7 @@ fn stalled_status_still_roundtrips() {
         "updatedAt": "2026-01-01T00:00:00Z"
     }"#;
 
-    let instance: CaseInstance = serde_json::from_str(json).unwrap();
+    let instance: WorkflowProcess = serde_json::from_str(json).unwrap();
     assert_eq!(instance.status, wos_core::instance::InstanceStatus::Stalled);
     assert_eq!(
         instance.stalled_since.as_deref(),

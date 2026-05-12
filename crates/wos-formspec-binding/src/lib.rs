@@ -4,7 +4,7 @@
 
 use integrity_canonical::{CANONICALIZATION_PROFILE, DigestAlgorithm, build_signed_payload};
 use wos_core::{
-    instance::{ActiveTask, CaseInstance, ValidationOutcome},
+    instance::{ActiveTask, ValidationOutcome, WorkflowProcess},
     provenance::{ProvenanceKind, ProvenanceRecord},
 };
 use wos_runtime::binding::{
@@ -600,7 +600,7 @@ pub fn case_created_provenance(
 ) -> Result<ProvenanceRecord, BindingError> {
     handoff.validate()?;
     ensure_non_empty("caseRef", case_ref)?;
-    if !CaseInstance::is_case_id(case_ref) {
+    if !WorkflowProcess::is_case_id(case_ref) {
         return Err(BindingError::InvalidInput(
             "caseRef must be a canonical case ledger TypeID".to_string(),
         ));

@@ -6,7 +6,7 @@
 //! WOS runtime. Concrete adapters can implement the trait directly, while the
 //! current `WosRuntime` remains the reference in-memory adapter.
 
-use wos_core::instance::{CaseInstance, PendingEvent};
+use wos_core::instance::{PendingEvent, WorkflowProcess};
 use wos_core::provenance::ProvenanceRecord;
 
 use crate::custody::{CustodyAppendContext, CustodyAppendInput, CustodyAppendReceipt};
@@ -29,35 +29,33 @@ pub trait DurableRuntime {
     fn create_instance(
         &mut self,
         request: CreateInstanceRequest,
-    ) -> Result<CaseInstance, RuntimeError>;
+    ) -> Result<WorkflowProcess, RuntimeError>;
 
     /// Loads the canonical instance state.
     ///
     /// # Errors
     /// Returns an error when the instance cannot be found or loaded.
-    fn load_instance(&self, instance_id: &str) -> Result<CaseInstance, RuntimeError>;
+    fn load_instance(&self, process_id: &str) -> Result<WorkflowProcess, RuntimeError>;
 
     /// Appends an event to the durable queue.
     ///
     /// # Errors
     /// Returns an error when the instance cannot be found, timestamping fails,
     /// or persistence fails.
-    fn enqueue_event(&mut self, instance_id: &str, event: PendingEvent)
-    -> Result<(), RuntimeError>;
+    fn enqueue_event(&mut self, process_id: &str, event: PendingEvent) -> Result<(), RuntimeError>;
 
     /// Drains a single queued event.
     ///
     /// # Errors
     /// Returns an error when loading, evaluation, host interaction, or
     /// persistence fails.
-    fn drain_once(&mut self, instance_id: &str) -> Result<DrainOnceResult, RuntimeError>;
+    fn drain_once(&mut self, process_id: &str) -> Result<DrainOnceResult, RuntimeError>;
 
     /// Drains until the instance becomes idle.
     ///
     /// # Errors
     /// Returns an error when any `drain_once` step fails.
-    fn drain_until_idle(&mut self, instance_id: &str)
-    -> Result<Vec<DrainOnceResult>, RuntimeError>;
+    fn drain_until_idle(&mut self, process_id: &str) -> Result<Vec<DrainOnceResult>, RuntimeError>;
 
     /// Persists a task draft artifact.
     ///
@@ -109,7 +107,7 @@ pub trait DurableRuntime {
     /// Returns an error when the instance cannot be found or loaded.
     fn load_provenance_window(
         &self,
-        instance_id: &str,
+        process_id: &str,
         cursor: usize,
         limit: usize,
     ) -> Result<Vec<ProvenanceRecord>, RuntimeError>;
@@ -121,7 +119,7 @@ pub trait DurableRuntime {
     /// record cannot be canonicalized into custody append input form.
     fn load_custody_append_window(
         &self,
-        instance_id: &str,
+        process_id: &str,
         cursor: usize,
         limit: usize,
         context: CustodyAppendContext,
@@ -134,7 +132,7 @@ pub trait DurableRuntime {
     /// located, or when persistence fails.
     fn apply_custody_receipt(
         &mut self,
-        instance_id: &str,
+        process_id: &str,
         record_id: &str,
         receipt: CustodyAppendReceipt,
     ) -> Result<(), RuntimeError>;

@@ -15,7 +15,7 @@ use fel_core::{evaluate, has_error_diagnostics, parse, types::Value};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use wos_core::context::EvalContext;
-use wos_core::instance::{ActiveTask, CaseInstance, PendingEvent};
+use wos_core::instance::{ActiveTask, PendingEvent, WorkflowProcess};
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord, SignatureAffirmationInput};
 
 use crate::binding::{
@@ -1198,7 +1198,7 @@ impl WosRuntime {
 
     pub(super) fn record_signature_completion(
         &self,
-        instance: &mut CaseInstance,
+        instance: &mut WorkflowProcess,
         task: &ActiveTask,
         signer_id: &str,
         signed_at: &str,
@@ -1247,7 +1247,7 @@ impl WosRuntime {
 
     pub(super) fn signature_flow_complete_after(
         &self,
-        instance: &CaseInstance,
+        instance: &WorkflowProcess,
         task: &ActiveTask,
     ) -> Result<bool, RuntimeError> {
         if !Self::is_signature_task(task) {
@@ -2494,7 +2494,7 @@ fn truthy(value: &serde_json::Value) -> bool {
     }
 }
 
-fn completed_signature_steps(instance: &CaseInstance) -> HashSet<String> {
+fn completed_signature_steps(instance: &WorkflowProcess) -> HashSet<String> {
     instance
         .extensions
         .get(SIGNATURE_COMPLETIONS_EXTENSION)

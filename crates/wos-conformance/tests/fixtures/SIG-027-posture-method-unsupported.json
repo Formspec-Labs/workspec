@@ -63,7 +63,7 @@
               "signedPayload": {
                 "canonicalization": "formspec-response-signing-v1",
                 "digestAlgorithm": "sha-256",
-                "digest": "cf5196d19ede39a596a800af2d31f527edd230d0840f9a3426f50682605b2b02",
+                "digest": "004171bbadd2285495539cc3121e2e7c8ae92f779fbd0feeb473f2a2e164527a",
                 "responseId": "resp-sig-027-posture-method-unsupported-applicantTask",
                 "definitionUrl": "urn:test:formspec:signature",
                 "definitionVersion": "1.0.0"

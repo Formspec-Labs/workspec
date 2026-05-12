@@ -151,7 +151,7 @@ fn write_trace(
     writer
         .create_element("trace")
         .write_inner_content::<_, quick_xml::Error>(|w| {
-            write_string_attribute(w, "concept:name", &config.instance_id)?;
+            write_string_attribute(w, "concept:name", &config.process_id)?;
             if let Some(version) = definition_version {
                 write_string_attribute(w, "wos:definitionVersion", version)?;
             }
@@ -263,7 +263,7 @@ mod tests {
     fn config() -> ExportConfig {
         ExportConfig {
             provenance_namespace: "urn:wos:prov:test:".to_string(),
-            instance_id: "benefits-001".to_string(),
+            process_id: "benefits-001".to_string(),
         }
     }
 
@@ -495,7 +495,7 @@ mod tests {
     }
 
     #[test]
-    fn trace_concept_name_matches_instance_id() {
+    fn trace_concept_name_matches_process_id() {
         let log = ProvenanceLog::default();
         let xml = export(&log, &config());
 

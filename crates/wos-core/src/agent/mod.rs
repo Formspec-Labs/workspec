@@ -185,7 +185,7 @@ pub struct AgentTask {
 #[derive(Debug)]
 pub struct AgentContext<'a> {
     /// Workflow instance id (case TypeID).
-    pub instance_id: &'a str,
+    pub process_id: &'a str,
 
     /// Per-invocation index supplied by the runtime (often 0 until the runtime
     /// threads a counter). The canonical stub adapter (`wos-agent-stub`) keeps
@@ -585,7 +585,7 @@ mod tests {
         };
         let case = serde_json::json!({});
         let ctx = AgentContext {
-            instance_id: "i",
+            process_id: "i",
             invocation_index: 0,
             case_state: &case,
         };
@@ -662,7 +662,7 @@ mod tests {
         };
         let case = serde_json::json!({});
         let ctx = AgentContext {
-            instance_id: "i",
+            process_id: "i",
             invocation_index: 0,
             case_state: &case,
         };

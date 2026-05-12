@@ -17,7 +17,7 @@ Per ADR 0082 D-15 step 6, this domain pairs with `audit.schema.json` (cross-case
 
 ## Resource Shape
 
-`Bundle` carries identity, case linkage, lifecycle status, sealing metadata, and the certificate-of-completion digest. Required fields: `id`, `instanceId`, `status`, `lifecycleStateAtExport`, `exportedAt`, `tierInclusion`, `mediaType`. Optional fields, omitted when absent: `requestedAt`, `expiresAt`, `byteSize`, `certificateOfCompletionDigest`, `verifierProfile`, `failure`.
+`Bundle` carries identity, case linkage, lifecycle status, sealing metadata, and the certificate-of-completion digest. Required fields: `id`, `processId`, `status`, `lifecycleStateAtExport`, `exportedAt`, `tierInclusion`, `mediaType`. Optional fields, omitted when absent: `requestedAt`, `expiresAt`, `byteSize`, `certificateOfCompletionDigest`, `verifierProfile`, `failure`.
 
 `status` is a closed lifecycle: `pending` (queued, build not started), `building` (generator running, bytes not yet sealed), `available` (byte stream sealed and downloadable), `expired` (retention window elapsed, bytes purged but metadata retained for audit), `failed` (build terminated with error). Closed enum with no extension seam — bundle lifecycle is normative.
 
@@ -31,7 +31,7 @@ Per ADR 0082 D-15 step 6, this domain pairs with `audit.schema.json` (cross-case
 
 ## Identifiers
 
-`Bundle.id` is a `urn:wos:<typeid>` URN per ADR 0092 D-1. `Bundle.instanceId` is a `urn:wos:<typeid>` URN of the owning case.
+`Bundle.id` is a `urn:wos:<typeid>` URN per ADR 0092 D-1. `Bundle.processId` is a `urn:wos:<typeid>` URN of the owning case.
 
 ## Endpoints
 
@@ -42,13 +42,13 @@ Per ADR 0082 D-15 step 6, this domain pairs with `audit.schema.json` (cross-case
 | `POST` | `/api/v1/bundles` | `BundleCreateRequest` -> `Bundle` (status `pending` or `building`) | **REQUIRED** |
 | `GET` | `/api/v1/bundles/{urn}/download` | -> `application/cbor` byte stream | n/a |
 
-`GET /api/v1/bundles` is cursor-paginated per ADR 0082 D-7. Filters: `instanceId` (one case), `lifecycleStateAtExport` (e.g., `decided`), `status` (most commonly `available` for download-ready bundles), `createdAfter` (UTC lower bound on `requestedAt`). No `total`, no `page`. Cursors are deploy-lifetime stable; `WOS-1410` on expiry triggers client restart from the top.
+`GET /api/v1/bundles` is cursor-paginated per ADR 0082 D-7. Filters: `processId` (one case), `lifecycleStateAtExport` (e.g., `decided`), `status` (most commonly `available` for download-ready bundles), `createdAfter` (UTC lower bound on `requestedAt`). No `total`, no `page`. Cursors are deploy-lifetime stable; `WOS-1410` on expiry triggers client restart from the top.
 
 `GET /api/v1/bundles/{urn}` returns the metadata envelope only — never the byte stream. Use this to poll a `pending` / `building` bundle until `status == available`.
 
 **Completion notification seam.** Bundle completion (transition to `available`, `expired`, or `failed`) emits a `Notification` with `type == bundle-completed` (`notification.schema.json`); the carrying `Notification.bundleId` is REQUIRED on that type per the conditional `if`/`then` block on `Notification` (ADR 0082 D-11) and points at the addressable bundle resource. Clients SHOULD subscribe to the notification feed (`GET /api/v1/notifications`) instead of polling `Bundle.status` per case — at scale the feed is the discoverable observable for bundle completion. Polling stays valid (the metadata envelope at `GET /api/v1/bundles/{urn}` is authoritative); the notification seam is the recommended path.
 
-`POST /api/v1/bundles` kicks off the bundle build. **`Idempotency-Key` is REQUIRED** per ADR 0082 D-16 because bundle builds are externally-visible side effects (Trellis events emit, key-registry snapshots, attachment lineage resolution). A repeat request within the retention window returns the original `Bundle` resource unchanged. Body: `BundleCreateRequest { instanceId, tierFilter?, verifierProfile? }`. Response: a `Bundle` resource with `status` typically `pending` or `building`. Clients poll `GET /api/v1/bundles/{urn}` until `status == available`.
+`POST /api/v1/bundles` kicks off the bundle build. **`Idempotency-Key` is REQUIRED** per ADR 0082 D-16 because bundle builds are externally-visible side effects (Trellis events emit, key-registry snapshots, attachment lineage resolution). A repeat request within the retention window returns the original `Bundle` resource unchanged. Body: `BundleCreateRequest { processId, tierFilter?, verifierProfile? }`. Response: a `Bundle` resource with `status` typically `pending` or `building`. Clients poll `GET /api/v1/bundles/{urn}` until `status == available`.
 
 `GET /api/v1/bundles/{urn}/download` is the **binary content seam** — distinct from every other endpoint in the public API. Response `Content-Type: application/cbor`; response body is the Trellis CBOR byte stream verbatim. **This is NOT a JSON response.** OpenAPI describes it as `{"type": "string", "format": "binary"}` under the `application/cbor` content key:
 
@@ -79,7 +79,7 @@ All non-2xx responses (except `/download`'s binary stream which uses HTTP status
 - `WOS-1404`: bundle URN does not exist or is not in the caller's scope.
 - `WOS-1409`: download requested before `status == available`, or bundle is `expired` and bytes were purged.
 - `WOS-1410`: cursor expired, or download attempted on an expired bundle.
-- `WOS-1422`: `BundleCreateRequest.instanceId` is not a valid `urn:wos:<typeid>` URN, or the requested `tierFilter` is rejected by the deployment posture.
+- `WOS-1422`: `BundleCreateRequest.processId` is not a valid `urn:wos:<typeid>` URN, or the requested `tierFilter` is rejected by the deployment posture.
 - `WOS-1503`: bundle build backend (Trellis exporter) unavailable.
 
 ## Greenfield Discipline

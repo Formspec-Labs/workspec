@@ -371,7 +371,7 @@ def _api_facts_record(record_kind: str, event: str) -> dict:
     return {
         "tier": "facts",
         "id": "urn:wos:agency-gov_prov_01jqrxabcd3f8xtx9qxkkv3raa",
-        "instanceId": "urn:wos:sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "processId": "urn:wos:sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc",
         "recordKind": record_kind,
         "timestamp": "2026-04-23T12:00:00Z",
         "definitionVersion": "1.0.0",

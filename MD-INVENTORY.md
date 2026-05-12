@@ -212,7 +212,7 @@ Each file below has a paired `.llm.md` (auto-generated, identical content struct
 
 #### `specs/companions/runtime.md`
 
-**Summary:** Comprehensive runtime contract between WOS engine and host. Covers CaseInstance serialization, instance ops (create/process/suspend/migrate), event delivery (serial, exactly-once dedup), action execution, durability checkpoints, timer management, governance enforcement ordering, explanation assembly, evaluation modes (event-driven + continuous with convergence cap), multi-version coexistence, host interfaces (InstanceStore, DocumentResolver, ContractValidator, ExternalService, etc.), security model, relationship-triggered events, Formspec task coprocessor (S15).
+**Summary:** Comprehensive runtime contract between WOS engine and host. Covers WorkflowProcess serialization, instance ops (create/process/suspend/migrate), event delivery (serial, exactly-once dedup), action execution, durability checkpoints, timer management, governance enforcement ordering, explanation assembly, evaluation modes (event-driven + continuous with convergence cap), multi-version coexistence, host interfaces (InstanceStore, DocumentResolver, ContractValidator, ExternalService, etc.), security model, relationship-triggered events, Formspec task coprocessor (S15).
 **Relates to:** Kernel §4–§9; lifecycle-detail; governance enforcement ordering; Formspec Core (task binding, validation); mapping spec; Respondent Ledger.
 **Status:** ✅ Canonical Draft. **LLM pair:** ✅
 
@@ -402,7 +402,7 @@ Six open questions from architecture review with synthesized answers from 3 revi
 
 ### `thoughts/archive/specs/2026-04-11-wos-s15-formspec-coprocessor-proposal.md`
 
-Concrete proposal for Runtime Companion §15 (Formspec Coprocessor Protocol). Defines task pinning, FormspecTaskContext shape, TaskPresenter interface, coprocessor validation algorithm, submitTaskResponse steps, kernel/case-instance schema updates, Respondent Ledger integration.
+Concrete proposal for Runtime Companion §15 (Formspec Coprocessor Protocol). Defines task pinning, FormspecTaskContext shape, TaskPresenter interface, coprocessor validation algorithm, submitTaskResponse steps, kernel/workflow-process schema updates, Respondent Ledger integration.
 **Status:** 🗄 Archived — merged into Phase 11 master spec 2026-04-11; remains as §15 source.
 
 ### `thoughts/examples/medicaid-redetermination-user-stories.md`

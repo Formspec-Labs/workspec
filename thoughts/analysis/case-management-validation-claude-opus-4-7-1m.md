@@ -20,7 +20,7 @@ This is not cosmetic. It changes every API shape in §"Suggested API direction":
 
 1. **ADR 0073 D-1 ownership.** WOS is the *only* layer that emits `case.created`. The proposal's "Case MAY exist with zero processes" + manual creation + deferred intake silently demote WOS to owning *process* identity only. Either ADR 0073 amends to admit non-handoff manual origination through WOS, or a new layer above WOS gains emission authority (rejected). Proposal does not pick.
 
-2. **Three-way "case" naming collision.** Product `Case` / Trellis `Case Ledger` (Phase-3, [`trellis-core.md §1.2`](../../../trellis/specs/trellis-core.md)) / WOS `$wosCaseInstance` runtime marker. Proposal acknowledges only the third. When the Trellis case-ledger spec ships, "case" becomes triply loaded in one commit unless the ADR pins it now. Plus the TypeID family prefix `_case_` for `instanceId` must be re-decided (probably `_process_`).
+2. **Three-way "case" naming collision.** Product `Case` / Trellis `Case Ledger` (Phase-3, [`trellis-core.md §1.2`](../../../trellis/specs/trellis-core.md)) / WOS `$wosProcess` runtime marker. Proposal acknowledges only the third. When the Trellis case-ledger spec ships, "case" becomes triply loaded in one commit unless the ADR pins it now. Plus the TypeID family prefix `_case_` for `processId` must be re-decided (probably `_process_`).
 
 3. **"Governed output path" is not a seam.** The six named kernel seams (ADR 0077) do not include it. `CaseStateMutation`/`CaseArtifact`/`CaseDecision`/`Timeline append` are new output-binding *kinds*. **Right answer**: extend `outputBinding` ([kernel §9.2.21](../../specs/kernel/spec.md)) with a `target` discriminator (`processCaseState` | `caseArtifact` | `caseDecision` | `caseTimeline`). Do not invent a seventh seam.
 
@@ -34,14 +34,14 @@ This is not cosmetic. It changes every API shape in §"Suggested API direction":
 
 ## Tactical disagreements between the two agents
 
-- **`$wosCaseInstance` rename blast radius.** spec-expert reads it as large (touches lint, conformance discovery, CI gates, fixtures). cross-stack-scout grep'd it: 14 hits in `work-spec/` + case-portal SDK regen — *~20-30 files, one ADR, no stable reason to leave it misnamed.* The codebase favors cross-stack-scout's count. Do the rename in one shot.
+- **`$wosProcess` rename blast radius.** spec-expert reads it as large (touches lint, conformance discovery, CI gates, fixtures). cross-stack-scout grep'd it: 14 hits in `work-spec/` + case-portal SDK regen — *~20-30 files, one ADR, no stable reason to leave it misnamed.* The codebase favors cross-stack-scout's count. Do the rename in one shot.
 
 - **Kernel §5 "Case State" semantics.** spec-expert flags that kernel §5 today defines only *one* `caseState` (workflow business data, append-only log per §5.1). The proposal's `CaseState` (durable case-domain) vs `ProcessState` (runtime) distinction does not exist in the kernel and would require a kernel spec extension, not just an API-layer addition.
 
 ## Root-domino dependency order
 
 1. **Trellis** — register `wos.case-created`, `wos.case-closed`, `wos.case-reopened`, `wos.note`, `wos.communication`, `wos.artifact-attached` in the bound `event_type` registry (registry binding, no byte change).
-2. **WOS kernel** — extend `outputBinding` with `target` discriminator; admit non-transition governance event paths (for ad-hoc notes — caseworker note still hits the chain, signed by staff actor, anchored via `custodyHook`); rename `$wosCaseInstance` → `$wosProcessInstance`; extend kernel §5 to distinguish process-scoped from case-scoped state.
+2. **WOS kernel** — extend `outputBinding` with `target` discriminator; admit non-transition governance event paths (for ad-hoc notes — caseworker note still hits the chain, signed by staff actor, anchored via `custodyHook`); rename `$wosProcess` → `$wosProcessInstance`; extend kernel §5 to distinguish process-scoped from case-scoped state.
 3. **ADR 0073 amendment** — admit manual (no-handoff) case origination; enumerate validation discipline; pin three-way naming.
 4. **wos-server EventStore** — `case_projection` reducer + metadata-only `/api/v1/cases/*` routes. **Cannot land before the zero-trust EventStore refactor.**
 5. **Formspec** — minimal; existing `IntakeHandoff` continues; attach-to-existing path already exists.
@@ -54,7 +54,7 @@ Write a **half-page reframing memo** at `thoughts/specs/2026-05-10-case-is-a-pro
 - Classifies `subjects`/`participants`/`notes`/`communications`/`decisions`/`artifacts` under ADR-0074 access classes; commits to ciphertext-plus-wrapped-DEKs on subresource reads.
 - Pins the three-way "case" naming (product Case / Trellis Case Ledger / `$wosProcessInstance`) and the TypeID prefix change.
 - Names the `outputBinding.target` discriminator as the WOS-layer structural change (no new seam).
-- Confirms `$wosCaseInstance` → `$wosProcessInstance` rename ships in one ADR, not as a perpetual alias.
+- Confirms `$wosProcess` → `$wosProcessInstance` rename ships in one ADR, not as a perpetual alias.
 
 After that memo lands, the proposed Step-1 ADR can be written with the right structural premise. Without it, the ADR risks ratifying a parallel store that contradicts the zero-trust commitment.
 
@@ -70,15 +70,15 @@ The proposal is an AI-generated architectural analysis and consultant recommenda
 
 **Three distinct "case" names exist and the proposal navigates them unequally.**
 
-**WOS `CaseInstance`** is the runtime artifact. Its schema marker is `$wosCaseInstance: "1.0"` in `wos-case-instance.schema.json`. The description states explicitly: "A CaseInstance is the serialization format for a running workflow instance — it captures the complete runtime state needed to resume processing after a crash, migrate between processors, or audit past behavior." Its `instanceId` uses `TypeID` pattern `[tenant]_case_[ulid]`. This is scoped entirely to workflow runtime.
+**WOS `WorkflowProcess`** is the runtime artifact. Its schema marker is `$wosProcess: "1.0"` in `wos-process.schema.json`. The description states explicitly: "A WorkflowProcess is the serialization format for a running workflow instance — it captures the complete runtime state needed to resume processing after a crash, migrate between processors, or audit past behavior." Its `processId` uses `TypeID` pattern `[tenant]_case_[ulid]`. This is scoped entirely to workflow runtime.
 
 **Trellis "Case Ledger"** is defined at `trellis-core.md §1.2` as: "A hash-chained sequence of governance events composing one or more sealed response-ledger heads with WOS governance events into one adjudicatory matter. Phase 3." The `work-spec/CLAUDE.md` (Architecture section) says "'Case Ledger' (Trellis Core §1.2 term) is the canonical name for what was called 'Subject Ledger' or extended 'Respondent Ledger.' Spec rewrite from `respondent-ledger-spec.md` → `case-ledger-spec.md` is pending." The `trellis/CLAUDE.md` confirms: "'case ledger' (Core §1.2) is the canonical scope name." Critically, the Trellis case ledger does not yet have a finalized spec — `case-ledger-spec.md` does not exist at `trellis/specs/`. It is a Phase 3 superset concept.
 
 **The proposal's "Case"** is a new product-level domain aggregate above both.
 
-The proposal does acknowledge the naming risk in edge case 32 ("caseState currently means workflow process business data") but does NOT acknowledge the Trellis Case Ledger collision. The proposed `Case` aggregate uses the bare word "case" — the same word Trellis uses for its integrity-anchored adjudicatory container, which will eventually be the cryptographic wrapper for all durable case events. There is a genuine **three-way naming collision**: product `Case` / Trellis `Case Ledger` / WOS `CaseInstance`, and the proposal underestimates the Trellis one because the Trellis Phase 3 spec has not yet shipped. When it does ship, "case" will be doubly loaded in a single stack commit: the product domain aggregate and the Trellis cryptographic ledger scope. This is manageable if the ADR explicitly pins the distinction — Trellis Case Ledger is the integrity substrate for case events; the product Case is the domain aggregate — but the current proposal does not do that pinning work.
+The proposal does acknowledge the naming risk in edge case 32 ("caseState currently means workflow process business data") but does NOT acknowledge the Trellis Case Ledger collision. The proposed `Case` aggregate uses the bare word "case" — the same word Trellis uses for its integrity-anchored adjudicatory container, which will eventually be the cryptographic wrapper for all durable case events. There is a genuine **three-way naming collision**: product `Case` / Trellis `Case Ledger` / WOS `WorkflowProcess`, and the proposal underestimates the Trellis one because the Trellis Phase 3 spec has not yet shipped. When it does ship, "case" will be doubly loaded in a single stack commit: the product domain aggregate and the Trellis cryptographic ledger scope. This is manageable if the ADR explicitly pins the distinction — Trellis Case Ledger is the integrity substrate for case events; the product Case is the domain aggregate — but the current proposal does not do that pinning work.
 
-The `instanceId` TypeID in `wos-case-instance.schema.json` uses the family prefix `case` (`[tenant]_case_[ulid]`). The proposal recommends renaming the WOS runtime object to `CaseProcess` but does not address whether the TypeID family prefix also changes. If it stays `_case_`, the TypeID shape of a CaseProcess remains `[tenant]_case_[ulid]`, which will confuse consumers once the product `Case` aggregate gets its own IDs. The ADR must decide the CaseProcess TypeID prefix, likely `[tenant]_process_[ulid]`.
+The `processId` TypeID in `wos-process.schema.json` uses the family prefix `case` (`[tenant]_case_[ulid]`). The proposal recommends renaming the WOS runtime object to `CaseProcess` but does not address whether the TypeID family prefix also changes. If it stays `_case_`, the TypeID shape of a CaseProcess remains `[tenant]_case_[ulid]`, which will confuse consumers once the product `Case` aggregate gets its own IDs. The ADR must decide the CaseProcess TypeID prefix, likely `[tenant]_process_[ulid]`.
 
 ### 2. Existing Case-Initiation Contract
 
@@ -98,31 +98,31 @@ This is not a minor ADR clarification. Amending D-1 of ADR 0073 requires cross-s
 
 **Schemas requiring change:**
 
-`wos-case-instance.schema.json` — the entire schema represents what the proposal calls `CaseProcess`. Its root marker is `$wosCaseInstance: "1.0"`, its `instanceId` format annotation is `"format": "wos-case-typeid"`. Its `status` enum includes `active | suspended | migrating | completed | terminated | stalled | declined | voided | expired`. The proposal's suggestion of `pub type CaseInstance = CaseProcess` in Rust is internally viable as a type alias, but the `$wosCaseInstance` marker is a **JSON envelope discriminant**, not just a Rust type. The lint parser uses it to detect runtime artifacts uniformly (per ADR 0063 §2.3). A rename requires: (a) bumping the schema `$id`, (b) updating lint detection, (c) updating all serialized instances in test fixtures, and (d) updating `wos-runtime`'s `accept_intake_handoff` and `create_instance` code paths. The proposal correctly identifies the marker issue in "Compatibility stance" but understates the coupling depth.
+`wos-process.schema.json` — the entire schema represents what the proposal calls `CaseProcess`. Its root marker is `$wosProcess: "1.0"`, its `processId` format annotation is `"format": "wos-case-typeid"`. Its `status` enum includes `active | suspended | migrating | completed | terminated | stalled | declined | voided | expired`. The proposal's suggestion of `pub type WorkflowProcess = CaseProcess` in Rust is internally viable as a type alias, but the `$wosProcess` marker is a **JSON envelope discriminant**, not just a Rust type. The lint parser uses it to detect runtime artifacts uniformly (per ADR 0063 §2.3). A rename requires: (a) bumping the schema `$id`, (b) updating lint detection, (c) updating all serialized instances in test fixtures, and (d) updating `wos-runtime`'s `accept_intake_handoff` and `create_instance` code paths. The proposal correctly identifies the marker issue in "Compatibility stance" but understates the coupling depth.
 
-`wos-workflow.schema.json` — defines `$defs/InstanceStatus` (the closed status enum mirrored from `wos-case-instance.schema.json`) and `$defs/CaseFile` (the `caseState` analog for author-time). Adding a `caseId` field to the instance schema is a schema-breaking change for any conformance suite that validates instance documents against `wos-case-instance.schema.json` (currently `additionalProperties: false`).
+`wos-workflow.schema.json` — defines `$defs/InstanceStatus` (the closed status enum mirrored from `wos-process.schema.json`) and `$defs/CaseFile` (the `caseState` analog for author-time). Adding a `caseId` field to the instance schema is a schema-breaking change for any conformance suite that validates instance documents against `wos-process.schema.json` (currently `additionalProperties: false`).
 
 `wos-provenance-log.schema.json` — the `$defs/CaseCreatedRecord` uses `event: "case.created"` as a hardcoded constant. If the Case aggregate above WOS uses the same event name with different semantics, the provenance record shape is overloaded. A new event name (`process.created` or `case.process.attached`) will be needed.
 
 **New schemas needed:**
 
-The proposed `schemas/api/case.schema.json` is entirely new territory with no current equivalent. The `schemas/api/instance.schema.json` (referenced in `wos-case-instance.schema.json#/$defs/FormspecTaskContext` under `instanceId`) and `wos-workflow.schema.json#/$defs/InstanceStatus` are the public API surface projection for runtime instances.
+The proposed `schemas/api/case.schema.json` is entirely new territory with no current equivalent. The `schemas/api/instance.schema.json` (referenced in `wos-process.schema.json#/$defs/FormspecTaskContext` under `processId`) and `wos-workflow.schema.json#/$defs/InstanceStatus` are the public API surface projection for runtime instances.
 
 **Conformance suite impact:**
 
-The `RELEASE-STREAMS.md` conformance streams (signature, governance, AI deontic, advanced equity) all operate on the `$wosWorkflow` envelope and `$wosCaseInstance` runtime artifact as their anchor documents. Renaming `$wosCaseInstance` → `$wosCaseProcess` or adding `caseId` to the instance document will require: re-running all signature-profile fixtures (since provenance records reference `instanceId` values), updating governance conformance fixtures, and verifying that the `wos-conformance` test suite's discovery logic (which finds runtime artifacts by `$wosCaseInstance` marker) still works. The `every_load_bearing_conformance_rule_has_at_least_two_executable_fixtures` CI gate will trip if fixture documents carry the old marker.
+The `RELEASE-STREAMS.md` conformance streams (signature, governance, AI deontic, advanced equity) all operate on the `$wosWorkflow` envelope and `$wosProcess` runtime artifact as their anchor documents. Renaming `$wosProcess` → `$wosCaseProcess` or adding `caseId` to the instance document will require: re-running all signature-profile fixtures (since provenance records reference `processId` values), updating governance conformance fixtures, and verifying that the `wos-conformance` test suite's discovery logic (which finds runtime artifacts by `$wosProcess` marker) still works. The `every_load_bearing_conformance_rule_has_at_least_two_executable_fixtures` CI gate will trip if fixture documents carry the old marker.
 
 ### 4. `caseState` Semantics
 
 The kernel spec §5 is named "Case State" and §5.1 says: "Case state is the structured data container associated with a workflow instance... Case state is an **append-only log** that grows regardless of lifecycle transitions. Lifecycle state (where in the workflow) and case state (what data exists) are independent."
 
-The `caseState` property in `wos-case-instance.schema.json` is described as: "Current case file field values. The keys are field names declared in the Kernel Document's caseFile.fields (Kernel S5.2). Values conform to the declared field types (Kernel S5.3). Mutated by setData actions and completed task response mappings. This is the authoritative business-data snapshot at the current point in processing."
+The `caseState` property in `wos-process.schema.json` is described as: "Current case file field values. The keys are field names declared in the Kernel Document's caseFile.fields (Kernel S5.2). Values conform to the declared field types (Kernel S5.3). Mutated by setData actions and completed task response mappings. This is the authoritative business-data snapshot at the current point in processing."
 
 So currently `caseState` is: workflow-declared business data, scoped to a single workflow instance, mutated by `setData` actions, projected back via `responseMappingRef`. It is the canonical runtime projection of the author-time `caseFile.fields`.
 
 The proposal correctly diagnoses the risk: without refactoring, `caseState` would be expected to serve as both the workflow's runtime data container AND the durable product-domain fact store for the broader Case. These are semantically different scopes.
 
-The proposal's distinction between `CaseState` (durable case-domain) and `ProcessState` (runtime workflow) is **not currently supported** in any kernel spec section. Kernel §5 uses only one term — "case state" — for the workflow instance's business data. The author-time schema (`wos-workflow.schema.json#/$defs/CaseFile`) is the contract; the runtime snapshot (`wos-case-instance.schema.json#/properties/caseState`) is the materialized value. Neither has a concept of "process-scoped state" vs "case-scoped state." The proposal invents new semantics the kernel does not yet define, which means kernel §5 itself would need to be extended or bifurcated, not just the API layer. This is a kernel spec change, not a product-layer addition.
+The proposal's distinction between `CaseState` (durable case-domain) and `ProcessState` (runtime workflow) is **not currently supported** in any kernel spec section. Kernel §5 uses only one term — "case state" — for the workflow instance's business data. The author-time schema (`wos-workflow.schema.json#/$defs/CaseFile`) is the contract; the runtime snapshot (`wos-process.schema.json#/properties/caseState`) is the materialized value. Neither has a concept of "process-scoped state" vs "case-scoped state." The proposal invents new semantics the kernel does not yet define, which means kernel §5 itself would need to be extended or bifurcated, not just the API layer. This is a kernel spec change, not a product-layer addition.
 
 ### 5. Governed Output Path Claim
 
@@ -130,7 +130,7 @@ The kernel's six seams (ADR 0077, normatively confirmed in kernel spec abstract 
 
 What exists that is closest: `wos-workflow.schema.json` has a top-level `bindings` property (type `array`, items `OutputBinding`). The `State` properties include `outputPath` and `mergeStrategy` for `foreach` states (added in kernel §4.3.1), where "Per ADR 0078, the write goes through the governed output-commit pipeline (ADR 0080) with `mutationSource: computed`." ADR 0078 and 0080 describe the `outputPath` + `mergeStrategy` mechanism for foreach iteration results — but this is scoped to foreach state body outputs, not a generalized "governed output" seam for cross-Case writes.
 
-The proposal's "CaseStateMutation / CaseArtifact creation / CaseDecision creation / Timeline append" output taxonomy is entirely new — none of these are currently defined anywhere in the WOS kernel, governance, or advanced governance specs. `CaseDecision` is not an existing WOS construct. The `Governance` block in `wos-workflow.schema.json` has `amendmentTaxonomy` with values like `correction`, `amendment`, `supersession`, `rescission`, `reinstatement` (visible in the schema examples at offset 222–237) — but these are governance amendment types for provenance records on the existing `CaseInstance`, not a separate `CaseDecision` aggregate.
+The proposal's "CaseStateMutation / CaseArtifact creation / CaseDecision creation / Timeline append" output taxonomy is entirely new — none of these are currently defined anywhere in the WOS kernel, governance, or advanced governance specs. `CaseDecision` is not an existing WOS construct. The `Governance` block in `wos-workflow.schema.json` has `amendmentTaxonomy` with values like `correction`, `amendment`, `supersession`, `rescission`, `reinstatement` (visible in the schema examples at offset 222–237) — but these are governance amendment types for provenance records on the existing `WorkflowProcess`, not a separate `CaseDecision` aggregate.
 
 ADR 0066 (referenced by the proposal) does not exist at `thoughts/adr/0066-stack-provenance-record-amendment-and-supersession.md` — that file is missing from the tree. The amendment/supersession vocabulary referenced is visible only in the `governance.amendmentTaxonomy` example in `wos-workflow.schema.json`. The proposal's "CaseDecision" concept partially overlaps with what the current specs call "determination" (a `transitionTags` value used with `caseFileSnapshot` per kernel §8.2.1), but determination is a transition-level concept inside a workflow, not a top-level Case resource.
 
@@ -156,9 +156,9 @@ Several edge cases in the proposal are already settled normatively and the propo
 
 **Edge case 16 (Related cases — directional vs symmetric):** Kernel §5.5 already defines `bidirectional: boolean` (default `false`) and `type` as `parent | child | sibling | related | supersedes` with `x-` extensibility. The proposal's `CaseRelationshipKind` of `parent | child | sibling | predecessor | successor | appeals | appealed-by | related | supersedes | duplicate-of | duplicated-by | split-from | split-into | merged-into | merged-from` is a superset. It must decide whether to replace the kernel's `caseRelationships` vocabulary or extend it via `x-` prefixed kinds.
 
-**Edge case 17 (Process migration):** Kernel §9.6 defines `instanceVersioning: "pinned" | "migrateable"` with "Running instances remain on their creation-time version unless explicitly migrated (Runtime Companion §11)." The `wos-case-instance.schema.json` property `definitionVersion` is described as "pinned at instance creation." The proposal's "Process migration must preserve caseId" is correct in direction, but the spec already has migration semantics; the proposal just needs to add `caseId` as an invariant under migration.
+**Edge case 17 (Process migration):** Kernel §9.6 defines `instanceVersioning: "pinned" | "migrateable"` with "Running instances remain on their creation-time version unless explicitly migrated (Runtime Companion §11)." The `wos-process.schema.json` property `definitionVersion` is described as "pinned at instance creation." The proposal's "Process migration must preserve caseId" is correct in direction, but the spec already has migration semantics; the proposal just needs to add `caseId` as an invariant under migration.
 
-**Edge case 28 (Case status vs process status):** This is the proposal's strongest point from a spec gap perspective. The `wos-case-instance.schema.json#/properties/status` enum `active | suspended | migrating | completed | terminated | stalled | declined | voided | expired` is entirely workflow-lifecycle vocabulary. There is no current concept of a separate Case status. The proposal is right that `open | on-hold | closed | archived` is semantically distinct and does not exist anywhere in the current schemas.
+**Edge case 28 (Case status vs process status):** This is the proposal's strongest point from a spec gap perspective. The `wos-process.schema.json#/properties/status` enum `active | suspended | migrating | completed | terminated | stalled | declined | voided | expired` is entirely workflow-lifecycle vocabulary. There is no current concept of a separate Case status. The proposal is right that `open | on-hold | closed | archived` is semantically distinct and does not exist anywhere in the current schemas.
 
 **Edge case 6 (Case closure with active processes):** The kernel has no concept of "case closure" at all — only workflow terminal states (`completed`, `terminated`). This edge case is entirely unaddressed by the current spec and will require new normative work regardless.
 
@@ -168,13 +168,13 @@ Several edge cases in the proposal are already settled normatively and the propo
 
 This proposal is **(b) — structurally sound but requires renaming existing normative terms and would force cross-stack ADRs** — with a partial **(c)** caveat for several edge cases.
 
-**What is structurally sound:** The core insight — that `CaseInstance` is a workflow runtime artifact and is architecturally wrong as the root product domain object for case management — is correct and the kernel spec confirms it. The `wos-case-instance.schema.json` title says "A WOS CaseInstance document... a running workflow instance." The conflation risk is real. Separating Case (domain aggregate) from CaseProcess (runtime instance) is a structurally correct direction.
+**What is structurally sound:** The core insight — that `WorkflowProcess` is a workflow runtime artifact and is architecturally wrong as the root product domain object for case management — is correct and the kernel spec confirms it. The `wos-process.schema.json` title says "A WOS WorkflowProcess document... a running workflow instance." The conflation risk is real. Separating Case (domain aggregate) from CaseProcess (runtime instance) is a structurally correct direction.
 
 **What requires normative surgery:**
 
 1. ADR 0073 D-1 ("WOS owns governed case identity and `case.created`") must be amended to answer "who emits `case.created` for a Case created with zero CaseProcesses." The current normative answer is: WOS does, always. The proposal silently overrides this.
 
-2. The `$wosCaseInstance` marker rename is not just a Rust type alias. It is a JSON envelope discriminant used by lint, conformance, and the runtime. Every conformance fixture referencing it must be updated and the `discover_and_report_promotion_candidates` CI gate will need adjustment.
+2. The `$wosProcess` marker rename is not just a Rust type alias. It is a JSON envelope discriminant used by lint, conformance, and the runtime. Every conformance fixture referencing it must be updated and the `discover_and_report_promotion_candidates` CI gate will need adjustment.
 
 3. The TypeID family prefix `_case_` for instance IDs must be changed if the instance object is renamed to `CaseProcess`, or left as `_case_` with documented ambiguity. The ADR must make this call explicitly.
 
@@ -189,7 +189,7 @@ This proposal is **(b) — structurally sound but requires renaming existing nor
 ### Key file references for the ADR author
 
 - `thoughts/adr/0073-stack-case-initiation-and-intake-handoff.md` — D-1, D-4, D-7 ownership pins
-- `work-spec/schemas/wos-case-instance.schema.json` — `$wosCaseInstance` marker, `status` enum, `instanceId` TypeID pattern, `caseState` definition
+- `work-spec/schemas/wos-process.schema.json` — `$wosProcess` marker, `status` enum, `processId` TypeID pattern, `caseState` definition
 - `work-spec/schemas/wos-provenance-log.schema.json` — `CaseCreatedRecord` (`event: "case.created"` constant), `IntakeAcceptedRecord`
 - `work-spec/specs/kernel/spec.md` §5 ("Case State") — the term "caseState" is workflow-instance scoped; §5.5 (`caseRelationships`) — existing related-case vocabulary; §8.2.3 — `caseCreated` / `intakeAccepted` record kind definitions
 - `work-spec/specs/advanced/advanced-governance.md` §4 — constraint zones as process-internal adaptive work overlay, not a case-aggregate concept
@@ -258,9 +258,9 @@ The proposal's seven `/api/v1/cases/*` routes ([`case-management.md:147-156`](ca
 
 None of this exists today. The proposal's Phase F ([`case-management.md:366-374`](case-management.md)) describes the *behavior* but does not enumerate the *machinery*. Either the proposal must defer routes until the EventStore zero-trust refactor lands, or it must include explicit dependency on it.
 
-### 5. `$wosCaseInstance` marker rename — blast radius is tractable but real
+### 5. `$wosProcess` marker rename — blast radius is tractable but real
 
-Grepping `$wosCaseInstance` across `work-spec/`: **14 hits** across schema, lint, tests, plans, ADRs, and one governance spec ([`workflow-governance.md:791`](../../specs/governance/workflow-governance.md)). Plus runtime artifact identity discipline at [ADR-0063](../adr/0063-embedded-vs-sidecar-identity-boundary.md) (recognizes only six author-time + two runtime markers).
+Grepping `$wosProcess` across `work-spec/`: **14 hits** across schema, lint, tests, plans, ADRs, and one governance spec ([`workflow-governance.md:791`](../../specs/governance/workflow-governance.md)). Plus runtime artifact identity discipline at [ADR-0063](../adr/0063-embedded-vs-sidecar-identity-boundary.md) (recognizes only six author-time + two runtime markers).
 
 True blast radius if renamed to `$wosProcessInstance`:
 
@@ -268,10 +268,10 @@ True blast radius if renamed to `$wosProcessInstance`:
 - Lint: `crates/wos-lint/src/document.rs:88` (DocumentKind dispatch table), `crates/wos-lint/tests/tier2_rules.rs:109`.
 - ADR-0063 itself: textual update naming the recognized markers.
 - Conformance fixtures: any fixture carrying the marker (low — runtime artifacts are not heavily fixtured).
-- wos-server adapters: internal Rust types use `CaseInstance` symbol but that's separable from JSON marker.
-- Trellis export bundles: the marker doesn't appear in Trellis envelopes — Trellis sees governance events, not case-instance JSON.
+- wos-server adapters: internal Rust types use `WorkflowProcess` symbol but that's separable from JSON marker.
+- Trellis export bundles: the marker doesn't appear in Trellis envelopes — Trellis sees governance events, not workflow-process JSON.
 - Studio (policy-studio) authoring: zero — Studio authors Workflow Documents, not runtime artifacts.
-- case-portal generated SDK: the response schema's `$wosCaseInstance` field flows to the generated TS type; rename = generated-type rename.
+- case-portal generated SDK: the response schema's `$wosProcess` field flows to the generated TS type; rename = generated-type rename.
 
 **Total: ~20-30 files, all in `work-spec/` + `case-portal/` generated-SDK refresh.** The proposal's "keep marker temporarily, document as legacy" stance ([`case-management.md:920-922`](case-management.md)) is can-kicking. Per parent [`VISION.md`](../../../VISION.md) "no backwards compatibility / nothing is released," there is no legitimate reason to leave a misnamed marker. **Rename in one ADR; it's a 30-minute rebuild, not a stable rest position.**
 
@@ -302,7 +302,7 @@ The proposal does not name (a) vs (b). **Both require WOS spec edits.** Custody 
 
 ### 8. Tenant + class consistency — invariant is fine; federation is out of scope
 
-[`case-management.md:439`](case-management.md): "Case tenant MUST match attached CaseProcess tenant." Today's `wos-case-instance.schema.json:53-66` enforces tenant in the TypeID prefix. Postgres-per-tenant + OpenFGA enforces at storage and authz layers. Case-vs-process tenancy is a derived invariant — a Case projection in tenant A's database cannot reference a Process in tenant B's database, since they are physically separate. The proposal's invariant is a check on the projection reducer, not new infrastructure.
+[`case-management.md:439`](case-management.md): "Case tenant MUST match attached CaseProcess tenant." Today's `wos-process.schema.json:53-66` enforces tenant in the TypeID prefix. Postgres-per-tenant + OpenFGA enforces at storage and authz layers. Case-vs-process tenancy is a derived invariant — a Case projection in tenant A's database cannot reference a Process in tenant B's database, since they are physically separate. The proposal's invariant is a check on the projection reducer, not new infrastructure.
 
 Cross-tenant federation is a Trellis concern ([`trellis-core.md` Phase-3 federation log](../../../trellis/specs/trellis-core.md)) and explicitly out of scope for SBA Q1. Defer.
 
@@ -312,16 +312,16 @@ The missing primitive is **NOT** a "Case aggregate." It is:
 
 > **A case-scoped projection, materialized from the canonical Trellis case ledger by replay, exposed as the product API root, with no plaintext content in the projection itself — only opaque per-class refs, key-bag-fragment release flowing through the normal client-decrypt path.**
 
-The proposal correctly identifies the boundary problem (`Case ≠ CaseInstance`, multiple processes, ad hoc work) and correctly insists on governed output paths. It is **wrong at one structural premise**: it talks as though `Case` is a new authoritative store, when under [`workspec-server/crates/wos-server/VISION.md`](../../../workspec-server/crates/wos-server/VISION.md) the only authoritative store is the Trellis case ledger and the only co-located store is plaintext-content-free projections.
+The proposal correctly identifies the boundary problem (`Case ≠ WorkflowProcess`, multiple processes, ad hoc work) and correctly insists on governed output paths. It is **wrong at one structural premise**: it talks as though `Case` is a new authoritative store, when under [`workspec-server/crates/wos-server/VISION.md`](../../../workspec-server/crates/wos-server/VISION.md) the only authoritative store is the Trellis case ledger and the only co-located store is plaintext-content-free projections.
 
 The dominoes that fall, in dependency order:
 
 1. **Trellis** (low-risk, mostly registry work) — register `wos.case-created`, `wos.case-closed`, `wos.case-reopened`, `wos.note`, `wos.communication`, `wos.artifact-attached` in the bound registry per [`trellis-core.md:2436-2442`](../../../trellis/specs/trellis-core.md). This is registry binding, not byte change.
-2. **WOS kernel** — extend `outputBinding` §9.2.21 with `target` discriminator (`processCaseState` | `caseArtifact` | `caseDecision` | `caseTimeline`); admit non-transition governance event paths for ad-hoc notes/communications; rename `$wosCaseInstance` → `$wosProcessInstance` in one go.
+2. **WOS kernel** — extend `outputBinding` §9.2.21 with `target` discriminator (`processCaseState` | `caseArtifact` | `caseDecision` | `caseTimeline`); admit non-transition governance event paths for ad-hoc notes/communications; rename `$wosProcess` → `$wosProcessInstance` in one go.
 3. **WOS governed-case ownership** — amend ADR-0073 to admit manual case origination (no `IntakeHandoff`); enumerate the validation discipline.
 4. **wos-server EventStore** — define `case_projection` reducer and `/api/v1/cases/*` route shape, all metadata-only; commit to ciphertext-plus-key-bag-fragments for content subresources. **Cannot land before the zero-trust EventStore refactor.**
 5. **Formspec** — minimal change; `IntakeHandoff` continues to operate per ADR-0073 with the addition that an intake-handoff path may attach to an existing Case.
-6. **`$wosCaseInstance` rename** — execute as one ADR.
+6. **`$wosProcess` rename** — execute as one ADR.
 
 **The proposal as written is approximately 70% correct.** Adopt the boundary refactor, but rewrite the `Case` aggregate spec as a *projection spec*, classify the content fields (`subjects` / `participants` / `notes` / etc.) under ADR-0074 access classes, and make the `target` discriminator on `outputBinding` the named structural change at the WOS layer instead of a vague "governed output path."
 

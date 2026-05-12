@@ -3,12 +3,12 @@
 //! Instance lifecycle commands for the reference runtime.
 //!
 //! This module owns the durable command methods that create, load, enqueue,
-//! and expose append windows for case instances. The methods still operate on
+//! and expose append windows for workflow processes. The methods still operate on
 //! `WosRuntime`, but keeping them separate from the type declarations makes the
 //! adapter boundary easier to audit.
 
 use wos_core::eval::{Evaluator, validate_migration_configuration};
-use wos_core::instance::{CaseInstance, InstanceStatus, PendingEvent};
+use wos_core::instance::{InstanceStatus, PendingEvent, WorkflowProcess};
 use wos_core::provenance::{InstanceMigratedInput, ProvenanceRecord};
 use wos_core::typeid;
 
@@ -109,12 +109,12 @@ fn requested_type_id(value: &str) -> Option<&str> {
     if typeid::is_valid_type_id(value, None) {
         Some(value)
     } else {
-        CaseInstance::extract_urn_type_id(value)
+        WorkflowProcess::extract_urn_type_id(value)
     }
 }
 
 impl WosRuntime {
-    /// Create and persist a new case instance.
+    /// Create and persist a new workflow process.
     ///
     /// # Errors
     /// Returns an error when kernel resolution, evaluation, task staging, or
@@ -122,7 +122,7 @@ impl WosRuntime {
     pub fn create_instance(
         &mut self,
         request: CreateInstanceRequest,
-    ) -> Result<CaseInstance, RuntimeError> {
+    ) -> Result<WorkflowProcess, RuntimeError> {
         self.create_instance_inner(request, None)
     }
 
@@ -135,7 +135,7 @@ impl WosRuntime {
         &mut self,
         request: CreateInstanceRequest,
         case_ledger_id: String,
-    ) -> Result<CaseInstance, RuntimeError> {
+    ) -> Result<WorkflowProcess, RuntimeError> {
         self.create_instance_inner(request, Some(case_ledger_id))
     }
 
@@ -143,11 +143,11 @@ impl WosRuntime {
         &mut self,
         request: CreateInstanceRequest,
         bound_case_ledger_id: Option<String>,
-    ) -> Result<CaseInstance, RuntimeError> {
+    ) -> Result<WorkflowProcess, RuntimeError> {
         let now_ms = self.clock.now_ms();
         let now_iso = format_timestamp(now_ms)?;
         let CreateInstanceRequest {
-            instance_id,
+            process_id,
             tenant: requested_tenant,
             definition_url,
             definition_version,
@@ -156,15 +156,40 @@ impl WosRuntime {
 
         // ADR 0068 D-1.2: resolve the authoritative tenant.
         // 1. If the caller supplied an explicit tenant, validate it.
-        // 2. If instance_id is a valid TypeID, extract the prefix.
+        // 2. If process_id is a valid TypeID, extract the prefix.
         // 3. If both are present, they must match.
         // 4. Fall back to the deployment-default tenant.
-        let type_id_tenant = typeid::extract_tenant(&instance_id)
+        let type_id_tenant = typeid::extract_tenant(&process_id)
             .map(String::from)
             .or_else(|| {
-                wos_core::instance::CaseInstance::extract_urn_parts(&instance_id).map(String::from)
+                wos_core::instance::WorkflowProcess::extract_urn_parts(&process_id)
+                    .map(String::from)
             });
-        let tenant = match (requested_tenant, &type_id_tenant) {
+        let bound_case_ledger_id = bound_case_ledger_id
+            .map(|value| {
+                let normalized = requested_type_id(&value)
+                    .map(str::to_string)
+                    .unwrap_or_else(|| value.clone());
+                if !typeid::is_valid_type_id(&normalized, Some(typeid::CASE_PREFIX)) {
+                    return Err(RuntimeError::MigrationRejected(format!(
+                        "case ledger id `{value}` is not a case TypeID"
+                    )));
+                }
+                Ok(normalized)
+            })
+            .transpose()?;
+        let bound_case_tenant = bound_case_ledger_id
+            .as_deref()
+            .and_then(typeid::extract_tenant)
+            .map(String::from);
+        let inferred_tenant = type_id_tenant.as_ref().or_else(|| {
+            if process_id.trim().is_empty() {
+                bound_case_tenant.as_ref()
+            } else {
+                None
+            }
+        });
+        let tenant = match (requested_tenant, inferred_tenant) {
             (Some(explicit), Some(prefix)) => {
                 if !typeid::is_valid_tenant(&explicit) {
                     return Err(RuntimeError::TenantInvalid(explicit));
@@ -188,15 +213,7 @@ impl WosRuntime {
         };
         let bound_case_ledger_id = bound_case_ledger_id
             .map(|value| {
-                let normalized = requested_type_id(&value)
-                    .map(str::to_string)
-                    .unwrap_or_else(|| value.clone());
-                if !typeid::is_valid_type_id(&normalized, Some(typeid::CASE_PREFIX)) {
-                    return Err(RuntimeError::MigrationRejected(format!(
-                        "case ledger id `{value}` is not a case TypeID"
-                    )));
-                }
-                if let Some(prefix) = typeid::extract_tenant(&normalized)
+                if let Some(prefix) = typeid::extract_tenant(&value)
                     && prefix != tenant
                 {
                     return Err(RuntimeError::TenantMismatch {
@@ -204,53 +221,26 @@ impl WosRuntime {
                         type_id_prefix: prefix.to_string(),
                     });
                 }
-                Ok(normalized)
+                Ok(value)
             })
             .transpose()?;
 
-        let input_type_id = requested_type_id(&instance_id);
-        let input_case_ledger_id = input_type_id
-            .filter(|value| typeid::is_valid_type_id(value, Some(typeid::CASE_PREFIX)))
-            .map(str::to_string);
-        let input_process_id = input_type_id
-            .filter(|value| typeid::is_valid_type_id(value, Some(typeid::PROCESS_PREFIX)))
-            .map(str::to_string);
-
-        let (instance_id, legacy_alias) =
-            if input_case_ledger_id.is_some() || input_process_id.is_some() {
-                (instance_id, None)
-            } else if instance_id.trim().is_empty() {
-                (typeid::mint_type_id(&tenant, typeid::CASE_PREFIX), None)
-            } else {
-                (
-                    typeid::mint_type_id(&tenant, typeid::CASE_PREFIX),
-                    Some(instance_id),
-                )
-            };
-        let process_id = Some(
-            input_process_id
-                .unwrap_or_else(|| typeid::mint_type_id(&tenant, typeid::PROCESS_PREFIX)),
-        );
-        let case_ledger_id = Some(match (bound_case_ledger_id, input_case_ledger_id) {
-            (Some(bound), Some(input)) if bound != input => {
+        let process_id = if process_id.trim().is_empty() {
+            typeid::mint_type_id(&tenant, typeid::PROCESS_PREFIX)
+        } else if let Some(input_type_id) = requested_type_id(&process_id) {
+            if !typeid::is_valid_type_id(input_type_id, Some(typeid::PROCESS_PREFIX)) {
                 return Err(RuntimeError::MigrationRejected(format!(
-                    "bound case ledger id `{bound}` conflicts with requested instance id `{input}`"
+                    "process id `{process_id}` is not a process TypeID"
                 )));
             }
-            (Some(bound), _) => bound,
-            (None, Some(input)) => input,
-            (None, None) => {
-                if CaseInstance::is_case_id(&instance_id) {
-                    instance_id.clone()
-                } else if let Some(urn_type_id) = CaseInstance::extract_urn_type_id(&instance_id)
-                    && CaseInstance::is_case_id(urn_type_id)
-                {
-                    urn_type_id.to_string()
-                } else {
-                    typeid::mint_type_id(&tenant, typeid::CASE_PREFIX)
-                }
-            }
-        });
+            input_type_id.to_string()
+        } else {
+            return Err(RuntimeError::MigrationRejected(format!(
+                "process id `{process_id}` is not a WOS TypeID"
+            )));
+        };
+        let case_ledger_id = bound_case_ledger_id
+            .unwrap_or_else(|| typeid::mint_type_id(&tenant, typeid::CASE_PREFIX));
         let kernel = self
             .resolver
             .resolve_kernel(&definition_url, &definition_version)?;
@@ -263,8 +253,7 @@ impl WosRuntime {
 
         let (timer_states, convergence_error_ids) =
             timers_to_state(evaluator.timers(), self.business_calendar.as_ref())?;
-        let instance = CaseInstance {
-            instance_id,
+        let instance = WorkflowProcess {
             process_id,
             case_ledger_id,
             tenant,
@@ -293,14 +282,6 @@ impl WosRuntime {
             updated_at: now_iso.clone(),
             extensions: Default::default(),
         };
-        let mut instance = instance;
-        if let Some(alias) = legacy_alias {
-            instance.extensions.insert(
-                CaseInstance::LEGACY_INSTANCE_ALIAS_EXTENSION_KEY.to_string(),
-                serde_json::Value::String(alias),
-            );
-        }
-
         let mut record = RuntimeRecord::new(instance);
         let mut appended_provenance = evaluator.provenance().records().to_vec();
         // Annotate any timers created during instance initialization with calendarVersion.
@@ -335,12 +316,38 @@ impl WosRuntime {
         Ok(record.instance)
     }
 
-    /// Load the canonical case instance state.
+    /// Load the canonical workflow process state.
     ///
     /// # Errors
     /// Returns an error when the instance cannot be found or loaded.
-    pub fn load_instance(&self, instance_id: &str) -> Result<CaseInstance, RuntimeError> {
-        Ok(self.store.load_record(instance_id)?.instance)
+    pub fn load_instance(&self, process_id: &str) -> Result<WorkflowProcess, RuntimeError> {
+        Ok(self
+            .load_record_by_process_or_case_ref(process_id)?
+            .instance)
+    }
+
+    pub(super) fn load_record_by_process_or_case_ref(
+        &self,
+        id: &str,
+    ) -> Result<RuntimeRecord, RuntimeError> {
+        match self.store.load_record(id) {
+            Ok(record) => return Ok(record),
+            Err(crate::store::StoreError::NotFound(_)) => {}
+            Err(error) => return Err(RuntimeError::from(error)),
+        }
+
+        let normalized = WorkflowProcess::extract_urn_type_id(id).unwrap_or(id);
+        if normalized != id {
+            match self.store.load_record(normalized) {
+                Ok(record) => return Ok(record),
+                Err(crate::store::StoreError::NotFound(_)) => {}
+                Err(error) => return Err(RuntimeError::from(error)),
+            }
+        }
+
+        self.store
+            .load_record_by_case_ledger_id(normalized)
+            .map_err(RuntimeError::from)
     }
 
     /// Append an event to the instance queue.
@@ -350,10 +357,10 @@ impl WosRuntime {
     /// or persistence fails.
     pub fn enqueue_event(
         &mut self,
-        instance_id: &str,
+        process_id: &str,
         mut event: PendingEvent,
     ) -> Result<(), RuntimeError> {
-        let mut record = self.store.load_record(instance_id)?;
+        let mut record = self.store.load_record(process_id)?;
         if event.timestamp.is_empty() {
             event.timestamp = format_timestamp(self.clock.now_ms())?;
         }
@@ -370,12 +377,12 @@ impl WosRuntime {
     /// record cannot be canonicalized into custody append input form.
     pub fn load_custody_append_window(
         &self,
-        instance_id: &str,
+        process_id: &str,
         cursor: usize,
         limit: usize,
         context: CustodyAppendContext,
     ) -> Result<Vec<CustodyAppendInput>, RuntimeError> {
-        let record = self.store.load_record(instance_id)?;
+        let record = self.load_record_by_process_or_case_ref(process_id)?;
         record
             .provenance_log
             .iter()
@@ -384,7 +391,7 @@ impl WosRuntime {
             .take(limit)
             .map(|(position, provenance)| {
                 let metadata = context.metadata_for_provenance_record(
-                    record.instance.effective_case_ledger_id(),
+                    &record.instance.case_ledger_id,
                     position,
                     provenance,
                 )?;
@@ -401,11 +408,11 @@ impl WosRuntime {
     /// located, or when persistence fails.
     pub fn apply_custody_receipt(
         &mut self,
-        instance_id: &str,
+        process_id: &str,
         record_id: &str,
         receipt: crate::custody::CustodyAppendReceipt,
     ) -> Result<(), RuntimeError> {
-        let mut record = self.store.load_record(instance_id)?;
+        let mut record = self.store.load_record(process_id)?;
         let Some(provenance) = record
             .provenance_log
             .iter_mut()
@@ -438,17 +445,17 @@ impl WosRuntime {
     /// application fails; the instance is not modified.
     pub fn migrate(
         &mut self,
-        instance_id: &str,
+        process_id: &str,
         target_definition_version: &str,
         migration_map: MigrationMap,
         operator_actor_id: Option<&str>,
     ) -> Result<MigrationOutcome, RuntimeError> {
         let now_ms = self.clock.now_ms();
         let now_iso = format_timestamp(now_ms)?;
-        let mut record = self.store.load_record(instance_id)?;
+        let mut record = self.store.load_record(process_id)?;
         if record.instance.definition_version == target_definition_version {
             return Ok(MigrationOutcome {
-                instance_id: instance_id.to_string(),
+                process_id: process_id.to_string(),
                 previous_definition_version: record.instance.definition_version.clone(),
                 new_definition_version: target_definition_version.to_string(),
                 migration_map,
@@ -486,7 +493,7 @@ impl WosRuntime {
         self.store.save_record(record)?;
 
         Ok(MigrationOutcome {
-            instance_id: instance_id.to_string(),
+            process_id: process_id.to_string(),
             previous_definition_version,
             new_definition_version: target_definition_version.to_string(),
             migration_map,

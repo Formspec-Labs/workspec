@@ -1,9 +1,9 @@
-"""Process TypeID regression tests.
+"""Workflow-process TypeID regression tests.
 
-Guards the runtime-artifact Process schema after T1-3 tightened
-`instanceId` to WOS TypeID families. The transitional bridge accepts the
-legacy `case` family and the new workflow `process` family while the explicit
-`caseLedgerId` and `processId` fields carry the split identity.
+Guards the runtime-artifact Process schema after the greenfield split between
+workflow execution identity and durable case-ledger identity. A root WOS
+Process must carry a `processId` from the `process` TypeID family and a
+`caseLedgerId` from the `case` TypeID family.
 """
 
 from __future__ import annotations
@@ -22,7 +22,8 @@ PROCESS_SCHEMA = (
 def _minimal_instance() -> dict:
     return {
         "$wosProcess": "1.0",
-        "instanceId": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd",
+        "processId": "sba-poc_process_01jqrpd32jf8xtx9qxkkv3rqsd",
+        "caseLedgerId": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd",
         "tenant": "sba-poc",
         "definitionUrl": "https://agency.gov/workflows/benefits-adjudication",
         "definitionVersion": "1.0.0",
@@ -37,43 +38,32 @@ def _minimal_instance() -> dict:
     }
 
 
-def test_case_instance_accepts_case_typeid():
+def test_workflow_process_accepts_split_identity_typeids():
     schema = json.loads(PROCESS_SCHEMA.read_text())
     validator = Draft202012Validator(schema)
     errors = list(validator.iter_errors(_minimal_instance()))
-    assert errors == [], f"valid CaseInstance rejected: {errors}"
+    assert errors == [], f"valid WorkflowProcess rejected: {errors}"
 
 
-def test_case_instance_accepts_process_typeid():
+def test_workflow_process_rejects_root_instance_id_bridge():
     schema = json.loads(PROCESS_SCHEMA.read_text())
     validator = Draft202012Validator(schema)
     doc = _minimal_instance()
-    doc["instanceId"] = "sba-poc_process_01jqrpd32jf8xtx9qxkkv3rqsd"
-    doc["caseLedgerId"] = "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd"
+    doc["instanceId"] = doc["processId"]
     errors = list(validator.iter_errors(doc))
-    assert errors == [], f"valid process-backed CaseInstance rejected: {errors}"
+    assert errors, "WorkflowProcess root instanceId bridge must be rejected"
 
 
-def test_case_instance_accepts_explicit_dual_identity_fields():
+def test_workflow_process_rejects_non_process_id_family():
     schema = json.loads(PROCESS_SCHEMA.read_text())
     validator = Draft202012Validator(schema)
     doc = _minimal_instance()
-    doc["processId"] = "sba-poc_process_01jqrpd32jf8xtx9qxkkv3rqsd"
-    doc["caseLedgerId"] = "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd"
+    doc["processId"] = "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd"
     errors = list(validator.iter_errors(doc))
-    assert errors == [], f"valid dual-identity CaseInstance rejected: {errors}"
+    assert errors, "WorkflowProcess.processId must use the `process` family"
 
 
-def test_case_instance_rejects_non_runtime_typeid():
-    schema = json.loads(PROCESS_SCHEMA.read_text())
-    validator = Draft202012Validator(schema)
-    doc = _minimal_instance()
-    doc["instanceId"] = "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd"
-    errors = list(validator.iter_errors(doc))
-    assert errors, "CaseInstance.instanceId must use `case` or `process`"
-
-
-def test_case_instance_rejects_swapped_dual_identity_families():
+def test_workflow_process_rejects_swapped_identity_families():
     schema = json.loads(PROCESS_SCHEMA.read_text())
     validator = Draft202012Validator(schema)
     doc = _minimal_instance()
@@ -83,7 +73,16 @@ def test_case_instance_rejects_swapped_dual_identity_families():
     assert errors, "processId and caseLedgerId must use their reserved families"
 
 
-def test_formspec_task_context_accepts_process_instance_id():
+def test_workflow_process_rejects_non_case_ledger_id_family():
+    schema = json.loads(PROCESS_SCHEMA.read_text())
+    validator = Draft202012Validator(schema)
+    doc = _minimal_instance()
+    doc["caseLedgerId"] = "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd"
+    errors = list(validator.iter_errors(doc))
+    assert errors, "WorkflowProcess.caseLedgerId must use the `case` family"
+
+
+def test_formspec_task_context_accepts_process_id():
     schema = json.loads(PROCESS_SCHEMA.read_text())
     validator = Draft202012Validator(schema)
     doc = _minimal_instance()
@@ -94,7 +93,7 @@ def test_formspec_task_context_accepts_process_instance_id():
             "status": "created",
             "context": {
                 "taskId": "task-1",
-                "instanceId": "sba-poc_process_01jqrpd32jf8xtx9qxkkv3rqsd",
+                "processId": "sba-poc_process_01jqrpd32jf8xtx9qxkkv3rqsd",
                 "contractRef": "intakeApplication",
                 "definitionUrl": "urn:formspec:intake",
                 "definitionVersion": "1.0.0",
@@ -109,17 +108,17 @@ def test_formspec_task_context_accepts_process_instance_id():
     assert errors == [], f"valid process task context rejected: {errors}"
 
 
-def test_case_instance_omitted_tenant_still_validates():
+def test_workflow_process_omitted_tenant_still_validates():
     """Older persisted rows and minimal hand-authored fixtures may omit tenant."""
     schema = json.loads(PROCESS_SCHEMA.read_text())
     validator = Draft202012Validator(schema)
     doc = _minimal_instance()
     del doc["tenant"]
     errors = list(validator.iter_errors(doc))
-    assert errors == [], f"CaseInstance without tenant rejected: {errors}"
+    assert errors == [], f"WorkflowProcess without tenant rejected: {errors}"
 
 
-def test_case_instance_rejects_invalid_tenant_pattern():
+def test_workflow_process_rejects_invalid_tenant_pattern():
     schema = json.loads(PROCESS_SCHEMA.read_text())
     validator = Draft202012Validator(schema)
     doc = _minimal_instance()
@@ -128,11 +127,12 @@ def test_case_instance_rejects_invalid_tenant_pattern():
     assert errors, "tenant must match ADR 0068 D-1.1 DNS-label grammar"
 
 
-def test_case_instance_accepts_default_tenant_literal():
+def test_workflow_process_accepts_default_tenant_literal():
     schema = json.loads(PROCESS_SCHEMA.read_text())
     validator = Draft202012Validator(schema)
     doc = _minimal_instance()
-    doc["instanceId"] = "default_case_01hw7rm71vfay8vvw14d2pf2db"
+    doc["processId"] = "default_process_01hw7rm71vfay8vvw14d2pf2db"
+    doc["caseLedgerId"] = "default_case_01hw7rm71vfay8vvw14d2pf2db"
     doc["tenant"] = "default"
     errors = list(validator.iter_errors(doc))
-    assert errors == [], f"valid default-tenant CaseInstance rejected: {errors}"
+    assert errors == [], f"valid default-tenant WorkflowProcess rejected: {errors}"

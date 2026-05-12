@@ -35,13 +35,13 @@ Remaining questions are independently resolvable.
 
 ### Q2. Spec §9 G4 vs H1 (timer extraction) — normative conflict
 
-**The conflict.** `specs/kernel/spec.md` §9 G4: *"Timer state is part of the CaseInstance (§S3.1) and is persisted at every durability checkpoint."* H1 (current plan) proposes extracting timer state to a `TimerService` seam.
+**The conflict.** `specs/kernel/spec.md` §9 G4: *"Timer state is part of the WorkflowProcess (§S3.1) and is persisted at every durability checkpoint."* H1 (current plan) proposes extracting timer state to a `TimerService` seam.
 
 | Option | Tradeoff |
 |---|---|
 | **A.** Amend spec §9.1 G4 + §S3.1 + §6.1 to "timer state MUST be durably persisted, placement implementation-defined" | Preserves H1; loses one sentence of specificity; opens door to divergent impls if not carefully worded |
 | **B.** Keep spec as-is; abandon H1 | No engine-adapter path without spec change later; we pay migration cost at first-commercial-demand time |
-| **C.** Land H1 as extension point, not replacement — keep `CaseInstance.timers` snapshot as canonical (spec-conformant), but also populate `TimerService` seam mirroring the same state | Adapter-ready + spec-conformant; but duplicates state (two sources of truth → consistency bugs) |
+| **C.** Land H1 as extension point, not replacement — keep `WorkflowProcess.timers` snapshot as canonical (spec-conformant), but also populate `TimerService` seam mirroring the same state | Adapter-ready + spec-conformant; but duplicates state (two sources of truth → consistency bugs) |
 | **D.** Per-processor profile flag — "embedded-timer profile" (conformant) vs "externalized-timer profile" (requires spec carve-out) | Formalises both modes; most complex normatively |
 
 **Tentative recommendation:** A. The existing wording over-specifies — G4's real content is "durable + fires within tolerance," not "stored in X JSON field." Option C's dual-source hazard outweighs its compatibility. Needs 2–3 spec-PR sentences.
@@ -85,7 +85,7 @@ Remaining questions are independently resolvable.
 | Option | Tradeoff |
 |---|---|
 | **Path 1.** New `SubmitPolicy` trait object, parallel to `CompanionPolicy`; injected via `with_submit_policy` builder | Clean conceptual separation from `CompanionPolicy` (which runs on every event, not just submits); explicit submit-boundary semantics; but adds another trait to wire |
-| **Path 2.** Extend `ContractValidator` with `validate_in_context(contract_ref, data, impact_level, instance_id)` default method | Additive, non-breaking; reuses existing trait; but conflates pure-contract validation with runtime-context policy (mixed concerns) |
+| **Path 2.** Extend `ContractValidator` with `validate_in_context(contract_ref, data, impact_level, process_id)` default method | Additive, non-breaking; reuses existing trait; but conflates pure-contract validation with runtime-context policy (mixed concerns) |
 
 **Tentative recommendation:** Path 1. The conceptual overlap concern (Path 2) is real — `validate_in_context` would mean "validate contract AND check runtime policies" which is two different things. Keeping them separate via `SubmitPolicy` matches the `CompanionPolicy` pattern and makes defaults easier to override individually.
 
@@ -207,7 +207,7 @@ Remaining questions are independently resolvable.
 | Option | Tradeoff |
 |---|---|
 | **A.** Big-bang migration — version bump, scripted fixture rewrite, one PR | Fast; clean; consumer pain concentrated |
-| **B.** Dual-write window — `CaseInstance.timers` keeps old shape, new `TimerService` also populated, read from either | Graceful; consumers migrate at their pace; but double-state risk (see Q2 option C tradeoff) |
+| **B.** Dual-write window — `WorkflowProcess.timers` keeps old shape, new `TimerService` also populated, read from either | Graceful; consumers migrate at their pace; but double-state risk (see Q2 option C tradeoff) |
 | **C.** Feature-flag — `WOS_TIMER_MODE=embedded \| externalized`; consumers opt in | Flexible; but doubles test surface permanently |
 
 **Tentative recommendation:** A. Pre-1.0 is the time for this; dual-write invites the exact inconsistency bug we're fixing. Scripted migration + one focused sprint.

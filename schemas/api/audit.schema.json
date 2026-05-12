@@ -186,7 +186,7 @@
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
-          "description": "Optional instance scope — restrict the result set to records belonging to one or more named case instances. Empty array is forbidden. When omitted the query spans every visible instance in scope.",
+          "description": "Optional instance scope — restrict the result set to records belonging to one or more named workflow processes. Empty array is forbidden. When omitted the query spans every visible instance in scope.",
           "items": {
             "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
           }

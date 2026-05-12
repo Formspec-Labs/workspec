@@ -668,7 +668,7 @@ Milestones are named conditions on case state that, when satisfied, indicate mea
 | `description` | string | OPTIONAL | Human-readable description. |
 | `triggerMode` | enum | OPTIONAL | When the processor evaluates the condition. Defaults to `writeSettled`. |
 
-**Trigger semantics (`triggerMode: writeSettled`).** A processor MUST evaluate every un-fired milestone's `condition` after each durable case-state write — once the write has been persisted and is observable to subsequent reads. A milestone fires at most once per case instance: once `condition` evaluates true and a `MilestoneFired` provenance record has been appended (carrying `{"milestoneId": <id>}`), the milestone id is recorded on the case instance and never re-evaluated. Multiple milestones firing from a single write MUST be appended to provenance in lexicographic milestone-id order so the stream is deterministic. Future trigger modes (e.g., reactive event-based firing per §4.13 Future Work) will extend the enum without altering `writeSettled` semantics.
+**Trigger semantics (`triggerMode: writeSettled`).** A processor MUST evaluate every un-fired milestone's `condition` after each durable case-state write — once the write has been persisted and is observable to subsequent reads. A milestone fires at most once per workflow process: once `condition` evaluates true and a `MilestoneFired` provenance record has been appended (carrying `{"milestoneId": <id>}`), the milestone id is recorded on the workflow process and never re-evaluated. Multiple milestones firing from a single write MUST be appended to provenance in lexicographic milestone-id order so the stream is deterministic. Future trigger modes (e.g., reactive event-based firing per §4.13 Future Work) will extend the enum without altering `writeSettled` semantics.
 
 ### 4.14 History States
 
@@ -765,12 +765,12 @@ The mutation history is append-only. Previous entries MUST NOT be modified or de
 
 ### 5.5 Case Relationships
 
-A workflow instance MAY declare typed relationships to other case instances. Relationships are metadata -- they do NOT affect lifecycle evaluation. Cross-case behavioral interaction (e.g., "when the appeal case enters determination, notify the original case") uses the existing `correlationKey` mechanism (Kernel S9.4): the related case emits an event that this case receives via correlation.
+A workflow instance MAY declare typed relationships to other workflow processes. Relationships are metadata -- they do NOT affect lifecycle evaluation. Cross-case behavioral interaction (e.g., "when the appeal case enters determination, notify the original case") uses the existing `correlationKey` mechanism (Kernel S9.4): the related case emits an event that this case receives via correlation.
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
 | `type` | enum | REQUIRED | Relationship type: `parent`, `child`, `sibling`, `related`, or `supersedes`. Extensible via `x-` prefixed values. |
-| `targetCase` | string (URI) | REQUIRED | URI reference to the related case instance. |
+| `targetCase` | string (URI) | REQUIRED | URI reference to the related workflow process. |
 | `relationship` | string | OPTIONAL | Semantic label describing the relationship (e.g., `"appeal-of"`, `"household-member"`, `"consolidated-with"`). |
 | `bidirectional` | boolean | OPTIONAL | When `true`, the target case SHOULD also record the inverse relationship. Default: `false`. |
 
@@ -1008,13 +1008,13 @@ The Kernel Specification (Kernel S9.1) defines five durable execution guarantees
 
 **G3: Non-Deterministic Output Persisted Before Advancing.** Every `invokeService` action MUST persist its output as an immutable step result before the processor advances lifecycle state. During recovery, the processor MUST use the persisted output rather than re-invoking the service.
 
-**G4: Timer Durability.** Timers MUST survive processor restarts, fire within their declared tolerance (S7.2), and consume no runtime resources while waiting. Timer state is part of the CaseInstance (S3.1) and is persisted at every durability checkpoint.
+**G4: Timer Durability.** Timers MUST survive processor restarts, fire within their declared tolerance (S7.2), and consume no runtime resources while waiting. Timer state is part of the WorkflowProcess (S3.1) and is persisted at every durability checkpoint.
 
 **G5: Signal Delivery.** External signals addressed to suspended or temporarily unreachable instances MUST be durably enqueued. The processor MUST process enqueued signals when the instance becomes available.
 
 ### 9.1.2 Checkpoint Semantics
 
-The unit of durability is the **event**. After each event is fully processed -- all transitions fired, all actions executed, all provenance recorded -- the processor MUST durably persist the CaseInstance. The checkpoint includes the updated configuration, case state, provenance position, timer state, active task state, and history store.
+The unit of durability is the **event**. After each event is fully processed -- all transitions fired, all actions executed, all provenance recorded -- the processor MUST durably persist the WorkflowProcess. The checkpoint includes the updated configuration, case state, provenance position, timer state, active task state, and history store.
 
 ```
 function processEventWithDurability(instance, event):
@@ -1027,7 +1027,7 @@ function processEventWithDurability(instance, event):
         host.instanceStore.save(instance)
     except ProcessorCrash:
         # On restart: reload pre-event state, replay the event
-        instance = host.instanceStore.load(instance.instanceId)
+        instance = host.instanceStore.load(instance.processId)
         # instance is at pre-event state; event will be replayed
 ```
 
@@ -1711,7 +1711,7 @@ The processor MAY declare tighter tolerances than these maximums. Tighter tolera
 
 ### 9.7.13 Persistence
 
-Timer state is part of the CaseInstance (S3.1). Timers are persisted at every durability checkpoint (S6.2). After a processor restart, all pending timers MUST be reconstituted from the persisted state and scheduled for firing at their original deadlines. Timers whose deadlines have passed during the outage MUST fire immediately on restart, in deadline order.
+Timer state is part of the WorkflowProcess (S3.1). Timers are persisted at every durability checkpoint (S6.2). After a processor restart, all pending timers MUST be reconstituted from the persisted state and scheduled for firing at their original deadlines. Timers whose deadlines have passed during the outage MUST fire immediately on restart, in deadline order.
 
 ### 9.7.14 Simulated Time
 
@@ -1845,15 +1845,15 @@ Rationale for the two-mechanism design: the `extensions` container is useful whe
 ---
 
 ## 11. Runtime Serialization
-<!-- absorbed-from: companions/runtime.md §3 Instance Lifecycle (CaseInstance serialization) per ADR 0076 D-8 — moved verbatim with renumbered headers; cross-references to runtime.md own subsections remain valid. -->
+<!-- absorbed-from: companions/runtime.md §3 Instance Lifecycle (WorkflowProcess serialization) per ADR 0076 D-8 — moved verbatim with renumbered headers; cross-references to runtime.md own subsections remain valid. -->
 
-### 11.1 CaseInstance
+### 11.1 WorkflowProcess
 
-A **CaseInstance** is the serialization format for a running workflow instance. It captures the complete runtime state needed to resume processing after a crash, migrate between processors, or audit past behavior.
+A **WorkflowProcess** is the serialization format for a running workflow instance. It captures the complete runtime state needed to resume processing after a crash, migrate between processors, or audit past behavior.
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `instanceId` | string (URI) | REQUIRED | Globally unique identifier for this instance. |
+| `processId` | string (URI) | REQUIRED | Globally unique identifier for this instance. |
 | `definitionUrl` | string (URI) | REQUIRED | Canonical URL of the Kernel Document governing this instance. |
 | `definitionVersion` | string | REQUIRED | Version of the Kernel Document, pinned at creation (Kernel S9.6). |
 | `configuration` | array of string | REQUIRED | Active leaf states as an ordered array. The order is deterministic: document order of state declarations within the kernel, depth-first. |
@@ -1883,7 +1883,7 @@ The `configuration` array is ordered by document declaration order, depth-first.
 
 ### 11.3 Instance Operations
 
-A conformant processor MUST support the following operations on CaseInstance:
+A conformant processor MUST support the following operations on WorkflowProcess:
 
 | Operation | Input | Effect | Provenance `recordKind` |
 |-----------|-------|--------|------------|
@@ -2057,14 +2057,14 @@ A Formspec task has one completion bundle: one task, one pinned Formspec Definit
 
 ### 13.2 Task Context
 
-When a Formspec-backed `createTask` action executes, the processor resolves the ContractReference and creates an ActiveTask entry in CaseInstance `activeTasks`.
+When a Formspec-backed `createTask` action executes, the processor resolves the ContractReference and creates an ActiveTask entry in WorkflowProcess `activeTasks`.
 
 The processor then constructs a FormspecTaskContext:
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
 | `taskId` | string | REQUIRED | Processor task identifier. Stable for idempotency and provenance. |
-| `instanceId` | string (URI) | REQUIRED | WOS CaseInstance identifier. |
+| `processId` | string (URI) | REQUIRED | WOS WorkflowProcess identifier. |
 | `contractRef` | string | REQUIRED | Kernel contract map key used by the task. |
 | `definitionUrl` | string (URI) | REQUIRED | Formspec Definition `url`. MUST match `response.definitionUrl`. |
 | `definitionVersion` | string | REQUIRED | Pinned Formspec Definition version. MUST match `response.definitionVersion`. |
@@ -2238,20 +2238,20 @@ The processor expects its host to provide implementations of the following inter
 
 ### 16.1 InstanceStore
 
-Persists CaseInstance documents between events.
+Persists WorkflowProcess documents between events.
 
 | Operation | Input | Output | Required | Description |
 |-----------|-------|--------|----------|-------------|
-| `load` | instanceId: string | CaseInstance | REQUIRED | Load an instance by ID. Error if not found. |
-| `save` | instance: CaseInstance | (none) | REQUIRED | Durably persist an instance. MUST be atomic. |
-| `listByState` | stateId: string | array of instanceId | OPTIONAL | List instances with the given state in their configuration. |
-| `listByDefinition` | definitionUrl: string, definitionVersion: string | array of instanceId | OPTIONAL | List instances governed by the given definition version. |
+| `load` | processId: string | WorkflowProcess | REQUIRED | Load an instance by ID. Error if not found. |
+| `save` | instance: WorkflowProcess | (none) | REQUIRED | Durably persist an instance. MUST be atomic. |
+| `listByState` | stateId: string | array of processId | OPTIONAL | List instances with the given state in their configuration. |
+| `listByDefinition` | definitionUrl: string, definitionVersion: string | array of processId | OPTIONAL | List instances governed by the given definition version. |
 
 `load` and `save` are REQUIRED for all conformance profiles. `listByState` and `listByDefinition` are OPTIONAL query operations -- they enable administrative and migration workflows but are not needed for core event processing.
 
 Error conditions: `instanceNotFound`, `storageUnavailable`, `concurrencyConflict` (when two processors attempt to save the same instance simultaneously).
 
-**Provenance log storage.** The provenance log is a separate append-only store referenced by the CaseInstance's `provenancePosition` cursor. The processor MUST NOT embed the full provenance log in the CaseInstance document -- provenance logs grow unboundedly and would make instance serialization progressively more expensive. The `provenancePosition` field on CaseInstance records how many provenance entries have been durably persisted, enabling the processor to resume provenance collection after a crash.
+**Provenance log storage.** The provenance log is a separate append-only store referenced by the WorkflowProcess's `provenancePosition` cursor. The processor MUST NOT embed the full provenance log in the WorkflowProcess document -- provenance logs grow unboundedly and would make instance serialization progressively more expensive. The `provenancePosition` field on WorkflowProcess records how many provenance entries have been durably persisted, enabling the processor to resume provenance collection after a crash.
 
 ### 16.2 DocumentResolver
 
@@ -2329,9 +2329,9 @@ Manages the per-instance event queue for serial processing (S4.1).
 
 | Operation | Input | Output | Description |
 |-----------|-------|--------|-------------|
-| `enqueue` | instanceId: string, event: Event | (none) | Add an event to the instance's processing queue. |
-| `dequeue` | instanceId: string | Event or empty | Remove and return the next event for processing. Returns empty if the queue is drained. |
-| `peek` | instanceId: string | Event or empty | Return the next event without removing it. |
+| `enqueue` | processId: string, event: Event | (none) | Add an event to the instance's processing queue. |
+| `dequeue` | processId: string | Event or empty | Remove and return the next event for processing. Returns empty if the queue is drained. |
+| `peek` | processId: string | Event or empty | Return the next event without removing it. |
 
 The EventQueue is a logical abstraction -- implementations MAY use an in-process queue, a message broker, or a database-backed queue. The only requirement is FIFO ordering per instance (S4.1). The queue MUST be durable: events enqueued but not yet processed MUST survive processor restarts.
 

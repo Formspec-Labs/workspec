@@ -265,7 +265,7 @@ mod tests {
     fn config() -> ExportConfig {
         ExportConfig {
             provenance_namespace: "urn:wos:prov:test:".to_string(),
-            instance_id: "test-instance".to_string(),
+            process_id: "test-instance".to_string(),
         }
     }
 

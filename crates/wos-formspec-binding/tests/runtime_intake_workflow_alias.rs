@@ -12,17 +12,17 @@
 //!
 //! ## Scenarios
 //!
-//! - Workflow attach with a legacy instance id: handoff `caseRef` string must stay
+//! - Workflow attach with a case-ledger id: handoff `caseRef` string must stay
 //!   consistent with [`wos_formspec_binding::FormspecBinding::finalize_intake_acceptance`]
-//!   while the runtime stores a canonical case id (`outcome_for_binding_finalize` in
+//!   while the runtime stores a distinct process id (`outcome_for_binding_finalize` in
 //!   `wos-runtime`).
-//! - Public intake with a legacy requested governed-case ref: acceptance must mint a
-//!   canonical id while keeping alias resolution for loads.
+//! - Public intake with a requested governed-case TypeID: acceptance must create a
+//!   process bound to that canonical case ledger.
 
 use std::collections::HashMap;
 
 use serde_json::json;
-use wos_core::instance::{CaseInstance, FormspecTaskContext};
+use wos_core::instance::{FormspecTaskContext, WorkflowProcess};
 use wos_core::model::kernel::KernelDocument;
 use wos_core::provenance::ProvenanceKind;
 use wos_core::traits::{DocumentResolver, ExternalService, TaskPresenter};
@@ -208,8 +208,11 @@ fn workflow_handoff(case_ref: &str, handoff_id: &str) -> serde_json::Value {
     })
 }
 
+const TEST_PROCESS_ID: &str = "default_process_01hw7rm71vfay8vvw14d2pf2db";
+const TEST_CASE_LEDGER_ID: &str = "default_case_01hw7rm71vfay8vvw14d2pf2db";
+
 #[test]
-fn runtime_formspec_intake_workflow_attach_survives_legacy_alias_canonicalization() {
+fn runtime_formspec_intake_workflow_attach_uses_case_ledger_identity() {
     let kernel: KernelDocument = serde_json::from_value(json!({
         "$wosWorkflow": "1.0",
         "url": "urn:test:formspec-intake-runtime-it",
@@ -238,27 +241,24 @@ fn runtime_formspec_intake_workflow_attach_survives_legacy_alias_canonicalizatio
     )
     .with_intake_acceptors(intake);
 
-    let legacy_ref = "wf-legacy-alias-it";
     let created = runtime
-        .create_instance(CreateInstanceRequest {
-            instance_id: legacy_ref.to_string(),
-            tenant: None,
-            definition_url: "urn:test:formspec-intake-runtime-it".to_string(),
-            definition_version: "1.0.0".to_string(),
-            initial_case_state: None,
-        })
+        .create_instance_bound_to_case(
+            CreateInstanceRequest {
+                process_id: TEST_PROCESS_ID.to_string(),
+                tenant: None,
+                definition_url: "urn:test:formspec-intake-runtime-it".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: None,
+            },
+            TEST_CASE_LEDGER_ID.to_string(),
+        )
         .expect("create_instance");
-
-    assert_ne!(
-        created.instance_id, legacy_ref,
-        "legacy non-TypeID ids are minted; alias is stored for resolution"
-    );
 
     let decision = runtime
         .accept_intake_handoff(
             "formspec",
             IntakeAcceptanceRequest {
-                document: workflow_handoff(legacy_ref, "ih-runtime-it-1"),
+                document: workflow_handoff(TEST_CASE_LEDGER_ID, "ih-runtime-it-1"),
                 actor_id: Some("intake-service".to_string()),
                 governed_case_ref: None,
                 governed_case_definition: None,
@@ -271,13 +271,13 @@ fn runtime_formspec_intake_workflow_attach_survives_legacy_alias_canonicalizatio
         decision.outcome,
         IntakeAcceptanceOutcome::Accepted {
             case_disposition: IntakeCaseDisposition::AttachToExistingCase {
-                case_ref: created.instance_id.clone()
+                case_ref: created.case_ledger_id.clone()
             }
         }
     );
 
     let window = runtime
-        .load_provenance_window(&created.instance_id, 0, 20)
+        .load_provenance_window(&created.process_id, 0, 20)
         .expect("provenance window");
     assert!(
         window
@@ -288,7 +288,7 @@ fn runtime_formspec_intake_workflow_attach_survives_legacy_alias_canonicalizatio
 }
 
 #[test]
-fn runtime_formspec_intake_public_create_survives_legacy_governed_case_ref() {
+fn runtime_formspec_intake_public_create_uses_governed_case_ref() {
     let def_url = "urn:test:formspec-intake-public-it";
     let def_version = "1.0.0";
     let kernel: KernelDocument = serde_json::from_value(json!({
@@ -320,14 +320,13 @@ fn runtime_formspec_intake_public_create_survives_legacy_governed_case_ref() {
     .with_intake_acceptors(intake)
     .with_intake_policy(AutoCreatePublicIntakePolicy);
 
-    let legacy_ref = "legacy-governed-ref-public-it";
     let decision = runtime
         .accept_intake_handoff(
             "formspec",
             IntakeAcceptanceRequest {
                 document: public_intake_handoff("ih-public-it-legacy", def_url, def_version),
                 actor_id: Some("intake-service".to_string()),
-                governed_case_ref: Some(legacy_ref.to_string()),
+                governed_case_ref: Some(TEST_CASE_LEDGER_ID.to_string()),
                 governed_case_definition: Some(IntakeCaseDefinition {
                     definition_url: def_url.to_string(),
                     definition_version: def_version.to_string(),
@@ -345,15 +344,16 @@ fn runtime_formspec_intake_public_create_survives_legacy_governed_case_ref() {
     };
 
     assert!(
-        CaseInstance::is_case_id(&canonical),
+        WorkflowProcess::is_case_id(&canonical),
         "public intake acceptance must return canonical governed case id"
     );
-    assert_ne!(canonical, legacy_ref);
+    assert_eq!(canonical, TEST_CASE_LEDGER_ID);
 
-    let by_alias = runtime
-        .load_instance(legacy_ref)
-        .expect("load by legacy governed_case_ref");
-    assert_eq!(by_alias.instance_id, canonical);
+    let by_case = runtime
+        .load_instance(&canonical)
+        .expect("load by governed_case_ref");
+    assert_eq!(by_case.case_ledger_id, canonical);
+    assert_ne!(by_case.process_id, by_case.case_ledger_id);
 
     let window = runtime
         .load_provenance_window(&canonical, 0, 30)

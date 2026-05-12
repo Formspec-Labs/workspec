@@ -630,7 +630,7 @@
       "additionalProperties": false,
       "description": "Server-assembled adverse-decision explanation (governance §3.8; workflow-governance.md:166-238). The §3.8.1 algorithm's output structure — Reasoning records ordered by authority rank + Counterfactual records partitioned positive/negative + assembly metadata — projected as a typed read-only resource so clients do not re-implement the deterministic-assembly MUST. Returned by `GET /api/v1/cases/{case_id}/processes/{process_id}/explanation`. Two conformant processors MUST produce the byte-identical assembled explanation from the same provenance log (workflow-governance.md:170).",
       "required": [
-        "instanceId",
+        "processId",
         "assembledAt",
         "assembledBy",
         "narrative",
@@ -638,9 +638,9 @@
         "rulesApplied"
       ],
       "properties": {
-        "instanceId": {
+        "processId": {
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
-          "description": "Case instance URN this explanation was assembled for. Entity-type segment MUST be `instance`."
+          "description": "Workflow process URN this explanation was assembled for. Entity-type segment MUST be `instance`."
         },
         "assembledAt": {
           "type": "string",
@@ -776,11 +776,11 @@
     "FactsTierRecord": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Facts-tier provenance record (kernel S8). Authoritative, immutable layer recording what happened. The wire shape carries the kernel `FactsTierRecord` envelope; the API layer renames `id`, `instanceId`, `actorRef` to URNs (D-4, D-9) and exposes `recordKind` as a closed enum (with vendor extension). Each tier variant is fully self-contained -- no shared envelope or `allOf` composition -- so codegen produces a clean discriminated union.",
+      "description": "Facts-tier provenance record (kernel S8). Authoritative, immutable layer recording what happened. The wire shape carries the kernel `FactsTierRecord` envelope; the API layer renames `id`, `processId`, `actorRef` to URNs (D-4, D-9) and exposes `recordKind` as a closed enum (with vendor extension). Each tier variant is fully self-contained -- no shared envelope or `allOf` composition -- so codegen produces a clean discriminated union.",
       "required": [
         "tier",
         "id",
-        "instanceId",
+        "processId",
         "recordKind",
         "timestamp",
         "definitionVersion",
@@ -795,9 +795,9 @@
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
           "description": "Stable URN for this provenance record."
         },
-        "instanceId": {
+        "processId": {
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
-          "description": "Case instance URN this record belongs to."
+          "description": "Workflow process URN this record belongs to."
         },
         "recordKind": {
           "$ref": "#/$defs/FactsRecordKind",
@@ -1487,7 +1487,7 @@
     "OverrideRecord": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Typed runtime payload appended to `FactsTierRecord` when `recordKind == \"overrideRecorded\"` (governance §7.3, workflow-governance.md:400-407). Mirrors the kernel `OverrideRecord` $def (`wos-workflow.schema.json#/$defs/OverrideRecord`); the API projection uses `caseInstanceRef` (URN per ADR 0082 D-4) rather than the kernel TypeID. Three required structured fields correspond to the three OverrideAuthority policy switches: `requireStructuredRationale → rationale`, `requireAuthorityVerification → authorityVerification`, `requireSupportingEvidence → supportingEvidence`. The audit query `recordKindFilter: [\"overrideRecorded\"]` returns `FactsTierRecord` envelopes carrying this payload in `overrideRecord`.",
+      "description": "Typed runtime payload appended to `FactsTierRecord` when `recordKind == \"overrideRecorded\"` (governance §7.3, workflow-governance.md:400-407). Mirrors the kernel `OverrideRecord` $def (`wos-workflow.schema.json#/$defs/OverrideRecord`); the API projection uses `workflowProcessRef` (URN per ADR 0082 D-4) rather than the kernel TypeID. Three required structured fields correspond to the three OverrideAuthority policy switches: `requireStructuredRationale → rationale`, `requireAuthorityVerification → authorityVerification`, `requireSupportingEvidence → supportingEvidence`. The audit query `recordKindFilter: [\"overrideRecorded\"]` returns `FactsTierRecord` envelopes carrying this payload in `overrideRecord`.",
       "required": [
         "rationale",
         "authorityVerification",
@@ -1892,7 +1892,7 @@
     "DcrZoneViolationRecord": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Typed public payload for `dcrZoneViolation`. Records a Dynamic Condition Response constraint-zone breach on a case instance.",
+      "description": "Typed public payload for `dcrZoneViolation`. Records a Dynamic Condition Response constraint-zone breach on a workflow process.",
       "required": [
         "zoneId",
         "activityId",
@@ -2105,7 +2105,7 @@
       "required": [
         "tier",
         "id",
-        "instanceId",
+        "processId",
         "recordKind",
         "timestamp",
         "definitionVersion",
@@ -2123,9 +2123,9 @@
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
           "description": "Stable URN for this provenance record."
         },
-        "instanceId": {
+        "processId": {
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
-          "description": "Case instance URN this record belongs to."
+          "description": "Workflow process URN this record belongs to."
         },
         "recordKind": {
           "$ref": "#/$defs/FactsRecordKind",
@@ -2206,7 +2206,7 @@
       "required": [
         "tier",
         "id",
-        "instanceId",
+        "processId",
         "recordKind",
         "timestamp",
         "definitionVersion",
@@ -2223,9 +2223,9 @@
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
           "description": "Stable URN for this provenance record."
         },
-        "instanceId": {
+        "processId": {
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
-          "description": "Case instance URN this record belongs to."
+          "description": "Workflow process URN this record belongs to."
         },
         "recordKind": {
           "$ref": "#/$defs/FactsRecordKind",
@@ -2283,7 +2283,7 @@
       "required": [
         "tier",
         "id",
-        "instanceId",
+        "processId",
         "recordKind",
         "timestamp",
         "definitionVersion",
@@ -2302,9 +2302,9 @@
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
           "description": "Stable URN for this provenance record."
         },
-        "instanceId": {
+        "processId": {
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
-          "description": "Case instance URN this record belongs to."
+          "description": "Workflow process URN this record belongs to."
         },
         "recordKind": {
           "$ref": "#/$defs/FactsRecordKind",

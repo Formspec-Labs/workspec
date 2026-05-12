@@ -24,10 +24,10 @@ use super::{
 
 impl WosRuntime {
     /// Drain a single event from the instance queue.
-    pub fn drain_once(&mut self, instance_id: &str) -> Result<DrainOnceResult, RuntimeError> {
+    pub fn drain_once(&mut self, process_id: &str) -> Result<DrainOnceResult, RuntimeError> {
         let now_ms = self.clock.now_ms();
         let now_iso = format_timestamp(now_ms)?;
-        let mut record = self.store.load_record(instance_id)?;
+        let mut record = self.store.load_record(process_id)?;
         let mut appended_provenance =
             materialize_due_timers(&mut record.instance, now_ms, &now_iso)?;
 
@@ -217,12 +217,12 @@ impl WosRuntime {
     /// Drain events until the queue is empty and no timers are due.
     pub fn drain_until_idle(
         &mut self,
-        instance_id: &str,
+        process_id: &str,
     ) -> Result<Vec<DrainOnceResult>, RuntimeError> {
         let mut results = Vec::new();
 
         loop {
-            let result = self.drain_once(instance_id)?;
+            let result = self.drain_once(process_id)?;
             let should_stop = result.processed_event.is_none();
             if should_stop {
                 break;

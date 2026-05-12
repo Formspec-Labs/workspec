@@ -1232,7 +1232,7 @@ Every provenance record MUST include:
 |-------|------|----------|-------------|
 | `id` | URI | REQUIRED | Globally unique. |
 | `timestamp` | datetime | REQUIRED | RFC 3339 with timezone. |
-| `instanceId` | URI | REQUIRED | Workflow instance. |
+| `processId` | URI | REQUIRED | Workflow instance. |
 | `recordType` | enum | REQUIRED | See §12.3–12.9. |
 | `actor` | ActorRef | REQUIRED | Who/what caused the action. |
 | `authority` | string | OPTIONAL | Role, rule, or policy under which the actor operated. |

@@ -313,7 +313,7 @@
     "/instances": {
       "get": {
         "operationId": "listInstances",
-        "summary": "List case instances visible to the caller.",
+        "summary": "List workflow processes visible to the caller.",
         "parameters": [
           {
             "name": "lifecycleState",
@@ -396,7 +396,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Cursor-paginated case instance page.",
+            "description": "Cursor-paginated workflow process page.",
             "headers": {
               "X-WOS-API-Version": {
                 "description": "Current public API major.minor version.",
@@ -409,7 +409,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstancePage"
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcessPage"
                 }
               }
             }
@@ -442,7 +442,7 @@
       },
       "post": {
         "operationId": "createInstance",
-        "summary": "Create a new case instance.",
+        "summary": "Create a new workflow process.",
         "parameters": [
           {
             "name": "Idempotency-Key",
@@ -457,18 +457,18 @@
         ],
         "requestBody": {
           "required": true,
-          "description": "Create a case instance against the supplied workflow.",
+          "description": "Create a workflow process against the supplied workflow.",
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceCreateRequest"
+                "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcessCreateRequest"
               }
             }
           }
         },
         "responses": {
           "201": {
-            "description": "Created (or attached-to) case instance with the resolved intake-handoff outcome.",
+            "description": "Created (or attached-to) workflow process with the resolved intake-handoff outcome.",
             "headers": {
               "X-WOS-API-Version": {
                 "description": "Current public API major.minor version.",
@@ -481,7 +481,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceCreateResponse"
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcessCreateResponse"
                 }
               }
             }
@@ -516,8 +516,8 @@
     "/instances/{id}": {
       "get": {
         "operationId": "getInstance",
-        "summary": "Fetch a single case instance, optionally with closed `?include=` subresources.",
-        "description": "Returns `CaseInstance` when no `?include=` parameter is supplied; returns `CaseInstanceWithIncludes` (which embeds `CaseInstance` under the `instance` key) when one or more subresource literals are requested. Clients discriminate on the presence of the `instance` envelope key.",
+        "summary": "Fetch a single workflow process, optionally with closed `?include=` subresources.",
+        "description": "Returns `WorkflowProcess` when no `?include=` parameter is supplied; returns `WorkflowProcessWithIncludes` (which embeds `WorkflowProcess` under the `instance` key) when one or more subresource literals are requested. Clients discriminate on the presence of the `instance` envelope key.",
         "parameters": [
           {
             "name": "id",
@@ -542,7 +542,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Case instance projection. The `instance` envelope key carries the base `CaseInstance` shape; subresource keys appear only when `?include=...` requested them.",
+            "description": "Workflow process projection. The `instance` envelope key carries the base `WorkflowProcess` shape; subresource keys appear only when `?include=...` requested them.",
             "headers": {
               "X-WOS-API-Version": {
                 "description": "Current public API major.minor version.",
@@ -555,7 +555,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceWithIncludes"
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcessWithIncludes"
                 }
               }
             }
@@ -827,7 +827,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstance"
+                    "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcess"
                   }
                 }
               }
@@ -880,7 +880,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceCreateRequest"
+                "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcessCreateRequest"
               }
             }
           }
@@ -900,7 +900,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstance"
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcess"
                 }
               }
             }
@@ -972,7 +972,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstance"
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcess"
                 }
               }
             }
@@ -1198,7 +1198,7 @@
     "/instances/{id}/governance": {
       "get": {
         "operationId": "getInstanceGovernance",
-        "summary": "Fetch the governance subresource of a case instance.",
+        "summary": "Fetch the governance subresource of a workflow process.",
         "parameters": [
           {
             "name": "id",
@@ -1225,7 +1225,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceGovernance"
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcessGovernance"
                 }
               }
             }
@@ -1260,7 +1260,7 @@
     "/instances/{id}/tasks": {
       "get": {
         "operationId": "listInstanceTasks",
-        "summary": "List tasks scoped to a case instance.",
+        "summary": "List tasks scoped to a workflow process.",
         "parameters": [
           {
             "name": "id",
@@ -1377,7 +1377,7 @@
     "/instances/{id}/timers": {
       "get": {
         "operationId": "getInstanceTimers",
-        "summary": "Fetch the timers subresource of a case instance.",
+        "summary": "Fetch the timers subresource of a workflow process.",
         "parameters": [
           {
             "name": "id",
@@ -1404,7 +1404,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceTimerList"
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcessTimerList"
                 }
               }
             }
@@ -1439,7 +1439,7 @@
     "/instances/{id}/holds": {
       "get": {
         "operationId": "getInstanceHolds",
-        "summary": "Fetch the holds subresource of a case instance.",
+        "summary": "Fetch the holds subresource of a workflow process.",
         "parameters": [
           {
             "name": "id",
@@ -1466,7 +1466,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceHoldList"
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcessHoldList"
                 }
               }
             }
@@ -1501,7 +1501,7 @@
     "/instances/{id}/related": {
       "get": {
         "operationId": "getInstanceRelated",
-        "summary": "Fetch the related-cases subresource of a case instance.",
+        "summary": "Fetch the related-cases subresource of a workflow process.",
         "parameters": [
           {
             "name": "id",
@@ -1528,7 +1528,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceRelatedList"
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcessRelatedList"
                 }
               }
             }
@@ -1563,7 +1563,7 @@
     "/instances/{id}/provenance": {
       "get": {
         "operationId": "listInstanceProvenance",
-        "summary": "List provenance records for a case instance.",
+        "summary": "List provenance records for a workflow process.",
         "parameters": [
           {
             "name": "id",
@@ -2223,7 +2223,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceHoldList"
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcessHoldList"
                 }
               }
             }
@@ -2351,7 +2351,7 @@
     "/instances/{id}/events": {
       "post": {
         "operationId": "submitInstanceEvent",
-        "summary": "Submit an authored event against a running case instance.",
+        "summary": "Submit an authored event against a running workflow process.",
         "parameters": [
           {
             "name": "id",
@@ -2434,7 +2434,7 @@
     "/instances/{id}/suspend": {
       "post": {
         "operationId": "suspendInstance",
-        "summary": "Suspend a running case instance.",
+        "summary": "Suspend a running workflow process.",
         "parameters": [
           {
             "name": "id",
@@ -2469,7 +2469,7 @@
         },
         "responses": {
           "200": {
-            "description": "Updated case instance with `lifecycleState == suspended`.",
+            "description": "Updated workflow process with `lifecycleState == suspended`.",
             "headers": {
               "X-WOS-API-Version": {
                 "description": "Current public API major.minor version.",
@@ -2482,7 +2482,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstance"
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcess"
                 }
               }
             }
@@ -2517,7 +2517,7 @@
     "/instances/{id}/resume": {
       "post": {
         "operationId": "resumeInstance",
-        "summary": "Resume a suspended case instance.",
+        "summary": "Resume a suspended workflow process.",
         "parameters": [
           {
             "name": "id",
@@ -2552,7 +2552,7 @@
         },
         "responses": {
           "200": {
-            "description": "Updated case instance with `lifecycleState == active`.",
+            "description": "Updated workflow process with `lifecycleState == active`.",
             "headers": {
               "X-WOS-API-Version": {
                 "description": "Current public API major.minor version.",
@@ -2565,7 +2565,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstance"
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcess"
                 }
               }
             }
@@ -2600,7 +2600,7 @@
     "/instances/{id}/terminate": {
       "post": {
         "operationId": "terminateInstance",
-        "summary": "Terminate a case instance (irreversible per Kernel S11.5).",
+        "summary": "Terminate a workflow process (irreversible per Kernel S11.5).",
         "parameters": [
           {
             "name": "id",
@@ -2635,7 +2635,7 @@
         },
         "responses": {
           "200": {
-            "description": "Updated case instance with `lifecycleState == terminated`.",
+            "description": "Updated workflow process with `lifecycleState == terminated`.",
             "headers": {
               "X-WOS-API-Version": {
                 "description": "Current public API major.minor version.",
@@ -2648,7 +2648,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstance"
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcess"
                 }
               }
             }
@@ -2683,7 +2683,7 @@
     "/instances/{id}/migrate": {
       "post": {
         "operationId": "migrateInstance",
-        "summary": "Migrate a case instance to a new workflow definition version.",
+        "summary": "Migrate a workflow process to a new workflow definition version.",
         "parameters": [
           {
             "name": "id",
@@ -2796,10 +2796,10 @@
             }
           },
           {
-            "name": "instanceId",
+            "name": "processId",
             "in": "query",
             "required": false,
-            "description": "Filter to tasks on the supplied case instance.",
+            "description": "Filter to tasks on the supplied workflow process.",
             "schema": {
               "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
             }
@@ -3865,10 +3865,10 @@
         "summary": "List correspondence messages visible to the caller.",
         "parameters": [
           {
-            "name": "instanceId",
+            "name": "processId",
             "in": "query",
             "required": false,
-            "description": "Filter to correspondence on this case instance URN.",
+            "description": "Filter to correspondence on this workflow process URN.",
             "schema": {
               "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
             }
@@ -4129,16 +4129,16 @@
         }
       }
     },
-    "/instances/{instanceId}/correspondence": {
+    "/instances/{processId}/correspondence": {
       "get": {
         "operationId": "listInstanceCorrespondence",
-        "summary": "List correspondence messages scoped to a case instance.",
+        "summary": "List correspondence messages scoped to a workflow process.",
         "parameters": [
           {
-            "name": "instanceId",
+            "name": "processId",
             "in": "path",
             "required": true,
-            "description": "Case instance URN (ADR 0082 D-4).",
+            "description": "Workflow process URN (ADR 0082 D-4).",
             "schema": {
               "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
             }
@@ -6019,10 +6019,10 @@
         "summary": "List case-export bundles.",
         "parameters": [
           {
-            "name": "instanceId",
+            "name": "processId",
             "in": "query",
             "required": false,
-            "description": "Filter to bundles for one case instance URN.",
+            "description": "Filter to bundles for one workflow process URN.",
             "schema": {
               "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
             }
@@ -6602,7 +6602,7 @@
     "/instances/{id}/appeals": {
       "get": {
         "operationId": "listInstanceAppeals",
-        "summary": "List appeals filed against a case instance.",
+        "summary": "List appeals filed against a workflow process.",
         "parameters": [
           {
             "name": "id",
@@ -6689,7 +6689,7 @@
       },
       "post": {
         "operationId": "fileAppeal",
-        "summary": "File an appeal against a closed case instance's adverse determination (governance S3.5).",
+        "summary": "File an appeal against a closed workflow process's adverse determination (governance S3.5).",
         "parameters": [
           {
             "name": "id",
@@ -6834,7 +6834,7 @@
     "/instances/{id}/signature-ceremonies": {
       "get": {
         "operationId": "listInstanceSignatureCeremonies",
-        "summary": "List signature ceremonies scoped to a case instance.",
+        "summary": "List signature ceremonies scoped to a workflow process.",
         "parameters": [
           {
             "name": "id",
@@ -7006,32 +7006,32 @@
       "ActorPage": {
         "$ref": "https://schemas.formspec.io/wos-api/actor/v1#/$defs/ActorPage"
       },
-      "CaseInstance": {
-        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstance"
+      "WorkflowProcess": {
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcess"
       },
-      "CaseInstanceWithIncludes": {
-        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceWithIncludes"
+      "WorkflowProcessWithIncludes": {
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcessWithIncludes"
       },
-      "CaseInstancePage": {
-        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstancePage"
+      "WorkflowProcessPage": {
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcessPage"
       },
-      "CaseInstanceCreateRequest": {
-        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceCreateRequest"
+      "WorkflowProcessCreateRequest": {
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcessCreateRequest"
       },
-      "CaseInstanceCreateResponse": {
-        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceCreateResponse"
+      "WorkflowProcessCreateResponse": {
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcessCreateResponse"
       },
-      "CaseInstanceGovernance": {
-        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceGovernance"
+      "WorkflowProcessGovernance": {
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcessGovernance"
       },
-      "CaseInstanceTimerList": {
-        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceTimerList"
+      "WorkflowProcessTimerList": {
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcessTimerList"
       },
-      "CaseInstanceHoldList": {
-        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceHoldList"
+      "WorkflowProcessHoldList": {
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcessHoldList"
       },
-      "CaseInstanceRelatedList": {
-        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceRelatedList"
+      "WorkflowProcessRelatedList": {
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcessRelatedList"
       },
       "EventSubmissionRequest": {
         "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/EventSubmissionRequest"

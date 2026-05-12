@@ -71,7 +71,7 @@ MARKER_TO_SCHEMA = {
     "$wosWorkflow": "wos-workflow.schema.json",
     "$wosDelivery": "sidecars/wos-delivery.schema.json",
     "$wosOntologyAlignment": "sidecars/wos-ontology-alignment.schema.json",
-    "$wosCaseInstance": "wos-case-instance.schema.json",
+    "$wosProcess": "wos-process.schema.json",
     "$wosProvenanceLog": "wos-provenance-log.schema.json",
     "$wosTooling": "wos-tooling.schema.json",
 }

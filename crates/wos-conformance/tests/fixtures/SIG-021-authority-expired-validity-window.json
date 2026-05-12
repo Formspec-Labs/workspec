@@ -59,7 +59,7 @@
               "signedPayload": {
                 "canonicalization": "formspec-response-signing-v1",
                 "digestAlgorithm": "sha-256",
-                "digest": "3dd55943e5d9443d68cdc378861eabfe34915a59156a21742616155712c4c229",
+                "digest": "cd634abca771dc8015c47727e759149797492487af43ced751b143fdd18cce22",
                 "responseId": "resp-sig-021-authority-expired-validity-window-notaryTask",
                 "definitionUrl": "urn:test:formspec:signature",
                 "definitionVersion": "1.0.0"

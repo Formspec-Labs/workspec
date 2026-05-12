@@ -7,7 +7,7 @@
 //! module makes future adapter comparisons focus on command semantics rather
 //! than reference-runtime internals.
 
-use wos_core::instance::{CaseInstance, PendingEvent};
+use wos_core::instance::{PendingEvent, WorkflowProcess};
 use wos_core::provenance::ProvenanceRecord;
 
 use crate::custody::{CustodyAppendContext, CustodyAppendInput, CustodyAppendReceipt};
@@ -23,31 +23,24 @@ impl DurableRuntime for WosRuntime {
     fn create_instance(
         &mut self,
         request: CreateInstanceRequest,
-    ) -> Result<CaseInstance, RuntimeError> {
+    ) -> Result<WorkflowProcess, RuntimeError> {
         WosRuntime::create_instance(self, request)
     }
 
-    fn load_instance(&self, instance_id: &str) -> Result<CaseInstance, RuntimeError> {
-        WosRuntime::load_instance(self, instance_id)
+    fn load_instance(&self, process_id: &str) -> Result<WorkflowProcess, RuntimeError> {
+        WosRuntime::load_instance(self, process_id)
     }
 
-    fn enqueue_event(
-        &mut self,
-        instance_id: &str,
-        event: PendingEvent,
-    ) -> Result<(), RuntimeError> {
-        WosRuntime::enqueue_event(self, instance_id, event)
+    fn enqueue_event(&mut self, process_id: &str, event: PendingEvent) -> Result<(), RuntimeError> {
+        WosRuntime::enqueue_event(self, process_id, event)
     }
 
-    fn drain_once(&mut self, instance_id: &str) -> Result<DrainOnceResult, RuntimeError> {
-        WosRuntime::drain_once(self, instance_id)
+    fn drain_once(&mut self, process_id: &str) -> Result<DrainOnceResult, RuntimeError> {
+        WosRuntime::drain_once(self, process_id)
     }
 
-    fn drain_until_idle(
-        &mut self,
-        instance_id: &str,
-    ) -> Result<Vec<DrainOnceResult>, RuntimeError> {
-        WosRuntime::drain_until_idle(self, instance_id)
+    fn drain_until_idle(&mut self, process_id: &str) -> Result<Vec<DrainOnceResult>, RuntimeError> {
+        WosRuntime::drain_until_idle(self, process_id)
     }
 
     fn persist_task_draft(
@@ -84,29 +77,29 @@ impl DurableRuntime for WosRuntime {
 
     fn load_provenance_window(
         &self,
-        instance_id: &str,
+        process_id: &str,
         cursor: usize,
         limit: usize,
     ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
-        WosRuntime::load_provenance_window(self, instance_id, cursor, limit)
+        WosRuntime::load_provenance_window(self, process_id, cursor, limit)
     }
 
     fn load_custody_append_window(
         &self,
-        instance_id: &str,
+        process_id: &str,
         cursor: usize,
         limit: usize,
         context: CustodyAppendContext,
     ) -> Result<Vec<CustodyAppendInput>, RuntimeError> {
-        WosRuntime::load_custody_append_window(self, instance_id, cursor, limit, context)
+        WosRuntime::load_custody_append_window(self, process_id, cursor, limit, context)
     }
 
     fn apply_custody_receipt(
         &mut self,
-        instance_id: &str,
+        process_id: &str,
         record_id: &str,
         receipt: CustodyAppendReceipt,
     ) -> Result<(), RuntimeError> {
-        WosRuntime::apply_custody_receipt(self, instance_id, record_id, receipt)
+        WosRuntime::apply_custody_receipt(self, process_id, record_id, receipt)
     }
 }

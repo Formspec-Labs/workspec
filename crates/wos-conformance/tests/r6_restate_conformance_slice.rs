@@ -5,7 +5,7 @@
 //! `restate_signature_fixture_runtime` reference for the same create + start + drain path.
 //!
 //! C.0 (configuration + active_tasks.len parity) and C.1 (full DrainOnceResult shape +
-//! CaseInstance field parity) live here.
+//! WorkflowProcess field parity) live here.
 
 use std::sync::{Arc, Mutex};
 
@@ -22,7 +22,7 @@ fn signature_start_request(process_id: &str) -> CreateInstanceRequest {
     CreateInstanceRequest {
         definition_url: "urn:test:signature-runtime".into(),
         definition_version: "1.0.0".into(),
-        instance_id: process_id.to_string(),
+        process_id: process_id.to_string(),
         tenant: None,
         initial_case_state: None,
     }
@@ -121,7 +121,7 @@ async fn r6_memory_parity_signature_start_drain_matches_reference_runtime() {
 ///
 /// Compares the complete `DrainOnceResult` shape for the start-event step
 /// (`processed_event`, transition tuples, `created_task_ids`, `emitted_events`,
-/// provenance kinds, guard evaluation count) plus final `CaseInstance` fields
+/// provenance kinds, guard evaluation count) plus final `WorkflowProcess` fields
 /// (`configuration`, `active_tasks` IDs, `pending_events` empty).
 #[tokio::test]
 async fn r6_c1_full_drain_result_shape_parity() {
@@ -249,7 +249,7 @@ async fn r6_c1_full_drain_result_shape_parity() {
         );
     }
 
-    // Final CaseInstance parity
+    // Final WorkflowProcess parity
     assert_eq!(
         ref_inst.configuration, ad_inst.configuration,
         "C.1: configuration must match"

@@ -12,13 +12,13 @@ Five subagents (1× `spec-expert`, 4× `code-scout`) cross-checked the consultan
 
 **Conceptually directionally sound, but with one architectural blind spot that needs to be resolved before the ADR is written.** The technical claims about the existing code are mostly accurate but have several precise misstatements, ~3 broken file references, and one significant ADR-misreading that the ADR text would propagate if not fixed.
 
-The memo's central move — *durable Case aggregate ≠ workflow runtime instance* — matches what WOS already says internally (`CaseInstance` is normatively a "running workflow instance"; Kernel §5.1 says lifecycle ⊥ caseState). But the memo writes as if WOS has *no* concept of governed case today, when in fact **ADR 0073 D-1 places "governed case" identity inside WOS** and Kernel §11.4 already distinguishes `caseCreated` from `instanceCreated`. The unresolved question — does product `Case` collapse onto WOS `governed case`, or coexist as a second identity above it? — is the load-bearing decision the ADR must make, and the memo doesn't address it.
+The memo's central move — *durable Case aggregate ≠ workflow runtime instance* — matches what WOS already says internally (`WorkflowProcess` is normatively a "running workflow instance"; Kernel §5.1 says lifecycle ⊥ caseState). But the memo writes as if WOS has *no* concept of governed case today, when in fact **ADR 0073 D-1 places "governed case" identity inside WOS** and Kernel §11.4 already distinguishes `caseCreated` from `instanceCreated`. The unresolved question — does product `Case` collapse onto WOS `governed case`, or coexist as a second identity above it? — is the load-bearing decision the ADR must make, and the memo doesn't address it.
 
 ## 1. Conceptual validation (spec-expert)
 
 | Claim | Verdict | Why |
 |---|---|---|
-| `CaseInstance` "conflates" Case + workflow instance | **PARTIALLY VALID** | Spec text is explicit it's a workflow runtime artifact (Kernel §11.1, schema description, `specs/api/instance.md` L10). The conflation is **product-naming and API root choice**, not spec-text. |
+| `WorkflowProcess` "conflates" Case + workflow instance | **PARTIALLY VALID** | Spec text is explicit it's a workflow runtime artifact (Kernel §11.1, schema description, `specs/api/instance.md` L10). The conflation is **product-naming and API root choice**, not spec-text. |
 | `caseState` = workflow process business data | **VALID** | Kernel §5.1: per-instance, mutated by setData/output bindings, scoped to one workflow run. |
 | Lifecycle states ≠ case status | **VALID** | Kernel §5 explicitly separates lifecycle from case data. |
 | DCR constraint zones are overlays on compound states | **VALID** | Advanced §4.7: "governance overlay on existing `compound` states." |
@@ -28,7 +28,7 @@ The memo's central move — *durable Case aggregate ≠ workflow runtime instanc
 | Migration must preserve `caseId` | **INVALID as stated** | Kernel §11.2 migration semantics have no `caseId` today; this would be **new** normative content. Stack ADR 0071 has `caseId: TypeID` in `MigrationPinChanged` but at the stack record layer, not Kernel migration steps. |
 | Tenant invariant Case ↔ CaseProcess | **PARTIALLY VALID** | ADR 0068 + instance schema have `tenant`; Case ↔ CaseProcess match is a plausible *new* invariant, not an existing MUST. |
 | Provenance is process-scoped, aggregable | **VALID** | `provenancePosition` is per-instance cursor; cross-instance aggregation is a projection, not normative. |
-| `$wosCaseInstance` marker should remain | **VALID** | Renaming would break schema/lint/conformance contract; aliasing is the right call. |
+| `$wosProcess` marker should remain | **VALID** | Renaming would break schema/lint/conformance contract; aliasing is the right call. |
 
 ### The blind spot
 
@@ -49,15 +49,15 @@ The ADR template in the memo does not list this as a "decision required" — it 
 All 11 enumerated fields confirmed: `definition_url`, `definition_version`, `configuration`, `case_state`, `active_tasks`, `timers`, `pending_events`, `status`, `governance_state`, `volume_counters`, `provenance_position`. Specifically:
 
 - `instance.rs:36-109` carries every field as named.
-- Lifecycle status enum: doc lists six values (`active | suspended | migrating | completed | terminated | stalled`); **kernel schema actually has nine** — adds `declined`, `voided`, `expired` (`wos-case-instance.schema.json:273-285`). Doc's six matches the *public API* `LifecycleState`, not the kernel runtime artifact.
-- **No `caseId` field exists on `CaseInstance`** — identity is `instance_id`. `correlationKey` (public API) is the closest existing case-linkage analog but is not parent-pointer.
+- Lifecycle status enum: doc lists six values (`active | suspended | migrating | completed | terminated | stalled`); **kernel schema actually has nine** — adds `declined`, `voided`, `expired` (`wos-process.schema.json:273-285`). Doc's six matches the *public API* `LifecycleState`, not the kernel runtime artifact.
+- **No `caseId` field exists on `WorkflowProcess`** — identity is `process_id`. `correlationKey` (public API) is the closest existing case-linkage analog but is not parent-pointer.
 - TypeID prefix `case` already exists (`typeid.rs:15-16`); URN format is `urn:wos:{tenant}_case_{base32}`. **A new `Case` aggregate would either need a new TypeID family or collide with the current `case` prefix that today identifies instances.** This is unstated in the memo and is a real design constraint.
-- Memo missed several CaseInstance fields a refactor would need to relocate: `next_task_sequence`, `history_store`, `compensation_logs`, terminal-status satellites (`stalled_since`, `decline_reason`, `voided_by/at`, `expired_at`), `fired_milestones`, `pending_callbacks`, `extensions`.
+- Memo missed several WorkflowProcess fields a refactor would need to relocate: `next_task_sequence`, `history_store`, `compensation_logs`, terminal-status satellites (`stalled_since`, `decline_reason`, `voided_by/at`, `expired_at`), `fired_milestones`, `pending_callbacks`, `extensions`.
 
 ### Public API — proposals are additive, but reference server is already drifting
 
 - `/api/v1/cases` and `/api/v1/case-processes` **don't exist today** — proposal is purely additive, no naming conflict.
-- Public `CaseInstance` schema has 9 required + 8 optional fields including `dcrZones`, `milestonesFired`, `continuationOfServicesActive`, `correlationKey`, `tenant`. No `caseId`.
+- Public `WorkflowProcess` schema has 9 required + 8 optional fields including `dcrZones`, `milestonesFired`, `continuationOfServicesActive`, `correlationKey`, `tenant`. No `caseId`.
 - Subresources confirmed: `/governance`, `/tasks`, `/timers`, `/holds`, `/related`, `/provenance`, `/custody`, `/compensation`.
 - **Reference server is OUT OF SYNC with OpenAPI**: `suspend`/`resume`/`terminate` are in the contract but **not implemented** in `workspec-server/.../instances.rs`; `/explanation` (OpenAPI) ≠ `/explain` (server); tasks live at `/api/v1/tasks` (server) but OpenAPI also has `/instances/{id}/tasks`. The Case/Process refactor will inherit this drift if not noticed.
 - Generated SDK consumers: `case-portal/src/types/wos/api-instance.ts` (json-schema-to-typescript, 62 hits in one file) and `wos-server` typify-generated Rust types from `work-spec/schemas/api/*.schema.json`. Both bind to the schema `$defs` shape.
@@ -71,9 +71,9 @@ All 11 enumerated fields confirmed: `definition_url`, `definition_version`, `con
 
 ### Blast radius
 
-- **~584 matches across ~106 files** for `CaseInstance` patterns (work-spec + workspec-server combined).
+- **~584 matches across ~106 files** for `WorkflowProcess` patterns (work-spec + workspec-server combined).
 - Top-density files: `instance.schema.json` (49), `instance.md` (40), OpenAPI (33), `temporal-reference-implementation.md` (13), `instance.rs` (12), portal `api-instance.ts` (62).
-- Lint touchpoints: `wos-lint/src/document.rs:84-90` (`DocumentKind::CaseInstance`), `fel_analysis.rs`, `tier1.rs`.
+- Lint touchpoints: `wos-lint/src/document.rs:84-90` (`DocumentKind::WorkflowProcess`), `fel_analysis.rs`, `tier1.rs`.
 - **Alias-only saves Rust churn but not the schema/OpenAPI/portal/typify chain** — if wire names or `$defs` titles change at all, portal regeneration is mandatory.
 - ADR 0082 confirmed at stack root with closed-taxonomy discipline (D-12, lines 329-331); memo's characterization is correct.
 - Tenant pattern: `^[a-z][a-z0-9-]{0,62}$` (single DNS label). No central "assert tenant match" function — enforcement is distributed across schema validation, TypeID parsing (`typeid.rs::extract_tenant`), auth scope tests (`auth_conformance.rs`).
@@ -115,7 +115,7 @@ All 11 enumerated fields confirmed: `definition_url`, `definition_version`, `con
 
 - **Edge-case enumeration (lines 622-799) is excellent.** All 35 cases survive scrutiny; the spec-expert flagged none as already settled in WOS in a contradictory way. Use this as the test matrix.
 - **DCR positioning is correct** (Advanced §4.7 confirms overlay-on-compound).
-- **Recommendation against marker rename** (`$wosCaseInstance` legacy) is correct — it's load-bearing in lint/conformance.
+- **Recommendation against marker rename** (`$wosProcess` legacy) is correct — it's load-bearing in lint/conformance.
 - **Phase ordering** (ADR → end-state spec → landing plan → formal specs → schemas → code) matches repo conventions; no structural blockers found in any phase.
 
 ## Recommendation
@@ -140,9 +140,9 @@ This validation was produced by Claude Opus 4.7 (Cursor IDE) by reading the sour
 | Subagent | Subject |
 |---|---|
 | `spec-expert` | Normative WOS spec validation (Kernel, Governance, AI, Advanced, sidecars, ADRs). |
-| `code-scout` #1 | Runtime model: `crates/wos-core/src/instance.rs`, `wos-case-instance.schema.json`, public API `CaseInstance` shape. |
+| `code-scout` #1 | Runtime model: `crates/wos-core/src/instance.rs`, `wos-process.schema.json`, public API `WorkflowProcess` shape. |
 | `code-scout` #2 | Public API surface: OpenAPI, `specs/api/instance.md`, `workspec-server` route handlers, generated SDK consumers. |
 | `code-scout` #3 | Cross-spec contracts: ADR 0066, 0073, 0080, custody seam, stack VISION/STACK alignment. |
-| `code-scout` #4 | Migration blast radius (`CaseInstance` references), ADR 0082 closed-taxonomy, TypeID-in-URN, tenant discipline, phase-feasibility checks. |
+| `code-scout` #4 | Migration blast radius (`WorkflowProcess` references), ADR 0082 closed-taxonomy, TypeID-in-URN, tenant discipline, phase-feasibility checks. |
 
 All five agents ran in read-only mode. Findings cross-checked against each other; the few disagreements (e.g., presence of `specs/kernel/spec.md`) are flagged in §3 as checkout-state artifacts to verify before ADR work begins.

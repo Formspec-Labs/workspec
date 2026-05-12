@@ -69,7 +69,7 @@ Fit against WOS:
 
 Adapter shape if revisited:
 
-- One WOS case instance maps to one Temporal workflow execution.
+- One WOS workflow process maps to one Temporal workflow execution.
 - `enqueue_event` maps to a Temporal signal.
 - `load_instance` and provenance windows map to workflow queries plus an external provenance store.
 - `invokeService`, task presentation, contract validation, and custody append should be Temporal activities, not inline workflow code.
@@ -104,7 +104,7 @@ Fit against WOS:
 
 Adapter shape:
 
-- One WOS case instance maps to one Restate workflow object key.
+- One WOS workflow process maps to one Restate workflow object key.
 - `create_instance` starts the workflow or initializes a virtual-object-backed case record.
 - `enqueue_event` resolves a durable promise or invokes a shared handler that appends to the per-instance event queue.
 - `drain_once` and `drain_until_idle` execute inside the workflow `run` handler or a serialized virtual-object command path.
@@ -124,16 +124,16 @@ The selected backend contract is logical tenant isolation first, physical isolat
 Every production adapter MUST carry:
 
 - `tenant_id`: opaque deployment tenant, agency, or customer identifier.
-- `instance_id`: WOS instance identifier.
+- `process_id`: WOS instance identifier.
 - `case_ref`: custody/provenance case identifier.
 - `workflow_ref`: governing workflow/kernel identifier.
 
 ### Key rules
 
 1. Backend object keys MUST be tenant-qualified.
-   - Restate key shape: `{tenant_id}/{instance_id}`.
-   - Temporal fallback shape: workflow id `{tenant_id}/{instance_id}` unless using namespace-per-tenant.
-2. `instance_id` SHOULD be globally unique. If it is not, the adapter MUST qualify it with `tenant_id` before handing it to the backend.
+   - Restate key shape: `{tenant_id}/{process_id}`.
+   - Temporal fallback shape: workflow id `{tenant_id}/{process_id}` unless using namespace-per-tenant.
+2. `process_id` SHOULD be globally unique. If it is not, the adapter MUST qualify it with `tenant_id` before handing it to the backend.
 3. `case_ref` MUST be globally unique across tenants or tenant-qualified before custody append metadata is generated.
 4. Provenance cursors are scoped to one tenant-qualified instance.
 5. A custody append window MUST NOT combine records across tenants, workflows, or instances.
@@ -148,7 +148,7 @@ Every production adapter MUST carry:
 Per-tenant provenance scoping is by tenant-qualified instance plus append position:
 
 ```text
-tenant_id / instance_id / provenance_position
+tenant_id / process_id / provenance_position
 ```
 
 ADR-0061 custody idempotency remains:

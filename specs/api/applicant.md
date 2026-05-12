@@ -29,7 +29,7 @@ Full applicant-visible projection. Wraps `summary` (the same `ApplicantCaseSumma
 Required: `summary`, `openTasks`, `recentNotifications`, `statusTimeline`.
 Optional: `aiInvolvement` (`ApplicantAiInvolvementSummary` — present iff the governing workflow's `aiOversight.disclosure.discloseThatAgentAssisted` is true).
 
-This shape is **distinct** from staff `CaseInstanceWithIncludes`: holds, delegations, review-state details, and other staff-only subresources are NOT exposed. The applicant view is intentionally narrower.
+This shape is **distinct** from staff `WorkflowProcessWithIncludes`: holds, delegations, review-state details, and other staff-only subresources are NOT exposed. The applicant view is intentionally narrower.
 
 ### `ApplicantAiInvolvementSummary`
 

@@ -57,7 +57,7 @@
               "signedPayload": {
                 "canonicalization": "formspec-response-signing-v1",
                 "digestAlgorithm": "sha-256",
-                "digest": "8988b35187e15edfb132f4635ef0fbe494c593a62043cbfae060000174105b59",
+                "digest": "3a1a56c56ff8b3ad9fe17b8e244b59e45972e3223f593585bd85b6c8f04842f6",
                 "responseId": "resp-sig-008-notary-in-person-auth-notaryTask",
                 "definitionUrl": "urn:test:formspec:signature",
                 "definitionVersion": "1.0.0"

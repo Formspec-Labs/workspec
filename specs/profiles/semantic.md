@@ -408,7 +408,7 @@ The `processMining` property declares export configuration:
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
 | `formats` | array of enum | REQUIRED | Export formats to support: `"xes"`, `"ocel"`, or both. |
-| `caseIdentifier` | string | OPTIONAL | The case state field used as the XES case identifier. Default: `"instanceId"`. |
+| `caseIdentifier` | string | OPTIONAL | The case state field used as the XES case identifier. Default: `"processId"`. |
 | `eventClassifier` | string | OPTIONAL | The provenance field used as the XES activity classifier. Default: `"action"`. |
 | `objectTypes` | array | OPTIONAL | For OCEL: the WOS object types to include in the object-centric event log. |
 
@@ -831,7 +831,7 @@ This appendix is informative. The following is the reference `@context` document
     "wasDerivedFrom": { "@id": "prov:wasDerivedFrom", "@type": "@id" },
     "recordType": "wos:recordType",
     "auditLayer": "wos:auditLayer",
-    "instanceId": { "@id": "wos:instanceId", "@type": "@id" }
+    "processId": { "@id": "wos:processId", "@type": "@id" }
   }
 }
 ```

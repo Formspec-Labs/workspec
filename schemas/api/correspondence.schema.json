@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.formspec.io/wos-api/correspondence/v1",
   "title": "WOS API Correspondence",
-  "description": "Public API resource schema for correspondence messages and delivery-template renderings. A CorrespondenceMessage is a single addressable inbound or outbound communication associated with a WOS case instance; a CorrespondenceRendering is the result of rendering a delivery-sidecar notification template into a draft message body. Greenfield per ADR 0082; closed taxonomies project the WOS delivery sidecar (https://wos-spec.org/schemas/delivery/1.0) into the public API surface without redefinition.",
+  "description": "Public API resource schema for correspondence messages and delivery-template renderings. A CorrespondenceMessage is a single addressable inbound or outbound communication associated with a WOS workflow process; a CorrespondenceRendering is the result of rendering a delivery-sidecar notification template into a draft message body. Greenfield per ADR 0082; closed taxonomies project the WOS delivery sidecar (https://wos-spec.org/schemas/delivery/1.0) into the public API surface without redefinition.",
   "oneOf": [
     {
       "$ref": "#/$defs/CorrespondenceMessage"
@@ -271,10 +271,10 @@
     "CorrespondenceMessage": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Public WOS correspondence message: a single inbound or outbound communication associated with a case instance. The `contentRef` field is a claim-check pointer; payload bytes never travel through this API resource.",
+      "description": "Public WOS correspondence message: a single inbound or outbound communication associated with a workflow process. The `contentRef` field is a claim-check pointer; payload bytes never travel through this API resource.",
       "required": [
         "id",
-        "instanceId",
+        "processId",
         "workflowUrl",
         "templateRef",
         "channel",
@@ -291,9 +291,9 @@
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
           "description": "Stable public URN for this correspondence message."
         },
-        "instanceId": {
+        "processId": {
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
-          "description": "Case instance URN this correspondence belongs to."
+          "description": "Workflow process URN this correspondence belongs to."
         },
         "workflowUrl": {
           "$ref": "#/$defs/WorkflowUrn",
@@ -413,9 +413,9 @@
       "additionalProperties": false,
       "description": "Query fields for listing correspondence messages.",
       "properties": {
-        "instanceId": {
+        "processId": {
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
-          "description": "When present, restrict results to this case instance."
+          "description": "When present, restrict results to this workflow process."
         },
         "direction": {
           "$ref": "#/$defs/MessageDirection",
@@ -494,7 +494,7 @@
       "additionalProperties": false,
       "description": "Request body for recording a correspondence message. The server assigns `id`, `recordedAt`, and any URN-shaped resource references the caller did not supply.",
       "required": [
-        "instanceId",
+        "processId",
         "workflowUrl",
         "templateRef",
         "channel",
@@ -505,9 +505,9 @@
         "occurredAt"
       ],
       "properties": {
-        "instanceId": {
+        "processId": {
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
-          "description": "Case instance URN this correspondence belongs to."
+          "description": "Workflow process URN this correspondence belongs to."
         },
         "workflowUrl": {
           "$ref": "#/$defs/WorkflowUrn",
@@ -602,9 +602,9 @@
           "$ref": "#/$defs/TemplateRef",
           "description": "Notification template key from the delivery sidecar's `notifications.templates`."
         },
-        "instanceId": {
+        "processId": {
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
-          "description": "Optional case instance URN. When present the server MAY enrich rendering variables from case state per the workflow's delivery sidecar."
+          "description": "Optional workflow process URN. When present the server MAY enrich rendering variables from case state per the workflow's delivery sidecar."
         },
         "variables": {
           "type": "array",

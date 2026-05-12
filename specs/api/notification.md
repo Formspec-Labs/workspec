@@ -29,7 +29,7 @@ Optional fields are omitted when absent:
 - `readAt`
 - `expiresAt`, including the literal `never` for non-expiring notifications.
 - `actorRef`
-- `instanceId`
+- `processId`
 - `taskId`
 - `bundleId` — REQUIRED when `type == bundle-completed` (conditional `if`/`then` block per ADR 0082 D-11). Points at the addressable bundle resource that transitioned to a terminal lifecycle state.
 - `action`
@@ -48,7 +48,7 @@ The `type` field is a closed-with-vendor-extension family; vendor extensions use
 |---|---|---|
 | `bundle-completed` | Case-export bundle reached a terminal lifecycle state (`BundleStatus`). | `info` (on `available`), `warning` (on `expired`), `critical` (on `failed`) |
 | `adverse-decision` | A governed determination was reached that denies, reduces, or otherwise adversely affects a claimed benefit, right, or access — triggers procedural-review and appeal-path awareness. Emitted under governance §S10.3 escalation when an adverse outcome renders. | `critical` |
-| `appeal-filed` | An interested party has initiated a formal appeal against a prior adverse determination. Emitted to the adjudication authority and any registered observers; carries `instanceId` of the appeal case and `actorRef` of the appellant. | `critical` |
+| `appeal-filed` | An interested party has initiated a formal appeal against a prior adverse determination. Emitted to the adjudication authority and any registered observers; carries `processId` of the appeal case and `actorRef` of the appellant. | `critical` |
 
 `adverse-decision` enables case-portal UI to surface the "your application was denied / your benefit was reduced" feed item with deep-link to the determination and appeal instructions. `appeal-filed` enables the original adjudicator and oversight dashboard to surface pending-appeal state inline.
 

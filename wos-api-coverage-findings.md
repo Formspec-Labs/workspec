@@ -38,7 +38,7 @@ The **Authoring Interface** lives in Policy Studio / Formspec Studio — separat
 
 | # | Gap | Status | Resolution |
 |---|-----|--------|------------|
-| 8 | Instance governance subresource thin | ✅ RESOLVED | `CaseInstanceGovernance` extended: `adverseDecisionPolicyActive`, `reviewProtocolActive` ($ref `ReviewProtocolKind`), `activeEscalation` (level/escalatedTo/escalatedAt/reason), `activeHoldsCount`, `activeGovernanceRules[]`. |
+| 8 | Instance governance subresource thin | ✅ RESOLVED | `WorkflowProcessGovernance` extended: `adverseDecisionPolicyActive`, `reviewProtocolActive` ($ref `ReviewProtocolKind`), `activeEscalation` (level/escalatedTo/escalatedAt/reason), `activeHoldsCount`, `activeGovernanceRules[]`. |
 | 9 | DCR zone state — only breach indicator | ✅ RESOLVED | `DcrConstraintZoneState` extended: `pendingActivities[]`, `violatedRelations[]` (relationType/source/target, 5 relation types). |
 | 10 | Compensation log invisible | ✅ RESOLVED | `CompensationLogEntry` + `CompensationLogEntryPage` $defs added to `instance.schema.json`. Endpoint: `GET /api/v1/instances/{id}/compensations`. Added to `?include=` taxonomy. |
 | 11 | Counterfactual query surface | ✅ LOWERED | Provenance tier filtering (`?tier=counterfactual`) already works. `AssembledExplanation` surfaces counterfactuals for adverse decisions. |
@@ -55,7 +55,7 @@ The **Authoring Interface** lives in Policy Studio / Formspec Studio — separat
 |---|-----|--------|------------|
 | 18 | PolicyParameterSummary missing type/unit | ✅ RESOLVED | `type` (number/integer/string/boolean) and `unit` (string) added to `PolicyParameterSummary`. |
 | 19 | Assurance taxonomy mismatch | ✅ RESOLVED | `x-wos.assuranceTaxonomyMapping` annotation added to `AuditAttestationView.highestAssuranceLevel` (L1↔low … L4↔very-high). Documented in `audit.md`. |
-| 20 | LifecycleHook rule activation query | ✅ RESOLVED | `activeGovernanceRules[]` added to `CaseInstanceGovernance` (ruleId, ruleKind, triggerTag, activatedAt). |
+| 20 | LifecycleHook rule activation query | ✅ RESOLVED | `activeGovernanceRules[]` added to `WorkflowProcessGovernance` (ruleId, ruleKind, triggerTag, activatedAt). |
 | 21 | Multi-step session DAG topology | ⏸ DEFERRED | `MultiStepSessionState` already carries live state. Per-step declarative structure is author-time detail; defer to next pass. |
 
 ### Deprecated Code Cleanup
@@ -73,7 +73,7 @@ The **Authoring Interface** lives in Policy Studio / Formspec Studio — separat
 
 | Domain | Strengths |
 |--------|-----------|
-| **Instance** | `CaseInstance` with lifecycle, impactLevel, configuration, milestones, dcrZones; `?include=` subresource aggregation (9 includes); `EvaluationResult` with typed `CaseStateMutation[]`; correlation-group fan-out; lifecycle-control mutations (suspend/resume/terminate/migrate) |
+| **Instance** | `WorkflowProcess` with lifecycle, impactLevel, configuration, milestones, dcrZones; `?include=` subresource aggregation (9 includes); `EvaluationResult` with typed `CaseStateMutation[]`; correlation-group fan-out; lifecycle-control mutations (suspend/resume/terminate/migrate) |
 | **Task** | Full CRUD (draft/submit/dismiss); contract binding; `ValidationOutcome` with 3-axis validity; `AssignmentRoles` 5-role table; `TaskDeadline[]` multi-SLA; `reviewProtocol` on review tasks |
 | **Provenance** | Tier-discriminated union (facts/reasoning/counterfactual/narrative); 60+ `FactsRecordKind` literals; composable AND filters; `AssembledExplanation` |
 | **Governance** | `AgentView` with drift, circuit breaker, shadow mode, lifecycle state, disclosure; `Delegation` full CRUD with quorum; `PolicyVersion` with parameter hash; `EscalationEvent` with 10 reasons; `AutonomyEvent` |
@@ -101,13 +101,13 @@ The **Authoring Interface** lives in Policy Studio / Formspec Studio — separat
 | File | Changes |
 |------|---------|
 | `schemas/api/governance.schema.json` | AgentView +5 fields (disclosure×3, reviewWindow, suppressedPending); DeonticConstraintSummary +onViolation; PolicyParameterSummary +type/+unit; AutonomyEvent $def; CircuitBreakerSpec alignment (failureThreshold removed, rate-over-window fields added) |
-| `schemas/api/instance.schema.json` | CaseInstanceGovernance +5 fields; DcrConstraintZoneState +2 fields; CustodyReceipt $def; CompensationLogEntry + Page $defs; IncludeKind +compensation; oneOf updated |
+| `schemas/api/instance.schema.json` | WorkflowProcessGovernance +5 fields; DcrConstraintZoneState +2 fields; CustodyReceipt $def; CompensationLogEntry + Page $defs; IncludeKind +compensation; oneOf updated |
 | `schemas/api/notification.schema.json` | NotificationType +adverse-decision +appeal-filed |
 | `schemas/api/_common.schema.json` | WosResourceUrn +appeal +signature-ceremony |
 | `schemas/api/provenance.schema.json` | FactsTierRecord.data.description extended with equityAlert fields |
 | `schemas/api/audit.schema.json` | AuditAttestationView.highestAssuranceLevel x-wos taxonomy mapping added |
 | `specs/api/governance.md` | AgentView disclosure/reviewWindow/suppressedPending; DeonticConstraintSummary.onViolation; PolicyParameterSummary type/unit; AutonomyEvent; CircuitBreakerSpec |
-| `specs/api/instance.md` | CaseInstanceGovernance fields; DcrConstraintZoneState fields; CustodyReceipt; CompensationLogEntry; custody + compensation subresources + endpoints |
+| `specs/api/instance.md` | WorkflowProcessGovernance fields; DcrConstraintZoneState fields; CustodyReceipt; CompensationLogEntry; custody + compensation subresources + endpoints |
 | `specs/api/notification.md` | NotificationType adverse-decision + appeal-filed |
 | `specs/api/provenance.md` | equityAlert + autonomyEscalation/autonomyDemotion payload docs (lightweight inline pattern) |
 | `specs/api/audit.md` | Assurance taxonomy mapping L1-L4 ↔ low/standard/high/very-high |
@@ -134,7 +134,7 @@ GET    /api/v1/instances/{id}/compensations         -> CompensationLogEntryPage
 |--------|-------|---------|----------|----------|
 | Phase 1 | governance, notification, _common schemas + spec docs | APPROVE | 0 | 0 |
 | Phase 2 | appeal, signature, custody/compensation schemas + spec docs | APPROVE | 0 | 0 |
-| Phase 3 | CaseInstanceGovernance, DCR, AutonomyEvent, CircuitBreakerSpec | APPROVE (post-fix) | 0 | 0 (4 pre-fix warnings fixed) |
+| Phase 3 | WorkflowProcessGovernance, DCR, AutonomyEvent, CircuitBreakerSpec | APPROVE (post-fix) | 0 | 0 (4 pre-fix warnings fixed) |
 | Phase 4 | provenance payload docs, assurance taxonomy | APPROVE (post-fix) | 0 | 0 (2 pre-fix blockers fixed) |
 | Cross-phase | All 16 files, all $refs, spec↔schema consistency, URN entity-types, required fields | APPROVE | 0 | 0 |
 

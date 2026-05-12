@@ -17,7 +17,7 @@ The ceremony aggregate lets the case portal answer "who hasn't signed yet?" and 
 
 ## Resource Shape
 
-`SignatureCeremony` carries identity, case binding, optional task binding, status, ordered signers, flow pattern, timing metadata, and signing intent. Required fields: `id`, `instanceId`, `status`, `signers`, `flowPattern`, `createdAt`. Optional fields, omitted when absent: `taskId`, `documentRef`, `intentUri`, `completedAt`, `expiresAt`.
+`SignatureCeremony` carries identity, case binding, optional task binding, status, ordered signers, flow pattern, timing metadata, and signing intent. Required fields: `id`, `processId`, `status`, `signers`, `flowPattern`, `createdAt`. Optional fields, omitted when absent: `taskId`, `documentRef`, `intentUri`, `completedAt`, `expiresAt`.
 
 `status` is a closed lifecycle: `awaiting-signatures` (ceremony active, signers pending), `complete` (all required signers have signed), `declined` (a signer declined and the ceremony reached a terminal state), `expired` (signing window elapsed), `voided` (ceremony was administratively voided). Closed enum with no extension seam — ceremony lifecycle is normative.
 
@@ -31,7 +31,7 @@ The ceremony aggregate lets the case portal answer "who hasn't signed yet?" and 
 
 ## Identifier Scheme
 
-`SignatureCeremony.id` is a `urn:wos:<typeid>` URN per ADR 0092 D-1. `SignatureCeremony.instanceId` is a `urn:wos:<typeid>` URN of the owning case.
+`SignatureCeremony.id` is a `urn:wos:<typeid>` URN per ADR 0092 D-1. `SignatureCeremony.processId` is a `urn:wos:<typeid>` URN of the owning case.
 
 ## Endpoints
 
@@ -40,7 +40,7 @@ The ceremony aggregate lets the case portal answer "who hasn't signed yet?" and 
 | GET | /api/v1/instances/{id}/signatures | → SignatureCeremonyPage | n/a |
 | GET | /api/v1/instances/{id}/signatures/{ceremonyId} | → SignatureCeremony | n/a |
 
-`GET /api/v1/instances/{id}/signatures` lists ceremonies for a case instance. Response is `SignatureCeremonyPage`: `items: SignatureCeremony[]`, optional `cursor`, required `hasMore`. Cursor-paginated per ADR 0082 D-7. No `total`, no `page`. Cursors are deploy-lifetime stable; `WOS-1410` on expiry triggers client restart from the top.
+`GET /api/v1/instances/{id}/signatures` lists ceremonies for a workflow process. Response is `SignatureCeremonyPage`: `items: SignatureCeremony[]`, optional `cursor`, required `hasMore`. Cursor-paginated per ADR 0082 D-7. No `total`, no `page`. Cursors are deploy-lifetime stable; `WOS-1410` on expiry triggers client restart from the top.
 
 `GET /api/v1/instances/{id}/signatures/{ceremonyId}` returns a single `SignatureCeremony`. The `ceremonyId` path parameter is a signature-ceremony URN; `404` (`WOS-1404`) when the ceremony is not visible to the caller's scope.
 

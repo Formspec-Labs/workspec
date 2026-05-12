@@ -67,7 +67,7 @@
       "description": "Subset of staff `task.schema.json#/$defs/TaskListItem` projected for the applicant view. Only applicant-owed tasks are returned by `GET /api/v1/applicant/cases/{id}/tasks`; the contract defends that scope by carrying a closed `TaskKind` subset (`intake`, `correspondence-response`, `signature`, `verification`) covering applicant-actionable families and a closed user-facing `TaskStatus` (`pending | drafted | submitted | dismissed | expired`). Staff-owned task families (`review`, `determination`, `escalation`, `hold-resolution`) are filtered server-side and never appear here.",
       "required": [
         "id",
-        "instanceId",
+        "processId",
         "kind",
         "status",
         "title",
@@ -78,9 +78,9 @@
           "$ref": "#/$defs/WosResourceUrn",
           "description": "Stable public URN for this task."
         },
-        "instanceId": {
+        "processId": {
           "$ref": "#/$defs/WosResourceUrn",
-          "description": "Case instance URN this task belongs to."
+          "description": "Workflow process URN this task belongs to."
         },
         "kind": {
           "oneOf": [
@@ -222,9 +222,9 @@
             "We need additional information to continue your application."
           ]
         },
-        "instanceId": {
+        "processId": {
           "$ref": "#/$defs/WosResourceUrn",
-          "description": "Case instance URN this notification relates to. Omitted only for tenant-wide system notifications."
+          "description": "Workflow process URN this notification relates to. Omitted only for tenant-wide system notifications."
         },
         "taskId": {
           "$ref": "#/$defs/WosResourceUrn",
@@ -370,7 +370,7 @@
     "ApplicantCaseSummary": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Lightweight applicant-facing case projection for list views. Distinct from staff `instance.schema.json#/$defs/CaseInstance` — the applicant view hides governance internals (delegations, review state, hold rationale) and surfaces only the fields the applicant has authority to see. Carries the case URN, governing workflow, lifecycle posture, last-update timestamp, and an `actionNeeded` flag indicating whether at least one applicant-owed task is in `pending` or `drafted` status.",
+      "description": "Lightweight applicant-facing case projection for list views. Distinct from staff `instance.schema.json#/$defs/WorkflowProcess` — the applicant view hides governance internals (delegations, review state, hold rationale) and surfaces only the fields the applicant has authority to see. Carries the case URN, governing workflow, lifecycle posture, last-update timestamp, and an `actionNeeded` flag indicating whether at least one applicant-owed task is in `pending` or `drafted` status.",
       "required": [
         "id",
         "workflowUrl",
@@ -382,7 +382,7 @@
       "properties": {
         "id": {
           "$ref": "#/$defs/WosResourceUrn",
-          "description": "Stable public URN for this case instance."
+          "description": "Stable public URN for this workflow process."
         },
         "workflowUrl": {
           "$ref": "#/$defs/WorkflowUrl",
@@ -438,7 +438,7 @@
     "ApplicantCaseDetail": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Full applicant-visible case projection returned by `GET /api/v1/applicant/cases/{id}`. Wraps a `summary` envelope (the same shape returned by the list endpoint), the applicant-owed open task set, the most recent applicant notifications for this case, and the bounded status timeline. Holds, delegations, review state, governance internals, and other staff-only subresources are NOT exposed; the applicant view is intentionally narrower than staff `CaseInstanceWithIncludes`.",
+      "description": "Full applicant-visible case projection returned by `GET /api/v1/applicant/cases/{id}`. Wraps a `summary` envelope (the same shape returned by the list endpoint), the applicant-owed open task set, the most recent applicant notifications for this case, and the bounded status timeline. Holds, delegations, review state, governance internals, and other staff-only subresources are NOT exposed; the applicant view is intentionally narrower than staff `WorkflowProcessWithIncludes`.",
       "required": [
         "summary",
         "openTasks",

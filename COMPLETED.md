@@ -46,7 +46,7 @@ Archive of closed-out work items extracted from `TODO.md`. Active backlog and in
 - [x] LINT-MATRIX rule count reconciled (197 total; I-001 added in NB.2).
 - [x] Kernel schema — `evaluationMode`, `maxRelationshipEventDepth`.
 - [x] Governance schema — `scope`, `sourceAuthority`, `ruleId`.
-- [x] Case Instance schema — `pendingEvents`, `governanceState`, `volumeCounters`.
+- [x] Workflow Process schema — `pendingEvents`, `governanceState`, `volumeCounters`.
 
 ## Normative features (from IDEA_SCRATCH Shipped)
 
@@ -135,7 +135,7 @@ Archive of closed-out work items extracted from `TODO.md`. Active backlog and in
 
 - [x] NB.1 — typed `IntegrationBindingKind` enum + `IntegrationBindingHandler` trait; replaced stringly-typed dispatch (f017910).
 - [x] NB.2 — outputBinding RFC 9535 profile pinned (wildcard + slice; filter/recursive-descent rejected); lint rule I-001; spec §3.3.1 (e6e916d).
-- [x] NB.3 — CloudEvents bindings (`event-emit`, `event-consume`, `callback`) with subject correlation `{instanceId}:{bindingId}:{invocationId}`; full envelope captured in provenance; 6 fixtures INT-EMIT/CONSUME/CALLBACK-001–003 (75c8b21).
+- [x] NB.3 — CloudEvents bindings (`event-emit`, `event-consume`, `callback`) with subject correlation `{processId}:{bindingId}:{invocationId}`; full envelope captured in provenance; 6 fixtures INT-EMIT/CONSUME/CALLBACK-001–003 (75c8b21).
 - [x] NB.4 — Arazzo, tool, and policy-engine bindings; `PolicyDecision` normalized to `{decision, reasons, obligations}`; 7 fixtures INT-ARAZZO/TOOL/POLICY-001–004 (d79c02b).
 
 ## Security / architecture docs
@@ -306,7 +306,7 @@ After Session 13's audit + Session 14's typed-path closure, the user asked for a
 **Validation findings:**
 
 - [x] **Variant-count drift** — TODO Snapshot, audit doc, and COMPLETED.md Session 13 all cited "95 `ProvenanceKind` variants" — actual count at HEAD is **100** (`awk '/^pub enum ProvenanceKind/,/^}/' kind.rs | grep -c "^    [A-Z]"` confirms). Six sites corrected to "99 at audit time, 100 at HEAD" framing. The audit's *script* enumerated all 100 (hand-list verified by `comm` diff against the actual enum), so the structural finding (1 zero-emission variant, 1 missing schema-driven kind) holds — only the *prose count* was wrong.
-- [x] **#68 rescoped (all schemas + bidirectional).** Original framing scanned only `wos-workflow.schema.json`; scout pointed out `wos-provenance-log.schema.json` and `wos-case-instance.schema.json` also carry `recordKind` references and the lint should be bidirectional (every literal → variant AND every variant → literal binding) so dead variants like `TaskSkipped` get caught mechanically. Description updated.
+- [x] **#68 rescoped (all schemas + bidirectional).** Original framing scanned only `wos-workflow.schema.json`; scout pointed out `wos-provenance-log.schema.json` and `wos-process.schema.json` also carry `recordKind` references and the lint should be bidirectional (every literal → variant AND every variant → literal binding) so dead variants like `TaskSkipped` get caught mechanically. Description updated.
 - [x] **§4.1 rescoped (3 schemas → 2).** Third schema (`schemas/kernel/wos-custody-hook-encoding.schema.json`) was deleted in ADR 0076 promotion — confirmed by `ls schemas/kernel/`. Rescoped to `schemas/conformance/conformance-trace.schema.json` + `schemas/mcp/wos-mcp-tools.schema.json`. Adjacent gap surfaced: `K-EXT-001` (T1 unknown-non-`x-` lint) is referenced in `LINT-MATRIX.md` jumps but not landed (`K-005 → K-EXT-002` with K-EXT-001 missing) — flagged in the entry as a separate lint-rule gap, not part of #2's scope.
 - [x] **Kernel-Basic LoadBearing declaration retired.** Scout found "Kernel-Basic" appears only as a name in `RELEASE-STREAMS.md:11` claims-map row — no profile definition file, no fixtures bound, no kernel-block selection. Real Cx is 5+ (write the profile artifact + fixture binding + conformance crate wiring before the LoadBearing flag, not "one-line declaration"). Verifiability-closure entry rewritten as `RESCOPED 2026-04-28 (LARGER-THAN-CLAIMED)`; re-file when the profile artifact actually exists.
 - [x] **Stack-level ADR cross-check lint retired** (TODO-STACK.md). No ADR carries a structured `Cross-references` section; refs are inline narrative. The lint itself is trivial; the **work** is the convention — adding a structured `## Cross-references` block (or YAML frontmatter) to the ADR template, which is a stack-wide convention change requiring owner sign-off, not single-session. Re-file as a two-step (template revision → lint) once the convention is decided.
@@ -374,7 +374,7 @@ The audit was correct on the date it ran against an older HEAD, but the §2.9/§
 Completion contract archived from the former `T1-TODO.md` execution file:
 
 1. WOS publishes the reserved TypeID family prefixes and `wos.*` event-type ownership in the extension-registry surface.
-2. WOS case instances and authored records mint TypeIDs at authoring time rather than deriving them from log position or storage order.
+2. WOS workflow processes and authored records mint TypeIDs at authoring time rather than deriving them from log position or storage order.
 3. Record-family schemas reject malformed `caseId` / `id` values at authoring time.
 4. The binding mechanically converts schema-valid WOS JSON records into dCBOR using the ADR-0061 encoding table and rejection list.
 5. The WOS runtime emits the narrow four-field append input: `caseId`, `recordId`, `eventType`, `record`.
@@ -383,7 +383,7 @@ Completion contract archived from the former `T1-TODO.md` execution file:
 8. Trellis fixture `append/010-wos-custody-hook-state-transition` and Trellis Operational Companion §24.9 match the final emitted shape.
 9. Round-trip fixture corpora byte-match in Rust and Python for every WOS record family crossing `custodyHook`.
 
-- [x] **TypeID minting landed in code** — added stack-local [typeid.rs](crates/wos-core/src/typeid.rs) with UUIDv7/Crockford `{tenant}_{type}_{uuidv7_base32}` minting + validation; `ProvenanceRecord` now mints `prov` IDs at authoring time; `CaseInstance` now mints `case` IDs and preserves legacy request aliases for runtime compatibility.
+- [x] **TypeID minting landed in code** — added stack-local [typeid.rs](crates/wos-core/src/typeid.rs) with UUIDv7/Crockford `{tenant}_{type}_{uuidv7_base32}` minting + validation; `ProvenanceRecord` now mints `prov` IDs at authoring time; `WorkflowProcess` now mints `case` IDs and preserves legacy request aliases for runtime compatibility.
 - [x] **Kernel provenance records gained durable custody citation** — `ProvenanceRecord` now carries `canonicalEventHash`; runtime added `apply_custody_receipt(...)` and stamps `CustodyAppendReceipt { canonical_event_hash }` onto persisted provenance by `recordId`.
 - [x] **`wos-runtime::custody` rewritten to ADR-0061** — removed the superseded JCS/wide-shape append surface; live runtime now emits the narrow four-field append input (`caseId`, `recordId`, `eventType`, `record`) with dCBOR-authored bytes, base64 JSON host serialization, canonical CBOR map ordering, oversize rejection, and 2-tuple idempotency `(caseId, recordId)`.
 - [x] **Spec / schema / registry surfaces aligned** — [specs/kernel/custody-hook-encoding.md](specs/kernel/custody-hook-encoding.md), [schemas/kernel/wos-custody-hook-encoding.schema.json](schemas/kernel/wos-custody-hook-encoding.schema.json), registry ownership metadata, case/provenance/governance TypeID patterns, and the Trellis Operational Companion §24.9 now all point at the accepted ADR-0061 contract.

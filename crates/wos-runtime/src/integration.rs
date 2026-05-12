@@ -119,7 +119,7 @@ pub struct IntegrationBinding {
     /// CloudEvents binding handlers read metadata from this map:
     /// - `"source"` — CE `source` attribute for outbound events
     /// - `"eventType"` — CE `type` attribute for outbound events
-    /// - `"subject"` — explicit CE `subject` override (default: `{instanceId}:{bindingId}:{invocationId}`)
+    /// - `"subject"` — explicit CE `subject` override (default: `{processId}:{bindingId}:{invocationId}`)
     /// - `"expectedUntil"` — ISO 8601 deadline for callback resolution
     #[serde(flatten)]
     pub extensions: HashMap<String, serde_json::Value>,

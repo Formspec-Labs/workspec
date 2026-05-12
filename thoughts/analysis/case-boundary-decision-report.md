@@ -46,7 +46,7 @@ Four parallel agents (`trellis-expert`, `wos-expert`, `spec-expert`, `cross-stac
 | 3 | ADR-0071 D-1 case-open pin is **four fields** (`formspec.definitionVersion`, `wos.$wosWorkflowVersion`, `trellis.envelopeVersion`, `trellis.conformanceClass`), not just `definitionUrl`/`definitionVersion`. | High |
 | 4 | ADR-0074 status is Proposed/Not started; scope broader than Response wire shape. Synthesis treated as already-normative. | Medium |
 | 5 | `formspec-bucketing` flagged as "non-canonical" — false positive. The term IS canonical (planned package per ADR-0074 §5 line 480). | False positive |
-| 6 | `wos-core::CaseInstance` doesn't emit provenance from the struct itself — emission seam lives in runtime/exporter. | Low |
+| 6 | `wos-core::WorkflowProcess` doesn't emit provenance from the struct itself — emission seam lives in runtime/exporter. | Low |
 | 7 | ADR-0073 manual-creation seam is narrower than admitted; kernel §8.2.3 already leaves room. | Low |
 | 8 | Multiple dangling `(ADR 0077)` references in CLAUDE.md, ADR-0080, ADR-0076, ADR-0078. | Medium |
 | 9 | Tasks-route "inconsistency" framing wrong — `/instances/{id}/tasks` doesn't exist on either side. | Low |
@@ -88,7 +88,7 @@ Net diff: 462 lines changed, +230/-229. Trimmed from a debugging-the-self-inflic
 
 The predecessor ADR-0093 (`0093-case-process-boundary.md`) was deleted. A new ADR was authored from scratch at `0093-case-is-its-trellis-ledger.md` — 289 lines, standard ADR shape (Context / Decision / Consequences / Alternatives Considered / Implementation / Verification / Revision history).
 
-Five alternatives were considered and rejected explicitly: (1) Case as separate aggregate (the predecessor); (2) Case as WOS-CRUD-with-audit-on-the-side; (3) Case as relational table with event-sourced log; (4) Case as a CRDT replicated across regions; (5) status quo (`CaseInstance` is the case).
+Five alternatives were considered and rejected explicitly: (1) Case as separate aggregate (the predecessor); (2) Case as WOS-CRUD-with-audit-on-the-side; (3) Case as relational table with event-sourced log; (4) Case as a CRDT replicated across regions; (5) status quo (`WorkflowProcess` is the case).
 
 ### 2.6 External AI review
 
@@ -158,7 +158,7 @@ A workflow process is bound to a case ledger at `wos.kernel.process_started` tim
 
 - `wos-core::typeid::mint_case_id()` is renamed `mint_case_ledger_id()` (or similar — name TBD per implementation). Continues minting `case_<ulid>` IDs, but the IDs now name *ledgers*, not workflow instances.
 - New `mint_process_id()` returns `process_<ulid>` for workflow instances.
-- The current `CaseInstance` struct is renamed to `WorkflowProcess` (or `Process`). Its `instance_id` field becomes `process_id`; it gains a `case_ledger_id` foreign-key field bound at start.
+- The current `WorkflowProcess` struct is renamed to `WorkflowProcess` (or `Process`). Its `process_id` field becomes `process_id`; it gains a `case_ledger_id` foreign-key field bound at start.
 - `WosResourceUrn` pattern in `_common.schema.json:20` adds `process` as a family literal alongside `case`, `prov`, `gov`, `ai`, `assurance`, and `x-<vendor>-<name>`.
 
 ### 3.3 Why Option B over A or C
@@ -216,9 +216,9 @@ The rollback is **deployment-policy-level only** — the architecture continues 
 **Files affected:**
 
 - `work-spec/crates/wos-core/src/typeid.rs` — add `PROCESS_PREFIX = "process"`, `mint_process_id()`. Rename `CASE_PREFIX` → keep as `case` but reframe purpose (ledger identity, not workflow instance). Add `is_process_id()`, `parse_process_id()` helpers mirroring case-side ones.
-- `work-spec/crates/wos-core/src/instance.rs` — rename `CaseInstance` → `WorkflowProcess` (or `Process`). Rename `instance_id` → `process_id`. Add `case_ledger_id` field (FK). Update all consumers.
+- `work-spec/crates/wos-core/src/instance.rs` — rename `WorkflowProcess` → `WorkflowProcess` (or `Process`). Rename `process_id` → `process_id`. Add `case_ledger_id` field (FK). Update all consumers.
 - `work-spec/schemas/api/_common.schema.json:20` — update `WosResourceUrn.pattern` to add `process` family literal.
-- `work-spec/schemas/wos-case-instance.schema.json` — rename to `wos-process.schema.json`; rename top-level marker `$wosCaseInstance` → `$wosProcess`; update consumers.
+- `work-spec/schemas/wos-process.schema.json` — rename to `wos-process.schema.json`; rename top-level marker `$wosProcess` → `$wosProcess`; update consumers.
 - `work-spec/crates/wos-lint/src/document.rs:84-90` — update `DocumentKind` mapping.
 
 ### 4.2 Storage refactor
@@ -245,7 +245,7 @@ Migration is pre-release so destructive DROP+CREATE is acceptable.
 **Files affected:**
 
 - `workspec-server/crates/wos-server/src/http/instances.rs` → renamed (or sibling) `processes.rs`. Routes:
-  - `POST /api/v1/cases/{case_id}/processes` — start a new workflow on a case. Returns `process_id`. Replaces today's case-instance-create path.
+  - `POST /api/v1/cases/{case_id}/processes` — start a new workflow on a case. Returns `process_id`. Replaces today's workflow-process-create path.
   - `GET /api/v1/cases/{case_id}/processes/{process_id}` — read process state.
   - `POST /api/v1/cases/{case_id}/processes/{process_id}/inputs` — submit a workflow input (per ADR-0093 §2.4/§2.8: two routes, two verbs, two semantics — `/inputs` is the workflow-submission surface, `/events` is direct-append). Replaces today's `POST /instances/{id}/events`.
   - `POST /api/v1/cases/{case_id}/processes/{process_id}/drain` — drain. Replaces today's `POST /instances/{id}/drain`.
@@ -459,7 +459,7 @@ Completed 2026-05-12:
 Remaining WOS-owned work (pre-release framing — no deprecation periods, no version bumps; legacy aliases get deleted outright):
 
 - Complete alignment of `wos-provenance-log.schema.json`, `wos-workflow.schema.json`, API provenance schemas, and `record-kind-registry.json` (132 kinds; 22 schema-validated; 110 flat): outer `event` literals and schema overlays must agree everywhere, and the inner `recordKind` field is dropped outright per D26 (no parallel-discriminator transition).
-- Finish `wos-core` / runtime identity vocabulary (`CaseInstance` → `WorkflowProcess`, `instance_id` → `process_id`, `case_ledger_id` as the durable case ledger link). Delete legacy aliases (`mint_case_id`) and compatibility fallbacks outright; pre-release framing rejects deprecation periods.
+- Finish `wos-core` / runtime identity vocabulary (`WorkflowProcess` → `WorkflowProcess`, `process_id` → `process_id`, `case_ledger_id` as the durable case ledger link). Delete legacy aliases (`mint_case_id`) and compatibility fallbacks outright; pre-release framing rejects deprecation periods.
 - Sweep prose so bare `caseCreated` / `intakeAccepted` names are only ever inner `recordKind` values, never F-13 event-type literals. Inner field removal proceeds in the same train.
 - Delete the remaining workspec-server `/instances/...` routes outright (no aliasing, no `#[deprecated]` attributes, no transition window). Update OpenAPI accordingly. The process list, task, explanation, provenance, correspondence, holds, and migrate bridges have landed on the public surface; internal provenance verify/export/transitions plus hold create/release aliases now exist under the case/process family; remaining legacy routes get deleted in this sweep. The reference server now dispatches post-ledger direct append through a relationship-authorization port, fails closed with a real 403 denial under the default deny-all implementation, and persists event-contract-valid direct appends after a configured allow decision when the generic direct writer can enforce the event contract. Remaining server work is the concrete ReBAC/OpenFGA adapter plus specialized writer paths such as `SignatureAffirmation` and governance determination.
 - ~~Decide whether the D26 payload-dispatch change requires a `$wosWorkflow` / registry version bump.~~ **Moot 2026-05-12 (owner-ratified):** pre-release framing — no version bump, no Facts-tier migration record retroactively required. Migration ships under HEAD; the D26 dispatch change is a coordinated greenfield replace, not a versioned migration.
@@ -510,7 +510,7 @@ The byte-primitive scope companion is `thoughts/plans/2026-05-09-signature-wire-
 
 **Forward promises (queued, not blocker-grade):**
 
-- This report's §4.5 should adopt F-13 for the closed event-type enum naming when next touched. The synthesis's §4 and D-4 should adopt F-13 in place of the current bare-flat enum, alongside the §6.2 D-2 amendment + D-17 addition. The synthesis's D-3 hedge (*"`$wosCaseInstance` (if it survives at all)"*) should be reconciled with this report's §4.1 (which assumes it survives and renames it to `$wosProcess`).
+- This report's §4.5 should adopt F-13 for the closed event-type enum naming when next touched. The synthesis's §4 and D-4 should adopt F-13 in place of the current bare-flat enum, alongside the §6.2 D-2 amendment + D-17 addition. The synthesis's D-3 hedge (*"`$wosProcess` (if it survives at all)"*) should be reconciled with this report's §4.1 (which assumes it survives and renames it to `$wosProcess`).
 - **Q-14 — Canonical-bytes substrate-vs-profile-shape split.** Landed 2026-05-12 on the Formspec side: Core §2.1.6, `response.schema.json`, the lint schema mirror, generated TS response types, and the feature matrix now state that `formspec-response-signing-v1` is the wire-visible Formspec profile shape while `integrity-canonical-json-v1` is the consumed substrate primitive. The Formspec layer owns the `authoredSignatures` omission rule and `formspec.response.signed-payload.v1` domain tag; the substrate owns reusable canonical-byte construction.
 - **D26 — `event_type` is authoritative dispatch; drop inner `recordKind` field.** The current `WosRecordKind` discriminator inside payload bytes is redundant — current Trellis/WOS parsers still validate local inner `recordKind` literals after event-type dispatch. Drop the inner field outright in one coordinated train; no deprecation window, no parallel-discriminator transition (pre-release framing). Rely on the COSE protected-header `profile_id` (plan O-2) for cross-profile dispatch and `event_type` for intra-profile dispatch. The migration is atomic with the remaining WOS schema/runtime fixture regeneration.
 
@@ -525,7 +525,7 @@ Following the post-swarm code-review pass and a focused owner-decision session, 
 - **A-3 (`CoseSign1` unification) — RATIFIED.** Unify on Trellis-cose shape (`alg: i128`, carries `suite_id` and `profile_id`). Formspec adapts upward; lands inside `integrity-cose` extraction (plan step 5).
 - **A-4 (EventStore atomicity) — RATIFIED at the EventStore-port level.** The atomicity contract belongs at the EventStore trait per `workspec-server/crates/wos-server/VISION.md` ("Single transaction per write"); not at the SQLite adapter. Trait grows an `append_with_receipt(event, idempotency, recovery_hooks)`-shaped method that adapters MUST commit atomically. SQLite adapter wraps in one transaction now; the `recovery_hooks` parameter preserves the DI seam for richer WAL-recovery later without breaking the contract. Direct addresses the durability gap at `case_events.rs:207, 271`.
 - **D26 `$wosWorkflow` version-bump — DROPPED (moot).** Pre-release; no version bump needed.
-- **Legacy/deprecation framing — DROPPED stack-wide.** Pre-release rejects deprecation periods. Legacy aliases (`mint_case_id`), legacy routes (`/instances/*`), legacy types (`CaseInstance`), and the inner `recordKind` field all get deleted outright in their respective sweeps. No `#[deprecated]` attributes, no sunset windows, no compatibility shims.
+- **Legacy/deprecation framing — DROPPED stack-wide.** Pre-release rejects deprecation periods. Legacy aliases (`mint_case_id`), legacy routes (`/instances/*`), legacy types (`WorkflowProcess`), and the inner `recordKind` field all get deleted outright in their respective sweeps. No `#[deprecated]` attributes, no sunset windows, no compatibility shims.
 - **ADR status promotion (ADR-0074, ADR-0093) — MOOT pre-release.** "Proposed vs Accepted" does not change citeability when there is no released version to stabilize against. Status promotions deferred to a future release window when they will carry user-visible value.
 
 These ratifications collapse PLN-0419 (version-bump) and several legacy-handling bullets; they unblock PLN-0420 / PLN-0421 / PLN-0422 / PLN-0423 / PLN-0424 / PLN-0425 / PLN-0426 from owner-decision to execution.
@@ -592,7 +592,7 @@ The session's working set, as of 2026-05-11:
 - `work-spec/crates/wos-runtime/src/store.rs`
 - `work-spec/crates/wos-runtime/src/binding.rs`
 - `work-spec/schemas/wos-provenance-log.schema.json`
-- `work-spec/schemas/wos-case-instance.schema.json` (renamed)
+- `work-spec/schemas/wos-process.schema.json` (renamed)
 - `work-spec/schemas/wos-workflow.schema.json`
 - `work-spec/schemas/api/_common.schema.json`
 - `work-spec/schemas/api/instance.schema.json` (consolidated or renamed)

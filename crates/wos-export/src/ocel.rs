@@ -42,7 +42,7 @@ use crate::{ExportConfig, camel_case_record_kind, is_facts_tier};
 ///
 /// The returned value is shaped exactly per the OCEL 2.0 spec: four top-level
 /// arrays (`objectTypes`, `eventTypes`, `objects`, `events`). Every event
-/// relates to a single `wf-instance` object whose id is `config.instance_id`;
+/// relates to a single `wf-instance` object whose id is `config.process_id`;
 /// per-case-file-item E2O relationships are deferred — see module docs for
 /// the object modelling gap.
 #[must_use]
@@ -58,7 +58,7 @@ pub fn export(log: &ProvenanceLog, config: &ExportConfig) -> Value {
     let events: Vec<Value> = facts_records
         .iter()
         .enumerate()
-        .map(|(index, record)| event_node(index, record, &config.instance_id))
+        .map(|(index, record)| event_node(index, record, &config.process_id))
         .collect();
 
     json!({
@@ -76,7 +76,7 @@ fn object_types() -> Value {
     json!([{
         "name": "wf-instance",
         "attributes": [
-            { "name": "instanceId", "type": "string" }
+            { "name": "processId", "type": "string" }
         ],
     }])
 }
@@ -122,7 +122,7 @@ fn static_event_attribute_schema() -> Value {
     ])
 }
 
-/// Emit the single `wf-instance` object. Its `instanceId` attribute carries
+/// Emit the single `wf-instance` object. Its `processId` attribute carries
 /// the earliest non-empty record timestamp (falling back to `""` when the log
 /// contains no stamped records) so downstream OCEL tools can anchor the
 /// object in the event timeline.
@@ -143,18 +143,18 @@ fn objects(config: &ExportConfig, records: &[&ProvenanceRecord]) -> Value {
         .unwrap_or("");
 
     json!([{
-        "id": config.instance_id,
+        "id": config.process_id,
         "type": "wf-instance",
         "attributes": [{
-            "name": "instanceId",
+            "name": "processId",
             "time": earliest,
-            "value": config.instance_id,
+            "value": config.process_id,
         }],
     }])
 }
 
 /// Emit a single OCEL event for a record at position `index`.
-fn event_node(index: usize, record: &ProvenanceRecord, instance_id: &str) -> Value {
+fn event_node(index: usize, record: &ProvenanceRecord, process_id: &str) -> Value {
     let mut node = Map::new();
     node.insert("id".into(), Value::String(format!("e-{index}")));
     node.insert("type".into(), Value::String(camel_case_record_kind(record)));
@@ -164,7 +164,7 @@ fn event_node(index: usize, record: &ProvenanceRecord, instance_id: &str) -> Val
     node.insert("attributes".into(), Value::Array(event_attributes(record)));
     node.insert(
         "relationships".into(),
-        json!([{ "objectId": instance_id, "qualifier": "relates-to" }]),
+        json!([{ "objectId": process_id, "qualifier": "relates-to" }]),
     );
     Value::Object(node)
 }
@@ -239,7 +239,7 @@ mod tests {
     fn config() -> ExportConfig {
         ExportConfig {
             provenance_namespace: "urn:wos:prov:test:".to_string(),
-            instance_id: "instance-abc".to_string(),
+            process_id: "instance-abc".to_string(),
         }
     }
 
@@ -373,7 +373,7 @@ mod tests {
             "empty timestamp must round-trip as empty string"
         );
 
-        // When every record is unstamped, the instance object's `instanceId`
+        // When every record is unstamped, the instance object's `processId`
         // attribute falls back to an empty `time` (documented at module level).
         let objects = document["objects"].as_array().expect("objects array");
         let instance_attrs = objects[0]["attributes"]
@@ -381,7 +381,7 @@ mod tests {
             .expect("attributes array");
         assert_eq!(
             instance_attrs[0]["time"], "",
-            "all-unstamped log must produce empty instanceId attribute time"
+            "all-unstamped log must produce empty processId attribute time"
         );
     }
 

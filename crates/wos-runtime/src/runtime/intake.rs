@@ -5,7 +5,7 @@
 use std::slice;
 
 use serde_json::{Map, Value};
-use wos_core::instance::CaseInstance;
+use wos_core::instance::WorkflowProcess;
 use wos_core::model::kernel::{ActorKind, KernelDocument};
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
 
@@ -175,10 +175,10 @@ impl WosRuntime {
         match outcome {
             IntakeAcceptanceOutcome::Accepted { case_disposition } => match case_disposition {
                 IntakeCaseDisposition::AttachToExistingCase { case_ref } => {
-                    let case = self.load_instance(case_ref)?;
+                    let case = self.load_record_for_case_ref(case_ref)?.instance;
                     Ok(IntakeAcceptanceOutcome::Accepted {
                         case_disposition: IntakeCaseDisposition::AttachToExistingCase {
-                            case_ref: case.instance_id,
+                            case_ref: case.case_ledger_id,
                         },
                     })
                 }
@@ -187,25 +187,31 @@ impl WosRuntime {
                     definition,
                     initial_case_state,
                 } => {
-                    let case = match self.load_instance(case_ref) {
+                    let case = match self.load_record_for_case_ref(case_ref) {
                         Ok(existing) => {
-                            self.ensure_matching_case_definition(&existing, definition, case_ref)?;
-                            existing
+                            self.ensure_matching_case_definition(
+                                &existing.instance,
+                                definition,
+                                case_ref,
+                            )?;
+                            existing.instance
                         }
-                        Err(RuntimeError::Store(StoreError::NotFound(_))) => {
-                            self.create_instance(CreateInstanceRequest {
-                                instance_id: case_ref.clone(),
-                                tenant: None,
-                                definition_url: definition.definition_url.clone(),
-                                definition_version: definition.definition_version.clone(),
-                                initial_case_state: initial_case_state.clone(),
-                            })?
-                        }
+                        Err(RuntimeError::Store(StoreError::NotFound(_))) => self
+                            .create_instance_bound_to_case(
+                                CreateInstanceRequest {
+                                    process_id: String::new(),
+                                    tenant: None,
+                                    definition_url: definition.definition_url.clone(),
+                                    definition_version: definition.definition_version.clone(),
+                                    initial_case_state: initial_case_state.clone(),
+                                },
+                                case_ref.clone(),
+                            )?,
                         Err(error) => return Err(error),
                     };
                     Ok(IntakeAcceptanceOutcome::Accepted {
                         case_disposition: IntakeCaseDisposition::CreateGovernedCase {
-                            case_ref: case.instance_id,
+                            case_ref: case.case_ledger_id,
                             definition: definition.clone(),
                             initial_case_state: initial_case_state.clone(),
                         },
@@ -223,7 +229,7 @@ impl WosRuntime {
 
     fn ensure_matching_case_definition(
         &self,
-        case: &wos_core::instance::CaseInstance,
+        case: &wos_core::instance::WorkflowProcess,
         definition: &IntakeCaseDefinition,
         requested_case_ref: &str,
     ) -> Result<(), RuntimeError> {
@@ -269,7 +275,7 @@ impl WosRuntime {
         case_ref: &str,
         provenance: &[ProvenanceRecord],
     ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
-        let mut record = self.store.load_record(case_ref)?;
+        let mut record = self.load_record_for_case_ref(case_ref)?;
         let now_iso = format_timestamp(self.clock.now_ms())?;
         let kernel = self.resolver.resolve_kernel(
             &record.instance.definition_url,
@@ -328,8 +334,9 @@ impl WosRuntime {
     ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
         let (kernel, definition_version) = self.intake_provenance_context(request)?;
         let lifecycle_state = if let Some(case_ref) = request.governed_case_ref.as_deref() {
-            match self.load_instance(case_ref) {
-                Ok(case) => case
+            match self.load_record_for_case_ref(case_ref) {
+                Ok(record) => record
+                    .instance
                     .configuration
                     .first()
                     .cloned()
@@ -355,12 +362,13 @@ impl WosRuntime {
         request: &IntakeAcceptanceRequest,
     ) -> Result<(KernelDocument, String), RuntimeError> {
         if let Some(case_ref) = request.governed_case_ref.as_deref() {
-            match self.load_instance(case_ref) {
-                Ok(case) => {
-                    let kernel = self
-                        .resolver
-                        .resolve_kernel(&case.definition_url, &case.definition_version)?;
-                    return Ok((kernel, case.definition_version));
+            match self.load_record_for_case_ref(case_ref) {
+                Ok(record) => {
+                    let kernel = self.resolver.resolve_kernel(
+                        &record.instance.definition_url,
+                        &record.instance.definition_version,
+                    )?;
+                    return Ok((kernel, record.instance.definition_version));
                 }
                 Err(RuntimeError::Store(StoreError::NotFound(_))) => {}
                 Err(error) => return Err(error),
@@ -378,6 +386,22 @@ impl WosRuntime {
             "governedCaseDefinition or existing governedCaseRef required for detached intake provenance"
                 .to_string(),
         ))
+    }
+
+    fn load_record_for_case_ref(
+        &self,
+        case_ref: &str,
+    ) -> Result<crate::store::RuntimeRecord, RuntimeError> {
+        match self.store.load_record(case_ref) {
+            Ok(record) => Ok(record),
+            Err(StoreError::NotFound(_)) => {
+                let normalized = WorkflowProcess::extract_urn_type_id(case_ref).unwrap_or(case_ref);
+                self.store
+                    .load_record_by_case_ledger_id(normalized)
+                    .map_err(RuntimeError::from)
+            }
+            Err(error) => Err(RuntimeError::from(error)),
+        }
     }
 }
 
@@ -422,9 +446,9 @@ fn stamp_intake_provenance_fields(
     }
 }
 
-fn stamp_case_boundary_identity(records: &mut [ProvenanceRecord], instance: &CaseInstance) {
-    let case_ledger_id = instance.effective_case_ledger_id();
-    if !CaseInstance::is_case_id(case_ledger_id) {
+fn stamp_case_boundary_identity(records: &mut [ProvenanceRecord], instance: &WorkflowProcess) {
+    let case_ledger_id = &instance.case_ledger_id;
+    if !WorkflowProcess::is_case_id(case_ledger_id) {
         return;
     }
 

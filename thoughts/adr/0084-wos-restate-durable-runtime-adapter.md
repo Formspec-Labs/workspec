@@ -16,9 +16,9 @@
 
 ### D1 — Restate service shape: Virtual Object per WOS instance
 
-**Decision:** Model each **governed workflow instance** as a **Restate Virtual Object** keyed by a stable **`instance_id`** string (the same identifier used in `RuntimeOps` and `Storage`).
+**Decision:** Model each **governed workflow instance** as a **Restate Virtual Object** keyed by a stable **`process_id`** string (the same identifier used in `RuntimeOps` and `Storage`).
 
-**Rationale:** Exclusive handler semantics per key match WOS single-writer drain expectations; built-in K/V state matches projection of `CaseInstance` / queue metadata without inventing a second keyspace. [`#[restate_sdk::object]`](https://docs.rs/restate-sdk/latest/restate_sdk/#virtual-objects) with optional `#[shared]` handlers covers read/query vs write paths (see spec).
+**Rationale:** Exclusive handler semantics per key match WOS single-writer drain expectations; built-in K/V state matches projection of `WorkflowProcess` / queue metadata without inventing a second keyspace. [`#[restate_sdk::object]`](https://docs.rs/restate-sdk/latest/restate_sdk/#virtual-objects) with optional `#[shared]` handlers covers read/query vs write paths (see spec).
 
 **Rejected for v1 default:** A single global **Service** without keyed serialization — would require external locking to match WOS ordering. **Workflow** as the *sole* representation of an instance remains a **future ADR slot** if a product line needs `run`-once lifecycle with different fault domains; the spike noted workflows as an alternative mapping.
 

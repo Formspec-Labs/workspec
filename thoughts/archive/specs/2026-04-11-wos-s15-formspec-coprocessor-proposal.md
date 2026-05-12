@@ -62,7 +62,7 @@ When executing `createTask` with `binding: "formspec"`:
 | Property | Type | Req | Description |
 |----------|------|-----|-------------|
 | `taskId` | string | R | Processor-generated task id (stable for idempotency). |
-| `instanceId` | URI | R | WOS case instance id. |
+| `processId` | URI | R | WOS workflow process id. |
 | `contractRef` | string (URI) | R | Resolved Kernel **contract** reference (normalized string per `wos-kernel.schema.json`) — may differ from Formspec **`definitionUrl`**. |
 | `definitionUrl` | string (URI) | R | Canonical Formspec Definition **`url`** (Core Definition). MUST equal **`response.definitionUrl`** on successful submit (VP-01 tuple). |
 | `definitionVersion` | string | R | Pinned Formspec Definition version. MUST equal **`response.definitionVersion`** on successful submit (VP-01 tuple). |
@@ -169,9 +169,9 @@ In **Kernel** spec / `wos-kernel.schema.json` (exact placement follows your `Con
 
 ---
 
-## §15.8 CaseInstance / active task tracking (informative minimum)
+## §15.8 WorkflowProcess / active task tracking (informative minimum)
 
-Processors SHOULD persist enough **active task metadata** to recover after crash: at least `{ taskId, definitionUrl, definitionVersion, assignedActor, idempotencyKeysSeen }` (mirror §15.3; use **`definitionVersion`**, not “contract version,” to match Response pinning). The artifact **`work-spec/schemas/wos-case-instance.schema.json`** exists today but does **not** yet define an **`activeTasks`** (or equivalent) array — **schema gap:** add an optional `activeTasks` array of `ActiveTask` objects in a follow-on PR when S15 lands in prose.
+Processors SHOULD persist enough **active task metadata** to recover after crash: at least `{ taskId, definitionUrl, definitionVersion, assignedActor, idempotencyKeysSeen }` (mirror §15.3; use **`definitionVersion`**, not “contract version,” to match Response pinning). The artifact **`work-spec/schemas/wos-process.schema.json`** exists today but does **not** yet define an **`activeTasks`** (or equivalent) array — **schema gap:** add an optional `activeTasks` array of `ActiveTask` objects in a follow-on PR when S15 lands in prose.
 
 ---
 
@@ -205,7 +205,7 @@ State: **Formspec validation + optional pipeline** constitute the **single gatin
 - [ ] Land `validateFormspecTaskResponse` + **`ValidationOutcome`** in published **`runtime.md` §12.3** (this file is the draft source).
 - [x] Governance S8 cited for rejection/explanations; task **`claimed` → `failed`** on validation failure (executive table + §15.6).
 - [ ] **Kernel:** `responseMappingRef`, `prefillMappingRef`, `completionEvent`, `failureEvent` in `wos-kernel.schema.json` + Kernel spec.
-- [ ] **CaseInstance:** optional **`activeTasks`** in `wos-case-instance.schema.json` (§15.8).
+- [ ] **WorkflowProcess:** optional **`activeTasks`** in `wos-process.schema.json` (§15.8).
 - [ ] Optional: **`wos-runtime`** (or kernel) schema **`$defs`** for `FormspecTaskContext` / `ValidationOutcome` for LLM-authorable contracts.
 
 ---

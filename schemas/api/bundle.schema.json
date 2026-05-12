@@ -67,7 +67,7 @@
       "description": "Bundle metadata resource. Describes a single case-export bundle: identity, the case it exports, when it was sealed, and the digest a verifier uses to confirm byte-stream integrity. The actual archive bytes are downloaded out-of-band via `GET /api/v1/bundles/{urn}/download` and are NOT inlined here — JSON cannot represent Trellis CBOR.",
       "required": [
         "id",
-        "instanceId",
+        "processId",
         "status",
         "lifecycleStateAtExport",
         "exportedAt",
@@ -79,9 +79,9 @@
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
           "description": "Stable public URN for this bundle. The entity-type segment MUST be `bundle`."
         },
-        "instanceId": {
+        "processId": {
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
-          "description": "Case instance URN this bundle exports. The entity-type segment MUST be `instance`. One bundle exports exactly one case; multi-case exports are a separate `audit`-domain concern."
+          "description": "Workflow process URN this bundle exports. The entity-type segment MUST be `instance`. One bundle exports exactly one case; multi-case exports are a separate `audit`-domain concern."
         },
         "status": {
           "$ref": "#/$defs/BundleStatus",
@@ -199,9 +199,9 @@
       "additionalProperties": false,
       "description": "Query fields for `GET /api/v1/bundles` (ADR 0082 D-7 cursor pagination).",
       "properties": {
-        "instanceId": {
+        "processId": {
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
-          "description": "Optional case instance URN filter — list bundles for one case."
+          "description": "Optional workflow process URN filter — list bundles for one case."
         },
         "lifecycleStateAtExport": {
           "type": "string",
@@ -271,12 +271,12 @@
       "additionalProperties": false,
       "description": "Request body for `POST /api/v1/bundles` — kicks off a case-export bundle build. `Idempotency-Key` header is REQUIRED per ADR 0082 D-16 because bundle builds are externally-visible side effects (Trellis events emit, key-registry snapshots, attachment lineage resolution); a repeat request within the retention window returns the original `Bundle` resource unchanged.",
       "required": [
-        "instanceId"
+        "processId"
       ],
       "properties": {
-        "instanceId": {
+        "processId": {
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
-          "description": "Case instance URN to export. The entity-type segment MUST be `instance`. The caller MUST have visibility into the instance under the current scope (ADR 0068 D-2)."
+          "description": "Workflow process URN to export. The entity-type segment MUST be `instance`. The caller MUST have visibility into the instance under the current scope (ADR 0068 D-2)."
         },
         "tierFilter": {
           "$ref": "#/$defs/BundleTierInclusion",

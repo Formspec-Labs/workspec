@@ -2,7 +2,7 @@
 
 **Status:** Chore (executable) + tracked decisions. **Not** an ADR; no architectural forks opened. Decision items here are sequenced for future ADR slots when ratification is needed; chore items run independently as gating allows.
 **Date:** 2026-05-01. **Doc revision:** 2026-05-01 (final) — **C6/C7 ratchet-zero** on all `EXPECTED_OPEN_STRING_LEAVES` schemas; **C5 / WS-042** minimal checklist closed (version-indexed kernels + HTTP `Idempotency-Key` + `1.0.0 → 1.1.0` integration proof); **C7** `SCHEMA-OPEN-001` now runs inside `lint_schema`; **C8** implementation tracked in [`2026-05-01-wos-c8-graph-lint-k033-k034.md`](./2026-05-01-wos-c8-graph-lint-k033-k034.md).
-**Scope (achieved for vocab parity):** Open-string-leaf debt is **0** under the current ratchet counter for every production schema in `open_string_leaf_ratchet.rs` (workflow full inner-block closure + honest-open annotation batch on tooling, case-instance, provenance-log, delivery, ontology-alignment via `work-spec/scripts/annotate_open_string_kinds.py`). **Remaining open tails** are explicit: **C8** graph lint (child plan), **C1** optional `actor_type` serde storage, **C2** `auditCertificate.format` until signature profile ratifies, **PLN-0387** / **WS-090** same-transaction co-write, **D4–D7** items still called out in ADR 0083 where not yet ratified.
+**Scope (achieved for vocab parity):** Open-string-leaf debt is **0** under the current ratchet counter for every production schema in `open_string_leaf_ratchet.rs` (workflow full inner-block closure + honest-open annotation batch on tooling, workflow-process, provenance-log, delivery, ontology-alignment via `work-spec/scripts/annotate_open_string_kinds.py`). **Remaining open tails** are explicit: **C8** graph lint (child plan), **C1** optional `actor_type` serde storage, **C2** `auditCertificate.format` until signature profile ratifies, **PLN-0387** / **WS-090** same-transaction co-write, **D4–D7** items still called out in ADR 0083 where not yet ratified.
 
 ---
 
@@ -49,7 +49,7 @@ Repo-hygiene items (CI parity, `wos-server*` → `workspec-server`, `formspec-in
 
 **Landed (C6 slice — provenance adjunct `recordKind`, 2026-05-01):** Fifteen single-kind `$defs` on `schemas/wos-workflow.schema.json` now pin `properties.recordKind` with `const` (plus `type: "string"`) matching existing `allOf`/`if` arms: `AmendmentAuthorizedRecord`, `AuthorizationAttestationRecord`, `AuthorizationRejectedRecord`, `CapabilityInvocationRecord`, `ClockResolvedRecord`, `ClockSkewObservedRecord`, `ClockStartedRecord`, `CommitAttemptFailureRecord`, `CorrectionAuthorizedRecord`, `DeterminationAmendedRecord`, `DeterminationRescindedRecord`, `IdentityAttestationRecord`, `MigrationPinChangedRecord`, `ReinstatedRecord`, `RescissionAuthorizedRecord`. Ratchet `wos-workflow.schema.json`: **189 → 174**. C0 inventory rows **WS-008**, **WS-027**, **WS-028**, **WS-031**, **WS-035**, **WS-036**, **WS-037**, **WS-038**, **WS-039**, **WS-055**, **WS-056**, **WS-077**, **WS-090**, **WS-111**, **WS-112** marked **CLOSED**. `FactsTierRecord.recordKind` stays the multi-kind **enum** (unchanged `$comment`).
 
-**Landed (C6/C7 ratchet-zero — 2026-05-01):** Remaining open leaves on `wos-workflow.schema.json` closed to **0**; parallel schemas (`wos-tooling`, `wos-case-instance`, `wos-provenance-log`, `wos-delivery`, `wos-ontology-alignment`) annotated via `work-spec/scripts/annotate_open_string_kinds.py` (heuristic `x-wos.openStringKind` + `minLength: 1`); `EXPECTED_OPEN_STRING_LEAVES` all **0**; `lint_schema` invokes `check_open_string_kinds` (CI-wide **SCHEMA-OPEN-001**).
+**Landed (C6/C7 ratchet-zero — 2026-05-01):** Remaining open leaves on `wos-workflow.schema.json` closed to **0**; parallel schemas (`wos-tooling`, `wos-process`, `wos-provenance-log`, `wos-delivery`, `wos-ontology-alignment`) annotated via `work-spec/scripts/annotate_open_string_kinds.py` (heuristic `x-wos.openStringKind` + `minLength: 1`); `EXPECTED_OPEN_STRING_LEAVES` all **0**; `lint_schema` invokes `check_open_string_kinds` (CI-wide **SCHEMA-OPEN-001**).
 
 **Open tails (post-parity-plan):**
 
@@ -207,7 +207,7 @@ Already recorded in `T4-TODO.md` ("Vendor `x-*` assurance floor enforcement (def
 
 ### C3 — `WosRuntime::migrate` Rust implementation (per ADR 0083 D1)
 
-**Why:** ADR 0083 D1 settled the API shape: method on `WosRuntime` with `migrate(&mut self, instance_id, target_definition_version, migration_map, operator_actor_id) -> Result<MigrationOutcome, RuntimeError>` (fourth parameter threads Supervisor identity into `instanceMigrated` provenance). **Minimal slice landed 2026-05-01** — this section tracks **residual** closure.
+**Why:** ADR 0083 D1 settled the API shape: method on `WosRuntime` with `migrate(&mut self, process_id, target_definition_version, migration_map, operator_actor_id) -> Result<MigrationOutcome, RuntimeError>` (fourth parameter threads Supervisor identity into `instanceMigrated` provenance). **Minimal slice landed 2026-05-01** — this section tracks **residual** closure.
 
 **Spec anchor:** kernel §11.2 (`specs/kernel/spec.md:1494-1535`) — state validation, case-state transformation, provenance, version update, atomicity.
 

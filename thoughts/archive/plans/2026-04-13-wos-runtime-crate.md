@@ -33,7 +33,7 @@ The repo now has a clean lower layer but no reusable runtime layer:
 
 What is still missing is the crate that a real processor would embed to do the work described in the Runtime Companion:
 
-- load a `CaseInstance`
+- load a `WorkflowProcess`
 - dequeue one event
 - evaluate it through `wos-core`
 - append provenance durably
@@ -77,7 +77,7 @@ This keeps the behavioral contract portable and keeps engine adapters thin.
 
 ### What already exists
 
-- `wos-core` exposes typed documents, `Evaluator`, `CaseInstance`, timers, provenance, and host traits.
+- `wos-core` exposes typed documents, `Evaluator`, `WorkflowProcess`, timers, provenance, and host traits.
 - `wos-core` already models `activeTasks`, `FormspecTaskContext`, and `ValidationOutcome`.
 - Runtime Companion S12 defines the host interface contract.
 - Runtime Companion S15 defines the Formspec coprocessor algorithm.
@@ -206,7 +206,7 @@ Some seams belong in `wos-core` because they are spec-level host interfaces. Oth
 - `Clock`
   Supplies wall-clock time and deadline comparisons without hard-coding `Utc::now()` into the runtime.
 - `TaskStateStore` only if needed
-  Prefer `CaseInstance.activeTasks` as the canonical workflow state. Add a separate projection store only for dashboard/query efficiency, not semantics.
+  Prefer `WorkflowProcess.activeTasks` as the canonical workflow state. Add a separate projection store only for dashboard/query efficiency, not semantics.
 
 ---
 
@@ -382,7 +382,7 @@ Model one runtime step as a single commit unit and make that explicit in the run
 
 Recommendation:
 
-Yes. `CaseInstance.activeTasks` remains the canonical workflow state. Add read-model projections only for query speed and UX.
+Yes. `WorkflowProcess.activeTasks` remains the canonical workflow state. Add read-model projections only for query speed and UX.
 
 ### 5. Should the first adapter be Temporal?
 
@@ -432,7 +432,7 @@ Keep WOS orchestration in `wos-runtime`; keep Formspec semantics behind injected
 
 - `wos-runtime` exists as a new crate in `work-spec/Cargo.toml`
 - `wos-core` trait parity gaps for Runtime S12 are closed
-- one in-memory runtime can create, persist, reload, and advance a case instance
+- one in-memory runtime can create, persist, reload, and advance a workflow process
 - Runtime S15 task submission is implemented in one place, not spread across callers
 - `wos-conformance` can reuse runtime-owned helpers instead of maintaining separate runtime semantics
 - a future `wos-temporal` crate can be mostly storage and workflow wiring, not a second implementation of WOS behavior

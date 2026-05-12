@@ -54,7 +54,7 @@
       "xes",
       "ocel"
     ],
-    "caseIdentifier": "instanceId",
+    "caseIdentifier": "processId",
     "eventClassifier": "action",
     "objectTypes": [
       "application",

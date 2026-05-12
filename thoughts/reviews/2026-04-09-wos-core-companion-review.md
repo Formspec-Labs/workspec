@@ -757,7 +757,7 @@ Full audit of all 4 flagged draft files completed 2026-04-09. Results:
 
 ## 12. Delivered Inventory
 
-*Added 2026-04-09 after the initial architecture slice. Synced 2026-04-11 to the landed Runtime Companion, CaseInstance schema, correspondence metadata, and current fixture inventory.*
+*Added 2026-04-09 after the initial architecture slice. Synced 2026-04-11 to the landed Runtime Companion, WorkflowProcess schema, correspondence metadata, and current fixture inventory.*
 
 ### Specs (18 documents)
 
@@ -803,7 +803,7 @@ Full audit of all 4 flagged draft files completed 2026-04-09. Results:
 | `wos-integration-profile.schema.json` | `schemas/wos-integration-profile.schema.json` |
 | `wos-semantic-profile.schema.json` | `schemas/wos-semantic-profile.schema.json` |
 | `wos-lifecycle-detail.schema.json` | `schemas/wos-lifecycle-detail.schema.json` |
-| `wos-case-instance.schema.json` | `schemas/wos-case-instance.schema.json` |
+| `wos-process.schema.json` | `schemas/wos-process.schema.json` |
 
 ### Fixtures (41 JSON artifacts)
 

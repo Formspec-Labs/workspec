@@ -9,15 +9,15 @@
 
 ## Purpose
 
-An `Appeal` is a cross-case governance artifact: an appellant challenges an adverse determination on a **closed** case instance, triggering a governed review process against a declared ground for appeal. An adjudicator reviews the appeal and records a closed disposition (`upheld`, `overturned`, `remanded`, `modified`, `dismissed`). The appeal lifecycle is a closed taxonomy (`pending`, `accepted`, `denied`, `withdrawn`) — no vendor extension on lifecycle state or disposition.
+An `Appeal` is a cross-case governance artifact: an appellant challenges an adverse determination on a **closed** workflow process, triggering a governed review process against a declared ground for appeal. An adjudicator reviews the appeal and records a closed disposition (`upheld`, `overturned`, `remanded`, `modified`, `dismissed`). The appeal lifecycle is a closed taxonomy (`pending`, `accepted`, `denied`, `withdrawn`) — no vendor extension on lifecycle state or disposition.
 
-Appeals are filed against a specific instance (must be in a completed lifecycle state — `WOS-1409` on non-completed instances). The appeal record links back to the instance via `instanceId` (instance URN) and to the appellant via `appellantRef` (ActorRef URN per ADR 0082 D-9). When routed through a governed review process, the adjudicator is recorded via `adjudicatorRef`.
+Appeals are filed against a specific instance (must be in a completed lifecycle state — `WOS-1409` on non-completed instances). The appeal record links back to the instance via `processId` (instance URN) and to the appellant via `appellantRef` (ActorRef URN per ADR 0082 D-9). When routed through a governed review process, the adjudicator is recorded via `adjudicatorRef`.
 
-Appeals do NOT reopen the case — they create a separate cross-case governance track. The case's `CaseInstanceGovernance` subresource (instance.schema.json) may carry a per-case projection summarizing the appeal state, but the `Appeal` shape here is the authoritative cross-case record.
+Appeals do NOT reopen the case — they create a separate cross-case governance track. The case's `WorkflowProcessGovernance` subresource (instance.schema.json) may carry a per-case projection summarizing the appeal state, but the `Appeal` shape here is the authoritative cross-case record.
 
 ## Resource Shape
 
-`Appeal` carries identity, instance linkage, appellant, status, and disposition. Required fields: `id`, `instanceId`, `appellantRef`, `filedAt`, `status`. Optional fields, omitted when absent: `groundForAppeal`, `disposition`, `dispositionAt`, `adjudicatorRef`, `createdAt`.
+`Appeal` carries identity, instance linkage, appellant, status, and disposition. Required fields: `id`, `processId`, `appellantRef`, `filedAt`, `status`. Optional fields, omitted when absent: `groundForAppeal`, `disposition`, `dispositionAt`, `adjudicatorRef`, `createdAt`.
 
 `status` is a closed lifecycle: `pending` (filed, awaiting adjudicator acceptance), `accepted` (under review), `denied` (adjudicator denied the appeal), `withdrawn` (appellant withdrew before disposition). Closed enum with no extension seam.
 
@@ -29,7 +29,7 @@ Appeals do NOT reopen the case — they create a separate cross-case governance 
 
 ## Identifiers
 
-`Appeal.id` is a `urn:wos:<typeid>` URN per ADR 0092 D-1. `Appeal.instanceId` is a `urn:wos:<typeid>` URN of the owning case.
+`Appeal.id` is a `urn:wos:<typeid>` URN per ADR 0092 D-1. `Appeal.processId` is a `urn:wos:<typeid>` URN of the owning case.
 
 ## Endpoints
 
@@ -39,7 +39,7 @@ Appeals do NOT reopen the case — they create a separate cross-case governance 
 | `GET` | `/api/v1/appeals/{urn}` | -> `Appeal` | n/a |
 | `GET` | `/api/v1/instances/{id}/appeals` | `AppealListOptions` (query) -> `AppealPage` | n/a |
 
-`POST /api/v1/instances/{id}/appeals` files an appeal against a completed case instance. **`Idempotency-Key` is REQUIRED** per ADR 0082 D-16. The server validates: the instance exists and is in a completed lifecycle state (`WOS-1409` if not), the appellant has standing to appeal, and the `groundForAppeal` is non-empty. Body: `AppealCreateRequest { instanceId, appellantRef, groundForAppeal }`. Response: an `Appeal` resource with `status: "pending"`. Server assigns `id`, `filedAt`, and `createdAt`; clients MUST NOT supply them.
+`POST /api/v1/instances/{id}/appeals` files an appeal against a completed workflow process. **`Idempotency-Key` is REQUIRED** per ADR 0082 D-16. The server validates: the instance exists and is in a completed lifecycle state (`WOS-1409` if not), the appellant has standing to appeal, and the `groundForAppeal` is non-empty. Body: `AppealCreateRequest { processId, appellantRef, groundForAppeal }`. Response: an `Appeal` resource with `status: "pending"`. Server assigns `id`, `filedAt`, and `createdAt`; clients MUST NOT supply them.
 
 `GET /api/v1/appeals/{urn}` returns a single appeal by its URN. Returns `404` (`WOS-1404`) when the URN is not visible to the caller's scope. This endpoint is the canonical lookup for an appeal resource; use it to poll `status` after filing.
 
@@ -61,7 +61,7 @@ All non-2xx responses use `application/problem+json` per ADR 0082 D-8 and `api/e
 
 - `WOS-1404`: appeal URN does not exist or is not in the caller's scope.
 - `WOS-1409`: appeal filed against a non-completed instance, or appeal state transition attempted from an invalid lifecycle posture.
-- `WOS-1422`: `AppealCreateRequest.instanceId` is not a valid `urn:wos:<typeid>` URN, or `groundForAppeal` is empty, or `appellantRef` is not a valid ActorRef.
+- `WOS-1422`: `AppealCreateRequest.processId` is not a valid `urn:wos:<typeid>` URN, or `groundForAppeal` is empty, or `appellantRef` is not a valid ActorRef.
 
 ## Closed Taxonomies
 

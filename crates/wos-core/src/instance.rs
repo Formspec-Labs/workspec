@@ -1,9 +1,9 @@
 // Rust guideline compliant 2026-02-21
 
-//! CaseInstance serialization format (Runtime Companion S3).
+//! WorkflowProcess serialization format (Runtime Companion S3).
 //!
-//! A CaseInstance captures the complete runtime state of a workflow
-//! instance — enough to resume after a crash, migrate between
+//! A WorkflowProcess captures the complete runtime state of a workflow
+//! process — enough to resume after a crash, migrate between
 //! processors, or audit past behavior.
 
 use serde::{Deserialize, Serialize};
@@ -16,41 +16,22 @@ fn default_tenant() -> String {
     typeid::DEFAULT_TENANT.to_string()
 }
 
-/// A running workflow instance (Runtime Companion S3.1).
+/// A running workflow process (Runtime Companion S3.1).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CaseInstance {
-    /// Globally unique instance identifier.
-    pub instance_id: String,
-
+pub struct WorkflowProcess {
     /// Workflow runtime process identifier.
-    ///
-    /// Transitional persisted rows may omit this while the pre-rename
-    /// `instance_id` field remains the storage key. New rows should populate
-    /// this with a `process` TypeID so process identity is explicit even before
-    /// `CaseInstance` is renamed to the process model.
-    /// TODO(PLN-0419): settle the D26 versioning marker before retiring this
-    /// transitional shape.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub process_id: Option<String>,
+    pub process_id: String,
 
     /// Durable case-ledger identifier this process writes into.
-    ///
-    /// Transitional persisted rows may omit this and imply the existing
-    /// `instance_id` case TypeID. New rows should populate this with a `case`
-    /// TypeID so the runtime can distinguish ledger identity from workflow
-    /// process identity.
-    /// TODO(PLN-0419): settle the D26 versioning marker before retiring this
-    /// transitional shape.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub case_ledger_id: Option<String>,
+    pub case_ledger_id: String,
 
-    /// Tenant this instance belongs to (ADR 0068 D-1 / PLN-0004).
+    /// Tenant this process belongs to (ADR 0068 D-1 / PLN-0004).
     ///
-    /// MUST match the TypeID prefix when `instance_id` is a WOS case TypeID.
+    /// MUST match the TypeID prefix when `process_id` is a WOS process TypeID.
     /// At creation, processors resolve this from `CreateInstanceRequest.tenant`
     /// when set (and consistent with the TypeID prefix when both are present),
-    /// else from the `instance_id` prefix, else [`crate::typeid::DEFAULT_TENANT`].
+    /// else from the `process_id` prefix, else [`crate::typeid::DEFAULT_TENANT`].
     #[serde(default = "default_tenant")]
     pub tenant: String,
 
@@ -87,13 +68,13 @@ pub struct CaseInstance {
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub compensation_logs: HashMap<String, CompensationLog>,
 
-    /// Instance status.
+    /// Process status.
     pub status: InstanceStatus,
 
     /// RFC3339 timestamp marking when the instance entered
     /// [`InstanceStatus::Stalled`] (ADR 0070 D-4.1). MUST be populated
     /// when `status == Stalled`; otherwise omitted from the wire.
-    /// Schema-side guard at `wos-case-instance.schema.json` enforces the
+    /// Schema-side guard at `wos-process.schema.json` enforces the
     /// `if status == "stalled" then stalledSince required` invariant.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stalled_since: Option<String>,
@@ -147,7 +128,7 @@ pub struct CaseInstance {
     ///
     /// Keyed by the CloudEvents `subject` string used for correlation:
     /// `{correlationInstanceId}:{bindingId}:{invocationId}` where
-    /// `correlationInstanceId` is `CaseInstance::correlation_instance_id`.
+    /// `correlationInstanceId` is `WorkflowProcess::correlation_process_id`.
     /// When a matching inbound event arrives its entry is removed and a
     /// `CallbackReceived` provenance record is emitted.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
@@ -158,15 +139,11 @@ pub struct CaseInstance {
     pub extensions: HashMap<String, serde_json::Value>,
 }
 
-impl CaseInstance {
-    /// Extension key where the runtime preserves a creator-supplied identifier
-    /// when a canonical case TypeID was minted at `create_instance`.
-    pub const LEGACY_INSTANCE_ALIAS_EXTENSION_KEY: &str = "x-wos-legacy-instance-alias";
-
-    /// Mints a new case-ledger identifier.
+impl WorkflowProcess {
+    /// Mints a new process identifier.
     #[must_use]
     pub fn mint_id() -> String {
-        typeid::mint_case_ledger_id()
+        typeid::mint_process_id()
     }
 
     /// Returns whether `value` already matches the reserved case TypeID shape.
@@ -217,44 +194,11 @@ impl CaseInstance {
         }
     }
 
-    /// Returns the explicit process id, or the legacy instance id fallback.
-    ///
-    /// Older persisted rows predate the split between workflow process and case
-    /// ledger identity. The fallback keeps those rows readable until the
-    /// storage model is fully renamed.
-    #[must_use]
-    pub fn effective_process_id(&self) -> &str {
-        self.process_id
-            .as_deref()
-            .unwrap_or(self.instance_id.as_str())
-    }
-
-    /// Returns the explicit case-ledger id, or the legacy instance id fallback.
-    ///
-    /// Older persisted rows predate the split between workflow process and case
-    /// ledger identity. The fallback keeps those rows readable until the
-    /// storage model is fully renamed.
-    #[must_use]
-    pub fn effective_case_ledger_id(&self) -> &str {
-        self.case_ledger_id
-            .as_deref()
-            .unwrap_or(self.instance_id.as_str())
-    }
-
     /// Returns the identifier used for external correlation (CloudEvents
     /// `subject`, broker routing keys, conformance fixtures).
-    ///
-    /// When the host supplied a non-TypeID `instance_id` at creation, the
-    /// runtime mints a canonical id and stores the original value in
-    /// [`Self::extensions`] under [`Self::LEGACY_INSTANCE_ALIAS_EXTENSION_KEY`].
-    /// This method returns that original id when present; otherwise the
-    /// canonical [`CaseInstance::instance_id`].
     #[must_use]
-    pub fn correlation_instance_id(&self) -> &str {
-        self.extensions
-            .get(Self::LEGACY_INSTANCE_ALIAS_EXTENSION_KEY)
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or(self.instance_id.as_str())
+    pub fn correlation_process_id(&self) -> &str {
+        self.process_id.as_str()
     }
 }
 
@@ -280,7 +224,7 @@ pub struct PendingCallback {
 /// ADR 0070 maximalist Q18 / Q21). It is orthogonal to the kernel statechart
 /// node taxonomy (`atomic | compound | parallel | final`) — `Stalled` is
 /// instance execution metadata, not a lifecycle node type. When `status ==
-/// Stalled`, [`CaseInstance::stalled_since`] MUST be populated.
+/// Stalled`, [`WorkflowProcess::stalled_since`] MUST be populated.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum InstanceStatus {
@@ -293,14 +237,14 @@ pub enum InstanceStatus {
     /// intervention required (ADR 0070 D-4.1, OQ-2 — no auto-recovery).
     Stalled,
     /// Envelope signer or participant declined; instance carries
-    /// [`CaseInstance::decline_reason`]. Tasks in the envelope are
+    /// [`WorkflowProcess::decline_reason`]. Tasks in the envelope are
     /// individually cancelled. Irreversible terminal state.
     Declined,
-    /// Instance explicitly voided; carries [`CaseInstance::voided_by`]
-    /// and [`CaseInstance::voided_at`]. Irreversible terminal state.
+    /// Instance explicitly voided; carries [`WorkflowProcess::voided_by`]
+    /// and [`WorkflowProcess::voided_at`]. Irreversible terminal state.
     Voided,
     /// Instance expired (envelope deadline elapsed); carries
-    /// [`CaseInstance::expired_at`]. Irreversible terminal state.
+    /// [`WorkflowProcess::expired_at`]. Irreversible terminal state.
     Expired,
 }
 
@@ -421,8 +365,8 @@ pub struct FormspecTaskContext {
     /// Stable task identifier.
     pub task_id: String,
 
-    /// Case instance identifier.
-    pub instance_id: String,
+    /// Workflow process identifier.
+    pub process_id: String,
 
     /// Kernel contract map key.
     pub contract_ref: String,

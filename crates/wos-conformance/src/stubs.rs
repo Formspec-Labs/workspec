@@ -14,7 +14,7 @@ use std::collections::HashMap;
 
 use crate::fixture::ContractOutcome;
 #[cfg(test)]
-use wos_core::instance::CaseInstance;
+use wos_core::instance::WorkflowProcess;
 #[cfg(test)]
 use wos_core::traits::InstanceStore;
 use wos_core::traits::{ContractValidator, ExternalService, ValidationResult};
@@ -23,7 +23,7 @@ use wos_core::traits::{ContractValidator, ExternalService, ValidationResult};
 
 /// In-memory instance store for conformance tests.
 ///
-/// Stores `CaseInstance` documents in a `HashMap` keyed by instance ID.
+/// Stores `WorkflowProcess` documents in a `HashMap` keyed by instance ID.
 /// All state is lost when the store is dropped.
 ///
 /// **Note:** The runtime engine uses `wos_runtime::InMemoryStore` (which
@@ -32,7 +32,7 @@ use wos_core::traits::{ContractValidator, ExternalService, ValidationResult};
 #[derive(Debug, Default)]
 #[cfg(test)]
 struct InMemoryStore {
-    instances: HashMap<String, CaseInstance>,
+    instances: HashMap<String, WorkflowProcess>,
 }
 
 #[cfg(test)]
@@ -63,16 +63,16 @@ pub enum StoreError {
 impl InstanceStore for InMemoryStore {
     type Error = StoreError;
 
-    fn load(&self, instance_id: &str) -> Result<CaseInstance, Self::Error> {
+    fn load(&self, process_id: &str) -> Result<WorkflowProcess, Self::Error> {
         self.instances
-            .get(instance_id)
+            .get(process_id)
             .cloned()
-            .ok_or_else(|| StoreError::NotFound(instance_id.to_string()))
+            .ok_or_else(|| StoreError::NotFound(process_id.to_string()))
     }
 
-    fn save(&mut self, instance: &CaseInstance) -> Result<(), Self::Error> {
+    fn save(&mut self, instance: &WorkflowProcess) -> Result<(), Self::Error> {
         self.instances
-            .insert(instance.instance_id.clone(), instance.clone());
+            .insert(instance.process_id.clone(), instance.clone());
         Ok(())
     }
 }
@@ -215,10 +215,9 @@ mod tests {
         let mut store = InMemoryStore::new();
         assert!(store.is_empty());
 
-        let instance = CaseInstance {
-            instance_id: "test-001".to_string(),
-            process_id: None,
-            case_ledger_id: None,
+        let instance = WorkflowProcess {
+            process_id: "test-001".to_string(),
+            case_ledger_id: "test-case-001".to_string(),
             tenant: "default".to_string(),
             definition_url: "https://example.com/workflow".to_string(),
             definition_version: "1.0".to_string(),
@@ -250,7 +249,7 @@ mod tests {
         assert_eq!(store.len(), 1);
 
         let loaded = store.load("test-001").unwrap();
-        assert_eq!(loaded.instance_id, "test-001");
+        assert_eq!(loaded.process_id, "test-001");
         assert_eq!(loaded.configuration, vec!["open"]);
     }
 

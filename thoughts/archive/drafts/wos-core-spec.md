@@ -1388,7 +1388,7 @@ Every provenance record MUST include the following fields:
 |-------|------|----------|-------------|
 | `id` | string (URI) | REQUIRED | Globally unique identifier for this record. |
 | `timestamp` | string (datetime) | REQUIRED | RFC 3339 timestamp with timezone. |
-| `instanceId` | string (URI) | REQUIRED | The workflow instance this record belongs to. |
+| `processId` | string (URI) | REQUIRED | The workflow instance this record belongs to. |
 | `recordType` | enum | REQUIRED | The type of record (see §11.3–11.6). |
 | `actor` | ActorRef | REQUIRED | The human user, system component, or Decision Service that caused the recorded action. |
 | `authority` | string | OPTIONAL | The role, rule, or policy under which the actor operated. |
@@ -2271,7 +2271,7 @@ lifecycle:
           actions:
             - action: "emitEvent"
               eventType: "org.example.grants.sla-warning"
-              data: "{ instanceId: instance.id, stage: 'submitted' }"
+              data: "{ processId: instance.id, stage: 'submitted' }"
 
     returnedToApplicant:
       type: "atomic"

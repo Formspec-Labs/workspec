@@ -70,13 +70,13 @@ let typeid = typeid::mint_case_id();
 let id = format!("urn:wos:{typeid}");
 ```
 
-**R-4.2** `GET /api/v1/instances/{id}` resolves by direct string match on the stored `instance_id`.
+**R-4.2** `GET /api/v1/instances/{id}` resolves by direct string match on the stored `process_id`.
 
-**R-4.3** The `to_instance_urn()` synthesis function (`workspec-server/crates/wos-server/src/services/instance_service.rs:113-128`) is deleted. Its replacement is `format!("urn:wos:{}", row.instance_id)` — no parsing, no fallback, no heuristic.
+**R-4.3** The `to_instance_urn()` synthesis function (`workspec-server/crates/wos-server/src/services/instance_service.rs:113-128`) is deleted. Its replacement is `format!("urn:wos:{}", row.process_id)` — no parsing, no fallback, no heuristic.
 
 **R-4.4** `urn_scope_and_date()` (`instance_service.rs:131-139`, `task_service.rs:95-104`) is deleted. Scope and date extraction from the URN is replaced by `typeid::extract_tenant(typeid)` and the UUIDv7 timestamp embedded in the TypeID suffix.
 
-**R-4.5** The HTTP create handler default ID generation (`instances.rs:233-239`) stops generating free-form `urn:wos:instance:default:...:<uuid>` URNs. When no `instance_id` is supplied by the client, it mints via `typeid::mint_case_id()` and wraps.
+**R-4.5** The HTTP create handler default ID generation (`instances.rs:233-239`) stops generating free-form five-segment workflow-process URNs. When no `process_id` is supplied by the client, it mints via `typeid::mint_process_id()` and wraps.
 
 **R-4.6** `ActorRef` (`actor:<principalClass>:<id>`) is unchanged by this spec.
 
@@ -112,7 +112,7 @@ TypeID prefixes map to record families, not REST resource types:
 
 | Prefix | Record family | REST path |
 |---|---|---|
-| `case` | Case instance | `/instances/{id}` |
+| `case` | Workflow process | `/instances/{id}` |
 | `prov` | Provenance records | `/instances/{case_id}/provenance/{id}` |
 | `gov` | Governance records | `/instances/{case_id}/governance/...` |
 | `ai` | AI records | `/instances/{case_id}/...` |
@@ -152,7 +152,7 @@ Sub-resources use path context + local identifier, not independent TypeIDs.
 
 ### 3.4 DB normalization
 
-- `instance_id` in the DB stores the 3-segment URN string (`urn:wos:{typeid}`).
+- `process_id` in the DB stores the 3-segment URN string (`urn:wos:{typeid}`).
 - Any pre-existing rows with bare TypeIDs or legacy 5-segment URNs are normalized in a one-time migration script. No ongoing dual-format acceptance.
 
 ---

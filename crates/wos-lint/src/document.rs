@@ -179,7 +179,7 @@ mod tests {
     #[test]
     fn parse_accepts_wos_process_marker() {
         let doc = parse(
-            r#"{"$wosProcess":"1.0","instanceId":"default_process_01hw7rm71vfay8vvw14d2pf2db"}"#,
+            r#"{"$wosProcess":"1.0","processId":"default_process_01hw7rm71vfay8vvw14d2pf2db","caseLedgerId":"default_case_01hw7rm71vfay8vvw14d2pf2db"}"#,
         )
         .expect("$wosProcess marker should be recognized");
 

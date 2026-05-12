@@ -77,7 +77,7 @@ struct ExportSpec {
 #[derive(Debug, Deserialize)]
 struct ExportConfigSpec {
     provenance_namespace: String,
-    instance_id: String,
+    process_id: String,
 }
 
 /// Kernel shared by all export-conformance fixtures.
@@ -229,7 +229,7 @@ fn sp_export_004_facts_tier_filter() {
 
     let config = ExportConfig {
         provenance_namespace: "urn:wos:prov:test:".to_string(),
-        instance_id: "sp-export-004".to_string(),
+        process_id: "sp-export-004".to_string(),
     };
 
     // ── PROV-O ─────────────────────────────────────────────────
@@ -280,7 +280,7 @@ fn run_export_fixture(fixture_filename: &str) {
     let log = run_workflow_to_stamped_log(&fixture);
     let config = ExportConfig {
         provenance_namespace: fixture.export.config.provenance_namespace.clone(),
-        instance_id: fixture.export.config.instance_id.clone(),
+        process_id: fixture.export.config.process_id.clone(),
     };
 
     match fixture.export.format.as_str() {
@@ -932,7 +932,7 @@ fn assert_ocel(fixture: &ExportFixture, log: &ProvenanceLog, config: &ExportConf
 
     // Every event relates to the instance object.
     if assertion_bool(assertions, "ocel_every_event_relates_to_instance") {
-        let instance_id = &config.instance_id;
+        let process_id = &config.process_id;
         for (index, event) in events.iter().enumerate() {
             let relationships = event["relationships"].as_array().unwrap_or_else(|| {
                 panic!(
@@ -941,11 +941,11 @@ fn assert_ocel(fixture: &ExportFixture, log: &ProvenanceLog, config: &ExportConf
                 )
             });
             let has_instance_relationship = relationships.iter().any(|relationship| {
-                relationship.get("objectId").and_then(Value::as_str) == Some(instance_id)
+                relationship.get("objectId").and_then(Value::as_str) == Some(process_id)
             });
             assert!(
                 has_instance_relationship,
-                "OCEL event[{index}] does not relate to instance object '{instance_id}' (fixture '{}'): {event}",
+                "OCEL event[{index}] does not relate to instance object '{process_id}' (fixture '{}'): {event}",
                 fixture.id
             );
         }

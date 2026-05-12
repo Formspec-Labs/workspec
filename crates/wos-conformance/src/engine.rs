@@ -39,7 +39,7 @@ use crate::fixture::ConformanceFixture;
 use crate::formspec_processor::FixtureFormspecProcessor;
 use crate::stubs::{StubService, StubValidator};
 
-const CONFORMANCE_INSTANCE_ID: &str = "conformance-instance";
+const CONFORMANCE_INSTANCE_ID: &str = "default_process_01hw7rm71vfay8vvw14d2pf2db";
 
 /// Document roles that the engine handles explicitly.
 ///
@@ -352,7 +352,7 @@ impl WorkflowEngine {
     ) -> Result<crate::ConformanceResult, ConformanceError> {
         self.runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: CONFORMANCE_INSTANCE_ID.to_string(),
+                process_id: CONFORMANCE_INSTANCE_ID.to_string(),
                 tenant: None,
                 definition_url: self.definition_url.clone(),
                 definition_version: self.definition_version.clone(),
@@ -680,10 +680,10 @@ impl WorkflowEngine {
             Err(error) => return Err(ConformanceError::Engine(error.to_string())),
         };
 
-        if outcome.instance_id != CONFORMANCE_INSTANCE_ID {
+        if outcome.process_id != CONFORMANCE_INSTANCE_ID {
             return Err(ConformanceError::Engine(format!(
                 "migration outcome instance mismatch: expected {CONFORMANCE_INSTANCE_ID}, got {}",
-                outcome.instance_id
+                outcome.process_id
             )));
         }
         if outcome.previous_definition_version != previous_definition_version {

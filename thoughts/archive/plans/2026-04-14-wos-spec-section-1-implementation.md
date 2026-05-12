@@ -21,7 +21,7 @@
 - Integration request-response handler: `crates/wos-runtime/src/runtime.rs:1040-1257`; input-mapping helper `1531-1608`; output binding `1692-1876`; JSONPath subset parser `1735-1813`.
 - `IntegrationBinding.kind` is a free-form string: `crates/wos-runtime/src/integration.rs:62`.
 - Kernel state history schema: `wos-kernel.schema.json:303-307` (`historyState` enum `["shallow","deep"]`).
-- `history_store: Option<HashMap<String, Vec<String>>>` already on `CaseInstance`: `crates/wos-core/src/instance.rs:46` — never written today.
+- `history_store: Option<HashMap<String, Vec<String>>>` already on `WorkflowProcess`: `crates/wos-core/src/instance.rs:46` — never written today.
 - Milestone schema: `crates/wos-core/src/model/kernel.rs:199-202` and `480-482`; lint rule K-013 at `crates/wos-lint/src/rules/fel_analysis.rs:186-198`.
 - Business calendar model: `crates/wos-core/src/model/business_calendar.rs` (complete schema, zero runtime integration).
 - Timer hook point: `crates/wos-runtime/src/runtime.rs:1447-1491`.
@@ -531,7 +531,7 @@ git commit -m "build: bump wos-spec submodule (S15.1)"
 - [ ] **3.1** Migrate any existing fixture that relied on `StubValidator` fixture-driven outcomes to the canned-error processor mechanism. Red: identify fixtures by `grep -l contract_outcomes crates/wos-conformance/fixtures/`. Green: each migrated fixture still passes.
 - [ ] **3.2** Flip `default_binding()` to `"formspec"`. Run fixtures — every remaining stub-reliant fixture fails. Fix by migration, not by stub fallback.
 - [ ] **3.3** Delete `ConformanceBinding`. Delete `StubValidator` / `stubs.rs`. Remove `pub` surface. Run fixtures — must stay green.
-- [ ] **3.4** Write a new test `replay_pin_enforcement.rs`: simulate re-loading a completed response with a different pinned version than case-instance; assert `BindingError::PinMismatch`.
+- [ ] **3.4** Write a new test `replay_pin_enforcement.rs`: simulate re-loading a completed response with a different pinned version than workflow-process; assert `BindingError::PinMismatch`.
 - [ ] **3.5** Implement pin-equality on re-validation paths (exact hook depends on runtime code; survey points to `runtime.rs` `ValidationOutcome` construction). Red → green.
 - [ ] **3.6** Slice commit + parent bump.
 
@@ -561,7 +561,7 @@ git commit -m "build: bump wos-spec submodule (S15.1)"
 **Tasks:**
 
 - [ ] **4.1** Author the 9 fixtures first. Each fixture asserts expected state-configuration provenance after re-entry. Run them — **all 9 should fail**. That's the baseline.
-- [ ] **4.2** Implement `CaseInstance::record_history` and `take_history` on `instance.rs`. Unit test in `crates/wos-core/tests/history_store_ops.rs`. Red → green.
+- [ ] **4.2** Implement `WorkflowProcess::record_history` and `take_history` on `instance.rs`. Unit test in `crates/wos-core/tests/history_store_ops.rs`. Red → green.
 - [ ] **4.3** Hook exit handler: when exiting a state, walk up parent chain to find nearest ancestor with `historyState`; record the substate configuration at that ancestor's entry in `history_store`. Test: `K-H-D1-shallow-normal-reentry` and `K-H-D1-deep-normal-reentry` pass.
 - [ ] **4.4** Hook entry handler: when entering a state with `historyState`, consult `history_store` — if populated, restore per Deep/Shallow semantics instead of `initialState`. Test: remaining 7 fixtures pass.
 - [ ] **4.5** Boundary check: when a transition's target is outside the history-bearing state, skip history capture *and* entry-restoration. Fixture `K-H-D2-*-across-boundary` covers this. Red → green.
@@ -573,12 +573,12 @@ git commit -m "build: bump wos-spec submodule (S15.1)"
 
 ## Slice 5 — KS.2: Milestone firing
 
-**Outcome:** Milestone conditions are evaluated after each durable data write. Newly-true milestones emit a `MilestoneFired` provenance record, then reactive transitions drain. Milestones do not re-fire once fired within a given case-instance until the underlying state changes.
+**Outcome:** Milestone conditions are evaluated after each durable data write. Newly-true milestones emit a `MilestoneFired` provenance record, then reactive transitions drain. Milestones do not re-fire once fired within a given workflow-process until the underlying state changes.
 
 **Files:**
 
 - Modify: `crates/wos-core/src/provenance.rs:13-156` — add variant `MilestoneFired { milestone_id: String }` to `ProvenanceKind`.
-- Modify: `crates/wos-core/src/instance.rs` — add `fired_milestones: HashSet<String>` to `CaseInstance` (serde default empty).
+- Modify: `crates/wos-core/src/instance.rs` — add `fired_milestones: HashSet<String>` to `WorkflowProcess` (serde default empty).
 - Create: `crates/wos-runtime/src/milestones.rs` — `evaluate_milestones(instance, kernel, pre_state, post_state) -> Vec<ProvenanceRecord>`. Evaluates each milestone's FEL condition against post-state; for any newly-true (not in `fired_milestones`), records the ID and returns a provenance record.
 - Modify: `crates/wos-runtime/src/runtime.rs` — insert milestone evaluation **after** data write completes durably, **before** reactive-transition drain. Exact line identified during execution — look near every `CaseMutationBundle` application.
 - Create fixtures:

@@ -369,7 +369,7 @@ fn build_step_binding(
     step_context: &HashMap<String, serde_json::Value>,
     kernel: &KernelDocument,
     observed: &ObservedAction,
-    instance: &wos_core::instance::CaseInstance,
+    instance: &wos_core::instance::WorkflowProcess,
 ) -> Result<serde_json::Value, RuntimeError> {
     if step.input_mapping.is_empty() {
         // No mapping declared: pass the action data as-is.

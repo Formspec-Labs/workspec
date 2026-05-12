@@ -22,7 +22,7 @@ note: >-
 | `thoughts/archive/specs/2026-04-10-formspec-integration-gaps.md` | Original gap analysis, coprocessor narrative, FEL gap specs (cross-repo: Formspec repo) |
 | `thoughts/plans/2026-04-11-phase11-coprocessor-fel.md` | North star, biases, shipped inventory, sequencing, next actions (cross-repo: Formspec repo) |
 
-**Normative home:** WOS coprocessor changes now live in `work-spec/` (Runtime Companion §12.9 / §15, Kernel §9.2 / §11.3, kernel schema, case-instance schema, and typed Rust model). Formspec changes live in `specs/` and `schemas/`. This `thoughts/` file is the Phase 11 integration index; use the WOS specs as the behavior source of truth.
+**Normative home:** WOS coprocessor changes now live in `work-spec/` (Runtime Companion §12.9 / §15, Kernel §9.2 / §11.3, kernel schema, workflow-process schema, and typed Rust model). Formspec changes live in `specs/` and `schemas/`. This `thoughts/` file is the Phase 11 integration index; use the WOS specs as the behavior source of truth.
 
 ---
 
@@ -49,7 +49,7 @@ Phase 11 is not “close gaps between documents.” It is **make multi-document 
 
 | # | Gap | Original severity | Status (2026-04-11) |
 |---|-----|-------------------|---------------------|
-| **1** | **Formspec coprocessor** — no specified WOS↔Formspec handoff | Critical | **Landed** in WOS Runtime §12.9 / §15, Kernel §9.2 / §11.3, `wos-kernel.schema.json`, `wos-case-instance.schema.json`, and typed Rust model. Backlog behavior questions are closed; the P11-BL-050 publication-rule checklist is treated as complete for this handoff. |
+| **1** | **Formspec coprocessor** — no specified WOS↔Formspec handoff | Critical | **Landed** in WOS Runtime §12.9 / §15, Kernel §9.2 / §11.3, `wos-kernel.schema.json`, `wos-process.schema.json`, and typed Rust model. Backlog behavior questions are closed; the P11-BL-050 publication-rule checklist is treated as complete for this handoff. |
 | **2** | **`every` / `some` / `duration`** missing from Core catalog | High | **Resolved** in Formspec: Core §3.5, `fel-functions.schema.json`, fel-core, Python/WASM/engine tests. |
 | **3** | **Record arrays + predicates** (string vs expression `$`) | High | **Resolved** in Core §3.5.1: FEL expression predicates; **`$.field`** on object elements; WOS examples updated (`ai-integration.md`). **ADR-0060** (`thoughts/archive/adr/0060-fel-constraint-self-dollar-nesting.md`): constraint `$` vs predicate `$`. |
 
@@ -78,7 +78,7 @@ Technical order: **functions → record semantics → coprocessor prose** (autho
 
 1. **FEL-QUANTIFIERS** — **Done** (`every`, `some`, `duration`; wos-lint AG-012 narrowed).
 2. **FEL-RECORDS** — **Done** (Core prose, tests, ADR-0060, WOS grep clean).
-3. **COPROCESSOR** — **Landed** in `work-spec/specs/companions/runtime.md`, kernel prose, kernel schema, case-instance schema, and typed Rust model. §6 remains the design index, not the normative source.
+3. **COPROCESSOR** — **Landed** in `work-spec/specs/companions/runtime.md`, kernel prose, kernel schema, workflow-process schema, and typed Rust model. §6 remains the design index, not the normative source.
 
 ### 5.1 Shipped inventory (Formspec repo)
 
@@ -150,7 +150,7 @@ On `createTask` with `binding: "formspec"`:
 | Property | Type | Req | Description |
 |----------|------|-----|-------------|
 | `taskId` | string | R | Processor id; stable for idempotency. |
-| `instanceId` | URI | R | WOS instance id. |
+| `processId` | URI | R | WOS instance id. |
 | `contractRef` | string | R | Kernel contract map key (may ≠ Formspec `definitionUrl`). |
 | `definitionUrl` | URI | R | Definition **`url`**; MUST match `response.definitionUrl`. |
 | `definitionVersion` | string | R | Pinned version; MUST match `response.definitionVersion`. |
@@ -278,7 +278,7 @@ Rights/safety **`impactLevel`:** processor MUST require ledger / **`submit`** ev
 
 - [x] **`work-spec/specs/companions/runtime.md`:** §15 Formspec Coprocessor; §15.5 / §15.6 full Response validation; §12.9 **TaskPresenter**; Abstract/Scope mention Formspec tasks. §12.3 intentionally remains the `ContractValidator` data-bag seam.
 - [x] **`wos-kernel.schema.json` + Kernel spec:** `responseMappingRef`, `prefillMappingRef`, `completionEvent`, `failureEvent`; **`contractRef` on `createTask`** prose (bias #4).
-- [x] **`wos-case-instance.schema.json`:** required **`activeTasks`** array plus **`ActiveTask`**.
+- [x] **`wos-process.schema.json`:** required **`activeTasks`** array plus **`ActiveTask`**.
 - [x] **`$defs`:** `ActiveTask`, `FormspecTaskContext`, `ValidationOutcome` for tooling.
 - [x] **P11-BL-050 publication-rule checklist captured in this handoff:** additive only; cite never restate; delegate processing; canonical terminology; Formspec-as-validator. No standalone review artifact is linked from this document.
 

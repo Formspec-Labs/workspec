@@ -163,7 +163,7 @@ mod tests {
 
     fn ctx<'a>(case_state: &'a serde_json::Value) -> AgentContext<'a> {
         AgentContext {
-            instance_id: "test_case_01abc",
+            process_id: "test_case_01abc",
             invocation_index: 0,
             case_state,
         }

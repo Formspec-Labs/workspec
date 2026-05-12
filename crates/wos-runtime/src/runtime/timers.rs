@@ -10,7 +10,7 @@ use chrono::DateTime;
 use wos_core::business_calendar::{
     BusinessCalendarDocument, BusinessCalendarError, next_business_moment,
 };
-use wos_core::instance::{CaseInstance, PendingEvent};
+use wos_core::instance::{PendingEvent, WorkflowProcess};
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
 use wos_core::timer::{Timer, max_tolerance_ms, tolerance_to_iso};
 
@@ -21,7 +21,7 @@ use super::{RuntimeError, format_timestamp, parse_timestamp};
 /// # Errors
 /// Returns an error when a stored timer timestamp cannot be parsed.
 pub(super) fn materialize_due_timers(
-    instance: &mut CaseInstance,
+    instance: &mut WorkflowProcess,
     now_ms: u64,
     now_iso: &str,
 ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {

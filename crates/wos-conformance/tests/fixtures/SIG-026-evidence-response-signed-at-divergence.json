@@ -48,7 +48,7 @@
               "signedPayload": {
                 "canonicalization": "formspec-response-signing-v1",
                 "digestAlgorithm": "sha-256",
-                "digest": "bdac150ecfa641bbbc0ce2c78fa888d70ab7053a8c34b6d5d8100452b53b2741",
+                "digest": "acc088602824e4a5d0d3668ddc004f5d0f5117a00ab0d5f0d56b5398b3cc039a",
                 "responseId": "resp-sig-026-evidence-response-signed-at-divergence-applicantTask",
                 "definitionUrl": "urn:test:formspec:signature",
                 "definitionVersion": "1.0.0"

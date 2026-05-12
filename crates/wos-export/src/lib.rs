@@ -53,7 +53,7 @@ pub struct ExportConfig {
     /// - `"https://example.org/prov/grant-2026/"` (HTTP)
     pub provenance_namespace: String,
     /// Instance ID used as the XES case identifier / OCEL case reference.
-    pub instance_id: String,
+    pub process_id: String,
 }
 
 /// Render `record_kind` in camelCase by reusing the serde rename already

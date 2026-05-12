@@ -1400,7 +1400,7 @@ Normative. Published at `https://wos-spec.org/context/4.0.0`. Extends v3 context
     "wasDerivedFrom": { "@id": "prov:wasDerivedFrom", "@type": "@id" },
     "recordType": "wos:recordType",
     "auditLayer": "wos:auditLayer",
-    "instanceId": { "@id": "wos:instanceId", "@type": "@id" },
+    "processId": { "@id": "wos:processId", "@type": "@id" },
 
     "operations": { "@id": "wos:operations", "@container": "@list" },
     "op": "wos:patchOp",

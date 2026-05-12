@@ -6,7 +6,8 @@
   "type": "object",
   "required": [
     "$wosProcess",
-    "instanceId",
+    "processId",
+    "caseLedgerId",
     "definitionUrl",
     "definitionVersion",
     "configuration",
@@ -36,33 +37,11 @@
     "$schema": {
       "$ref": "#/$defs/JsonSchemaUri"
     },
-    "instanceId": {
-      "type": "string",
-      "oneOf": [
-        {
-          "pattern": "^[a-z][a-z0-9-]*_case_[0-9a-hjkmnp-tv-z]{26}$",
-          "format": "wos-case-typeid"
-        },
-        {
-          "pattern": "^[a-z][a-z0-9-]*_process_[0-9a-hjkmnp-tv-z]{26}$",
-          "format": "wos-process-typeid"
-        }
-      ],
-      "description": "Transitional runtime storage key for this workflow artifact. Existing persisted rows and callers may use the `case` TypeID family; new dual-identity rows may use the `process` TypeID family while carrying the bound case ledger in `caseLedgerId`. Processors assign this at createInstance time; authors do not choose it.",
-      "examples": [
-        "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd",
-        "default_process_01hw7rm71vfay8vvw14d2pf2db"
-      ],
-      "x-lm": {
-        "critical": true,
-        "intent": "Transitional runtime identity for routing and persistence during the case/process split"
-      }
-    },
     "processId": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9-]*_process_[0-9a-hjkmnp-tv-z]{26}$",
       "format": "wos-process-typeid",
-      "description": "Workflow runtime process identifier. Reserved family prefix: `process`. Present on new dual-identity rows; optional so older persisted CaseInstance rows remain readable until the full WorkflowProcess rename lands.",
+      "description": "Workflow runtime process identifier. Reserved family prefix: `process`. Required for every WOS Process row and distinct from the durable case ledger that may host multiple processes.",
       "examples": [
         "sba-poc_process_01jqrpd32jf8xtx9qxkkv3rqsd",
         "default_process_01hw7rm71vfay8vvw14d2pf2db"
@@ -76,7 +55,7 @@
       "type": "string",
       "pattern": "^[a-z][a-z0-9-]*_case_[0-9a-hjkmnp-tv-z]{26}$",
       "format": "wos-case-typeid",
-      "description": "Durable case-ledger identifier this workflow process writes into. Reserved family prefix: `case`. Present on new dual-identity rows; optional so older persisted CaseInstance rows remain readable until the full WorkflowProcess rename lands.",
+      "description": "Durable case-ledger identifier this workflow process writes into. Reserved family prefix: `case`. Required for every WOS Process row and stable across related workflow processes for the same matter.",
       "examples": [
         "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd",
         "default_case_01hw7rm71vfay8vvw14d2pf2db"
@@ -89,7 +68,7 @@
     "tenant": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9-]{0,62}$",
-      "description": "Deployment tenant for this governed case (ADR 0068 D-1.1, PLN-0004). Grammar matches a single DNS label: lowercase ASCII letter first, then lowercase letters, digits, or hyphen, length 1 to 63. When instanceId is a WOS case TypeID, this value MUST equal the tenant prefix before the `_case_` segment. Processors set it from an explicit create-instance tenant when provided and valid, else from that TypeID prefix, else the deployment default (for example `default`). Omitted keys deserialize to the default tenant in Rust bindings.",
+      "description": "Deployment tenant for this governed case (ADR 0068 D-1.1, PLN-0004). Grammar matches a single DNS label: lowercase ASCII letter first, then lowercase letters, digits, or hyphen, length 1 to 63. When processId is a WOS process TypeID, this value MUST equal the tenant prefix before the `_process_` segment. Processors set it from an explicit create-instance tenant when provided and valid, else from that TypeID prefix, else the deployment default (for example `default`). Omitted keys deserialize to the default tenant in Rust bindings.",
       "examples": [
         "sba-poc",
         "default",
@@ -801,7 +780,7 @@
       "type": "object",
       "required": [
         "taskId",
-        "instanceId",
+        "processId",
         "contractRef",
         "definitionUrl",
         "definitionVersion",
@@ -827,21 +806,12 @@
             "openStringKind": "identifier"
           }
         },
-        "instanceId": {
+        "processId": {
           "type": "string",
-          "oneOf": [
-            {
-              "pattern": "^[a-z][a-z0-9-]*_case_[0-9a-hjkmnp-tv-z]{26}$",
-              "format": "wos-case-typeid"
-            },
-            {
-              "pattern": "^[a-z][a-z0-9-]*_process_[0-9a-hjkmnp-tv-z]{26}$",
-              "format": "wos-process-typeid"
-            }
-          ],
-          "description": "Identifier of the WOS runtime artifact this task belongs to. Existing handoffs may use the `case` family; dual-identity handoffs may use the `process` family for workflow routing.",
+          "pattern": "^[a-z][a-z0-9-]*_process_[0-9a-hjkmnp-tv-z]{26}$",
+          "format": "wos-process-typeid",
+          "description": "Identifier of the WOS runtime process this task belongs to. The Formspec handoff field name remains `processId`, but the value is the workflow `process` TypeID.",
           "examples": [
-            "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd",
             "default_process_01hw7rm71vfay8vvw14d2pf2db"
           ]
         },
@@ -978,7 +948,7 @@
       "examples": [
         {
           "taskId": "task-1",
-          "instanceId": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd",
+          "processId": "sba-poc_process_01jqrpd32jf8xtx9qxkkv3rqsd",
           "contractRef": "intake",
           "definitionUrl": "https://gov.agency/forms/intake",
           "definitionVersion": "1.0.0",

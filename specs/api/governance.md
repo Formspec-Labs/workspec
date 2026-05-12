@@ -10,7 +10,7 @@
 
 ## Purpose
 
-This domain authors the cross-case authoritative shapes for WOS governance — the records that span case instances and outlive any one case. Five resource families ratify under this spec:
+This domain authors the cross-case authoritative shapes for WOS governance — the records that span workflow processes and outlive any one case. Five resource families ratify under this spec:
 
 - **`AgentView`** — agent declaration view (model identity, autonomy level, deontic constraints summary, confidence floor, drift status, capabilities). Per ADR 0064, agents are first-class actors; this view projects the workflow `agents[]` block on top of the underlying `Actor` resource.
 - **`Delegation`** — full cross-case delegation record (delegator URN, delegatee URN, authority scope, period, conditions, audit). Distinct from `instance.schema.json#/$defs/DelegationEntry`, which is the case-scoped summary projection.
@@ -22,7 +22,7 @@ Greenfield projection per ADR 0082 D-15: kernel governance `$defs` (`Delegation`
 
 ## Relationship to per-case governance projection
 
-The per-case projection lives on `instance.schema.json` (`CaseInstanceGovernance`, `DelegationEntry`, `ReviewState`, `HoldEntry`). That subresource summarizes the in-effect governance state for a single case instance — minimum fields necessary for case-portal rendering — and is reachable through `GET /api/v1/instances/{id}/governance` and the `?include=governance` aggregation seam (ADR 0082 D-3). This domain authors the cross-case authoritative shapes those summaries project from:
+The per-case projection lives on `instance.schema.json` (`WorkflowProcessGovernance`, `DelegationEntry`, `ReviewState`, `HoldEntry`). That subresource summarizes the in-effect governance state for a single workflow process — minimum fields necessary for case-portal rendering — and is reachable through `GET /api/v1/instances/{id}/governance` and the `?include=governance` aggregation seam (ADR 0082 D-3). This domain authors the cross-case authoritative shapes those summaries project from:
 
 | Per-case (instance.schema.json) | Cross-case (this domain) | Relationship |
 |---|---|---|
@@ -31,7 +31,7 @@ The per-case projection lives on `instance.schema.json` (`CaseInstanceGovernance
 | `HoldEntry` (case-scoped hold projection) | (no cross-case shape) | Holds are case-scoped by construction; the hold policy declarations live on the workflow's `governance.holds` block, not as cross-case records. |
 | (no per-case projection) | `AgentView` | Agents are workflow-scoped, not case-scoped — the same agent declaration governs every case under the workflow. The case view does not surface agents directly. |
 | (no per-case projection) | `PolicyVersion` | Policy versions are workflow-scoped; the version effective for a case is resolved at runtime from the case's resolution-date field (governance §S13). |
-| (no per-case projection) | `EscalationEvent` | Escalation events are emitted into the audit timeline; they are surfaced via the audit domain (ADR 0082 D-15 audit, deferred), not the case-instance governance subresource. |
+| (no per-case projection) | `EscalationEvent` | Escalation events are emitted into the audit timeline; they are surfaced via the audit domain (ADR 0082 D-15 audit, deferred), not the workflow-process governance subresource. |
 | (no per-case projection) | `AutonomyEvent` | Autonomy-level transitions are emitted by the runtime and surfaced via the governance domain as a cross-agent query aggregate. Per-event detail lives in Facts-tier `autonomyEscalation` / `autonomyDemotion` provenance records. |
 
 The two-shape decomposition matches ADR 0082 D-3 — pagination scales per resource, and the per-case view stays bounded for case-portal rendering while consumers needing the cross-case authoritative record (audit, governance dashboards, AI-oversight) reach this domain directly.
@@ -44,7 +44,7 @@ Carries `id` (URN), `actorRef` (the underlying `Actor` URN), `workflowUrl`/`work
 
 `invokerKind` is REQUIRED so operability tooling (telemetry, capability planning, multi-agent dispatch) can branch on the underlying adapter without inspecting the workflow document — this is the cross-spec observability commitment per ADR 0064. `lifecycleState` is REQUIRED so portals can render the live four-state machine (advanced-governance.md §7.1) without reconstructing from the per-event `agentStateTransition` provenance stream; the runtime event literal records transitions, this declarative field carries the current state.
 
-`MultiStepSessionState` (declared in this domain, projected onto `AgentView.activeSessions`) carries `sessionId`, `currentStep`, `totalSteps`, `actorRef`, `startedAt`, optional `instanceId`, optional `atCheckpoint`. Lets reviewers query "which agent is parked awaiting human review at a multi-step checkpoint?" via `activeSessions[].atCheckpoint == true` (advanced-governance.md §5.4 cumulative-confidence pause). Closes the residual gap from the original advanced-sidecars audit fix #2.
+`MultiStepSessionState` (declared in this domain, projected onto `AgentView.activeSessions`) carries `sessionId`, `currentStep`, `totalSteps`, `actorRef`, `startedAt`, optional `processId`, optional `atCheckpoint`. Lets reviewers query "which agent is parked awaiting human review at a multi-step checkpoint?" via `activeSessions[].atCheckpoint == true` (advanced-governance.md §5.4 cumulative-confidence pause). Closes the residual gap from the original advanced-sidecars audit fix #2.
 
 Per ADR 0064, the agent's principal class on the underlying `Actor` is `service-account` or `workload` — never `human`.
 
@@ -76,7 +76,7 @@ Carries `policyUrl` (workflow URL), `version` (stable label, SemVer recommended)
 
 ### `EscalationEvent`
 
-Carries `id` (provenance-record URN), `instanceId` (case URN), `taskId?` (task URN when task-scoped), `reason` (closed `EscalationReason`), `level` (integer ≥ 1 — kernel `EscalationStep.level`), `stepId?` (kernel `EscalationStep.id`), `escalatedAt`, `escalatedBy`/`escalatedTo` (actor URNs), `rationale` (when `reason == manual`), `gracePeriod` (ISO 8601 duration, kernel `EscalationStep.gracePeriod`).
+Carries `id` (provenance-record URN), `processId` (case URN), `taskId?` (task URN when task-scoped), `reason` (closed `EscalationReason`), `level` (integer ≥ 1 — kernel `EscalationStep.level`), `stepId?` (kernel `EscalationStep.id`), `escalatedAt`, `escalatedBy`/`escalatedTo` (actor URNs), `rationale` (when `reason == manual`), `gracePeriod` (ISO 8601 duration, kernel `EscalationStep.gracePeriod`).
 
 ### `AutonomyEvent`
 
@@ -97,11 +97,11 @@ GET   /api/v1/governance/policies/{policyUrl}/versions/{version}        -> Polic
 
 `{policyUrl}` is the URL-encoded governing workflow URL.
 
-Per-case scoped delegations remain accessible via the case-instance subresource per ADR 0082 D-3:
+Per-case scoped delegations remain accessible via the workflow-process subresource per ADR 0082 D-3:
 
 ```
-GET   /api/v1/instances/{id}/governance                                 -> CaseInstanceGovernance  (instance.schema.json)
-GET   /api/v1/instances/{id}?include=governance                         -> CaseInstanceWithIncludes (instance.schema.json)
+GET   /api/v1/instances/{id}/governance                                 -> WorkflowProcessGovernance  (instance.schema.json)
+GET   /api/v1/instances/{id}?include=governance                         -> WorkflowProcessWithIncludes (instance.schema.json)
 ```
 
 `GET /api/v1/governance/agents` accepts `AgentListOptions`: `workflowUrl?`, `autonomyLevel?`, `driftStatus?`, `cursor?`, `limit?`. Returns `AgentPage` (cursor envelope per `pagination.schema.json`, ADR 0082 D-7). Default ordering is `id` ascending.

@@ -5,7 +5,7 @@
     "format": "xes",
     "config": {
       "provenance_namespace": "urn:wos:prov:test:",
-      "instance_id": "sp-export-xes"
+      "process_id": "sp-export-xes"
     }
   },
   "assertions": {

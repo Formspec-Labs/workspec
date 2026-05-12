@@ -52,7 +52,7 @@ The evaluator entry points live in [`src/eval.rs`](./src/eval.rs) and are expose
 
 At a high level, the runtime flow is:
 
-1. Load the typed kernel and case instance state.
+1. Load the typed kernel and workflow process state.
 2. Build the indexed state view used for deterministic transition lookup.
 3. Process one event at a time against the active configuration.
 4. Evaluate guards through FEL using `EvalContext`.
@@ -74,7 +74,7 @@ Supporting modules handle the rule families that are shared across processors:
 
 `wos-core` keeps the evaluator pure by pushing deployment concerns behind traits in [`src/traits/mod.rs`](./src/traits/mod.rs). These traits correspond to Runtime Companion S12:
 
-- `InstanceStore`: durable load/save of `CaseInstance`
+- `InstanceStore`: durable load/save of `WorkflowProcess`
 - `DocumentResolver`: version-aware document loading
 - `ContractValidator`: Formspec or schema validation for contracts
 - `ExternalService`: controlled service invocation for `invokeService`

@@ -27,7 +27,7 @@ synthesis: [`../analysis/case-management-aggregate-synthesis.md`](../analysis/ca
 
 ### 1.1 The conflation we are removing
 
-Until this ADR, the stack treated the durable domain **case** as identical to the WOS runtime artifact `CaseInstance`. A `CaseInstance` is a *running workflow execution*: it carries lifecycle state, cursor position, scheduled timers, retry counters, completion semantics. Calling it "the case" was a category error.
+Until this ADR, the stack treated the durable domain **case** as identical to the WOS runtime artifact `WorkflowProcess`. A `WorkflowProcess` is a *running workflow execution*: it carries lifecycle state, cursor position, scheduled timers, retry counters, completion semantics. Calling it "the case" was a category error.
 
 Real matters outlive any single workflow. Intake produces a case; an appeal three months later attaches a *second* workflow to the *same* case; a compliance review later attaches a *third*. A fraud investigation may run interview + audit + sanction workflows concurrently on one case. The status of "the case" is not the lifecycle state of "the workflow currently running on it." Conflating the two pushed product-level concerns (notes, participants, related matters, decisions, history) into the workflow runtime, where they sat awkwardly and bloated `caseState` into a junk drawer.
 
@@ -88,7 +88,7 @@ A workflow process is bound to a case ledger at `wos.kernel.process_started` tim
 
 - `mint_case_id()` in [`work-spec/crates/wos-core/src/typeid.rs`](../../crates/wos-core/src/typeid.rs) is renamed `mint_case_ledger_id()` and continues minting `case_<ulid>` — but the IDs now name *ledgers*, not workflow instances.
 - A new `mint_process_id()` returns `process_<ulid>` for workflow instances.
-- The `CaseInstance` struct in [`work-spec/crates/wos-core/src/instance.rs`](../../crates/wos-core/src/instance.rs) is renamed `WorkflowProcess`; its `instance_id` field becomes `process_id`; it gains a `case_ledger_id` foreign-key field bound at process start.
+- The `WorkflowProcess` struct in [`work-spec/crates/wos-core/src/instance.rs`](../../crates/wos-core/src/instance.rs) is renamed `WorkflowProcess`; its `process_id` field becomes `process_id`; it gains a `case_ledger_id` foreign-key field bound at process start.
 - The runtime schema marker is `$wosProcess` in [`work-spec/schemas/wos-process.schema.json`](../../schemas/wos-process.schema.json).
 - [`work-spec/schemas/api/_common.schema.json`](../../schemas/api/_common.schema.json) `WosResourceUrn.pattern` adds `process` as a family literal alongside the existing `case`, `prov`, `gov`, `ai`, `assurance`, and `x-<vendor>-<name>`.
 - **Family-registry alignment (broader than the URN schema file alone).** Custody-hook **§1.4** reserved-prefix family registry adds `process`; **wos-core typeid helpers** (`work-spec/crates/wos-core/src/typeid.rs`) add `PROCESS_PREFIX = "process"`, `mint_process_id()`, `is_process_id()`, `parse_process_id()`. The URN schema, the family registry, and the typeid helpers move in lockstep — any one of them in isolation produces split admission.
@@ -256,7 +256,7 @@ Workflow processes are managed via dedicated routes scoped to a case:
 | `POST /api/v1/cases/{case_id}/processes/{process_id}/terminate` | Terminate the process. Emits `wos.kernel.process_terminated`. |
 | `GET /api/v1/cases/{case_id}/processes/{process_id}/explanation` | Assembled provenance explanation (replaces today's `/instances/{id}/explain` per ADR 0082 schema authority; see §5.4). |
 | `GET /api/v1/cases/{case_id}/processes/{process_id}/provenance` | Workflow-process provenance list. Bridge for today's `/instances/{id}/provenance` while the broader legacy route surface is retired. |
-| `GET /api/v1/cases/{case_id}/processes/{process_id}/correspondence` | Workflow-process correspondence list. Bridge for today's `/instances/{instanceId}/correspondence` while the broader legacy route surface is retired. |
+| `GET /api/v1/cases/{case_id}/processes/{process_id}/correspondence` | Workflow-process correspondence list. Bridge for today's `/instances/{processId}/correspondence` while the broader legacy route surface is retired. |
 | `GET /api/v1/cases/{case_id}/processes/{process_id}/provenance/verify` / `provenance/export` / `transitions` | Internal process utility aliases for today's `/instances/{id}/provenance/verify`, `/provenance/export`, and `/transitions`; each validates the case/process binding before delegating to the existing process helper. |
 | `GET /api/v1/cases/{case_id}/processes/{process_id}/holds` | Workflow-process holds list. Bridge for today's `/instances/{id}/holds` while the broader legacy route surface is retired. |
 | `POST /api/v1/cases/{case_id}/processes/{process_id}/holds` / `DELETE /api/v1/cases/{case_id}/processes/{process_id}/holds/{hold_idx}` | Internal workflow-process hold mutation aliases for today's `/instances/{id}/holds` and `/instances/{id}/holds/{hold_idx}`; each validates the case/process binding before mutating holds. |
@@ -345,7 +345,7 @@ A `Case` domain aggregate above WOS, materialized from the Trellis Case Ledger, 
 
 ### 4.5 Case as a WOS-centered domain entity (CRUD)
 
-Model `Case` as a primary WOS domain entity (similar to `CaseInstance`, carrying `serde_json::Value` for state) whose mutations produce Trellis events via `custodyHook`. The CRUD database is the operational source of truth; Trellis is an audit projection.
+Model `Case` as a primary WOS domain entity (similar to `WorkflowProcess`, carrying `serde_json::Value` for state) whose mutations produce Trellis events via `custodyHook`. The CRUD database is the operational source of truth; Trellis is an audit projection.
 
 **Rejected** because it preserves the dual-source-of-truth problem in a different shape. If WOS maintains an authoritative DB representation of the case AND Trellis maintains the event chain, the zero-trust commitment (Trellis is canonical, projections derived) inverts. ADR-0070 D-1 and ADR-0074 both presuppose Trellis canonicity.
 
@@ -361,7 +361,7 @@ A `cases` SQL table is the operational source of truth; Trellis is an append-onl
 
 **Rejected** because the SBA / Federal / Sovereign deployment matrix does not call for multi-region active-active. Append-log semantics handle single-region multi-writer concurrency adequately; CRDTs would add substantial implementation surface without a matching user story.
 
-### 4.8 Status quo (`CaseInstance` *is* the case)
+### 4.8 Status quo (`WorkflowProcess` *is* the case)
 
 Do nothing. Keep treating the running workflow as the durable case.
 
@@ -378,7 +378,7 @@ The work surfaces below describe **what changes**; logical ordering is captured 
 **Files:**
 
 - [`work-spec/crates/wos-core/src/typeid.rs`](../../crates/wos-core/src/typeid.rs) — add `PROCESS_PREFIX = "process"`, `mint_process_id()`, `is_process_id()`, `parse_process_id()`. Rename `mint_case_id()` → `mint_case_ledger_id()`. Keep `CASE_PREFIX = "case"` but reframe purpose (ledger ID, not instance ID).
-- [`work-spec/crates/wos-core/src/instance.rs`](../../crates/wos-core/src/instance.rs) — rename `CaseInstance` → `WorkflowProcess`. `instance_id` → `process_id`. Add `case_ledger_id` FK field. Update all consumers in `wos-core`, `wos-runtime`, downstream crates.
+- [`work-spec/crates/wos-core/src/instance.rs`](../../crates/wos-core/src/instance.rs) — rename `WorkflowProcess` → `WorkflowProcess`. `process_id` → `process_id`. Add `case_ledger_id` FK field. Update all consumers in `wos-core`, `wos-runtime`, downstream crates.
 - [`work-spec/schemas/wos-process.schema.json`](../../schemas/wos-process.schema.json) — renamed runtime schema. Top-level marker is `$wosProcess`. Update lint mapping ([`work-spec/crates/wos-lint/src/document.rs`](../../crates/wos-lint/src/document.rs) lines 84-90).
 - [`work-spec/schemas/api/_common.schema.json`](../../schemas/api/_common.schema.json) line 20 — `WosResourceUrn.pattern` adds `process` family literal.
 
@@ -427,7 +427,7 @@ For `wos.kernel.case_created` specifically: requires the case ledger to NOT yet 
 **Files:**
 
 - [`work-spec/schemas/wos-provenance-log.schema.json`](../../schemas/wos-provenance-log.schema.json) — extend with the §2.3 F-13-named closed event-type enum. Each event-type record gains optional `processId` and required `caseLedgerId`. Existing `$defs/CaseCreatedRecord.event.const` rebinds from `"case.created"` to `"wos.kernel.case_created"`; sibling record definitions added for every other §2.3 event. Inner `recordKind` field deprecated per D26 (§2.3); fixture corpus regenerates atomically.
-- [`work-spec/schemas/api/provenance.schema.json`](../../schemas/api/provenance.schema.json) — `AssembledExplanation` reference updated from `/instances/{id}/explanation` to `/cases/{case_id}/processes/{process_id}/explanation`; process provenance is now also reachable at `/cases/{case_id}/processes/{process_id}/provenance`. [`work-spec/schemas/api/instance.schema.json`](../../schemas/api/instance.schema.json) retains `CaseInstanceHoldList`; the public OpenAPI/docs expose it through the case/process holds bridge.
+- [`work-spec/schemas/api/provenance.schema.json`](../../schemas/api/provenance.schema.json) — `AssembledExplanation` reference updated from `/instances/{id}/explanation` to `/cases/{case_id}/processes/{process_id}/explanation`; process provenance is now also reachable at `/cases/{case_id}/processes/{process_id}/provenance`. [`work-spec/schemas/api/instance.schema.json`](../../schemas/api/instance.schema.json) retains `WorkflowProcessHoldList`; the public OpenAPI/docs expose it through the case/process holds bridge.
 - New [`work-spec/schemas/api/case-view.schema.json`](../../schemas/api/case-view.schema.json) — the read-side response shape from §2.6.
 
 ### 5.7 Conformance fixtures
@@ -480,7 +480,7 @@ Until the registry binding lands, WOS-side emission of the new event types MUST 
 
 ### 5.10 Out of scope for this ADR
 
-- Migration of in-memory `CaseInstance` representations from prior development snapshots — none are in production; pre-release admits a clean cut.
+- Migration of in-memory `WorkflowProcess` representations from prior development snapshots — none are in production; pre-release admits a clean cut.
 - Multi-region active-active replication (rejected as Alternative 4.7).
 - Cross-tenant case sharing (out of scope of the case=ledger model; would require separate tenancy ADR).
 

@@ -1022,7 +1022,7 @@ Every provenance record MUST include:
 |-------|------|----------|-------------|
 | `id` | URI | REQUIRED | Globally unique. Maps to `@id`. |
 | `timestamp` | datetime | REQUIRED | RFC 3339 with timezone. Maps to `prov:atTime`. |
-| `instanceId` | URI | REQUIRED | Workflow instance. |
+| `processId` | URI | REQUIRED | Workflow instance. |
 | `recordType` | enum | REQUIRED | See §12.4–12.9. |
 | `actor` | ActorRef | REQUIRED | Maps to `prov:wasAssociatedWith`. |
 | `authority` | string | OPTIONAL | Role, rule, or policy. |
@@ -1459,7 +1459,7 @@ This appendix is normative. The following is the core structure of the WOS JSON-
     "wasDerivedFrom": { "@id": "prov:wasDerivedFrom", "@type": "@id" },
     "recordType": "wos:recordType",
     "auditLayer": "wos:auditLayer",
-    "instanceId": { "@id": "wos:instanceId", "@type": "@id" }
+    "processId": { "@id": "wos:processId", "@type": "@id" }
   }
 }
 ```

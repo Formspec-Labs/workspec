@@ -19,13 +19,13 @@ Greenfield posture: no backwards compat, no dual-format acceptance, no deprecati
 ## End-state assertions (definition of done)
 
 - [ ] `WosResourceUrn` regex in `_common.schema.json` matches `^urn:wos:<typeid>$`
-- [ ] `grep -rn "urn:wos:instance:" workspec-server/` returns zero matches
+- [ ] `grep -rn` for the old five-segment workflow-process URN prefix in `workspec-server/` returns zero matches
 - [ ] `grep -rn "to_instance_urn" workspec-server/` returns zero matches
 - [ ] `grep -rn "urn_scope_and_date" workspec-server/` returns zero matches
 - [ ] `grep -rn "task_urn" workspec-server/` returns zero matches
 - [ ] `grep -rn "instance_urn" workspec-server/` returns zero matches
 - [ ] `grep -rn "parse_instance_urn_segments\|is_instance_urn\|extract_urn_parts" work-spec/crates/wos-core/` returns zero matches (or functions rewritten for new format)
-- [ ] HTTP create handler mints via `typeid::mint_case_id()` + wraps with `urn:wos:`
+- [ ] HTTP create handler mints via `typeid::mint_process_id()` + wraps with `urn:wos:`
 - [ ] All ~55 test fixtures use 3-segment `urn:wos:{typeid}` — no old 5-segment strings remain
 - [ ] `cargo build -p wos-server` regenerates typify types from new pattern
 - [ ] `cargo nextest run --workspace` green
@@ -64,8 +64,8 @@ After this edit, `cargo build -p wos-server` regenerates all `typify`-derived ty
 #### 2a. `workspec-server/crates/wos-server/src/services/instance_service.rs`
 - **Delete** `to_instance_urn` (lines 113-129)
 - **Delete** `urn_scope_and_date` (lines 131-140)
-- **Replace** 3 call sites of `to_instance_urn` (lines 63, 146, 190) with `format!("urn:wos:{}", row.instance_id)`
-- **Replace** `urn_scope_and_date` call site (lines 57-58). Task URN construction: since tasks are sub-resources identified by path context per ADR 0092 D-2, synthesize as `format!("urn:wos:{}#tasks/{}", row.instance_id, task_index)` or a format TBD — or drop task URN synthesis entirely if tasks are always returned with their parent instance context.
+- **Replace** 3 call sites of `to_instance_urn` (lines 63, 146, 190) with `format!("urn:wos:{}", row.process_id)`
+- **Replace** `urn_scope_and_date` call site (lines 57-58). Task URN construction: since tasks are sub-resources identified by path context per ADR 0092 D-2, synthesize as `format!("urn:wos:{}#tasks/{}", row.process_id, task_index)` or a format TBD — or drop task URN synthesis entirely if tasks are always returned with their parent instance context.
 
 #### 2b. `workspec-server/crates/wos-server/src/services/task_service.rs`
 - **Delete** `urn_scope_and_date` duplicate (lines 95-104)
@@ -76,18 +76,18 @@ After this edit, `cargo build -p wos-server` regenerates all `typify`-derived ty
 #### 2c. `workspec-server/crates/wos-server/src/http/instances.rs`
 - **Replace** default ID generation (lines 233-240):
   ```rust
-  // OLD
-  let instance_id = body.instance_id.unwrap_or_else(|| {
-      format!("urn:wos:instance:{}:{}:{}", "default", chrono::Utc::now().format("%Y-%m-%d"), uuid::Uuid::now_v7())
+  // OLD: free-form five-segment workflow-process URN
+  let process_id = body.process_id.unwrap_or_else(|| {
+      format!("urn:wos:{}:{}:{}:{}", "process", "default", chrono::Utc::now().format("%Y-%m-%d"), uuid::Uuid::now_v7())
   });
   // NEW
-  let instance_id = body.instance_id.unwrap_or_else(|| {
-      format!("urn:wos:{}", wos_core::typeid::mint_case_id())
+  let process_id = body.process_id.unwrap_or_else(|| {
+      format!("urn:wos:{}", wos_core::typeid::mint_process_id())
   });
   ```
 
 #### 2d. `workspec-server/crates/wos-server/src/services/applicant_service.rs`
-- **Fix** fallback URN (line 178-179): `"urn:wos:instance:reference:fallback:0"` → minted TypeID or a conformance-valid placeholder like `"urn:wos:default_case_00000000000000000000000000"` (all-zeros base32 is not a valid UUIDv7, so use a real mint for test paths).
+- **Fix** fallback URN (line 178-179): old five-segment workflow-process fallback → minted TypeID or a conformance-valid placeholder such as a real `default_case_*` fixture TypeID. All-zeros base32 is not a valid UUIDv7, so use a real mint for test paths.
 
 ---
 
@@ -99,38 +99,38 @@ Three functions parse/validate the old 5-segment URN. These need to either be de
 
 - **`parse_instance_urn_segments`** (lines 119-148) — private, splits on `:` and extracts scope/date/id. Rewrite to: strip `urn:wos:` prefix, validate the remainder is a valid TypeID via `typeid::is_valid_type_id`. Return `Option<&str>` (the TypeID string). Callers that need scope/date extract them from the TypeID tenant and UUIDv7 timestamp.
 
-- **`is_instance_urn`** (lines 181-187) — checks `urn:wos:instance:` prefix. Rewrite to: strip `urn:wos:`, check `typeid::is_valid_type_id`. Keeps the name since the calling code in `wos-runtime/src/runtime/instance.rs:162` gates on this. The semantics change from "is this a 5-segment instance URN?" to "is this a valid TypeID-in-URN?"
+- **`is_instance_urn`** (lines 181-187) — checks the old five-segment workflow-process URN prefix. Rewrite to: strip `urn:wos:`, check `typeid::is_valid_type_id`. Keeps the name since the calling code in `wos-runtime/src/runtime/instance.rs:162` gates on this. The semantics change from "is this a 5-segment instance URN?" to "is this a valid TypeID-in-URN?"
 
 - **`extract_urn_parts`** (lines 193-196) — returns `Option<(&str, &str, &str)>` for (scope, date, id). Rewrite or delete depending on whether the 2 consumers (`urn_scope_and_date` in server services) still need scope/date. Since those consumers are being deleted (WS-2), this function's callers vanish. Delete it, or if kept for `wos-runtime` consumer (line 134-136) that extracts tenant, replace with `typeid::extract_tenant`.
 
 **Consumer in `wos-runtime`:** `work-spec/crates/wos-runtime/src/runtime/instance.rs:134-136`
 
 ```rust
-wos_core::instance::CaseInstance::extract_urn_parts(&instance_id)
+wos_core::instance::WorkflowProcess::extract_urn_parts(&process_id)
     .map(|(ns, _, _)| ns.to_string())
 ```
 
-Replace with `typeid::extract_tenant(&instance_id).map(String::from)`.
+Replace with `typeid::extract_tenant(&process_id).map(String::from)`.
 
 ---
 
 ### WS-4 — `workspec-server` test fixture updates (~33 fixtures)
 
-All integration test files under `workspec-server/crates/wos-server/tests/integration/` that reference old 5-segment URNs need their `instance_id` strings updated. The typical pattern:
+All integration test files under `workspec-server/crates/wos-server/tests/integration/` that reference old 5-segment URNs need their `process_id` strings updated. The typical pattern:
 
 ```rust
 // OLD
-"urn:wos:instance:default:2026-04-15:abc123"
+"urn:wos:process:default:2026-04-15:abc123"
 // NEW
-let id = format!("urn:wos:{}", wos_core::typeid::mint_case_id());
+let id = format!("urn:wos:{}", wos_core::typeid::mint_process_id());
 ```
 
 Or use a helper that produces a valid 3-segment URN. Key files:
 
 | File | Est. fixtures | Pattern to update |
 |---|---|---|
-| `http_coverage_backfill.rs` | 8 | `urn:wos:instance:...` → typeid-based |
-| `ws_spec_gaps_2.rs` | 8 | `urn:wos:instance:...` → typeid-based |
+| `http_coverage_backfill.rs` | 8 | old five-segment workflow-process URNs → typeid-based |
+| `ws_spec_gaps_2.rs` | 8 | old five-segment workflow-process URNs → typeid-based |
 | `runtime_lifecycle.rs` | 2 | both instance + task URNs |
 | `http_tasks_lifecycle.rs` | 1 | task URN |
 | `http_tenant_passthrough.rs` | 2 | already uses TypeID — verify they still pass |
@@ -188,9 +188,9 @@ All API spec docs under `work-spec/specs/api/` that reference the old 5-segment 
 | File | Update |
 |---|---|
 | `_common.md` | Update `urn:wos:<entity-type>:<scope>:<date>:<hash>` description → `urn:wos:<typeid>` |
-| `instance.md` | Replace `urn:wos:instance:<scope>:<date>:<short-hash>` with `urn:wos:{typeid}` |
+| `instance.md` | Replace old five-segment workflow-process URNs with `urn:wos:{typeid}` |
 | `task.md` | Replace `urn:wos:task:<scope>:<date>:<short-hash>` with sub-resource identification |
-| `provenance.md` | Replace `urn:wos:provenance-record:...` and `urn:wos:instance:...` |
+| `provenance.md` | Replace old provenance-record and workflow-process URNs |
 | `signature.md` | Replace `urn:wos:signature-ceremony:...` |
 | `appeal.md` | Replace entity URNs |
 | `bundle.md` | Replace entity URNs |

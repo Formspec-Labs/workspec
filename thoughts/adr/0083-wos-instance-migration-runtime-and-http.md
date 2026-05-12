@@ -6,7 +6,7 @@
 
 ## Context
 
-Kernel §11.2 defines instance lifecycle against workflow definition versions, including author-time `execution.instanceVersioning` literals `pinned` and `migrateable` (see kernel spec §9.6). Moving a live case instance to a new definition version requires:
+Kernel §11.2 defines instance lifecycle against workflow definition versions, including author-time `execution.instanceVersioning` literals `pinned` and `migrateable` (see kernel spec §9.6). Moving a live workflow process to a new definition version requires:
 
 - State validation against the target definition (no silent retargeting of incompatible topology).
 - A migration map or equivalent provenance so auditors can explain what changed and why.
@@ -19,7 +19,7 @@ Kernel §11.2 defines instance lifecycle against workflow definition versions, i
 
 ### D1 — Migrate API shape (settled 2026-05-01)
 
-`WosRuntime::migrate(&mut self, instance_id: &str, target_definition_version: &str, migration_map: MigrationMap, operator_actor_id: Option<&str>) -> Result<MigrationOutcome, RuntimeError>`
+`WosRuntime::migrate(&mut self, process_id: &str, target_definition_version: &str, migration_map: MigrationMap, operator_actor_id: Option<&str>) -> Result<MigrationOutcome, RuntimeError>`
 
 The optional `operator_actor_id` is the authenticated operator identity (HTTP: Supervisor JWT user id) carried into `instanceMigrated` provenance as `actor_id` when present; `None` is allowed for non-HTTP callers.
 
@@ -60,7 +60,7 @@ Landed in-tree:
 ## Open decisions
 
 - **D4: Preconditions for `migrate`** — requires posture-floor table from Posture Declaration registry; gated on PLN-0384. **Related (vendor assurance):** Signature Profile `x-*` assurance tokens remain **fail-open** in `identity_binding_meets_policy` until Posture Declaration + spec §2.13 land — tracked in [`../../T4-TODO.md`](../../T4-TODO.md) § *Vendor `x-*` assurance floor enforcement*.
-- **D5: Idempotency model** — **Minimal reference-server slice closed 2026-05-01:** HTTP `Idempotency-Key` replays the cached successful [`MigrationOutcome`](../../crates/wos-runtime/src/runtime.rs) for the same `(instance_id, target_definition_version, key)` triple (in-memory cache on `AppState`). **Still open (full D5 posture):** dedupe across process restarts, failure semantics for conflicting bodies with the same key, and alignment with D4 preconditions when the posture floor lands.
+- **D5: Idempotency model** — **Minimal reference-server slice closed 2026-05-01:** HTTP `Idempotency-Key` replays the cached successful [`MigrationOutcome`](../../crates/wos-runtime/src/runtime.rs) for the same `(process_id, target_definition_version, key)` triple (in-memory cache on `AppState`). **Still open (full D5 posture):** dedupe across process restarts, failure semantics for conflicting bodies with the same key, and alignment with D4 preconditions when the posture floor lands.
 - **D6: Error model** — `MigrationOutcome` extensions and additional `RuntimeError` variants for topology mismatch beyond `stateNotFound`, missing migration map fields, and rollback posture are gated on D4.
 - **D7: Provenance ordering vs facts-tier** — whether `instanceMigrated` precedes or follows the target-version `stateEntered` record is gated on D4 and D5.
 

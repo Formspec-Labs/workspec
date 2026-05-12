@@ -11,7 +11,7 @@ use wos_core::confidence;
 use wos_core::deontic;
 use wos_core::eval::parse_iso_duration_to_ms;
 use wos_core::event_handler::{self, AdverseDecisionNoticeInput};
-use wos_core::instance::CaseInstance;
+use wos_core::instance::WorkflowProcess;
 use wos_core::model::ai::{AIIntegrationDocument, ViolationAction};
 use wos_core::model::kernel::{ImpactLevel, KernelDocument, State, Transition, TransitionEvent};
 use wos_core::provenance::{
@@ -57,7 +57,7 @@ impl CompanionPolicy for ReferenceCompanionPolicy {
         let mut effective_event = Some(event.event.clone());
         let event_data = event.data.clone();
         let actor_id = event.actor_id.as_deref().unwrap_or("");
-        let instance_id = context.instance.instance_id.clone();
+        let process_id = context.instance.process_id.clone();
 
         if let (Some(ai_doc), Some(data)) = (&self.ai_doc, &event_data) {
             if let Some(output) = data.get("output") {
@@ -180,7 +180,7 @@ impl CompanionPolicy for ReferenceCompanionPolicy {
             self.governance_json.as_ref(),
             &self.companion_docs,
             self.seen_idempotency_keys_by_instance
-                .entry(instance_id)
+                .entry(process_id)
                 .or_default(),
             adverse_notice.as_ref(),
         );
@@ -204,7 +204,7 @@ impl CompanionPolicy for ReferenceCompanionPolicy {
 
 fn deterministic_adverse_decision_notice_input(
     kernel: &KernelDocument,
-    instance: &CaseInstance,
+    instance: &WorkflowProcess,
     event_name: &str,
     now_ms: u64,
     governance: Option<&serde_json::Value>,
@@ -310,7 +310,7 @@ fn deterministic_adverse_decision_notice_input(
 
 fn active_adverse_transition<'a>(
     kernel: &'a KernelDocument,
-    instance: &CaseInstance,
+    instance: &WorkflowProcess,
     event_name: &str,
 ) -> Option<(String, &'a Transition)> {
     for active_state in &instance.configuration {
@@ -440,7 +440,7 @@ fn resolve_notice_template<'a>(
 }
 
 fn notice_render_context(
-    instance: &CaseInstance,
+    instance: &WorkflowProcess,
     snapshot: &CaseFileSnapshot,
     transition: &Transition,
     grace_period: Option<&str>,
@@ -448,7 +448,7 @@ fn notice_render_context(
     now_ms: u64,
 ) -> BTreeMap<String, String> {
     let mut context = BTreeMap::new();
-    context.insert("caseId".to_string(), instance.instance_id.clone());
+    context.insert("caseId".to_string(), instance.case_ledger_id.clone());
     context.insert(
         "decisionEvent".to_string(),
         transition
@@ -866,7 +866,7 @@ impl ReferenceCompanionPolicy {
     }
 }
 
-fn case_state_from_value(instance: &CaseInstance) -> HashMap<String, serde_json::Value> {
+fn case_state_from_value(instance: &WorkflowProcess) -> HashMap<String, serde_json::Value> {
     instance
         .case_state
         .as_object()
@@ -908,10 +908,11 @@ mod tests {
             "reviewerRoles": ["appealReviewer"],
         });
 
-        // Synthesize a minimal CaseInstance via deserialization so we exercise
+        // Synthesize a minimal WorkflowProcess via deserialization so we exercise
         // notice_render_context exactly as production does.
-        let instance: CaseInstance = serde_json::from_value(serde_json::json!({
-            "instanceId": "case-42",
+        let instance: WorkflowProcess = serde_json::from_value(serde_json::json!({
+            "processId": "default_process_01hw7rm71vfay8vvw14d2pf2db",
+            "caseLedgerId": "default_case_01hw7rm71vfay8vvw14d2pf2db",
             "definitionUrl": "https://test.wos-spec.org/workflows/due-process",
             "definitionVersion": "1.0.0",
             "configuration": ["pendingDetermination"],
@@ -923,7 +924,7 @@ mod tests {
             "createdAt": "2026-04-20T00:00:00Z",
             "updatedAt": "2026-04-20T00:00:00Z",
         }))
-        .expect("test case instance deserialization must succeed");
+        .expect("test workflow process deserialization must succeed");
 
         let now_ms: u64 = 1_700_000_000_000;
         let context = notice_render_context(
@@ -977,8 +978,9 @@ mod tests {
             "appealWindow": "P30D",
             "reviewerRoles": ["appealReviewer"],
         });
-        let instance: CaseInstance = serde_json::from_value(serde_json::json!({
-            "instanceId": "case-42",
+        let instance: WorkflowProcess = serde_json::from_value(serde_json::json!({
+            "processId": "default_process_01hw7rm71vfay8vvw14d2pf2db",
+            "caseLedgerId": "default_case_01hw7rm71vfay8vvw14d2pf2db",
             "definitionUrl": "https://test.wos-spec.org/workflows/due-process",
             "definitionVersion": "1.0.0",
             "configuration": ["pendingDetermination"],

@@ -657,7 +657,7 @@
       "description": "Per-event result row for the timer-breach report.",
       "required": [
         "reportType",
-        "instanceId",
+        "processId",
         "breachedAt",
         "breachKind"
       ],
@@ -666,9 +666,9 @@
           "const": "timer-breach",
           "description": "Discriminator literal selecting the timer-breach row variant."
         },
-        "instanceId": {
+        "processId": {
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
-          "description": "Case instance URN whose timer or hold breached."
+          "description": "Workflow process URN whose timer or hold breached."
         },
         "breachedAt": {
           "type": "string",

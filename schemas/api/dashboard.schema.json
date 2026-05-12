@@ -45,7 +45,7 @@
         "count": {
           "type": "integer",
           "minimum": 0,
-          "description": "Number of case instances currently in this lifecycle state, computed as of `LifecycleStateRollup.asOf`. Best-effort per ADR 0082 D-7 — counts on append-only logs are cached, not transactionally consistent."
+          "description": "Number of workflow processes currently in this lifecycle state, computed as of `LifecycleStateRollup.asOf`. Best-effort per ADR 0082 D-7 — counts on append-only logs are cached, not transactionally consistent."
         }
       }
     },

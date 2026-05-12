@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.formspec.io/wos-api/appeal/v1",
   "title": "WOS API Appeal",
-  "description": "Public API resource schema for WOS appeals. Appeals are cross-case governance artifacts: an appellant challenges an adverse determination on a closed case instance, triggering a governed review process. The `appeal` entity-type literal is already admitted in the URN alternation at `_common.schema.json#/$defs/WosResourceUrn` (Phase 1). Actor references are `ActorRef` URNs per ADR 0082 D-9; URNs follow the closed `WosResourceUrn` taxonomy per ADR 0082 D-4. Closed taxonomies (status, disposition) per D-12; vendor extensions are NOT permitted — appeal lifecycle and disposition are normative.",
+  "description": "Public API resource schema for WOS appeals. Appeals are cross-case governance artifacts: an appellant challenges an adverse determination on a closed workflow process, triggering a governed review process. The `appeal` entity-type literal is already admitted in the URN alternation at `_common.schema.json#/$defs/WosResourceUrn` (Phase 1). Actor references are `ActorRef` URNs per ADR 0082 D-9; URNs follow the closed `WosResourceUrn` taxonomy per ADR 0082 D-4. Closed taxonomies (status, disposition) per D-12; vendor extensions are NOT permitted — appeal lifecycle and disposition are normative.",
   "oneOf": [
     {
       "$ref": "#/$defs/AppealStatus"
@@ -62,10 +62,10 @@
     "Appeal": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Appeal resource against a closed case instance's adverse determination (governance S3.5). An appeal is filed by an appellant actor, reviewed by an adjudicator, and terminates with a closed disposition. This shape is the cross-case authoritative record; per-case projections on `CaseInstanceGovernance` (instance.schema.json) summarize the appeal state for the consuming instance.",
+      "description": "Appeal resource against a closed workflow process's adverse determination (governance S3.5). An appeal is filed by an appellant actor, reviewed by an adjudicator, and terminates with a closed disposition. This shape is the cross-case authoritative record; per-case projections on `WorkflowProcessGovernance` (instance.schema.json) summarize the appeal state for the consuming instance.",
       "required": [
         "id",
-        "instanceId",
+        "processId",
         "appellantRef",
         "filedAt",
         "status"
@@ -75,9 +75,9 @@
           "$ref": "#/$defs/WosResourceUrn",
           "description": "Stable public URN for this appeal. Entity-type segment MUST be `appeal`."
         },
-        "instanceId": {
+        "processId": {
           "$ref": "#/$defs/WosResourceUrn",
-          "description": "Case instance URN this appeal was filed against. Entity-type segment MUST be `instance`."
+          "description": "Workflow process URN this appeal was filed against. Entity-type segment MUST be `instance`."
         },
         "appellantRef": {
           "$ref": "#/$defs/ActorRef",
@@ -132,16 +132,16 @@
     "AppealCreateRequest": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Request body for `POST /api/v1/instances/{id}/appeals` — files an appeal against a closed case instance's adverse determination. The `Idempotency-Key` HTTP header is REQUIRED per ADR 0082 D-16; a repeat request within the retention window returns the original `Appeal` resource unchanged. Server assigns the URN, `filedAt`, and `createdAt`; clients MUST NOT supply them.",
+      "description": "Request body for `POST /api/v1/instances/{id}/appeals` — files an appeal against a closed workflow process's adverse determination. The `Idempotency-Key` HTTP header is REQUIRED per ADR 0082 D-16; a repeat request within the retention window returns the original `Appeal` resource unchanged. Server assigns the URN, `filedAt`, and `createdAt`; clients MUST NOT supply them.",
       "required": [
-        "instanceId",
+        "processId",
         "appellantRef",
         "groundForAppeal"
       ],
       "properties": {
-        "instanceId": {
+        "processId": {
           "$ref": "#/$defs/WosResourceUrn",
-          "description": "Case instance URN to file the appeal against. Entity-type segment MUST be `instance`. Server validates the instance is in a completed lifecycle state."
+          "description": "Workflow process URN to file the appeal against. Entity-type segment MUST be `instance`. Server validates the instance is in a completed lifecycle state."
         },
         "appellantRef": {
           "$ref": "#/$defs/ActorRef",
@@ -162,9 +162,9 @@
       "additionalProperties": false,
       "description": "Query fields for `GET /api/v1/instances/{id}/appeals`.",
       "properties": {
-        "instanceId": {
+        "processId": {
           "$ref": "#/$defs/WosResourceUrn",
-          "description": "When present, restrict results to appeals for this case instance."
+          "description": "When present, restrict results to appeals for this workflow process."
         },
         "status": {
           "$ref": "#/$defs/AppealStatus",

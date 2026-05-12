@@ -19,7 +19,7 @@
 
 ## 1. The Core Architectural Tension
 
-The analysis phase began by observing a fundamental conflation within the WOS (Workflow Orchestration Standard) architecture: **the `CaseInstance` object was bearing the weight of two distinct domain concepts.**
+The analysis phase began by observing a fundamental conflation within the WOS (Workflow Orchestration Standard) architecture: **the `WorkflowProcess` object was bearing the weight of two distinct domain concepts.**
 
 1. **The Execution Artifact:** The ephemeral, runtime state of a specific workflow process (timers, active tasks, current lifecycle state).
 2. **The Real-World Matter:** The durable, long-lived domain object representing the overarching issue (e.g., a fraud investigation, a benefit application) which may span months and encompass multiple distinct workflows.

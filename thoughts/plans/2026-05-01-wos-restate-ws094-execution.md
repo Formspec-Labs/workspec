@@ -58,7 +58,7 @@ Phases **0–2** below keep **ADR §** / **spec req** on each line. **Phases 3�
 
 - [x] **A.1/A.2** — local oracle verified (164/164 tests, 4 reference modules authoritative).
 - [x] **B.0/B.1** — baseline smoke + multi-step drain ingress against Restate cluster (`ingress_drain_lifecycle_smoke`).
-- [x] **C.0/C.1** — in-memory parity slice + full `DrainOnceResult` field-by-field + `CaseInstance` parity.
+- [x] **C.0/C.1** — in-memory parity slice + full `DrainOnceResult` field-by-field + `WorkflowProcess` parity.
 - [x] **D.1a (terminal)** — proven (8 tests: 4 memory + 3 ingress + 1 drain_parse); VO paths map these to `TerminalError` so Restate does not retry them.
 - [ ] **D.1b (retryable / stall)** — blocked pending **WS-105** / **PLN-0039** (`AppendFailure`) + `RuntimeError → HandlerError` classification in [`restate_virtual.rs`](../../crates/wos-server-runtime-restate/src/restate_virtual.rs).
 

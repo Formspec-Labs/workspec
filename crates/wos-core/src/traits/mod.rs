@@ -12,21 +12,21 @@
 
 use std::collections::HashMap;
 
-use crate::instance::{CaseInstance, FormspecTaskContext};
+use crate::instance::{FormspecTaskContext, WorkflowProcess};
 use crate::model::governance::{DelegationScope, GovernanceDocument};
 use crate::model::kernel::KernelDocument;
 use crate::provenance::ProvenanceRecord;
 
-/// Persists CaseInstance documents between events (Runtime S12.1).
+/// Persists WorkflowProcess documents between events (Runtime S12.1).
 pub trait InstanceStore {
     /// Error type for store operations.
     type Error: std::error::Error;
 
     /// Load an instance by ID.
-    fn load(&self, instance_id: &str) -> Result<CaseInstance, Self::Error>;
+    fn load(&self, process_id: &str) -> Result<WorkflowProcess, Self::Error>;
 
     /// Durably persist an instance. Must be atomic.
-    fn save(&mut self, instance: &CaseInstance) -> Result<(), Self::Error>;
+    fn save(&mut self, instance: &WorkflowProcess) -> Result<(), Self::Error>;
 
     /// List instances that currently include the requested state.
     fn list_by_state(&self, _state_id: &str) -> Result<Vec<String>, Self::Error> {
@@ -152,13 +152,13 @@ pub trait EventQueue {
     type Error: std::error::Error;
 
     /// Add an event to the instance's processing queue.
-    fn enqueue(&mut self, instance_id: &str, event: serde_json::Value) -> Result<(), Self::Error>;
+    fn enqueue(&mut self, process_id: &str, event: serde_json::Value) -> Result<(), Self::Error>;
 
     /// Remove and return the next event for processing.
-    fn dequeue(&mut self, instance_id: &str) -> Result<Option<serde_json::Value>, Self::Error>;
+    fn dequeue(&mut self, process_id: &str) -> Result<Option<serde_json::Value>, Self::Error>;
 
     /// Return the next event without removing it.
-    fn peek(&self, instance_id: &str) -> Result<Option<serde_json::Value>, Self::Error>;
+    fn peek(&self, process_id: &str) -> Result<Option<serde_json::Value>, Self::Error>;
 }
 
 /// Presents Formspec-backed tasks to a host user interface.
@@ -199,7 +199,7 @@ pub trait ActionExecutor {
 #[derive(Debug, Default)]
 pub struct DefaultRuntime {
     /// In-memory instance store.
-    instances: HashMap<String, CaseInstance>,
+    instances: HashMap<String, WorkflowProcess>,
     /// In-memory event queues per instance.
     queues: HashMap<String, Vec<serde_json::Value>>,
 }
@@ -225,16 +225,16 @@ pub enum DefaultRuntimeError {
 impl InstanceStore for DefaultRuntime {
     type Error = DefaultRuntimeError;
 
-    fn load(&self, instance_id: &str) -> Result<CaseInstance, Self::Error> {
+    fn load(&self, process_id: &str) -> Result<WorkflowProcess, Self::Error> {
         self.instances
-            .get(instance_id)
+            .get(process_id)
             .cloned()
-            .ok_or_else(|| DefaultRuntimeError::InstanceNotFound(instance_id.to_string()))
+            .ok_or_else(|| DefaultRuntimeError::InstanceNotFound(process_id.to_string()))
     }
 
-    fn save(&mut self, instance: &CaseInstance) -> Result<(), Self::Error> {
+    fn save(&mut self, instance: &WorkflowProcess) -> Result<(), Self::Error> {
         self.instances
-            .insert(instance.instance_id.clone(), instance.clone());
+            .insert(instance.process_id.clone(), instance.clone());
         Ok(())
     }
 }
@@ -276,16 +276,16 @@ impl ContractValidator for DefaultRuntime {
 impl EventQueue for DefaultRuntime {
     type Error = DefaultRuntimeError;
 
-    fn enqueue(&mut self, instance_id: &str, event: serde_json::Value) -> Result<(), Self::Error> {
+    fn enqueue(&mut self, process_id: &str, event: serde_json::Value) -> Result<(), Self::Error> {
         self.queues
-            .entry(instance_id.to_string())
+            .entry(process_id.to_string())
             .or_default()
             .push(event);
         Ok(())
     }
 
-    fn dequeue(&mut self, instance_id: &str) -> Result<Option<serde_json::Value>, Self::Error> {
-        Ok(self.queues.get_mut(instance_id).and_then(|q| {
+    fn dequeue(&mut self, process_id: &str) -> Result<Option<serde_json::Value>, Self::Error> {
+        Ok(self.queues.get_mut(process_id).and_then(|q| {
             if q.is_empty() {
                 None
             } else {
@@ -294,10 +294,10 @@ impl EventQueue for DefaultRuntime {
         }))
     }
 
-    fn peek(&self, instance_id: &str) -> Result<Option<serde_json::Value>, Self::Error> {
+    fn peek(&self, process_id: &str) -> Result<Option<serde_json::Value>, Self::Error> {
         Ok(self
             .queues
-            .get(instance_id)
+            .get(process_id)
             .and_then(|queue| queue.first().cloned()))
     }
 }

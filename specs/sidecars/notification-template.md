@@ -156,10 +156,10 @@ Standard variables available in all templates:
 
 | Variable | Source | Description |
 |----------|--------|-------------|
-| `caseId` | Case instance | The case identifier. |
+| `caseId` | Workflow process | The case identifier. |
 | `applicantName` | Case state | Name of the case subject. |
 | `currentDate` | Runtime | Current date in the calendar's timezone. |
-| `currentState` | Case instance | Current lifecycle state. |
+| `currentState` | Workflow process | Current lifecycle state. |
 
 Category-specific variables:
 

@@ -708,7 +708,8 @@ class TestStalledInstanceStatus:
     def _instance(status: str, **extra) -> dict:
         record = {
             "$wosProcess": "1.0",
-            "instanceId": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd",
+            "processId": "sba-poc_process_01jqrpd32jf8xtx9qxkkv3rqsd",
+            "caseLedgerId": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd",
             "definitionUrl": "https://agency.gov/workflows/benefits",
             "definitionVersion": "1.0.0",
             "configuration": ["intake"],

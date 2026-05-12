@@ -23,7 +23,7 @@ use wos_core::business_calendar::BusinessCalendarDocument;
 #[cfg(test)]
 use wos_core::eval::Evaluator;
 use wos_core::eval::{GuardEvaluation, ObservedTransition};
-use wos_core::instance::{CaseInstance, FormspecTaskContext, PendingEvent};
+use wos_core::instance::{FormspecTaskContext, PendingEvent, WorkflowProcess};
 use wos_core::model::kernel::KernelDocument;
 #[cfg(test)]
 use wos_core::provenance::ProvenanceKind;
@@ -60,12 +60,12 @@ const FAILURE_EVENT_EXTENSION_KEY: &str = "x-wos-runtime-failure-event";
 /// Request for instance creation.
 #[derive(Debug, Clone)]
 pub struct CreateInstanceRequest {
-    /// Stable WOS instance identifier.
-    pub instance_id: String,
+    /// Stable WOS workflow-process identifier.
+    pub process_id: String,
     /// Tenant this instance belongs to (ADR 0068 D-1).
     ///
     /// When `None`, the runtime extracts the tenant from the TypeID prefix
-    /// (if `instance_id` is a valid TypeID) or falls back to the
+    /// (if `process_id` is a valid TypeID) or falls back to the
     /// deployment-default tenant.
     pub tenant: Option<String>,
     /// Governing kernel URL.
@@ -95,7 +95,7 @@ pub struct MigrationMap {
 #[serde(rename_all = "camelCase")]
 pub struct MigrationOutcome {
     /// Instance that was migrated.
-    pub instance_id: String,
+    pub process_id: String,
     /// Prior `definitionVersion`.
     pub previous_definition_version: String,
     /// New `definitionVersion`.
@@ -173,7 +173,7 @@ pub struct RuntimeEventContext {
     /// Kernel active for the instance.
     pub kernel: KernelDocument,
     /// Instance state before the event is evaluated.
-    pub instance: CaseInstance,
+    pub instance: WorkflowProcess,
     /// Event dequeued for processing.
     pub event: PendingEvent,
     /// Runtime clock at the start of event processing.
@@ -649,6 +649,18 @@ mod tests {
     use wos_core::instance::{ActiveTask, ActiveTaskStatus, ValidationOutcome};
     use wos_core::traits::{DocumentResolver, ExternalService, TaskPresenter};
 
+    fn test_process_id(label: &str) -> &'static str {
+        Box::leak(format!("{label}_process_01hw7rm71vfay8vvw14d2pf2db").into_boxed_str())
+    }
+
+    fn test_case_ledger_id(label: &str) -> &'static str {
+        Box::leak(format!("{label}_case_01hw7rm71vfay8vvw14d2pf2db").into_boxed_str())
+    }
+
+    fn test_case_ledger_urn(label: &str) -> &'static str {
+        Box::leak(format!("urn:wos:{}", test_case_ledger_id(label)).into_boxed_str())
+    }
+
     #[test]
     fn stamp_provenance_fills_empty_timestamps_only() {
         let mut records = vec![
@@ -879,7 +891,7 @@ mod tests {
 
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-determination".to_string(),
+                process_id: test_process_id("case-determination").to_string(),
                 tenant: None,
                 definition_url: "urn:test:determination-snapshot".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -888,7 +900,7 @@ mod tests {
             .unwrap();
         runtime
             .enqueue_event(
-                "case-determination",
+                test_process_id("case-determination"),
                 PendingEvent {
                     event: "decide".to_string(),
                     actor_id: Some("reviewer".to_string()),
@@ -899,7 +911,9 @@ mod tests {
             )
             .unwrap();
 
-        let result = runtime.drain_once("case-determination").unwrap();
+        let result = runtime
+            .drain_once(test_process_id("case-determination"))
+            .unwrap();
         let transition = result
             .provenance
             .iter()
@@ -971,7 +985,7 @@ mod tests {
 
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-join-determination".to_string(),
+                process_id: test_process_id("case-join-determination").to_string(),
                 tenant: None,
                 definition_url: "urn:test:join-determination-snapshot".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -980,7 +994,7 @@ mod tests {
             .unwrap();
         runtime
             .enqueue_event(
-                "case-join-determination",
+                test_process_id("case-join-determination"),
                 PendingEvent {
                     event: "completeReview".to_string(),
                     actor_id: Some("reviewer".to_string()),
@@ -991,7 +1005,9 @@ mod tests {
             )
             .unwrap();
 
-        let result = runtime.drain_once("case-join-determination").unwrap();
+        let result = runtime
+            .drain_once(test_process_id("case-join-determination"))
+            .unwrap();
         let join_transition = result
             .provenance
             .iter()
@@ -1055,7 +1071,7 @@ mod tests {
 
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-multi-determination".to_string(),
+                process_id: test_process_id("case-multi-determination").to_string(),
                 tenant: None,
                 definition_url: "urn:test:multi-determination-snapshot".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -1065,7 +1081,7 @@ mod tests {
         for event in ["decideFirst", "decideSecond"] {
             runtime
                 .enqueue_event(
-                    "case-multi-determination",
+                    test_process_id("case-multi-determination"),
                     PendingEvent {
                         event: event.to_string(),
                         actor_id: Some("reviewer".to_string()),
@@ -1079,7 +1095,9 @@ mod tests {
 
         let mut snapshots = Vec::new();
         loop {
-            let result = runtime.drain_once("case-multi-determination").unwrap();
+            let result = runtime
+                .drain_once(test_process_id("case-multi-determination"))
+                .unwrap();
             for record in &result.provenance {
                 if record.record_kind == ProvenanceKind::StateTransition {
                     if let Some(snapshot) = record.case_file_snapshot.as_ref() {
@@ -1416,8 +1434,18 @@ mod tests {
             self.0.lock().unwrap().create_record(record)
         }
 
-        fn load_record(&self, instance_id: &str) -> Result<RuntimeRecord, StoreError> {
-            self.0.lock().unwrap().load_record(instance_id)
+        fn load_record(&self, process_id: &str) -> Result<RuntimeRecord, StoreError> {
+            self.0.lock().unwrap().load_record(process_id)
+        }
+
+        fn load_record_by_case_ledger_id(
+            &self,
+            case_ledger_id: &str,
+        ) -> Result<RuntimeRecord, StoreError> {
+            self.0
+                .lock()
+                .unwrap()
+                .load_record_by_case_ledger_id(case_ledger_id)
         }
 
         fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
@@ -1504,7 +1532,7 @@ mod tests {
                 .store
                 .lock()
                 .unwrap()
-                .load_record(&context.instance_id)
+                .load_record(&context.process_id)
                 .unwrap();
             let task = record
                 .instance
@@ -2064,8 +2092,15 @@ mod tests {
             self.inner.create_record(record)
         }
 
-        fn load_record(&self, instance_id: &str) -> Result<RuntimeRecord, StoreError> {
-            self.inner.load_record(instance_id)
+        fn load_record(&self, process_id: &str) -> Result<RuntimeRecord, StoreError> {
+            self.inner.load_record(process_id)
+        }
+
+        fn load_record_by_case_ledger_id(
+            &self,
+            case_ledger_id: &str,
+        ) -> Result<RuntimeRecord, StoreError> {
+            self.inner.load_record_by_case_ledger_id(case_ledger_id)
         }
 
         fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
@@ -2100,8 +2135,15 @@ mod tests {
             self.inner.create_record(record)
         }
 
-        fn load_record(&self, instance_id: &str) -> Result<RuntimeRecord, StoreError> {
-            self.inner.load_record(instance_id)
+        fn load_record(&self, process_id: &str) -> Result<RuntimeRecord, StoreError> {
+            self.inner.load_record(process_id)
+        }
+
+        fn load_record_by_case_ledger_id(
+            &self,
+            case_ledger_id: &str,
+        ) -> Result<RuntimeRecord, StoreError> {
+            self.inner.load_record_by_case_ledger_id(case_ledger_id)
         }
 
         fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
@@ -2139,8 +2181,15 @@ mod tests {
             Err(StoreError::Failed("injected create failure".to_string()))
         }
 
-        fn load_record(&self, instance_id: &str) -> Result<RuntimeRecord, StoreError> {
-            self.inner.load_record(instance_id)
+        fn load_record(&self, process_id: &str) -> Result<RuntimeRecord, StoreError> {
+            self.inner.load_record(process_id)
+        }
+
+        fn load_record_by_case_ledger_id(
+            &self,
+            case_ledger_id: &str,
+        ) -> Result<RuntimeRecord, StoreError> {
+            self.inner.load_record_by_case_ledger_id(case_ledger_id)
         }
 
         fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
@@ -2298,7 +2347,7 @@ mod tests {
         fn exercise_all_trait_methods(runtime: &mut impl DurableRuntime) {
             let created = runtime
                 .create_instance(CreateInstanceRequest {
-                    instance_id: "case-trait".to_string(),
+                    process_id: test_process_id("case-trait").to_string(),
                     tenant: None,
                     definition_url: "urn:test:durable-trait".to_string(),
                     definition_version: "1.0.0".to_string(),
@@ -2306,15 +2355,15 @@ mod tests {
                 })
                 .expect("trait create_instance");
             let loaded = runtime
-                .load_instance("case-trait")
+                .load_instance(test_process_id("case-trait"))
                 .expect("trait load_instance");
-            assert_eq!(created.instance_id, loaded.instance_id);
+            assert_eq!(created.process_id, loaded.process_id);
             assert_eq!(created.definition_url, loaded.definition_url);
             assert_eq!(created.definition_version, loaded.definition_version);
 
             runtime
                 .enqueue_event(
-                    "case-trait",
+                    test_process_id("case-trait"),
                     PendingEvent {
                         event: "start".to_string(),
                         actor_id: Some("reviewer".to_string()),
@@ -2326,7 +2375,7 @@ mod tests {
                 .expect("trait enqueue_event");
 
             let idle = runtime
-                .drain_until_idle("case-trait")
+                .drain_until_idle(test_process_id("case-trait"))
                 .expect("trait drain_until_idle");
             assert!(
                 idle.iter().any(|step| step.processed_event.is_some()),
@@ -2340,7 +2389,7 @@ mod tests {
                 .expect("task id from drain");
 
             let once = runtime
-                .drain_once("case-trait")
+                .drain_once(test_process_id("case-trait"))
                 .expect("trait drain_once on idle queue");
             assert!(
                 once.processed_event.is_none(),
@@ -2348,13 +2397,13 @@ mod tests {
             );
 
             let window = runtime
-                .load_provenance_window("case-trait", 0, 50)
+                .load_provenance_window(test_process_id("case-trait"), 0, 50)
                 .expect("trait load_provenance_window");
             assert!(!window.is_empty());
 
             let custody_window = runtime
                 .load_custody_append_window(
-                    "case-trait",
+                    test_process_id("case-trait"),
                     0,
                     50,
                     crate::CustodyAppendContext {
@@ -2368,7 +2417,7 @@ mod tests {
             assert_eq!(custody_window.len(), window.len());
             assert_eq!(
                 custody_window[0].idempotency_tuple(),
-                (created.instance_id.as_str(), window[0].id.as_str())
+                (created.case_ledger_id.as_str(), window[0].id.as_str())
             );
             assert!(
                 custody_window[0].event_type.starts_with("wos.kernel."),
@@ -2416,7 +2465,7 @@ mod tests {
             let record_id = window[0].id.clone();
             runtime
                 .apply_custody_receipt(
-                    created.instance_id.as_str(),
+                    created.process_id.as_str(),
                     &record_id,
                     crate::CustodyAppendReceipt {
                         canonical_event_hash:
@@ -2482,19 +2531,22 @@ mod tests {
         );
 
         let created = runtime
-            .create_instance(CreateInstanceRequest {
-                instance_id: "urn:wos:case:case-2026-0042".to_string(),
-                tenant: None,
-                definition_url: "urn:test:intake-dispatch".to_string(),
-                definition_version: "1.0.0".to_string(),
-                initial_case_state: None,
-            })
+            .create_instance_bound_to_case(
+                CreateInstanceRequest {
+                    process_id: test_process_id("case-2026-0042").to_string(),
+                    tenant: None,
+                    definition_url: "urn:test:intake-dispatch".to_string(),
+                    definition_version: "1.0.0".to_string(),
+                    initial_case_state: None,
+                },
+                test_case_ledger_urn("case-2026-0042").to_string(),
+            )
             .expect("create case before attach");
 
         let result = runtime
             .accept_intake_handoff(
                 "formspec",
-                workflow_intake_request("ih-attach", "urn:wos:case:case-2026-0042"),
+                workflow_intake_request("ih-attach", test_case_ledger_urn("case-2026-0042")),
             )
             .expect("intake accepted");
 
@@ -2502,7 +2554,7 @@ mod tests {
             result.outcome,
             IntakeAcceptanceOutcome::Accepted {
                 case_disposition: IntakeCaseDisposition::AttachToExistingCase {
-                    case_ref: created.instance_id.clone()
+                    case_ref: created.case_ledger_id.clone()
                 }
             }
         );
@@ -2513,7 +2565,7 @@ mod tests {
                 .any(|record| record.record_kind == ProvenanceKind::IntakeAccepted)
         );
         let provenance = runtime
-            .load_provenance_window(&created.instance_id, 0, 20)
+            .load_provenance_window(&created.process_id, 0, 20)
             .expect("load attached provenance");
         let intake_accepted = provenance
             .iter()
@@ -2525,7 +2577,7 @@ mod tests {
                 .as_ref()
                 .and_then(|data| data.get("caseLedgerId"))
                 .and_then(serde_json::Value::as_str),
-            Some(created.instance_id.as_str())
+            Some(created.case_ledger_id.as_str())
         );
     }
 
@@ -2548,19 +2600,22 @@ mod tests {
         .with_intake_policy(PolicyEmittingMarkerProvenance);
 
         runtime
-            .create_instance(CreateInstanceRequest {
-                instance_id: "urn:wos:case:case-policy-prov".to_string(),
-                tenant: None,
-                definition_url: "urn:test:intake-policy-prov".to_string(),
-                definition_version: "1.0.0".to_string(),
-                initial_case_state: None,
-            })
+            .create_instance_bound_to_case(
+                CreateInstanceRequest {
+                    process_id: test_process_id("case-policy-prov").to_string(),
+                    tenant: None,
+                    definition_url: "urn:test:intake-policy-prov".to_string(),
+                    definition_version: "1.0.0".to_string(),
+                    initial_case_state: None,
+                },
+                test_case_ledger_urn("case-policy-prov").to_string(),
+            )
             .expect("create case");
 
         let result = runtime
             .accept_intake_handoff(
                 "formspec",
-                workflow_intake_request("ih-policy-prov", "urn:wos:case:case-policy-prov"),
+                workflow_intake_request("ih-policy-prov", test_case_ledger_urn("case-policy-prov")),
             )
             .expect("intake accepted");
 
@@ -2603,7 +2658,7 @@ mod tests {
                 "formspec",
                 public_intake_request(
                     "ih-public-create",
-                    "urn:wos:case:case-2026-0050",
+                    test_case_ledger_urn("case-2026-0050"),
                     "urn:test:intake-public-create",
                     "1.0.0",
                 ),
@@ -2629,7 +2684,7 @@ mod tests {
                         &Some(serde_json::json!({ "source": "publicIntake" }))
                     );
                     assert!(
-                        CaseInstance::is_case_id(case_ref),
+                        WorkflowProcess::is_case_id(case_ref),
                         "public intake create must return canonical case id"
                     );
                     case_ref.clone()
@@ -2639,15 +2694,17 @@ mod tests {
             other => panic!("unexpected intake outcome: {other:?}"),
         };
         let created = runtime
-            .load_instance("urn:wos:case:case-2026-0050")
-            .expect("created intake case by alias");
-        assert_eq!(created.instance_id, created_case_ref);
+            .store
+            .load_record_by_case_ledger_id(&created_case_ref)
+            .expect("created intake case by case ledger")
+            .instance;
+        assert_eq!(created.case_ledger_id, created_case_ref);
         assert_eq!(
             created.case_state.get("source"),
             Some(&serde_json::Value::String("publicIntake".to_string()))
         );
         let provenance = runtime
-            .load_provenance_window(&created_case_ref, 0, 20)
+            .load_provenance_window(&created.process_id, 0, 20)
             .expect("load create provenance");
         let intake_accepted = provenance
             .iter()
@@ -2702,19 +2759,22 @@ mod tests {
         .with_intake_policy(RejectAllIntakePolicy);
 
         runtime
-            .create_instance(CreateInstanceRequest {
-                instance_id: "urn:wos:case:case-2026-0042".to_string(),
-                tenant: None,
-                definition_url: "urn:test:intake-policy-reject".to_string(),
-                definition_version: "1.0.0".to_string(),
-                initial_case_state: None,
-            })
+            .create_instance_bound_to_case(
+                CreateInstanceRequest {
+                    process_id: test_process_id("case-2026-0042").to_string(),
+                    tenant: None,
+                    definition_url: "urn:test:intake-policy-reject".to_string(),
+                    definition_version: "1.0.0".to_string(),
+                    initial_case_state: None,
+                },
+                test_case_ledger_urn("case-2026-0042").to_string(),
+            )
             .expect("create case before rejection");
 
         let result = runtime
             .accept_intake_handoff(
                 "formspec",
-                workflow_intake_request("ih-reject", "urn:wos:case:case-2026-0042"),
+                workflow_intake_request("ih-reject", test_case_ledger_urn("case-2026-0042")),
             )
             .expect("intake decision");
 
@@ -2754,7 +2814,7 @@ mod tests {
                 "formspec",
                 public_intake_request(
                     "ih-disabled",
-                    "urn:wos:case:case-2026-0052",
+                    test_case_ledger_urn("case-2026-0052"),
                     "urn:test:intake-disabled",
                     "1.0.0",
                 ),
@@ -2796,7 +2856,7 @@ mod tests {
                 "formspec",
                 public_intake_request(
                     "ih-replay",
-                    "urn:wos:case:case-2026-0051",
+                    test_case_ledger_urn("case-2026-0051"),
                     "urn:test:intake-replay",
                     "1.0.0",
                 ),
@@ -2807,7 +2867,7 @@ mod tests {
                 "formspec",
                 public_intake_request(
                     "ih-replay",
-                    "urn:wos:case:case-2026-0051",
+                    test_case_ledger_urn("case-2026-0051"),
                     "urn:test:intake-replay",
                     "1.0.0",
                 ),
@@ -2846,7 +2906,7 @@ mod tests {
                 "formspec",
                 public_intake_request(
                     "ih-replay-conflict",
-                    "urn:wos:case:case-2026-0053",
+                    test_case_ledger_urn("case-2026-0053"),
                     "urn:test:intake-replay-conflict",
                     "1.0.0",
                 ),
@@ -2855,7 +2915,7 @@ mod tests {
 
         let mut actor_changed = public_intake_request(
             "ih-replay-conflict",
-            "urn:wos:case:case-2026-0053",
+            test_case_ledger_urn("case-2026-0053"),
             "urn:test:intake-replay-conflict",
             "1.0.0",
         );
@@ -2870,7 +2930,7 @@ mod tests {
                 "formspec",
                 public_intake_request(
                     "ih-replay-conflict",
-                    "urn:wos:case:case-2026-0054",
+                    test_case_ledger_urn("case-2026-0054"),
                     "urn:test:intake-replay-conflict",
                     "1.0.0",
                 ),
@@ -2904,7 +2964,7 @@ mod tests {
                 "formspec",
                 public_intake_request(
                     "ih-save-failure",
-                    "legacy-intake-case",
+                    test_case_ledger_urn("case-save-failure"),
                     "urn:test:intake-save-failure",
                     "1.0.0",
                 ),
@@ -2920,7 +2980,7 @@ mod tests {
                 "formspec",
                 public_intake_request(
                     "ih-save-failure",
-                    "legacy-intake-case",
+                    test_case_ledger_urn("case-save-failure"),
                     "urn:test:intake-save-failure",
                     "1.0.0",
                 ),
@@ -2935,8 +2995,13 @@ mod tests {
             other => panic!("unexpected intake outcome: {other:?}"),
         };
 
+        let created = runtime
+            .store
+            .load_record_by_case_ledger_id(&created_case_ref)
+            .expect("created case record")
+            .instance;
         let provenance = runtime
-            .load_provenance_window(&created_case_ref, 0, 20)
+            .load_provenance_window(&created.process_id, 0, 20)
             .expect("load created case provenance");
         assert_eq!(
             provenance
@@ -2955,7 +3020,7 @@ mod tests {
     }
 
     #[test]
-    fn accept_intake_handoff_returns_canonical_case_ref_for_legacy_public_intake_id() {
+    fn accept_intake_handoff_returns_canonical_case_ref_for_public_intake_id() {
         let mut runtime = runtime_with_kernel(
             serde_json::from_value(serde_json::json!({
                 "$wosWorkflow": "1.0",
@@ -2976,13 +3041,13 @@ mod tests {
             .accept_intake_handoff(
                 "formspec",
                 public_intake_request(
-                    "ih-legacy-alias",
-                    "legacy-intake-case-42",
+                    "ih-canonical-case-ref",
+                    test_case_ledger_urn("case-canonical-ref"),
                     "urn:test:intake-legacy-alias",
                     "1.0.0",
                 ),
             )
-            .expect("legacy create must succeed");
+            .expect("case creation must succeed");
 
         let case_ref = match &decision.outcome {
             IntakeAcceptanceOutcome::Accepted { case_disposition } => match case_disposition {
@@ -2992,15 +3057,18 @@ mod tests {
             other => panic!("unexpected intake outcome: {other:?}"),
         };
         assert!(
-            CaseInstance::is_case_id(&case_ref),
-            "legacy create must return canonical TypeID, got {case_ref}"
+            WorkflowProcess::is_case_id(&case_ref),
+            "public intake create must return canonical TypeID, got {case_ref}"
         );
-        assert_ne!(case_ref, "legacy-intake-case-42");
+        assert_eq!(case_ref, test_case_ledger_id("case-canonical-ref"));
 
-        let loaded_by_alias = runtime
-            .load_instance("legacy-intake-case-42")
-            .expect("load created case by alias");
-        assert_eq!(loaded_by_alias.instance_id, case_ref);
+        let loaded_by_case = runtime
+            .store
+            .load_record_by_case_ledger_id(&case_ref)
+            .expect("load created case by case ledger")
+            .instance;
+        assert_eq!(loaded_by_case.case_ledger_id, case_ref);
+        assert_ne!(loaded_by_case.process_id, loaded_by_case.case_ledger_id);
 
         let intake_record = decision
             .provenance
@@ -3071,7 +3139,7 @@ mod tests {
                 "formspec",
                 public_intake_request(
                     "ih-reject-populated",
-                    "urn:wos:case:case-2026-0055",
+                    test_case_ledger_urn("case-2026-0055"),
                     "urn:test:intake-reject-populated",
                     "1.0.0",
                 ),
@@ -3118,7 +3186,7 @@ mod tests {
                 "formspec",
                 public_intake_request(
                     "ih-defer-populated",
-                    "urn:wos:case:case-2026-0056",
+                    test_case_ledger_urn("case-2026-0056"),
                     "urn:test:intake-defer-populated",
                     "1.0.0",
                 ),
@@ -3206,7 +3274,7 @@ mod tests {
         let mut runtime = runtime_with_kernel(kernel);
         let created = runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-receipt".to_string(),
+                process_id: test_process_id("case-receipt").to_string(),
                 tenant: None,
                 definition_url: "urn:test:receipt".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -3214,13 +3282,13 @@ mod tests {
             })
             .expect("create instance");
         let provenance = runtime
-            .load_provenance_window("case-receipt", 0, 1)
+            .load_provenance_window(test_process_id("case-receipt"), 0, 1)
             .expect("load provenance");
         let record_id = provenance[0].id.clone();
 
         runtime
             .apply_custody_receipt(
-                "case-receipt",
+                test_process_id("case-receipt"),
                 &record_id,
                 crate::CustodyAppendReceipt {
                     canonical_event_hash:
@@ -3231,7 +3299,7 @@ mod tests {
             .expect("apply receipt");
 
         let persisted = runtime
-            .load_provenance_window(created.instance_id.as_str(), 0, 1)
+            .load_provenance_window(created.process_id.as_str(), 0, 1)
             .expect("reload provenance");
         assert_eq!(
             persisted[0].canonical_event_hash.as_deref(),
@@ -3256,7 +3324,7 @@ mod tests {
         let mut runtime = runtime_with_kernel(kernel);
         let _created = runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-receipt-idem".to_string(),
+                process_id: test_process_id("case-receipt-idem").to_string(),
                 tenant: None,
                 definition_url: "urn:test:receipt-idem".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -3264,7 +3332,7 @@ mod tests {
             })
             .expect("create instance");
         let provenance = runtime
-            .load_provenance_window("case-receipt-idem", 0, 1)
+            .load_provenance_window(test_process_id("case-receipt-idem"), 0, 1)
             .expect("load provenance");
         let record_id = provenance[0].id.clone();
         let hash = "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c";
@@ -3272,13 +3340,17 @@ mod tests {
             canonical_event_hash: hash.to_string(),
         };
         runtime
-            .apply_custody_receipt("case-receipt-idem", &record_id, receipt.clone())
+            .apply_custody_receipt(
+                test_process_id("case-receipt-idem"),
+                &record_id,
+                receipt.clone(),
+            )
             .expect("first apply");
         runtime
-            .apply_custody_receipt("case-receipt-idem", &record_id, receipt)
+            .apply_custody_receipt(test_process_id("case-receipt-idem"), &record_id, receipt)
             .expect("idempotent reapply");
         let persisted = runtime
-            .load_provenance_window("case-receipt-idem", 0, 1)
+            .load_provenance_window(test_process_id("case-receipt-idem"), 0, 1)
             .expect("reload");
         assert_eq!(persisted[0].canonical_event_hash.as_deref(), Some(hash));
     }
@@ -3300,7 +3372,7 @@ mod tests {
         let mut runtime = runtime_with_kernel(kernel);
         let _created = runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-receipt-conflict".to_string(),
+                process_id: test_process_id("case-receipt-conflict").to_string(),
                 tenant: None,
                 definition_url: "urn:test:receipt-conflict".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -3308,12 +3380,12 @@ mod tests {
             })
             .expect("create instance");
         let provenance = runtime
-            .load_provenance_window("case-receipt-conflict", 0, 1)
+            .load_provenance_window(test_process_id("case-receipt-conflict"), 0, 1)
             .expect("load provenance");
         let record_id = provenance[0].id.clone();
         runtime
             .apply_custody_receipt(
-                "case-receipt-conflict",
+                test_process_id("case-receipt-conflict"),
                 &record_id,
                 crate::CustodyAppendReceipt {
                     canonical_event_hash:
@@ -3324,7 +3396,7 @@ mod tests {
             .expect("first apply");
         let err = runtime
             .apply_custody_receipt(
-                "case-receipt-conflict",
+                test_process_id("case-receipt-conflict"),
                 &record_id,
                 crate::CustodyAppendReceipt {
                     canonical_event_hash:
@@ -3337,35 +3409,20 @@ mod tests {
     }
 
     #[test]
-    fn create_instance_preserves_pre_minted_case_typeid() {
+    fn create_instance_rejects_case_typeid_as_process_id() {
         let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
         let mut runtime = runtime_with_kernel(kernel);
-        let pre_minted = CaseInstance::mint_id();
-        let created = runtime
+        let pre_minted = wos_core::typeid::mint_case_ledger_id();
+        let err = runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: pre_minted.clone(),
+                process_id: pre_minted.clone(),
                 tenant: None,
                 definition_url: "urn:test:populator".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: None,
             })
-            .expect("create");
-        assert_eq!(created.instance_id, pre_minted);
-        assert_eq!(created.case_ledger_id.as_deref(), Some(pre_minted.as_str()));
-        assert!(
-            created
-                .process_id
-                .as_deref()
-                .is_some_and(CaseInstance::is_process_id),
-            "pre-minted case TypeID should still create an explicit process id"
-        );
-        assert!(
-            created
-                .extensions
-                .get("x-wos-legacy-instance-alias")
-                .is_none(),
-            "pre-minted TypeID must not produce a legacy alias"
-        );
+            .expect_err("case TypeID must not be accepted as a process id");
+        assert!(matches!(err, RuntimeError::MigrationRejected(_)));
     }
 
     #[test]
@@ -3375,7 +3432,7 @@ mod tests {
         let pre_minted = wos_core::typeid::mint_process_id();
         let created = runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: pre_minted.clone(),
+                process_id: pre_minted.clone(),
                 tenant: None,
                 definition_url: "urn:test:populator".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -3383,15 +3440,8 @@ mod tests {
             })
             .expect("create");
 
-        assert_eq!(created.instance_id, pre_minted);
-        assert_eq!(created.process_id.as_deref(), Some(pre_minted.as_str()));
-        assert!(
-            created
-                .case_ledger_id
-                .as_deref()
-                .is_some_and(CaseInstance::is_case_id),
-            "pre-minted process TypeID should bind a case ledger id"
-        );
+        assert_eq!(created.process_id, pre_minted);
+        assert!(WorkflowProcess::is_case_id(&created.case_ledger_id));
         assert!(
             created
                 .extensions
@@ -3412,7 +3462,7 @@ mod tests {
         let created_a = runtime
             .create_instance_bound_to_case(
                 CreateInstanceRequest {
-                    instance_id: format!("urn:wos:{process_a}"),
+                    process_id: format!("urn:wos:{process_a}"),
                     tenant: None,
                     definition_url: "urn:test:populator".to_string(),
                     definition_version: "1.0.0".to_string(),
@@ -3424,7 +3474,7 @@ mod tests {
         let created_b = runtime
             .create_instance_bound_to_case(
                 CreateInstanceRequest {
-                    instance_id: format!("urn:wos:{process_b}"),
+                    process_id: format!("urn:wos:{process_b}"),
                     tenant: None,
                     definition_url: "urn:test:populator".to_string(),
                     definition_version: "1.0.0".to_string(),
@@ -3434,32 +3484,20 @@ mod tests {
             )
             .expect("create process b");
 
-        assert_eq!(
-            created_a.case_ledger_id.as_deref(),
-            Some(case_ledger_id.as_str())
-        );
-        assert_eq!(
-            created_b.case_ledger_id.as_deref(),
-            Some(case_ledger_id.as_str())
-        );
-        assert_eq!(created_a.process_id.as_deref(), Some(process_a.as_str()));
-        assert_eq!(created_b.process_id.as_deref(), Some(process_b.as_str()));
-        assert_ne!(created_a.instance_id, created_b.instance_id);
+        assert_eq!(created_a.case_ledger_id.as_str(), case_ledger_id.as_str());
+        assert_eq!(created_b.case_ledger_id.as_str(), case_ledger_id.as_str());
+        assert_eq!(created_a.process_id.as_str(), process_a.as_str());
+        assert_eq!(created_b.process_id.as_str(), process_b.as_str());
+        assert_ne!(created_a.process_id, created_b.process_id);
 
         let loaded_a = runtime
-            .load_instance(&created_a.instance_id)
+            .load_instance(&created_a.process_id)
             .expect("load process a");
         let loaded_b = runtime
-            .load_instance(&created_b.instance_id)
+            .load_instance(&created_b.process_id)
             .expect("load process b");
-        assert_eq!(
-            loaded_a.case_ledger_id.as_deref(),
-            Some(case_ledger_id.as_str())
-        );
-        assert_eq!(
-            loaded_b.case_ledger_id.as_deref(),
-            Some(case_ledger_id.as_str())
-        );
+        assert_eq!(loaded_a.case_ledger_id.as_str(), case_ledger_id.as_str());
+        assert_eq!(loaded_b.case_ledger_id.as_str(), case_ledger_id.as_str());
     }
 
     #[test]
@@ -3468,7 +3506,7 @@ mod tests {
         let mut runtime = runtime_with_kernel(kernel);
         let created = runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "   ".to_string(),
+                process_id: "   ".to_string(),
                 tenant: None,
                 definition_url: "urn:test:populator".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -3476,70 +3514,34 @@ mod tests {
             })
             .expect("create");
         assert!(
-            CaseInstance::is_case_id(&created.instance_id),
-            "empty instance_id must be replaced with a minted case TypeID, got {}",
-            created.instance_id
+            WorkflowProcess::is_process_id(&created.process_id),
+            "empty process_id must be replaced with a minted process TypeID, got {}",
+            created.process_id
         );
-        assert_eq!(
-            created.case_ledger_id.as_deref(),
-            Some(created.instance_id.as_str())
-        );
-        assert!(
-            created
-                .process_id
-                .as_deref()
-                .is_some_and(CaseInstance::is_process_id),
-            "empty instance_id must still get an explicit process id"
-        );
+        assert!(WorkflowProcess::is_case_id(&created.case_ledger_id));
         assert!(
             created
                 .extensions
                 .get("x-wos-legacy-instance-alias")
                 .is_none(),
-            "empty instance_id must not produce a legacy alias"
+            "empty process_id must not produce a legacy alias"
         );
     }
 
     #[test]
-    fn create_instance_mints_id_and_stores_alias_for_legacy_name() {
+    fn create_instance_rejects_legacy_process_name() {
         let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
         let mut runtime = runtime_with_kernel(kernel);
-        let created = runtime
+        let err = runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "legacy-case-42".to_string(),
+                process_id: "legacy-case-42".to_string(),
                 tenant: None,
                 definition_url: "urn:test:populator".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: None,
             })
-            .expect("create");
-        assert!(
-            CaseInstance::is_case_id(&created.instance_id),
-            "legacy name must be replaced with a minted case TypeID"
-        );
-        assert_eq!(
-            created.case_ledger_id.as_deref(),
-            Some(created.instance_id.as_str())
-        );
-        assert!(
-            created
-                .process_id
-                .as_deref()
-                .is_some_and(CaseInstance::is_process_id),
-            "legacy name must still get an explicit process id"
-        );
-        assert_eq!(
-            created
-                .extensions
-                .get("x-wos-legacy-instance-alias")
-                .and_then(serde_json::Value::as_str),
-            Some("legacy-case-42"),
-            "legacy name must be preserved as an alias"
-        );
-        let loaded = runtime
-            .load_instance("legacy-case-42")
-            .expect("load by alias");
-        assert_eq!(loaded.instance_id, created.instance_id);
+            .expect_err("legacy names must not be accepted as process ids");
+        assert!(matches!(err, RuntimeError::MigrationRejected(_)));
     }
 
     /// Kernel + Signature Profile documents shared with conformance `SIG-013`
@@ -3570,12 +3572,12 @@ mod tests {
     fn submit_sig013_applicant_response(
         runtime: &mut WosRuntime,
         kernel: &KernelDocument,
-        instance_id: &str,
+        process_id: &str,
         token_prefix: &str,
     ) -> TaskSubmissionResult {
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: instance_id.to_string(),
+                process_id: process_id.to_string(),
                 tenant: None,
                 definition_url: kernel.url.clone().unwrap(),
                 definition_version: kernel.version.clone().unwrap(),
@@ -3585,7 +3587,7 @@ mod tests {
 
         runtime
             .enqueue_event(
-                instance_id,
+                process_id,
                 PendingEvent {
                     event: "start".to_string(),
                     actor_id: Some("applicant".to_string()),
@@ -3596,10 +3598,10 @@ mod tests {
             )
             .expect("enqueue start");
         runtime
-            .drain_until_idle(instance_id)
+            .drain_until_idle(process_id)
             .expect("drain after start");
 
-        let instance = runtime.load_instance(instance_id).expect("load instance");
+        let instance = runtime.load_instance(process_id).expect("load instance");
         let task_id = instance
             .active_tasks
             .iter()
@@ -3638,11 +3640,11 @@ mod tests {
     }
 
     fn manual_formspec_task(
-        instance_id: &str,
+        process_id: &str,
         ordinal: usize,
         response_mapping_ref: Option<&str>,
     ) -> ActiveTask {
-        let task_id = make_task_id(instance_id, ordinal as u64, "review");
+        let task_id = make_task_id(process_id, ordinal as u64, "review");
         ActiveTask {
             task_id: task_id.clone(),
             task_ref: "review".to_string(),
@@ -3658,7 +3660,7 @@ mod tests {
             impact_level: None,
             context: Some(FormspecTaskContext {
                 task_id,
-                instance_id: instance_id.to_string(),
+                process_id: process_id.to_string(),
                 contract_ref: "reviewForm".to_string(),
                 definition_url: "urn:formspec:review".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -3718,7 +3720,7 @@ mod tests {
 
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-1".to_string(),
+                process_id: test_process_id("case-1").to_string(),
                 tenant: None,
                 definition_url: "urn:test:kernel".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -3727,7 +3729,7 @@ mod tests {
             .unwrap();
         runtime
             .enqueue_event(
-                "case-1",
+                test_process_id("case-1"),
                 PendingEvent {
                     event: "start".to_string(),
                     actor_id: Some("reviewer".to_string()),
@@ -3738,7 +3740,7 @@ mod tests {
             )
             .unwrap();
 
-        let result = runtime.drain_once("case-1").unwrap();
+        let result = runtime.drain_once(test_process_id("case-1")).unwrap();
         assert_eq!(result.processed_event.as_deref(), Some("start"));
         assert_eq!(result.created_task_ids.len(), 1);
         assert!(result.created_task_ids[0].starts_with("wos-task:"));
@@ -3749,7 +3751,7 @@ mod tests {
                 .any(|record| record.record_kind == ProvenanceKind::TaskPresented)
         );
 
-        let instance = runtime.load_instance("case-1").unwrap();
+        let instance = runtime.load_instance(test_process_id("case-1")).unwrap();
         assert_eq!(instance.active_tasks.len(), 1);
         assert_eq!(instance.active_tasks[0].status, ActiveTaskStatus::Assigned);
         assert_eq!(
@@ -3785,7 +3787,7 @@ mod tests {
         let mut runtime = runtime_with_kernel(kernel);
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-token".to_string(),
+                process_id: test_process_id("case-token").to_string(),
                 tenant: None,
                 definition_url: "urn:test:event-token".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -3796,7 +3798,7 @@ mod tests {
         for token in ["old-token", "target-token"] {
             runtime
                 .enqueue_event(
-                    "case-token",
+                    test_process_id("case-token"),
                     PendingEvent {
                         event: "same".to_string(),
                         actor_id: Some("reviewer".to_string()),
@@ -3808,11 +3810,11 @@ mod tests {
                 .unwrap();
         }
 
-        let first = runtime.drain_once("case-token").unwrap();
+        let first = runtime.drain_once(test_process_id("case-token")).unwrap();
         assert_eq!(first.processed_event.as_deref(), Some("same"));
         assert_eq!(first.processed_event_token.as_deref(), Some("old-token"));
 
-        let second = runtime.drain_once("case-token").unwrap();
+        let second = runtime.drain_once(test_process_id("case-token")).unwrap();
         assert_eq!(second.processed_event.as_deref(), Some("same"));
         assert_eq!(
             second.processed_event_token.as_deref(),
@@ -3839,10 +3841,10 @@ mod tests {
 
         let mut runtime = runtime_with_kernel(kernel)
             .with_companion_policy(crate::ReferenceCompanionPolicy::default());
-        for instance_id in ["case-a", "case-b"] {
+        for process_id in [test_process_id("case-a"), test_process_id("case-b")] {
             runtime
                 .create_instance(CreateInstanceRequest {
-                    instance_id: instance_id.to_string(),
+                    process_id: process_id.to_string(),
                     tenant: None,
                     definition_url: "urn:test:companion-idempotency".to_string(),
                     definition_version: "1.0.0".to_string(),
@@ -3851,7 +3853,7 @@ mod tests {
                 .unwrap();
             runtime
                 .enqueue_event(
-                    instance_id,
+                    process_id,
                     PendingEvent {
                         event: "submit".to_string(),
                         actor_id: Some("reviewer".to_string()),
@@ -3863,8 +3865,8 @@ mod tests {
                 .unwrap();
         }
 
-        let first = runtime.drain_once("case-a").unwrap();
-        let second = runtime.drain_once("case-b").unwrap();
+        let first = runtime.drain_once(test_process_id("case-a")).unwrap();
+        let second = runtime.drain_once(test_process_id("case-b")).unwrap();
 
         assert!(
             !first
@@ -3930,7 +3932,7 @@ mod tests {
 
         let error = runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-1a".to_string(),
+                process_id: test_process_id("case-1a").to_string(),
                 tenant: None,
                 definition_url: "urn:test:presenter-order".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -3990,7 +3992,7 @@ mod tests {
 
         let instance = runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-1a".to_string(),
+                process_id: test_process_id("case-1a").to_string(),
                 tenant: None,
                 definition_url: "urn:test:presented-state-order".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -4028,7 +4030,7 @@ mod tests {
         let mut runtime = runtime_with_kernel(kernel.clone());
         let instance = runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-1b".to_string(),
+                process_id: test_process_id("case-1b").to_string(),
                 tenant: None,
                 definition_url: "urn:test:timer-metadata".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -4040,7 +4042,10 @@ mod tests {
         assert_eq!(instance.timers[0].duration_iso.as_deref(), Some("PT2H"));
         assert_eq!(instance.timers[0].duration_ms, Some(7_200_000));
 
-        let record = runtime.store.load_record("case-1b").unwrap();
+        let record = runtime
+            .store
+            .load_record(test_process_id("case-1b"))
+            .unwrap();
         let evaluator = Evaluator::from_instance(kernel, &record.instance, 1_710_000_000_000)
             .expect("restore evaluator");
         let timer = evaluator.timers().iter().next().expect("restored timer");
@@ -4067,7 +4072,7 @@ mod tests {
         let mut runtime = runtime_with_kernels(vec![mk("1.0.0"), mk("1.1.0")]);
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "m-case-1".into(),
+                process_id: test_process_id("m-case-1").to_string(),
                 tenant: None,
                 definition_url: "urn:test:migrate-kernel".into(),
                 definition_version: "1.0.0".into(),
@@ -4076,16 +4081,18 @@ mod tests {
             .unwrap();
         let out = runtime
             .migrate(
-                "m-case-1",
+                test_process_id("m-case-1"),
                 "1.1.0",
                 MigrationMap::default(),
                 Some("supervisor-op-1"),
             )
             .unwrap();
         assert_eq!(out.new_definition_version, "1.1.0");
-        let inst = runtime.load_instance("m-case-1").unwrap();
+        let inst = runtime.load_instance(test_process_id("m-case-1")).unwrap();
         assert_eq!(inst.definition_version, "1.1.0");
-        let window = runtime.load_provenance_window("m-case-1", 0, 50).unwrap();
+        let window = runtime
+            .load_provenance_window(test_process_id("m-case-1"), 0, 50)
+            .unwrap();
         let last = window.last().expect("provenance");
         assert_eq!(last.record_kind, ProvenanceKind::InstanceMigrated);
         assert_eq!(last.actor_id.as_deref(), Some("supervisor-op-1"));
@@ -4120,7 +4127,7 @@ mod tests {
         let mut runtime = runtime_with_kernels(vec![k1, k2]);
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "m-case-2".into(),
+                process_id: test_process_id("m-case-2").to_string(),
                 tenant: None,
                 definition_url: "urn:test:migrate-mismatch".into(),
                 definition_version: "1.0.0".into(),
@@ -4128,7 +4135,12 @@ mod tests {
             })
             .unwrap();
         let err = runtime
-            .migrate("m-case-2", "1.1.0", MigrationMap::default(), None)
+            .migrate(
+                test_process_id("m-case-2"),
+                "1.1.0",
+                MigrationMap::default(),
+                None,
+            )
             .expect_err("open missing in target");
         match err {
             RuntimeError::MigrationRejected(msg) => {
@@ -4138,7 +4150,7 @@ mod tests {
         }
         assert_eq!(
             runtime
-                .load_instance("m-case-2")
+                .load_instance(test_process_id("m-case-2"))
                 .unwrap()
                 .definition_version,
             "1.0.0"
@@ -4165,7 +4177,7 @@ mod tests {
         let mut runtime = runtime_with_kernel(kernel);
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-2".to_string(),
+                process_id: test_process_id("case-2").to_string(),
                 tenant: None,
                 definition_url: "urn:test:submit-kernel".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -4173,8 +4185,12 @@ mod tests {
             })
             .unwrap();
 
-        let mut record = runtime.store.load_record("case-2").unwrap();
-        let mut task = manual_formspec_task("case-2", 1, Some("urn:mapping:response"));
+        let mut record = runtime
+            .store
+            .load_record(test_process_id("case-2"))
+            .unwrap();
+        let mut task =
+            manual_formspec_task(test_process_id("case-2"), 1, Some("urn:mapping:response"));
         let task_id = task.task_id.clone();
         task.extensions.insert(
             COMPLETION_EVENT_EXTENSION_KEY.to_string(),
@@ -4209,7 +4225,7 @@ mod tests {
             other => panic!("expected completed result, got {other:?}"),
         }
 
-        let instance = runtime.load_instance("case-2").unwrap();
+        let instance = runtime.load_instance(test_process_id("case-2")).unwrap();
         assert!(instance.active_tasks.is_empty());
         assert_eq!(instance.case_state["decision"], serde_json::json!(true));
         assert_eq!(instance.pending_events.len(), 1);
@@ -4224,10 +4240,10 @@ mod tests {
         let (kernel, profile) = sig013_harness_documents();
         let mut runtime = runtime_with_kernel_sig013_harness(kernel.clone())
             .with_signature_profile("signatureProfile", profile);
-        let instance_id = "case-sig013-submit-harness";
+        let process_id = test_process_id("case-sig013-submit-harness");
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: instance_id.to_string(),
+                process_id: process_id.to_string(),
                 tenant: None,
                 definition_url: kernel.url.clone().unwrap(),
                 definition_version: kernel.version.clone().unwrap(),
@@ -4237,7 +4253,7 @@ mod tests {
 
         runtime
             .enqueue_event(
-                instance_id,
+                process_id,
                 PendingEvent {
                     event: "start".to_string(),
                     actor_id: Some("applicant".to_string()),
@@ -4248,10 +4264,10 @@ mod tests {
             )
             .expect("enqueue start");
         runtime
-            .drain_until_idle(instance_id)
+            .drain_until_idle(process_id)
             .expect("drain after start");
 
-        let instance = runtime.load_instance(instance_id).expect("load instance");
+        let instance = runtime.load_instance(process_id).expect("load instance");
         let task = instance
             .active_tasks
             .iter()
@@ -4297,10 +4313,10 @@ mod tests {
         let (kernel, profile) = sig013_harness_documents();
         let mut runtime = runtime_with_kernel_sig013_harness(kernel.clone())
             .with_signature_profile("signatureProfile", profile);
-        let instance_id = "case-sig013-submit-affirmation";
+        let process_id = test_process_id("case-sig013-submit-affirmation");
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: instance_id.to_string(),
+                process_id: process_id.to_string(),
                 tenant: None,
                 definition_url: kernel.url.clone().unwrap(),
                 definition_version: kernel.version.clone().unwrap(),
@@ -4310,7 +4326,7 @@ mod tests {
 
         runtime
             .enqueue_event(
-                instance_id,
+                process_id,
                 PendingEvent {
                     event: "start".to_string(),
                     actor_id: Some("applicant".to_string()),
@@ -4321,10 +4337,10 @@ mod tests {
             )
             .expect("enqueue start");
         runtime
-            .drain_until_idle(instance_id)
+            .drain_until_idle(process_id)
             .expect("drain after start");
 
-        let instance = runtime.load_instance(instance_id).expect("load instance");
+        let instance = runtime.load_instance(process_id).expect("load instance");
         let task_id = instance
             .active_tasks
             .iter()
@@ -4365,7 +4381,7 @@ mod tests {
             "expected completed submission, got {result:?}"
         );
 
-        let record = runtime.store.load_record(instance_id).expect("load record");
+        let record = runtime.store.load_record(process_id).expect("load record");
         let affirmation = record
             .provenance_log
             .iter()
@@ -4383,11 +4399,11 @@ mod tests {
             .expect("signature affirmation carries data");
         assert_eq!(
             data["caseLedgerId"],
-            serde_json::json!(record.instance.case_ledger_id.as_deref().unwrap())
+            serde_json::json!(record.instance.case_ledger_id.as_str())
         );
         assert_eq!(
             data["processId"],
-            serde_json::json!(record.instance.process_id.as_deref().unwrap())
+            serde_json::json!(record.instance.process_id.as_str())
         );
         assert_eq!(data["signerId"], serde_json::json!("applicant"));
         assert_eq!(
@@ -4408,10 +4424,10 @@ mod tests {
         let (kernel, profile) = sig013_harness_documents();
         let mut runtime = runtime_with_kernel_sig013_harness(kernel.clone())
             .with_signature_profile("signatureProfile", profile);
-        let instance_id = "case-sig013-submit-receipt";
+        let process_id = test_process_id("case-sig013-submit-receipt");
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: instance_id.to_string(),
+                process_id: process_id.to_string(),
                 tenant: None,
                 definition_url: kernel.url.clone().unwrap(),
                 definition_version: kernel.version.clone().unwrap(),
@@ -4421,7 +4437,7 @@ mod tests {
 
         runtime
             .enqueue_event(
-                instance_id,
+                process_id,
                 PendingEvent {
                     event: "start".to_string(),
                     actor_id: Some("applicant".to_string()),
@@ -4432,10 +4448,10 @@ mod tests {
             )
             .expect("enqueue start");
         runtime
-            .drain_until_idle(instance_id)
+            .drain_until_idle(process_id)
             .expect("drain after start");
 
-        let instance = runtime.load_instance(instance_id).expect("load instance");
+        let instance = runtime.load_instance(process_id).expect("load instance");
         let task_id = instance
             .active_tasks
             .iter()
@@ -4478,7 +4494,7 @@ mod tests {
             "expected completed submission, got {result:?}"
         );
 
-        let record = runtime.store.load_record(instance_id).expect("load record");
+        let record = runtime.store.load_record(process_id).expect("load record");
         let affirmation = record
             .provenance_log
             .iter()
@@ -4505,10 +4521,10 @@ mod tests {
         let (kernel, profile) = sig013_harness_documents();
         let mut runtime = runtime_with_kernel_sig013_harness(kernel.clone())
             .with_signature_profile("signatureProfile", profile);
-        let instance_id = "case-sig013-submit-admission-failed";
+        let process_id = test_process_id("case-sig013-submit-admission-failed");
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: instance_id.to_string(),
+                process_id: process_id.to_string(),
                 tenant: None,
                 definition_url: kernel.url.clone().unwrap(),
                 definition_version: kernel.version.clone().unwrap(),
@@ -4518,7 +4534,7 @@ mod tests {
 
         runtime
             .enqueue_event(
-                instance_id,
+                process_id,
                 PendingEvent {
                     event: "start".to_string(),
                     actor_id: Some("applicant".to_string()),
@@ -4529,10 +4545,10 @@ mod tests {
             )
             .expect("enqueue start");
         runtime
-            .drain_until_idle(instance_id)
+            .drain_until_idle(process_id)
             .expect("drain after start");
 
-        let instance = runtime.load_instance(instance_id).expect("load instance");
+        let instance = runtime.load_instance(process_id).expect("load instance");
         let task_id = instance
             .active_tasks
             .iter()
@@ -4580,7 +4596,7 @@ mod tests {
             "expected failed submission, got {result:?}"
         );
 
-        let record = runtime.store.load_record(instance_id).expect("load record");
+        let record = runtime.store.load_record(process_id).expect("load record");
         assert!(
             record
                 .instance
@@ -4606,11 +4622,11 @@ mod tests {
             .expect("SignatureAdmissionFailed carries data");
         assert_eq!(
             admission_failed_data["caseLedgerId"],
-            serde_json::json!(record.instance.case_ledger_id.as_deref().unwrap())
+            serde_json::json!(record.instance.case_ledger_id.as_str())
         );
         assert_eq!(
             admission_failed_data["processId"],
-            serde_json::json!(record.instance.process_id.as_deref().unwrap())
+            serde_json::json!(record.instance.process_id.as_str())
         );
         assert!(
             record.provenance_log.iter().any(|record| {
@@ -4655,10 +4671,11 @@ mod tests {
             let mut runtime = runtime_with_kernel_sig013_harness(kernel.clone())
                 .with_signature_profile("signatureProfile", profile);
             let id_suffix = reason.replace('_', "-");
-            let instance_id = format!("case-sig013-binding-failed-{id_suffix}");
+            let process_label = format!("case-sig013-binding-failed-{id_suffix}");
+            let process_id = test_process_id(&process_label);
             runtime
                 .create_instance(CreateInstanceRequest {
-                    instance_id: instance_id.clone(),
+                    process_id: process_id.to_string(),
                     tenant: None,
                     definition_url: kernel.url.clone().unwrap(),
                     definition_version: kernel.version.clone().unwrap(),
@@ -4668,7 +4685,7 @@ mod tests {
 
             runtime
                 .enqueue_event(
-                    &instance_id,
+                    &process_id,
                     PendingEvent {
                         event: "start".to_string(),
                         actor_id: Some("applicant".to_string()),
@@ -4679,10 +4696,10 @@ mod tests {
                 )
                 .expect("enqueue start");
             runtime
-                .drain_until_idle(&instance_id)
+                .drain_until_idle(&process_id)
                 .expect("drain after start");
 
-            let instance = runtime.load_instance(&instance_id).expect("load instance");
+            let instance = runtime.load_instance(&process_id).expect("load instance");
             let task_id = instance
                 .active_tasks
                 .iter()
@@ -4735,10 +4752,7 @@ mod tests {
                 "expected failed submission for {reason}, got {result:?}"
             );
 
-            let record = runtime
-                .store
-                .load_record(&instance_id)
-                .expect("load record");
+            let record = runtime.store.load_record(&process_id).expect("load record");
             assert!(
                 record
                     .instance
@@ -4805,10 +4819,10 @@ mod tests {
         .expect("posture declaration parses");
         runtime = runtime.with_posture_declaration(posture);
 
-        let instance_id = "case-sig013-posture-method-unsupported";
+        let process_id = test_process_id("case-sig013-posture-method-unsupported");
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: instance_id.to_string(),
+                process_id: process_id.to_string(),
                 tenant: None,
                 definition_url: kernel.url.clone().unwrap(),
                 definition_version: kernel.version.clone().unwrap(),
@@ -4818,7 +4832,7 @@ mod tests {
 
         runtime
             .enqueue_event(
-                instance_id,
+                process_id,
                 PendingEvent {
                     event: "start".to_string(),
                     actor_id: Some("applicant".to_string()),
@@ -4829,10 +4843,10 @@ mod tests {
             )
             .expect("enqueue start");
         runtime
-            .drain_until_idle(instance_id)
+            .drain_until_idle(process_id)
             .expect("drain after start");
 
-        let instance = runtime.load_instance(instance_id).expect("load instance");
+        let instance = runtime.load_instance(process_id).expect("load instance");
         let task_id = instance
             .active_tasks
             .iter()
@@ -4880,7 +4894,7 @@ mod tests {
             "expected posture method rejection, got {result:?}"
         );
 
-        let record = runtime.store.load_record(instance_id).expect("load record");
+        let record = runtime.store.load_record(process_id).expect("load record");
         let admission_failed = record
             .provenance_log
             .iter()
@@ -4946,7 +4960,7 @@ mod tests {
         let first = submit_sig013_applicant_response(
             &mut runtime,
             &kernel,
-            "case-sig013-posture-substitution-first",
+            test_process_id("case-sig013-posture-substitution-first"),
             "sig013-posture-substitution-first",
         );
         assert!(
@@ -4957,7 +4971,7 @@ mod tests {
         let second = submit_sig013_applicant_response(
             &mut runtime,
             &kernel,
-            "case-sig013-posture-substitution-second",
+            test_process_id("case-sig013-posture-substitution-second"),
             "sig013-posture-substitution-second",
         );
         assert!(
@@ -4973,7 +4987,7 @@ mod tests {
 
         let record = runtime
             .store
-            .load_record("case-sig013-posture-substitution-second")
+            .load_record(test_process_id("case-sig013-posture-substitution-second"))
             .expect("load substituted-content record");
         let admission_failed = record
             .provenance_log
@@ -5014,10 +5028,10 @@ mod tests {
         .expect("posture declaration parses");
         runtime = runtime.with_posture_declaration(posture);
 
-        let instance_id = "case-sig013-posture-intent-unsupported";
+        let process_id = test_process_id("case-sig013-posture-intent-unsupported");
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: instance_id.to_string(),
+                process_id: process_id.to_string(),
                 tenant: None,
                 definition_url: kernel.url.clone().unwrap(),
                 definition_version: kernel.version.clone().unwrap(),
@@ -5027,7 +5041,7 @@ mod tests {
 
         runtime
             .enqueue_event(
-                instance_id,
+                process_id,
                 PendingEvent {
                     event: "start".to_string(),
                     actor_id: Some("applicant".to_string()),
@@ -5038,10 +5052,10 @@ mod tests {
             )
             .expect("enqueue start");
         runtime
-            .drain_until_idle(instance_id)
+            .drain_until_idle(process_id)
             .expect("drain after start");
 
-        let instance = runtime.load_instance(instance_id).expect("load instance");
+        let instance = runtime.load_instance(process_id).expect("load instance");
         let task_id = instance
             .active_tasks
             .iter()
@@ -5089,7 +5103,7 @@ mod tests {
             "expected posture intent rejection, got {result:?}"
         );
 
-        let record = runtime.store.load_record(instance_id).expect("load record");
+        let record = runtime.store.load_record(process_id).expect("load record");
         let admission_failed = record
             .provenance_log
             .iter()
@@ -5138,10 +5152,10 @@ mod tests {
         .expect("posture declaration parses");
         runtime = runtime.with_posture_declaration(posture);
 
-        let instance_id = "case-sig013-posture-receipt-required";
+        let process_id = test_process_id("case-sig013-posture-receipt-required");
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: instance_id.to_string(),
+                process_id: process_id.to_string(),
                 tenant: None,
                 definition_url: kernel.url.clone().unwrap(),
                 definition_version: kernel.version.clone().unwrap(),
@@ -5151,7 +5165,7 @@ mod tests {
 
         runtime
             .enqueue_event(
-                instance_id,
+                process_id,
                 PendingEvent {
                     event: "start".to_string(),
                     actor_id: Some("applicant".to_string()),
@@ -5162,10 +5176,10 @@ mod tests {
             )
             .expect("enqueue start");
         runtime
-            .drain_until_idle(instance_id)
+            .drain_until_idle(process_id)
             .expect("drain after start");
 
-        let instance = runtime.load_instance(instance_id).expect("load instance");
+        let instance = runtime.load_instance(process_id).expect("load instance");
         let task_id = instance
             .active_tasks
             .iter()
@@ -5213,7 +5227,7 @@ mod tests {
             "expected posture receipt rejection, got {result:?}"
         );
 
-        let record = runtime.store.load_record(instance_id).expect("load record");
+        let record = runtime.store.load_record(process_id).expect("load record");
         let admission_failed = record
             .provenance_log
             .iter()
@@ -5256,7 +5270,7 @@ mod tests {
         let mut runtime = runtime_with_kernel(kernel);
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-3".to_string(),
+                process_id: test_process_id("case-3").to_string(),
                 tenant: None,
                 definition_url: "urn:test:draft-kernel".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -5264,8 +5278,11 @@ mod tests {
             })
             .unwrap();
 
-        let mut record = runtime.store.load_record("case-3").unwrap();
-        let task = manual_formspec_task("case-3", 1, Some("urn:mapping:response"));
+        let mut record = runtime
+            .store
+            .load_record(test_process_id("case-3"))
+            .unwrap();
+        let task = manual_formspec_task(test_process_id("case-3"), 1, Some("urn:mapping:response"));
         let task_id = task.task_id.clone();
         record.instance.active_tasks.push(task);
         runtime.store.save_record(record).unwrap();
@@ -5284,7 +5301,10 @@ mod tests {
             )
             .unwrap();
 
-        let record = runtime.store.load_record("case-3").unwrap();
+        let record = runtime
+            .store
+            .load_record(test_process_id("case-3"))
+            .unwrap();
         assert!(record.artifacts.contains_key(&draft.artifact_id));
         assert_eq!(
             record.instance.case_state["decision"],
@@ -5322,7 +5342,7 @@ mod tests {
         let mut runtime = runtime_with_kernel(kernel);
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-draft-pop".to_string(),
+                process_id: test_process_id("case-draft-pop").to_string(),
                 tenant: None,
                 definition_url: "urn:test:draft-kernel".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -5330,8 +5350,15 @@ mod tests {
             })
             .unwrap();
 
-        let mut record = runtime.store.load_record("case-draft-pop").unwrap();
-        let task = manual_formspec_task("case-draft-pop", 1, Some("urn:mapping:response"));
+        let mut record = runtime
+            .store
+            .load_record(test_process_id("case-draft-pop"))
+            .unwrap();
+        let task = manual_formspec_task(
+            test_process_id("case-draft-pop"),
+            1,
+            Some("urn:mapping:response"),
+        );
         let task_id = task.task_id.clone();
         record.instance.active_tasks.push(task);
         runtime.store.save_record(record).unwrap();
@@ -5350,7 +5377,10 @@ mod tests {
             )
             .unwrap();
 
-        let record = runtime.store.load_record("case-draft-pop").unwrap();
+        let record = runtime
+            .store
+            .load_record(test_process_id("case-draft-pop"))
+            .unwrap();
         let draft_entry = record
             .provenance_log
             .iter()
@@ -5386,7 +5416,7 @@ mod tests {
         let mut runtime = runtime_with_kernel(kernel);
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-4".to_string(),
+                process_id: test_process_id("case-4").to_string(),
                 tenant: None,
                 definition_url: "urn:test:dismiss-kernel".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -5394,15 +5424,21 @@ mod tests {
             })
             .unwrap();
 
-        let mut record = runtime.store.load_record("case-4").unwrap();
-        let task = manual_formspec_task("case-4", 1, Some("urn:mapping:response"));
+        let mut record = runtime
+            .store
+            .load_record(test_process_id("case-4"))
+            .unwrap();
+        let task = manual_formspec_task(test_process_id("case-4"), 1, Some("urn:mapping:response"));
         let task_id = task.task_id.clone();
         record.instance.active_tasks.push(task);
         runtime.store.save_record(record).unwrap();
 
         runtime.dismiss_task(&task_id, "snoozed").unwrap();
 
-        let record = runtime.store.load_record("case-4").unwrap();
+        let record = runtime
+            .store
+            .load_record(test_process_id("case-4"))
+            .unwrap();
         assert_eq!(record.instance.active_tasks.len(), 1);
         assert!(
             record
@@ -5430,7 +5466,7 @@ mod tests {
         let mut runtime = runtime_with_kernel(kernel);
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-5".to_string(),
+                process_id: test_process_id("case-5").to_string(),
                 tenant: None,
                 definition_url: "urn:test:replay-kernel".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -5438,8 +5474,12 @@ mod tests {
             })
             .unwrap();
 
-        let mut record = runtime.store.load_record("case-5").unwrap();
-        let mut task = manual_formspec_task("case-5", 1, Some("urn:mapping:response"));
+        let mut record = runtime
+            .store
+            .load_record(test_process_id("case-5"))
+            .unwrap();
+        let mut task =
+            manual_formspec_task(test_process_id("case-5"), 1, Some("urn:mapping:response"));
         let task_id = task.task_id.clone();
         task.extensions.insert(
             COMPLETION_EVENT_EXTENSION_KEY.to_string(),
@@ -5475,7 +5515,10 @@ mod tests {
             other => panic!("expected replayed completed results, got {other:?}"),
         }
 
-        let record = runtime.store.load_record("case-5").unwrap();
+        let record = runtime
+            .store
+            .load_record(test_process_id("case-5"))
+            .unwrap();
         assert_eq!(record.instance.pending_events.len(), 1);
         assert_eq!(
             record
@@ -5505,7 +5548,7 @@ mod tests {
         let mut runtime = runtime_with_kernel(kernel);
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-6".to_string(),
+                process_id: test_process_id("case-6").to_string(),
                 tenant: None,
                 definition_url: "urn:test:actor-replay-kernel".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -5513,8 +5556,11 @@ mod tests {
             })
             .unwrap();
 
-        let mut record = runtime.store.load_record("case-6").unwrap();
-        let task = manual_formspec_task("case-6", 1, Some("urn:mapping:response"));
+        let mut record = runtime
+            .store
+            .load_record(test_process_id("case-6"))
+            .unwrap();
+        let task = manual_formspec_task(test_process_id("case-6"), 1, Some("urn:mapping:response"));
         let task_id = task.task_id.clone();
         record.instance.active_tasks.push(task);
         runtime.store.save_record(record).unwrap();
@@ -5543,7 +5589,10 @@ mod tests {
             if code == "taskResponseStatusNotCompleted"
         ));
 
-        let record = runtime.store.load_record("case-6").unwrap();
+        let record = runtime
+            .store
+            .load_record(test_process_id("case-6"))
+            .unwrap();
         assert_eq!(
             record
                 .provenance_log
@@ -5587,7 +5636,7 @@ mod tests {
         let mut runtime = runtime_with_kernel(kernel);
         let instance = runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-7".to_string(),
+                process_id: test_process_id("case-7").to_string(),
                 tenant: None,
                 definition_url: "urn:test:timer-kernel".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -5597,7 +5646,7 @@ mod tests {
         assert_eq!(instance.pending_events.len(), 0);
         assert_eq!(instance.timers.len(), 1);
 
-        let result = runtime.drain_once("case-7").unwrap();
+        let result = runtime.drain_once(test_process_id("case-7")).unwrap();
         assert_eq!(result.processed_event.as_deref(), Some("$timeout.review"));
         assert!(
             result
@@ -5606,7 +5655,7 @@ mod tests {
                 .any(|entry| entry.record_kind == ProvenanceKind::TimerFired)
         );
 
-        let instance = runtime.load_instance("case-7").unwrap();
+        let instance = runtime.load_instance(test_process_id("case-7")).unwrap();
         assert!(instance.configuration.contains(&"timed_out".to_string()));
         assert!(instance.pending_events.is_empty());
         assert!(instance.timers.is_empty());
@@ -5659,7 +5708,7 @@ mod tests {
         );
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-8".to_string(),
+                process_id: test_process_id("case-8").to_string(),
                 tenant: None,
                 definition_url: "urn:test:unsupported-binding".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -5668,7 +5717,7 @@ mod tests {
             .unwrap();
         runtime
             .enqueue_event(
-                "case-8",
+                test_process_id("case-8"),
                 PendingEvent {
                     event: "start".to_string(),
                     actor_id: Some("reviewer".to_string()),
@@ -5679,7 +5728,7 @@ mod tests {
             )
             .unwrap();
 
-        let error = runtime.drain_once("case-8").unwrap_err();
+        let error = runtime.drain_once(test_process_id("case-8")).unwrap_err();
         assert!(matches!(
             error,
             RuntimeError::UnsupportedBinding(ref binding) if binding == "json-schema"
@@ -5733,7 +5782,7 @@ mod tests {
         );
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-9".to_string(),
+                process_id: test_process_id("case-9").to_string(),
                 tenant: None,
                 definition_url: "urn:test:atomic-kernel".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -5742,7 +5791,7 @@ mod tests {
             .unwrap();
         runtime
             .enqueue_event(
-                "case-9",
+                test_process_id("case-9"),
                 PendingEvent {
                     event: "start".to_string(),
                     actor_id: Some("reviewer".to_string()),
@@ -5752,13 +5801,15 @@ mod tests {
                 },
             )
             .unwrap();
-        let provenance_position_before_failure =
-            runtime.load_instance("case-9").unwrap().provenance_position;
+        let provenance_position_before_failure = runtime
+            .load_instance(test_process_id("case-9"))
+            .unwrap()
+            .provenance_position;
 
-        let error = runtime.drain_once("case-9").unwrap_err();
+        let error = runtime.drain_once(test_process_id("case-9")).unwrap_err();
         assert!(matches!(error, RuntimeError::Store(StoreError::Failed(_))));
 
-        let instance = runtime.load_instance("case-9").unwrap();
+        let instance = runtime.load_instance(test_process_id("case-9")).unwrap();
         assert_eq!(instance.pending_events.len(), 1);
         assert!(instance.active_tasks.is_empty());
         assert_eq!(
@@ -5796,7 +5847,7 @@ mod tests {
         );
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-10".to_string(),
+                process_id: test_process_id("case-10").to_string(),
                 tenant: None,
                 definition_url: "urn:test:unavailable-kernel".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -5804,9 +5855,13 @@ mod tests {
             })
             .unwrap();
 
-        let mut record = runtime.store.load_record("case-10").unwrap();
+        let mut record = runtime
+            .store
+            .load_record(test_process_id("case-10"))
+            .unwrap();
         let provenance_len_before_failure = record.provenance_log.len();
-        let task = manual_formspec_task("case-10", 1, Some("urn:mapping:response"));
+        let task =
+            manual_formspec_task(test_process_id("case-10"), 1, Some("urn:mapping:response"));
         let task_id = task.task_id.clone();
         record.instance.active_tasks.push(task);
         runtime.store.save_record(record).unwrap();
@@ -5829,7 +5884,10 @@ mod tests {
             RuntimeError::Binding(BindingError::ProcessorUnavailable(_))
         ));
 
-        let record = runtime.store.load_record("case-10").unwrap();
+        let record = runtime
+            .store
+            .load_record(test_process_id("case-10"))
+            .unwrap();
         assert_eq!(record.instance.active_tasks.len(), 1);
         assert_eq!(record.provenance_log.len(), provenance_len_before_failure);
     }
@@ -5887,7 +5945,7 @@ mod tests {
 
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-service".to_string(),
+                process_id: test_process_id("case-service").to_string(),
                 tenant: None,
                 definition_url: "urn:test:service-kernel".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -5896,7 +5954,7 @@ mod tests {
             .unwrap();
         runtime
             .enqueue_event(
-                "case-service",
+                test_process_id("case-service"),
                 PendingEvent {
                     event: "verify".to_string(),
                     actor_id: Some("verificationSystem".to_string()),
@@ -5907,7 +5965,7 @@ mod tests {
             )
             .unwrap();
 
-        let result = runtime.drain_once("case-service").unwrap();
+        let result = runtime.drain_once(test_process_id("case-service")).unwrap();
         assert_eq!(calls.load(Ordering::SeqCst), 1);
         assert!(result.provenance.iter().any(|record| {
             record.record_kind == ProvenanceKind::StepResultPersisted
@@ -6007,7 +6065,7 @@ mod tests {
 
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-integration".to_string(),
+                process_id: test_process_id("case-integration").to_string(),
                 tenant: None,
                 definition_url: "urn:test:integration-profile-kernel".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -6023,7 +6081,7 @@ mod tests {
 
         runtime
             .enqueue_event(
-                "case-integration",
+                test_process_id("case-integration"),
                 PendingEvent {
                     event: "verify".to_string(),
                     actor_id: Some("system".to_string()),
@@ -6034,7 +6092,9 @@ mod tests {
             )
             .unwrap();
 
-        let first_result = runtime.drain_once("case-integration").unwrap();
+        let first_result = runtime
+            .drain_once(test_process_id("case-integration"))
+            .unwrap();
         assert_eq!(calls.load(Ordering::SeqCst), 1);
         {
             let invocations = invocations.lock().unwrap();
@@ -6055,7 +6115,9 @@ mod tests {
             );
         }
 
-        let instance = runtime.load_instance("case-integration").unwrap();
+        let instance = runtime
+            .load_instance(test_process_id("case-integration"))
+            .unwrap();
         assert_eq!(
             instance.case_state["eligibility"]["result"],
             serde_json::json!("eligible")
@@ -6088,7 +6150,7 @@ mod tests {
 
         runtime
             .enqueue_event(
-                "case-integration",
+                test_process_id("case-integration"),
                 PendingEvent {
                     event: "verify".to_string(),
                     actor_id: Some("system".to_string()),
@@ -6099,7 +6161,9 @@ mod tests {
             )
             .unwrap();
 
-        let second_result = runtime.drain_once("case-integration").unwrap();
+        let second_result = runtime
+            .drain_once(test_process_id("case-integration"))
+            .unwrap();
         assert_eq!(calls.load(Ordering::SeqCst), 1);
         {
             let invocations = invocations.lock().unwrap();
@@ -6182,7 +6246,7 @@ mod tests {
 
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-target-mismatch".to_string(),
+                process_id: test_process_id("case-target-mismatch").to_string(),
                 tenant: None,
                 definition_url: "urn:test:integration-profile-kernel".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -6196,7 +6260,7 @@ mod tests {
             .unwrap();
         runtime
             .enqueue_event(
-                "case-target-mismatch",
+                test_process_id("case-target-mismatch"),
                 PendingEvent {
                     event: "verify".to_string(),
                     actor_id: Some("system".to_string()),
@@ -6207,7 +6271,9 @@ mod tests {
             )
             .unwrap();
 
-        let error = runtime.drain_once("case-target-mismatch").unwrap_err();
+        let error = runtime
+            .drain_once(test_process_id("case-target-mismatch"))
+            .unwrap_err();
         assert!(matches!(
             error,
             RuntimeError::Integration(ref message) if message.contains("targets")
@@ -6281,7 +6347,7 @@ mod tests {
 
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-tool-integration-binding".to_string(),
+                process_id: test_process_id("case-tool-integration-binding").to_string(),
                 tenant: None,
                 definition_url: "urn:test:tool-integration-binding".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -6294,7 +6360,7 @@ mod tests {
             .unwrap();
         runtime
             .enqueue_event(
-                "case-tool-integration-binding",
+                test_process_id("case-tool-integration-binding"),
                 PendingEvent {
                     event: "verify".to_string(),
                     actor_id: Some("system".to_string()),
@@ -6307,7 +6373,7 @@ mod tests {
 
         // Tool bindings now succeed — expect Ok, not Err.
         let result = runtime
-            .drain_once("case-tool-integration-binding")
+            .drain_once(test_process_id("case-tool-integration-binding"))
             .expect("tool binding dispatch must succeed (NB.4)");
 
         // The service must have been called exactly once.
@@ -6394,7 +6460,7 @@ mod tests {
 
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-invalid-idempotency".to_string(),
+                process_id: test_process_id("case-invalid-idempotency").to_string(),
                 tenant: None,
                 definition_url: "urn:test:invalid-idempotency-expression".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -6408,7 +6474,7 @@ mod tests {
             .unwrap();
         runtime
             .enqueue_event(
-                "case-invalid-idempotency",
+                test_process_id("case-invalid-idempotency"),
                 PendingEvent {
                     event: "verify".to_string(),
                     actor_id: Some("system".to_string()),
@@ -6419,7 +6485,9 @@ mod tests {
             )
             .unwrap();
 
-        let error = runtime.drain_once("case-invalid-idempotency").unwrap_err();
+        let error = runtime
+            .drain_once(test_process_id("case-invalid-idempotency"))
+            .unwrap_err();
         assert!(matches!(
             error,
             RuntimeError::Integration(ref message)
@@ -6464,7 +6532,7 @@ mod tests {
         let mut runtime = runtime_with_kernel(kernel);
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-guards".to_string(),
+                process_id: test_process_id("case-guards").to_string(),
                 tenant: None,
                 definition_url: "urn:test:drain-guard-evals".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -6474,7 +6542,7 @@ mod tests {
 
         runtime
             .enqueue_event(
-                "case-guards",
+                test_process_id("case-guards"),
                 PendingEvent {
                     event: "approve".to_string(),
                     actor_id: Some("approver".to_string()),
@@ -6485,7 +6553,7 @@ mod tests {
             )
             .unwrap();
 
-        let result = runtime.drain_once("case-guards").unwrap();
+        let result = runtime.drain_once(test_process_id("case-guards")).unwrap();
 
         // DrainOnceResult must carry both guard evaluations for this event:
         // the first one blocked (amount < 100 = false), the second fired
@@ -6543,7 +6611,7 @@ mod tests {
         let mut runtime = runtime_with_kernel(kernel);
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-scope".to_string(),
+                process_id: test_process_id("case-scope").to_string(),
                 tenant: None,
                 definition_url: "urn:test:guard-scope".to_string(),
                 definition_version: "1.0.0".to_string(),
@@ -6553,7 +6621,7 @@ mod tests {
         for name in ["go", "next"] {
             runtime
                 .enqueue_event(
-                    "case-scope",
+                    test_process_id("case-scope"),
                     PendingEvent {
                         event: name.to_string(),
                         actor_id: None,
@@ -6565,8 +6633,8 @@ mod tests {
                 .unwrap();
         }
 
-        let first = runtime.drain_once("case-scope").unwrap();
-        let second = runtime.drain_once("case-scope").unwrap();
+        let first = runtime.drain_once(test_process_id("case-scope")).unwrap();
+        let second = runtime.drain_once(test_process_id("case-scope")).unwrap();
 
         assert_eq!(first.guard_evaluations.len(), 1);
         assert_eq!(first.guard_evaluations[0].event, "go");
@@ -6733,7 +6801,7 @@ mod tests {
         };
         let case = serde_json::json!({});
         let ctx = CoreAgentContext {
-            instance_id: "case-scope",
+            process_id: test_process_id("case-scope"),
             invocation_index: 0,
             case_state: &case,
         };

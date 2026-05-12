@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use wos_core::instance::CaseInstance;
+use wos_core::instance::WorkflowProcess;
 use wos_core::provenance::ProvenanceRecord;
 
 use crate::intake::{
@@ -15,8 +15,8 @@ use crate::runtime::{PersistDraftResult, TaskSubmissionResult};
 /// Atomic runtime record for a single instance.
 #[derive(Debug, Clone)]
 pub struct RuntimeRecord {
-    /// Canonical WOS case instance state.
-    pub instance: CaseInstance,
+    /// Canonical WOS workflow process state.
+    pub instance: WorkflowProcess,
     /// Append-only provenance for the instance.
     pub provenance_log: Vec<ProvenanceRecord>,
     /// Persisted results from `invokeService` actions.
@@ -29,7 +29,7 @@ pub struct RuntimeRecord {
 
 impl RuntimeRecord {
     /// Create a new record around a freshly-created instance.
-    pub fn new(instance: CaseInstance) -> Self {
+    pub fn new(instance: WorkflowProcess) -> Self {
         Self {
             instance,
             provenance_log: Vec::new(),
@@ -158,7 +158,15 @@ pub trait RuntimeStore {
     fn create_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError>;
 
     /// Load the current record for an instance.
-    fn load_record(&self, instance_id: &str) -> Result<RuntimeRecord, StoreError>;
+    fn load_record(&self, process_id: &str) -> Result<RuntimeRecord, StoreError>;
+
+    /// Load the current record bound to a case ledger.
+    fn load_record_by_case_ledger_id(
+        &self,
+        case_ledger_id: &str,
+    ) -> Result<RuntimeRecord, StoreError> {
+        Err(StoreError::NotFound(case_ledger_id.to_string()))
+    }
 
     /// Atomically replace an instance record.
     fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError>;
@@ -181,7 +189,6 @@ pub trait RuntimeStore {
 #[derive(Debug, Default)]
 pub struct InMemoryStore {
     records: HashMap<String, RuntimeRecord>,
-    aliases: HashMap<String, String>,
     intake_records: HashMap<(String, String), IntakeRecord>,
 }
 
@@ -194,45 +201,40 @@ impl InMemoryStore {
 
 impl RuntimeStore for InMemoryStore {
     fn create_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
-        let instance_id = record.instance.instance_id.clone();
-        if self.records.contains_key(&instance_id) {
-            return Err(StoreError::AlreadyExists(instance_id));
+        let process_id = record.instance.process_id.clone();
+        if self.records.contains_key(&process_id) {
+            return Err(StoreError::AlreadyExists(process_id));
         }
 
-        if let Some(alias) = legacy_instance_alias(&record.instance)
-            && alias != instance_id
-        {
-            self.aliases.insert(alias, instance_id.clone());
-        }
-
-        self.records.insert(instance_id, record);
+        self.records.insert(process_id, record);
         Ok(())
     }
 
-    fn load_record(&self, instance_id: &str) -> Result<RuntimeRecord, StoreError> {
-        let canonical_id = self
-            .aliases
-            .get(instance_id)
-            .map_or(instance_id, String::as_str);
+    fn load_record(&self, process_id: &str) -> Result<RuntimeRecord, StoreError> {
         self.records
-            .get(canonical_id)
+            .get(process_id)
             .cloned()
-            .ok_or_else(|| StoreError::NotFound(instance_id.to_string()))
+            .ok_or_else(|| StoreError::NotFound(process_id.to_string()))
+    }
+
+    fn load_record_by_case_ledger_id(
+        &self,
+        case_ledger_id: &str,
+    ) -> Result<RuntimeRecord, StoreError> {
+        self.records
+            .values()
+            .find(|record| record.instance.case_ledger_id == case_ledger_id)
+            .cloned()
+            .ok_or_else(|| StoreError::NotFound(case_ledger_id.to_string()))
     }
 
     fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
-        let instance_id = record.instance.instance_id.clone();
-        if !self.records.contains_key(&instance_id) {
-            return Err(StoreError::NotFound(instance_id));
+        let process_id = record.instance.process_id.clone();
+        if !self.records.contains_key(&process_id) {
+            return Err(StoreError::NotFound(process_id));
         }
 
-        if let Some(alias) = legacy_instance_alias(&record.instance)
-            && alias != instance_id
-        {
-            self.aliases.insert(alias, instance_id.clone());
-        }
-
-        self.records.insert(instance_id, record);
+        self.records.insert(process_id, record);
         Ok(())
     }
 
@@ -267,14 +269,6 @@ impl RuntimeStore for InMemoryStore {
         self.intake_records.insert(key, record);
         Ok(())
     }
-}
-
-fn legacy_instance_alias(instance: &CaseInstance) -> Option<String> {
-    instance
-        .extensions
-        .get(CaseInstance::LEGACY_INSTANCE_ALIAS_EXTENSION_KEY)
-        .and_then(serde_json::Value::as_str)
-        .map(str::to_owned)
 }
 
 /// Step results, artifacts, and replay map split out of [`RuntimeRecord`] for auxiliary storage.

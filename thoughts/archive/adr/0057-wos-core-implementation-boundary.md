@@ -33,12 +33,12 @@ If YES, it's a core engine concern — the spec must define it, and `wos-core` m
 
 These are behavioral semantics where divergent implementations would break interoperability or correctness.
 
-**1. CaseInstance shape.**
+**1. WorkflowProcess shape.**
 
 The structure of runtime instance data — active state configuration, case file snapshot, provenance log position, timer state — must be defined by `wos-core` so instances can migrate between processors. If Processor A serializes active states as `["review", "substate"]` and Processor B expects `{"primary": "review", "nested": "substate"}`, migration fails silently.
 
 ```rust
-pub struct CaseInstance {
+pub struct WorkflowProcess {
     pub id: String,
     pub definition_url: String,
     pub definition_version: String,
@@ -119,8 +119,8 @@ These are infrastructure decisions that don't affect the evaluation algorithm's 
 ```rust
 /// Where workflow instances are stored between events.
 pub trait InstanceStore: Send + Sync {
-    fn load(&self, instance_id: &str) -> Result<CaseInstance, StoreError>;
-    fn save(&self, instance: &CaseInstance) -> Result<(), StoreError>;
+    fn load(&self, process_id: &str) -> Result<WorkflowProcess, StoreError>;
+    fn save(&self, instance: &WorkflowProcess) -> Result<(), StoreError>;
     fn list_by_state(&self, state_id: &str) -> Result<Vec<String>, StoreError>;
 }
 ```
@@ -215,7 +215,7 @@ The `wos-core` crate becomes the dependency inversion point:
 wos-core
 ├── model/        — typed document models (KernelDocument, State, Transition, ...)
 ├── eval.rs       — deterministic evaluation algorithm
-├── instance.rs   — CaseInstance type
+├── instance.rs   — WorkflowProcess type
 ├── provenance.rs — ProvenanceKind enum, ProvenanceLog
 ├── context.rs    — FEL evaluation context builder
 ├── timer.rs      — timer lifecycle
@@ -238,7 +238,7 @@ wos-lambda       → DynamoStore + S3Resolver + FormspecValidator + HttpService 
 
 Seven normative additions to the spec suite:
 
-1. **CaseInstance serialization format** — new section in Kernel spec or a companion document defining the JSON shape of a serialized instance.
+1. **WorkflowProcess serialization format** — new section in Kernel spec or a companion document defining the JSON shape of a serialized instance.
 2. **Concurrency statement** — normative statement in Kernel S4.2: "Events MUST be processed serially per instance. Concurrent event delivery MUST be serialized by the processor."
 3. **Async action semantics** — normative statement in Kernel S9.2: "Actions within a single state execute sequentially in document order. Actions across parallel regions MAY execute concurrently; provenance MUST record the actual execution order."
 4. **Governance scoping** — new `scope` property on governance rule bindings (ReviewProtocolBinding, DueProcess, HoldPolicy) accepting a FEL guard expression.
@@ -260,7 +260,7 @@ Seven normative additions to the spec suite:
 
 **Alternative 2: Everything as implementation.** Define no traits; let each deployment figure it out. Rejected because instance serialization, concurrency semantics, and explanation assembly require interoperability guarantees. Two "WOS-conformant" processors that produce different explanations from the same provenance are not conformant.
 
-**Alternative 3: Separate spec for runtime concerns.** Create a "WOS Runtime Specification" distinct from the orchestration spec. Initially deferred, then **adopted** — the WOS Runtime Companion (`specs/companions/runtime.md`, 717 lines) was written to formalize the behavioral contracts identified in this ADR. The companion covers: CaseInstance serialization (S3), event delivery (S4), action execution (S5), durability guarantees (S6), timer management (S7), governance enforcement (S8), explanation assembly (S9), evaluation modes (S10), multi-version coexistence (S11), host interfaces (S12), security model (S13), and relationship-triggered events (S14). Several normative statements from the companion still need backporting to the kernel and governance specs (see `TODO.md`).
+**Alternative 3: Separate spec for runtime concerns.** Create a "WOS Runtime Specification" distinct from the orchestration spec. Initially deferred, then **adopted** — the WOS Runtime Companion (`specs/companions/runtime.md`, 717 lines) was written to formalize the behavioral contracts identified in this ADR. The companion covers: WorkflowProcess serialization (S3), event delivery (S4), action execution (S5), durability guarantees (S6), timer management (S7), governance enforcement (S8), explanation assembly (S9), evaluation modes (S10), multi-version coexistence (S11), host interfaces (S12), security model (S13), and relationship-triggered events (S14). Several normative statements from the companion still need backporting to the kernel and governance specs (see `TODO.md`).
 
 ---
 

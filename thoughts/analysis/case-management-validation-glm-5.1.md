@@ -18,7 +18,7 @@ Three parallel validation passes were run: conceptual alignment (vision, goals, 
 
 ## 1. Conceptual Validation: PARTIAL (core thesis PASS, 3 critical gaps)
 
-The central thesis — `CaseInstance` is a process instance, not a case aggregate — is **confirmed by the codebase** (Rust doc comment: "A running workflow instance"; kernel spec §11.1; API spec line 10). The proposed layering (Case above WOS) aligns with VISION.md's three-center architecture.
+The central thesis — `WorkflowProcess` is a process instance, not a case aggregate — is **confirmed by the codebase** (Rust doc comment: "A running workflow instance"; kernel spec §11.1; API spec line 10). The proposed layering (Case above WOS) aligns with VISION.md's three-center architecture.
 
 ### 1.1 What passes
 
@@ -36,13 +36,13 @@ The central thesis — `CaseInstance` is a process instance, not a case aggregat
 
 **Gap 2: Trellis Case Ledger relationship unaddressed.** VISION §VI line 437 defines the case ledger as composed sealed response-ledger heads + WOS governance events. The analysis mentions Trellis only in passing (line 855). The relationship must be pinned: one Trellis case ledger per Case; Case-level events outside any Process flow through `custodyHook` same as process events; case split opens new ledger per ADR 0066 supersession pattern.
 
-**Gap 3: Prod-MVP phasing not explicit.** The 8-phase plan + 35 edge cases exceeds GOAL.md scope. GOAL.md line 243: "prefer work that makes the seed deployment more real." GOAL.md line 250: "one complete production cell over three aspirational deployment tiers." The ADR should explicitly phase: minimum for prod-MVP (Case exists, CaseInstance aliased as CaseProcess, `caseId` added, one-Case-one-Process), and full ontology (split/merge, multiple processes, artifacts/decisions as top-level resources) as post-MVP.
+**Gap 3: Prod-MVP phasing not explicit.** The 8-phase plan + 35 edge cases exceeds GOAL.md scope. GOAL.md line 243: "prefer work that makes the seed deployment more real." GOAL.md line 250: "one complete production cell over three aspirational deployment tiers." The ADR should explicitly phase: minimum for prod-MVP (Case exists, WorkflowProcess aliased as CaseProcess, `caseId` added, one-Case-one-Process), and full ontology (split/merge, multiple processes, artifacts/decisions as top-level resources) as post-MVP.
 
 ### 1.3 GOAL.md alignment
 
 - Does not block any of the 7 critical-path steps. The separation is additive — introduces new concepts without requiring changes to existing WOS kernel semantics.
 - Correctly scoped as pre-release work (line 298: "Because this is pre-release, prefer clean naming where possible").
-- Recommended alias strategy (`pub type CaseProcess = CaseInstance;`, line 361) preserves backward compatibility.
+- Recommended alias strategy (`pub type CaseProcess = WorkflowProcess;`, line 361) preserves backward compatibility.
 - Risk: executing all 8 phases before prod-MVP would violate GOAL.md's task selection rule.
 
 ---
@@ -52,28 +52,28 @@ The central thesis — `CaseInstance` is a process instance, not a case aggregat
 ### 2.1 Schema accuracy
 
 **Confirmed claims:**
-- `$wosCaseInstance` marker exists (schema line 28-34), pinned to `"1.0"`
+- `$wosProcess` marker exists (schema line 28-34), pinned to `"1.0"`
 - Required fields `definitionUrl`, `definitionVersion`, `configuration`, `caseState`, `provenancePosition`, `timers`, `activeTasks`, `status`, `createdAt`, `updatedAt` all present
 - `governanceState`, `volumeCounters` exist as optional properties
 - `pendingEvents` exists (schema lines 381-400)
 
-**Incomplete enumeration.** Analysis lists ~10 fields; schema + Rust have ~20+. Missing: `instanceId`, `tenant`, `historyStore`, `compensationLogs`, `stalledSince`, `declineReason`, `voidedAt`, `expiredAt`, `voidedBy`, `pendingCallbacks`, `extensions`, `nextTaskSequence`, `firedMilestones`.
+**Incomplete enumeration.** Analysis lists ~10 fields; schema + Rust have ~20+. Missing: `processId`, `tenant`, `historyStore`, `compensationLogs`, `stalledSince`, `declineReason`, `voidedAt`, `expiredAt`, `voidedBy`, `pendingCallbacks`, `extensions`, `nextTaskSequence`, `firedMilestones`.
 
 **Status enum incomplete.** Analysis implies 6 values at line 555; actual has 9. Missing: `declined`, `voided`, `expired`.
 
-**API vs runtime schema relationship.** Directionally correct but underspecified. `wos-case-instance.schema.json` is the kernel runtime artifact; `api/instance.schema.json` is the public API projection (ADR 0082 D-3). API schema's `$defs/CaseInstance` renames fields (`id` vs `instanceId`, `workflowUrl` vs `definitionUrl`, `lifecycleState` vs `status`), drops runtime-only fields, and adds API-only fields (`impactLevel`, `outcomeCode`, `milestonesFired`, `continuationOfServicesActive`, `dcrZones`, `correlationKey`). Any refactor must handle both surfaces.
+**API vs runtime schema relationship.** Directionally correct but underspecified. `wos-process.schema.json` is the kernel runtime artifact; `api/instance.schema.json` is the public API projection (ADR 0082 D-3). API schema's `$defs/WorkflowProcess` renames fields (`id` vs `processId`, `workflowUrl` vs `definitionUrl`, `lifecycleState` vs `status`), drops runtime-only fields, and adds API-only fields (`impactLevel`, `outcomeCode`, `milestonesFired`, `continuationOfServicesActive`, `dcrZones`, `correlationKey`). Any refactor must handle both surfaces.
 
 ### 2.2 Rust model accuracy
 
-- `instance.rs` line 22: `CaseInstance` struct with doc comment "A running workflow instance (Runtime Companion S3.1)" — directly confirms the analysis's core claim.
+- `instance.rs` line 22: `WorkflowProcess` struct with doc comment "A running workflow instance (Runtime Companion S3.1)" — directly confirms the analysis's core claim.
 - `case_state: serde_json::Value` (line 45) — confirms `caseState` is opaque JSON, not a typed case-domain struct. The naming collision concern is valid.
 - `InstanceStatus` enum has 9 variants: `Active`, `Suspended`, `Migrating`, `Completed`, `Terminated`, `Stalled`, `Declined`, `Voided`, `Expired`.
 - No separate `Case` struct or `CaseState` type exists anywhere in the codebase — confirming the gap the analysis identifies.
 
 ### 2.3 Spec accuracy
 
-- Kernel spec §11.1 (line 1849-1851): "A CaseInstance is the serialization format for a running workflow instance." Directly confirms the analysis.
-- Instance API spec line 10: "`CaseInstance` is the public projection of a running WOS workflow instance." Confirmed.
+- Kernel spec §11.1 (line 1849-1851): "A WorkflowProcess is the serialization format for a running workflow instance." Directly confirms the analysis.
+- Instance API spec line 10: "`WorkflowProcess` is the public projection of a running WOS workflow instance." Confirmed.
 - "Files to inspect first" (lines 821-838): all 12 paths exist and are relevant. No incorrect paths.
 
 ### 2.4 Naming collision assessment
@@ -186,10 +186,10 @@ The 35 edge cases are well-structured: concrete scenarios, ordered simple-to-com
 
 ## 4. Recommended Next Steps
 
-1. **Fix 9 typos** and complete `CaseInstance` field enumeration to include all current fields from schema and Rust
+1. **Fix 9 typos** and complete `WorkflowProcess` field enumeration to include all current fields from schema and Rust
 2. **Pin ownership:** Case is a WOS-center concept, projects into Trellis Case Ledger via `custodyHook`, not a fourth center
 3. **Pin Trellis binding:** 1:1 Case-to-ledger, Case-level events flow through `custodyHook`, case split opens new ledger
-4. **Pin MVP phasing:** minimum viable Case (exists, `CaseInstance` aliased as `CaseProcess`, `caseId` added, one-Case-one-Process); full ontology post-MVP
+4. **Pin MVP phasing:** minimum viable Case (exists, `WorkflowProcess` aliased as `CaseProcess`, `caseId` added, one-Case-one-Process); full ontology post-MVP
 5. **Add critical edge cases** M1 (case schema evolution), M2 (Trellis ledger binding), M3 (dual-state crash recovery)
 6. **Add critical invariants** I1 (CaseID immutability), I2 (Case provenance completeness)
 7. **Add missing acceptance criteria** AC1–AC6

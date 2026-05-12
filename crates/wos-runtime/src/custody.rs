@@ -44,14 +44,14 @@ impl CustodyAppendContext {
     /// type violate the ADR-0061 authored-wire rules.
     pub fn metadata_for_provenance_record(
         &self,
-        instance_id: &str,
+        process_id: &str,
         _log_position: usize,
         record: &ProvenanceRecord,
     ) -> Result<CustodyAppendMetadata, CustodyAppendError> {
         let case_id = self
             .case_id
             .clone()
-            .unwrap_or_else(|| instance_id.to_string());
+            .unwrap_or_else(|| process_id.to_string());
         let metadata = CustodyAppendMetadata {
             case_id,
             record_id: record.id.clone(),
@@ -691,14 +691,14 @@ mod tests {
     }
 
     #[test]
-    fn context_uses_instance_id_as_default_case_id() {
+    fn context_uses_case_ledger_id_as_default_case_id() {
         let record = ProvenanceRecord::unmatched_event("submitted", Some("worker"));
-        let instance_id = wos_core::instance::CaseInstance::mint_id();
+        let case_ledger_id = typeid::mint_case_ledger_id();
         let metadata = context()
-            .metadata_for_provenance_record(&instance_id, 0, &record)
+            .metadata_for_provenance_record(&case_ledger_id, 0, &record)
             .expect("metadata");
 
-        assert_eq!(metadata.case_id, instance_id);
+        assert_eq!(metadata.case_id, case_ledger_id);
         assert_eq!(metadata.record_id, record.id);
     }
 

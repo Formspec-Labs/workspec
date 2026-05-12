@@ -10,9 +10,9 @@ This document states **processor-observable obligations** for the `wos-server-ru
 
 ## 1. Identity and keying (D1)
 
-**R-1.1 [D1]** Every Restate Virtual Object key used for WOS instance execution MUST equal the WOS `instance_id` string exposed on `CaseInstance.instance_id` and accepted by `RuntimeOps::load_instance`.
+**R-1.1 [D1]** Every Restate Virtual Object key used for WOS instance execution MUST equal the WOS `process_id` string exposed on `WorkflowProcess.process_id` and accepted by `RuntimeOps::load_instance`.
 
-**R-1.2 [D1]** At most one exclusive (`ObjectContext`) handler for a given `instance_id` MUST run at a time; concurrent reads that do not mutate durable WOS state MUST use `#[shared]` handlers and `SharedObjectContext` as defined by `restate-sdk`.
+**R-1.2 [D1]** At most one exclusive (`ObjectContext`) handler for a given `process_id` MUST run at a time; concurrent reads that do not mutate durable WOS state MUST use `#[shared]` handlers and `SharedObjectContext` as defined by `restate-sdk`.
 
 **R-1.3 [D1]** Handlers that mutate WOS operational projection or enqueue drain work MUST NOT be marked `#[shared]`.
 

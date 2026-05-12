@@ -48,7 +48,7 @@
               "signedPayload": {
                 "canonicalization": "formspec-response-signing-v1",
                 "digestAlgorithm": "sha-256",
-                "digest": "46e24b5693b2c8335103e7e882ac9bd1e1659cd57e817bafe2699f7fb47a24c3",
+                "digest": "98b97fe5f06b691adddbc2b8b96020cb391211f1a3df20349c078d4ece2b8fc2",
                 "responseId": "resp-sig-024-allowlisted-deployment-local-intent-applicantTask",
                 "definitionUrl": "urn:test:formspec:signature",
                 "definitionVersion": "1.0.0"

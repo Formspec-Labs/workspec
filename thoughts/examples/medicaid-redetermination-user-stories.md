@@ -108,7 +108,7 @@ James reaches the review page. The system shows a summary of all entered data, f
 
 James signs using the signature pad. He submits. The system confirms: "Your redetermination has been submitted. You will receive a decision within 30 business days. Your current coverage continues until a decision is made. Reference number: MED-2026-0847."
 
-Behind the scenes: the Formspec submission is validated against the contract, the Coprocessor creates a WOS case instance, maps the response fields to the case file, and fires the `submitted` event. Temporal persists the case state and starts the 30-business-day SLA timer.
+Behind the scenes: the Formspec submission is validated against the contract, the Coprocessor creates a WOS workflow process, maps the response fields to the case file, and fires the `submitted` event. Temporal persists the case state and starts the 30-business-day SLA timer.
 
 ---
 

@@ -8,7 +8,7 @@
 
 ## Verdict
 
-The core thesis is sound: `Case != CaseInstance`, and the current `CaseInstance`
+The core thesis is sound: `Case != WorkflowProcess`, and the current `WorkflowProcess`
 shape is really a workflow/runtime process artifact. The repo supports this
 diagnosis.
 
@@ -21,11 +21,11 @@ ordering before implementation starts.
 
 - WOS positions itself as a workflow/governance standard, not a full
   case-management product ontology. See `README.md:19-30`.
-- The current public `CaseInstance` is explicitly described as a running WOS
+- The current public `WorkflowProcess` is explicitly described as a running WOS
   workflow instance. See `specs/api/instance.md:10`.
 - The runtime artifact carries workflow binding, lifecycle configuration,
   `caseState`, timers, active tasks, status, provenance cursor, and runtime
-  state. See `schemas/wos-case-instance.schema.json:5` and
+  state. See `schemas/wos-process.schema.json:5` and
   `crates/wos-core/src/instance.rs:19`.
 - The proposed Case / CaseProcess separation would reduce product/API
   confusion if it is framed as a boundary correction, not a WOS rewrite.
@@ -51,7 +51,7 @@ ordering before implementation starts.
    `WOS-FEATURE-MATRIX.md:177`, `WOS-FEATURE-MATRIX.md:201`,
    `specs/kernel/spec.md:750`.
 
-3. **The identity split is under-specified.** Current `CaseInstance.instanceId`
+3. **The identity split is under-specified.** Current `WorkflowProcess.processId`
    already uses the reserved `_case_` TypeID family, and public
    `WosResourceUrn` accepts only `case | prov | gov | ai | assurance | x-*`
    families. A new first-class `Case.id` plus `CaseProcess.processId` needs an
@@ -59,7 +59,7 @@ ordering before implementation starts.
    IDs become Case IDs, Process IDs, aliases, or paired IDs.
 
    Evidence: `case-management.md:160`, `case-management.md:582`,
-   `schemas/wos-case-instance.schema.json:39`,
+   `schemas/wos-process.schema.json:39`,
    `schemas/api/_common.schema.json:18`,
    `thoughts/adr/0092-api-typeid-urn-identity.md:63`.
 
@@ -76,7 +76,7 @@ ordering before implementation starts.
 
 5. **`/instances` versus `/case-processes` remains an undecided compatibility
    contract.** Current OpenAPI and API specs are deeply rooted in `/instances`
-   and `CaseInstance`; the plan alternates between introducing
+   and `WorkflowProcess`; the plan alternates between introducing
    `/case-processes`, keeping `/instances`, or doing both. It must define alias
    behavior, deprecation headers, operationId stability, idempotency-key route
    scoping, generated type names, and subresource migration rules.

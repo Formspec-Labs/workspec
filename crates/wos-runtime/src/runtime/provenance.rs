@@ -6,7 +6,7 @@
 //! before persistence: timestamp stamping, Semantic Profile field population,
 //! compensation records, and task validation provenance construction.
 
-use wos_core::instance::CaseInstance;
+use wos_core::instance::WorkflowProcess;
 use wos_core::model::kernel::{ActorKind, KernelDocument};
 use wos_core::provenance::{ProvenanceAuditTier, ProvenanceKind, ProvenanceRecord};
 
@@ -130,14 +130,14 @@ pub fn populate_provenance_record_fields(
 /// decision payloads and carry the bound case ledger plus workflow process.
 pub fn stamp_signature_decision_identity(
     records: &mut [ProvenanceRecord],
-    instance: &CaseInstance,
+    instance: &WorkflowProcess,
 ) {
-    let case_ledger_id = instance.effective_case_ledger_id();
-    if !CaseInstance::is_case_id(case_ledger_id) {
+    let case_ledger_id = instance.case_ledger_id.as_str();
+    if !WorkflowProcess::is_case_id(case_ledger_id) {
         return;
     }
-    let process_id = instance.effective_process_id();
-    let process_id = CaseInstance::is_process_id(process_id).then_some(process_id);
+    let process_id = instance.process_id.as_str();
+    let process_id = WorkflowProcess::is_process_id(process_id).then_some(process_id);
 
     for record in records {
         if !matches!(

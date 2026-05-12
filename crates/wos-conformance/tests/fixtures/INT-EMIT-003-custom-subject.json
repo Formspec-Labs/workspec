@@ -1,7 +1,7 @@
 {
   "id": "INT-EMIT-003-custom-subject",
   "rule": "INT-EMIT",
-  "description": "When a binding declares an explicit 'subject' extension field, the event-emit handler uses it verbatim instead of the default {instanceId}:{bindingId}:{invocationId} format. This verifies that bindings can override the default subject template for custom routing or correlation requirements.",
+  "description": "When a binding declares an explicit 'subject' extension field, the event-emit handler uses it verbatim instead of the default {processId}:{bindingId}:{invocationId} format. This verifies that bindings can override the default subject template for custom routing or correlation requirements.",
   "documents": {
     "kernel": "inline",
     "integration": "inline"

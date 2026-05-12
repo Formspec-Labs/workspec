@@ -8,7 +8,7 @@
 
 ## Purpose
 
-Provenance records are the public read-shape for the WOS audit trail of a single case instance. The four tiers — Facts, Reasoning, Counterfactual, Narrative — surface the kernel and governance audit layers (`auditLayer` in the persisted log) as a typed discriminated union at the API boundary. The wire shape is greenfield per ADR 0082 D-15: the legacy `case-portal` `ProvenanceRecord` (single envelope with four optional tier blocks) is the explicit anti-design and is structurally inexpressible here.
+Provenance records are the public read-shape for the WOS audit trail of a single workflow process. The four tiers — Facts, Reasoning, Counterfactual, Narrative — surface the kernel and governance audit layers (`auditLayer` in the persisted log) as a typed discriminated union at the API boundary. The wire shape is greenfield per ADR 0082 D-15: the legacy `case-portal` `ProvenanceRecord` (single envelope with four optional tier blocks) is the explicit anti-design and is structurally inexpressible here.
 
 ## Resource Shape
 
@@ -23,7 +23,7 @@ Provenance records are the public read-shape for the WOS audit trail of a single
 
 Identity uses URNs throughout (ADR 0082 D-4, D-9):
 
-- `id` and `instanceId` are WOS resource URNs (`urn:wos:<typeid>`) per ADR 0092 D-1.
+- `id` and `processId` are WOS resource URNs (`urn:wos:<typeid>`) per ADR 0092 D-1.
 - `actorRef` is an `actor:<class>:<id>` URN. The legacy nested `actor: { id, type, name }` shape is not part of this contract; identity details live once in the identity / governance subsystem and every record references them by URN.
 - `factsRecordRef` (on Reasoning, Counterfactual, Narrative variants) points to the Facts-tier record being interpreted, narrated, or analyzed.
 
@@ -57,7 +57,7 @@ Lifecycle-control public literals are `instanceSuspended`, `instanceResumed`, an
 
 The variants are flattened, not composed: each variant's `required` array enumerates exactly the fields it needs. Cold-read summary:
 
-- **Facts.** `tier`, `id`, `instanceId`, `recordKind`, `timestamp`, `definitionVersion`, `event`. `actorRef` is optional (kernel S8 leaves the actor optional when the processor cannot name one). `caseFileSnapshot` is REQUIRED when `transitionTags` includes `determination` (kernel S8.2.1) — enforced at the runtime append path; the API schema records this as a `description`-level obligation rather than a conditional `if/then` because the kernel envelope already enforces it on the persisted log shape.
+- **Facts.** `tier`, `id`, `processId`, `recordKind`, `timestamp`, `definitionVersion`, `event`. `actorRef` is optional (kernel S8 leaves the actor optional when the processor cannot name one). `caseFileSnapshot` is REQUIRED when `transitionTags` includes `determination` (kernel S8.2.1) — enforced at the runtime append path; the API schema records this as a `description`-level obligation rather than a conditional `if/then` because the kernel envelope already enforces it on the persisted log shape.
 - **Reasoning.** Adds `rulesApplied` (`min 1`), `evidenceConsulted`, `criteriaChecked`. Required for `determination`-tagged transitions. Optional `assertionGates: AssertionGateResult[]` (governance §5.4 — closed `gateKind: source-grounded | arithmetic | range | consistency | format | cross-document | temporal` + `gatePassed: boolean` + `evidenceRefs: EvidenceReference[]`) and optional `confidenceReport: ConfidenceReport` (ai-integration.md §7.1 — `outputId` + `confidence` + `decayApplied` + `cumulativeConfidenceWindow`).
 - **Counterfactual.** Adds `positiveCounterfactuals`, `negativeCounterfactuals`. Required for `adverse-decision`-tagged transitions in `rights-impacting` workflows.
 - **Narrative.** Adds `narrative`, `authoritative` (MUST be the literal `false`), `modelIdentifier`, `modelVersion`. Per AI Integration §13.2, every implementation MUST treat narrative content as non-authoritative; the schema makes this structurally enforced via the `const false` discriminant. Optional `confidenceReport: ConfidenceReport` (ai-integration.md §7.1 applies to narrative output too — every agent output carries one).
@@ -66,7 +66,7 @@ The variants are flattened, not composed: each variant's `required` array enumer
 
 `AssembledExplanation` is the server-assembled adverse-decision explanation projected as a typed read-only resource (governance §3.8.1; workflow-governance.md:166-238). The §3.8.1 algorithm runs deterministically server-side — two conformant processors MUST produce byte-identical output (workflow-governance.md:170) — and clients consume the result via `GET /api/v1/instances/{id}/explanation`. Eliminates the prior client-side re-implementation of §3.8.1 ordering.
 
-Required fields: `instanceId`, `assembledAt`, `assembledBy: ActorRef`, `narrative: prose`, `factsTrace: WosResourceUrn[]` (ordered Facts-tier record URNs walked by §3.8.1 step 1), `rulesApplied: RuleReference[]` (ordered by authority rank descending per §3.8.2). Optional: `positiveCounterfactuals`, `negativeCounterfactuals`, `transitionId`. Cross-`$ref`s `RuleReference` and `Counterfactual` from this same schema rather than redefining (ADR 0082 D-14).
+Required fields: `processId`, `assembledAt`, `assembledBy: ActorRef`, `narrative: prose`, `factsTrace: WosResourceUrn[]` (ordered Facts-tier record URNs walked by §3.8.1 step 1), `rulesApplied: RuleReference[]` (ordered by authority rank descending per §3.8.2). Optional: `positiveCounterfactuals`, `negativeCounterfactuals`, `transitionId`. Cross-`$ref`s `RuleReference` and `Counterfactual` from this same schema rather than redefining (ADR 0082 D-14).
 
 ### Resource shape — `AssertionGateResult` and `ConfidenceReport`
 

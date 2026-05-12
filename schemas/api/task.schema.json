@@ -389,7 +389,7 @@
       "description": "Lightweight task projection for list views (ADR 0082 D-3). Carries identity, classification, status, deadline, and binding metadata — enough to drive an inbox-style list without forcing the heavier `Task` body. The full `Task` shape is fetched per row on detail navigation.",
       "required": [
         "id",
-        "instanceId",
+        "processId",
         "kind",
         "status",
         "title",
@@ -400,9 +400,9 @@
           "$ref": "#/$defs/WosResourceUrn",
           "description": "Stable public URN for this task."
         },
-        "instanceId": {
+        "processId": {
           "$ref": "#/$defs/WosResourceUrn",
-          "description": "Case instance URN this task belongs to."
+          "description": "Workflow process URN this task belongs to."
         },
         "workflowUrl": {
           "$ref": "#/$defs/WorkflowUrl",
@@ -458,7 +458,7 @@
       "description": "Full public task projection (ADR 0082 D-3). Adds contract binding, draft state, and validation outcome to the `TaskListItem` core. The kernel runtime artifact `wos-process.schema.json#/$defs/ActiveTask` is prior art; this is greenfield (ADR 0082 D-15) so the projection diverges intentionally: identifiers are URNs (D-4), `status` is the closed user-facing taxonomy (not the kernel `created|assigned|claimed|...` set), and the form-rendering `context` block is not surfaced (clients fetch the form via `definitionUrl`/`definitionVersion`).",
       "required": [
         "id",
-        "instanceId",
+        "processId",
         "kind",
         "status",
         "title",
@@ -471,9 +471,9 @@
           "$ref": "#/$defs/WosResourceUrn",
           "description": "Stable public URN for this task."
         },
-        "instanceId": {
+        "processId": {
           "$ref": "#/$defs/WosResourceUrn",
-          "description": "Case instance URN this task belongs to."
+          "description": "Workflow process URN this task belongs to."
         },
         "workflowUrl": {
           "$ref": "#/$defs/WorkflowUrl",
@@ -590,7 +590,7 @@
     "TaskListOptions": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Query fields for `GET /api/v1/tasks` and `GET /api/v1/instances/{instanceId}/tasks` (ADR 0082 D-7). The default scope is the calling actor's inbox; admins MAY pass `assignedActor` to widen the scope subject to ReBAC checks.",
+      "description": "Query fields for `GET /api/v1/tasks` and `GET /api/v1/instances/{processId}/tasks` (ADR 0082 D-7). The default scope is the calling actor's inbox; admins MAY pass `assignedActor` to widen the scope subject to ReBAC checks.",
       "properties": {
         "assignedActor": {
           "$ref": "#/$defs/ActorRef",
@@ -604,9 +604,9 @@
           "$ref": "#/$defs/TaskKind",
           "description": "Filter to tasks of the supplied family."
         },
-        "instanceId": {
+        "processId": {
           "$ref": "#/$defs/WosResourceUrn",
-          "description": "Filter to tasks on the supplied case instance. Implied (and required to match) when the request is the `/instances/{instanceId}/tasks` subresource."
+          "description": "Filter to tasks on the supplied workflow process. Implied (and required to match) when the request is the `/instances/{processId}/tasks` subresource."
         },
         "workflowUrl": {
           "$ref": "#/$defs/WorkflowUrl",
@@ -800,7 +800,7 @@
       "description": "Wire shape of a task state change emitted to subscribed observers (notifications domain, server-side projections). Carries the task URN, the new posture, the actor responsible, and the outcome literal — enough for downstream projections to update without re-fetching the task. The structurally-identical `Task` resource is also retrievable; this event is the projection seam for incremental consumers.",
       "required": [
         "taskId",
-        "instanceId",
+        "processId",
         "outcome",
         "occurredAt"
       ],
@@ -809,9 +809,9 @@
           "$ref": "#/$defs/WosResourceUrn",
           "description": "Task URN whose posture changed."
         },
-        "instanceId": {
+        "processId": {
           "$ref": "#/$defs/WosResourceUrn",
-          "description": "Case instance URN this task belongs to."
+          "description": "Workflow process URN this task belongs to."
         },
         "outcome": {
           "$ref": "#/$defs/TaskOutcomeKind",

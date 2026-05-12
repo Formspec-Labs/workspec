@@ -19,7 +19,7 @@ Two identity formats coexist in the stack:
 
 ADR 0061 states TypeID should be "one identity, zero mapping" — the same identifier across WOS case id, durable-execution workflow id, and provenance-store primary key. ADR 0082 D-4 explicitly rejects opaque UUIDs at the API surface and requires a URN wire format with human-readable `<scope>`, `<date>`, and `<hash>` segments.
 
-The server bridges them with a heuristic: `to_instance_urn()` (`instance_service.rs:113-128`) tries to parse the stored `instance_id` as a URN, and on failure extracts the TypeID tenant, synthesizes a scope and date, and stuffs the raw TypeID into the `<hash>` segment. This is not a design — it is a fallback that leaks the TypeID through the URN shape by accident.
+The server bridges them with a heuristic: `to_instance_urn()` (`instance_service.rs:113-128`) tries to parse the stored `process_id` as a URN, and on failure extracts the TypeID tenant, synthesizes a scope and date, and stuffs the raw TypeID into the `<hash>` segment. This is not a design — it is a fallback that leaks the TypeID through the URN shape by accident.
 
 The greenfield posture matters: no production API consumers exist. The current `workspec-server` HTTP surface is pre-stable development scaffolding. This is the moment to resolve the tension before it becomes a migration problem.
 
@@ -72,7 +72,7 @@ A task does not need a `_task_` prefix — it lives at `/instances/{case_id}/tas
 
 `urn_scope_and_date()` (`instance_service.rs:131-139`, `task_service.rs:95-104`) — deleted. Scope and date extraction from the old URN is replaced by `typeid::extract_tenant()` and the UUIDv7 timestamp embedded in the TypeID suffix.
 
-The HTTP create handler default ID generation (`instances.rs:233-239`) stops generating free-form `urn:wos:instance:default:...:<uuid>`. When no `instance_id` is supplied, the handler calls `typeid::mint_case_id()` and wraps the result with `urn:wos:`.
+The HTTP create handler default ID generation (`instances.rs:233-239`) stops generating free-form five-segment workflow-process URNs. When no `process_id` is supplied, the handler calls `typeid::mint_process_id()` and wraps the result with `urn:wos:`.
 
 ### D-4. `ActorRef` unchanged
 

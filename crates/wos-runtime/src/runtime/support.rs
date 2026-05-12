@@ -67,7 +67,7 @@ pub(super) fn impact_level_label(level: ImpactLevel) -> String {
     .to_string()
 }
 
-pub(super) fn make_task_id(instance_id: &str, ordinal: u64, task_ref: &str) -> String {
-    let encoded_instance_id = URL_SAFE_NO_PAD.encode(instance_id);
-    format!("wos-task:{encoded_instance_id}:{ordinal}:{task_ref}")
+pub(super) fn make_task_id(process_id: &str, ordinal: u64, task_ref: &str) -> String {
+    let encoded_process_id = URL_SAFE_NO_PAD.encode(process_id);
+    format!("wos-task:{encoded_process_id}:{ordinal}:{task_ref}")
 }

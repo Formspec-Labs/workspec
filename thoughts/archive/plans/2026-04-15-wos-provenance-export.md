@@ -85,7 +85,7 @@
       /// Base namespace for minting provenance IRIs (PROV-O §5.2).
       pub provenance_namespace: String,
       /// Instance ID used as the XES case identifier / OCEL case reference.
-      pub instance_id: String,
+      pub process_id: String,
   }
   ```
 
@@ -153,7 +153,7 @@ The output is a JSON-LD document with `@context` embedding PROV-O and WOS namesp
           ));
           let config = ExportConfig {
               provenance_namespace: "https://example.org/prov/".into(),
-              instance_id: "inst-001".into(),
+              process_id: "inst-001".into(),
           };
           let doc = export(&log, &config);
           let graph = &doc.graph;
@@ -186,7 +186,7 @@ The output is a JSON-LD document with `@context` embedding PROV-O and WOS namesp
 - [ ] **Step 3.1:** Implement `pub fn export(log: &ProvenanceLog, config: &ExportConfig) -> String`. The function uses `quick-xml` to emit:
 
   - `<log>` root with XES namespace and standard extension declarations.
-  - One `<trace>` containing one `<string key="concept:name" value="{instance_id}"/>`.
+  - One `<trace>` containing one `<string key="concept:name" value="{process_id}"/>`.
   - One `<event>` per `ProvenanceRecord` with:
     - `<string key="concept:name" value="{record_kind camelCase}"/>`
     - `<date key="time:timestamp" value="{record.timestamp}"/>`
@@ -216,8 +216,8 @@ The output is a JSON-LD document with `@context` embedding PROV-O and WOS namesp
 
 - [ ] **Step 4.1:** Implement `pub fn export(log: &ProvenanceLog, config: &ExportConfig) -> serde_json::Value`. The function:
 
-  - Declares one object type `"wf-instance"` with attribute `"instanceId"`.
-  - Creates one object with `id = config.instance_id`, type `"wf-instance"`.
+  - Declares one object type `"wf-instance"` with attribute `"processId"`.
+  - Creates one object with `id = config.process_id`, type `"wf-instance"`.
   - For each `ProvenanceRecord`: emits one event with `id`, `type` = `record_kind`, `time`, `attributes`, and `relationships` linking to the workflow instance object.
   - Events that mutate multiple case file items MUST produce one event with multiple E2O links (§6.4 requirement) — for this implementation, each event links to the instance object only (case file item tracking is a future extension).
 

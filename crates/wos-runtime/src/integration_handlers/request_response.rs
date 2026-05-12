@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use fel_core::{evaluate, fel_to_json, has_error_diagnostics, parse};
 use wos_core::EvalContext;
 use wos_core::eval::ObservedAction;
-use wos_core::instance::CaseInstance;
+use wos_core::instance::WorkflowProcess;
 use wos_core::model::kernel::KernelDocument;
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
 
@@ -296,7 +296,7 @@ pub(crate) fn build_event_data_from_binding(
     binding: &IntegrationBinding,
     kernel: &KernelDocument,
     observed: &ObservedAction,
-    instance: &CaseInstance,
+    instance: &WorkflowProcess,
 ) -> Result<serde_json::Value, RuntimeError> {
     let mapping = &binding.data_mapping;
     if mapping.is_empty() {
@@ -323,7 +323,7 @@ pub(crate) fn build_integration_input(
     binding: &IntegrationBinding,
     kernel: &KernelDocument,
     observed: &ObservedAction,
-    instance: &CaseInstance,
+    instance: &WorkflowProcess,
 ) -> Result<serde_json::Value, RuntimeError> {
     let mapping = &binding.input_mapping;
     if mapping.is_empty() {
@@ -345,7 +345,7 @@ pub(crate) fn build_integration_input(
 pub(crate) fn evaluate_integration_expression(
     expression: &str,
     kernel: &KernelDocument,
-    instance: &CaseInstance,
+    instance: &WorkflowProcess,
     observed: &ObservedAction,
 ) -> Result<serde_json::Value, RuntimeError> {
     let case_state = case_state_map(&instance.case_state)?;
@@ -353,7 +353,7 @@ pub(crate) fn evaluate_integration_expression(
     let mut context = EvalContext::from_case_state(&case_state, event.as_ref());
     context.instance.insert(
         "id".to_string(),
-        serde_json::Value::String(instance.instance_id.clone()),
+        serde_json::Value::String(instance.process_id.clone()),
     );
     context.instance.insert(
         "definitionUrl".to_string(),

@@ -143,7 +143,7 @@ Both `caseId` and `recordId` use the TypeID format adopted stack-wide from the r
 
   | Prefix | Family | Covers (sub-kinds discriminated by `recordKind`) |
   |---|---|---|
-  | `case` | WOS case instance | (the case itself; not a record) |
+  | `case` | WOS workflow process | (the case itself; not a record) |
   | `prov` | Kernel Facts-tier provenance records | `stateTransition`, `caseStateMutation`, `milestoneFired`, `convergenceCapReached`, etc. |
   | `gov` | Governance records | `overrideRecord`, `delegationGrant`, `holdApplied`, `authorityVerification`, `appealInitiated`, etc. |
   | `ai` | AI Integration records | `capabilityInvocation`, `driftAlert`, `autonomyDemotion`, `agentEscalation`, etc. |
@@ -280,7 +280,7 @@ Design decisions above are Accepted. Implementation lands through the cascade tr
 Summary of the cascade (full detail in WOS TODO):
 
 1. Register TypeID type-prefixes (`case`, `prov`, `gov`, `ai`, `assurance`) in the WOS Extension Registry (§21).
-2. Mint TypeIDs at WOS authoring time (`ProvenanceRecord` constructors, `CaseInstance::create`).
+2. Mint TypeIDs at WOS authoring time (`ProvenanceRecord` constructors, `WorkflowProcess::create`).
 3. Tighten record-family JSON Schemas with TypeID patterns on `id` / `caseId`.
 4. Land JSON→dCBOR converter with round-trip fixture corpus (byte-match Rust + Python).
 5. Publish WOS normative encoding spec section (codifies §2.2 table + §2.7 rejection list + domain tag).

@@ -4,15 +4,15 @@
 //!
 //! After every durable data write the runtime evaluates all milestones in the
 //! kernel document against the updated case state.  A milestone fires at most
-//! once per case instance: once its condition has been true, the id is recorded
-//! in `CaseInstance::fired_milestones` and the milestone is never re-evaluated.
+//! once per workflow process: once its condition has been true, the id is recorded
+//! in `WorkflowProcess::fired_milestones` and the milestone is never re-evaluated.
 
 use std::collections::HashMap;
 
 use fel_core::{evaluate, fel_to_json, has_error_diagnostics, parse};
 use serde_json::json;
 use wos_core::EvalContext;
-use wos_core::instance::CaseInstance;
+use wos_core::instance::WorkflowProcess;
 use wos_core::model::kernel::KernelDocument;
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
 
@@ -26,7 +26,7 @@ use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
 /// stream is deterministic regardless of `HashMap` iteration order.
 pub fn evaluate_milestones(
     kernel: &KernelDocument,
-    instance: &mut CaseInstance,
+    instance: &mut WorkflowProcess,
     post_state: &serde_json::Value,
 ) -> Vec<ProvenanceRecord> {
     if kernel.lifecycle.milestones.is_empty() {
@@ -147,11 +147,10 @@ mod tests {
         serde_json::from_value(kernel_json).expect("valid kernel JSON")
     }
 
-    fn bare_instance() -> CaseInstance {
-        CaseInstance {
-            instance_id: "test".to_string(),
-            process_id: None,
-            case_ledger_id: None,
+    fn bare_instance() -> WorkflowProcess {
+        WorkflowProcess {
+            process_id: "test".to_string(),
+            case_ledger_id: "test-case".to_string(),
             tenant: wos_core::typeid::DEFAULT_TENANT.to_string(),
             definition_url: "urn:test".to_string(),
             definition_version: "1.0.0".to_string(),

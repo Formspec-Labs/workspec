@@ -17,7 +17,7 @@ use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
 use crate::context::EvalContext;
-use crate::instance::CaseInstance;
+use crate::instance::WorkflowProcess;
 use crate::model::kernel::{
     Action, ActionKind, CancellationPolicy, HistoryMode, KernelDocument, MergeStrategy, Region,
     State, StateKind, Transition, TransitionEvent,
@@ -280,10 +280,10 @@ impl Evaluator {
         Ok(eval)
     }
 
-    /// Restore an evaluator from a serialized case instance.
+    /// Restore an evaluator from a serialized workflow process.
     pub fn from_instance(
         kernel: KernelDocument,
-        instance: &CaseInstance,
+        instance: &WorkflowProcess,
         current_time_ms: u64,
     ) -> Result<Self, EvalError> {
         let state_index = build_state_index(&kernel);

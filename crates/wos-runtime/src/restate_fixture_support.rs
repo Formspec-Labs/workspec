@@ -36,11 +36,21 @@ impl RuntimeStore for SharedInMemoryStore {
             .create_record(record)
     }
 
-    fn load_record(&self, instance_id: &str) -> Result<RuntimeRecord, StoreError> {
+    fn load_record(&self, process_id: &str) -> Result<RuntimeRecord, StoreError> {
         self.0
             .lock()
             .expect("store mutex poisoned")
-            .load_record(instance_id)
+            .load_record(process_id)
+    }
+
+    fn load_record_by_case_ledger_id(
+        &self,
+        case_ledger_id: &str,
+    ) -> Result<RuntimeRecord, StoreError> {
+        self.0
+            .lock()
+            .expect("store mutex poisoned")
+            .load_record_by_case_ledger_id(case_ledger_id)
     }
 
     fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {

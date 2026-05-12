@@ -14,7 +14,7 @@ use crate::store::{
 };
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use wos_core::instance::{ActiveTask, CaseInstance, PendingEvent};
+use wos_core::instance::{ActiveTask, PendingEvent, WorkflowProcess};
 use wos_core::model::governance::DelegationScope;
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord, SignatureAdmissionFailedInput};
 use wos_core::traits::AccessControl;
@@ -514,11 +514,11 @@ impl WosRuntime {
     /// Returns an error when the instance cannot be found or loaded.
     pub fn load_provenance_window(
         &self,
-        instance_id: &str,
+        process_id: &str,
         cursor: usize,
         limit: usize,
     ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
-        let record = self.store.load_record(instance_id)?;
+        let record = self.load_record_by_process_or_case_ref(process_id)?;
         Ok(record
             .provenance_log
             .iter()
@@ -532,8 +532,8 @@ impl WosRuntime {
         &self,
         task_id: &str,
     ) -> Result<RuntimeRecord, RuntimeError> {
-        let instance_id = task_instance_id(task_id)?;
-        Ok(self.store.load_record(&instance_id)?)
+        let process_id = task_process_id(task_id)?;
+        Ok(self.store.load_record(&process_id)?)
     }
 
     pub(super) fn record_submission_rejection(
@@ -581,17 +581,17 @@ impl WosRuntime {
     }
 }
 
-fn task_instance_id(task_id: &str) -> Result<String, RuntimeError> {
-    let Some(encoded_instance_id) = task_id
+fn task_process_id(task_id: &str) -> Result<String, RuntimeError> {
+    let Some(encoded_process_id) = task_id
         .strip_prefix("wos-task:")
         .and_then(|rest| rest.split_once(':'))
-        .map(|(encoded_instance_id, _)| encoded_instance_id)
+        .map(|(encoded_process_id, _)| encoded_process_id)
     else {
         return Err(RuntimeError::TaskNotFound(task_id.to_string()));
     };
 
     let decoded = URL_SAFE_NO_PAD
-        .decode(encoded_instance_id)
+        .decode(encoded_process_id)
         .map_err(|_| RuntimeError::TaskNotFound(task_id.to_string()))?;
     std::str::from_utf8(&decoded)
         .map(str::to_owned)
@@ -664,7 +664,7 @@ fn build_artifact(
 }
 
 fn remove_task_with_event(
-    instance: &mut CaseInstance,
+    instance: &mut WorkflowProcess,
     task_index: usize,
     extension_key: &str,
     actor_id: &str,

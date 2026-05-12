@@ -111,7 +111,7 @@
       "description": "Aggregate projection of a WOS signing ceremony — the FSM state tracking which signers have signed, declined, or expired across a document or transition.",
       "required": [
         "id",
-        "instanceId",
+        "processId",
         "status",
         "signers",
         "flowPattern",
@@ -122,9 +122,9 @@
           "$ref": "#/$defs/WosResourceUrn",
           "description": "Stable public URN for this signature ceremony. Entity-type segment MUST be signature-ceremony."
         },
-        "instanceId": {
+        "processId": {
           "$ref": "#/$defs/WosResourceUrn",
-          "description": "Case instance URN this ceremony belongs to."
+          "description": "Workflow process URN this ceremony belongs to."
         },
         "taskId": {
           "$ref": "#/$defs/WosResourceUrn",

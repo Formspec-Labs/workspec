@@ -130,7 +130,7 @@ DCR-style constraint zones for flexible investigation work (drawn from DCR Graph
 ### Companions
 
 - **Lifecycle Detail** — Evaluation order, nested entry/exit, parallel region activation, compensation (saga), history-state resumption, and a bidirectional SCXML mapping.
-- **Runtime** — Case instance serialization, event delivery contract, intake-handoff acceptance, and the Formspec coprocessor handoff (how accepted intake becomes a governed case or attaches to one).
+- **Runtime** — Workflow process serialization, event delivery contract, intake-handoff acceptance, and the Formspec coprocessor handoff (how accepted intake becomes a governed case or attaches to one).
 
 ---
 

@@ -1,4 +1,4 @@
-# WOS Public API Case Instance
+# WOS Public API Workflow Process
 
 **Status:** Draft
 **ADR:** [`thoughts/adr/0082-stack-public-api-contract-and-schema-discipline.md`](../../../thoughts/adr/0082-stack-public-api-contract-and-schema-discipline.md) (D-15 step 4)
@@ -7,11 +7,11 @@
 
 ## Purpose
 
-`CaseInstance` is the public projection of a running WOS workflow instance — the case-file state, lifecycle posture, and identity that drive the case-portal and SDK consumers. `CaseLedgerProjection` is the durable case-level view keyed by the governed case ledger; it can exist before any workflow process starts and aggregates bound `CaseInstance` process projections. `CaseLedgerEventSummary` summarizes the latest direct case-ledger provenance event when one exists and exposes the D26 event literal rather than the redundant inner `recordKind` discriminator. Greenfield per ADR 0082 D-15: the kernel runtime artifact (`wos-process.schema.json`) and the prior `case-portal/src/ports/types.ts` `CaseInstanceView` are prior art, not this contract. Per ADR 0082 D-3, process resources carry lifecycle and `caseState` only; governance, tasks, timers, holds, compensation, and cross-case relationships are subresources and the `?include=` aggregation seam is closed. `CustodyReceipt` exposes the Trellis custody-anchoring receipt projection; `CompensationLogEntry` and `CompensationLogEntryPage` supply the kernel compensation log (Kernel §9.5).
+`WorkflowProcess` is the public projection of a running WOS workflow instance — the case-file state, lifecycle posture, and identity that drive the case-portal and SDK consumers. `CaseLedgerProjection` is the durable case-level view keyed by the governed case ledger; it can exist before any workflow process starts and aggregates bound `WorkflowProcess` process projections. `CaseLedgerEventSummary` summarizes the latest direct case-ledger provenance event when one exists and exposes the D26 event literal rather than the redundant inner `recordKind` discriminator. Greenfield per ADR 0082 D-15: the kernel runtime artifact (`wos-process.schema.json`) and the prior `case-portal/src/ports/types.ts` `WorkflowProcessView` are prior art, not this contract. Per ADR 0082 D-3, process resources carry lifecycle and `caseState` only; governance, tasks, timers, holds, compensation, and cross-case relationships are subresources and the `?include=` aggregation seam is closed. `CustodyReceipt` exposes the Trellis custody-anchoring receipt projection; `CompensationLogEntry` and `CompensationLogEntryPage` supply the kernel compensation log (Kernel §9.5).
 
 ## Resource Shape
 
-`CaseInstance` carries identity, workflow binding, lifecycle posture, current configuration, and the case-file value:
+`WorkflowProcess` carries identity, workflow binding, lifecycle posture, current configuration, and the case-file value:
 
 - `id`: `urn:wos:<typeid>` URN per ADR 0092 D-1. The namespace-specific string IS the TypeID. The TypeID prefix carries the record family (e.g., `case`).
 - `workflowUrl`, `workflowVersion`: the governing Workflow Document reference (Kernel S9.6).
@@ -28,7 +28,7 @@
 - `tenant`: optional tenant scope per ADR 0068 D-1.1.
 - `correlationKey`: optional cross-case correlation identifier (Kernel S9.4).
 
-`CaseInstance` does NOT carry `activeTasks`, `timers`, `holds`, `delegations`, or `relatedCases`. Those are subresources.
+`WorkflowProcess` does NOT carry `activeTasks`, `timers`, `holds`, `delegations`, or `relatedCases`. Those are subresources.
 
 ## Subresources and `?include=`
 
@@ -37,13 +37,13 @@ Per ADR 0082 D-3, subresource endpoints scale pagination per resource and preven
 | Subresource | Endpoint | Schema | `include=` literal | Pagination |
 |---|---|---|---|---|---|
 | Compensation | `GET /api/v1/instances/{id}/compensation` | `CompensationLogEntryPage` | `compensation` | cursor (D-7) |
-| Governance | `GET /api/v1/instances/{id}/governance` | `CaseInstanceGovernance` | `governance` | not paginated; small bounded set |
+| Governance | `GET /api/v1/instances/{id}/governance` | `WorkflowProcessGovernance` | `governance` | not paginated; small bounded set |
 | Tasks | `GET /api/v1/instances/{id}/tasks`; case/process bridge `GET /api/v1/cases/{case_id}/processes/{process_id}/tasks` | `TaskPage` (from `task.schema.json`) | `tasks` | cursor (D-7); query filters per `TaskListOptions` |
-| Timers | `GET /api/v1/instances/{id}/timers` | `CaseInstanceTimerList` | `timers` | not paginated |
-| Holds | `GET /api/v1/instances/{id}/holds`; case/process bridge `GET /api/v1/cases/{case_id}/processes/{process_id}/holds` | `CaseInstanceHoldList` | `holds` | not paginated |
-| Related cases | `GET /api/v1/instances/{id}/related` | `CaseInstanceRelatedList` | `related` | not paginated |
+| Timers | `GET /api/v1/instances/{id}/timers` | `WorkflowProcessTimerList` | `timers` | not paginated |
+| Holds | `GET /api/v1/instances/{id}/holds`; case/process bridge `GET /api/v1/cases/{case_id}/processes/{process_id}/holds` | `WorkflowProcessHoldList` | `holds` | not paginated |
+| Related cases | `GET /api/v1/instances/{id}/related` | `WorkflowProcessRelatedList` | `related` | not paginated |
 | Provenance | `GET /api/v1/instances/{id}/provenance`; case/process bridge `GET /api/v1/cases/{case_id}/processes/{process_id}/provenance` | `ProvenanceRecordPage` (from `provenance.schema.json`) | NOT in `?include=` | cursor (D-7); query filters per `ProvenanceListOptions` |
-| Correspondence | `GET /api/v1/instances/{instanceId}/correspondence`; case/process bridge `GET /api/v1/cases/{case_id}/processes/{process_id}/correspondence` | `CorrespondenceMessagePage` (from `correspondence.schema.json`) | `correspondence` | cursor (D-7); query filters per `CorrespondenceListOptions` |
+| Correspondence | `GET /api/v1/instances/{processId}/correspondence`; case/process bridge `GET /api/v1/cases/{case_id}/processes/{process_id}/correspondence` | `CorrespondenceMessagePage` (from `correspondence.schema.json`) | `correspondence` | cursor (D-7); query filters per `CorrespondenceListOptions` |
 
 Provenance is intentionally NOT in the `?include=` taxonomy because the cardinality is unbounded and provenance domain-ratification (ADR 0082 D-15 step 3) already supplies a dedicated paginated endpoint.
 
@@ -61,11 +61,11 @@ Provenance is intentionally NOT in the `?include=` taxonomy because the cardinal
 
 `?include=` is a closed enum (`IncludeKind`): `compensation | governance | tasks | timers | holds | related`. Per-section limits (for example `?include=tasks(limit=10)`) are enforced server-side; the inline `tasks` projection uses the lighter `TaskListItem` shape so list views inside the aggregation match the standalone task list. No vendor extensions on `IncludeKind` — closed by design (D-3 framing).
 
-The aggregated response shape is `CaseInstanceWithIncludes`: a required `instance` envelope (the same `CaseInstance` shape returned with no `?include=`) plus optional subresource fields. Subresource fields are present only when their literal was requested. This keeps the aggregation seam discoverable and structurally explicit.
+The aggregated response shape is `WorkflowProcessWithIncludes`: a required `instance` envelope (the same `WorkflowProcess` shape returned with no `?include=`) plus optional subresource fields. Subresource fields are present only when their literal was requested. This keeps the aggregation seam discoverable and structurally explicit.
 
 ## Governance subresource fields
 
-`CaseInstanceGovernance` (the `governance` `include=` literal) carries the enriched governance projection for a case instance. Beyond the required `instanceId`, `delegations` (governance S11), and `reviewState` (closed-with-vendor-extension `none | pending | in-review | cleared | flagged` plus `^x-[a-z]+-` extensions), the following optional fields project governance posture at instance scope:
+`WorkflowProcessGovernance` (the `governance` `include=` literal) carries the enriched governance projection for a workflow process. Beyond the required `processId`, `delegations` (governance S11), and `reviewState` (closed-with-vendor-extension `none | pending | in-review | cleared | flagged` plus `^x-[a-z]+-` extensions), the following optional fields project governance posture at instance scope:
 
 - `adverseDecisionPolicyActive?: boolean` — when true, the workflow's adverse-decision policy is active. The case portal SHOULD surface notices about appeal rights, deadlines, and continuation-of-services windows (governance §3.6).
 - `reviewProtocolActive?: ReviewProtocolKind` — the review protocol currently active on this instance. Projected from the workflow's review-protocol declaration. Present only when a review-protocol-governed transition is in the active configuration. Cross-`$ref`d from `task.schema.json#/$defs/ReviewProtocolKind`.
@@ -75,7 +75,7 @@ The aggregated response shape is `CaseInstanceWithIncludes`: a required `instanc
 
 ## DCR constraint zone state
 
-`DcrConstraintZoneState` (projected on `CaseInstance.dcrZones`) carries per-zone DCR constraint posture for lifecycle states that declare advanced-governance constraint zones (advanced-governance.md §1.2). In addition to the existing `zoneId`, `currentLevel` (closed `none | caution | breach`), and `lastTriggered` (RFC 3339 timestamp of last transition out of `none`), the enriched projection adds:
+`DcrConstraintZoneState` (projected on `WorkflowProcess.dcrZones`) carries per-zone DCR constraint posture for lifecycle states that declare advanced-governance constraint zones (advanced-governance.md §1.2). In addition to the existing `zoneId`, `currentLevel` (closed `none | caution | breach`), and `lastTriggered` (RFC 3339 timestamp of last transition out of `none`), the enriched projection adds:
 
 - `pendingActivities?: string[]` — activity identifiers currently in the 'pending' marking within this DCR zone. Each entry matches an activity name declared in the workflow's constraint-zone declaration.
 - `violatedRelations?: [ { relationType, source, target } ]` — DCR relations currently in violation within this zone. `relationType` is the closed DCR relation taxonomy `condition | response | include | exclude | milestone` per advanced-governance.md. `source` and `target` are identifier-shaped strings naming the activities whose relation is in violation. Empty or absent when no relations are in violation.
@@ -83,37 +83,37 @@ The aggregated response shape is `CaseInstanceWithIncludes`: a required `instanc
 ## Endpoints
 
 ```
-GET   /api/v1/instances                       -> CaseInstancePage
-POST  /api/v1/instances                       -> CaseInstanceCreateResponse  (Idempotency-Key REQUIRED)
-GET   /api/v1/instances/{id}                  -> CaseInstance | CaseInstanceWithIncludes
-GET   /api/v1/instances/{id}/governance       -> CaseInstanceGovernance
+GET   /api/v1/instances                       -> WorkflowProcessPage
+POST  /api/v1/instances                       -> WorkflowProcessCreateResponse  (Idempotency-Key REQUIRED)
+GET   /api/v1/instances/{id}                  -> WorkflowProcess | WorkflowProcessWithIncludes
+GET   /api/v1/instances/{id}/governance       -> WorkflowProcessGovernance
 GET   /api/v1/instances/{id}/compensation      -> CompensationLogEntryPage     (cursor-paginated)
 GET   /api/v1/instances/{id}/tasks            -> TaskPage                    (cursor-paginated)
-GET   /api/v1/instances/{id}/timers           -> CaseInstanceTimerList
-GET   /api/v1/instances/{id}/holds            -> CaseInstanceHoldList
-GET   /api/v1/instances/{id}/related          -> CaseInstanceRelatedList
+GET   /api/v1/instances/{id}/timers           -> WorkflowProcessTimerList
+GET   /api/v1/instances/{id}/holds            -> WorkflowProcessHoldList
+GET   /api/v1/instances/{id}/related          -> WorkflowProcessRelatedList
 GET   /api/v1/instances/{id}/provenance       -> ProvenanceRecordPage        (cursor-paginated)
 GET   /api/v1/instances/{id}/custody           -> CustodyReceipt
 POST  /api/v1/instances/{id}/events           -> EventSubmissionResponse     (Idempotency-Key REQUIRED)
-POST  /api/v1/instances/{id}/suspend          -> CaseInstance                (Idempotency-Key REQUIRED)
-POST  /api/v1/instances/{id}/resume           -> CaseInstance                (Idempotency-Key REQUIRED)
-POST  /api/v1/instances/{id}/terminate        -> CaseInstance                (Idempotency-Key REQUIRED)
+POST  /api/v1/instances/{id}/suspend          -> WorkflowProcess                (Idempotency-Key REQUIRED)
+POST  /api/v1/instances/{id}/resume           -> WorkflowProcess                (Idempotency-Key REQUIRED)
+POST  /api/v1/instances/{id}/terminate        -> WorkflowProcess                (Idempotency-Key REQUIRED)
 POST  /api/v1/instances/{id}/migrate          -> MigrationResult             (Idempotency-Key REQUIRED)
 GET   /api/v1/cases/{case_id}                 -> CaseLedgerProjection
-GET   /api/v1/cases/{case_id}/processes       -> CaseInstance[]
-POST  /api/v1/cases/{case_id}/processes       -> CaseInstance
+GET   /api/v1/cases/{case_id}/processes       -> WorkflowProcess[]
+POST  /api/v1/cases/{case_id}/processes       -> WorkflowProcess
 GET   /api/v1/cases/{case_id}/processes/{process_id}/explanation -> AssembledExplanation
 GET   /api/v1/cases/{case_id}/processes/{process_id}/provenance  -> ProvenanceRecordPage        (cursor-paginated)
 GET   /api/v1/cases/{case_id}/processes/{process_id}/correspondence -> CorrespondenceMessagePage (cursor-paginated)
-GET   /api/v1/cases/{case_id}/processes/{process_id}/holds       -> CaseInstanceHoldList
+GET   /api/v1/cases/{case_id}/processes/{process_id}/holds       -> WorkflowProcessHoldList
 POST  /api/v1/cases/{case_id}/processes/{process_id}/migrate     -> MigrationResult             (Idempotency-Key REQUIRED)
 ```
 
-`GET /api/v1/instances` accepts `CaseInstanceListOptions`: `lifecycleState`, `workflowUrl`, `createdAfter`, `createdBefore`, `tenant`, `include`, `cursor`, `limit` (max 200). Returns `CaseInstancePage` (cursor envelope per `pagination.schema.json`, ADR 0082 D-7). Filters compose with the standard `X-WOS-Tenant` / `X-WOS-Organization` scope headers (ADR 0082 D-9).
+`GET /api/v1/instances` accepts `WorkflowProcessListOptions`: `lifecycleState`, `workflowUrl`, `createdAfter`, `createdBefore`, `tenant`, `include`, `cursor`, `limit` (max 200). Returns `WorkflowProcessPage` (cursor envelope per `pagination.schema.json`, ADR 0082 D-7). Filters compose with the standard `X-WOS-Tenant` / `X-WOS-Organization` scope headers (ADR 0082 D-9).
 
-`POST /api/v1/instances` accepts `CaseInstanceCreateRequest { workflowUrl, tenant?, correlationKey?, seedCaseState?, intakeHandoffRef? }` and returns `CaseInstanceCreateResponse { instance, outcome, attachedToInstanceId?, deferralReason? }`. The `Idempotency-Key` HTTP header is REQUIRED per ADR 0082 D-16; a repeat request within the retention window returns the original response unchanged. When `intakeHandoffRef` is supplied the server runs the kernel `acceptIntakeHandoff` algorithm (Kernel S11.4.1) and the response `outcome` carries the closed-no-extension `IntakeHandoffOutcome` literal (`accepted | attachToExistingCase | deferred`) per ADR 0073 D-7. `attachedToInstanceId` is REQUIRED on `attachToExistingCase`; `deferralReason` is REQUIRED on `deferred`. When `intakeHandoffRef` is omitted, `outcome` is always `accepted` and the optional fields are absent. The existing `CaseInstanceCreateRequest` shape stays compatible — the outcome surface is response-only.
+`POST /api/v1/instances` accepts `WorkflowProcessCreateRequest { workflowUrl, tenant?, correlationKey?, seedCaseState?, intakeHandoffRef? }` and returns `WorkflowProcessCreateResponse { instance, outcome, attachedToInstanceId?, deferralReason? }`. The `Idempotency-Key` HTTP header is REQUIRED per ADR 0082 D-16; a repeat request within the retention window returns the original response unchanged. When `intakeHandoffRef` is supplied the server runs the kernel `acceptIntakeHandoff` algorithm (Kernel S11.4.1) and the response `outcome` carries the closed-no-extension `IntakeHandoffOutcome` literal (`accepted | attachToExistingCase | deferred`) per ADR 0073 D-7. `attachedToInstanceId` is REQUIRED on `attachToExistingCase`; `deferralReason` is REQUIRED on `deferred`. When `intakeHandoffRef` is omitted, `outcome` is always `accepted` and the optional fields are absent. The existing `WorkflowProcessCreateRequest` shape stays compatible — the outcome surface is response-only.
 
-`GET /api/v1/instances/{id}` returns `CaseInstance` when no `?include=` is supplied and `CaseInstanceWithIncludes` when one or more subresource literals are requested. The schemas are distinct shapes; clients discriminate on the presence of the `instance` envelope key.
+`GET /api/v1/instances/{id}` returns `WorkflowProcess` when no `?include=` is supplied and `WorkflowProcessWithIncludes` when one or more subresource literals are requested. The schemas are distinct shapes; clients discriminate on the presence of the `instance` envelope key.
 
 ### Lifecycle-control mutations
 
@@ -121,13 +121,13 @@ The five mutations below close the kernel S11.3 / S4.9 instance-operations gap i
 
 `POST /api/v1/instances/{id}/events` accepts `EventSubmissionRequest { eventName, payload?, actorRef, occurredAt?, correlationKey? }` and returns `EventSubmissionResponse { evaluationResult, newLifecycleState, evaluatedAt, provenanceRecordId?, correlationGroupResult? }`. The kernel transition algorithm (Kernel S4.7) runs against the supplied event; the response carries `EvaluationResult` with the typed `mutations: CaseStateMutation[]` array (ADR 0082 D-6) — the kernel anti-design `caseStateMutations: Record<string, unknown>` is structurally inexpressible. Events whose name uses the kernel-reserved `$`-prefix family (Kernel S4.10) are rejected with `WOS-1422`; submissions to a non-`active` instance are rejected with `WOS-1409`. Fires a `stateTransition` (or `unmatchedEvent`) Facts-tier record.
 
-**Correlation-group fan-out atomicity.** When the submitted event triggered a kernel correlation-group fan-out (Kernel S9.4 — `correlationKey` resolves a multi-instance group), the server runs the kernel transition algorithm against each related instance independently and reports the typed per-instance outcome on `correlationGroupResult: CorrelationGroupResult`. The contract is **best-effort-with-typed-failure**, NOT all-or-nothing: when the server hits 3 of 5 related instances and the 4th refuses (lifecycle-posture mismatch, payload validation against the related instance's workflow event schema, scope filter), the response carries `allSucceeded: false` and the per-instance failure surface on `perInstanceResults: PerInstanceCorrelationResult[]`. Each entry carries `instanceId`, closed-no-extension `status: succeeded | failed | skipped`, REQUIRED `failureCode: WosErrorCode` when `status == failed`, and optional `evaluatedAt`. Callers MUST inspect `perInstanceResults` to determine compensation when `allSucceeded == false` — silent partial-failure is structurally impossible because every related instance the server attempted is named, and a missing entry is itself a contract bug. (Cross-cite ADR 0070 cross-layer failure and compensation when ratified.) `correlationGroupResult` is absent when no fan-out occurred (single-instance evaluation only); the originating instance the request targeted is reported via `evaluationResult` and MAY also appear in `perInstanceResults` at server discretion — callers MUST NOT depend on its presence in the per-instance array.
+**Correlation-group fan-out atomicity.** When the submitted event triggered a kernel correlation-group fan-out (Kernel S9.4 — `correlationKey` resolves a multi-instance group), the server runs the kernel transition algorithm against each related instance independently and reports the typed per-instance outcome on `correlationGroupResult: CorrelationGroupResult`. The contract is **best-effort-with-typed-failure**, NOT all-or-nothing: when the server hits 3 of 5 related instances and the 4th refuses (lifecycle-posture mismatch, payload validation against the related instance's workflow event schema, scope filter), the response carries `allSucceeded: false` and the per-instance failure surface on `perInstanceResults: PerInstanceCorrelationResult[]`. Each entry carries `processId`, closed-no-extension `status: succeeded | failed | skipped`, REQUIRED `failureCode: WosErrorCode` when `status == failed`, and optional `evaluatedAt`. Callers MUST inspect `perInstanceResults` to determine compensation when `allSucceeded == false` — silent partial-failure is structurally impossible because every related instance the server attempted is named, and a missing entry is itself a contract bug. (Cross-cite ADR 0070 cross-layer failure and compensation when ratified.) `correlationGroupResult` is absent when no fan-out occurred (single-instance evaluation only); the originating instance the request targeted is reported via `evaluationResult` and MAY also appear in `perInstanceResults` at server discretion — callers MUST NOT depend on its presence in the per-instance array.
 
-`POST /api/v1/instances/{id}/suspend` accepts `SuspendInstanceRequest { reason, actorRef, holdUntil? }` and returns the updated `CaseInstance` (now `lifecycleState == suspended`). `holdUntil` accepts an `ExpirableTimestamp` (RFC 3339 timestamp or the `never` sentinel per ADR 0082 D-10); the server uses it to surface an expected-resume timestamp on `CaseInstanceHoldList` but does NOT auto-resume — `POST /resume` is still required (Kernel S11.3). Submissions to a non-`active` instance are rejected with `WOS-1409`. Fires an `instanceSuspended` Facts-tier record (see "Companion provenance kinds" below).
+`POST /api/v1/instances/{id}/suspend` accepts `SuspendInstanceRequest { reason, actorRef, holdUntil? }` and returns the updated `WorkflowProcess` (now `lifecycleState == suspended`). `holdUntil` accepts an `ExpirableTimestamp` (RFC 3339 timestamp or the `never` sentinel per ADR 0082 D-10); the server uses it to surface an expected-resume timestamp on `WorkflowProcessHoldList` but does NOT auto-resume — `POST /resume` is still required (Kernel S11.3). Submissions to a non-`active` instance are rejected with `WOS-1409`. Fires an `instanceSuspended` Facts-tier record (see "Companion provenance kinds" below).
 
-`POST /api/v1/instances/{id}/resume` accepts `ResumeInstanceRequest { actorRef, justification? }` and returns the updated `CaseInstance` (now `lifecycleState == active`). Pending events queued during the suspension are evaluated in delivery order after the status flip (Kernel S11.5). Submissions to a non-`suspended` instance are rejected with `WOS-1409`. Fires an `instanceResumed` Facts-tier record.
+`POST /api/v1/instances/{id}/resume` accepts `ResumeInstanceRequest { actorRef, justification? }` and returns the updated `WorkflowProcess` (now `lifecycleState == active`). Pending events queued during the suspension are evaluated in delivery order after the status flip (Kernel S11.5). Submissions to a non-`suspended` instance are rejected with `WOS-1409`. Fires an `instanceResumed` Facts-tier record.
 
-`POST /api/v1/instances/{id}/terminate` accepts `TerminateInstanceRequest { reason, terminationKind, actorRef }` and returns the updated `CaseInstance` (now `lifecycleState == terminated`, irreversible per Kernel S11.5). `TerminationKind` is closed-with-vendor-extension per ADR 0082 D-12 — reserved literals `policy-violation | applicant-withdrawn | duplicate | error | administrative` plus `^x-[a-z]+-` extensions. Submissions to a `completed` or already-`terminated` instance are rejected with `WOS-1409`. Fires an `instanceTerminated` Facts-tier record.
+`POST /api/v1/instances/{id}/terminate` accepts `TerminateInstanceRequest { reason, terminationKind, actorRef }` and returns the updated `WorkflowProcess` (now `lifecycleState == terminated`, irreversible per Kernel S11.5). `TerminationKind` is closed-with-vendor-extension per ADR 0082 D-12 — reserved literals `policy-violation | applicant-withdrawn | duplicate | error | administrative` plus `^x-[a-z]+-` extensions. Submissions to a `completed` or already-`terminated` instance are rejected with `WOS-1409`. Fires an `instanceTerminated` Facts-tier record.
 
 `POST /api/v1/instances/{id}/migrate` and the case/process bridge `POST /api/v1/cases/{case_id}/processes/{process_id}/migrate` accept `MigrateInstanceRequest { targetDefinitionUrl?, targetDefinitionVersion, migrationMap, actorRef, justification }` and return `MigrationResult { instance, migratedAt, instanceMigratedRecordId, migrationPinChangedRecordId, previousWorkflowVersion, newWorkflowVersion, previousWorkflowUrl?, newWorkflowUrl? }`. The case/process bridge validates that `{process_id}` belongs to `{case_id}` before invoking migration; mismatch returns 404. `MigrationMap` mirrors the kernel four-key bag (Kernel S11.2 step 2) but exposes each operation as a typed array of `{path, ...}` objects (`FieldRename`, `FieldDefault`, `FieldCoercion`, plus a bare `FieldPath` array for removals) instead of an open key-value map so D-12 closed-taxonomy discipline holds at the API boundary. Migration is atomic: any step failure leaves the instance on its prior version (Kernel S11.2). Submissions to a `completed` or `terminated` instance are rejected with `WOS-1409`; a target definition lacking a state currently in the configuration is rejected with `WOS-1422` (kernel `stateNotFound`). Fires both `instanceMigrated` (Kernel S11.3) AND `migrationPinChanged` (ADR 0071 D-4 — the cross-layer provenance record kind anchoring the chain transition for offline verifier reconstruction) Facts-tier records; the response carries both URNs.
 
@@ -150,7 +150,7 @@ The kernel-named operation results map to API-side response fields: `instanceMig
 
 ## Identifiers
 
-- `CaseInstance.id`: `urn:wos:<typeid>` URN per ADR 0092 D-1. The namespace-specific string IS the TypeID. Strip `urn:wos:` to extract the canonical TypeID.
+- `WorkflowProcess.id`: `urn:wos:<typeid>` URN per ADR 0092 D-1. The namespace-specific string IS the TypeID. Strip `urn:wos:` to extract the canonical TypeID.
 - `actorRef` fields use the canonical `ActorRef` URN (`actor:(human|service-account|workload|support):...`) hoisted to `_common.schema.json`.
 
 ## Pagination
@@ -169,7 +169,7 @@ Every unsafe (mutation) endpoint requires an `Idempotency-Key` HTTP header per A
 
 All non-2xx responses use `application/problem+json` per ADR 0082 D-8 and `api/error.schema.json`. Domain-relevant codes from the registry:
 
-- `WOS-1404`: case instance does not exist or is not in the caller's scope.
+- `WOS-1404`: workflow process does not exist or is not in the caller's scope.
 - `WOS-1409`: state-transition mismatch — covers four lifecycle-control families: (a) `?include=` request when the instance is `terminated` and the subresource is unavailable; (b) event submission, suspend/resume/terminate/migrate against an instance whose `lifecycleState` does not admit the operation per Kernel S11.5 (e.g. `POST /resume` on an `active` instance, `POST /events` on a `completed` instance); (c) `Idempotency-Key` conflict — same key, different body, same route/scope; (d) `migrate` against an instance currently mid-migration.
 - `WOS-1410`: cursor expired.
 - `WOS-1422`: request failed schema validation. Lifecycle-control families: (a) unknown `seedCaseState` field, `tenant` mismatch with `X-WOS-Tenant`, or `intakeHandoffRef` rejected by the workflow's intake contract; (b) `eventName` uses the kernel-reserved `$`-prefix family (Kernel S4.10) — those are processor-emitted only; (c) migration `targetDefinitionVersion` lacks a state currently in the configuration (kernel `stateNotFound` per Kernel S11.2); (d) `payload` fails the workflow's declared event-payload schema; (e) `terminationKind` carries a vendor extension whose prefix is unregistered for the tenant.

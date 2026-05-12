@@ -88,7 +88,7 @@ mod tests {
         };
         let case = serde_json::json!({});
         let ctx = AgentContext {
-            instance_id: "i",
+            process_id: "i",
             invocation_index: 0,
             case_state: &case,
         };

@@ -502,10 +502,10 @@
         },
         "caseIdentifier": {
           "type": "string",
-          "default": "instanceId",
-          "description": "The case state field used as the XES case identifier (trace concept:name). Default: 'instanceId'.",
+          "default": "processId",
+          "description": "The case state field used as the XES case identifier (trace concept:name). Default: 'processId'.",
           "examples": [
-            "instanceId",
+            "processId",
             "caseFile.caseNumber"
           ],
           "x-wos": {

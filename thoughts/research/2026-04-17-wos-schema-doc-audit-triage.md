@@ -46,12 +46,12 @@
   - `/properties/version` — desc 56 chars (need 60). **Reshape** — identical SemVer semantics across 16 schemas; `$defs/SemVerString`.
   - `/$defs/EntryTemplate/properties/requiredFields/items` — desc 0, examples 0. **Reshape** — bare `string` items, no schema-specific semantics beyond string.
 
-### `schemas/companions/wos-case-instance.schema.json` (106 violations, 68 unique pointers)
+### `schemas/companions/wos-process.schema.json` (106 violations, 68 unique pointers)
 
 - **Dominant bucket:** Backfill (~75%), Reshape (~25%).
-- The largest companion in terms of property count. Many properties are load-bearing runtime state: `instanceId`, `caseState`, `status`, `activeTasks`, `compensationLogs`, `historyStore`. All are referenced by spec prose in `specs/companions/runtime.md`. The reshape fraction comes from repeated `extensions`, `items` arrays on embedded role lists, and `additionalProperties` on mapping objects.
+- The largest companion in terms of property count. Many properties are load-bearing runtime state: `processId`, `caseState`, `status`, `activeTasks`, `compensationLogs`, `historyStore`. All are referenced by spec prose in `specs/companions/runtime.md`. The reshape fraction comes from repeated `extensions`, `items` arrays on embedded role lists, and `additionalProperties` on mapping objects.
 - **Top 5 sampled offenders:**
-  - `/properties/instanceId` — desc 95 chars (need 140, critical); 2 examples (passes). **Backfill** — 1 fixture uses it; spec mandates it as the root identifier.
+  - `/properties/processId` — desc 95 chars (need 140, critical); 2 examples (passes). **Backfill** — 1 fixture uses it; spec mandates it as the root identifier.
   - `/properties/caseState` — desc 179 chars; 1 example (need 2, critical). **Backfill** — foundational runtime property; needs a second concrete example.
   - `/properties/status` — desc 314 chars; 1 example (need 2, critical). **Backfill** — referenced by lint (status-related rules); needs a second example enum value illustrated.
   - `/properties/configuration/items` — desc 0, examples 0. **Reshape** — bare string array item; candidates for `$defs/ConfigurationRef`.
@@ -314,7 +314,7 @@ The violation counts and release-train assignments in the plan map cleanly to th
 | Priority | Tier | Violations | Rationale |
 |----------|------|-----------|-----------|
 | 1 | Kernel (`wos-kernel`, `wos-correspondence-metadata`) | 109 | Most stable; highest adopter count; lint rules already reference these properties; fixes are unblocked by other tiers |
-| 2 | Companions (`wos-case-instance`, `wos-lifecycle-detail`) | 128 | Runtime-facing; `wos-case-instance` is the companion most likely to be LLM-authored in live workflows; high-value Claim A ROI |
+| 2 | Companions (`wos-process`, `wos-lifecycle-detail`) | 128 | Runtime-facing; `wos-process` is the companion most likely to be LLM-authored in live workflows; high-value Claim A ROI |
 | 3 | Governance (`wos-workflow-governance`, `wos-assertion-gate`, `wos-due-process`, `wos-policy-parameters`) | 176 | Critical governance properties have high doc debt; fixing `$wosWorkflowGovernance` and `Assertion.type` unblocks LLM authoring of governance documents |
 | 4 | AI (`wos-ai-integration`, `wos-agent-config`, `wos-drift-monitor`) | 161 | AI schemas are the most LLM-author-forward tier; fixing these has outsized Claim A impact |
 | 5 | Profiles (`wos-integration-profile`, `wos-semantic-profile`) | 82 | Integration-tier; used by integrators, not end-users; important but lower urgency |
@@ -329,7 +329,7 @@ The violation counts and release-train assignments in the plan map cleanly to th
 ```
 docs(schemas/shared): add $defs/ExtensionsMap and $defs/JsonSchemaUri, cross-ref across 19 schemas
 docs(kernel): backfill SCHEMA-DOC-001 violations — wos-kernel and wos-correspondence-metadata
-docs(companions): backfill SCHEMA-DOC-001 violations — wos-case-instance and wos-lifecycle-detail
+docs(companions): backfill SCHEMA-DOC-001 violations — wos-process and wos-lifecycle-detail
 docs(governance): backfill SCHEMA-DOC-001 violations — all four governance schemas
 docs(ai): backfill SCHEMA-DOC-001 violations — ai-integration, agent-config, drift-monitor
 docs(profiles): backfill SCHEMA-DOC-001 violations — integration-profile and semantic-profile

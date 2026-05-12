@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.formspec.io/wos-api/governance/v1",
   "title": "WOS API Governance",
-  "description": "Public API resource schema for WOS governance — the cross-case authoritative shapes for agent declarations, delegations, policy versions, and escalation events. Greenfield per ADR 0082 D-15 step 5; depends on the `actor` resource shape (ADR 0082 D-15 step 5 prerequisite — landed). The case-scoped projections (`CaseInstanceGovernance`, `DelegationEntry`, `HoldEntry`, `ReviewState` on `instance.schema.json`) are the per-instance views; this schema authors the cross-case authoritative records that those projections summarize. Identity references use the canonical `ActorRef` URN string from `_common.schema.json` (ADR 0082 D-9, D-14); URNs use the closed `WosResourceUrn` taxonomy (ADR 0082 D-4). Closed-with-vendor-extension enums per D-12 (`AutonomyLevel`, `DelegationAuthority`, `AgentDriftStatus`, `EscalationReason`). Kernel governance shapes (`Delegation`, `DeonticConstraint`) are mirrored byte-aligned via `x-wos.mirror` annotations consumed by Gate 6 (`scripts/check-api-mirror-parity.py`).",
+  "description": "Public API resource schema for WOS governance — the cross-case authoritative shapes for agent declarations, delegations, policy versions, and escalation events. Greenfield per ADR 0082 D-15 step 5; depends on the `actor` resource shape (ADR 0082 D-15 step 5 prerequisite — landed). The case-scoped projections (`WorkflowProcessGovernance`, `DelegationEntry`, `HoldEntry`, `ReviewState` on `instance.schema.json`) are the per-instance views; this schema authors the cross-case authoritative records that those projections summarize. Identity references use the canonical `ActorRef` URN string from `_common.schema.json` (ADR 0082 D-9, D-14); URNs use the closed `WosResourceUrn` taxonomy (ADR 0082 D-4). Closed-with-vendor-extension enums per D-12 (`AutonomyLevel`, `DelegationAuthority`, `AgentDriftStatus`, `EscalationReason`). Kernel governance shapes (`Delegation`, `DeonticConstraint`) are mirrored byte-aligned via `x-wos.mirror` annotations consumed by Gate 6 (`scripts/check-api-mirror-parity.py`).",
   "oneOf": [
     {
       "$ref": "#/$defs/AgentView"
@@ -395,9 +395,9 @@
             "openStringKind": "timestamp"
           }
         },
-        "instanceId": {
+        "processId": {
           "$ref": "#/$defs/WosResourceUrn",
-          "description": "Optional case instance URN this session is operating on. Surfaced so a portal showing \"sessions in flight on agent X\" can link each to its case."
+          "description": "Optional workflow process URN this session is operating on. Surfaced so a portal showing \"sessions in flight on agent X\" can link each to its case."
         },
         "atCheckpoint": {
           "type": "boolean",
@@ -481,7 +481,7 @@
         "maxInvocationsPerCase": {
           "type": "integer",
           "minimum": 0,
-          "description": "Maximum autonomous invocations per case instance. Absent when no per-case limit applies."
+          "description": "Maximum autonomous invocations per workflow process. Absent when no per-case limit applies."
         }
       }
     },
@@ -984,7 +984,7 @@
     "Delegation": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Cross-case authoritative delegation record (governance S11). Distinct from the case-scoped `DelegationEntry` at `instance.schema.json#/$defs/DelegationEntry`: that shape is the per-case projection on a `CaseInstanceGovernance` subresource; this `Delegation` is the cross-case authoritative record an organization holds for the delegate's authority. Mirrors `wos-workflow.schema.json#/$defs/Delegation` on the identifier and authority shape; identifiers project as URNs (ADR 0082 D-4) and actor references project as `ActorRef` URNs (ADR 0082 D-9).",
+      "description": "Cross-case authoritative delegation record (governance S11). Distinct from the case-scoped `DelegationEntry` at `instance.schema.json#/$defs/DelegationEntry`: that shape is the per-case projection on a `WorkflowProcessGovernance` subresource; this `Delegation` is the cross-case authoritative record an organization holds for the delegate's authority. Mirrors `wos-workflow.schema.json#/$defs/Delegation` on the identifier and authority shape; identifiers project as URNs (ADR 0082 D-4) and actor references project as `ActorRef` URNs (ADR 0082 D-9).",
       "required": [
         "id",
         "delegator",
@@ -1443,7 +1443,7 @@
       "description": "Wire shape for the `escalation` audit-event class (governance §S6 escalation chains; §10.3 SLA breach policy; §12.4 hold timeoutAction). One event is emitted per escalation step the runtime walks (§10.4.4 EscalationStep `level`). The shape is read-only at the public API layer — escalation events are emitted by the runtime when SLA windows breach, holds time out, or operators manually escalate; clients consume them via the audit timeline (ADR 0082 D-15 audit domain, deferred). This $def authors the wire shape so the audit domain can `$ref` it without re-defining.",
       "required": [
         "id",
-        "instanceId",
+        "processId",
         "reason",
         "level",
         "escalatedAt",
@@ -1454,9 +1454,9 @@
           "$ref": "#/$defs/WosResourceUrn",
           "description": "Stable public URN for this escalation event. Entity-type segment is `provenance-record` because escalation events are tier-typed provenance records (governance §S6)."
         },
-        "instanceId": {
+        "processId": {
           "$ref": "#/$defs/WosResourceUrn",
-          "description": "Case instance URN whose governance state escalated. Entity-type segment MUST be `instance`."
+          "description": "Workflow process URN whose governance state escalated. Entity-type segment MUST be `instance`."
         },
         "taskId": {
           "$ref": "#/$defs/WosResourceUrn",
