@@ -433,6 +433,18 @@ fn provenance_kind_reports_only_registry_seeded_d26_event_literals() {
         (ProvenanceKind::IntakeRejected, "wos.kernel.intake_rejected"),
         (ProvenanceKind::IntakeDeferred, "wos.kernel.intake_deferred"),
         (
+            ProvenanceKind::ForEachIterationStarted,
+            "wos.kernel.for_each_iteration_started",
+        ),
+        (
+            ProvenanceKind::ForEachIterationCompleted,
+            "wos.kernel.for_each_iteration_completed",
+        ),
+        (
+            ProvenanceKind::ForEachCompleted,
+            "wos.kernel.for_each_completed",
+        ),
+        (
             ProvenanceKind::SignatureAffirmation,
             "wos.kernel.signature_affirmation",
         ),

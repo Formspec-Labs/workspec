@@ -588,6 +588,35 @@ mod tests {
     }
 
     #[test]
+    fn provenance_event_type_rejects_missing_seeded_event_for_for_each() {
+        let record = record_with_seeded_kind(ProvenanceKind::ForEachIterationStarted, None);
+
+        assert_eq!(
+            provenance_event_type("wos.kernel", &record).expect_err("reject"),
+            CustodyAppendError::EventLiteralMismatch {
+                expected: "wos.kernel.for_each_iteration_started",
+                actual: None,
+            }
+        );
+    }
+
+    #[test]
+    fn provenance_event_type_rejects_mismatched_seeded_event_for_for_each() {
+        let record = record_with_seeded_kind(
+            ProvenanceKind::ForEachIterationStarted,
+            Some("wos.kernel.for_each_iteration_started_WRONG"),
+        );
+
+        assert_eq!(
+            provenance_event_type("wos.kernel", &record).expect_err("reject"),
+            CustodyAppendError::EventLiteralMismatch {
+                expected: "wos.kernel.for_each_iteration_started",
+                actual: Some("wos.kernel.for_each_iteration_started_WRONG".to_string()),
+            }
+        );
+    }
+
+    #[test]
     fn metadata_rejects_non_wos_event_type() {
         let error = CustodyAppendMetadata {
             case_id: typeid::mint_case_id(),

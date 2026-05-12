@@ -60,6 +60,7 @@ POST  /api/v1/tasks/{id}/draft                       -> Task               (idem
 POST  /api/v1/tasks/{id}/response                    -> Task               (Idempotency-Key REQUIRED)
 POST  /api/v1/tasks/{id}/dismiss                     -> Task               (idempotent on (taskId, reason))
 GET   /api/v1/instances/{instanceId}/tasks           -> TaskPage           (subresource of instance, D-3)
+GET   /api/v1/cases/{caseId}/processes/{processId}/tasks -> TaskPage       (case/process bridge, ADR 0093)
 ```
 
 `GET /api/v1/tasks` accepts `TaskListOptions`: `assignedActor` (defaults to the calling actor), `status`, `kind`, `instanceId`, `workflowUrl`, `deadlineBefore`, `cursor`, `limit` (max 200). Returns `TaskPage` (cursor envelope per `pagination.schema.json`, ADR 0082 D-7). Default scope is the calling actor's inbox; admins MAY widen via `assignedActor` subject to ReBAC checks.
@@ -74,7 +75,9 @@ GET   /api/v1/instances/{instanceId}/tasks           -> TaskPage           (subr
 
 `POST /api/v1/tasks/{id}/dismiss` accepts `TaskDismissal { reason, detail?, dismissedAt? }`. Declines the task without submitting a response; the server transitions the task to `dismissed` and fires the kernel `taskSkipped` event with the supplied rationale (governance §10.1 `skipped` requires structured rationale). Dismissal against a non-`pending`/`drafted` task is rejected with `WOS-1409`. Idempotent on `(taskId, reason)`.
 
-`GET /api/v1/instances/{instanceId}/tasks` is the case-scoped task subresource per ADR 0082 D-3. Same `TaskListOptions` query surface; `instanceId` is implied from the path. Cursor-paginated. The same shape is also embedded inline (lighter `TaskListItem`) when `GET /api/v1/instances/{instanceId}?include=tasks` is requested.
+`GET /api/v1/instances/{instanceId}/tasks` is the case-scoped task subresource per ADR 0082 D-3. Same `TaskListOptions` query surface; `instanceId` is implied from the path and any query `instanceId` MUST match it. Cursor-paginated. The same shape is also embedded inline (lighter `TaskListItem`) when `GET /api/v1/instances/{instanceId}?include=tasks` is requested.
+
+`GET /api/v1/cases/{caseId}/processes/{processId}/tasks` is the ADR 0093 dual-identity bridge for workflow-process tasks. The server first validates that `{processId}` is bound to `{caseId}`, then applies the same path-implied `instanceId` scoping and `TaskListOptions` filters as the instance subresource.
 
 ## Identifiers
 
@@ -84,7 +87,7 @@ GET   /api/v1/instances/{instanceId}/tasks           -> TaskPage           (subr
 
 ## Pagination
 
-`GET /api/v1/tasks` and `GET /api/v1/instances/{instanceId}/tasks` use cursor pagination per `api/pagination.schema.json`. Cursors are opaque, single-use within the issuing deploy. Cursor expiry returns `410 Gone` with `WOS-1410` (ADR 0082 D-7). No `total`, `page`, or `pageSize` echo.
+`GET /api/v1/tasks`, `GET /api/v1/instances/{instanceId}/tasks`, and `GET /api/v1/cases/{caseId}/processes/{processId}/tasks` use cursor pagination per `api/pagination.schema.json`. Cursors are opaque, single-use within the issuing deploy. Cursor expiry returns `410 Gone` with `WOS-1410` (ADR 0082 D-7). No `total`, `page`, or `pageSize` echo.
 
 ## Idempotency
 

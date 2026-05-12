@@ -38,7 +38,7 @@ Per ADR 0082 D-3, subresource endpoints scale pagination per resource and preven
 |---|---|---|---|---|---|
 | Compensation | `GET /api/v1/instances/{id}/compensation` | `CompensationLogEntryPage` | `compensation` | cursor (D-7) |
 | Governance | `GET /api/v1/instances/{id}/governance` | `CaseInstanceGovernance` | `governance` | not paginated; small bounded set |
-| Tasks | `GET /api/v1/instances/{id}/tasks` | `TaskPage` (from `task.schema.json`) | `tasks` | cursor (D-7) |
+| Tasks | `GET /api/v1/instances/{id}/tasks`; case/process bridge `GET /api/v1/cases/{case_id}/processes/{process_id}/tasks` | `TaskPage` (from `task.schema.json`) | `tasks` | cursor (D-7); query filters per `TaskListOptions` |
 | Timers | `GET /api/v1/instances/{id}/timers` | `CaseInstanceTimerList` | `timers` | not paginated |
 | Holds | `GET /api/v1/instances/{id}/holds`; case/process bridge `GET /api/v1/cases/{case_id}/processes/{process_id}/holds` | `CaseInstanceHoldList` | `holds` | not paginated |
 | Related cases | `GET /api/v1/instances/{id}/related` | `CaseInstanceRelatedList` | `related` | not paginated |

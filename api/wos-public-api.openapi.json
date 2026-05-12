@@ -2056,6 +2056,133 @@
         }
       }
     },
+    "/cases/{case_id}/processes/{process_id}/tasks": {
+      "get": {
+        "operationId": "listCaseProcessTasks",
+        "summary": "List tasks for a workflow process in a case ledger.",
+        "description": "Case/process bridge for ADR 0093 dual identity. The server validates the case/process binding before listing tasks for the bound workflow process.",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "description": "Durable case ledger WOS resource URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "process_id",
+            "in": "path",
+            "required": true,
+            "description": "Workflow process WOS resource URN bound to the case ledger.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "assignedActor",
+            "in": "query",
+            "required": false,
+            "description": "Filter to tasks currently assigned to the supplied actor URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Filter to tasks in the supplied status (closed `TaskStatus` taxonomy).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskStatus"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "description": "Filter to tasks of the supplied family.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskKind"
+            }
+          },
+          {
+            "name": "deadlineBefore",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive UTC RFC 3339 upper bound on `deadline`.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque resume token from the previous page (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum page size (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated task page scoped to the bound workflow process.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/cases/{case_id}/processes/{process_id}/holds": {
       "get": {
         "operationId": "getCaseProcessHolds",

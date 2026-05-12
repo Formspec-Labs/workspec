@@ -18,6 +18,10 @@ const WOS_GOVERNANCE_REINSTATED_EVENT: &str = "wos.governance.reinstated";
 const WOS_GOVERNANCE_CLOCK_STARTED_EVENT: &str = "wos.governance.clock_started";
 const WOS_GOVERNANCE_CLOCK_RESOLVED_EVENT: &str = "wos.governance.clock_resolved";
 const WOS_ASSURANCE_IDENTITY_ATTESTATION_EVENT: &str = "wos.assurance.identity_attestation";
+const WOS_KERNEL_FOR_EACH_ITERATION_STARTED_EVENT: &str = "wos.kernel.for_each_iteration_started";
+const WOS_KERNEL_FOR_EACH_ITERATION_COMPLETED_EVENT: &str =
+    "wos.kernel.for_each_iteration_completed";
+const WOS_KERNEL_FOR_EACH_COMPLETED_EVENT: &str = "wos.kernel.for_each_completed";
 
 /// Configuration-warning provenance input (cross-cutting; covers AI
 /// `drift-monitor.policyRef`, governance `continuationPolicyRef`, and
@@ -765,6 +769,7 @@ impl ProvenanceRecord {
         item: &serde_json::Value,
     ) -> Self {
         let mut record = Self::blank(ProvenanceKind::ForEachIterationStarted);
+        record.event = Some(WOS_KERNEL_FOR_EACH_ITERATION_STARTED_EVENT.to_string());
         record.data = Some(serde_json::json!({
             "foreachState": foreach_state,
             "index": index,
@@ -781,6 +786,7 @@ impl ProvenanceRecord {
         break_triggered: bool,
     ) -> Self {
         let mut record = Self::blank(ProvenanceKind::ForEachIterationCompleted);
+        record.event = Some(WOS_KERNEL_FOR_EACH_ITERATION_COMPLETED_EVENT.to_string());
         let mut data = serde_json::json!({
             "foreachState": foreach_state,
             "index": index,
@@ -800,6 +806,7 @@ impl ProvenanceRecord {
     /// loop terminated early via `breakCondition`.
     pub fn foreach_completed(foreach_state: &str, iterations: u32, broke: bool) -> Self {
         let mut record = Self::blank(ProvenanceKind::ForEachCompleted);
+        record.event = Some(WOS_KERNEL_FOR_EACH_COMPLETED_EVENT.to_string());
         record.data = Some(serde_json::json!({
             "foreachState": foreach_state,
             "iterations": iterations,
