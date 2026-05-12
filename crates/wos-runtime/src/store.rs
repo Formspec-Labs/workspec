@@ -1,6 +1,6 @@
 // Rust guideline compliant 2026-02-21
 
-//! Atomic runtime persistence for instance state and task artifacts.
+//! Atomic runtime persistence for workflow-process state and task artifacts.
 
 use std::collections::HashMap;
 
@@ -12,7 +12,7 @@ use crate::intake::{
 };
 use crate::runtime::{PersistDraftResult, TaskSubmissionResult};
 
-/// Atomic runtime record for a single instance.
+/// Atomic runtime record for a single workflow process.
 #[derive(Debug, Clone)]
 pub struct RuntimeRecord {
     /// Canonical WOS workflow process state.
@@ -154,10 +154,10 @@ pub enum StoreError {
 
 /// Atomic runtime record store.
 pub trait RuntimeStore {
-    /// Create a brand-new instance record.
+    /// Create a brand-new workflow-process record.
     fn create_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError>;
 
-    /// Load the current record for an instance.
+    /// Load the current record for a workflow process.
     fn load_record(&self, process_id: &str) -> Result<RuntimeRecord, StoreError>;
 
     /// Load the current record bound to a case ledger.
@@ -226,7 +226,7 @@ pub trait RuntimeStore {
         self.save_record(runtime_record)
     }
 
-    /// Atomically replace an instance record.
+    /// Atomically replace a workflow-process record.
     fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError>;
 
     /// Create a brand-new intake record.
