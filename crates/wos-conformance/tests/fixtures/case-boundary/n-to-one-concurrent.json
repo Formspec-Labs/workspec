@@ -1,0 +1,75 @@
+{
+  "id": "CBR-4C-1-n-to-one-concurrent",
+  "rule": "CBR-§4.3",
+  "description": "N:1 case-boundary fixture (CBR §4.3, REFACTOR-TODO 4C.1). Two workflow processes started on one case ledger; each emits provenance events with interleaved timestamps. The case view (provenance_for_case) MUST return all events in (timestamp, encounter-order) order, and processes_for_case MUST list both process_ids.",
+  "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2db_n_to_one",
+  "processes": [
+    {
+      "process_id": "process_01hw7rm71vfay8vvw14d2pf2da_a",
+      "definition_url": "urn:test:case-boundary:n-to-one:definition-a",
+      "definition_version": "1.0.0"
+    },
+    {
+      "process_id": "process_01hw7rm71vfay8vvw14d2pf2db_b",
+      "definition_url": "urn:test:case-boundary:n-to-one:definition-b",
+      "definition_version": "1.0.0"
+    }
+  ],
+  "actions": [
+    {
+      "kind": "directAppend",
+      "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2db_n_to_one",
+      "process_id": "process_01hw7rm71vfay8vvw14d2pf2da_a",
+      "event_type": "wos.kernel.case_created",
+      "actor_id": "system:case-genesis",
+      "timestamp": "2026-05-12T10:00:00Z",
+      "label": "genesis"
+    },
+    {
+      "kind": "appendProvenance",
+      "process_id": "process_01hw7rm71vfay8vvw14d2pf2da_a",
+      "event": "alpha",
+      "from_state": "Draft",
+      "to_state": "Submitted",
+      "actor_id": "actor:process-a",
+      "timestamp": "2026-05-12T10:00:01Z",
+      "label": "alpha"
+    },
+    {
+      "kind": "appendProvenance",
+      "process_id": "process_01hw7rm71vfay8vvw14d2pf2db_b",
+      "event": "beta",
+      "from_state": "Draft",
+      "to_state": "Routed",
+      "actor_id": "actor:process-b",
+      "timestamp": "2026-05-12T10:00:02Z",
+      "label": "beta"
+    },
+    {
+      "kind": "appendProvenance",
+      "process_id": "process_01hw7rm71vfay8vvw14d2pf2da_a",
+      "event": "gamma",
+      "from_state": "Submitted",
+      "to_state": "Approved",
+      "actor_id": "actor:process-a",
+      "timestamp": "2026-05-12T10:00:03Z",
+      "label": "gamma"
+    }
+  ],
+  "expected_processes_for_case": [
+    "process_01hw7rm71vfay8vvw14d2pf2da_a",
+    "process_01hw7rm71vfay8vvw14d2pf2db_b"
+  ],
+  "expected_case_view_timestamps": [
+    "2026-05-12T10:00:00Z",
+    "2026-05-12T10:00:01Z",
+    "2026-05-12T10:00:02Z",
+    "2026-05-12T10:00:03Z"
+  ],
+  "expected_case_view_events": [
+    { "event": "wos.kernel.case_created", "process_id": "process_01hw7rm71vfay8vvw14d2pf2da_a" },
+    { "event": "alpha", "process_id": "process_01hw7rm71vfay8vvw14d2pf2da_a" },
+    { "event": "beta", "process_id": "process_01hw7rm71vfay8vvw14d2pf2db_b" },
+    { "event": "gamma", "process_id": "process_01hw7rm71vfay8vvw14d2pf2da_a" }
+  ]
+}

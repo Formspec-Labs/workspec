@@ -25,6 +25,10 @@ name = "signature_profile"
 path = "tests/signature_profile.rs"
 
 [[test]]
+name = "case_boundary_fixtures"
+path = "tests/case_boundary_fixtures.rs"
+
+[[test]]
 name = "r6_restate_conformance_slice"
 path = "tests/r6_restate_conformance_slice.rs"
 required-features = ["restate-tests"]
