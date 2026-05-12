@@ -153,14 +153,14 @@ The spec does not give AI a separate, weaker track — agents participate under 
 
 ## Specification inventory
 
-Per [ADR 0076](../thoughts/adr/0076-product-tier-consolidation.md), the WOS schema family is consolidated to **6 files**. One author-time core (`wos-workflow.schema.json`) carries the workflow lifecycle plus seven optional embedded blocks (governance, agents, aiOversight, signature, custody, advanced, assurance). Two sidecars (`wos-delivery`, `wos-ontology-alignment`) join by `targetWorkflow` URI. Two runtime artifact schemas (`wos-case-instance`, `wos-provenance-log`) and one tooling schema (`wos-tooling`) round out the family.
+Per [ADR 0076](../thoughts/adr/0076-product-tier-consolidation.md), the WOS schema family is consolidated to **6 files**. One author-time core (`wos-workflow.schema.json`) carries the workflow lifecycle plus seven optional embedded blocks (governance, agents, aiOversight, signature, custody, advanced, assurance). Two sidecars (`wos-delivery`, `wos-ontology-alignment`) join by `targetWorkflow` URI. Two runtime artifact schemas (`wos-process`, `wos-provenance-log`) and one tooling schema (`wos-tooling`) round out the family.
 
 | Role | Spec | Schema |
 |---|---|---|
 | Author-time core | [`kernel/spec.md`](specs/kernel/spec.md) (the merged kernel spec post-ADR-0076 absorption — §1-§16 cover lifecycle, case state, provenance, durable execution, extension seams, runtime serialization, evaluation modes, Formspec coprocessor, separation principles, contract validation, host interfaces) | [`wos-workflow`](schemas/wos-workflow.schema.json) |
 | Sidecar (delivery) | (schema descriptions are the canonical surface; see [`specs/sidecars/README.md`](specs/sidecars/README.md)) | [`wos-delivery`](schemas/sidecars/wos-delivery.schema.json) |
 | Sidecar (ontology) | (schema descriptions are the canonical surface; see [`specs/sidecars/README.md`](specs/sidecars/README.md)) | [`wos-ontology-alignment`](schemas/sidecars/wos-ontology-alignment.schema.json) |
-| Runtime artifact (instance) | n/a (produced by processors) | [`wos-case-instance`](schemas/wos-case-instance.schema.json) |
+| Runtime artifact (process) | n/a (produced by processors) | [`wos-process`](schemas/wos-process.schema.json) |
 | Runtime artifact (audit log) | n/a (produced by processors) | [`wos-provenance-log`](schemas/wos-provenance-log.schema.json) |
 | Tooling | n/a (consumed by tooling) | [`wos-tooling`](schemas/wos-tooling.schema.json) |
 

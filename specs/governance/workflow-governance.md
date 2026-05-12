@@ -788,7 +788,7 @@ Governance is declared as the `governance` embedded block within a `$wosWorkflow
 }
 ```
 
-The `url` value is the canonical workflow identifier. Runtime artifacts (`$wosCaseInstance`, `$wosProvenanceLog`) and any delivery sidecar (`$wosDelivery`) join to the same `url` via their respective `targetWorkflow` or `workflowUrl` properties.
+The `url` value is the canonical workflow identifier. Runtime artifacts (`$wosProcess`, `$wosProvenanceLog`) and any delivery sidecar (`$wosDelivery`) join to the same `url` via their respective `targetWorkflow` or `workflowUrl` properties.
 
 ---
 

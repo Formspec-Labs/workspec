@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.formspec.io/wos-api/task/v1",
   "title": "WOS API Task",
-  "description": "Public API resource schema for WOS tasks. Greenfield per ADR 0082 D-15 step 4. A `Task` is a single unit of governed actor work created by a kernel `createTask` action (Kernel S9.2) and governed by the Workflow Governance task-management contract (governance S10). The wire shape carries identity, workflow binding, assignment, contract context, lifecycle (closed `TaskStatus`), and the optional draft response. The lighter `TaskListItem` shape is used for list views; the full `Task` is the single-resource shape. Submission is split into a draft (idempotent partial save) and a final response (require `Idempotency-Key`). The kernel runtime artifact `wos-case-instance.schema.json#/$defs/ActiveTask` is prior art; this projection is greenfield (ADR 0082 D-15).",
+  "description": "Public API resource schema for WOS tasks. Greenfield per ADR 0082 D-15 step 4. A `Task` is a single unit of governed actor work created by a kernel `createTask` action (Kernel S9.2) and governed by the Workflow Governance task-management contract (governance S10). The wire shape carries identity, workflow binding, assignment, contract context, lifecycle (closed `TaskStatus`), and the optional draft response. The lighter `TaskListItem` shape is used for list views; the full `Task` is the single-resource shape. Submission is split into a draft (idempotent partial save) and a final response (require `Idempotency-Key`). The kernel runtime artifact `wos-process.schema.json#/$defs/ActiveTask` is prior art; this projection is greenfield (ADR 0082 D-15).",
   "oneOf": [
     {
       "$ref": "#/$defs/Task"
@@ -63,7 +63,7 @@
         "dismissed",
         "expired"
       ],
-      "description": "Closed user-facing task lifecycle for the public API (ADR 0082 D-12). The kernel runtime carries a richer `created|assigned|claimed|delegated|escalated` set on `wos-case-instance.schema.json#/$defs/ActiveTask.status` for processor-side bookkeeping; the public API collapses those into the user-visible posture: `pending` (the actor has work to do); `drafted` (a partial response is saved); `submitted` (the actor's final response is committed and the task is no longer actionable); `dismissed` (the actor declined the task per delegation or escalation policy); `expired` (the SLA `targetDuration` elapsed without submission and the breach policy fired). No vendor-extension seam: the user-facing taxonomy is closed by design; richer kernel-side states surface in provenance and on `TaskOutcomeEvent.outcome`.",
+      "description": "Closed user-facing task lifecycle for the public API (ADR 0082 D-12). The kernel runtime carries a richer `created|assigned|claimed|delegated|escalated` set on `wos-process.schema.json#/$defs/ActiveTask.status` for processor-side bookkeeping; the public API collapses those into the user-visible posture: `pending` (the actor has work to do); `drafted` (a partial response is saved); `submitted` (the actor's final response is committed and the task is no longer actionable); `dismissed` (the actor declined the task per delegation or escalation policy); `expired` (the SLA `targetDuration` elapsed without submission and the breach policy fired). No vendor-extension seam: the user-facing taxonomy is closed by design; richer kernel-side states surface in provenance and on `TaskOutcomeEvent.outcome`.",
       "examples": [
         "pending",
         "drafted"
@@ -101,12 +101,12 @@
         "jsonSchema",
         "freeform"
       ],
-      "description": "Closed contract-binding kind for the task body (Kernel S7.2). Byte-aligned mirror of the kernel `ActiveTask.binding` enum at `wos-case-instance.schema.json#/$defs/ActiveTask/properties/binding` (ADR 0082 D-13 gate 6). `formspec` is rendered by Formspec; `jsonSchema` is a generic JSON-Schema-validated payload; `freeform` is a structured task with no machine-validated payload (typical of dismissals or simple acknowledgements). Closed-no-extension at this layer; if a deployment needs new bindings, the kernel grows them and the API mirror tracks.",
+      "description": "Closed contract-binding kind for the task body (Kernel S7.2). Byte-aligned mirror of the kernel `ActiveTask.binding` enum at `wos-process.schema.json#/$defs/ActiveTask/properties/binding` (ADR 0082 D-13 gate 6). `formspec` is rendered by Formspec; `jsonSchema` is a generic JSON-Schema-validated payload; `freeform` is a structured task with no machine-validated payload (typical of dismissals or simple acknowledgements). Closed-no-extension at this layer; if a deployment needs new bindings, the kernel grows them and the API mirror tracks.",
       "examples": [
         "formspec"
       ],
       "x-wos": {
-        "mirror": "wos-case-instance.schema.json#/$defs/ActiveTask/properties/binding"
+        "mirror": "wos-process.schema.json#/$defs/ActiveTask/properties/binding"
       }
     },
     "ReviewProtocolKind": {
@@ -255,7 +255,7 @@
           "$comment": "Vendor-extension fields for deployment-local validation metadata."
         }
       },
-      "description": "Most recent WOS validation wrapper for a Formspec-backed task response (Kernel §13.6; wos-case-instance.schema.json#/$defs/ValidationOutcome). The three booleans are the validation axes: Formspec response envelope validity, task-pin match, and Formspec definition validation over response.data.",
+      "description": "Most recent WOS validation wrapper for a Formspec-backed task response (Kernel §13.6; wos-process.schema.json#/$defs/ValidationOutcome). The three booleans are the validation axes: Formspec response envelope validity, task-pin match, and Formspec definition validation over response.data.",
       "required": [
         "envelopeValid",
         "pinMatch",
@@ -455,7 +455,7 @@
     "Task": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Full public task projection (ADR 0082 D-3). Adds contract binding, draft state, and validation outcome to the `TaskListItem` core. The kernel runtime artifact `wos-case-instance.schema.json#/$defs/ActiveTask` is prior art; this is greenfield (ADR 0082 D-15) so the projection diverges intentionally: identifiers are URNs (D-4), `status` is the closed user-facing taxonomy (not the kernel `created|assigned|claimed|...` set), and the form-rendering `context` block is not surfaced (clients fetch the form via `definitionUrl`/`definitionVersion`).",
+      "description": "Full public task projection (ADR 0082 D-3). Adds contract binding, draft state, and validation outcome to the `TaskListItem` core. The kernel runtime artifact `wos-process.schema.json#/$defs/ActiveTask` is prior art; this is greenfield (ADR 0082 D-15) so the projection diverges intentionally: identifiers are URNs (D-4), `status` is the closed user-facing taxonomy (not the kernel `created|assigned|claimed|...` set), and the form-rendering `context` block is not surfaced (clients fetch the form via `definitionUrl`/`definitionVersion`).",
       "required": [
         "id",
         "instanceId",

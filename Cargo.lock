@@ -840,16 +840,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "formspec-canonical"
-version = "0.1.0"
-dependencies = [
- "hex",
- "serde",
- "serde_json",
- "sha2 0.10.9",
-]
-
-[[package]]
 name = "fraction"
 version = "0.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1387,6 +1377,16 @@ dependencies = [
  "serde",
  "similar",
  "tempfile",
+]
+
+[[package]]
+name = "integrity-canonical"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "serde_json",
+ "serde_json_canonicalizer",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -4156,7 +4156,7 @@ dependencies = [
 name = "wos-formspec-binding"
 version = "0.1.0"
 dependencies = [
- "formspec-canonical",
+ "integrity-canonical",
  "serde",
  "serde_json",
  "thiserror 2.0.18",

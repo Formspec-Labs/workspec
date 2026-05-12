@@ -163,22 +163,22 @@ impl CaseInstance {
     /// when a canonical case TypeID was minted at `create_instance`.
     pub const LEGACY_INSTANCE_ALIAS_EXTENSION_KEY: &str = "x-wos-legacy-instance-alias";
 
-    /// Mints a new case identifier.
+    /// Mints a new case-ledger identifier.
     #[must_use]
     pub fn mint_id() -> String {
-        typeid::mint_case_id()
+        typeid::mint_case_ledger_id()
     }
 
     /// Returns whether `value` already matches the reserved case TypeID shape.
     #[must_use]
     pub fn is_case_id(value: &str) -> bool {
-        typeid::is_valid_type_id(value, Some(typeid::CASE_PREFIX))
+        typeid::is_case_ledger_id(value)
     }
 
     /// Returns whether `value` matches the reserved process TypeID shape.
     #[must_use]
     pub fn is_process_id(value: &str) -> bool {
-        typeid::is_valid_type_id(value, Some(typeid::PROCESS_PREFIX))
+        typeid::is_process_id(value)
     }
 
     /// Returns whether `value` matches the WOS resource URN shape

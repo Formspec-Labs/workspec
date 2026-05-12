@@ -1,6 +1,6 @@
-"""CaseInstance TypeID regression tests.
+"""Process TypeID regression tests.
 
-Guards the runtime-artifact CaseInstance schema after T1-3 tightened
+Guards the runtime-artifact Process schema after T1-3 tightened
 `instanceId` to WOS TypeID families. The transitional bridge accepts the
 legacy `case` family and the new workflow `process` family while the explicit
 `caseLedgerId` and `processId` fields carry the split identity.
@@ -14,14 +14,14 @@ from pathlib import Path
 from jsonschema import Draft202012Validator
 
 WOS_SPEC_ROOT = Path(__file__).resolve().parents[2]
-CASE_INSTANCE_SCHEMA = (
-    WOS_SPEC_ROOT / "schemas" / "wos-case-instance.schema.json"
+PROCESS_SCHEMA = (
+    WOS_SPEC_ROOT / "schemas" / "wos-process.schema.json"
 )
 
 
 def _minimal_instance() -> dict:
     return {
-        "$wosCaseInstance": "1.0",
+        "$wosProcess": "1.0",
         "instanceId": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd",
         "tenant": "sba-poc",
         "definitionUrl": "https://agency.gov/workflows/benefits-adjudication",
@@ -38,14 +38,14 @@ def _minimal_instance() -> dict:
 
 
 def test_case_instance_accepts_case_typeid():
-    schema = json.loads(CASE_INSTANCE_SCHEMA.read_text())
+    schema = json.loads(PROCESS_SCHEMA.read_text())
     validator = Draft202012Validator(schema)
     errors = list(validator.iter_errors(_minimal_instance()))
     assert errors == [], f"valid CaseInstance rejected: {errors}"
 
 
 def test_case_instance_accepts_process_typeid():
-    schema = json.loads(CASE_INSTANCE_SCHEMA.read_text())
+    schema = json.loads(PROCESS_SCHEMA.read_text())
     validator = Draft202012Validator(schema)
     doc = _minimal_instance()
     doc["instanceId"] = "sba-poc_process_01jqrpd32jf8xtx9qxkkv3rqsd"
@@ -55,7 +55,7 @@ def test_case_instance_accepts_process_typeid():
 
 
 def test_case_instance_accepts_explicit_dual_identity_fields():
-    schema = json.loads(CASE_INSTANCE_SCHEMA.read_text())
+    schema = json.loads(PROCESS_SCHEMA.read_text())
     validator = Draft202012Validator(schema)
     doc = _minimal_instance()
     doc["processId"] = "sba-poc_process_01jqrpd32jf8xtx9qxkkv3rqsd"
@@ -65,7 +65,7 @@ def test_case_instance_accepts_explicit_dual_identity_fields():
 
 
 def test_case_instance_rejects_non_runtime_typeid():
-    schema = json.loads(CASE_INSTANCE_SCHEMA.read_text())
+    schema = json.loads(PROCESS_SCHEMA.read_text())
     validator = Draft202012Validator(schema)
     doc = _minimal_instance()
     doc["instanceId"] = "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd"
@@ -74,7 +74,7 @@ def test_case_instance_rejects_non_runtime_typeid():
 
 
 def test_case_instance_rejects_swapped_dual_identity_families():
-    schema = json.loads(CASE_INSTANCE_SCHEMA.read_text())
+    schema = json.loads(PROCESS_SCHEMA.read_text())
     validator = Draft202012Validator(schema)
     doc = _minimal_instance()
     doc["processId"] = "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd"
@@ -84,7 +84,7 @@ def test_case_instance_rejects_swapped_dual_identity_families():
 
 
 def test_formspec_task_context_accepts_process_instance_id():
-    schema = json.loads(CASE_INSTANCE_SCHEMA.read_text())
+    schema = json.loads(PROCESS_SCHEMA.read_text())
     validator = Draft202012Validator(schema)
     doc = _minimal_instance()
     doc["activeTasks"] = [
@@ -111,7 +111,7 @@ def test_formspec_task_context_accepts_process_instance_id():
 
 def test_case_instance_omitted_tenant_still_validates():
     """Older persisted rows and minimal hand-authored fixtures may omit tenant."""
-    schema = json.loads(CASE_INSTANCE_SCHEMA.read_text())
+    schema = json.loads(PROCESS_SCHEMA.read_text())
     validator = Draft202012Validator(schema)
     doc = _minimal_instance()
     del doc["tenant"]
@@ -120,7 +120,7 @@ def test_case_instance_omitted_tenant_still_validates():
 
 
 def test_case_instance_rejects_invalid_tenant_pattern():
-    schema = json.loads(CASE_INSTANCE_SCHEMA.read_text())
+    schema = json.loads(PROCESS_SCHEMA.read_text())
     validator = Draft202012Validator(schema)
     doc = _minimal_instance()
     doc["tenant"] = "INVALID"
@@ -129,7 +129,7 @@ def test_case_instance_rejects_invalid_tenant_pattern():
 
 
 def test_case_instance_accepts_default_tenant_literal():
-    schema = json.loads(CASE_INSTANCE_SCHEMA.read_text())
+    schema = json.loads(PROCESS_SCHEMA.read_text())
     validator = Draft202012Validator(schema)
     doc = _minimal_instance()
     doc["instanceId"] = "default_case_01hw7rm71vfay8vvw14d2pf2db"

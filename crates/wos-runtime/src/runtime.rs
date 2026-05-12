@@ -44,9 +44,10 @@ pub use provenance::{
 };
 use provenance::{compensation_provenance, contract_validation_record};
 pub use signature::{
-    AdmissionOutcome, CompletionRequirementKind, PostureDeclaration,
-    SIGNATURE_PROFILE_KEY_EXTENSION, SIGNATURE_PROFILE_REF_EXTENSION, SIGNATURE_STEP_ID_EXTENSION,
-    SignatureProfileDocument,
+    AdmissionOutcome, CompletionRequirementKind, HttpPostureResolver, PostureDeclaration,
+    PostureResolver, ResolvedPostureDeclaration, SIGNATURE_PROFILE_KEY_EXTENSION,
+    SIGNATURE_PROFILE_REF_EXTENSION, SIGNATURE_STEP_ID_EXTENSION, SignatureProfileDocument,
+    StaticPostureResolver,
 };
 use support::{
     format_timestamp, impact_level_label, make_task_id, merge_case_state,
@@ -487,7 +488,9 @@ pub struct WosRuntime {
     /// declaration's `invoker` discriminator. Empty by default — runtimes
     /// without agent participation never need to populate it.
     agent_invokers: wos_core::AgentInvokerRegistry,
-    /// Cached Posture Declarations keyed by URI.
+    /// Host-owned Posture Declaration resolver.
+    posture_resolver: Box<dyn signature::PostureResolver + Send + Sync>,
+    /// Cached Posture Declarations keyed by resolved content digest.
     ///
     /// **Production note:** `RefCell` makes `WosRuntime` `!Send + !Sync`, which is
     /// acceptable for the in-memory adapter (single-threaded test oracle) but MUST be
@@ -537,6 +540,7 @@ impl WosRuntime {
             intake_policy: Box::new(NoopIntakeAcceptancePolicy),
             signature_profiles: Vec::new(),
             agent_invokers: wos_core::AgentInvokerRegistry::new(),
+            posture_resolver: Box::new(signature::HttpPostureResolver),
             posture_declarations: RefCell::new(HashMap::new()),
         }
     }
@@ -623,7 +627,7 @@ impl WosRuntime {
 mod tests {
     use super::*;
 
-    use std::collections::HashMap;
+    use std::collections::{HashMap, VecDeque};
     use std::fs;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -1343,6 +1347,37 @@ mod tests {
             _anchor_date: Option<&str>,
         ) -> Result<serde_json::Value, Self::Error> {
             Err(TestResolverError("unused".to_string()))
+        }
+    }
+
+    #[derive(Debug)]
+    struct RotatingPostureResolver {
+        bodies: Mutex<VecDeque<String>>,
+    }
+
+    impl RotatingPostureResolver {
+        fn new(bodies: impl IntoIterator<Item = String>) -> Self {
+            Self {
+                bodies: Mutex::new(bodies.into_iter().collect()),
+            }
+        }
+    }
+
+    impl signature::PostureResolver for RotatingPostureResolver {
+        fn resolve_posture_declaration(
+            &self,
+            posture_uri: &str,
+        ) -> Result<signature::ResolvedPostureDeclaration, RuntimeError> {
+            let mut bodies = self.bodies.lock().expect("posture resolver mutex poisoned");
+            let body = bodies.pop_front().ok_or_else(|| {
+                RuntimeError::Signature(format!(
+                    "no posture declaration body queued for '{posture_uri}'"
+                ))
+            })?;
+            Ok(signature::ResolvedPostureDeclaration::new(
+                posture_uri,
+                body,
+            ))
         }
     }
 
@@ -3532,6 +3567,76 @@ mod tests {
         (kernel, profile)
     }
 
+    fn submit_sig013_applicant_response(
+        runtime: &mut WosRuntime,
+        kernel: &KernelDocument,
+        instance_id: &str,
+        token_prefix: &str,
+    ) -> TaskSubmissionResult {
+        runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: instance_id.to_string(),
+                tenant: None,
+                definition_url: kernel.url.clone().unwrap(),
+                definition_version: kernel.version.clone().unwrap(),
+                initial_case_state: None,
+            })
+            .expect("create_instance");
+
+        runtime
+            .enqueue_event(
+                instance_id,
+                PendingEvent {
+                    event: "start".to_string(),
+                    actor_id: Some("applicant".to_string()),
+                    data: None,
+                    timestamp: String::new(),
+                    idempotency_token: Some(format!("{token_prefix}-start")),
+                },
+            )
+            .expect("enqueue start");
+        runtime
+            .drain_until_idle(instance_id)
+            .expect("drain after start");
+
+        let instance = runtime.load_instance(instance_id).expect("load instance");
+        let task_id = instance
+            .active_tasks
+            .iter()
+            .find(|t| t.task_ref == "applicantTask")
+            .expect("applicantTask from signature onEntry")
+            .task_id
+            .clone();
+
+        runtime
+            .submit_task_response(
+                &task_id,
+                serde_json::json!({
+                    "status": "completed",
+                    "definitionUrl": "urn:test:formspec:signature",
+                    "definitionVersion": "1.0.0",
+                    "data": {
+                        "signerId": "applicant",
+                        "signatureProvider": "formspec",
+                        "ceremonyId": "ceremony-sequential",
+                        "identityBinding": {
+                            "method": "email-otp",
+                            "assuranceLevel": "standard"
+                        },
+                        "signature": {
+                            "acceptedAt": "2026-04-22T12:00:00Z",
+                            "affirmed": true,
+                            "signatureMethod": "urn:formspec:sig-method:ed25519-cose-sign1@1",
+                            "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                        }
+                    }
+                }),
+                "applicant",
+                Some(&format!("{token_prefix}-submit")),
+            )
+            .expect("signature admission should complete")
+    }
+
     fn manual_formspec_task(
         instance_id: &str,
         ordinal: usize,
@@ -4698,10 +4803,7 @@ mod tests {
             }
         }))
         .expect("posture declaration parses");
-        runtime
-            .posture_declarations
-            .borrow_mut()
-            .insert(posture.url.clone(), posture);
+        runtime = runtime.with_posture_declaration(posture);
 
         let instance_id = "case-sig013-posture-method-unsupported";
         runtime
@@ -4804,6 +4906,90 @@ mod tests {
     }
 
     #[test]
+    fn submit_task_response_posture_rejects_substituted_content_for_same_uri() {
+        let (kernel, mut profile) = sig013_harness_documents();
+        let posture_url =
+            "https://example.gov/posture/signature-runtime-substitution-test.json".to_string();
+        profile.posture_policy = Some(signature::PosturePolicyRef {
+            url: posture_url.clone(),
+            version: Some("1.0.0".to_string()),
+        });
+        let allowed_body = serde_json::json!({
+            "$postureDeclaration": "1.0",
+            "url": posture_url.clone(),
+            "version": "1.0.0",
+            "signaturePolicy": {
+                "allowedMethods": ["urn:formspec:sig-method:ed25519-cose-sign1@1"],
+                "minimumPrimitiveVerification": "deferredPendingHelper",
+                "receiptSigningRequired": false
+            }
+        })
+        .to_string();
+        let substituted_body = serde_json::json!({
+            "$postureDeclaration": "1.0",
+            "url": posture_url,
+            "version": "1.0.0",
+            "signaturePolicy": {
+                "allowedMethods": ["urn:formspec:sig-method:ecdsa-p256-cose-sign1@1"],
+                "minimumPrimitiveVerification": "deferredPendingHelper",
+                "receiptSigningRequired": false
+            }
+        })
+        .to_string();
+        let mut runtime = runtime_with_kernel_sig013_harness(kernel.clone())
+            .with_signature_profile("signatureProfile", profile)
+            .with_posture_resolver(RotatingPostureResolver::new([
+                allowed_body,
+                substituted_body,
+            ]));
+
+        let first = submit_sig013_applicant_response(
+            &mut runtime,
+            &kernel,
+            "case-sig013-posture-substitution-first",
+            "sig013-posture-substitution-first",
+        );
+        assert!(
+            matches!(first, TaskSubmissionResult::Completed { .. }),
+            "first admission should use the original posture content, got {first:?}"
+        );
+
+        let second = submit_sig013_applicant_response(
+            &mut runtime,
+            &kernel,
+            "case-sig013-posture-substitution-second",
+            "sig013-posture-substitution-second",
+        );
+        assert!(
+            matches!(
+                second,
+                TaskSubmissionResult::Failed {
+                    ref code,
+                    emitted_event: None
+                } if code == "signatureAdmissionFailed"
+            ),
+            "substituted posture content for the same URI must be re-evaluated, got {second:?}"
+        );
+
+        let record = runtime
+            .store
+            .load_record("case-sig013-posture-substitution-second")
+            .expect("load substituted-content record");
+        let admission_failed = record
+            .provenance_log
+            .iter()
+            .find(|record| {
+                record.record_kind == wos_core::provenance::ProvenanceKind::SignatureAdmissionFailed
+            })
+            .expect("substituted posture content emits SignatureAdmissionFailed");
+        let data = admission_failed
+            .data
+            .as_ref()
+            .expect("SignatureAdmissionFailed carries data");
+        assert_eq!(data["reason"], serde_json::json!("method_unsupported"));
+    }
+
+    #[test]
     fn submit_task_response_posture_rejects_disallowed_signing_intent() {
         let (kernel, mut profile) = sig013_harness_documents();
         let posture_url =
@@ -4826,10 +5012,7 @@ mod tests {
             }
         }))
         .expect("posture declaration parses");
-        runtime
-            .posture_declarations
-            .borrow_mut()
-            .insert(posture.url.clone(), posture);
+        runtime = runtime.with_posture_declaration(posture);
 
         let instance_id = "case-sig013-posture-intent-unsupported";
         runtime
@@ -4953,10 +5136,7 @@ mod tests {
             }
         }))
         .expect("posture declaration parses");
-        runtime
-            .posture_declarations
-            .borrow_mut()
-            .insert(posture.url.clone(), posture);
+        runtime = runtime.with_posture_declaration(posture);
 
         let instance_id = "case-sig013-posture-receipt-required";
         runtime

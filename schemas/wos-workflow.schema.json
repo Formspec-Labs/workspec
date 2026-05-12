@@ -969,7 +969,7 @@
       ]
     },
     "InstanceStatus": {
-      "$comment": "Name-promoted alias of the runtime instance-status enum, originally inlined at `wos-case-instance.schema.json#/properties/status` (ADR 0070 D-5 \u2014 `stalled` reframed as a reserved `InstanceStatus` variant). Lifted to `$defs` so the public API projection in `schemas/api/instance.schema.json#/$defs/LifecycleState` (ADR 0082 D-13 gate 6) and any future consumer can `$ref` a stable target. Closed enum: `active` accepts events; `suspended` is paused; `migrating` is mid-version-change; `completed`/`terminated` are irreversible terminal states; `stalled` exhausted the commit retry budget and is recoverable via operator intervention.",
+      "$comment": "Name-promoted alias of the runtime instance-status enum, originally inlined at `wos-process.schema.json#/properties/status` (ADR 0070 D-5 \u2014 `stalled` reframed as a reserved `InstanceStatus` variant). Lifted to `$defs` so the public API projection in `schemas/api/instance.schema.json#/$defs/LifecycleState` (ADR 0082 D-13 gate 6) and any future consumer can `$ref` a stable target. Closed enum: `active` accepts events; `suspended` is paused; `migrating` is mid-version-change; `completed`/`terminated` are irreversible terminal states; `stalled` exhausted the commit retry budget and is recoverable via operator intervention.",
       "enum": [
         "active",
         "suspended",
@@ -3777,12 +3777,24 @@
             "url": {
               "type": "string",
               "format": "uri",
-              "description": "URL of the Posture Declaration document."
+              "description": "URI where the deployment Posture Declaration document is published or otherwise retrievable.",
+              "examples": [
+                "https://agency.example.gov/wos/posture-declaration.json"
+              ],
+              "x-wos": {
+                "openStringKind": "uri"
+              }
             },
             "version": {
               "type": "string",
               "minLength": 1,
-              "description": "Optional pinned version of the Posture Declaration."
+              "description": "Optional immutable version identifier for the deployment Posture Declaration that governed signature admission.",
+              "examples": [
+                "2026-05-01"
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
             }
           },
           "x-lm": { "critical": true, "intent": "Per-deployment posture declaration governing signature admission policy." }

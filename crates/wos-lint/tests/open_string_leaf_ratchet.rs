@@ -35,7 +35,7 @@ const EXPECTED_OPEN_STRING_LEAVES: &[(&str, usize)] = &[
     ("schemas/sidecars/wos-delivery.schema.json", 0),
     ("schemas/sidecars/wos-ontology-alignment.schema.json", 0),
     ("schemas/synth/wos-synth-trace.schema.json", 0),
-    ("schemas/wos-case-instance.schema.json", 0),
+    ("schemas/wos-process.schema.json", 0),
     ("schemas/wos-provenance-log.schema.json", 0),
     ("schemas/wos-tooling.schema.json", 0),
     ("schemas/wos-workflow.schema.json", 0),

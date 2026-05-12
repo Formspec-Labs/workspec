@@ -17,8 +17,8 @@ pub enum DocumentKind {
     Delivery,
     /// `$wosOntologyAlignment` — semantic sidecar (JSON-LD, SHACL, PROV-O).
     OntologyAlignment,
-    /// `$wosCaseInstance` — runtime case-instance artifact.
-    CaseInstance,
+    /// `$wosProcess` — runtime workflow-process artifact.
+    Process,
     /// `$wosProvenanceLog` — runtime append-only audit log.
     ProvenanceLog,
     /// `$wosTooling` — tooling artifact (lintDiagnostic / conformanceTrace /
@@ -85,7 +85,7 @@ const MARKERS: &[(&str, DocumentKind)] = &[
     ("$wosWorkflow", DocumentKind::Workflow),
     ("$wosDelivery", DocumentKind::Delivery),
     ("$wosOntologyAlignment", DocumentKind::OntologyAlignment),
-    ("$wosCaseInstance", DocumentKind::CaseInstance),
+    ("$wosProcess", DocumentKind::Process),
     ("$wosProvenanceLog", DocumentKind::ProvenanceLog),
     ("$wosTooling", DocumentKind::Tooling),
 ];
@@ -170,4 +170,27 @@ fn collect_json_files(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DocumentKind, parse};
+
+    #[test]
+    fn parse_accepts_wos_process_marker() {
+        let doc = parse(
+            r#"{"$wosProcess":"1.0","instanceId":"default_process_01hw7rm71vfay8vvw14d2pf2db"}"#,
+        )
+        .expect("$wosProcess marker should be recognized");
+
+        assert_eq!(doc.kind, DocumentKind::Process);
+    }
+
+    #[test]
+    fn lint_document_accepts_wos_process_marker() {
+        let diagnostics = crate::lint_document(r#"{"$wosProcess":"1.0"}"#)
+            .expect("$wosProcess document should lint");
+
+        assert!(diagnostics.is_empty());
+    }
 }

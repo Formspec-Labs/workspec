@@ -89,7 +89,7 @@ A workflow process is bound to a case ledger at `wos.kernel.process_started` tim
 - `mint_case_id()` in [`work-spec/crates/wos-core/src/typeid.rs`](../../crates/wos-core/src/typeid.rs) is renamed `mint_case_ledger_id()` and continues minting `case_<ulid>` — but the IDs now name *ledgers*, not workflow instances.
 - A new `mint_process_id()` returns `process_<ulid>` for workflow instances.
 - The `CaseInstance` struct in [`work-spec/crates/wos-core/src/instance.rs`](../../crates/wos-core/src/instance.rs) is renamed `WorkflowProcess`; its `instance_id` field becomes `process_id`; it gains a `case_ledger_id` foreign-key field bound at process start.
-- The `$wosCaseInstance` schema marker becomes `$wosProcess` ([`work-spec/schemas/wos-case-instance.schema.json`](../../schemas/wos-case-instance.schema.json) renamed to `wos-process.schema.json`).
+- The runtime schema marker is `$wosProcess` in [`work-spec/schemas/wos-process.schema.json`](../../schemas/wos-process.schema.json).
 - [`work-spec/schemas/api/_common.schema.json`](../../schemas/api/_common.schema.json) `WosResourceUrn.pattern` adds `process` as a family literal alongside the existing `case`, `prov`, `gov`, `ai`, `assurance`, and `x-<vendor>-<name>`.
 - **Family-registry alignment (broader than the URN schema file alone).** Custody-hook **§1.4** reserved-prefix family registry adds `process`; **wos-core typeid helpers** (`work-spec/crates/wos-core/src/typeid.rs`) add `PROCESS_PREFIX = "process"`, `mint_process_id()`, `is_process_id()`, `parse_process_id()`. The URN schema, the family registry, and the typeid helpers move in lockstep — any one of them in isolation produces split admission.
 
@@ -379,7 +379,7 @@ The work surfaces below describe **what changes**; logical ordering is captured 
 
 - [`work-spec/crates/wos-core/src/typeid.rs`](../../crates/wos-core/src/typeid.rs) — add `PROCESS_PREFIX = "process"`, `mint_process_id()`, `is_process_id()`, `parse_process_id()`. Rename `mint_case_id()` → `mint_case_ledger_id()`. Keep `CASE_PREFIX = "case"` but reframe purpose (ledger ID, not instance ID).
 - [`work-spec/crates/wos-core/src/instance.rs`](../../crates/wos-core/src/instance.rs) — rename `CaseInstance` → `WorkflowProcess`. `instance_id` → `process_id`. Add `case_ledger_id` FK field. Update all consumers in `wos-core`, `wos-runtime`, downstream crates.
-- [`work-spec/schemas/wos-case-instance.schema.json`](../../schemas/wos-case-instance.schema.json) → renamed `wos-process.schema.json`. Top-level marker `$wosCaseInstance` → `$wosProcess`. Update lint mapping ([`work-spec/crates/wos-lint/src/document.rs`](../../crates/wos-lint/src/document.rs) lines 84-90).
+- [`work-spec/schemas/wos-process.schema.json`](../../schemas/wos-process.schema.json) — renamed runtime schema. Top-level marker is `$wosProcess`. Update lint mapping ([`work-spec/crates/wos-lint/src/document.rs`](../../crates/wos-lint/src/document.rs) lines 84-90).
 - [`work-spec/schemas/api/_common.schema.json`](../../schemas/api/_common.schema.json) line 20 — `WosResourceUrn.pattern` adds `process` family literal.
 
 ### 5.2 Storage migration

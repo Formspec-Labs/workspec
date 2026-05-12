@@ -38,7 +38,7 @@ SCHEMAS_ROOT = WOS_SPEC_ROOT / "schemas"
 
 # Marker → schema path. Post-ADR-0076 (D-6) the schema family collapsed to 6
 # files — one author-time core ($wosWorkflow), two sidecars ($wosDelivery,
-# $wosOntologyAlignment), two runtime artifacts ($wosCaseInstance,
+# $wosOntologyAlignment), two runtime artifacts ($wosProcess,
 # $wosProvenanceLog), one tooling ($wosTooling). Legacy per-block schemas have
 # been deleted; their normative content is absorbed under embedded blocks of
 # wos-workflow.schema.json. Spec example blocks and fixtures use the canonical
@@ -47,7 +47,7 @@ MARKER_TO_SCHEMA: dict[str, str] = {
     "$wosWorkflow": "wos-workflow.schema.json",
     "$wosDelivery": "sidecars/wos-delivery.schema.json",
     "$wosOntologyAlignment": "sidecars/wos-ontology-alignment.schema.json",
-    "$wosCaseInstance": "wos-case-instance.schema.json",
+    "$wosProcess": "wos-process.schema.json",
     "$wosProvenanceLog": "wos-provenance-log.schema.json",
     "$wosTooling": "wos-tooling.schema.json",
     # Studio (Authoring) markers live under `studio/tests/schemas/conftest.py`.

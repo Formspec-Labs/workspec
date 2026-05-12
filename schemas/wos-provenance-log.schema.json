@@ -719,6 +719,9 @@
           "examples": [
             "wos.kernel.signature_affirmation"
           ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
           "minLength": 1
         }
       },
@@ -838,6 +841,9 @@
           "examples": [
             "wos.kernel.signature_admission_failed"
           ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
           "minLength": 1
         }
       },
@@ -1357,7 +1363,10 @@
         "verificationReceipt": {
           "type": "string",
           "description": "Optional base64-encoded COSE_Sign1 VerificationReceipt bytes. Present when primitiveVerification.status is 'verified' and a verifier ran. Absent when status is 'deferredPendingHelper'.",
-          "examples": ["0oRWoQExiQEFQnNpZ25lZA=="]
+          "examples": ["0oRWoQExiQEFQnNpZ25lZA=="],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         }
       }
     },
@@ -1388,32 +1397,108 @@
         "reason": {
           "type": "string",
           "enum": ["primitive_verification_failed", "method_unsupported", "method_unregistered", "evidence_divergence", "posture_floor_unmet", "registry_unrecognized_method", "adapter_unavailable"],
-          "description": "Why the signature was not admitted."
+          "description": "Closed admission-failure reason explaining why evaluated signature evidence was not accepted into workflow state.",
+          "examples": [
+            "primitive_verification_failed"
+          ]
         },
         "receipt": {
-          "description": "Optional VerificationReceipt when a verifier ran (failed or unsupported)."
+          "description": "Optional VerificationReceipt object captured when a verifier ran and produced failed or unsupported verification evidence.",
+          "examples": [
+            {
+              "result": "failed"
+            }
+          ]
         },
         "evidenceBindings": {
           "type": "object",
           "required": ["responseId", "signedPayloadDigest", "signatureId", "signingIntent"],
           "additionalProperties": false,
           "properties": {
-            "responseId": { "type": "string", "minLength": 1 },
-            "signedPayloadDigest": { "type": "string", "minLength": 1 },
-            "signatureId": { "type": "string", "minLength": 1 },
-            "signingIntent": { "type": "string", "format": "uri" }
+            "responseId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Source Formspec response identifier whose authored signature evidence was evaluated for admission.",
+              "examples": [
+                "resp-2026-0001"
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
+            },
+            "signedPayloadDigest": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Hex digest of the source signed payload that the failed admission decision evaluated.",
+              "examples": [
+                "abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+              ],
+              "x-wos": {
+                "openStringKind": "hash"
+              }
+            },
+            "signatureId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Source-system signature identifier for the evaluated signature evidence record.",
+              "examples": [
+                "sig-2026-0001"
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
+            },
+            "signingIntent": {
+              "type": "string",
+              "format": "uri",
+              "description": "Signing-intent URI asserted by the source signature evidence during admission evaluation.",
+              "examples": [
+                "urn:wos:signing-intent:applicant-signature"
+              ],
+              "x-wos": {
+                "openStringKind": "uri"
+              }
+            }
           }
         },
         "failureContext": {
           "type": "object",
-          "description": "Reason-specific structured data."
+          "description": "Reason-specific structured diagnostic data captured for the failed signature-admission decision.",
+          "examples": [
+            {
+              "adapter": "formspec-signing-helper"
+            }
+          ]
         },
-        "signerAuthority": { "type": "object" },
-        "signerId": { "type": "string" },
+        "signerAuthority": {
+          "type": "object",
+          "description": "Optional signer-authority evidence observed while evaluating the rejected signature admission.",
+          "examples": [
+            {
+              "class": "self"
+            }
+          ]
+        },
+        "signerId": {
+          "type": "string",
+          "description": "Optional source signer identifier associated with the rejected signature evidence.",
+          "examples": [
+            "applicant"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
         "emittedAt": {
           "type": "string",
           "format": "date-time",
-          "description": "RFC 3339 timestamp when the admission decision was emitted."
+          "description": "RFC 3339 timestamp when the signature-admission failure decision was emitted by runtime.",
+          "examples": [
+            "2026-05-08T10:30:00Z"
+          ],
+          "x-wos": {
+            "openStringKind": "timestamp"
+          }
         }
       }
     },

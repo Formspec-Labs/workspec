@@ -229,7 +229,7 @@
       }
     },
     "LifecycleState": {
-      "description": "Closed instance lifecycle posture (ADR 0082 D-12). Byte-aligned mirror of the kernel `InstanceStatus` enum at `wos-workflow.schema.json#/$defs/InstanceStatus` \u2014 itself the name-promoted alias of the inline `status` field on `wos-case-instance.schema.json` (ADR 0082 D-13 gate 6 enforces this byte-parity). Closed-no-extension by design: `active` accepts events normally; `suspended` is paused; `migrating` is mid-definition-version-change; `completed` reached a top-level final state; `terminated` was explicitly terminated; `stalled` exhausted the commit retry budget (ADR 0070 D-5). The kernel taxonomy is closed; if a deployment needs new lifecycle postures, the kernel grows them and the API mirror tracks.",
+      "description": "Closed instance lifecycle posture (ADR 0082 D-12). Byte-aligned mirror of the kernel `InstanceStatus` enum at `wos-workflow.schema.json#/$defs/InstanceStatus` \u2014 itself the name-promoted alias of the inline `status` field on `wos-process.schema.json` (ADR 0082 D-13 gate 6 enforces this byte-parity). Closed-no-extension by design: `active` accepts events normally; `suspended` is paused; `migrating` is mid-definition-version-change; `completed` reached a top-level final state; `terminated` was explicitly terminated; `stalled` exhausted the commit retry budget (ADR 0070 D-5). The kernel taxonomy is closed; if a deployment needs new lifecycle postures, the kernel grows them and the API mirror tracks.",
       "enum": [
         "active",
         "suspended",
@@ -511,7 +511,7 @@
     "CaseInstance": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Public case-instance resource (ADR 0082 D-3). Carries identity, workflow binding, lifecycle posture, current configuration, `impactLevel` (Kernel S6 proportionality index), and `caseState` only; subresources are accessed via dedicated endpoints or the closed `?include=` aggregation seam (`CaseInstanceWithIncludes`). Mirrors structural fields from the kernel runtime artifact `wos-case-instance.schema.json` but is a wire projection: identifiers are URNs (D-4), `lifecycleState` is the closed posture taxonomy (not the kernel raw `status`), and subresource fields (`activeTasks`, `timers`, `holds`, etc.) are intentionally absent.",
+      "description": "Public case-instance resource (ADR 0082 D-3). Carries identity, workflow binding, lifecycle posture, current configuration, `impactLevel` (Kernel S6 proportionality index), and `caseState` only; subresources are accessed via dedicated endpoints or the closed `?include=` aggregation seam (`CaseInstanceWithIncludes`). Mirrors structural fields from the kernel runtime artifact `wos-process.schema.json` but is a wire projection: identifiers are URNs (D-4), `lifecycleState` is the closed posture taxonomy (not the kernel raw `status`), and subresource fields (`activeTasks`, `timers`, `holds`, etc.) are intentionally absent.",
       "required": [
         "id",
         "caseLedgerId",
@@ -921,7 +921,7 @@
     "TimerEntry": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Single durable timer projection for a case instance. Mirrors `wos-case-instance.schema.json#/$defs/TimerState`; `event` retains the kernel raw event name without the API-layer URN rewrite because timers fire kernel events, not API resources.",
+      "description": "Single durable timer projection for a case instance. Mirrors `wos-process.schema.json#/$defs/TimerState`; `event` retains the kernel raw event name without the API-layer URN rewrite because timers fire kernel events, not API resources.",
       "required": [
         "timerId",
         "deadline",
@@ -962,7 +962,7 @@
         }
       },
       "x-wos": {
-        "mirror": "wos-case-instance.schema.json#/$defs/TimerState"
+        "mirror": "wos-process.schema.json#/$defs/TimerState"
       }
     },
     "CaseInstanceTimerList": {

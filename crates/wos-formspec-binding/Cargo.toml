@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-formspec-canonical = { path = "../../../formspec/crates/formspec-canonical" }
+integrity-canonical = { path = "../../../integrity-stack/crates/integrity-canonical" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"

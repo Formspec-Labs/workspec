@@ -7,7 +7,7 @@
 
 ## Purpose
 
-`Task` is the public projection of a single unit of governed actor work. Tasks are created by kernel `createTask` actions (Kernel S9.2) and governed by the workflow-governance task-management contract (governance S10). Greenfield per ADR 0082 D-15: the kernel runtime artifact (`wos-case-instance.schema.json#/$defs/ActiveTask`) and the prior `case-portal/src/ports/types.ts` `TaskView` are prior art, not this contract.
+`Task` is the public projection of a single unit of governed actor work. Tasks are created by kernel `createTask` actions (Kernel S9.2) and governed by the workflow-governance task-management contract (governance S10). Greenfield per ADR 0082 D-15: the kernel runtime artifact (`wos-process.schema.json#/$defs/ActiveTask`) and the prior `case-portal/src/ports/types.ts` `TaskView` are prior art, not this contract.
 
 The contract carries identity, workflow binding, assignment, contract-binding context (form definition or JSON Schema), the closed user-facing lifecycle, and the optional draft response. Submission splits into a draft (idempotent partial save) and a final response (require `Idempotency-Key`).
 
@@ -23,25 +23,25 @@ The contract carries identity, workflow binding, assignment, contract-binding co
 - `impactLevel`: closed-with-vendor-extension impact level (Kernel S6) mirroring `wos-workflow.schema.json#/$defs/ImpactLevel`.
 - `title`, `description`: actor-facing prose.
 - `assignedActor`, `delegatedFrom`: `ActorRef` URNs hoisted to `_common.schema.json`.
-- `binding`: closed-with-vendor-extension contract-binding kind (`formspec | jsonSchema | freeform`) mirroring `wos-case-instance.schema.json#/$defs/ActiveTask/properties/binding`.
+- `binding`: closed-with-vendor-extension contract-binding kind (`formspec | jsonSchema | freeform`) mirroring `wos-process.schema.json#/$defs/ActiveTask/properties/binding`.
 - `contractRef`, `definitionUrl`, `definitionVersion`: pinned contract references; REQUIRED when `binding` is `formspec` or `jsonSchema`.
 - `deadlines`: full set of named SLA / statutory / internal deadlines (governance §10.4.1; workflow-governance.md:548-560 — `slaDefinitions`). Each entry is `TaskDeadline { kind: sla | statutory | internal, at: ExpirableTimestamp, severity: advisory | enforcing, id? }`. Multi-SLA workflows expose both `firstResponse` and `fullResolution` here so the applicant can see both clocks and the staff portal can prioritize by which window is closer to breach.
 - `reviewProtocol`: closed-with-vendor-extension review-protocol classification (governance §4.1-§4.2; workflow-governance.md:248-260) — `independentFirst | considerOpposite | calibratedConfidence | dualBlind | unassisted`. Present iff `kind == review` and the workflow declares a review protocol on this task pattern.
 - `mustCompleteBeforeContinuationEnds`: when true, this task MUST be completed before the case's `continuationOfServicesEndsAt` window closes (governance §3.6 cross-cut). Applicant- and staff-facing UIs surface this flag to prioritize work that gates continued service delivery during an appeal window.
 - `assignmentRoles`: `AssignmentRoles` projection (governance §7.2 + §10.2; workflow-governance.md:502-514). Closed object with optional `excludedOwner: ActorRef`, `requiredOwner: ActorRef`, `eligiblePool: ActorRef[]`, `currentAssignee: ActorRef`, `delegatedFrom: ActorRef`, `businessAdministrator: ActorRef`. Surfaces the kernel's five-role table so a staff portal can answer "who is excluded?", "who is in the pool?", "who is the business administrator?" without re-deriving from delegation graphs. The §10.2 precedence rule (`excludedOwner` overrides all other roles, workflow-governance.md:514) is enforced at the runtime, not in the projection.
 - `draftResponse`, `draftedAt`: present only when `status == drafted`.
-- `lastValidationOutcome`: most recent WOS `ValidationOutcome` wrapper from Kernel §13.6 / `wos-case-instance.schema.json#/$defs/ValidationOutcome`.
+- `lastValidationOutcome`: most recent WOS `ValidationOutcome` wrapper from Kernel §13.6 / `wos-process.schema.json#/$defs/ValidationOutcome`.
 - `createdAt`, `updatedAt`: RFC 3339 UTC timestamps per ADR 0082 D-10.
 
 `TaskListItem` is a lighter projection for inbox-style list views — same identity, classification, status, deadline, assignment. Detail navigation fetches the full `Task`.
 
 ## Closed taxonomies
 
-`TaskStatus` is closed-no-extension by design: `pending | drafted | submitted | dismissed | expired`. The richer kernel runtime states (`created | assigned | claimed | delegated | escalated`; governance §10.1) live on the `wos-case-instance.schema.json#/$defs/ActiveTask.status` enum and are processor-internal — the public API collapses them into the user-visible posture. Richer kernel-side outcomes surface on `TaskOutcomeEvent.outcome` and in provenance, not on the public-list `status`. Adding a new status requires a schema major bump (ADR 0082 D-12).
+`TaskStatus` is closed-no-extension by design: `pending | drafted | submitted | dismissed | expired`. The richer kernel runtime states (`created | assigned | claimed | delegated | escalated`; governance §10.1) live on the `wos-process.schema.json#/$defs/ActiveTask.status` enum and are processor-internal — the public API collapses them into the user-visible posture. Richer kernel-side outcomes surface on `TaskOutcomeEvent.outcome` and in provenance, not on the public-list `status`. Adding a new status requires a schema major bump (ADR 0082 D-12).
 
 `TaskKind` is closed-with-vendor-extension. Reserved literals at v1: `intake | review | determination | signature | correspondence-response | hold-resolution | escalation | verification`. Vendor extensions MUST use an `^x-[a-z]+-` prefix (ADR 0082 D-12).
 
-`TaskBinding` is closed-with-vendor-extension. Reserved literals: `formspec | jsonSchema | freeform`. Mirrors `wos-case-instance.schema.json#/$defs/ActiveTask/properties/binding` plus an explicit `freeform` literal for tasks with no machine-validated payload (typical of dismissals or simple acknowledgements). Vendor extensions MUST use an `^x-[a-z]+-` prefix.
+`TaskBinding` is closed-with-vendor-extension. Reserved literals: `formspec | jsonSchema | freeform`. Mirrors `wos-process.schema.json#/$defs/ActiveTask/properties/binding` plus an explicit `freeform` literal for tasks with no machine-validated payload (typical of dismissals or simple acknowledgements). Vendor extensions MUST use an `^x-[a-z]+-` prefix.
 
 `TaskOutcomeKind` is closed-no-extension (matching `TaskStatus`): `submitted | dismissed | expired | delegated | escalated | drafted`.
 
@@ -117,7 +117,7 @@ The contract projects (does not redefine) the kernel runtime model. `x-wos.mirro
 
 | API definition | Kernel source | Mirror annotation |
 |---|---|---|
-| `TaskBinding` | `wos-case-instance.schema.json#/$defs/ActiveTask/properties/binding` | `x-wos.mirror = "wos-case-instance.schema.json#/$defs/ActiveTask/properties/binding"` |
+| `TaskBinding` | `wos-process.schema.json#/$defs/ActiveTask/properties/binding` | `x-wos.mirror = "wos-process.schema.json#/$defs/ActiveTask/properties/binding"` |
 | `ImpactLevel` | `wos-workflow.schema.json#/$defs/ImpactLevel` | `x-wos.mirror = "wos-workflow.schema.json#/$defs/ImpactLevel"` |
 
 `TaskStatus`, `TaskKind`, `TaskOutcomeKind`, and `TaskDismissal.reason` are wire-projection taxonomies without an exact kernel `$def` — the kernel `ActiveTask.status` carries different (richer, processor-internal) semantics, and the `kind` / outcome / dismissal-reason taxonomies are API-introduced. They do not carry the mirror annotation; cross-spec drift is caught by the spec text and the closed-with-vendor-extension discipline.

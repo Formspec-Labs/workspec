@@ -1,5 +1,7 @@
 # Validation of `case-management.md`
 
+> **Superseded validation artifact.** This R-file is retained as derivation history. The controlling source of truth for case-management decisions is [`case-boundary-decision-report.md`](case-boundary-decision-report.md); when this file disagrees with that report, the report controls.
+
 **Reviewer:** Claude Opus 4.7 (Cursor IDE), with delegated investigations to one `spec-expert` subagent and four `code-scout` subagents.
 **Date:** 2026-05-10
 **Subject:** [`case-management.md`](./case-management.md) — consultant memo proposing a Case / CaseProcess boundary refactor for WOS.

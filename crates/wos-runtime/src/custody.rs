@@ -447,7 +447,7 @@ mod tests {
 
     fn metadata() -> CustodyAppendMetadata {
         CustodyAppendMetadata {
-            case_id: typeid::mint_case_id(),
+            case_id: typeid::mint_case_ledger_id(),
             record_id: typeid::mint_provenance_id(),
             event_type: "wos.kernel.state_transition".to_string(),
         }
@@ -525,7 +525,10 @@ mod tests {
                 ProvenanceKind::ForEachIterationCompleted,
                 "wos.kernel.for_each_iteration_completed",
             ),
-            (ProvenanceKind::ForEachCompleted, "wos.kernel.for_each_completed"),
+            (
+                ProvenanceKind::ForEachCompleted,
+                "wos.kernel.for_each_completed",
+            ),
             (
                 ProvenanceKind::SignatureAffirmation,
                 "wos.kernel.signature_affirmation",
@@ -619,7 +622,7 @@ mod tests {
     #[test]
     fn metadata_rejects_non_wos_event_type() {
         let error = CustodyAppendMetadata {
-            case_id: typeid::mint_case_id(),
+            case_id: typeid::mint_case_ledger_id(),
             record_id: typeid::mint_provenance_id(),
             event_type: "trellis.appended".to_string(),
         }
@@ -648,8 +651,8 @@ mod tests {
     #[test]
     fn metadata_rejects_case_family_record_id() {
         let error = CustodyAppendMetadata {
-            case_id: typeid::mint_case_id(),
-            record_id: typeid::mint_case_id(),
+            case_id: typeid::mint_case_ledger_id(),
+            record_id: typeid::mint_case_ledger_id(),
             event_type: "wos.kernel.state_transition".to_string(),
         }
         .validate()
@@ -663,7 +666,7 @@ mod tests {
         let prov = typeid::mint_provenance_id();
         let tail = prov.rsplit_once('_').expect("typeid").1;
         let error = CustodyAppendMetadata {
-            case_id: typeid::mint_case_id(),
+            case_id: typeid::mint_case_ledger_id(),
             record_id: format!("default_custom_{tail}"),
             event_type: "wos.kernel.state_transition".to_string(),
         }
@@ -786,7 +789,7 @@ mod tests {
             verification_receipt: None,
         });
         let metadata = context()
-            .metadata_for_provenance_record(&typeid::mint_case_id(), 0, &record)
+            .metadata_for_provenance_record(&typeid::mint_case_ledger_id(), 0, &record)
             .expect("metadata");
 
         let input = CustodyAppendInput::from_provenance_record(&record, &context(), metadata)

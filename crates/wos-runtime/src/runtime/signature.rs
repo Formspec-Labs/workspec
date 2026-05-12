@@ -13,6 +13,7 @@ use std::time::Duration;
 
 use fel_core::{evaluate, has_error_diagnostics, parse, types::Value};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use wos_core::context::EvalContext;
 use wos_core::instance::{ActiveTask, CaseInstance, PendingEvent};
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord, SignatureAffirmationInput};
@@ -38,6 +39,131 @@ const SIGNATURE_COMPLETIONS_EXTENSION: &str = "x-wos-signature-completions";
 const SIGNATURE_ASSIGNMENTS_EXTENSION: &str = "x-wos-signature-assignments";
 const POSTURE_DECLARATION_MAX_BYTES: u64 = 64 * 1024;
 const POSTURE_DECLARATION_TIMEOUT_SECS: u64 = 5;
+
+/// Resolved Posture Declaration bytes.
+///
+/// `source_uri` records the deployment-owned lookup target. `body` is the
+/// exact JSON string whose bytes are hashed for runtime cache identity.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedPostureDeclaration {
+    /// URI supplied to the resolver.
+    pub source_uri: String,
+    /// Raw JSON body returned by the resolver.
+    pub body: String,
+}
+
+impl ResolvedPostureDeclaration {
+    /// Creates a resolved Posture Declaration body.
+    #[must_use]
+    pub fn new(source_uri: impl Into<String>, body: impl Into<String>) -> Self {
+        Self {
+            source_uri: source_uri.into(),
+            body: body.into(),
+        }
+    }
+}
+
+/// Resolves Posture Declaration bytes for signature admission.
+///
+/// Hosts implement this trait to own posture-document lookup, freshness, and
+/// network policy outside the admission hot path.
+pub trait PostureResolver {
+    /// Resolve a Posture Declaration URI into raw JSON bytes.
+    ///
+    /// # Errors
+    /// Returns [`RuntimeError`] when the declaration cannot be resolved under
+    /// the host's posture-resolution policy.
+    fn resolve_posture_declaration(
+        &self,
+        posture_uri: &str,
+    ) -> Result<ResolvedPostureDeclaration, RuntimeError>;
+}
+
+/// HTTP-backed Posture Declaration resolver.
+///
+/// This preserves the legacy allowlisted HTTP behavior behind an injectable
+/// boundary. Production hosts should inject a deployment-owned resolver that
+/// serves pinned bundle bytes or an equivalent bounded cache.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct HttpPostureResolver;
+
+impl PostureResolver for HttpPostureResolver {
+    fn resolve_posture_declaration(
+        &self,
+        posture_uri: &str,
+    ) -> Result<ResolvedPostureDeclaration, RuntimeError> {
+        let agent = ureq::Agent::config_builder()
+            .timeout_global(Some(Duration::from_secs(POSTURE_DECLARATION_TIMEOUT_SECS)))
+            .build()
+            .new_agent();
+        let mut response = agent.get(posture_uri).call().map_err(|error| {
+            RuntimeError::Signature(format!(
+                "failed to fetch posture declaration from '{posture_uri}': {error}"
+            ))
+        })?;
+        let body = response
+            .body_mut()
+            .with_config()
+            .limit(POSTURE_DECLARATION_MAX_BYTES)
+            .read_to_string()
+            .map_err(|error| {
+                RuntimeError::Signature(format!(
+                    "failed to read posture declaration body from '{posture_uri}': {error}"
+                ))
+            })?;
+        Ok(ResolvedPostureDeclaration::new(posture_uri, body))
+    }
+}
+
+/// In-memory Posture Declaration resolver.
+///
+/// Tests and embedded deployments use this resolver when posture bytes are
+/// already part of the trusted runtime bundle.
+#[derive(Debug, Clone, Default)]
+pub struct StaticPostureResolver {
+    bodies_by_uri: HashMap<String, String>,
+}
+
+impl StaticPostureResolver {
+    /// Creates an empty static posture resolver.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adds raw Posture Declaration JSON for `posture_uri`.
+    #[must_use]
+    pub fn with_body(mut self, posture_uri: impl Into<String>, body: impl Into<String>) -> Self {
+        self.bodies_by_uri.insert(posture_uri.into(), body.into());
+        self
+    }
+
+    /// Creates a resolver from a parsed Posture Declaration.
+    ///
+    /// # Panics
+    /// Panics only if serializing [`PostureDeclaration`] to JSON fails.
+    #[must_use]
+    pub fn from_declaration(declaration: PostureDeclaration) -> Self {
+        let posture_uri = declaration.url.clone();
+        let body = serde_json::to_string(&declaration)
+            .expect("PostureDeclaration serialization is infallible");
+        Self::new().with_body(posture_uri, body)
+    }
+}
+
+impl PostureResolver for StaticPostureResolver {
+    fn resolve_posture_declaration(
+        &self,
+        posture_uri: &str,
+    ) -> Result<ResolvedPostureDeclaration, RuntimeError> {
+        let body = self.bodies_by_uri.get(posture_uri).ok_or_else(|| {
+            RuntimeError::Signature(format!(
+                "posture declaration URI '{posture_uri}' is not loaded"
+            ))
+        })?;
+        Ok(ResolvedPostureDeclaration::new(posture_uri, body.clone()))
+    }
+}
 
 /// Vendor-extension token prefix. Mirrors the schema-side
 /// `^x-[a-z][a-z0-9-]*$` pattern; lowercase-only by design — case-mismatched
@@ -701,9 +827,17 @@ impl WosRuntime {
     /// Attach a cached Posture Declaration.
     #[must_use]
     pub fn with_posture_declaration(self, declaration: PostureDeclaration) -> Self {
-        self.posture_declarations
-            .borrow_mut()
-            .insert(declaration.url.clone(), declaration);
+        self.with_posture_resolver(StaticPostureResolver::from_declaration(declaration))
+    }
+
+    /// Replace the Posture Declaration resolver.
+    #[must_use]
+    pub fn with_posture_resolver<R>(mut self, resolver: R) -> Self
+    where
+        R: PostureResolver + Send + Sync + 'static,
+    {
+        self.posture_resolver = Box::new(resolver);
+        self.posture_declarations.borrow_mut().clear();
         self
     }
 
@@ -966,7 +1100,7 @@ impl WosRuntime {
 
         // Posture Declaration checks (ADR-0090).
         if let Some(posture_ref) = &profile.posture_policy {
-            let posture = self.load_posture_declaration(&posture_ref.url)?;
+            let posture = self.load_posture_declaration(posture_ref)?;
             if !posture
                 .signature_policy
                 .allowed_methods
@@ -1805,51 +1939,65 @@ impl WosRuntime {
         Ok(())
     }
 
-    /// Load a Posture Declaration from a URI, caching the result.
+    /// Load a Posture Declaration from the configured resolver.
     pub(crate) fn load_posture_declaration(
         &self,
-        posture_uri: &str,
+        posture_ref: &PosturePolicyRef,
     ) -> Result<PostureDeclaration, RuntimeError> {
+        let posture_uri = posture_ref.url.as_str();
         if !posture_uri_allowed(posture_uri) {
             return Err(RuntimeError::Signature(format!(
                 "posture declaration URI '{posture_uri}' is not allowed; expected https URL or loopback http URL"
             )));
         }
+        let resolved = self
+            .posture_resolver
+            .resolve_posture_declaration(posture_uri)?;
+        let cache_key = posture_declaration_cache_key(&resolved.body);
         {
             let cache = self.posture_declarations.borrow();
-            if let Some(cached) = cache.get(posture_uri) {
+            if let Some(cached) = cache.get(&cache_key) {
+                validate_posture_declaration(posture_ref, cached)?;
                 return Ok(cached.clone());
             }
         }
-        let agent = ureq::Agent::config_builder()
-            .timeout_global(Some(Duration::from_secs(POSTURE_DECLARATION_TIMEOUT_SECS)))
-            .build()
-            .new_agent();
-        let mut response = agent.get(posture_uri).call().map_err(|error| {
-            RuntimeError::Signature(format!(
-                "failed to fetch posture declaration from '{posture_uri}': {error}"
-            ))
-        })?;
-        let raw = response
-            .body_mut()
-            .with_config()
-            .limit(POSTURE_DECLARATION_MAX_BYTES)
-            .read_to_string()
-            .map_err(|error| {
+        let declaration: PostureDeclaration =
+            serde_json::from_str(&resolved.body).map_err(|error| {
                 RuntimeError::Signature(format!(
-                    "failed to read posture declaration body from '{posture_uri}': {error}"
+                    "failed to parse posture declaration from '{posture_uri}': {error}"
                 ))
             })?;
-        let declaration: PostureDeclaration = serde_json::from_str(&raw).map_err(|error| {
-            RuntimeError::Signature(format!(
-                "failed to parse posture declaration from '{posture_uri}': {error}"
-            ))
-        })?;
+        validate_posture_declaration(posture_ref, &declaration)?;
         self.posture_declarations
             .borrow_mut()
-            .insert(posture_uri.to_string(), declaration.clone());
+            .insert(cache_key, declaration.clone());
         Ok(declaration)
     }
+}
+
+fn posture_declaration_cache_key(body: &str) -> String {
+    format!("sha256:{:x}", Sha256::digest(body.as_bytes()))
+}
+
+fn validate_posture_declaration(
+    posture_ref: &PosturePolicyRef,
+    declaration: &PostureDeclaration,
+) -> Result<(), RuntimeError> {
+    if declaration.url != posture_ref.url {
+        return Err(RuntimeError::Signature(format!(
+            "posture declaration URL mismatch: expected '{}', got '{}'",
+            posture_ref.url, declaration.url
+        )));
+    }
+    if let Some(expected_version) = posture_ref.version.as_deref()
+        && declaration.version != expected_version
+    {
+        return Err(RuntimeError::Signature(format!(
+            "posture declaration version mismatch for '{}': expected '{}', got '{}'",
+            posture_ref.url, expected_version, declaration.version
+        )));
+    }
+    Ok(())
 }
 
 fn posture_uri_allowed(uri: &str) -> bool {

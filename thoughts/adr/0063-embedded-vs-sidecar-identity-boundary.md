@@ -57,7 +57,7 @@ Three categories, three identity rules:
 
 ### 2.3 Runtime artifacts
 
-`$wosCaseInstance` and `$wosProvenanceLog` are produced by processors at runtime.
+`$wosProcess` and `$wosProvenanceLog` are produced by processors at runtime.
 
 - They reference a workflow URI (via `workflowRef` or equivalent), but they are not author-time documents.
 - They MUST carry their `$wos*` marker so the parser detects them uniformly with author-time documents.
@@ -69,7 +69,7 @@ Legacy standalone author-time documents -- `$wosKernel`, `$wosWorkflowGovernance
 
 This is a **greenfield** retirement: no migration aliases, no compatibility shims, no "view" or "fragment" preservation of legacy markers. Authors who previously held standalone documents migrate by inlining them as embedded blocks under a single `$wosWorkflow` envelope.
 
-The lint document parser MUST recognize only six canonical author-time markers (`$wosWorkflow`, `$wosDelivery`, `$wosOntologyAlignment`, `$wosTooling`) plus two runtime-artifact markers (`$wosCaseInstance`, `$wosProvenanceLog`).
+The lint document parser MUST recognize only six canonical author-time markers (`$wosWorkflow`, `$wosDelivery`, `$wosOntologyAlignment`, `$wosTooling`) plus two runtime-artifact markers (`$wosProcess`, `$wosProvenanceLog`).
 
 ---
 
@@ -128,4 +128,4 @@ This ADR is the spec layer of a larger conformance hardening pass. The implement
 
 Schema-level enforcement of the boundary rule lives in `schemas/wos-workflow.schema.json` as `allOf` conditionals (one per embedded block) forbidding `targetWorkflow`. Lint-level enforcement lives in `WOS-EMBED-TARGET-001` (Tier 1) and `WOS-EMBED-IDENTITY-001` (Tier 1). Sidecar enforcement lives in `WOS-SIDECAR-TARGET-001` (Tier 1).
 
-Runtime-artifact marker requirements (`$wosCaseInstance`, `$wosProvenanceLog`) land in this sub-PR as schema additions and parser-test alignment.
+Runtime-artifact marker requirements (`$wosProcess`, `$wosProvenanceLog`) land in this sub-PR as schema additions and parser-test alignment.

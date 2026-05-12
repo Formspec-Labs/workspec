@@ -1,5 +1,7 @@
 # Multi-Agent Validation Report: Case Management Architecture
 
+> **Superseded validation artifact.** This R-file is retained as derivation history. The controlling source of truth for case-management decisions is [`case-boundary-decision-report.md`](case-boundary-decision-report.md); when this file disagrees with that report, the report controls.
+
 **Original Document:** `work-spec/thoughts/analysis/case-management.md`
 **Validating Model:** Gemini (CLI)
 

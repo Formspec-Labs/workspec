@@ -7,7 +7,7 @@
 
 ## Purpose
 
-`CaseInstance` is the public projection of a running WOS workflow instance — the case-file state, lifecycle posture, and identity that drive the case-portal and SDK consumers. `CaseLedgerProjection` is the durable case-level view keyed by the governed case ledger; it can exist before any workflow process starts and aggregates bound `CaseInstance` process projections. `CaseLedgerEventSummary` summarizes the latest direct case-ledger provenance event when one exists and exposes the D26 event literal rather than the redundant inner `recordKind` discriminator. Greenfield per ADR 0082 D-15: the kernel runtime artifact (`wos-case-instance.schema.json`) and the prior `case-portal/src/ports/types.ts` `CaseInstanceView` are prior art, not this contract. Per ADR 0082 D-3, process resources carry lifecycle and `caseState` only; governance, tasks, timers, holds, compensation, and cross-case relationships are subresources and the `?include=` aggregation seam is closed. `CustodyReceipt` exposes the Trellis custody-anchoring receipt projection; `CompensationLogEntry` and `CompensationLogEntryPage` supply the kernel compensation log (Kernel §9.5).
+`CaseInstance` is the public projection of a running WOS workflow instance — the case-file state, lifecycle posture, and identity that drive the case-portal and SDK consumers. `CaseLedgerProjection` is the durable case-level view keyed by the governed case ledger; it can exist before any workflow process starts and aggregates bound `CaseInstance` process projections. `CaseLedgerEventSummary` summarizes the latest direct case-ledger provenance event when one exists and exposes the D26 event literal rather than the redundant inner `recordKind` discriminator. Greenfield per ADR 0082 D-15: the kernel runtime artifact (`wos-process.schema.json`) and the prior `case-portal/src/ports/types.ts` `CaseInstanceView` are prior art, not this contract. Per ADR 0082 D-3, process resources carry lifecycle and `caseState` only; governance, tasks, timers, holds, compensation, and cross-case relationships are subresources and the `?include=` aggregation seam is closed. `CustodyReceipt` exposes the Trellis custody-anchoring receipt projection; `CompensationLogEntry` and `CompensationLogEntryPage` supply the kernel compensation log (Kernel §9.5).
 
 ## Resource Shape
 
@@ -15,7 +15,7 @@
 
 - `id`: `urn:wos:<typeid>` URN per ADR 0092 D-1. The namespace-specific string IS the TypeID. The TypeID prefix carries the record family (e.g., `case`).
 - `workflowUrl`, `workflowVersion`: the governing Workflow Document reference (Kernel S9.6).
-- `lifecycleState`: closed posture taxonomy `active | suspended | migrating | completed | terminated | stalled` mirroring the kernel runtime `status` enum at `wos-case-instance.schema.json#/properties/status` (`x-wos.mirror` annotation enables Gate 6 parity).
+- `lifecycleState`: closed posture taxonomy `active | suspended | migrating | completed | terminated | stalled` mirroring the kernel runtime `status` enum at `wos-process.schema.json#/properties/status` (`x-wos.mirror` annotation enables Gate 6 parity).
 - `impactLevel`: REQUIRED closed-with-vendor-extension kernel impact level (Kernel S6; kernel:826) cross-`$ref`d from `task.schema.json#/$defs/ImpactLevel`. Surfaces the workflow's proportionality index at instance scope so clients can branch on `rights-impacting` / `safety-impacting` cases without re-fetching the workflow.
 - `configuration`: ordered active leaf-state identifiers (Kernel S4.2). Empty for terminal instances.
 - `stalledSince`: REQUIRED when `lifecycleState == stalled` (ADR 0070 D-5).
@@ -189,10 +189,10 @@ The contract projects (does not redefine) the kernel runtime model. `x-wos.mirro
 
 | API definition | Kernel source | Mirror annotation |
 |---|---|---|
-| `LifecycleState` | `wos-workflow.schema.json#/$defs/InstanceStatus` (logical name; the kernel value lives at `wos-case-instance.schema.json#/properties/status`) | `x-wos.mirror = "wos-workflow.schema.json#/$defs/InstanceStatus"` |
+| `LifecycleState` | `wos-workflow.schema.json#/$defs/InstanceStatus` (logical name; the kernel value lives at `wos-process.schema.json#/properties/status`) | `x-wos.mirror = "wos-workflow.schema.json#/$defs/InstanceStatus"` |
 | `MutationKind` | `wos-workflow.schema.json#/$defs/MutationSource` | `x-wos.mirror = "wos-workflow.schema.json#/$defs/MutationSource"` |
 | `VerificationLevel` | `wos-workflow.schema.json#/$defs/VerificationLevel` | `x-wos.mirror = "wos-workflow.schema.json#/$defs/VerificationLevel"` |
-| `TimerEntry` | `wos-case-instance.schema.json#/$defs/TimerState` | `x-wos.mirror = "wos-case-instance.schema.json#/$defs/TimerState"` |
+| `TimerEntry` | `wos-process.schema.json#/$defs/TimerState` | `x-wos.mirror = "wos-process.schema.json#/$defs/TimerState"` |
 | `ImpactLevel` (cross-`$ref` to `task.schema.json#/$defs/ImpactLevel`) | `wos-workflow.schema.json#/$defs/ImpactLevel` | mirror annotation lives on `task.schema.json#/$defs/ImpactLevel`; per ADR 0082 D-14, the kernel/governance type is `$ref`d from its existing schema rather than redefined here |
 
 `HoldEntry`, `DelegationEntry`, `ReviewState`, and `RelatedCaseLink` mirror governance / kernel concepts by judgment without an exact kernel `$def` (governance §11, §12, §S5.5; kernel S5.5) and so do not carry the annotation.

@@ -1,5 +1,7 @@
 # Validation of `case-management.md` — Claude Opus 4.7 (1M context)
 
+> **Superseded validation artifact.** This R-file is retained as derivation history. The controlling source of truth for case-management decisions is [`case-boundary-decision-report.md`](case-boundary-decision-report.md); when this file disagrees with that report, the report controls.
+
 **Reviewer:** Claude Opus 4.7 (1M context), via `formspec-specs:spec-expert` + `formspec-specs:cross-stack-scout` dispatched in parallel.
 **Subject:** [`case-management.md`](case-management.md) — Case/CaseProcess boundary refactor proposal.
 **Date:** 2026-05-10.

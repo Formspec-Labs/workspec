@@ -106,7 +106,7 @@ fn normalize_legacy_project_docs(docs: Vec<(&str, Value)>) -> Vec<(String, Value
         }
         if doc.get("$wosDelivery").is_some()
             || doc.get("$wosOntologyAlignment").is_some()
-            || doc.get("$wosCaseInstance").is_some()
+            || doc.get("$wosProcess").is_some()
             || doc.get("$wosProvenanceLog").is_some()
             || doc.get("$wosTooling").is_some()
         {

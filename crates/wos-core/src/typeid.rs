@@ -3,16 +3,17 @@
 //! Stack-local TypeID minting and validation helpers.
 //!
 //! WOS adopts the ADR-0061 identifier format
-//! `{tenant}_{type}_{uuidv7_base32}` for case and authored-record identities.
-//! This module keeps the implementation local to `wos-core` until the stack
-//! decides whether a shared utility crate is worth the coordination cost.
+//! `{tenant}_{type}_{uuidv7_base32}` for case-ledger, process, and
+//! authored-record identities. This module keeps the implementation local to
+//! `wos-core` until the stack decides whether a shared utility crate is worth
+//! the coordination cost.
 
 use uuid::{Uuid, Version};
 
 /// Default deployment tenant for local development and tests.
 pub const DEFAULT_TENANT: &str = "default";
 
-/// Reserved WOS TypeID prefix for case ledgers.
+/// Reserved WOS TypeID prefix for durable case ledgers.
 pub const CASE_PREFIX: &str = "case";
 
 /// Reserved WOS TypeID prefix for workflow runtime processes.
@@ -57,16 +58,34 @@ pub fn mint_case_ledger_id() -> String {
     mint_type_id(&tenant(), CASE_PREFIX)
 }
 
-/// Mints a new case ledger identifier.
-#[must_use]
-pub fn mint_case_id() -> String {
-    mint_case_ledger_id()
-}
-
 /// Mints a new workflow runtime process identifier.
 #[must_use]
 pub fn mint_process_id() -> String {
     mint_type_id(&tenant(), PROCESS_PREFIX)
+}
+
+/// Returns whether `value` is a raw case-ledger TypeID.
+#[must_use]
+pub fn is_case_ledger_id(value: &str) -> bool {
+    is_valid_type_id(value, Some(CASE_PREFIX))
+}
+
+/// Returns whether `value` is a raw process TypeID.
+#[must_use]
+pub fn is_process_id(value: &str) -> bool {
+    is_valid_type_id(value, Some(PROCESS_PREFIX))
+}
+
+/// Parses a case-ledger TypeID from a raw TypeID or WOS URN.
+#[must_use]
+pub fn parse_case_ledger_id(value: &str) -> Option<&str> {
+    parse_prefixed_type_id(value, CASE_PREFIX)
+}
+
+/// Parses a process TypeID from a raw TypeID or WOS URN.
+#[must_use]
+pub fn parse_process_id(value: &str) -> Option<&str> {
+    parse_prefixed_type_id(value, PROCESS_PREFIX)
 }
 
 /// Mints a new Kernel provenance identifier.
@@ -170,6 +189,11 @@ pub fn is_valid_type_id(value: &str, expected_prefix: Option<&str>) -> bool {
     decode_uuid_v7_tail(tail).is_some()
 }
 
+fn parse_prefixed_type_id<'a>(value: &'a str, expected_prefix: &str) -> Option<&'a str> {
+    let type_id = value.strip_prefix("urn:wos:").unwrap_or(value);
+    is_valid_type_id(type_id, Some(expected_prefix)).then_some(type_id)
+}
+
 fn encode_uuid_v7(uuid: Uuid) -> String {
     let mut value = u128::from_be_bytes(*uuid.as_bytes());
     let mut output = [0u8; 26];
@@ -256,18 +280,21 @@ mod tests {
     fn minted_case_ledger_ids_match_reserved_shape() {
         let minted = mint_case_ledger_id();
         assert!(is_valid_type_id(&minted, Some(CASE_PREFIX)));
-    }
-
-    #[test]
-    fn legacy_case_minter_still_mints_case_ledger_ids() {
-        let minted = mint_case_id();
-        assert!(is_valid_type_id(&minted, Some(CASE_PREFIX)));
+        assert!(is_case_ledger_id(&minted));
+        assert_eq!(parse_case_ledger_id(&minted), Some(minted.as_str()));
+        let urn = format!("urn:wos:{minted}");
+        assert_eq!(parse_case_ledger_id(&urn), Some(minted.as_str()));
     }
 
     #[test]
     fn minted_process_ids_match_reserved_shape() {
         let minted = mint_process_id();
         assert!(is_valid_type_id(&minted, Some(PROCESS_PREFIX)));
+        assert!(is_process_id(&minted));
+        assert_eq!(parse_process_id(&minted), Some(minted.as_str()));
+        let urn = format!("urn:wos:{minted}");
+        assert_eq!(parse_process_id(&urn), Some(minted.as_str()));
+        assert_eq!(parse_case_ledger_id(&minted), None);
     }
 
     #[test]
@@ -307,7 +334,7 @@ mod tests {
 
     #[test]
     fn record_type_id_rejects_case_family_and_unknown_middle() {
-        assert!(!is_valid_record_type_id(&mint_case_id()));
+        assert!(!is_valid_record_type_id(&mint_case_ledger_id()));
         let prov = mint_provenance_id();
         let tail = prov.rsplit_once('_').expect("typeid shape").1;
         assert!(!is_valid_record_type_id(&format!("default_custom_{tail}")));

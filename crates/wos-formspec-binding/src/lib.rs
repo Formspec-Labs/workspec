@@ -2,7 +2,7 @@
 
 //! Formspec binding adapter for `wos-runtime`.
 
-use formspec_canonical::{CANONICALIZATION_PROFILE, DigestAlgorithm, build_signed_payload};
+use integrity_canonical::{CANONICALIZATION_PROFILE, DigestAlgorithm, build_signed_payload};
 use wos_core::{
     instance::{ActiveTask, CaseInstance, ValidationOutcome},
     provenance::{ProvenanceKind, ProvenanceRecord},
@@ -1273,16 +1273,15 @@ mod tests {
         response
     }
 
-    fn legacy_nul_separated_signed_payload_digest(response: &serde_json::Value) -> String {
-        let canonical = formspec_canonical::canonicalize_response(response).unwrap();
-        let canonical_bytes = serde_json::to_vec(&canonical).unwrap();
+    fn legacy_no_nul_signed_payload_digest(response: &serde_json::Value) -> String {
+        let canonical = integrity_canonical::canonicalize_response(response).unwrap();
+        let canonical_bytes = integrity_canonical::canonical_json_bytes(&canonical).unwrap();
         let mut payload = Vec::with_capacity(
-            formspec_canonical::DOMAIN_SEPARATION.len() + 1 + canonical_bytes.len(),
+            integrity_canonical::DOMAIN_SEPARATION.len() + canonical_bytes.len(),
         );
-        payload.extend_from_slice(formspec_canonical::DOMAIN_SEPARATION.as_bytes());
-        payload.push(0);
+        payload.extend_from_slice(integrity_canonical::DOMAIN_SEPARATION.as_bytes());
         payload.extend_from_slice(&canonical_bytes);
-        formspec_canonical::compute_digest(&payload, formspec_canonical::DigestAlgorithm::Sha256)
+        integrity_canonical::compute_digest(&payload, integrity_canonical::DigestAlgorithm::Sha256)
     }
 
     #[test]
@@ -1312,9 +1311,9 @@ mod tests {
     }
 
     #[test]
-    fn parse_authored_signatures_rejects_legacy_nul_separated_digest() {
+    fn parse_authored_signatures_rejects_legacy_no_nul_digest() {
         let mut response = signed_response();
-        let legacy_digest = legacy_nul_separated_signed_payload_digest(&response);
+        let legacy_digest = legacy_no_nul_signed_payload_digest(&response);
         response["authoredSignatures"][0]["signedPayload"]["digest"] =
             serde_json::Value::String(legacy_digest);
 

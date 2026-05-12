@@ -1,5 +1,7 @@
 # Case Management Boundary Validation
 
+> **Superseded validation artifact.** This R-file is retained as derivation history. The controlling source of truth for case-management decisions is [`case-boundary-decision-report.md`](case-boundary-decision-report.md); when this file disagrees with that report, the report controls.
+
 **Validated by:** GPT-5 Codex, with three subagent review passes  
 **Date:** 2026-05-10  
 **Target:** `work-spec/thoughts/analysis/case-management.md`

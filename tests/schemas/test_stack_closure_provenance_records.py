@@ -26,7 +26,7 @@ For each new record kind we cover:
 Bonus coverage:
 
 - ``InstanceStatus.stalled`` + ``stalledSince`` if/then guard in
-  ``schemas/wos-case-instance.schema.json`` (ADR 0070 D-5 / Q18 maximalist).
+  ``schemas/wos-process.schema.json`` (ADR 0070 D-5 / Q18 maximalist).
 """
 
 from __future__ import annotations
@@ -43,8 +43,8 @@ WOS_SPEC_ROOT = Path(__file__).resolve().parents[2]
 PROVENANCE_SCHEMA = (
     WOS_SPEC_ROOT / "schemas" / "wos-provenance-log.schema.json"
 )
-CASE_INSTANCE_SCHEMA = (
-    WOS_SPEC_ROOT / "schemas" / "wos-case-instance.schema.json"
+PROCESS_SCHEMA = (
+    WOS_SPEC_ROOT / "schemas" / "wos-process.schema.json"
 )
 
 
@@ -61,7 +61,7 @@ def schema() -> dict:
 
 @pytest.fixture(scope="module")
 def case_instance_schema() -> dict:
-    return json.loads(CASE_INSTANCE_SCHEMA.read_text())
+    return json.loads(PROCESS_SCHEMA.read_text())
 
 
 def _validator_for_def(schema: dict, def_name: str) -> Draft202012Validator:
@@ -707,7 +707,7 @@ class TestStalledInstanceStatus:
     @staticmethod
     def _instance(status: str, **extra) -> dict:
         record = {
-            "$wosCaseInstance": "1.0",
+            "$wosProcess": "1.0",
             "instanceId": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd",
             "definitionUrl": "https://agency.gov/workflows/benefits",
             "definitionVersion": "1.0.0",

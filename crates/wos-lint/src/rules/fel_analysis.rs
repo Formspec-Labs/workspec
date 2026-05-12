@@ -70,11 +70,11 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
             // $wosWorkflow carries lifecycle FEL, governance FEL, agents FEL,
             // advanced FEL, and assertion-library FEL in one envelope.
             DocumentKind::Workflow => check_workflow_fel(doc, diagnostics),
-            // Delivery, OntologyAlignment, CaseInstance, ProvenanceLog, Tooling
+            // Delivery, OntologyAlignment, Process, ProvenanceLog, Tooling
             // carry no FEL expressions.
             DocumentKind::Delivery
             | DocumentKind::OntologyAlignment
-            | DocumentKind::CaseInstance
+            | DocumentKind::Process
             | DocumentKind::ProvenanceLog
             | DocumentKind::Tooling => {}
         }

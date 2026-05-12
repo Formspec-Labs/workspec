@@ -18,11 +18,11 @@ use wos_runtime::{InMemoryStore, SharedInMemoryStore};
 use wos_server_ports::runtime::{RuntimeOps, SeamAccess};
 use wos_server_runtime_restate::RestateRuntimeAdapter;
 
-fn signature_start_request(case_id: &str) -> CreateInstanceRequest {
+fn signature_start_request(process_id: &str) -> CreateInstanceRequest {
     CreateInstanceRequest {
         definition_url: "urn:test:signature-runtime".into(),
         definition_version: "1.0.0".into(),
-        instance_id: case_id.to_string(),
+        instance_id: process_id.to_string(),
         tenant: None,
         initial_case_state: None,
     }
@@ -71,22 +71,22 @@ fn r6_sig013_tier3_conformance_negative_still_observable() {
 
 #[tokio::test]
 async fn r6_memory_parity_signature_start_drain_matches_reference_runtime() {
-    let case_id = typeid::mint_case_id();
-    let req = signature_start_request(&case_id);
+    let process_id = typeid::mint_process_id();
+    let req = signature_start_request(&process_id);
 
     let shared = SharedInMemoryStore(Arc::new(Mutex::new(InMemoryStore::new())));
     let mut rt = restate_signature_fixture_runtime(shared.clone());
     rt.create_instance(req.clone()).expect("reference create");
-    rt.enqueue_event(&case_id, start_pending())
+    rt.enqueue_event(&process_id, start_pending())
         .expect("reference enqueue");
-    rt.drain_until_idle(&case_id).expect("reference drain");
-    let ref_inst = rt.load_instance(&case_id).expect("reference load");
+    rt.drain_until_idle(&process_id).expect("reference drain");
+    let ref_inst = rt.load_instance(&process_id).expect("reference load");
 
     let adapter = RestateRuntimeAdapter::new();
     adapter.create_instance(req).await.expect("adapter create");
     adapter
         .enqueue_event(
-            &case_id,
+            &process_id,
             serde_json::json!({
                 "event": "start",
                 "actorId": "system:test",
@@ -97,10 +97,13 @@ async fn r6_memory_parity_signature_start_drain_matches_reference_runtime() {
         .await
         .expect("adapter enqueue");
     adapter
-        .drain_until_idle(&case_id)
+        .drain_until_idle(&process_id)
         .await
         .expect("adapter drain");
-    let ad_inst = adapter.load_instance(&case_id).await.expect("adapter load");
+    let ad_inst = adapter
+        .load_instance(&process_id)
+        .await
+        .expect("adapter load");
 
     assert_eq!(
         ref_inst.configuration, ad_inst.configuration,
@@ -122,24 +125,24 @@ async fn r6_memory_parity_signature_start_drain_matches_reference_runtime() {
 /// (`configuration`, `active_tasks` IDs, `pending_events` empty).
 #[tokio::test]
 async fn r6_c1_full_drain_result_shape_parity() {
-    let case_id = typeid::mint_case_id();
-    let req = signature_start_request(&case_id);
+    let process_id = typeid::mint_process_id();
+    let req = signature_start_request(&process_id);
 
     let shared = SharedInMemoryStore(Arc::new(Mutex::new(InMemoryStore::new())));
     let mut rt = restate_signature_fixture_runtime(shared.clone());
     rt.create_instance(req.clone()).expect("reference create");
-    rt.enqueue_event(&case_id, start_pending())
+    rt.enqueue_event(&process_id, start_pending())
         .expect("reference enqueue");
     let ref_steps = rt
-        .drain_until_idle(&case_id)
+        .drain_until_idle(&process_id)
         .expect("reference drain_until_idle");
-    let ref_inst = rt.load_instance(&case_id).expect("reference load");
+    let ref_inst = rt.load_instance(&process_id).expect("reference load");
 
     let adapter = RestateRuntimeAdapter::new();
     adapter.create_instance(req).await.expect("adapter create");
     adapter
         .enqueue_event(
-            &case_id,
+            &process_id,
             serde_json::json!({
                 "event": "start",
                 "actorId": "system:c1-parity",
@@ -150,10 +153,13 @@ async fn r6_c1_full_drain_result_shape_parity() {
         .await
         .expect("adapter enqueue");
     let ad_all = adapter
-        .drain_until_idle(&case_id)
+        .drain_until_idle(&process_id)
         .await
         .expect("adapter drain_until_idle");
-    let ad_inst = adapter.load_instance(&case_id).await.expect("adapter load");
+    let ad_inst = adapter
+        .load_instance(&process_id)
+        .await
+        .expect("adapter load");
 
     let idle_sentinel_count = ad_all
         .iter()

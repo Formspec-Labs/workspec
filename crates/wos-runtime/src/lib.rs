@@ -53,11 +53,11 @@ pub use restate_fixture_support::{
 };
 pub use runtime::{
     Clock, CompanionPolicy, CompletionRequirementKind, CreateInstanceRequest, DrainOnceResult,
-    MigrationMap, MigrationOutcome, PersistDraftResult, PostureDeclaration, RuntimeError,
-    RuntimeEventContext, RuntimeEventDecision, SIGNATURE_PROFILE_KEY_EXTENSION,
-    SIGNATURE_PROFILE_REF_EXTENSION, SIGNATURE_STEP_ID_EXTENSION, SignatureProfileDocument,
-    SystemClock, TaskSubmissionResult, WosRuntime, populate_provenance_record_fields,
-    stamp_provenance,
+    HttpPostureResolver, MigrationMap, MigrationOutcome, PersistDraftResult, PostureDeclaration,
+    PostureResolver, ResolvedPostureDeclaration, RuntimeError, RuntimeEventContext,
+    RuntimeEventDecision, SIGNATURE_PROFILE_KEY_EXTENSION, SIGNATURE_PROFILE_REF_EXTENSION,
+    SIGNATURE_STEP_ID_EXTENSION, SignatureProfileDocument, StaticPostureResolver, SystemClock,
+    TaskSubmissionResult, WosRuntime, populate_provenance_record_fields, stamp_provenance,
 };
 pub use store::{
     InMemoryStore, IntakeRecord, ReplayKey, ReplayOperation, ReplayValue, RuntimeAuxFields,

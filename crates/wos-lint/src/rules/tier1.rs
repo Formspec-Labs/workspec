@@ -33,7 +33,7 @@ pub fn check(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
             check_sidecar_target_workflow(doc, diagnostics);
         }
         // Other canonical markers have no Tier 1 rules yet.
-        DocumentKind::CaseInstance | DocumentKind::ProvenanceLog | DocumentKind::Tooling => {}
+        DocumentKind::Process | DocumentKind::ProvenanceLog | DocumentKind::Tooling => {}
     }
 }
 

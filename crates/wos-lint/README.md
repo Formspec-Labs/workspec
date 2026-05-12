@@ -83,6 +83,6 @@ Documents are identified by their `$wos*` marker property. Per ADR 0076 the sche
 | `$wosWorkflow` | Author-time workflow (kernel + governance + ai + advanced + signature + custody + assurance) | `schemas/wos-workflow.schema.json` |
 | `$wosDelivery` | Deployment-environment delivery sidecar (calendar + notifications + correspondence) | `schemas/sidecars/wos-delivery.schema.json` |
 | `$wosOntologyAlignment` | Per-deployment ontology alignment sidecar (JSON-LD `@context`, SHACL, PROV-O, XES/OCEL) | `schemas/sidecars/wos-ontology-alignment.schema.json` |
-| `$wosCaseInstance` | Runtime case-instance state | `schemas/wos-case-instance.schema.json` |
+| `$wosProcess` | Runtime workflow-process state | `schemas/wos-process.schema.json` |
 | `$wosProvenanceLog` | Runtime append-only audit log | `schemas/wos-provenance-log.schema.json` |
 | `$wosTooling` | Tooling envelope wrapping conformance traces, lint diagnostics, MCP catalogs, synth traces, extension registries | `schemas/wos-tooling.schema.json` |

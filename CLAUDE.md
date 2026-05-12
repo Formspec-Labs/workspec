@@ -55,7 +55,7 @@ One author-time core schema, three sidecars, two runtime artifact schemas, one t
 - **Sidecars (deployment-environment configuration; join by `targetWorkflow` URI):**
   - `wos-delivery.schema.json` — business calendar, notification templates, correspondence metadata.
   - `wos-ontology-alignment.schema.json` — JSON-LD `@context`, SHACL shapes, PROV-O / XES / OCEL export.
-- **Runtime artifacts (produced by processors):** `wos-case-instance.schema.json` (running-instance state), `wos-provenance-log.schema.json` (append-only audit log).
+- **Runtime artifacts (produced by processors):** `wos-process.schema.json` (running process state), `wos-provenance-log.schema.json` (append-only audit log).
 - **Tooling:** `wos-tooling.schema.json` (lint diagnostics, conformance traces, synth traces, MCP tool catalog, extension registry, authoring-tool view definitions).
 
 Single top-level version marker: `$wosWorkflow`. Stream identity (governance, agents, signature, custody, advanced) is implicit in the workflow envelope version; compliance claims compose as `$wosWorkflow@X.Y`. The historical "we comply with `wos-kernel@1.0 + wos-governance@1.1`" four-stream form translates to "`$wosWorkflow@1.0`" plus a one-paragraph claims-map in `RELEASE-STREAMS.md` enumerating which embedded blocks are exercised. T4 signature, governance, AI deontic, advanced equity conformance suites stay operationally separate but run against the workflow envelope at the claimed version.
