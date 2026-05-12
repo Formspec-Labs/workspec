@@ -176,6 +176,56 @@ pub trait RuntimeStore {
         Vec::new()
     }
 
+    /// Return every provenance record across every workflow process bound to
+    /// `case_ledger_id`, merged in `(timestamp, process_id, position)` order.
+    ///
+    /// This is the N:1 traversal primitive — one case file aggregating events
+    /// from many workflow processes (see case-boundary report §4.3). Records
+    /// with an empty `timestamp` (unit-test fixtures that never reached the
+    /// runtime stamper) sort to the front in encounter order — exporters
+    /// should treat empty timestamps as "unknown" per
+    /// [`ProvenanceRecord`] docs.
+    ///
+    /// Empty vector when no processes are bound to the case ledger or when
+    /// every bound process has an empty provenance log. Default implementation
+    /// returns empty; in-memory and storage-backed adapters override.
+    fn provenance_for_case(&self, _case_ledger_id: &str) -> Vec<ProvenanceRecord> {
+        Vec::new()
+    }
+
+    /// Append a provenance record to the workflow process identified by
+    /// `process_id` after validating that the process is bound to
+    /// `case_ledger_id`.
+    ///
+    /// Records are stored on the per-process `provenance_log`; this method
+    /// exists as the case-scoped writer counterpart to [`Self::provenance_for_case`]
+    /// so callers traversing case-keyed routes (ADR-0093 §2.8) need not load
+    /// the record first. Returns [`StoreError::NotFound`] when the process is
+    /// missing or bound to a different case ledger. The default implementation
+    /// performs the load/validate/save round-trip atop the existing
+    /// process-scoped methods; adapters with a direct case-ledger index may
+    /// override.
+    ///
+    /// # Errors
+    /// Returns an error when the record cannot be loaded, the case-ledger
+    /// binding mismatches, or the save fails.
+    fn append_provenance_for_case(
+        &mut self,
+        case_ledger_id: &str,
+        process_id: &str,
+        record: ProvenanceRecord,
+    ) -> Result<(), StoreError> {
+        let mut runtime_record = self.load_record(process_id)?;
+        if runtime_record.instance.case_ledger_id != case_ledger_id {
+            return Err(StoreError::NotFound(format!(
+                "process `{process_id}` is not bound to case ledger `{case_ledger_id}`"
+            )));
+        }
+        runtime_record.provenance_log.push(record);
+        runtime_record.instance.provenance_position = runtime_record.provenance_log.len() as u64;
+        self.save_record(runtime_record)
+    }
+
     /// Atomically replace an instance record.
     fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError>;
 
@@ -194,9 +244,15 @@ pub trait RuntimeStore {
 }
 
 /// In-memory runtime record store.
+///
+/// Maintains a secondary `case_ledger_id` → `Vec<process_id>` index so
+/// case-scoped traversals (N:1 case-to-processes) run in O(processes-per-case)
+/// rather than O(all-processes-in-store). Insertion order is preserved within
+/// each case for callers that opt out of timestamp sorting.
 #[derive(Debug, Default)]
 pub struct InMemoryStore {
     records: HashMap<String, RuntimeRecord>,
+    case_index: HashMap<String, Vec<String>>,
     intake_records: HashMap<(String, String), IntakeRecord>,
 }
 
@@ -214,7 +270,12 @@ impl RuntimeStore for InMemoryStore {
             return Err(StoreError::AlreadyExists(process_id));
         }
 
-        self.records.insert(process_id, record);
+        let case_ledger_id = record.instance.case_ledger_id.clone();
+        self.records.insert(process_id.clone(), record);
+        self.case_index
+            .entry(case_ledger_id)
+            .or_default()
+            .push(process_id);
         Ok(())
     }
 
@@ -237,11 +298,32 @@ impl RuntimeStore for InMemoryStore {
     }
 
     fn processes_for_case(&self, case_ledger_id: &str) -> Vec<String> {
-        self.records
-            .values()
-            .filter(|record| record.instance.case_ledger_id == case_ledger_id)
-            .map(|record| record.instance.process_id.clone())
-            .collect()
+        self.case_index
+            .get(case_ledger_id)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    fn provenance_for_case(&self, case_ledger_id: &str) -> Vec<ProvenanceRecord> {
+        let Some(process_ids) = self.case_index.get(case_ledger_id) else {
+            return Vec::new();
+        };
+        // (timestamp, encounter_order, record) — encounter order preserves
+        // intra-process insertion order and keeps the sort stable for the
+        // empty-timestamp fixture case.
+        let mut merged: Vec<(String, usize, ProvenanceRecord)> = Vec::new();
+        let mut counter: usize = 0;
+        for process_id in process_ids {
+            let Some(record) = self.records.get(process_id) else {
+                continue;
+            };
+            for provenance in &record.provenance_log {
+                merged.push((provenance.timestamp.clone(), counter, provenance.clone()));
+                counter += 1;
+            }
+        }
+        merged.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+        merged.into_iter().map(|(_, _, record)| record).collect()
     }
 
     fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
@@ -518,5 +600,146 @@ pub fn runtime_aux_from_json(v: &serde_json::Value) -> RuntimeAuxFields {
         step_results,
         artifacts,
         replay_entries,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wos_core::instance::InstanceStatus;
+    use wos_core::provenance::ProvenanceRecord;
+
+    fn record_with(process_id: &str, case_ledger_id: &str) -> RuntimeRecord {
+        let instance = WorkflowProcess {
+            process_id: process_id.to_string(),
+            case_ledger_id: case_ledger_id.to_string(),
+            tenant: wos_core::typeid::DEFAULT_TENANT.to_string(),
+            definition_url: "urn:test:case-scoped-store".to_string(),
+            definition_version: "1.0.0".to_string(),
+            configuration: Vec::new(),
+            case_state: serde_json::Value::Null,
+            provenance_position: 0,
+            next_task_sequence: 0,
+            timers: Vec::new(),
+            active_tasks: Vec::new(),
+            history_store: Default::default(),
+            compensation_logs: Default::default(),
+            status: InstanceStatus::Active,
+            stalled_since: None,
+            decline_reason: None,
+            voided_by: None,
+            voided_at: None,
+            expired_at: None,
+            pending_events: Vec::new(),
+            governance_state: None,
+            volume_counters: None,
+            fired_milestones: Default::default(),
+            pending_callbacks: Default::default(),
+            created_at: "1970-01-01T00:00:00Z".to_string(),
+            updated_at: "1970-01-01T00:00:00Z".to_string(),
+            extensions: Default::default(),
+        };
+        RuntimeRecord::new(instance)
+    }
+
+    fn stamped(timestamp: &str) -> ProvenanceRecord {
+        let mut record =
+            ProvenanceRecord::state_transition("from", "to", "evt", Some("actor:test"));
+        record.timestamp = timestamp.to_string();
+        record
+    }
+
+    #[test]
+    fn provenance_for_case_merges_records_from_multiple_processes_in_time_order() {
+        let mut store = InMemoryStore::new();
+        let case_ledger_id = "case_01h_ledger";
+        let process_a = "process_01h_a";
+        let process_b = "process_01h_b";
+
+        store.create_record(record_with(process_a, case_ledger_id)).unwrap();
+        store.create_record(record_with(process_b, case_ledger_id)).unwrap();
+
+        // Interleave timestamps across both processes — t1 (a), t2 (b), t3 (a), t4 (b).
+        let mut record_a = store.load_record(process_a).unwrap();
+        record_a.provenance_log.push(stamped("2026-05-12T10:00:01Z"));
+        record_a.provenance_log.push(stamped("2026-05-12T10:00:03Z"));
+        store.save_record(record_a).unwrap();
+
+        let mut record_b = store.load_record(process_b).unwrap();
+        record_b.provenance_log.push(stamped("2026-05-12T10:00:02Z"));
+        record_b.provenance_log.push(stamped("2026-05-12T10:00:04Z"));
+        store.save_record(record_b).unwrap();
+
+        let merged = store.provenance_for_case(case_ledger_id);
+        let timestamps: Vec<&str> = merged.iter().map(|r| r.timestamp.as_str()).collect();
+        assert_eq!(
+            timestamps,
+            vec![
+                "2026-05-12T10:00:01Z",
+                "2026-05-12T10:00:02Z",
+                "2026-05-12T10:00:03Z",
+                "2026-05-12T10:00:04Z",
+            ],
+            "merged provenance MUST be in timestamp order across all processes bound to the case ledger",
+        );
+
+        let mut process_ids = store.processes_for_case(case_ledger_id);
+        process_ids.sort();
+        assert_eq!(process_ids, vec![process_a.to_string(), process_b.to_string()]);
+    }
+
+    #[test]
+    fn provenance_for_case_returns_empty_for_unknown_case_ledger() {
+        let mut store = InMemoryStore::new();
+        store
+            .create_record(record_with("process_01h_a", "case_01h_known"))
+            .unwrap();
+
+        assert!(
+            store.provenance_for_case("case_01h_does_not_exist").is_empty(),
+            "unknown case ledger MUST yield an empty Vec, not panic or NotFound",
+        );
+        assert!(store.processes_for_case("case_01h_does_not_exist").is_empty());
+    }
+
+    #[test]
+    fn append_provenance_for_case_writes_to_bound_process() {
+        let mut store = InMemoryStore::new();
+        let case_ledger_id = "case_01h_append";
+        let process_id = "process_01h_writer";
+        store
+            .create_record(record_with(process_id, case_ledger_id))
+            .unwrap();
+
+        store
+            .append_provenance_for_case(case_ledger_id, process_id, stamped("2026-05-12T11:00:00Z"))
+            .expect("case-scoped append succeeds when binding matches");
+
+        let merged = store.provenance_for_case(case_ledger_id);
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].timestamp, "2026-05-12T11:00:00Z");
+
+        let record = store.load_record(process_id).unwrap();
+        assert_eq!(record.instance.provenance_position, 1, "position tracks log length");
+    }
+
+    #[test]
+    fn append_provenance_for_case_rejects_mismatched_binding() {
+        let mut store = InMemoryStore::new();
+        store
+            .create_record(record_with("process_01h_w", "case_01h_correct"))
+            .unwrap();
+
+        let err = store
+            .append_provenance_for_case(
+                "case_01h_wrong",
+                "process_01h_w",
+                stamped("2026-05-12T11:00:00Z"),
+            )
+            .expect_err("mismatched case ledger MUST be refused");
+        assert!(
+            matches!(err, StoreError::NotFound(_)),
+            "binding mismatch surfaces as NotFound, got {err:?}",
+        );
     }
 }
