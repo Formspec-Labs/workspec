@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.formspec.io/wos-api/case-view/v1",
+  "title": "WOS API Case View",
+  "description": "Public API resource schema for the staff case view returned by `GET /api/v1/cases/{case_id}` (Refactor 3A.2; CBR §4.4-§4.5; ADR-0093 §5). The case view is keyed by the durable case ledger and aggregates every workflow process bound to it plus every provenance event (direct-append and process-emitted) merged in time order. Replay-vs-projection byte-identity is required for the Phase 5 conformance fixture (CBR §4.7): reading via deterministic replay and reading via materialized projection MUST return byte-identical JSON for the same `case_id`. Audience field projection (the optional `audienceProjection` block) is the only allowed asymmetry between replay-read and projection-read; everything else MUST byte-match. The applicant-audience view lives at `GET /api/v1/applicant/cases/{id}` (see `applicant.schema.json#/$defs/ApplicantCaseDetail`); this staff view does NOT serve applicants. Greenfield per pre-release framing: no `eventCount`/`processCount` legacy shape, no instance-keyed identity. Closed taxonomies per ADR-0082 D-12; vendor extensions are NOT permitted on case-view fields except inside `audienceProjection.extensions` (open-with-`x-` per ADR-0082 D-12).",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/CaseView"
+    },
+    {
+      "$ref": "#/$defs/CaseStatus"
+    },
+    {
+      "$ref": "#/$defs/CaseViewEvent"
+    },
+    {
+      "$ref": "#/$defs/AudienceProjection"
+    }
+  ],
+  "$defs": {
+    "WosResourceUrn": {
+      "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+      "description": "Public WOS API resource URN (ADR 0082 D-4). Hoisted to `_common.schema.json`. Case ledger URNs use the `case` entity-type segment; workflow process URNs use the `process` segment."
+    },
+    "CaseStatus": {
+      "enum": [
+        "active",
+        "closed",
+        "genesis"
+      ],
+      "description": "Closed case-level rollup posture. `active` — at least one bound workflow process is non-terminal (active, suspended, migrating). `closed` — every bound workflow process reached a terminal lifecycle state (completed, terminated, stalled). `genesis` — the case ledger exists via the direct-append surface but no workflow process is bound yet. The taxonomy is closed-no-extension; pre-release framing forbids `x-` vendor extensions here.",
+      "examples": [
+        "active",
+        "genesis"
+      ]
+    },
+    "CaseViewEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One event in the merged time-ordered event stream for the case view. Direct-append events (no `processId`) and process-emitted events (with `processId`) share this shape so replay and projection return byte-identical event arrays. `event` is the closed WOS event-type literal (CBR §4 closed enum; F-13 naming convention). `sequence` is monotonic within the case ledger; `eventHash`/`previousHash` are the Trellis-style chain commitments.",
+      "required": [
+        "eventId",
+        "sequence",
+        "eventHash",
+        "previousHash",
+        "timestamp"
+      ],
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Storage-local provenance row identifier.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "event": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Registered WOS event literal carried by the provenance payload. Authoritative D26 dispatch value; the inner `recordKind` discriminator is intentionally suppressed in the merged case view. Absent only when the underlying provenance row predates the closed-enum migration (legacy rows; not emitted by greenfield write paths).",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "processId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Workflow process URN that emitted this event when present. Absent for direct-append events written through `POST /api/v1/cases/{case_id}/events`. The presence/absence of this field is the structural marker for the emission branch (CBR §4.6 two-branch authorization)."
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Monotonic sequence number within the case ledger's merged event stream. Direct-append rows partition on `case_ledger_id`; process-emitted rows partition on `process_id` but are still anchored to the case ledger and ordered by `timestamp` then `sequence` in this view."
+        },
+        "eventHash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Hash-chain digest for this event."
+        },
+        "previousHash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Hash-chain predecessor digest."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the row was appended. Primary sort key for the merged stream."
+        }
+      }
+    },
+    "AudienceProjection": {
+      "type": "object",
+      "description": "Optional audience-driven field projection block. CBR §4.4 architectural commitment: one case view, two audience-appropriate routes. The staff route at `GET /api/v1/cases/{case_id}` MAY surface fields suppressed on the applicant route at `GET /api/v1/applicant/cases/{id}`; the projection block records the resolved audience tier and any field-level redaction the responding deployment applied. This is the ONLY allowed asymmetry between replay-read and projection-read for the byte-identity acceptance fixture (CBR §4.7) — every other field MUST byte-match across read paths. `additionalProperties` is permitted under the `x-` prefix only (open-with-vendor-extension per ADR-0082 D-12).",
+      "required": [
+        "audience"
+      ],
+      "properties": {
+        "audience": {
+          "enum": [
+            "staff",
+            "applicant",
+            "support"
+          ],
+          "description": "Closed audience taxonomy for the responding view. `staff` is the default for `GET /api/v1/cases/{case_id}` (caseworker / supervisor / adjudicator). `applicant` is reserved for cross-tier reuse; the applicant route returns a distinct `ApplicantCaseDetail` shape. `support` is the human-in-the-loop assistance tier."
+        },
+        "redactedFields": {
+          "type": "array",
+          "description": "Field paths suppressed from `events[].payload` (or other case-view subtrees) by the responding deployment's class-bag policy. Paths are JSON Pointer fragments rooted at the response document. Empty array when no redaction applied.",
+          "items": {
+            "type": "string",
+            "pattern": "^/[^\\s]*$"
+          }
+        }
+      },
+      "patternProperties": {
+        "^x-[a-z][a-z0-9-]*$": {
+          "description": "Vendor extension (open-with-`x-` per ADR-0082 D-12). Deployments may attach audience-tier debug metadata under an `x-` key; consumers MUST tolerate unknown extensions."
+        }
+      },
+      "additionalProperties": false
+    },
+    "CaseView": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Staff case view returned by `GET /api/v1/cases/{case_id}` per CBR §4.5. Keyed by the durable case ledger; aggregates every bound workflow process URN and the merged provenance event stream. The `processes` array carries process URNs only (full process projections live at `GET /api/v1/cases/{case_id}/processes/{process_id}`). The `events` array is the merged time-ordered stream across direct-append rows and every bound process's per-process provenance. `lastUpdated` is the timestamp of the most recent event (or the case-ledger genesis timestamp when no events exist beyond genesis). Replay-vs-projection byte-identity is required for the Phase 5 N:1 conformance fixture; `audienceProjection` is the only allowed asymmetry between the two read paths.",
+      "required": [
+        "caseLedgerId",
+        "processes",
+        "events",
+        "status",
+        "lastUpdated"
+      ],
+      "properties": {
+        "caseLedgerId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Durable governed case-ledger URN (`urn:wos:<tenant>_case_<ulid>`). The case IS its ledger (CBR §1; ADR-0093 D-1)."
+        },
+        "processes": {
+          "type": "array",
+          "description": "Workflow process URNs bound to this case ledger, sorted by `created_at` then `process_id`. Empty for a direct-append case with no workflow started yet. Full process projections are NOT inlined here; consumers fetch them via `GET /api/v1/cases/{case_id}/processes/{process_id}` (D-3 subresource discipline). N:1 (N processes per one case) is supported from day one per CBR §3.",
+          "items": {
+            "$ref": "#/$defs/WosResourceUrn"
+          }
+        },
+        "events": {
+          "type": "array",
+          "description": "Merged time-ordered provenance event stream across direct-append rows and every bound process. Direct-append events have no `processId`; process-emitted events carry the emitting process URN. Sort order is primary by `timestamp` ascending, secondary by `sequence` ascending. This array is the load-bearing byte-identity surface for the Phase 5 replay-vs-projection conformance fixture.",
+          "items": {
+            "$ref": "#/$defs/CaseViewEvent"
+          }
+        },
+        "status": {
+          "$ref": "#/$defs/CaseStatus",
+          "description": "Case-level lifecycle rollup. See `CaseStatus` for the closed taxonomy."
+        },
+        "lastUpdated": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp of the most recent event in the merged stream. When `events` is empty (an impossible state under the 404 contract — the case view 404s when there are no processes AND no events), this field is absent."
+        },
+        "audienceProjection": {
+          "$ref": "#/$defs/AudienceProjection",
+          "description": "Audience-projection metadata. Optional; the only allowed asymmetry between replay-read and projection-read for the byte-identity fixture."
+        }
+      }
+    }
+  }
+}
