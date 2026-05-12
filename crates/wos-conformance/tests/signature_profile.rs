@@ -119,46 +119,17 @@ fn sig013_policy_assurance_below_floor_blocks_affirmation() {
 
 #[test]
 fn sig014_signed_payload_digest_mismatch_blocks_affirmation() {
-    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
-    let error = run_fixture(
-        &fixture_json("SIG-014-signed-payload-digest-mismatch.json"),
-        base_dir.to_str().expect("utf-8 fixture path"),
-    )
-    .expect_err("signed-payload digest mismatch must reject");
-    assert!(
-        error
-            .to_string()
-            .contains("signedPayload.digest does not match"),
-        "unexpected digest-mismatch rejection error: {error}"
-    );
+    assert_signature_fixture_passes("SIG-014-signed-payload-digest-mismatch.json");
 }
 
 #[test]
 fn sig015_signing_intent_mismatch_blocks_affirmation() {
-    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
-    let error = run_fixture(
-        &fixture_json("SIG-015-signing-intent-mismatch.json"),
-        base_dir.to_str().expect("utf-8 fixture path"),
-    )
-    .expect_err("signing-intent mismatch must reject");
-    assert!(
-        error.to_string().contains("does not match signature step"),
-        "unexpected signing-intent rejection error: {error}"
-    );
+    assert_signature_fixture_passes("SIG-015-signing-intent-mismatch.json");
 }
 
 #[test]
 fn sig016_signer_authority_floor_failure_blocks_affirmation() {
-    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
-    let error = run_fixture(
-        &fixture_json("SIG-016-signer-authority-floor-failure.json"),
-        base_dir.to_str().expect("utf-8 fixture path"),
-    )
-    .expect_err("missing signerAuthority must reject");
-    assert!(
-        error.to_string().contains("requires signerAuthority"),
-        "unexpected signer-authority rejection error: {error}"
-    );
+    assert_signature_fixture_passes("SIG-016-signer-authority-floor-failure.json");
 }
 
 #[test]
@@ -182,44 +153,17 @@ fn sig019_tampered_signature_method_admits_with_deferred_status() {
 
 #[test]
 fn sig020_authority_missing_evidence_binding_blocks_affirmation() {
-    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
-    let error = run_fixture(
-        &fixture_json("SIG-020-authority-missing-evidence-binding.json"),
-        base_dir.to_str().expect("utf-8 fixture path"),
-    )
-    .expect_err("missing evidenceBinding for non-self class must reject");
-    assert!(
-        error.to_string().contains("evidenceBinding"),
-        "unexpected evidence-binding rejection error: {error}"
-    );
+    assert_signature_fixture_passes("SIG-020-authority-missing-evidence-binding.json");
 }
 
 #[test]
 fn sig021_authority_expired_validity_window_blocks_affirmation() {
-    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
-    let error = run_fixture(
-        &fixture_json("SIG-021-authority-expired-validity-window.json"),
-        base_dir.to_str().expect("utf-8 fixture path"),
-    )
-    .expect_err("signedAt outside signerAuthority validity window must reject");
-    assert!(
-        error.to_string().contains("validUntil"),
-        "unexpected validity-window rejection error: {error}"
-    );
+    assert_signature_fixture_passes("SIG-021-authority-expired-validity-window.json");
 }
 
 #[test]
 fn sig022_authority_malformed_evidence_hash_blocks_affirmation() {
-    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
-    let error = run_fixture(
-        &fixture_json("SIG-022-authority-malformed-evidence-hash.json"),
-        base_dir.to_str().expect("utf-8 fixture path"),
-    )
-    .expect_err("malformed signerAuthority.evidenceBinding.evidenceHash must reject");
-    assert!(
-        error.to_string().contains("evidenceHash"),
-        "unexpected evidence-hash rejection error: {error}"
-    );
+    assert_signature_fixture_passes("SIG-022-authority-malformed-evidence-hash.json");
 }
 
 #[test]
@@ -234,48 +178,37 @@ fn sig024_allowlisted_deployment_local_intent_admits() {
 
 #[test]
 fn sig025_unregistered_non_allowlisted_intent_blocks_affirmation() {
-    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
-    let error = run_fixture(
-        &fixture_json("SIG-025-unregistered-non-allowlisted-intent.json"),
-        base_dir.to_str().expect("utf-8 fixture path"),
-    )
-    .expect_err("unregistered, non-allowlisted signingIntent must reject");
-    assert!(
-        error.to_string().contains("deploymentLocalSigningIntents"),
-        "unexpected unregistered-intent rejection error: {error}"
-    );
+    assert_signature_fixture_passes("SIG-025-unregistered-non-allowlisted-intent.json");
 }
 
 #[test]
 fn sig026_evidence_response_signed_at_divergence_blocks_affirmation() {
-    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
-    let error = run_fixture(
-        &fixture_json("SIG-026-evidence-response-signed-at-divergence.json"),
-        base_dir.to_str().expect("utf-8 fixture path"),
-    )
-    .expect_err(
-        "consent-path signedAt diverging from verified evidence signed_at must reject (review F4)",
-    );
-    assert!(
-        error
-            .to_string()
-            .contains("diverges from response consent signedAt"),
-        "unexpected divergence rejection error: {error}"
-    );
+    assert_signature_fixture_passes("SIG-026-evidence-response-signed-at-divergence.json");
+}
+
+#[test]
+fn sig027_posture_method_unsupported_blocks_affirmation() {
+    assert_signature_fixture_passes("SIG-027-posture-method-unsupported.json");
+}
+
+#[test]
+fn sig028_posture_floor_unmet_blocks_affirmation() {
+    assert_signature_fixture_passes("SIG-028-posture-floor-unmet.json");
+}
+
+#[test]
+fn sig029_posture_declaration_loaded_admits_signature() {
+    assert_signature_fixture_passes("SIG-029-posture-declaration-loaded.json");
+}
+
+#[test]
+fn sig030_method_unregistered_blocks_affirmation() {
+    assert_signature_fixture_passes("SIG-030-method-unregistered.json");
 }
 
 #[test]
 fn sig017_stale_response_pin_blocks_affirmation() {
-    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
-    let error = run_fixture(
-        &fixture_json("SIG-017-stale-response-pin.json"),
-        base_dir.to_str().expect("utf-8 fixture path"),
-    )
-    .expect_err("stale signedPayload response pin must reject");
-    assert!(
-        error.to_string().contains("signedPayload.responseId"),
-        "unexpected stale-pin rejection error: {error}"
-    );
+    assert_signature_fixture_passes("SIG-017-stale-response-pin.json");
 }
 
 #[test]

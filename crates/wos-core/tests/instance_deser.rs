@@ -88,6 +88,49 @@ fn active_formspec_task_round_trips() {
 }
 
 #[test]
+fn dual_identity_fields_round_trip() {
+    let json = r#"{
+        "instanceId": "test_process_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "processId": "test_process_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "caseLedgerId": "test_case_01jqrpd32jf8xtx9qxkkv3rqsd",
+        "definitionUrl": "urn:wos:workflow:test",
+        "definitionVersion": "1.0.0",
+        "configuration": ["intake"],
+        "caseState": {},
+        "provenancePosition": 0,
+        "timers": [],
+        "activeTasks": [],
+        "status": "active",
+        "createdAt": "2026-04-11T14:00:00Z",
+        "updatedAt": "2026-04-11T14:05:00Z"
+    }"#;
+
+    let instance: CaseInstance = serde_json::from_str(json).unwrap();
+
+    assert_eq!(
+        instance.effective_process_id(),
+        "test_process_01jqrpd32jf8xtx9qxkkv3rqsc"
+    );
+    assert_eq!(
+        instance.effective_case_ledger_id(),
+        "test_case_01jqrpd32jf8xtx9qxkkv3rqsd"
+    );
+    let round_trip = serde_json::to_value(&instance).unwrap();
+    assert_eq!(
+        round_trip
+            .pointer("/processId")
+            .and_then(serde_json::Value::as_str),
+        Some("test_process_01jqrpd32jf8xtx9qxkkv3rqsc")
+    );
+    assert_eq!(
+        round_trip
+            .pointer("/caseLedgerId")
+            .and_then(serde_json::Value::as_str),
+        Some("test_case_01jqrpd32jf8xtx9qxkkv3rqsd")
+    );
+}
+
+#[test]
 fn missing_active_tasks_is_invalid() {
     let json = r#"{
         "instanceId": "urn:wos:test_case_01jqrpd32jf8xtx9qxkkv3rqsc",

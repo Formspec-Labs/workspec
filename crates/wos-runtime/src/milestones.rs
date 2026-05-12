@@ -150,6 +150,8 @@ mod tests {
     fn bare_instance() -> CaseInstance {
         CaseInstance {
             instance_id: "test".to_string(),
+            process_id: None,
+            case_ledger_id: None,
             tenant: wos_core::typeid::DEFAULT_TENANT.to_string(),
             definition_url: "urn:test".to_string(),
             definition_version: "1.0.0".to_string(),

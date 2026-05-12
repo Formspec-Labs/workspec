@@ -105,6 +105,14 @@ fn apply_migration_map(
     Ok(())
 }
 
+fn requested_type_id(value: &str) -> Option<&str> {
+    if typeid::is_valid_type_id(value, None) {
+        Some(value)
+    } else {
+        CaseInstance::extract_urn_type_id(value)
+    }
+}
+
 impl WosRuntime {
     /// Create and persist a new case instance.
     ///
@@ -114,6 +122,27 @@ impl WosRuntime {
     pub fn create_instance(
         &mut self,
         request: CreateInstanceRequest,
+    ) -> Result<CaseInstance, RuntimeError> {
+        self.create_instance_inner(request, None)
+    }
+
+    /// Create and persist a new workflow process bound to an existing case ledger.
+    ///
+    /// # Errors
+    /// Returns an error when the case ledger id is invalid, its tenant disagrees
+    /// with the process id, or normal instance creation fails.
+    pub fn create_instance_bound_to_case(
+        &mut self,
+        request: CreateInstanceRequest,
+        case_ledger_id: String,
+    ) -> Result<CaseInstance, RuntimeError> {
+        self.create_instance_inner(request, Some(case_ledger_id))
+    }
+
+    fn create_instance_inner(
+        &mut self,
+        request: CreateInstanceRequest,
+        bound_case_ledger_id: Option<String>,
     ) -> Result<CaseInstance, RuntimeError> {
         let now_ms = self.clock.now_ms();
         let now_iso = format_timestamp(now_ms)?;
@@ -157,16 +186,71 @@ impl WosRuntime {
             (None, Some(prefix)) => prefix.clone(),
             (None, None) => typeid::DEFAULT_TENANT.to_string(),
         };
+        let bound_case_ledger_id = bound_case_ledger_id
+            .map(|value| {
+                let normalized = requested_type_id(&value)
+                    .map(str::to_string)
+                    .unwrap_or_else(|| value.clone());
+                if !typeid::is_valid_type_id(&normalized, Some(typeid::CASE_PREFIX)) {
+                    return Err(RuntimeError::MigrationRejected(format!(
+                        "case ledger id `{value}` is not a case TypeID"
+                    )));
+                }
+                if let Some(prefix) = typeid::extract_tenant(&normalized)
+                    && prefix != tenant
+                {
+                    return Err(RuntimeError::TenantMismatch {
+                        explicit: tenant.clone(),
+                        type_id_prefix: prefix.to_string(),
+                    });
+                }
+                Ok(normalized)
+            })
+            .transpose()?;
 
-        let (instance_id, legacy_alias) = if CaseInstance::is_case_id(&instance_id)
-            || CaseInstance::is_instance_urn(&instance_id)
-        {
-            (instance_id, None)
-        } else if instance_id.trim().is_empty() {
-            (CaseInstance::mint_id(), None)
-        } else {
-            (CaseInstance::mint_id(), Some(instance_id))
-        };
+        let input_type_id = requested_type_id(&instance_id);
+        let input_case_ledger_id = input_type_id
+            .filter(|value| typeid::is_valid_type_id(value, Some(typeid::CASE_PREFIX)))
+            .map(str::to_string);
+        let input_process_id = input_type_id
+            .filter(|value| typeid::is_valid_type_id(value, Some(typeid::PROCESS_PREFIX)))
+            .map(str::to_string);
+
+        let (instance_id, legacy_alias) =
+            if input_case_ledger_id.is_some() || input_process_id.is_some() {
+                (instance_id, None)
+            } else if instance_id.trim().is_empty() {
+                (typeid::mint_type_id(&tenant, typeid::CASE_PREFIX), None)
+            } else {
+                (
+                    typeid::mint_type_id(&tenant, typeid::CASE_PREFIX),
+                    Some(instance_id),
+                )
+            };
+        let process_id = Some(
+            input_process_id
+                .unwrap_or_else(|| typeid::mint_type_id(&tenant, typeid::PROCESS_PREFIX)),
+        );
+        let case_ledger_id = Some(match (bound_case_ledger_id, input_case_ledger_id) {
+            (Some(bound), Some(input)) if bound != input => {
+                return Err(RuntimeError::MigrationRejected(format!(
+                    "bound case ledger id `{bound}` conflicts with requested instance id `{input}`"
+                )));
+            }
+            (Some(bound), _) => bound,
+            (None, Some(input)) => input,
+            (None, None) => {
+                if CaseInstance::is_case_id(&instance_id) {
+                    instance_id.clone()
+                } else if let Some(urn_type_id) = CaseInstance::extract_urn_type_id(&instance_id)
+                    && CaseInstance::is_case_id(urn_type_id)
+                {
+                    urn_type_id.to_string()
+                } else {
+                    typeid::mint_type_id(&tenant, typeid::CASE_PREFIX)
+                }
+            }
+        });
         let kernel = self
             .resolver
             .resolve_kernel(&definition_url, &definition_version)?;
@@ -181,6 +265,8 @@ impl WosRuntime {
             timers_to_state(evaluator.timers(), self.business_calendar.as_ref())?;
         let instance = CaseInstance {
             instance_id,
+            process_id,
+            case_ledger_id,
             tenant,
             definition_url,
             definition_version,
@@ -298,7 +384,7 @@ impl WosRuntime {
             .take(limit)
             .map(|(position, provenance)| {
                 let metadata = context.metadata_for_provenance_record(
-                    &record.instance.instance_id,
+                    record.instance.effective_case_ledger_id(),
                     position,
                     provenance,
                 )?;

@@ -23,7 +23,8 @@ pub mod studio_api;
 
 pub use binding::{
     BindingError, BindingRegistry, CaseMutationBundle, ContractBindingAdapter, PreparedTask,
-    SignatureEvidence, SignaturePrimitiveStatus, SubmissionValidation,
+    SignatureAdmissionFailure, SignatureAdmissionFailureReason, SignatureEvidence,
+    SignaturePrimitiveStatus, SubmissionValidation,
 };
 pub use companion::ReferenceCompanionPolicy;
 #[doc(inline)]
@@ -52,10 +53,11 @@ pub use restate_fixture_support::{
 };
 pub use runtime::{
     Clock, CompanionPolicy, CompletionRequirementKind, CreateInstanceRequest, DrainOnceResult,
-    MigrationMap, MigrationOutcome, PersistDraftResult, RuntimeError, RuntimeEventContext,
-    RuntimeEventDecision, SIGNATURE_PROFILE_KEY_EXTENSION, SIGNATURE_PROFILE_REF_EXTENSION,
-    SIGNATURE_STEP_ID_EXTENSION, SignatureProfileDocument, SystemClock, TaskSubmissionResult,
-    WosRuntime, populate_provenance_record_fields, stamp_provenance,
+    MigrationMap, MigrationOutcome, PersistDraftResult, PostureDeclaration, RuntimeError,
+    RuntimeEventContext, RuntimeEventDecision, SIGNATURE_PROFILE_KEY_EXTENSION,
+    SIGNATURE_PROFILE_REF_EXTENSION, SIGNATURE_STEP_ID_EXTENSION, SignatureProfileDocument,
+    SystemClock, TaskSubmissionResult, WosRuntime, populate_provenance_record_fields,
+    stamp_provenance,
 };
 pub use store::{
     InMemoryStore, IntakeRecord, ReplayKey, ReplayOperation, ReplayValue, RuntimeAuxFields,

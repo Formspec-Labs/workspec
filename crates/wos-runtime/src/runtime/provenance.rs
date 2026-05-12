@@ -6,6 +6,7 @@
 //! before persistence: timestamp stamping, Semantic Profile field population,
 //! compensation records, and task validation provenance construction.
 
+use wos_core::instance::CaseInstance;
 use wos_core::model::kernel::{ActorKind, KernelDocument};
 use wos_core::provenance::{ProvenanceAuditTier, ProvenanceKind, ProvenanceRecord};
 
@@ -117,6 +118,46 @@ pub fn populate_provenance_record_fields(
         }
         if record.output_digest.is_none() {
             record.output_digest = digest_of(&record.outputs);
+        }
+    }
+}
+
+/// Stamps workflow identity into signature decision payloads.
+///
+/// F-11 keeps workflow identity in the WOS profile payload, not in the
+/// primitive integrity-event envelope. Until `DecisionEvent` is a first-class
+/// type, signature admission/affirmation provenance records are the runtime's
+/// decision payloads and carry the bound case ledger plus workflow process.
+pub fn stamp_signature_decision_identity(
+    records: &mut [ProvenanceRecord],
+    instance: &CaseInstance,
+) {
+    let case_ledger_id = instance.effective_case_ledger_id();
+    if !CaseInstance::is_case_id(case_ledger_id) {
+        return;
+    }
+    let process_id = instance.effective_process_id();
+    let process_id = CaseInstance::is_process_id(process_id).then_some(process_id);
+
+    for record in records {
+        if !matches!(
+            record.record_kind,
+            ProvenanceKind::SignatureAffirmation | ProvenanceKind::SignatureAdmissionFailed
+        ) {
+            continue;
+        }
+        let Some(data) = record
+            .data
+            .as_mut()
+            .and_then(serde_json::Value::as_object_mut)
+        else {
+            continue;
+        };
+        data.entry("caseLedgerId".to_string())
+            .or_insert_with(|| serde_json::Value::String(case_ledger_id.to_string()));
+        if let Some(process_id) = process_id {
+            data.entry("processId".to_string())
+                .or_insert_with(|| serde_json::Value::String(process_id.to_string()));
         }
     }
 }

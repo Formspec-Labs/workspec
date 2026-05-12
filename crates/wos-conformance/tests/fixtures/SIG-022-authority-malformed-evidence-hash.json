@@ -2,7 +2,7 @@
   "binding": "formspec",
   "id": "SIG-022-authority-malformed-evidence-hash",
   "rule": "SIG-RT",
-  "description": "Notary signerAuthority.evidenceBinding.evidenceHash that is not a valid hex digest (§2.12.3) blocks SignatureAffirmation.",
+  "description": "Notary signerAuthority.evidenceBinding.evidenceHash that is not a valid hex digest (§2.12.3) emits SignatureAdmissionFailed(posture_floor_unmet).",
   "documents": {
     "kernel": "../../../../fixtures/kernel/signature-runtime.json",
     "signatureProfile": "../../../../fixtures/profiles/signature-runtime-notary.json"
@@ -57,7 +57,7 @@
               "signedPayload": {
                 "canonicalization": "formspec-response-signing-v1",
                 "digestAlgorithm": "sha-256",
-                "digest": "8b2ca040c3ad966cfdb64c2c87042b2eabe4aa35596f72b3cd223261e1a6c9eb",
+                "digest": "76fa6cbd834a1e60f0ae4a7baacbc43a4a20919d97049b771a399606c81bc046",
                 "responseId": "resp-sig-022-authority-malformed-evidence-hash-notaryTask",
                 "definitionUrl": "urn:test:formspec:signature",
                 "definitionVersion": "1.0.0"
@@ -79,8 +79,19 @@
       "event": "start"
     }
   ],
-  "expected_provenance": [],
-  "expected_errors": [
-    "evidenceHash"
-  ]
+  "expected_provenance": [
+    {
+      "recordKind": "signatureAdmissionFailed",
+      "data": {
+        "reason": "posture_floor_unmet",
+        "failureContext": {
+          "field": "signerAuthority.evidenceBinding.evidenceHash"
+        },
+        "evidenceBindings": {
+          "signingIntent": "urn:wos:signing-intent:notarial-attestation"
+        }
+      }
+    }
+  ],
+  "expected_errors": []
 }

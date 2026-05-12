@@ -56,6 +56,12 @@ Returns the `CorrespondenceMessage`. Responds `WOS-1404` when the URN is not vis
 
 Per ADR 0082 D-3 (composition over flattening). Same `CorrespondenceListOptions` query fields except `instanceId` is implicit from the path. Same `CorrespondenceMessagePage` envelope. The instance aggregation endpoint at `GET /api/v1/instances/{id}?include=correspondence` extends the closed `?include=` enum (D-3) with the literal `correspondence`; consumers that want a count alongside the embedded slice request `?include=correspondence(limit=10)` per the existing aggregation grammar.
 
+### Case/process-scoped correspondence subresource
+
+`GET /api/v1/cases/{case_id}/processes/{process_id}/correspondence`
+
+Case/process bridge for ADR 0093 dual identity. Same `CorrespondenceListOptions` query fields except `instanceId` is implicit from the bound process path. The server validates that `{process_id}` belongs to `{case_id}` before listing the same `CorrespondenceMessagePage`; mismatch returns `WOS-1404`/404 and does not fall back to the process alone.
+
 ### Log a correspondence message
 
 `POST /api/v1/correspondence`

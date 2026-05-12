@@ -69,7 +69,7 @@ four wire fields:
 
 | Field | Meaning |
 |---|---|
-| `caseId` | TypeID-structured case identifier |
+| `caseId` | TypeID-structured case ledger identifier |
 | `recordId` | TypeID-structured authored-record identifier |
 | `eventType` | Outcome-neutral registered `wos.*` identifier for the authored record family |
 | `record` | The authored WOS record rendered as dCBOR |
@@ -112,7 +112,8 @@ Reserved WOS family prefixes:
 
 | Prefix | Family |
 |---|---|
-| `case` | case instance |
+| `case` | case ledger |
+| `process` | workflow runtime process |
 | `prov` | kernel facts-tier provenance records |
 | `gov` | governance runtime records |
 | `ai` | AI runtime records |
@@ -128,7 +129,7 @@ Vendors extending the family set MUST use `x-{vendor}-{kind}` naming consistent 
 
 Canonical form:
 
-`wos.<layer>.<recordKind>`
+`wos.<layer>.<record_kind>`
 
 Where `<layer>` is one of:
 
@@ -209,6 +210,12 @@ The bound input map is:
 ```
 
 That map is encoded as dCBOR and consumed by Trellis's concrete idempotency-key construction. WOS owns the semantic input. Trellis owns the concrete append-layer key bytes.
+
+This tag is only for records crossing the `custodyHook` seam after a `caseId`
+and `recordId` exist. It MUST NOT be reused for direct pre-ledger case creation.
+That path uses Trellis Core §9.8 `trellis-wos-preledger-idempotency-v1` over
+`(tenant, idempotency_token)` and the §17.3 pre-ledger genesis reservation rule;
+the two domains are intentionally separate.
 
 ### 1.10 Receipt Contract
 

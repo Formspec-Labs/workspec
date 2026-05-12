@@ -84,9 +84,9 @@ class TestHappyPath:
         event_types = extensions.get("x-wos-custody-event-types", [])
         published_event_types = {entry["eventType"] for entry in event_types}
         assert {
-            "wos.kernel.stateTransition",
-            "wos.governance.overrideRecord",
-            "wos.ai.autonomyDemotion",
+            "wos.kernel.state_transition",
+            "wos.governance.override_record",
+            "wos.ai.autonomy_demotion",
             "wos.assurance.attestation",
         } <= published_event_types, (
             "reference fixture must publish WOS-owned custody event types for "
@@ -95,7 +95,7 @@ class TestHappyPath:
 
         family_prefixes = extensions.get("x-wos-typeid-family-prefixes", [])
         published_prefixes = {entry["prefix"] for entry in family_prefixes}
-        assert {"case", "prov", "gov", "ai", "assurance"} <= published_prefixes, (
+        assert {"case", "process", "prov", "gov", "ai", "assurance"} <= published_prefixes, (
             "reference fixture must publish the reserved WOS TypeID family prefixes"
         )
 

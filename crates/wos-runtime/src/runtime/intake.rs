@@ -5,6 +5,7 @@
 use std::slice;
 
 use serde_json::{Map, Value};
+use wos_core::instance::CaseInstance;
 use wos_core::model::kernel::{ActorKind, KernelDocument};
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
 
@@ -299,6 +300,7 @@ impl WosRuntime {
                 &kernel,
                 &lifecycle_state,
             );
+            stamp_case_boundary_identity(slice::from_mut(&mut prepared), &record.instance);
             populate_provenance_record_fields(
                 slice::from_mut(&mut prepared),
                 &kernel,
@@ -420,6 +422,36 @@ fn stamp_intake_provenance_fields(
     }
 }
 
+fn stamp_case_boundary_identity(records: &mut [ProvenanceRecord], instance: &CaseInstance) {
+    let case_ledger_id = instance.effective_case_ledger_id();
+    if !CaseInstance::is_case_id(case_ledger_id) {
+        return;
+    }
+
+    for record in records {
+        if !matches!(
+            record.record_kind,
+            ProvenanceKind::CaseCreated | ProvenanceKind::IntakeAccepted
+        ) {
+            continue;
+        }
+
+        if record.outputs.is_empty() {
+            record.outputs.push(case_ledger_id.to_string());
+        }
+
+        let Some(data) = record
+            .data
+            .as_mut()
+            .and_then(serde_json::Value::as_object_mut)
+        else {
+            continue;
+        };
+        data.entry("caseLedgerId".to_string())
+            .or_insert_with(|| serde_json::Value::String(case_ledger_id.to_string()));
+    }
+}
+
 /// Shape the outcome passed to the intake adapter's `finalize_intake_acceptance`.
 ///
 /// Workflow-initiated Formspec finalization compares the accepted attach
@@ -499,9 +531,10 @@ fn intake_outcome_provenance(
                 Value::String(disposition_label.to_string()),
             );
             data.insert("caseRef".to_string(), Value::String(case_ref.clone()));
+            data.insert("caseLedgerId".to_string(), Value::String(case_ref.clone()));
             (
                 ProvenanceKind::IntakeAccepted,
-                "case.intake.accepted",
+                "wos.kernel.intake_accepted",
                 vec![case_ref],
             )
         }
@@ -509,7 +542,7 @@ fn intake_outcome_provenance(
             data.insert("code".to_string(), Value::String(code.clone()));
             (
                 ProvenanceKind::IntakeRejected,
-                "case.intake.rejected",
+                "wos.kernel.intake_rejected",
                 Vec::new(),
             )
         }
@@ -517,7 +550,7 @@ fn intake_outcome_provenance(
             data.insert("code".to_string(), Value::String(code.clone()));
             (
                 ProvenanceKind::IntakeDeferred,
-                "case.intake.deferred",
+                "wos.kernel.intake_deferred",
                 Vec::new(),
             )
         }

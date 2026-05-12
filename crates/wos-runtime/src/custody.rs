@@ -195,6 +195,15 @@ pub enum CustodyAppendError {
     #[error("custody event type must start with 'wos.': {0}")]
     InvalidEventType(String),
 
+    /// A registry-seeded D26 record omitted or contradicted its event literal.
+    #[error("custody record event must match registry literal {expected}: {actual:?}")]
+    EventLiteralMismatch {
+        /// The required registry event literal.
+        expected: &'static str,
+        /// The record's supplied `event` value.
+        actual: Option<String>,
+    },
+
     /// The authored record could not be serialized to JSON first.
     #[error("failed to serialize authored custody record to JSON: {0}")]
     JsonSerialization(String),
@@ -233,6 +242,17 @@ fn provenance_event_type(
 ) -> Result<String, CustodyAppendError> {
     let event_type_prefix = event_type_prefix.trim_end_matches('.');
     validate_required_field("eventTypePrefix", event_type_prefix)?;
+
+    if let Some(expected) = record.record_kind.canonical_event_literal() {
+        return match record.event.as_deref() {
+            Some(actual) if actual == expected => Ok(expected.to_string()),
+            _ => Err(CustodyAppendError::EventLiteralMismatch {
+                expected,
+                actual: record.event.clone(),
+            }),
+        };
+    }
+
     let kind = serde_json::to_value(record.record_kind)
         .map_err(|error| CustodyAppendError::JsonSerialization(error.to_string()))?;
     let Some(kind) = kind.as_str() else {
@@ -240,7 +260,25 @@ fn provenance_event_type(
             "provenance kind did not serialize to a string".to_string(),
         ));
     };
-    Ok(format!("{event_type_prefix}.{kind}"))
+    Ok(format!(
+        "{event_type_prefix}.{}",
+        camel_case_record_kind_to_event_tail(kind)
+    ))
+}
+
+fn camel_case_record_kind_to_event_tail(kind: &str) -> String {
+    let mut event_tail = String::with_capacity(kind.len());
+    for character in kind.chars() {
+        if character.is_ascii_uppercase() {
+            if !event_tail.is_empty() {
+                event_tail.push('_');
+            }
+            event_tail.push(character.to_ascii_lowercase());
+        } else {
+            event_tail.push(character);
+        }
+    }
+    event_tail
 }
 
 fn provenance_string_tags() -> HashMap<Vec<String>, u64> {
@@ -405,13 +443,13 @@ mod tests {
 
     use super::*;
     use sha2::{Digest, Sha256};
-    use wos_core::provenance::SignatureAffirmationInput;
+    use wos_core::provenance::{ProvenanceKind, SignatureAffirmationInput};
 
     fn metadata() -> CustodyAppendMetadata {
         CustodyAppendMetadata {
             case_id: typeid::mint_case_id(),
             record_id: typeid::mint_provenance_id(),
-            event_type: "wos.kernel.stateTransition".to_string(),
+            event_type: "wos.kernel.state_transition".to_string(),
         }
     }
 
@@ -432,13 +470,121 @@ mod tests {
         let input = CustodyAppendInput::from_provenance_record(&record, &context(), metadata())
             .expect("build input");
 
-        assert_eq!(input.event_type, "wos.kernel.stateTransition");
+        assert_eq!(input.event_type, "wos.kernel.state_transition");
         assert_eq!(input.idempotency_tuple().0, input.case_id);
         assert_eq!(input.idempotency_tuple().1, input.record_id);
         let view = input.record_json_view().expect("decode json view");
         assert_eq!(view["id"], record.id);
         assert_eq!(view["recordKind"], "stateTransition");
         assert_eq!(view["timestamp"], "2026-04-21T14:30:00Z");
+    }
+
+    #[test]
+    fn provenance_event_type_uses_snake_case_record_tail() {
+        assert_eq!(
+            camel_case_record_kind_to_event_tail("signatureAffirmation"),
+            "signature_affirmation"
+        );
+        assert_eq!(
+            camel_case_record_kind_to_event_tail("stateTransition"),
+            "state_transition"
+        );
+        assert_eq!(
+            camel_case_record_kind_to_event_tail("dcrActivityExecuted"),
+            "dcr_activity_executed"
+        );
+
+        let record =
+            ProvenanceRecord::state_transition("intake", "review", "submitted", Some("worker"));
+        assert_eq!(
+            provenance_event_type("wos.kernel", &record).expect("event type"),
+            "wos.kernel.state_transition"
+        );
+    }
+
+    fn record_with_seeded_kind(kind: ProvenanceKind, event: Option<&str>) -> ProvenanceRecord {
+        let mut record =
+            ProvenanceRecord::state_transition("intake", "review", "submitted", Some("worker"));
+        record.record_kind = kind;
+        record.event = event.map(str::to_string);
+        record
+    }
+
+    #[test]
+    fn provenance_event_type_uses_seeded_event_literal() {
+        let seeded = [
+            (ProvenanceKind::CaseCreated, "wos.kernel.case_created"),
+            (ProvenanceKind::IntakeAccepted, "wos.kernel.intake_accepted"),
+            (ProvenanceKind::IntakeRejected, "wos.kernel.intake_rejected"),
+            (ProvenanceKind::IntakeDeferred, "wos.kernel.intake_deferred"),
+            (
+                ProvenanceKind::ForEachIterationStarted,
+                "wos.kernel.for_each_iteration_started",
+            ),
+            (
+                ProvenanceKind::ForEachIterationCompleted,
+                "wos.kernel.for_each_iteration_completed",
+            ),
+            (ProvenanceKind::ForEachCompleted, "wos.kernel.for_each_completed"),
+            (
+                ProvenanceKind::SignatureAffirmation,
+                "wos.kernel.signature_affirmation",
+            ),
+            (
+                ProvenanceKind::SignatureAdmissionFailed,
+                "wos.kernel.signature_admission_failed",
+            ),
+            (
+                ProvenanceKind::DeterminationRescinded,
+                "wos.governance.determination_rescinded",
+            ),
+            (ProvenanceKind::Reinstated, "wos.governance.reinstated"),
+            (ProvenanceKind::ClockStarted, "wos.governance.clock_started"),
+            (
+                ProvenanceKind::ClockResolved,
+                "wos.governance.clock_resolved",
+            ),
+            (
+                ProvenanceKind::IdentityAttestation,
+                "wos.assurance.identity_attestation",
+            ),
+        ];
+
+        for (kind, event_literal) in seeded {
+            let record = record_with_seeded_kind(kind, Some(event_literal));
+
+            assert_eq!(
+                provenance_event_type("wos.kernel", &record).expect("event type"),
+                event_literal
+            );
+        }
+    }
+
+    #[test]
+    fn provenance_event_type_rejects_missing_seeded_event() {
+        let record = record_with_seeded_kind(ProvenanceKind::CaseCreated, None);
+
+        assert_eq!(
+            provenance_event_type("wos.kernel", &record).expect_err("reject"),
+            CustodyAppendError::EventLiteralMismatch {
+                expected: "wos.kernel.case_created",
+                actual: None,
+            }
+        );
+    }
+
+    #[test]
+    fn provenance_event_type_rejects_mismatched_seeded_event() {
+        let record =
+            record_with_seeded_kind(ProvenanceKind::CaseCreated, Some("wos.kernel.caseCreated"));
+
+        assert_eq!(
+            provenance_event_type("wos.kernel", &record).expect_err("reject"),
+            CustodyAppendError::EventLiteralMismatch {
+                expected: "wos.kernel.case_created",
+                actual: Some("wos.kernel.caseCreated".to_string()),
+            }
+        );
     }
 
     #[test]
@@ -462,7 +608,7 @@ mod tests {
         let error = CustodyAppendMetadata {
             case_id: typeid::mint_provenance_id(),
             record_id: typeid::mint_provenance_id(),
-            event_type: "wos.kernel.stateTransition".to_string(),
+            event_type: "wos.kernel.state_transition".to_string(),
         }
         .validate()
         .expect_err("reject");
@@ -475,7 +621,7 @@ mod tests {
         let error = CustodyAppendMetadata {
             case_id: typeid::mint_case_id(),
             record_id: typeid::mint_case_id(),
-            event_type: "wos.kernel.stateTransition".to_string(),
+            event_type: "wos.kernel.state_transition".to_string(),
         }
         .validate()
         .expect_err("reject");
@@ -490,7 +636,7 @@ mod tests {
         let error = CustodyAppendMetadata {
             case_id: typeid::mint_case_id(),
             record_id: format!("default_custom_{tail}"),
-            event_type: "wos.kernel.stateTransition".to_string(),
+            event_type: "wos.kernel.state_transition".to_string(),
         }
         .validate()
         .expect_err("reject");
@@ -546,7 +692,7 @@ mod tests {
         let metadata = CustodyAppendMetadata {
             case_id: "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd".to_string(),
             record_id: authored.id.clone(),
-            event_type: "wos.kernel.stateTransition".to_string(),
+            event_type: "wos.kernel.state_transition".to_string(),
         };
         let expected_bytes =
             std::fs::read(fixture_dir.join("record.dcbor")).expect("fixture dcbor");
@@ -608,6 +754,7 @@ mod tests {
                 "status": "deferredPendingHelper",
                 "reason": "formspec-signing-helper-pending",
             }),
+            verification_receipt: None,
         });
         let metadata = context()
             .metadata_for_provenance_record(&typeid::mint_case_id(), 0, &record)
@@ -617,7 +764,7 @@ mod tests {
             .expect("append input");
         let view = input.record_json_view().expect("decode json view");
 
-        assert_eq!(input.event_type, "wos.kernel.signatureAffirmation");
+        assert_eq!(input.event_type, "wos.kernel.signature_affirmation");
         assert_eq!(input.record_id, record.id);
         assert_eq!(view["recordKind"], "signatureAffirmation");
         assert_eq!(view["data"]["signerId"], "applicant");

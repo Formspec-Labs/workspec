@@ -189,11 +189,11 @@ A **ForEach state** runs an inline `body` State once per element of a bounded co
 
 **Cancellation and timers.** `cancellationPolicy` is reserved for parallel iteration semantics in a future revision; sequential foreach has a single in-flight branch and no cancellation surface. Timers created inside `body` are scoped to the iteration that created them (cancelled when the iteration completes or is broken).
 
-**Implementation status.** Sub-PR D shipped authoring + schema validity + lint coverage (`K-FOREACH-001`/`002`/`003`/`004`). Sub-PR D-2 wired sequential runtime iteration: `collection` FEL evaluation (rejects non-array with `EvalError::ForEach`), per-iteration `itemVariable` / `indexVariable` bindings (defaults `$item` / `$index`; restored to their prior values after the foreach completes), `breakCondition` FEL predicate evaluated after each iteration for early exit, the empty-collection fast path, and auto-firing of the foreach state's first eligible anonymous outgoing transition with synthetic event `$foreachComplete`. Provenance is emitted as `foreachIterationStarted` (per item, carrying `{foreachState, index, item}`) plus `foreachIterationCompleted` (carrying `{foreachState, index}` and `breakTriggered: true` when iteration broke early) plus exactly one `foreachCompleted` summary (`{foreachState, iterations, broke}`) before the outgoing transition fires. Sub-PR D-3 added per-iteration atomic-body action execution: `body.onEntry` actions run with the iteration's bindings visible, then `body.onExit` runs after the body but before `breakCondition` evaluation; mutations are attributed to the synthetic lifecycle-state label `<foreach-state>:body` so audit tooling can distinguish state-level onEntry mutations from body-iteration mutations. Sub-PR D-4 added `outputPath` + `mergeStrategy` writes: after each iteration's body executes, the post-body value of `case_state[itemVariable]` is captured per `mergeStrategy` (`collect` appends to the array at `outputPath`; `shallow` merges top-level object keys; `deep` recursively merges nested objects, replacing arrays wholesale and overwriting non-object collisions). Each merge emits a `caseStateMutation` record attributed to `<foreach-state>:output`. Type errors surface as `EvalError::ForEach`. Sub-PR D-5 added compound-body iteration: when `body.kind == compound`, the runtime walks the body's substate graph from `body.initialState`, firing anonymous transitions in document order until a Final substate is reached (or a 100-step cap surfaces a stuck/looping body as `EvalError::ForEach`). Substate-level provenance carries the synthetic label `<foreach-state>:body:<substate-id>`. Bodies with explicit-event transitions (kind `message`/`signal`/`timer`/`error`) cannot fire inside body execution because the runtime never receives external events between substate steps; authors MUST shape compound bodies with anonymous (auto-firing) transitions only. Parallel-body and nested-foreach body kinds are explicitly rejected at runtime (clear `EvalError::ForEach` rather than silent no-op).
+**Implementation status.** Sub-PR D shipped authoring + schema validity + lint coverage (`K-FOREACH-001`/`002`/`003`/`004`). Sub-PR D-2 wired sequential runtime iteration: `collection` FEL evaluation (rejects non-array with `EvalError::ForEach`), per-iteration `itemVariable` / `indexVariable` bindings (defaults `$item` / `$index`; restored to their prior values after the foreach completes), `breakCondition` FEL predicate evaluated after each iteration for early exit, the empty-collection fast path, and auto-firing of the foreach state's first eligible anonymous outgoing transition with synthetic event `$foreachComplete`. Provenance is emitted as `forEachIterationStarted` (per item, carrying `{foreachState, index, item}`; custody/export event type `wos.kernel.for_each_iteration_started`) plus `forEachIterationCompleted` (carrying `{foreachState, index}` and `breakTriggered: true` when iteration broke early; event type `wos.kernel.for_each_iteration_completed`) plus exactly one `forEachCompleted` summary (`{foreachState, iterations, broke}`; event type `wos.kernel.for_each_completed`) before the outgoing transition fires. Sub-PR D-3 added per-iteration atomic-body action execution: `body.onEntry` actions run with the iteration's bindings visible, then `body.onExit` runs after the body but before `breakCondition` evaluation; mutations are attributed to the synthetic lifecycle-state label `<foreach-state>:body` so audit tooling can distinguish state-level onEntry mutations from body-iteration mutations. Sub-PR D-4 added `outputPath` + `mergeStrategy` writes: after each iteration's body executes, the post-body value of `case_state[itemVariable]` is captured per `mergeStrategy` (`collect` appends to the array at `outputPath`; `shallow` merges top-level object keys; `deep` recursively merges nested objects, replacing arrays wholesale and overwriting non-object collisions). Each merge emits a `caseStateMutation` record attributed to `<foreach-state>:output`. Type errors surface as `EvalError::ForEach`. Sub-PR D-5 added compound-body iteration: when `body.kind == compound`, the runtime walks the body's substate graph from `body.initialState`, firing anonymous transitions in document order until a Final substate is reached (or a 100-step cap surfaces a stuck/looping body as `EvalError::ForEach`). Substate-level provenance carries the synthetic label `<foreach-state>:body:<substate-id>`. Bodies with explicit-event transitions (kind `message`/`signal`/`timer`/`error`) cannot fire inside body execution because the runtime never receives external events between substate steps; authors MUST shape compound bodies with anonymous (auto-firing) transitions only. Parallel-body and nested-foreach body kinds are explicitly rejected at runtime (clear `EvalError::ForEach` rather than silent no-op).
 
 **Durable-runtime compatibility (Temporal / Restate).** The canonical sequential semantics are deliberately compatible with the workspace's durable-runtime adapters. Iteration order is deterministic (document-order over the FEL-evaluated `collection`); `breakCondition` and substate guards are pure reads of case state; auto-firing transitions resolve in document order. Both Temporal (replay-deterministic workflow functions) and Restate (deterministic virtual-object handlers) reproduce the same iteration trace from the journal. Side-effecting actions (`invokeService`, `emitEvent`, `createTask`) flow through their existing host ports — `InvokeServicesDyn`, the binding registry, the task presenter — which the durable adapter wraps as Temporal Activities or Restate `ctx.run()` boundaries. Two principles let large or long-running iterations work durably:
 
-1. **Iteration partitioning.** A processor MAY split a large foreach across multiple durable checkpoints (Temporal `continueAsNew`, Restate handler re-entry). Iteration ordering and the `foreachCompleted` summary semantics are preserved across the partition; observable behavior (which `foreachIterationStarted` records emit, in what order, with what `index`) MUST match a single-checkpoint run. Partitioning is an adapter-tier optimization, not a spec-level concern.
+1. **Iteration partitioning.** A processor MAY split a large foreach across multiple durable checkpoints (Temporal `continueAsNew`, Restate handler re-entry). Iteration ordering and the `forEachCompleted` summary semantics are preserved across the partition; observable behavior (which `forEachIterationStarted` records emit, in what order, with what `index`) MUST match a single-checkpoint run. Partitioning is an adapter-tier optimization, not a spec-level concern.
 2. **External-event bodies are excluded by design.** Bodies with explicit-event transitions are rejected at runtime because synchronous body execution cannot await external events; this aligns with both Temporal and Restate's models, which expose external signals at handler boundaries, not inside synchronous loops. Authors who need event-driven per-item processing hoist the work out of the body into a separate compound or parallel state.
 
 **Parallel iteration honoring `concurrency`** stays an adapter-tier concern under the same framing: the in-memory canonical evaluator is sequential per spec §4.3.1 ("Sequential is the canonical semantics... Sequential canonical semantics treat `concurrency` as advisory"). A Temporal adapter MAY spawn parallel Activities up to the `concurrency` bound; a Restate adapter MAY parallelize `ctx.run()` calls. Deployments that need real parallelism wire a parallel-iteration adapter that honors the bound, leaving the authoring surface unchanged.
@@ -729,7 +729,7 @@ This section is normative.
 
 ### 5.1 Overview
 
-Case state is the structured data container associated with a workflow instance. Case state is an **append-only log** that grows regardless of lifecycle transitions. Lifecycle state (where in the workflow) and case state (what data exists) are independent.
+Case state is the structured data container associated with a governed case and its durable case ledger. Case state is an **append-only log** that grows regardless of lifecycle transitions. Lifecycle state (where in the workflow process) and case state (what data exists in the case ledger) are independent; lifecycle state remains workflow/process-specific.
 
 This separation is what makes governance attachment clean -- governance injects at transitions without touching the state machine's determinism.
 
@@ -948,7 +948,7 @@ The `preconditionNotSatisfied` outcome pairs with the `capabilityInvocation` rec
 
 #### 8.2.3 Intake and Governed-Case Boundary Record Kinds
 
-The following Facts-tier record kinds are reserved for the intake-acceptance boundary named by Runtime Companion §3.4:
+The following Facts-tier `recordKind` literals are reserved for the intake-acceptance boundary named by Runtime Companion §3.4. They are inner record-kind names, not F-13 event-type literals; the D26-seeded event literals are `wos.kernel.intake_accepted`, `wos.kernel.intake_rejected`, `wos.kernel.intake_deferred`, and `wos.kernel.case_created`.
 
 | `recordKind` | Emitted by | Meaning |
 |--------------|------------|---------|
@@ -957,13 +957,14 @@ The following Facts-tier record kinds are reserved for the intake-acceptance bou
 | `intakeDeferred` | Runtime `acceptIntakeHandoff` | The host received an intake handoff but deferred governed-case mutation pending later action. |
 | `caseCreated` | Runtime / binding finalization during accepted governed-case birth | A governed case boundary was established from accepted intake or an equivalent governance-owned creation path. |
 
-`caseCreated` is distinct from Runtime Companion `instanceCreated`. `instanceCreated` records runtime allocation of instance state. `caseCreated` records the governance boundary at which a governed case exists. A public-intake flow MAY emit both records; they remain semantically distinct.
+The `caseCreated` record kind is distinct from Runtime Companion `instanceCreated`. `instanceCreated` records runtime allocation of instance state. `caseCreated` records the governance boundary at which a governed case exists. A public-intake flow MAY emit both records; they remain semantically distinct.
 
 The canonical schema definitions are `$defs/IntakeAcceptedRecord`, `$defs/IntakeRejectedRecord`, `$defs/IntakeDeferredRecord`, and `$defs/CaseCreatedRecord` in `wos-provenance-log.schema.json`. Those schema branches intentionally constrain only the binding-agnostic minimum:
 
 - the `recordKind` literal,
 - the canonical event name when one is reserved,
-- the minimum relationship between intake inputs and governed-case outputs.
+- the minimum relationship between intake inputs and governed-case outputs,
+- the durable `caseLedgerId` for records that create or accept a governed-case append.
 
 Binding-specific evidence payloads remain owned by the binding seam. For example, a Formspec-driven `caseCreated` record MAY carry `intakeHandoffRef`, `formspecResponseRef`, and `validationReportRef` inside `data`, but the kernel does not require those exact keys for every future binding.
 
@@ -1884,7 +1885,7 @@ The `configuration` array is ordered by document declaration order, depth-first.
 
 A conformant processor MUST support the following operations on CaseInstance:
 
-| Operation | Input | Effect | Provenance |
+| Operation | Input | Effect | Provenance `recordKind` |
 |-----------|-------|--------|------------|
 | `create` | Kernel Document URL + version, initial case state | Creates a new runtime instance in the kernel's initial state. Runtime allocation, not governed-case birth. | `instanceCreated` |
 | `acceptIntakeHandoff` | IntakeHandoff, policy decision, idempotency token | Acknowledges a Formspec intake handoff, records WOS-owned intake provenance, and either attaches it to an existing governed case or births a new governed case. | `intakeAccepted`, `intakeRejected`, or `intakeDeferred`; `caseCreated` when a new governed case is born |
@@ -1899,7 +1900,7 @@ Every operation produces at least one provenance record. A `processEvent` that f
 
 ### 11.4 Intake Acceptance
 
-The `create` operation allocates runtime state. It does not, by itself, establish a governed case. Intake acceptance is a separate host operation: the processor consumes a Formspec `IntakeHandoff`, records intake provenance, and only then decides whether the handoff attaches to an existing governed case or births a new one. In a public-intake flow, `instanceCreated` and `caseCreated` MAY both occur, but they remain distinct records with distinct meanings.
+The `create` operation allocates runtime state. It does not, by itself, establish a governed case. Intake acceptance is a separate host operation: the processor consumes a Formspec `IntakeHandoff`, records intake provenance, and only then decides whether the handoff attaches to an existing governed case or births a new one. In a public-intake flow, `instanceCreated` and the `caseCreated` record kind MAY both occur, but they remain distinct records with distinct meanings.
 
 #### 11.4.1 Normative `acceptIntakeHandoff` Algorithm
 
@@ -1941,13 +1942,13 @@ When the processor cannot perform one of these checks itself because the relevan
 
 #### 11.4.3 Outcome Semantics
 
-The runtime owns the intake decision records:
+The runtime owns the intake decision `recordKind` literals:
 
 - `intakeAccepted` means the handoff was accepted into WOS-managed workflow handling.
 - `intakeRejected` means the handoff was declined and did not create or update governed case state.
 - `intakeDeferred` means the handoff was received but withheld from governed case mutation pending a later host decision.
 
-When acceptance births a governed case, `caseCreated` records the governed-case boundary. It is not interchangeable with `instanceCreated`, which only records runtime allocation of instance state.
+When acceptance births a governed case, the `caseCreated` record kind records the governed-case boundary. It is not interchangeable with `instanceCreated`, which only records runtime allocation of instance state.
 
 ### 11.5 Status Transitions
 

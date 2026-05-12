@@ -2,7 +2,7 @@
   "binding": "formspec",
   "id": "SIG-017-stale-response-pin",
   "rule": "SIG-RT",
-  "description": "Stale signedPayload.responseId blocks SignatureAffirmation emission.",
+  "description": "Stale signedPayload.responseId emits SignatureAdmissionFailed(evidence_divergence) and keeps the signing task active.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/signature-runtime.json",
     "signatureProfile": "../../../../fixtures/profiles/signature-runtime-sequential.json"
@@ -48,7 +48,7 @@
               "signedPayload": {
                 "canonicalization": "formspec-response-signing-v1",
                 "digestAlgorithm": "sha-256",
-                "digest": "39cc22282ffcb5a632635803d838c2517527684533ceb5ae8d2614b050683856",
+                "digest": "4c81792b81fd085c636947f9b84587c0453c936997c399bfa75bcbbd6d2e38a2",
                 "responseId": "resp-stale",
                 "definitionUrl": "urn:test:formspec:signature",
                 "definitionVersion": "1.0.0"
@@ -63,9 +63,29 @@
       }
     }
   ],
-  "expected_transitions": [],
-  "expected_provenance": [],
+  "expected_transitions": [
+    {
+      "from": "draft",
+      "target": "signing",
+      "event": "start"
+    }
+  ],
+  "expected_provenance": [
+    {
+      "recordKind": "signatureAdmissionFailed",
+      "data": {
+        "reason": "evidence_divergence",
+        "failureContext": {
+          "field": "signedPayload.responseId",
+          "expected": "resp-sig-001-sequential-single-signer-applicantTask",
+          "actual": "resp-stale"
+        },
+        "evidenceBindings": {
+          "signingIntent": "urn:wos:signing-intent:applicant-signature"
+        }
+      }
+    }
+  ],
   "expected_errors": [
-    "signedPayload.responseId"
   ]
 }

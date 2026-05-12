@@ -8,6 +8,17 @@ use crate::typeid;
 use super::kind::ProvenanceKind;
 use super::snapshot::CaseFileSnapshot;
 
+// F-13 event literals are consumed by Trellis custody/export verification and
+// WOS D26 schema dispatch; changing them requires a coordinated registry
+// migration and fixture regeneration.
+const WOS_KERNEL_SIGNATURE_AFFIRMATION_EVENT: &str = "wos.kernel.signature_affirmation";
+const WOS_KERNEL_SIGNATURE_ADMISSION_FAILED_EVENT: &str = "wos.kernel.signature_admission_failed";
+const WOS_GOVERNANCE_DETERMINATION_RESCINDED_EVENT: &str = "wos.governance.determination_rescinded";
+const WOS_GOVERNANCE_REINSTATED_EVENT: &str = "wos.governance.reinstated";
+const WOS_GOVERNANCE_CLOCK_STARTED_EVENT: &str = "wos.governance.clock_started";
+const WOS_GOVERNANCE_CLOCK_RESOLVED_EVENT: &str = "wos.governance.clock_resolved";
+const WOS_ASSURANCE_IDENTITY_ATTESTATION_EVENT: &str = "wos.assurance.identity_attestation";
+
 /// Configuration-warning provenance input (cross-cutting; covers AI
 /// `drift-monitor.policyRef`, governance `continuationPolicyRef`, and
 /// notification-template key/render failures).
@@ -427,6 +438,8 @@ pub struct SignatureAffirmationInput<'a> {
     /// `SignatureAffirmation` record so downstream verifiers can see whether
     /// the cryptographic primitive actually executed.
     pub primitive_verification: serde_json::Value,
+    /// Optional base64-encoded COSE_Sign1 VerificationReceipt bytes.
+    pub verification_receipt: Option<&'a str>,
 }
 
 /// Signature admission failure provenance input.
@@ -1076,9 +1089,16 @@ impl ProvenanceRecord {
         if let Some(signer_authority) = input.signer_authority {
             data.insert("signerAuthority".to_string(), signer_authority);
         }
+        if let Some(verification_receipt) = input.verification_receipt {
+            data.insert(
+                "verificationReceipt".to_string(),
+                serde_json::Value::String(verification_receipt.to_string()),
+            );
+        }
 
         let mut record = Self::blank(ProvenanceKind::SignatureAffirmation);
         record.actor_id = Some(input.signer_id.to_string());
+        record.event = Some(WOS_KERNEL_SIGNATURE_AFFIRMATION_EVENT.to_string());
         record.data = Some(serde_json::Value::Object(data));
         record
     }
@@ -1123,6 +1143,7 @@ impl ProvenanceRecord {
 
         let mut record = Self::blank(ProvenanceKind::SignatureAdmissionFailed);
         record.actor_id = input.signer_id.map(String::from);
+        record.event = Some(WOS_KERNEL_SIGNATURE_ADMISSION_FAILED_EVENT.to_string());
         record.data = Some(serde_json::Value::Object(data));
         record
     }
@@ -1289,6 +1310,7 @@ impl ProvenanceRecord {
         );
 
         let mut record = Self::blank(ProvenanceKind::DeterminationRescinded);
+        record.event = Some(WOS_GOVERNANCE_DETERMINATION_RESCINDED_EVENT.to_string());
         record.data = Some(serde_json::Value::Object(data));
         record
     }
@@ -1316,6 +1338,7 @@ impl ProvenanceRecord {
         );
 
         let mut record = Self::blank(ProvenanceKind::Reinstated);
+        record.event = Some(WOS_GOVERNANCE_REINSTATED_EVENT.to_string());
         record.data = Some(serde_json::Value::Object(data));
         record
     }
@@ -1401,6 +1424,7 @@ impl ProvenanceRecord {
         }
 
         let mut record = Self::blank(ProvenanceKind::ClockStarted);
+        record.event = Some(WOS_GOVERNANCE_CLOCK_STARTED_EVENT.to_string());
         record.data = Some(serde_json::Value::Object(data));
         record
     }
@@ -1454,6 +1478,7 @@ impl ProvenanceRecord {
         }
 
         let mut record = Self::blank(ProvenanceKind::ClockResolved);
+        record.event = Some(WOS_GOVERNANCE_CLOCK_RESOLVED_EVENT.to_string());
         record.data = Some(serde_json::Value::Object(data));
         record
     }
@@ -1511,6 +1536,7 @@ impl ProvenanceRecord {
         );
 
         let mut record = Self::blank(ProvenanceKind::IdentityAttestation);
+        record.event = Some(WOS_ASSURANCE_IDENTITY_ATTESTATION_EVENT.to_string());
         record.data = Some(serde_json::Value::Object(data));
         record
     }

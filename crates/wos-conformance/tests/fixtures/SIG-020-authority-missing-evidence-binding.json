@@ -2,7 +2,7 @@
   "binding": "formspec",
   "id": "SIG-020-authority-missing-evidence-binding",
   "rule": "SIG-RT",
-  "description": "Notary signerAuthority claim missing evidenceBinding (§2.12.4 step 5) blocks SignatureAffirmation.",
+  "description": "Notary signerAuthority claim missing evidenceBinding (§2.12.4 step 5) emits SignatureAdmissionFailed(posture_floor_unmet).",
   "documents": {
     "kernel": "../../../../fixtures/kernel/signature-runtime.json",
     "signatureProfile": "../../../../fixtures/profiles/signature-runtime-notary.json"
@@ -53,7 +53,7 @@
               "signedPayload": {
                 "canonicalization": "formspec-response-signing-v1",
                 "digestAlgorithm": "sha-256",
-                "digest": "07162002c372d7b3c2a8c4660c23c266fca6504c7c2de53f5279bf50c343327a",
+                "digest": "0c4751022b370ee5bb31599a21bd8bc2afd8db88cd4d6eb29ddfda95e4b2b7d7",
                 "responseId": "resp-sig-020-authority-missing-evidence-binding-notaryTask",
                 "definitionUrl": "urn:test:formspec:signature",
                 "definitionVersion": "1.0.0"
@@ -75,8 +75,19 @@
       "event": "start"
     }
   ],
-  "expected_provenance": [],
-  "expected_errors": [
-    "evidenceBinding"
-  ]
+  "expected_provenance": [
+    {
+      "recordKind": "signatureAdmissionFailed",
+      "data": {
+        "reason": "posture_floor_unmet",
+        "failureContext": {
+          "field": "signerAuthority.evidenceBinding"
+        },
+        "evidenceBindings": {
+          "signingIntent": "urn:wos:signing-intent:notarial-attestation"
+        }
+      }
+    }
+  ],
+  "expected_errors": []
 }

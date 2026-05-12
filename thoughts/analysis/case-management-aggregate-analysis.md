@@ -1,8 +1,11 @@
 # Case Management Architecture: Aggregate Analysis Report
 
+> **Historical synthesis.** This report is retained as analysis context. The controlling source of truth for case-management decisions is [`case-boundary-decision-report.md`](case-boundary-decision-report.md), not this aggregate report.
+
 **Context:** This report synthesizes the architectural exploration, multi-agent validation, and structural discoveries documented across the `case-management` lifecycle. It extracts the pure architectural analysis from the procedural decisions, providing a comprehensive assessment of the system's boundaries, constraints, and realized structures.
 
 **Source Corpus:**
+
 - `case-management.md` (Original Consultant Proposal)
 - `case-management-validation-claude-opus-4-7-1m.md`
 - `case-management-validation-claude-opus-4.7.md`
@@ -28,29 +31,36 @@ The initial proposal (`case-management.md`) accurately diagnosed this tension an
 Extensive cross-stack validation by multiple analytical models revealed that while the *symptom* (conflation) was correctly identified, the *proposed cure* (a separate `Case` aggregate) severely violated existing structural and security invariants of the broader system.
 
 ### 2.1 The Single Source of Truth Constraint (Trellis)
+
 *Ref: `case-management-validation-claude-opus-4-7-1m.md`, `case-management-validation-glm-5.1.md`, `case-management-validation-gemini.md`*
 
 The system's zero-trust architecture relies on the **Trellis Case Ledger** as the singular, cryptographically anchored, append-only source of truth. Attempting to introduce a `Case` aggregate as a *second* durable store created immediate contradictions. As identified by the validation passes:
+
 - The Trellis chain anchors at the case level.
 - Any "Case" object exposed to the product layer must strictly be a **read-side projection** (a derived view materialized from event replay), not a distinct, authoritative database table or aggregate root.
 - Projection lag or dual-state crash recovery are eliminated as failure modes when the ledger is recognized as the sole authority.
 
 ### 2.2 Security and Content Visibility (ADR-0074)
+
 *Ref: `case-management-validation-claude-opus-4-7-1m.md`, `case-management-validation-glm-5.1.md`*
 
 The original proposal suggested an API returning a `Case` object heavily populated with `notes`, `communications`, and `artifacts` in plaintext. The validation models identified this as a critical violation of per-class encryption protocols. In this architecture:
+
 - Servers are brokers, clients decrypt.
 - A Case projection cannot store or serve plaintext content; it can only serve opaque references and key-bag fragments.
 - This constraint further reinforces that the "Case" is a thin operational view, not a data-heavy aggregate.
 
 ### 2.3 The Governance of Origination (ADR-0073)
+
 *Ref: `case-management-validation-claude-opus-4.7.md`, `case-management-validation-claude-opus-4-7-1m.md`*
 
 The proposal theorized that a Case could be created manually, entirely outside the scope of a workflow. However, system invariants dictate that WOS exclusively owns the emission of the `case.created` boundary event.
+
 - Bypassing WOS to create cases would violate established governance boundaries.
 - The act of creating a case—even an ad-hoc, zero-process one—must flow through governed event emission paths to land on the Trellis ledger.
 
 ### 2.4 Uncovering Fake Primitives
+
 *Ref: `case-management-validation-gpt-5-codex.md`*
 
 Adversarial validation passes revealed that endpoints which appeared to be direct ledger-append surfaces (like `POST /instances/{id}/events`) were, in reality, secretly driven by workflow queues and state diffs. This proved that file-level validation is insufficient; the architectural behavior of the endpoint is what dictates its capabilities. Ad-hoc ledger mutations require genuinely distinct, workflow-agnostic write paths.
@@ -62,6 +72,7 @@ Adversarial validation passes revealed that endpoints which appeared to be direc
 The tension between the need to separate "Matter" from "Workflow" and the strict invariants of Trellis/WOS was resolved through a conceptual collapse: **A case is exactly and only its Trellis ledger.**
 
 This realization dissolved the need for a complex, newly engineered `Case` aggregate:
+
 - **One Entity:** The case ledger (durable, outlives any workflow).
 - **One Write Path Pattern:** Operations append typed events within a closed `wos.*` family (`case.created`, `process.started`, `note.added`) directly to the ledger via `$defs/OutputBinding` or direct-append APIs.
 - **One Read Path Pattern:** Consumers query a derived, denormalized view materialized from the event stream.

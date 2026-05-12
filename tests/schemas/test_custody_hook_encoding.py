@@ -141,7 +141,7 @@ def _valid_append_input() -> dict:
     return {
         "caseId": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd",
         "recordId": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
-        "eventType": "wos.kernel.stateTransition",
+        "eventType": "wos.kernel.state_transition",
         "record": "oA==",
     }
 
@@ -210,7 +210,7 @@ class TestIdempotencySource:
         doc = {
             "caseId": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd",
             "recordId": "sba-poc_gov_01hw7rm71vfay8vvw14d2pf2db",
-            "eventType": "wos.governance.overrideRecord",
+            "eventType": "wos.governance.override_record",
         }
         errors = list(validator.iter_errors(doc))
         assert errors, "eventType must not appear in the WOS-owned idempotency source"

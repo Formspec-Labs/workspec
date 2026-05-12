@@ -31,6 +31,11 @@ WOS_SPEC_ROOT = Path(__file__).resolve().parents[2]
 PROVENANCE_SCHEMA = (
     WOS_SPEC_ROOT / "schemas" / "wos-provenance-log.schema.json"
 )
+F13_SCHEMA_TEXT_TARGETS = (
+    WOS_SPEC_ROOT / "schemas" / "wos-provenance-log.schema.json",
+    WOS_SPEC_ROOT / "schemas" / "wos-workflow.schema.json",
+    WOS_SPEC_ROOT / "schemas" / "api" / "provenance.schema.json",
+)
 
 
 @pytest.fixture(scope="module")
@@ -65,7 +70,7 @@ def test_intake_accepted_requires_event_data_and_outputs(schema):
     validator = _validator_for_def(schema, "IntakeAcceptedRecord")
     record = _facts_record(
         "intakeAccepted",
-        event="case.intake.accepted",
+        event="wos.kernel.intake_accepted",
         inputs=["handoff-public-2026-0001"],
         outputs=["sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc"],
         data={
@@ -74,6 +79,7 @@ def test_intake_accepted_requires_event_data_and_outputs(schema):
             "caseIntent": "requestGovernedCaseCreation",
             "caseDisposition": "createGovernedCase",
             "caseRef": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+            "caseLedgerId": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc",
         },
     )
 
@@ -84,7 +90,7 @@ def test_intake_accepted_rejects_missing_outputs(schema):
     validator = _validator_for_def(schema, "IntakeAcceptedRecord")
     record = _facts_record(
         "intakeAccepted",
-        event="case.intake.accepted",
+        event="wos.kernel.intake_accepted",
         data={
             "binding": "formspec",
             "intakeId": "handoff-public-2026-0001",
@@ -101,7 +107,7 @@ def test_intake_accepted_rejects_missing_case_disposition(schema):
     validator = _validator_for_def(schema, "IntakeAcceptedRecord")
     record = _facts_record(
         "intakeAccepted",
-        event="case.intake.accepted",
+        event="wos.kernel.intake_accepted",
         outputs=["sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc"],
         data={
             "binding": "formspec",
@@ -120,7 +126,7 @@ def test_intake_accepted_rejects_missing_case_ref(schema):
     validator = _validator_for_def(schema, "IntakeAcceptedRecord")
     record = _facts_record(
         "intakeAccepted",
-        event="case.intake.accepted",
+        event="wos.kernel.intake_accepted",
         outputs=["sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc"],
         data={
             "binding": "formspec",
@@ -135,11 +141,31 @@ def test_intake_accepted_rejects_missing_case_ref(schema):
     assert errors, "accepted intake without caseRef must fail"
 
 
+def test_intake_accepted_rejects_missing_case_ledger_id(schema):
+    validator = _validator_for_def(schema, "IntakeAcceptedRecord")
+    record = _facts_record(
+        "intakeAccepted",
+        event="wos.kernel.intake_accepted",
+        outputs=["sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc"],
+        data={
+            "binding": "formspec",
+            "intakeId": "handoff-public-2026-0001",
+            "caseIntent": "requestGovernedCaseCreation",
+            "caseDisposition": "createGovernedCase",
+            "caseRef": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+        },
+    )
+
+    errors = list(validator.iter_errors(record))
+
+    assert errors, "accepted intake must carry the durable case ledger id"
+
+
 def test_intake_rejected_requires_code_and_rejection_event(schema):
     validator = _validator_for_def(schema, "IntakeRejectedRecord")
     record = _facts_record(
         "intakeRejected",
-        event="case.intake.rejected",
+        event="wos.kernel.intake_rejected",
         data={
             "binding": "formspec",
             "intakeId": "handoff-public-2026-0001",
@@ -155,7 +181,7 @@ def test_intake_deferred_requires_code_and_deferral_event(schema):
     validator = _validator_for_def(schema, "IntakeDeferredRecord")
     record = _facts_record(
         "intakeDeferred",
-        event="case.intake.deferred",
+        event="wos.kernel.intake_deferred",
         data={
             "binding": "formspec",
             "intakeId": "handoff-public-2026-0001",
@@ -171,11 +197,12 @@ def test_case_created_requires_case_created_event_and_outputs(schema):
     validator = _validator_for_def(schema, "CaseCreatedRecord")
     record = _facts_record(
         "caseCreated",
-        event="case.created",
+        event="wos.kernel.case_created",
         inputs=["handoff-public-2026-0001"],
         outputs=["sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc"],
         data={
             "caseRef": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+            "caseLedgerId": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc",
             "initiationMode": "publicIntake",
         },
     )
@@ -187,20 +214,20 @@ def test_case_created_rejects_wrong_event_literal(schema):
     validator = _validator_for_def(schema, "CaseCreatedRecord")
     record = _facts_record(
         "caseCreated",
-        event="case.intake.accepted",
+        event="wos.kernel.intake_accepted",
         outputs=["sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc"],
     )
 
     errors = list(validator.iter_errors(record))
 
-    assert errors, "caseCreated must pin the case.created event literal"
+    assert errors, "caseCreated must pin the wos.kernel.case_created event literal"
 
 
 def test_case_created_rejects_missing_case_ref(schema):
     validator = _validator_for_def(schema, "CaseCreatedRecord")
     record = _facts_record(
         "caseCreated",
-        event="case.created",
+        event="wos.kernel.case_created",
         outputs=["sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc"],
         data={
             "initiationMode": "publicIntake",
@@ -210,3 +237,34 @@ def test_case_created_rejects_missing_case_ref(schema):
     errors = list(validator.iter_errors(record))
 
     assert errors, "caseCreated must carry data.caseRef"
+
+
+def test_case_created_rejects_missing_case_ledger_id(schema):
+    validator = _validator_for_def(schema, "CaseCreatedRecord")
+    record = _facts_record(
+        "caseCreated",
+        event="wos.kernel.case_created",
+        outputs=["sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc"],
+        data={
+            "caseRef": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+            "initiationMode": "publicIntake",
+        },
+    )
+
+    errors = list(validator.iter_errors(record))
+
+    assert errors, "caseCreated must carry data.caseLedgerId"
+
+
+def test_f13_schema_examples_do_not_reintroduce_legacy_case_event_literals():
+    legacy_literals = (
+        "case.created",
+        "case.intake.accepted",
+        "case.intake.rejected",
+        "case.intake.deferred",
+    )
+
+    for path in F13_SCHEMA_TEXT_TARGETS:
+        text = path.read_text()
+        for literal in legacy_literals:
+            assert literal not in text, f"{path.relative_to(WOS_SPEC_ROOT)} still contains {literal}"

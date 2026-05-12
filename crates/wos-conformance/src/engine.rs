@@ -53,6 +53,7 @@ const RESERVED_DOCUMENT_ROLES: &[&str] = &[
     "integration",
     "businessCalendar",
     "signatureProfile",
+    "postureDeclaration",
 ];
 
 fn kernel_version_role(role: &str) -> Option<&str> {
@@ -232,6 +233,17 @@ impl WorkflowEngine {
             None
         };
 
+        let posture_declaration = if fixture.documents.contains_key("postureDeclaration") {
+            let posture_json = fixture_document_json(fixture, "postureDeclaration")?;
+            let parsed: Result<wos_runtime::PostureDeclaration, _> =
+                serde_json::from_value(posture_json);
+            Some(parsed.map_err(|e| {
+                ConformanceError::Parse(format!("posture declaration parse error: {e}"))
+            })?)
+        } else {
+            None
+        };
+
         // Load any remaining companion documents as raw JSON. When a role's
         // canonical form is now an embedded block of a $wosWorkflow / $wosDelivery
         // / $wosOntologyAlignment / $wosTooling envelope per ADR 0076, extract
@@ -310,6 +322,9 @@ impl WorkflowEngine {
         }
         if let Some(profile) = signature_profile {
             runtime = runtime.with_signature_profile("signatureProfile", profile);
+        }
+        if let Some(posture) = posture_declaration {
+            runtime = runtime.with_posture_declaration(posture);
         }
 
         Ok(Self {

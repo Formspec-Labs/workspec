@@ -52,7 +52,7 @@
               "signedPayload": {
                 "canonicalization": "formspec-response-signing-v1",
                 "digestAlgorithm": "sha-256",
-                "digest": "b1b3b34a29f10ffd1f91c9679f763881839e13a41c0442eef592ceefdc215049",
+                "digest": "8e02f18daef4c2aa897c388e5e00dd121307bb1aadd7f8a394e5e46851456191",
                 "responseId": "resp-sig-002-parallel-signers-any-order-agencyTask",
                 "definitionUrl": "urn:test:formspec:signature",
                 "definitionVersion": "1.0.0"
@@ -110,7 +110,7 @@
               "signedPayload": {
                 "canonicalization": "formspec-response-signing-v1",
                 "digestAlgorithm": "sha-256",
-                "digest": "3513ec9021c22d4c0839a260f4684e676660918b635594298c6d2b25fa68b450",
+                "digest": "a46b437a7c9b8717eac32a5a367b77abd59088e09d425a5ee8707fc1a51b20b1",
                 "responseId": "resp-sig-002-parallel-signers-any-order-applicantTask",
                 "definitionUrl": "urn:test:formspec:signature",
                 "definitionVersion": "1.0.0"

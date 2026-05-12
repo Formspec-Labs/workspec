@@ -10,9 +10,11 @@ Active backlog. Completed work → [COMPLETED.md](COMPLETED.md). Stack architect
 |---|---|
 | Specs / schemas | 41+18 spec/docs under `specs/` (`specs/api/` adds 17 ADR 0082 docs) · 22 schemas (4 core + 2 sidecars + 16 under `schemas/api/`) · 0 SCHEMA-DOC-001 violations |
 | Crates | 6 production (`wos-core`, `wos-lint`, `wos-conformance`, `wos-runtime`, `wos-formspec-binding`, `wos-export`) · 1 production agent (`wos-agent-stub`) · 6 authoring/synth (`wos-authoring`, `wos-mcp`, `wos-synth-core/-mock/-anthropic/-cli`) · 5 agent-adapter skeletons (`wos-agent-anthropic/-mcp/-a2a/-http/-claude-sdk`, `unimplemented!()` bodies per ADR 0064) · 1 spike (`wos-synth-spike`, keep-with-deletion-horizon) |
-| Tests | Latest targeted gates: `cargo check --workspace` green; `cargo nextest run -p wos-core --lib` green; `cargo nextest run -p wos-runtime --lib` green; `cargo nextest run -p wos-lint` green; `cargo nextest run -p wos-conformance --test signature_profile` 13 green; `pytest tests/schemas -q` 376 passed / 1 xfailed (post-ADR-0082; was 255 pre-session). API discipline test 15/15 (incl. cross-schema `$ref` resolution + facts-record-kind kernel parity + open-string-via-`oneOf`-arm recursion). |
+| Tests | Latest targeted gates: `cargo check --workspace` green; `cargo nextest run -p wos-core --lib` green; `cargo test -p wos-runtime --lib` 171 passed; `cargo test -p wos-formspec-binding` 31 passed; `cargo nextest run -p wos-lint` green; `cargo test -p wos-conformance --test signature_profile` 31 passed; `pytest tests/schemas -q` 397 passed / 1 xfailed (post-ADR-0082; was 255 pre-session). API discipline test 15/15 (incl. cross-schema `$ref` resolution + facts-record-kind kernel parity + open-string-via-`oneOf`-arm recursion). |
 | Lint matrix | 116 rules (35 T1 · 72 T2 · 9 T3 · 1 LoadBearing · 11 Tested · 104 Draft) |
 | CI gates | `schema_doc_zero_regression` · `every_promoted_*_rule_has_executable_or_annotated_evidence` · `every_load_bearing_conformance_rule_has_at_least_two_executable_fixtures` · `discover_and_report_promotion_candidates` ratchet · **ADR 0082 D-13 Gates 1–6** under `.github/workflows/api-contract-guardrails.yml`: schema validity (ajv), OpenAPI `$ref` discipline, route coverage, oasdiff breaking-change, response conformance (server + portal), mirror byte-parity |
+| Case/process identity | ADR-0093 Option B groundwork in progress: `process` TypeID family + `mint_process_id()` landed; `WosResourceUrn` admits `process`; `CaseInstance` serializes optional `processId` / `caseLedgerId`; `create_instance` now populates both while preserving legacy case-ID and alias callers; public API `CaseInstance` projections now require `caseLedgerId` + `processId`, wos-server creates new unkeyed instances with process TypeIDs, applicant case list/detail/task routes resolve process-backed rows by durable `caseLedgerId`, public `POST /cases/{case_id}/processes`, `GET /cases/{case_id}/processes/{process_id}`, `POST /cases/{case_id}/processes/{process_id}/inputs`, and `POST /cases/{case_id}/processes/{process_id}/drain` bridge routes validate the case/process binding, public `POST /cases/{case_id}/events` now admits `wos.kernel.case_created` as a direct case-ledger genesis append with `(tenant, idempotencyToken)` replay and case-ledger provenance storage, and dispatches registered post-ledger WOS event types through the post-ledger branch where they hard-deny at the relationship-authorization gate until ReBAC is wired, public `GET /cases/{case_id}` now returns a durable case-ledger projection across direct genesis events and bound processes, and runtime/HTTP tests now prove distinct process IDs can bind to the same durable case ledger; custody append windows use `caseLedgerId` when present; signature admission/affirmation decision payloads now require `caseLedgerId` and carry `processId` when workflow-emitted; `caseCreated` / `intakeAccepted` payloads now require `caseLedgerId`; runtime appends stamp it on accepted governed-case records and the Formspec finalizer emits it for canonical case-ledger TypeIDs. Remaining: full `CaseInstance` → `WorkflowProcess` rename, `wos-case-instance.schema.json` → `wos-process.schema.json` marker/file rename, server route/storage vocabulary migration from `/instances` to case/process surfaces, post-ledger ReBAC/event-contract append writers such as `wos.kernel.note_added` after registry binding, generic `DecisionEvent` shape, and broader N:1 conformance fixtures. |
+| E2E/API coverage | Current server coverage is mostly Rust integration/in-process HTTP. Durable plan now exists for Playwright API + browser E2E against real `wos-server`, using `WOS-FEATURE-MATRIX.md`'s 130 numbered rows as the manifest contract: [`../thoughts/plans/2026-05-09-wos-feature-matrix-e2e-test-plan.md`](../thoughts/plans/2026-05-09-wos-feature-matrix-e2e-test-plan.md). |
 
 **Navigation:** [**User profile** (read first)](../.claude/user_profile.md) · [**Stack vision**](../VISION.md) (canonical; WOS §X) · [`work-spec/CLAUDE.md`](CLAUDE.md) · [LINT-MATRIX](LINT-MATRIX.md) · [Feature Matrix](WOS-FEATURE-MATRIX.md) · [Implementation Status](WOS-IMPLEMENTATION-STATUS.md) · [IDEA_SCRATCH](IDEA_SCRATCH.md) · [POSITIONING](POSITIONING.md) · [CONVENTIONS](CONVENTIONS.md) · [Runtime Companion](specs/companions/runtime.md) · [ADRs](../thoughts/adr/) · [Plans](thoughts/plans/) · [Parallel-agent dispatch discipline](thoughts/practices/2026-04-17-parallel-agent-dispatch.md)
 
@@ -153,60 +155,84 @@ Pick from the top. Each item has a gate (what unblocks it) and a plan or ADR.
    Landed: SignatureAdmissionFailedRecord $def in wos-provenance-log.schema.json,
    SignatureAdmissionFailedData with 7-reason enum + evidenceBindings, recordKind enum entry in FactsTierRecord
    (wos-workflow.schema.json), ProvenanceKind::SignatureAdmissionFailed variant in wos-core, Facts-tier
-   audit classification, AdmissionOutcome enum in wos-runtime, ensure_signing_intent_admitted produces
-   AdmissionFailed with MethodUnsupported.
-   Remaining: SignatureAdmissionFailedInput constructor in wos-core/src/provenance/record.rs,
-   wos-runtime full admission gate coverage (all 7 reasons reachable, not just Failed + MethodUnsupported),
-   SIG-014..026 fixture re-casting from failed status to admission-failed records,
-   SIG-027 (method_unsupported), SIG-028 (posture_floor_unmet), SIG-030 (method_unregistered) fixtures.
+   audit classification, SignatureAdmissionFailedInput constructor + focused Rust serialization tests,
+   AdmissionOutcome enum in wos-runtime, runtime PrimitiveVerificationFailed / MethodUnsupported /
+   PostureFloorUnmet paths, and binding-reported terminal admission failures now carry a closed failure reason plus
+   object-shaped failureContext into SignatureAdmissionFailed; runtime submit_task_response tests prove all 7
+   schema reasons persist as SignatureAdmissionFailed, keep the signature task active, and block SignatureAffirmation;
+   Formspec binding now parses and carries signatureMethod, reports registry-shaped unknown methods as
+   MethodUnregistered, reports stale signedPayload pin/digest mismatches as EvidenceDivergence, and runtime
+   posture allowedMethods compares against the binding-supplied signature method while posture
+   allowedSigningIntents rejects non-allowlisted signing intents; both preserve legacy provider-managed fixture
+   compatibility. Unregistered-but-step-matching signing intents now reach the admission-failure branch instead
+   of short-circuiting during evidence selection. Runtime-side step intent, signer-authority, and consent signedAt
+   divergence gates now emit SignatureAdmissionFailed instead of engine errors, with structured failureContext
+   carried into the provenance record.
+   Remaining: actual Formspec verifier/posture/registry-corrupt/adapter paths that populate the remaining
+   nonprimitive binding-reported failure reasons beyond the current runtime/test adapters.
    Debt unchanged 4: schema + runtime structure landed; wiring to all reason paths remains.
 
 9. **WOS-FORMSPEC-CANONICALIZATION-001 — Consume Formspec canonical signed-payload helper** `[7 / 3 / 6]` (**42**)
    Stack plan: [`../thoughts/plans/2026-05-09-signature-wire-convergence-plan.md`](../thoughts/plans/2026-05-09-signature-wire-convergence-plan.md).
-   Problem: `wos-formspec-binding` computes Formspec `signedPayload.digest` locally with
-   `serde_json_canonicalizer` and a NUL-separated domain preimage. That disagrees with
-   `formspec-canonical` and the byte-populated cross-stack bundle digests. This is
-   architectural drift, not product value.
-   Remaining: add `formspec-canonical` as the digest source for WOS binding; remove the local
-   clone; add Bundle 001-003 regression tests; add one negative test proving the old preimage
-   is rejected; update conformance expectations if any fixture was accidentally passing under
-   the wrong digest.
-   Done when: WOS binding, Formspec harness, and cross-stack fixture bundles compute identical
-   signed-payload digests and no WOS path owns Formspec canonicalization logic.
+   Landed: `wos-formspec-binding` now depends on `formspec-canonical` for
+   `signedPayload.digest` computation and no longer owns a local `serde_json_canonicalizer`
+   + NUL-separated domain clone; a regression test proves the legacy NUL-separated preimage is rejected.
+   Bundle 001-003 cross-stack harness coverage recomputes signed-payload digests through
+   `formspec-canonical`, verifies WOS digest equality for admitted/failed records, and verifies
+   receipt byte equality for the byte-populated fixture bundles.
+   Remaining: none for this canonicalization row.
+   Done: WOS binding, Formspec harness, and cross-stack fixture bundles compute identical
+   signed-payload digests, and no WOS path owns Formspec canonicalization logic.
 
 10. **WOS-SIGNATURE-RECEIPT-CONSUMPTION-001 — VerificationReceipt consumption in wos-formspec-binding** `[6 / 4 / 5]` (**30**)
    Landed: VerificationReceipt types exist (Rust + TS), signature_evidence() signature ready for
    receipt injection; shared Formspec
    COSE helpers and Ed25519 webcrypto/ring/Trellis adapters can verify COSE_Sign1 bytes.
-   Remaining: parse authoredSignatures into the WOS binding evidence path, dispatch to the Verifier port,
-   produce VerificationReceipt, pass receipt fields into AdmissionOutcome decision logic,
-   wire receiptBytes into SignatureAffirmation.verificationReceipt when signature succeeds.
+   Runtime now carries optional Formspec `authoredSignatures[*].verificationReceipt` bytes through
+   `SignatureEvidence` into `SignatureAffirmation.verificationReceipt`, and Posture Declaration
+   `receiptSigningRequired: true` emits SignatureAdmissionFailed(posture_floor_unmet) when those
+   signed receipt bytes are absent.
+   Remaining: dispatch to the real Verifier port, produce signed VerificationReceipt bytes from the adapter,
+   map failed/unsupported receipt results into SignatureAdmissionFailed.receipt, and populate byte bundles with
+   real receipt COSE.
    Debt remains 5: COSE decode is shared, but adapter dispatch + receipt injection remain deep surfaces.
 
 11. **WOS-POSTURE-DECLARATION-CONSUMPTION-001 — Posture Declaration consumption** `[6 / 4 / 5]` (**30**)
     Landed: posturePolicy field in wos-workflow.schema.json (url + optional version),
     deploymentLocalSigningIntents sunset notice, PostureDeclaration schema in both
     formspec/schemas/ and work-spec/schemas/, load_posture_declaration URL fetch/parse/cache path
-    in wos-runtime, and posture-floor admission-path tests.
-    Remaining: receipt result × posture:receiptSigningRequired × posture:allowedSigningIntents
-    admission decisions, full all-reason conformance coverage, and SIG-029
-    (posture_declaration_loaded) positive conformance fixture.
+    in wos-runtime, posture-floor admission-path tests, and posture allowedMethods now gates on binding-supplied
+    signatureMethod instead of identityBinding.method; posture allowedSigningIntents now rejects
+    non-allowlisted signing intents with SignatureAdmissionFailed(method_unsupported).
+    Remaining: binding-driven registry-corrupt / adapter-unavailable conformance coverage once
+    receipt/verifier dispatch exists.
     Debt bumped 4→5: posture loading adds HTTP fetch + cache + version-pinning surface.
 
 12. **WOS-CONFORMANCE-SIG-FIXTURES-001 — SIG-027..030 + re-cast SIG-014..026** `[6 / 4 / 4]` (**24**)
-    Remaining: 22 existing fixtures with primitiveVerification.status: failed → re-expressed as
-    SignatureAdmissionFailed records; 4 new fixtures (SIG-027 method_unsupported, SIG-028 posture_floor_unmet,
-    SIG-029 posture_declaration_loaded, SIG-030 method_unregistered); wire into signature_profile.rs;
-    ensure cargo nextest run -p wos-conformance --test signature_profile reports all added fixtures.
+    Landed: SIG-014/SIG-017 now prove Formspec signedPayload pin/digest divergence as
+    SignatureAdmissionFailed(evidence_divergence), SIG-025 now proves unregistered, non-allowlisted
+    signing intents as SignatureAdmissionFailed(method_unsupported) instead of a runtime engine error;
+    SIG-015 proves step signing-intent mismatch as SignatureAdmissionFailed(evidence_divergence);
+    SIG-016/SIG-020/SIG-021/SIG-022 prove signer-authority floor/evidence/validity/hash failures as
+    SignatureAdmissionFailed(posture_floor_unmet); SIG-026 proves response consent signedAt divergence as
+    SignatureAdmissionFailed(evidence_divergence);
+    SIG-027..030 cover method_unsupported, posture_floor_unmet, posture_declaration_loaded, and
+    method_unregistered.
+    Remaining: none for the SIG-014..030 recast row; next signature convergence work is tracked by
+    receipt consumption and byte-populated fixture bundle rows.
     Gate: WOS-SIGNATURE-ADMISSION-FAILED-RECORD-001 constructor + WOS-POSTURE-DECLARATION-CONSUMPTION-001
     posture loading must land first.
 
 13. **WORKSPEC-SERVER-SIGNATURE-FIXUP-001 — workspec-server integration test fixup** `[5 / 3 / 3]` (**15**)
-    Remaining: update workspace-server/crates/wos-server/tests/integration/signature_affirmations.rs
-    for SignatureAdmissionFailed records emitted alongside SignatureAffirmation in same workflow flow;
-    update wos-server-runtime-local/src/runtime_store.rs CaseInstance literals with current field set;
-    add storage paths for SignatureAdmissionFailed records (mirror of SignatureAffirmation paths).
-    Gate: WOS-CONFORMANCE-SIG-FIXTURES-001 must land first (tests validate against fixtures).
+    Landed: workspec-server now compiles against the current `CaseInstance` field set, the
+    signature read service exposes separate `SignatureAffirmation` and `SignatureAdmissionFailed`
+    provenance streams, and the integration fixture proves receipt-bearing affirmations are not
+    conflated with failed-admission records.
+    Remaining: none for this server fixup row.
+    Gate: WOS-CONFORMANCE-SIG-FIXTURES-001 landed first; server verification is covered by
+    `cargo test -p wos-server --test integration signature_affirmations -- --nocapture`,
+    `cargo test -p wos-server-runtime-local runtime_store -- --nocapture`, and
+    `python scripts/check-route-coverage.py`.
 
 ### Agent task extract (from this file)
 
@@ -416,6 +442,7 @@ Work items, architecture, and adapter sequencing → [`crates/wos-server/TODO.md
   - ✅ **WS-2 B** 13 IPort interfaces + HTTP adapter (`NotImplementedError` stubs preserved) + fixture adapter reshape (`mutations: CaseStateMutation[]`); 0 tsc errors; 60/62 vitest pass (2 flaky `AuditViewer` waitFor races).
   - ✅ **WS-2 C** component sweep (commit `00ea21f`) — 41 component files, 33 `safeCall` boundaries, fixture conformance test in place. 4 legacy type imports remain in components (`WOSKernelDocument`, `FieldDefinition`, signature-profile types, `CaseInstance`); fold judgment into WS-3.
 - **WS-3 cross-stack train (partial):** Route registry + Gate 3 coverage and portal generated-type freshness landed 2026-05-09. Remaining: PLN-0401 canonical utoipa-emit cutover, PLN-0402 portal contract-removal follow-through, PLN-0405 closure, parent submodule pointer bump, and final TODO bookkeeping across stack.
+- **WS-4 feature-matrix E2E coverage train (planned):** Full plan at [`../thoughts/plans/2026-05-09-wos-feature-matrix-e2e-test-plan.md`](../thoughts/plans/2026-05-09-wos-feature-matrix-e2e-test-plan.md). Target shape: Playwright `request` API runner plus portal checks where the user story needs UI proof; real `wos-server` binary, SQLite test DB, local runtime, persona auth, and a machine-readable coverage manifest for all 130 `WOS-FEATURE-MATRIX.md` rows. First deliverables: persona JWT harness (do not rely on current single-supervisor mock auth), `wos-feature-coverage.manifest.json`, route-registry/OpenAPI smoke, schema validation helper, and S1/S2 applicant + caseworker stories through public API.
 
 ### Runtime Companion parity **[Stream: B]**
 

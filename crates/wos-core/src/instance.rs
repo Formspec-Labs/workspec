@@ -23,6 +23,28 @@ pub struct CaseInstance {
     /// Globally unique instance identifier.
     pub instance_id: String,
 
+    /// Workflow runtime process identifier.
+    ///
+    /// Transitional persisted rows may omit this while the pre-rename
+    /// `instance_id` field remains the storage key. New rows should populate
+    /// this with a `process` TypeID so process identity is explicit even before
+    /// `CaseInstance` is renamed to the process model.
+    /// TODO(PLN-0419): settle the D26 versioning marker before retiring this
+    /// transitional shape.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub process_id: Option<String>,
+
+    /// Durable case-ledger identifier this process writes into.
+    ///
+    /// Transitional persisted rows may omit this and imply the existing
+    /// `instance_id` case TypeID. New rows should populate this with a `case`
+    /// TypeID so the runtime can distinguish ledger identity from workflow
+    /// process identity.
+    /// TODO(PLN-0419): settle the D26 versioning marker before retiring this
+    /// transitional shape.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub case_ledger_id: Option<String>,
+
     /// Tenant this instance belongs to (ADR 0068 D-1 / PLN-0004).
     ///
     /// MUST match the TypeID prefix when `instance_id` is a WOS case TypeID.
@@ -153,6 +175,12 @@ impl CaseInstance {
         typeid::is_valid_type_id(value, Some(typeid::CASE_PREFIX))
     }
 
+    /// Returns whether `value` matches the reserved process TypeID shape.
+    #[must_use]
+    pub fn is_process_id(value: &str) -> bool {
+        typeid::is_valid_type_id(value, Some(typeid::PROCESS_PREFIX))
+    }
+
     /// Returns whether `value` matches the WOS resource URN shape
     /// `urn:wos:<typeid>` per ADR 0092 D-1. Semantics: valid TypeID
     /// wrapped in the `urn:wos:` namespace prefix.
@@ -174,6 +202,43 @@ impl CaseInstance {
     pub fn extract_urn_parts(value: &str) -> Option<&str> {
         let rest = value.strip_prefix("urn:wos:")?;
         typeid::extract_tenant(rest)
+    }
+
+    /// Extracts the TypeID payload from a WOS resource URN.
+    ///
+    /// Returns `None` when `value` is not a valid `urn:wos:<typeid>` string.
+    #[must_use]
+    pub fn extract_urn_type_id(value: &str) -> Option<&str> {
+        let rest = value.strip_prefix("urn:wos:")?;
+        if typeid::is_valid_type_id(rest, None) {
+            Some(rest)
+        } else {
+            None
+        }
+    }
+
+    /// Returns the explicit process id, or the legacy instance id fallback.
+    ///
+    /// Older persisted rows predate the split between workflow process and case
+    /// ledger identity. The fallback keeps those rows readable until the
+    /// storage model is fully renamed.
+    #[must_use]
+    pub fn effective_process_id(&self) -> &str {
+        self.process_id
+            .as_deref()
+            .unwrap_or(self.instance_id.as_str())
+    }
+
+    /// Returns the explicit case-ledger id, or the legacy instance id fallback.
+    ///
+    /// Older persisted rows predate the split between workflow process and case
+    /// ledger identity. The fallback keeps those rows readable until the
+    /// storage model is fully renamed.
+    #[must_use]
+    pub fn effective_case_ledger_id(&self) -> &str {
+        self.case_ledger_id
+            .as_deref()
+            .unwrap_or(self.instance_id.as_str())
     }
 
     /// Returns the identifier used for external correlation (CloudEvents

@@ -264,7 +264,7 @@ Migration is pre-release so destructive DROP+CREATE is acceptable.
 - `work-spec/schemas/wos-workflow.schema.json` — `$defs/OutputBinding` unchanged (D-5 preserved). 
 - `work-spec/api/wos-public-api.openapi.json` — full route surface rewrite per §4.4.
 - New `work-spec/schemas/api/case-view.schema.json` — the read-side response shape; supersedes (or merges with) today's `instance.schema.json` for the case-view representation.
-- `work-spec/schemas/api/provenance.schema.json:630` — the `AssembledExplanation` `GET /api/v1/instances/{id}/explanation` route reference gets rewritten to `GET /api/v1/cases/{case_id}/processes/{process_id}/explanation` or `GET /api/v1/cases/{case_id}/explanation` depending on whether explanation is process-scoped or case-scoped. (Likely process-scoped — explanation traces a specific workflow's reasoning.)
+- `work-spec/schemas/api/provenance.schema.json:630` — the `AssembledExplanation` `GET /api/v1/instances/{id}/explanation` route reference gets rewritten to `GET /api/v1/cases/{case_id}/processes/{process_id}/explanation` because explanation traces a specific workflow process's reasoning. **Landed 2026-05-12** as a case/process bridge route with case/process mismatch returning 404.
 
 ### 4.6 Direct ledger append API (the new surface)
 
@@ -376,7 +376,7 @@ The ADR-0093 went through three major versions in one day: predecessor (Case as 
 
 Even when owner declared "every ADR/SPEC/PLAN is disposable," upstream commitments shaped the answer:
 - ADR-0073 D-1 (WOS owns case-creation; literal `case.created` in the ADR text rebinds to `wos.kernel.case_created` under F-13 in the same rename train — see §6.7) — ownership commitment preserved; literal updated.
-- ADR-0074 (per-class encryption) — preserved as the encryption pattern for event payloads.
+- ADR-0074 (per-class encryption; ADR-0074 status: Proposed; per-class encryption not yet a spec-layer contract) — preserved as the target encryption pattern for event payloads.
 - ADR-0080 (governed output-commit pipeline; `$defs/OutputBinding`) — preserved without schema changes.
 - Kernel §10 six extension seams — preserved.
 - Trellis byte authority (ADR 0004) — preserved.
@@ -441,18 +441,30 @@ Update `case-management-aggregate-synthesis.md`:
 
 `work-spec/thoughts/analysis/case-management.md` gets a top-of-file supersession banner pointing at ADR-0093 + the v2 synthesis. Or move to `thoughts/archive/`. Either fixes Codex Finding 3.
 
-### 6.4 Trellis-side registry binding (cross-spec amendment + fixture regeneration, blocking)
+### 6.4 F-13 registry binding and WOS-owned completion train
 
-Coordinated change train across `trellis/`, `work-spec/`, and the stack root. Scope is broader than constants alone — the work is a **`RegistryBinding`** migration per `trellis-core.md` §14.3–§14.5, not just a constants file edit. Includes:
+The original Trellis-side framing is now stale. The Trellis/substrate slice of the F-13 train has landed: the WOS verifier constants, Python parity tests, Trellis prose, `profile_id` allocation, WOS-facing generator literals, regenerated fixture bytes, digest-named registry blobs, and `wos.assurance.identity_attestation` identity pin are at target. The remaining blocker is WOS-owned completion, not another Trellis constants or fixture pass.
 
-- Rename Trellis registry constants in [`trellis/crates/trellis-verify-wos/src/event_types.rs`](../../../trellis/crates/trellis-verify-wos/src/event_types.rs) (seven WOS-prefixed strings) to F-13 snake_case literals.
-- Amend `custody-hook-encoding.md` §1.5 spelling (`<recordKind>` → `<record_kind>`) and §1.4 family registry (add `process`).
-- Amend `trellis-core.md` §23.4 (identity pin: `wos.identity.identityAttestation` → `wos.assurance.identity_attestation`) and §19 step 6d (the cited admission seam) in lockstep.
-- Allocate `profile_id` in `trellis-core.md` §7.4 per the Label rationale paragraph (line 421) — prose + §28 CDDL + `trellis-cose` constant + Sig_structure golden vector.
-- Regenerate `trellis/fixtures/vectors/**` for every fixture directory whose golden bytes embed renamed `event_type` or renamed protected-header material — full corpus regen per CI; stranger-test parity passes.
-- Align `wos-provenance-log.schema.json`, `wos-workflow.schema.json`, and `record-kind-registry.json` (131 kinds; 21 schema-validated; 110 flat) — overlays and per-event-type guards rebind to snake_case `event` literals; inner `recordKind` field drops per D26.
+Completed 2026-05-12:
 
-Per Trellis Core §23.2 item 2 + §14 + §14.5. Blocking for any WOS-side emission of the new types. Effort estimate prior framing ("1-2 days") was scoped to constants alone; the cross-spec amendment + fixture regen + `profile_id` allocation work is materially larger and lands as its own change train.
+- `custody-hook-encoding.md` §1.5 uses `<record_kind>` and §1.4 reserves the `process` family.
+- Trellis Core §23.4 (with custody-hook-encoding §1.5 as the F-13 vocabulary home), `trellis-verify-wos` Rust constants, Trellis Python WOS constants/tests, and WOS-facing fixture generators use F-13 snake_case literals.
+- `profile_id` is allocated in Trellis Core §7.4 and mirrored through the protected-header CDDL/Rust/golden-vector path.
+- WOS-facing Trellis fixture bytes and digest-named registry blobs were regenerated and verified.
+- WOS schema/API/registry/workflow/producer/runtime custody D26 seed: `record-kind-registry.json` now carries optional `eventLiteral` metadata for eleven registry-seeded WOS overlay literals, `wos-provenance-log.schema.json` dispatches the case-creation, intake-decision, `SignatureAffirmation`, `signatureAdmissionFailed`, determination rescission/reinstatement, statutory-clock, and identity-attestation overlays from `event` while compatibility guards keep inner `recordKind` and `event` in agreement, API `FactsTierRecord` requires the same event agreement for those facts records, workflow `FactsTierRecord` rejects wrong explicit event literals without requiring `event` on legacy fragments, WOS producers emit F-13 literals for case creation, signature decisions, governance, clocks, and identity, runtime custody event-type derivation rejects missing or mismatched `event` values for the eleven seeded kinds, and `GET /cases/{case_id}` `latestEvent` exposes the D26 event literal without a redundant `recordKind` projection.
+- Case/process list/explanation/provenance/correspondence/holds/migrate bridges: `GET /api/v1/cases/{case_id}/processes`, `GET /api/v1/cases/{case_id}/processes/{process_id}/explanation`, `GET /api/v1/cases/{case_id}/processes/{process_id}/provenance`, `GET /api/v1/cases/{case_id}/processes/{process_id}/correspondence`, `GET /api/v1/cases/{case_id}/processes/{process_id}/holds`, and `POST /api/v1/cases/{case_id}/processes/{process_id}/migrate` are present in server, OpenAPI paths, and API docs. Internal case/process aliases for provenance chain verification, semantic provenance export, available-transition listing, and hold create/release also validate the case/process binding before delegating to the legacy instance helper. Routes with both `{case_id}` and `{process_id}` validate the case/process binding and return 404 on mismatch.
+- ADR-0078 iteration literals were reconciled against live registry/runtime state: the emitted record kinds are `forEachIterationStarted`, `forEachIterationCompleted`, and `forEachCompleted`, with custody/export event types `wos.kernel.for_each_iteration_started`, `wos.kernel.for_each_iteration_completed`, and `wos.kernel.for_each_completed`. The review suggestion to add `iteration_failed` / `iteration_skipped` was stale and is not release scope unless a future runtime change emits those records.
+- High-traffic kernel/API/ADR prose now labels bare `caseCreated` / `intakeAccepted` names as inner `recordKind` values rather than F-13 event-type literals. Full removal of those inner names remains part of D26, not a prose-only sweep.
+
+Remaining WOS-owned work:
+
+- Complete alignment of `wos-provenance-log.schema.json`, `wos-workflow.schema.json`, API provenance schemas, and `record-kind-registry.json` (132 kinds; 22 schema-validated; 110 flat): outer `event` literals and schema overlays must agree everywhere, and inner `recordKind` drops per D26.
+- Finish `wos-core` / runtime identity vocabulary (`CaseInstance` → `WorkflowProcess`, `instance_id` → `process_id`, `case_ledger_id` as the durable case ledger link) and remove compatibility fallbacks where they would make N:1 ambiguous.
+- Keep remaining historical and schema/code citations clear that bare `caseCreated` / `intakeAccepted` names are D26-era inner `recordKind` values, not event-type spellings.
+- Retire or explicitly bridge the remaining workspec-server `/instances/...` routes and update OpenAPI where routes are public. The process list, explanation, provenance, correspondence, holds, and migrate bridges have landed on the public surface; internal provenance verify/export/transitions plus hold create/release aliases now exist under the case/process family; the broader legacy route surface remains. The reference server now dispatches post-ledger direct append through a relationship-authorization port, fails closed with a real 403 denial under the default deny-all implementation, and persists event-contract-valid direct appends after a configured allow decision when the generic direct writer can enforce the event contract. Remaining server work is the concrete ReBAC/OpenFGA adapter plus specialized writer paths such as `SignatureAffirmation` and governance determination.
+- Decide whether the D26 payload-dispatch change requires a `$wosWorkflow` / registry version bump before treating the migration as release-ready.
+
+Per Trellis Core §23.2 item 2 + §14 + §14.5, WOS emission of the new types depends on a coherent registry snapshot and fixture set. That dependency is now satisfied on the Trellis side; WOS still owns the schema/runtime/server convergence needed before the same literals are release-grade end to end.
 
 ### 6.5 Implementation work (per §4 above)
 
@@ -463,7 +475,7 @@ Approximately 3-4 weeks for one focused engineer. Recommended sequencing:
 - Week 3: HTTP API surface rewrite → direct ledger append API → OpenAPI authoring.
 - Week 4: N:1 conformance fixtures → Restate-adapter parity → end-to-end integration verification.
 
-The Trellis registry PR should land at the start of Week 1 so emission isn't blocked.
+The WOS-owned F-13/D26 schema and registry cleanup should land at the start of Week 1 so emission isn't blocked; the Trellis-side registry/fixture slice is already complete.
 
 ### 6.6 Decision-archaeology hygiene
 
@@ -478,29 +490,29 @@ After the implementation ships:
 The byte-primitive scope companion is `thoughts/plans/2026-05-09-signature-wire-convergence-plan.md` (the Integrity Stack Primitive Extraction Plan, recast 2026-05-11). It runs in parallel with this report's implementation and reconciles at four explicit pins:
 
 - **Plan F-11 — Identity placement.** `caseLedgerId` (required) + `processId` (optional, present when workflow-emitted) live in `DecisionEvent` profile payload (`wos-provenance-log.schema.json` per-event-type records), NOT in the byte-primitive `integrity-event` envelope. Honors this report's §4.5 per-event-type record placement; prevents the primitive layer from re-coupling to workflow-domain semantics.
-- **Plan F-12 — Direct-append shape.** Both this report's `POST /api/v1/cases/{case_id}/events` (§4.6) and workflow-emitted events compose `integrity-canonical-json-v1` + `integrity-cose` + `integrity-event` to produce a single `SignedInput`-shaped `DecisionEvent`. No parallel emission paths; admission distinguishes origin via posture rules + presence/absence of `processId`.
-- **Plan F-13 — Event-type naming convention (CORRECTED).** `wos.<layer>.<record_kind>` snake_case, layer ∈ {`kernel`, `governance`, `ai`, `assurance`} per `custody-hook-encoding.md §1.5`. This preserves the existing closed taxonomy; the rename is snake_case within the layers, NOT a reinvention of the layer set. Existing entries rename per the wos-expert mapping:
+- **Plan F-12 — Direct-append shape.** Both this report's `POST /api/v1/cases/{case_id}/events` (§4.6) and workflow-emitted events compose `integrity-canonical-json-v1` + `integrity-cose` + `integrity-event` to produce a single `SignedInput`-shaped `DecisionEvent`. No parallel emission paths; admission distinguishes origin via posture rules + presence/absence of `processId`. Pre-extraction caveat: this is the target contract; current code still produces shape-divergent artifacts through two persistence seams (`ProvenanceRecord` for direct append vs `EvaluationResult` plus runtime emission for workflow output), and full `SignedInput` parity gates on the companion plan's steps 5-8.
+- **Plan F-13 — Event-type naming convention (CORRECTED).** `wos.<layer>.<record_kind>` snake_case, layer ∈ {`kernel`, `governance`, `ai`, `assurance`} per `custody-hook-encoding.md §1.5`. This preserves the existing closed taxonomy; the rename is snake_case within the layers, NOT a reinvention of the layer set. Historical literals map as follows; the Trellis-side constants/prose/fixture bytes have landed, while WOS schema/runtime/server cleanup remains:
   - `wos.kernel.caseCreated` → `wos.kernel.case_created`
   - `wos.kernel.signatureAffirmation` → `wos.kernel.signature_affirmation`
   - `wos.kernel.intakeAccepted` → `wos.kernel.intake_accepted`
-  - `wos.identity.identityAttestation` → `wos.assurance.identity_attestation` (placement by elimination given the closed layer set {kernel, governance, ai, assurance}; ADR-0068 D-3.1 defines the `IdentityAttestation` record shape only and makes no layer-ownership claim — see ADR-0093 §2.3 identity-collision resolution)
+  - `wos.identity.identityAttestation` → `wos.assurance.identity_attestation` (placement by elimination given the closed layer set {kernel, governance, ai, assurance}; ADR-0068 D-3.1 defines the `IdentityAttestation` record shape only and makes no layer-ownership claim — see ADR-0093's "Identity-layer collision resolution" block)
   - `wos.governance.determinationRescinded` → `wos.governance.determination_rescinded`
   - `wos.governance.reinstated` → `wos.governance.reinstated`
 
-  **This convention is a hard prerequisite for §6.4's cross-repo Trellis registration PR** — both source naming patterns rename in lockstep.
+  **This convention is a hard prerequisite for §6.4's WOS-owned completion train** — the Trellis-side registration/fixture slice has landed, and WOS schemas/runtime/server prose must now converge on the same literals.
 - **Plan §17 step 0a interlock.** Report weeks 1-2 (identity + storage + runtime) interleave with plan steps 1-4 (lift-only primitives) since file sets are disjoint; report weeks 3-4 (API + conformance) interleave with plan steps 5-7; plan steps 11-12 (profile spec rewrites + adapter stratification) **gate on report renames being settled**.
 
 **Blocker-grade (profile/schema/vector correctness, not hygiene):**
 
-- **SHA-256 vector pin (A1).** Prod-MVP golden vectors pin `digestAlgorithm = "sha-256"` even though `response.schema.json` admits sha-256/sha-384/sha-512/x-*. Distinguish the schema-visible profile name `formspec-response-signing-v1` from the substrate primitive `integrity-canonical-json-v1` (Q-14 — same bytes, two layered names). Until the vector pin lands, A1 is not closeable.
-- **`recordKind` migration enumerated against `record-kind-registry.json`.** D26 commits replace-only dispatch through outer `event_type`; the migration is **enumerated against** [`work-spec/schemas/record-kind-registry.json`](../../schemas/record-kind-registry.json) (131 kinds; 21 schema-validated; 110 flat), not via ripgrep heuristics. Until the schema/overlay edits land atomically with fixture regeneration, dispatch unsafety persists.
-- **V-15 verification.** Replace ADR-0093's "static analysis" placeholder with named negative behavioral fixtures (pre-ledger creation with no create-permission tuple → 403 from create-permission resolver with relationship resolver mocked-and-unreached; post-ledger event with no relationship tuple → 403 from relationship resolver with create-permission resolver mocked-and-unreached) OR a named lint rule + tool. Unnamed static analysis is not a verification path.
+- **SHA-256 vector pin (A1).** Landed 2026-05-12 for the signed-payload surface: `AuthoredSignatureSignedPayload.digestAlgorithm` is now structurally `sha-256` in Formspec's response schema, lint schema mirror, generated TS type, engine input type, runtime response assembly guard, and focused schema/engine negative tests. `documentHashAlgorithm` remains broader by design; it is not the A1 signed-payload commitment. Keep distinguishing the schema-visible profile name `formspec-response-signing-v1` from the substrate primitive `integrity-canonical-json-v1` (Q-14 — same bytes, two layered names).
+- **`recordKind` migration enumerated against `record-kind-registry.json`.** D26 commits replace-only dispatch through outer `event_type`; the migration is **enumerated against** [`work-spec/schemas/record-kind-registry.json`](../../schemas/record-kind-registry.json) (132 kinds; 22 schema-validated; 110 flat), not via ripgrep heuristics. The 2026-05-12 seed moved eleven registry-seeded overlays toward event dispatch, added API and workflow event-agreement guards, centralized producer literals for case creation, signature decisions, governance, clocks, and identity, and made runtime custody reject missing or mismatched `event` values for those eleven seed kinds, but full D26 remains open until workflow schema replace-only cleanup and runtime fixture regeneration are complete.
+- **V-15 verification.** ADR-0093's unnamed "static analysis" placeholder has named behavioral fixtures for the current reference-server posture: pre-ledger creation rejects before relationship authorization, post-ledger append invokes the relationship-authorization port and receives a 403 from the default deny-all resolver without appending a second provenance row, an allowed event-contract-valid post-ledger append persists and replays idempotently, and allowed generic `SignatureAffirmation` / governance determination direct appends are rejected instead of minting malformed specialized records. Full deployment acceptance remains open until a concrete ReBAC/OpenFGA adapter is configured.
 
 **Forward promises (queued, not blocker-grade):**
 
 - This report's §4.5 should adopt F-13 for the closed event-type enum naming when next touched. The synthesis's §4 and D-4 should adopt F-13 in place of the current bare-flat enum, alongside the §6.2 D-2 amendment + D-17 addition. The synthesis's D-3 hedge (*"`$wosCaseInstance` (if it survives at all)"*) should be reconciled with this report's §4.1 (which assumes it survives and renames it to `$wosProcess`).
-- **Q-14 — Canonical-bytes substrate-vs-profile-shape split.** Substrate owns the `integrity-canonical-json-v1` primitive (full JCS + NUL framing + domain prefix). Formspec owns the `formspec-response-signing-v1` profile shape (strip `authoredSignatures`, domain-tag with `formspec.response.signed-payload.v1`, digest). Without this split, the D1 collapse lands in the wrong dependency direction. The Formspec profile shape lives in the Formspec layer and consumes the substrate primitive.
-- **D26 — `event_type` is authoritative dispatch; deprecate inner `recordKind` field.** The current `WosRecordKind` discriminator inside payload bytes is redundant — the parser at `trellis-verify-wos/src/records.rs:310-313` literally validates the inner against the outer. Drop the inner field; rely on the COSE protected-header `profile_id` (plan O-2) for cross-profile dispatch and `event_type` for intra-profile dispatch. The migration is atomic with fixture regeneration.
+- **Q-14 — Canonical-bytes substrate-vs-profile-shape split.** Landed 2026-05-12 on the Formspec side: Core §2.1.6, `response.schema.json`, the lint schema mirror, generated TS response types, and the feature matrix now state that `formspec-response-signing-v1` is the wire-visible Formspec profile shape while `integrity-canonical-json-v1` is the consumed substrate primitive. The Formspec layer owns the `authoredSignatures` omission rule and `formspec.response.signed-payload.v1` domain tag; the substrate owns reusable canonical-byte construction.
+- **D26 — `event_type` is authoritative dispatch; deprecate inner `recordKind` field.** The current `WosRecordKind` discriminator inside payload bytes is redundant — current Trellis/WOS parsers still validate local inner `recordKind` literals after event-type dispatch. Drop the inner field; rely on the COSE protected-header `profile_id` (plan O-2) for cross-profile dispatch and `event_type` for intra-profile dispatch. The migration is atomic with the remaining WOS schema/runtime fixture regeneration.
 
 ### 6.8 Sister-artifact banner-mark reminder (M-3 follow-up)
 

@@ -9,21 +9,21 @@
     "x-wos-owning-spec-version": "1.0.0-draft.1",
     "x-wos-custody-event-types": [
       {
-        "eventType": "wos.kernel.stateTransition",
+        "eventType": "wos.kernel.state_transition",
         "recordKind": "stateTransition",
         "layer": "kernel",
         "typeIdFamilyPrefix": "prov",
         "specRef": "https://wos-spec.org/specs/kernel/custody-hook-encoding#1-5-event-type-ownership"
       },
       {
-        "eventType": "wos.governance.overrideRecord",
+        "eventType": "wos.governance.override_record",
         "recordKind": "overrideRecord",
         "layer": "governance",
         "typeIdFamilyPrefix": "gov",
         "specRef": "https://wos-spec.org/specs/governance/workflow-governance#7-3-override-authority"
       },
       {
-        "eventType": "wos.ai.autonomyDemotion",
+        "eventType": "wos.ai.autonomy_demotion",
         "recordKind": "autonomyDemotion",
         "layer": "ai",
         "typeIdFamilyPrefix": "ai",
@@ -40,7 +40,11 @@
     "x-wos-typeid-family-prefixes": [
       {
         "prefix": "case",
-        "family": "case instance"
+        "family": "case ledger"
+      },
+      {
+        "prefix": "process",
+        "family": "workflow runtime process"
       },
       {
         "prefix": "prov",

@@ -2,7 +2,7 @@
   "binding": "formspec",
   "id": "SIG-014-signed-payload-digest-mismatch",
   "rule": "SIG-RT",
-  "description": "Digest mismatch in Formspec authored signature blocks SignatureAffirmation emission.",
+  "description": "Digest mismatch in Formspec authored signature emits SignatureAdmissionFailed(evidence_divergence) and keeps the signing task active.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/signature-runtime.json",
     "signatureProfile": "../../../../fixtures/profiles/signature-runtime-sequential.json"
@@ -63,9 +63,28 @@
       }
     }
   ],
-  "expected_transitions": [],
-  "expected_provenance": [],
+  "expected_transitions": [
+    {
+      "from": "draft",
+      "target": "signing",
+      "event": "start"
+    }
+  ],
+  "expected_provenance": [
+    {
+      "recordKind": "signatureAdmissionFailed",
+      "data": {
+        "reason": "evidence_divergence",
+        "failureContext": {
+          "field": "signedPayload.digest",
+          "actual": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        },
+        "evidenceBindings": {
+          "signingIntent": "urn:wos:signing-intent:applicant-signature"
+        }
+      }
+    }
+  ],
   "expected_errors": [
-    "signedPayload.digest does not match"
   ]
 }

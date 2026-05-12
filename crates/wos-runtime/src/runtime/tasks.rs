@@ -23,7 +23,7 @@ use super::{
     AdmissionOutcome, COMPLETION_EVENT_EXTENSION_KEY, FAILURE_EVENT_EXTENSION_KEY,
     PersistDraftResult, RuntimeError, TaskSubmissionResult, WosRuntime, contract_validation_record,
     format_timestamp, impact_level_label, merge_case_state, populate_provenance_record_fields,
-    stamp_provenance,
+    stamp_provenance, stamp_signature_decision_identity,
 };
 
 impl WosRuntime {
@@ -282,6 +282,7 @@ impl WosRuntime {
                 &kernel,
                 &record.instance.definition_version,
             );
+            stamp_signature_decision_identity(&mut provenance, &record.instance);
             stamp_provenance(&mut provenance, &now_iso);
             record.instance.provenance_position += provenance.len() as u64;
             record.provenance_log.extend(provenance);
@@ -332,7 +333,7 @@ impl WosRuntime {
                     signing_intent: &failed.evidence_bindings.signing_intent,
                     signer_id: failed.signer_id.as_deref(),
                     signer_authority: failed.signer_authority.clone(),
-                    failure_context: None,
+                    failure_context: failed.failure_context.clone(),
                     emitted_at: &failed.emitted_at,
                 },
             ));
@@ -358,6 +359,7 @@ impl WosRuntime {
                 &kernel,
                 &record.instance.definition_version,
             );
+            stamp_signature_decision_identity(&mut provenance, &record.instance);
             stamp_provenance(&mut provenance, &now_iso);
             record.instance.provenance_position += provenance.len() as u64;
             record.provenance_log.extend(provenance);
@@ -480,6 +482,7 @@ impl WosRuntime {
             &kernel,
             &record.instance.definition_version,
         );
+        stamp_signature_decision_identity(&mut provenance, &record.instance);
         stamp_provenance(&mut provenance, &now_iso);
         record.instance.provenance_position += provenance.len() as u64;
         record.provenance_log.extend(provenance);

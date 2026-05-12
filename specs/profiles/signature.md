@@ -162,6 +162,8 @@ The profile MAY reference a rendered document and a source response or evidence 
 
 When a signing task completes and all profile requirements for that signing act are satisfied, the runtime MUST emit exactly one `SignatureAffirmation` provenance record for each signer/document pair.
 
+The custody/export event type for an admitted `SignatureAffirmation` is `wos.kernel.signature_affirmation`; the inner record kind remains `signatureAffirmation` until D26 removes inner `recordKind` dispatch.
+
 The record MUST include:
 
 - `signerId`
@@ -207,7 +209,7 @@ If consent evidence is missing, identity binding is below the role's required po
 
 ### 2.9 SignatureAdmissionFailed Record
 
-When a signature is evaluated but not admitted, the runtime MUST emit exactly one `signatureAdmissionFailed` provenance record for each evaluated signer/document pair that failed admission. This record is a sibling artifact to `SignatureAffirmation` (§2.8), used exclusively for non-admission — it is not a status inside `SignatureAffirmation`.
+When a signature is evaluated but not admitted, the runtime MUST emit exactly one `signatureAdmissionFailed` provenance record for each evaluated signer/document pair that failed admission. The custody/export event type is `wos.kernel.signature_admission_failed`; the inner record kind remains `signatureAdmissionFailed` until D26 removes inner `recordKind` dispatch. This record is a sibling artifact to `SignatureAffirmation` (§2.8), used exclusively for non-admission — it is not a status inside `SignatureAffirmation`.
 
 A `signatureAdmissionFailed` record MUST carry:
 
@@ -543,7 +545,7 @@ Runtime conformance checks signing behavior: sequential blocking, parallel compl
 
 ### 4.4 Conformance fixture coverage
 
-Conformance fixtures for §2.13–§2.15 land under `crates/wos-conformance/tests/fixtures/SIG-*` once the WOS event-type taxonomy ratification (parent PLN-0384) settles the `wos.signing.*` namespace. The fixture set MUST include at minimum:
+Conformance fixtures for §2.13–§2.15 land under `crates/wos-conformance/tests/fixtures/SIG-*` once the WOS event-type taxonomy ratification (parent PLN-0384) settles the F-13 signature-related event-type registrations. The fixture set MUST include at minimum:
 
 - one positive vector per registered intent URI in §2.13.1, exercising the URI's `general` floor;
 - one positive vector per declared jurisdictional posture (`esign`, `ueta`, `eidas`), exercising the strictest floor for `applicant-signature`;
@@ -551,4 +553,4 @@ Conformance fixtures for §2.13–§2.15 land under `crates/wos-conformance/test
 - one positive vector exercising the layered-verifier composition with a real Trellis ADR 0010 `UserContentAttestationPayload` byte-encoding;
 - negative vectors per failure surface: unregistered URI; URI registered but floor underrun; missing signer-authority claim where the floor demands it; `signerAuthority.principal` equal to `signerId` for a delegating class; `evidenceBinding.evidenceHash` algorithm not permitted by §2.7; ESIGN posture without ESIGN §7001(c) consent reference; URI mismatch across the three-layer propagation contract (§2.13.3).
 
-Until PLN-0384 closes, the fixtures live in the existing `SIG-*` series with placeholder ids; once `wos.signing.*` ratifies, they renumber to align with the namespace registration. The fixture authoring is non-blocking on this profile revision — fixture coverage gates land with the namespace ratification, not with the spec text.
+Until PLN-0384 closes, the fixtures live in the existing `SIG-*` series with placeholder ids; once the F-13 signature-related event names ratify, they renumber to align with the namespace registration. The fixture authoring is non-blocking on this profile revision — fixture coverage gates land with the namespace ratification, not with the spec text.

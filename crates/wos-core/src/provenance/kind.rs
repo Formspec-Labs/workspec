@@ -433,6 +433,25 @@ pub enum ProvenanceKind {
 }
 
 impl ProvenanceKind {
+    /// Returns the registry-seeded D26 event literal, when one is fixed.
+    #[must_use]
+    pub fn canonical_event_literal(&self) -> Option<&'static str> {
+        match self {
+            Self::CaseCreated => Some("wos.kernel.case_created"),
+            Self::IntakeAccepted => Some("wos.kernel.intake_accepted"),
+            Self::IntakeRejected => Some("wos.kernel.intake_rejected"),
+            Self::IntakeDeferred => Some("wos.kernel.intake_deferred"),
+            Self::SignatureAffirmation => Some("wos.kernel.signature_affirmation"),
+            Self::SignatureAdmissionFailed => Some("wos.kernel.signature_admission_failed"),
+            Self::DeterminationRescinded => Some("wos.governance.determination_rescinded"),
+            Self::Reinstated => Some("wos.governance.reinstated"),
+            Self::ClockStarted => Some("wos.governance.clock_started"),
+            Self::ClockResolved => Some("wos.governance.clock_resolved"),
+            Self::IdentityAttestation => Some("wos.assurance.identity_attestation"),
+            _ => None,
+        }
+    }
+
     /// Whether this kind represents a governance / AI policy or rule that
     /// applied during event processing.
     ///

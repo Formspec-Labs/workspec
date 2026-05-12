@@ -48,7 +48,7 @@
               "signedPayload": {
                 "canonicalization": "formspec-response-signing-v1",
                 "digestAlgorithm": "sha-256",
-                "digest": "39cc22282ffcb5a632635803d838c2517527684533ceb5ae8d2614b050683856",
+                "digest": "4c81792b81fd085c636947f9b84587c0453c936997c399bfa75bcbbd6d2e38a2",
                 "responseId": "resp-sig-001-sequential-single-signer-applicantTask",
                 "definitionUrl": "urn:test:formspec:signature",
                 "definitionVersion": "1.0.0"

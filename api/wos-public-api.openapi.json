@@ -587,6 +587,614 @@
         }
       }
     },
+    "/cases/{case_id}": {
+      "get": {
+        "operationId": "getCaseLedger",
+        "summary": "Fetch a durable case-ledger projection.",
+        "description": "Case-level projection for ADR 0093 dual identity. The route is keyed by the durable case ledger and aggregates direct case-ledger provenance with every workflow process currently bound to that case. It does not authorize or perform post-ledger direct append.",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "description": "Durable case-ledger TypeID or WOS resource URN.",
+            "schema": {
+              "oneOf": [
+                {
+                  "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*_case_[0-9a-hjkmnp-tv-z]{26}$"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Durable case-ledger projection with direct event summary and bound processes.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseLedgerProjection"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/cases/{case_id}/events": {
+      "post": {
+        "operationId": "appendCaseEvent",
+        "summary": "Append a direct event to a durable case ledger.",
+        "description": "Direct case-ledger append surface for ADR 0093. The reference server implements the pre-ledger `wos.kernel.case_created` genesis branch as a provenance-chain write without enqueueing or draining a workflow process. Registered post-ledger direct append event types invoke the relationship authorization port; the default resolver denies with 403, while configured allow decisions persist event-contract-valid append records the generic direct writer can validate. The concrete ReBAC/OpenFGA adapter remains open, and specialized events such as `wos.kernel.signature_affirmation` and `wos.governance.determination*` require their runtime adapters.",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "description": "Durable case-ledger TypeID or WOS resource URN.",
+            "schema": {
+              "oneOf": [
+                {
+                  "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*_case_[0-9a-hjkmnp-tv-z]{26}$"
+                }
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Direct case-ledger event. `wos.kernel.case_created` opens a new ledger; registered post-ledger WOS events run relationship authorization and append only after an allow decision plus event-contract validation.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "event",
+                  "actorId",
+                  "idempotencyToken"
+                ],
+                "properties": {
+                  "event": {
+                    "type": "string",
+                    "pattern": "^wos\\.(kernel|governance|assurance)\\.[a-z][a-z0-9_]*$",
+                    "description": "Registered WOS event literal. The reference server persists `wos.kernel.case_created` before ledger creation and persists post-ledger literals only after relationship authorization allows and the direct writer can enforce the event contract."
+                  },
+                  "actorId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "idempotencyToken": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Replay token scoped to `(tenant, token)` for pre-ledger creation and `(case_id, token)` for post-ledger direct append."
+                  },
+                  "data": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Optional event-contract data. `caseRef` and `caseLedgerId` are supplied from the path for generic direct appends and must match if present."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Provenance receipt for the appended genesis event.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "caseLedgerId",
+                    "eventId",
+                    "eventHash",
+                    "sequence"
+                  ],
+                  "properties": {
+                    "caseLedgerId": {
+                      "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+                    },
+                    "eventId": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]*_prov_[0-9a-hjkmnp-tv-z]{26}$"
+                    },
+                    "eventHash": {
+                      "type": "string",
+                      "pattern": "^sha256:[0-9a-f]{64}$"
+                    },
+                    "sequence": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/cases/{case_id}/processes": {
+      "get": {
+        "operationId": "listCaseProcesses",
+        "summary": "List workflow processes bound to a durable case ledger.",
+        "description": "Case/process read bridge for ADR 0093 dual identity. The route lists runtime workflow process projections whose `caseLedgerId` matches the supplied durable case ledger.",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "description": "Durable case-ledger WOS resource URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workflow process projections bound to the supplied case ledger.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstance"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createCaseProcess",
+        "summary": "Start a workflow process on a durable case ledger.",
+        "description": "Case/process creation bridge for ADR 0093 dual identity. The route creates a new runtime process bound to the supplied durable case ledger; repeated calls can create multiple process IDs for the same case ledger.",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "description": "Durable case-ledger WOS resource URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Workflow definition and optional initial case-state seed for the new process.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "New workflow process projection bound to the supplied case ledger.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstance"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/cases/{case_id}/processes/{process_id}": {
+      "get": {
+        "operationId": "getCaseProcess",
+        "summary": "Fetch one workflow process bound to a durable case ledger.",
+        "description": "Case/process bridge for ADR 0093 dual identity. `case_id` identifies the durable case ledger; `process_id` identifies the runtime workflow process. The server returns 404 when the process exists but is not bound to the supplied case ledger.",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "description": "Durable case-ledger WOS resource URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "process_id",
+            "in": "path",
+            "required": true,
+            "description": "Workflow runtime process WOS resource URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workflow process projection carrying both `caseLedgerId` and `processId`.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstance"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/cases/{case_id}/processes/{process_id}/inputs": {
+      "post": {
+        "operationId": "submitCaseProcessInput",
+        "summary": "Submit a workflow input to one process bound to a durable case ledger.",
+        "description": "Workflow-submission bridge for ADR 0093 dual identity. This route validates the case/process binding before enqueuing the authored input for kernel evaluation. Direct case-ledger appends use the separate case event surface.",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "description": "Durable case-ledger WOS resource URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "process_id",
+            "in": "path",
+            "required": true,
+            "description": "Workflow runtime process WOS resource URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Authored workflow input for kernel transition algorithm evaluation.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/EventSubmissionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Kernel evaluation result after draining the submitted workflow input.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/EvaluationResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/cases/{case_id}/processes/{process_id}/drain": {
+      "post": {
+        "operationId": "drainCaseProcess",
+        "summary": "Drain queued workflow inputs for one process bound to a durable case ledger.",
+        "description": "Case/process bridge for ADR 0093 dual identity. This route validates the case/process binding before draining queued runtime events for the process.",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "description": "Durable case-ledger WOS resource URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "process_id",
+            "in": "path",
+            "required": true,
+            "description": "Workflow runtime process WOS resource URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Runtime drain step summaries for the process.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "transitionsCount",
+                      "provenanceCount",
+                      "createdTaskIds",
+                      "emittedEvents"
+                    ],
+                    "properties": {
+                      "processedEvent": {
+                        "type": "string",
+                        "description": "Event name processed by this drain step, when a queued event was present."
+                      },
+                      "transitionsCount": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "provenanceCount": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "createdTaskIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "emittedEvents": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/instances/{id}/governance": {
       "get": {
         "operationId": "getInstanceGovernance",
@@ -1160,16 +1768,25 @@
         }
       }
     },
-    "/instances/{id}/explanation": {
+    "/cases/{case_id}/processes/{process_id}/explanation": {
       "get": {
-        "operationId": "getInstanceExplanation",
-        "summary": "Fetch the server-assembled adverse-decision explanation for a case instance.",
+        "operationId": "getCaseProcessExplanation",
+        "summary": "Fetch the server-assembled adverse-decision explanation for a workflow process in a case ledger.",
         "parameters": [
           {
-            "name": "id",
+            "name": "case_id",
             "in": "path",
             "required": true,
-            "description": "WOS resource URN (ADR 0082 D-4).",
+            "description": "Durable case ledger WOS resource URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "process_id",
+            "in": "path",
+            "required": true,
+            "description": "Workflow process WOS resource URN bound to the case ledger.",
             "schema": {
               "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
             }
@@ -1191,6 +1808,388 @@
               "application/json": {
                 "schema": {
                   "$ref": "https://schemas.formspec.io/wos-api/provenance/v1#/$defs/AssembledExplanation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/cases/{case_id}/processes/{process_id}/provenance": {
+      "get": {
+        "operationId": "listCaseProcessProvenance",
+        "summary": "List provenance records for a workflow process in a case ledger.",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "description": "Durable case ledger WOS resource URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "process_id",
+            "in": "path",
+            "required": true,
+            "description": "Workflow process WOS resource URN bound to the case ledger.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Provenance records for the bound workflow process.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/provenance/v1#/$defs/ProvenanceRecordPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/cases/{case_id}/processes/{process_id}/correspondence": {
+      "get": {
+        "operationId": "listCaseProcessCorrespondence",
+        "summary": "List correspondence messages for a workflow process in a case ledger.",
+        "description": "Case/process bridge for ADR 0093 dual identity. The server validates the case/process binding before listing the correspondence feed for the bound workflow process.",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "description": "Durable case ledger WOS resource URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "process_id",
+            "in": "path",
+            "required": true,
+            "description": "Workflow process WOS resource URN bound to the case ledger.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "required": false,
+            "description": "Filter by message direction.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/MessageDirection"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Filter by delivery status.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/MessageStatus"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "query",
+            "required": false,
+            "description": "Filter by communication channel.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/MessageChannel"
+            }
+          },
+          {
+            "name": "partyRole",
+            "in": "query",
+            "required": false,
+            "description": "Filter by party role.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/CorrespondencePartyRole"
+            }
+          },
+          {
+            "name": "occurredFrom",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive UTC RFC 3339 lower bound for `occurredAt`.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "occurredUntil",
+            "in": "query",
+            "required": false,
+            "description": "Exclusive UTC RFC 3339 upper bound for `occurredAt`.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque resume token from the previous page (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum page size (ADR 0082 D-7).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated correspondence message page scoped to the bound workflow process.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/correspondence/v1#/$defs/CorrespondenceMessagePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/cases/{case_id}/processes/{process_id}/holds": {
+      "get": {
+        "operationId": "getCaseProcessHolds",
+        "summary": "Fetch the holds subresource for a workflow process in a case ledger.",
+        "description": "Case/process bridge for ADR 0093 dual identity. The server returns 404 when the process exists but is not bound to the supplied case ledger.",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "description": "Durable case ledger WOS resource URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "process_id",
+            "in": "path",
+            "required": true,
+            "description": "Workflow process WOS resource URN bound to the case ledger.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Hold entries for the bound workflow process.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseInstanceHoldList"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/cases/{case_id}/processes/{process_id}/migrate": {
+      "post": {
+        "operationId": "migrateCaseProcess",
+        "summary": "Migrate a workflow process in a durable case ledger.",
+        "description": "Case/process bridge for ADR 0093 dual identity. The server validates the case/process binding before invoking the same migration semantics as the legacy instance-keyed route.",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "description": "Durable case ledger WOS resource URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "process_id",
+            "in": "path",
+            "required": true,
+            "description": "Workflow process WOS resource URN bound to the case ledger.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Idempotency key (ADR 0082 D-16). Server retains the request/response pair for at least 24 hours keyed by `(idempotency-key, route, scope)`. A repeat with the same key but a different body for the same route/scope is rejected with `WOS-1409`.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Migration target, typed `MigrationMap`, migrating actor, and rationale (Kernel S11.2).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/MigrateInstanceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Migration result with both `instanceMigrated` and `migrationPinChanged` Facts-tier record URNs.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/MigrationResult"
                 }
               }
             }

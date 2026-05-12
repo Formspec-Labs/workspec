@@ -208,6 +208,7 @@ Each event-type entry SHOULD disclose:
 The `x-wos-typeid-family-prefixes` array SHOULD publish, at minimum, the reserved WOS prefixes:
 
 - `case`
+- `process`
 - `prov`
 - `gov`
 - `ai`

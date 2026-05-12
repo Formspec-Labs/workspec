@@ -51,7 +51,7 @@
               "signedPayload": {
                 "canonicalization": "formspec-response-signing-v1",
                 "digestAlgorithm": "sha-256",
-                "digest": "1c8972d92904b64d81fbfcb46eb6c89ee78eb0be33bc50c851f098caadbfd363",
+                "digest": "b7ddf6087d2d8585f781158cf84d2e995648939fae2dbf5a9874c8f563c658c4",
                 "responseId": "resp-sig-003-routed-signer-fel-guard-applicantTask",
                 "definitionUrl": "urn:test:formspec:signature",
                 "definitionVersion": "1.0.0"

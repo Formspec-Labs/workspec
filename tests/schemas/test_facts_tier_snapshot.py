@@ -17,6 +17,7 @@ import pytest
 from jsonschema import Draft202012Validator
 
 from .conftest import _REGISTRY, validator_for_def
+from .test_record_kind_registry import event_literal_mappings
 
 WOS_SPEC_ROOT = Path(__file__).resolve().parents[2]
 PROVENANCE_SCHEMA = (
@@ -68,6 +69,80 @@ def _facts_record(record_kind: str, **extra) -> dict:
     }
     record.update(extra)
     return record
+
+
+_VALID_SEED_DATA_BY_KIND = {
+    "determinationRescinded": {
+        "priorDeterminationHash": "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c",
+        "rescissionAuthorizationEventHash": "6ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5093f",
+    },
+    "reinstated": {
+        "priorRescissionEventHash": "6ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5093f",
+        "reactivationAuthorizationEventHash": "8ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5095e",
+        "reason": "rescission overturned on appeal",
+    },
+    "clockStarted": {
+        "clockId": "appeal-window-2026-0042",
+        "clockKind": "AppealClock",
+        "originEventHash": "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c",
+        "duration": "P30D",
+        "computedDeadline": "2026-05-28T12:00:00Z",
+    },
+    "clockResolved": {
+        "clockId": "appeal-window-2026-0042",
+        "originClockHash": "2ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5092a",
+        "resolution": "elapsed",
+        "resolvedAt": "2026-05-28T12:00:00Z",
+    },
+    "identityAttestation": {
+        "subjectGlobalId": "globalid:eaff8b1c-4e3d-4c09-9c91-9b06b7d4c2e1",
+        "assuranceLevel": "high",
+        "attestationProvider": "urn:agency.gov:identity:idme",
+        "providerAttestationId": "idme-attestation-2026-04-28-0042",
+        "attestedAt": "2026-04-28T10:55:00Z",
+        "attestedPredicates": ["legal-name-verified"],
+    },
+}
+
+
+def _valid_seed_record(record_kind: str, **extra) -> dict:
+    if record_kind in _VALID_SEED_DATA_BY_KIND and "data" not in extra:
+        extra = {**extra, "data": _VALID_SEED_DATA_BY_KIND[record_kind]}
+    return _facts_record(record_kind, **extra)
+
+
+@pytest.mark.parametrize(
+    ("record_kind", "event"),
+    sorted(event_literal_mappings().items()),
+)
+def test_d26_seed_record_kind_rejects_wrong_event_when_present(
+    schema, record_kind, event
+):
+    validator = _validator_for_def(schema, "FactsTierRecord")
+
+    assert list(
+        validator.iter_errors(_valid_seed_record(record_kind, event=event))
+    ) == []
+    assert list(
+        validator.iter_errors(_valid_seed_record(record_kind, event="decide"))
+    ), f"{record_kind} must reject an explicit non-canonical event"
+
+
+@pytest.mark.parametrize(
+    "record_kind",
+    sorted(event_literal_mappings()),
+)
+def test_d26_seed_record_kind_does_not_require_event_on_base_facts_def(
+    schema, record_kind
+):
+    validator = _validator_for_def(schema, "FactsTierRecord")
+
+    errors = list(validator.iter_errors(_valid_seed_record(record_kind)))
+
+    assert errors == [], (
+        f"{record_kind} fragments without event must remain valid against "
+        "the base FactsTierRecord $def"
+    )
 
 
 def test_determination_transition_without_snapshot_is_rejected(schema):

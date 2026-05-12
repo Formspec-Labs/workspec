@@ -2,12 +2,14 @@
 
 //! Formspec binding adapter for `wos-runtime`.
 
+use formspec_canonical::{CANONICALIZATION_PROFILE, DigestAlgorithm, build_signed_payload};
 use wos_core::{
-    instance::{ActiveTask, ValidationOutcome},
+    instance::{ActiveTask, CaseInstance, ValidationOutcome},
     provenance::{ProvenanceKind, ProvenanceRecord},
 };
 use wos_runtime::binding::{
-    BindingError, CaseMutationBundle, ContractBindingAdapter, PreparedTask, SignatureEvidence,
+    BindingError, CaseMutationBundle, ContractBindingAdapter, PreparedTask,
+    SignatureAdmissionFailure, SignatureAdmissionFailureReason, SignatureEvidence,
     SignaturePrimitiveStatus, SubmissionValidation,
 };
 use wos_runtime::intake::{
@@ -15,8 +17,8 @@ use wos_runtime::intake::{
     IntakeCaseDisposition, IntakeCaseIntent, IntakeInterpretation,
 };
 
-const FORMSPEC_SIGNED_PAYLOAD_CANONICALIZATION: &str = "formspec-response-signing-v1";
-const FORMSPEC_SIGNED_PAYLOAD_DOMAIN: &str = "formspec.response.signed-payload.v1";
+const FORMSPEC_SIGNATURE_METHOD_REGISTRY_VERSION: &str = "1.0.0";
+const WOS_KERNEL_CASE_CREATED_EVENT: &str = "wos.kernel.case_created";
 
 /// Stable reason emitted when the reference Formspec binding has parsed and
 /// pre-checked an authored signature but has not yet run the cryptographic
@@ -163,6 +165,10 @@ pub struct FormspecAuthoredSignatureRef {
     /// Legal-effect class authored into the Formspec response.
     pub signing_intent: String,
 
+    /// Cryptographic signature method URI.
+    #[serde(default)]
+    pub signature_method: Option<String>,
+
     /// Signer display name required by Formspec schema.
     pub signer_name: String,
 
@@ -200,6 +206,16 @@ pub struct FormspecAuthoredSignatureRef {
     /// Provider-neutral identity binding, when Formspec captured it.
     #[serde(default)]
     pub identity_binding: Option<serde_json::Value>,
+
+    /// Base64-encoded COSE_Sign1 VerificationReceipt bytes.
+    #[serde(default)]
+    pub verification_receipt: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct FormspecAuthoredSignatureEvidence {
+    signature: FormspecAuthoredSignatureRef,
+    admission_failure: Option<SignatureAdmissionFailure>,
 }
 
 impl IntakeHandoff {
@@ -299,13 +315,7 @@ impl IntakeHandoff {
 pub fn parse_authored_signatures(
     response: &serde_json::Value,
 ) -> Result<Vec<FormspecAuthoredSignatureRef>, BindingError> {
-    let Some(items) = response.get("authoredSignatures") else {
-        return Ok(Vec::new());
-    };
-    let signatures: Vec<FormspecAuthoredSignatureRef> = serde_json::from_value(items.clone())
-        .map_err(|error| {
-            BindingError::InvalidInput(format!("invalid Formspec authoredSignatures: {error}"))
-        })?;
+    let signatures = authored_signature_refs(response)?;
     if signatures.is_empty() {
         return Ok(signatures);
     }
@@ -327,20 +337,7 @@ pub fn parse_authored_signatures(
         .unwrap_or_default();
 
     for signature in &signatures {
-        ensure_non_empty("authoredSignatures.signatureId", &signature.signature_id)?;
-        ensure_non_empty(
-            "authoredSignatures.signingIntent",
-            &signature.signing_intent,
-        )?;
-        ensure_non_empty(
-            "authoredSignatures.signedPayload.digest",
-            &signature.signed_payload.digest,
-        )?;
-        if signature.signed_payload.canonicalization != FORMSPEC_SIGNED_PAYLOAD_CANONICALIZATION {
-            return Err(BindingError::InvalidInput(format!(
-                "authoredSignatures signedPayload.canonicalization must be {FORMSPEC_SIGNED_PAYLOAD_CANONICALIZATION}"
-            )));
-        }
+        validate_authored_signature_shape(signature)?;
         if signature.signed_payload.response_id != response_id {
             return Err(BindingError::InvalidInput(
                 "authoredSignatures signedPayload.responseId must match Response id".to_string(),
@@ -358,11 +355,6 @@ pub fn parse_authored_signatures(
                     .to_string(),
             ));
         }
-        if !signature.consent_accepted {
-            return Err(BindingError::InvalidInput(
-                "authoredSignatures consentAccepted must be true".to_string(),
-            ));
-        }
         let computed_digest = compute_formspec_signed_payload_digest(
             response,
             &signature.signed_payload.digest_algorithm,
@@ -377,36 +369,184 @@ pub fn parse_authored_signatures(
     Ok(signatures)
 }
 
+fn authored_signature_refs(
+    response: &serde_json::Value,
+) -> Result<Vec<FormspecAuthoredSignatureRef>, BindingError> {
+    let Some(items) = response.get("authoredSignatures") else {
+        return Ok(Vec::new());
+    };
+    serde_json::from_value(items.clone()).map_err(|error| {
+        BindingError::InvalidInput(format!("invalid Formspec authoredSignatures: {error}"))
+    })
+}
+
+fn parse_authored_signatures_for_evidence(
+    response: &serde_json::Value,
+) -> Result<Vec<FormspecAuthoredSignatureEvidence>, BindingError> {
+    let signatures = authored_signature_refs(response)?;
+    if signatures.is_empty() {
+        return Ok(Vec::new());
+    }
+    let response_id = response
+        .get("id")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| {
+            BindingError::InvalidInput(
+                "Formspec Response with authoredSignatures requires id".to_string(),
+            )
+        })?;
+    let definition_url = response
+        .get("definitionUrl")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    let definition_version = response
+        .get("definitionVersion")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+
+    let mut out = Vec::with_capacity(signatures.len());
+    for signature in signatures {
+        validate_authored_signature_shape(&signature)?;
+        let mut admission_failure = None;
+        if signature.signed_payload.response_id != response_id {
+            admission_failure = Some(evidence_divergence_failure(
+                "signedPayload.responseId",
+                response_id,
+                &signature.signed_payload.response_id,
+            ));
+        }
+        if admission_failure.is_none() && signature.signed_payload.definition_url != definition_url
+        {
+            admission_failure = Some(evidence_divergence_failure(
+                "signedPayload.definitionUrl",
+                definition_url,
+                &signature.signed_payload.definition_url,
+            ));
+        }
+        if admission_failure.is_none()
+            && signature.signed_payload.definition_version != definition_version
+        {
+            admission_failure = Some(evidence_divergence_failure(
+                "signedPayload.definitionVersion",
+                definition_version,
+                &signature.signed_payload.definition_version,
+            ));
+        }
+        let computed_digest = compute_formspec_signed_payload_digest(
+            response,
+            &signature.signed_payload.digest_algorithm,
+        )?;
+        if admission_failure.is_none() && computed_digest != signature.signed_payload.digest {
+            admission_failure = Some(evidence_divergence_failure(
+                "signedPayload.digest",
+                &computed_digest,
+                &signature.signed_payload.digest,
+            ));
+        }
+        out.push(FormspecAuthoredSignatureEvidence {
+            signature,
+            admission_failure,
+        });
+    }
+    Ok(out)
+}
+
+fn validate_authored_signature_shape(
+    signature: &FormspecAuthoredSignatureRef,
+) -> Result<(), BindingError> {
+    ensure_non_empty("authoredSignatures.signatureId", &signature.signature_id)?;
+    ensure_non_empty(
+        "authoredSignatures.signingIntent",
+        &signature.signing_intent,
+    )?;
+    ensure_non_empty(
+        "authoredSignatures.signedPayload.digest",
+        &signature.signed_payload.digest,
+    )?;
+    if signature.signed_payload.canonicalization != CANONICALIZATION_PROFILE {
+        return Err(BindingError::InvalidInput(format!(
+            "authoredSignatures signedPayload.canonicalization must be {CANONICALIZATION_PROFILE}"
+        )));
+    }
+    if !signature.consent_accepted {
+        return Err(BindingError::InvalidInput(
+            "authoredSignatures consentAccepted must be true".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn evidence_divergence_failure(
+    field: &str,
+    expected: &str,
+    actual: &str,
+) -> SignatureAdmissionFailure {
+    SignatureAdmissionFailure {
+        reason: SignatureAdmissionFailureReason::EvidenceDivergence,
+        failure_context: Some(serde_json::Map::from_iter([
+            (
+                "field".to_string(),
+                serde_json::Value::String(field.to_string()),
+            ),
+            (
+                "expected".to_string(),
+                serde_json::Value::String(expected.to_string()),
+            ),
+            (
+                "actual".to_string(),
+                serde_json::Value::String(actual.to_string()),
+            ),
+        ])),
+    }
+}
+
 fn compute_formspec_signed_payload_digest(
     response: &serde_json::Value,
     algorithm: &str,
 ) -> Result<String, BindingError> {
-    let mut signed_payload = response.clone();
-    let object = signed_payload.as_object_mut().ok_or_else(|| {
-        BindingError::InvalidInput("Formspec response must be a JSON object".to_string())
+    let digest_algorithm = DigestAlgorithm::from_str(algorithm).map_err(|_| {
+        BindingError::InvalidInput(format!(
+            "unsupported Formspec signedPayload.digestAlgorithm '{algorithm}'"
+        ))
     })?;
-    object.remove("authoredSignatures");
-    let canonical = serde_json_canonicalizer::to_string(&signed_payload).map_err(|error| {
+    let signed_payload = build_signed_payload(response, digest_algorithm).map_err(|error| {
         BindingError::InvalidInput(format!("canonicalize Formspec signed payload: {error}"))
     })?;
-    let mut payload =
-        Vec::with_capacity(FORMSPEC_SIGNED_PAYLOAD_DOMAIN.len() + 1 + canonical.as_bytes().len());
-    payload.extend_from_slice(FORMSPEC_SIGNED_PAYLOAD_DOMAIN.as_bytes());
-    payload.push(0);
-    payload.extend_from_slice(canonical.as_bytes());
+    Ok(signed_payload.digest)
+}
 
-    use sha2::{Digest, Sha256, Sha384, Sha512};
-    let digest = match algorithm {
-        "sha-256" => format!("{:x}", Sha256::digest(&payload)),
-        "sha-384" => format!("{:x}", Sha384::digest(&payload)),
-        "sha-512" => format!("{:x}", Sha512::digest(&payload)),
-        other => {
-            return Err(BindingError::InvalidInput(format!(
-                "unsupported Formspec signedPayload.digestAlgorithm '{other}'"
-            )));
-        }
-    };
-    Ok(digest)
+fn signature_method_admission_failure(
+    signature_method: Option<&str>,
+) -> Option<SignatureAdmissionFailure> {
+    let method = signature_method?;
+    if !method.starts_with("urn:formspec:sig-method:") || registered_signature_method(method) {
+        return None;
+    }
+
+    Some(SignatureAdmissionFailure {
+        reason: SignatureAdmissionFailureReason::MethodUnregistered,
+        failure_context: Some(serde_json::Map::from_iter([
+            (
+                "signatureMethod".to_string(),
+                serde_json::Value::String(method.to_string()),
+            ),
+            (
+                "registryVersion".to_string(),
+                serde_json::Value::String(FORMSPEC_SIGNATURE_METHOD_REGISTRY_VERSION.to_string()),
+            ),
+        ])),
+    })
+}
+
+fn registered_signature_method(method: &str) -> bool {
+    matches!(
+        method,
+        "urn:formspec:sig-method:ed25519-cose-sign1@1"
+            | "urn:formspec:sig-method:ecdsa-p256-cose-sign1@1"
+            | "urn:formspec:sig-method:rsa-pss-sha256-cose-sign1@1"
+            | "urn:formspec:sig-method:ml-dsa-65-cose-sign1@1"
+            | "urn:formspec:sig-method:slh-dsa-128s-cose-sign1@1"
+    )
 }
 
 fn response_path<'a>(response: &'a serde_json::Value, path: &str) -> Option<&'a serde_json::Value> {
@@ -451,7 +591,8 @@ pub fn parse_intake_handoff(document: &serde_json::Value) -> Result<IntakeHandof
 /// # Errors
 ///
 /// Returns [`BindingError::InvalidInput`] when the handoff violates its
-/// schema-level mode invariants or if `case_ref` is empty.
+/// schema-level mode invariants, or if `case_ref` is empty or not a case
+/// TypeID.
 pub fn case_created_provenance(
     handoff: &IntakeHandoff,
     case_ref: &str,
@@ -459,10 +600,19 @@ pub fn case_created_provenance(
 ) -> Result<ProvenanceRecord, BindingError> {
     handoff.validate()?;
     ensure_non_empty("caseRef", case_ref)?;
+    if !CaseInstance::is_case_id(case_ref) {
+        return Err(BindingError::InvalidInput(
+            "caseRef must be a canonical case ledger TypeID".to_string(),
+        ));
+    }
 
     let mut data = serde_json::Map::from_iter([
         (
             "caseRef".to_string(),
+            serde_json::Value::String(case_ref.to_string()),
+        ),
+        (
+            "caseLedgerId".to_string(),
             serde_json::Value::String(case_ref.to_string()),
         ),
         (
@@ -501,7 +651,7 @@ pub fn case_created_provenance(
         actor_id: actor_id.map(String::from),
         from_state: None,
         to_state: None,
-        event: Some("case.created".to_string()),
+        event: Some(WOS_KERNEL_CASE_CREATED_EVENT.to_string()),
         data: Some(serde_json::Value::Object(data)),
         audit_layer: None,
         actor_type: None,
@@ -715,7 +865,7 @@ where
         _task: &ActiveTask,
         response: &serde_json::Value,
     ) -> Result<Option<Vec<SignatureEvidence>>, BindingError> {
-        let signatures = parse_authored_signatures(response)?;
+        let signatures = parse_authored_signatures_for_evidence(response)?;
         if signatures.is_empty() {
             return Ok(None);
         }
@@ -731,7 +881,11 @@ where
             .cloned();
 
         let mut evidence = Vec::with_capacity(signatures.len());
-        for signature in signatures {
+        for signature_evidence in signatures {
+            let signature = signature_evidence.signature;
+            let admission_failure = signature_evidence.admission_failure.or_else(|| {
+                signature_method_admission_failure(signature.signature_method.as_deref())
+            });
             if let (Some(response_signer_id), Some(signature_signer_id)) =
                 (response_signer_id, signature.signer_id.as_deref())
                 && response_signer_id != signature_signer_id
@@ -749,6 +903,7 @@ where
                     .signer_id
                     .or_else(|| response_signer_id.map(str::to_string)),
                 signing_intent: signature.signing_intent,
+                signature_method: signature.signature_method,
                 signed_payload_digest: signature.signed_payload.digest,
                 signed_payload_digest_algorithm: signature.signed_payload.digest_algorithm,
                 signed_at: signature.signed_at,
@@ -768,6 +923,8 @@ where
                 primitive_verification: SignaturePrimitiveStatus::DeferredPendingHelper {
                     reason: FORMSPEC_SIGNING_HELPER_PENDING_REASON.to_string(),
                 },
+                verification_receipt: signature.verification_receipt,
+                admission_failure,
             });
         }
         Ok(Some(evidence))
@@ -876,6 +1033,8 @@ fn validate_required_envelope_fields(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const TEST_CASE_LEDGER_ID: &str = "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc";
 
     #[derive(Debug, Clone, Default)]
     struct StubProcessor;
@@ -1114,6 +1273,18 @@ mod tests {
         response
     }
 
+    fn legacy_nul_separated_signed_payload_digest(response: &serde_json::Value) -> String {
+        let canonical = formspec_canonical::canonicalize_response(response).unwrap();
+        let canonical_bytes = serde_json::to_vec(&canonical).unwrap();
+        let mut payload = Vec::with_capacity(
+            formspec_canonical::DOMAIN_SEPARATION.len() + 1 + canonical_bytes.len(),
+        );
+        payload.extend_from_slice(formspec_canonical::DOMAIN_SEPARATION.as_bytes());
+        payload.push(0);
+        payload.extend_from_slice(&canonical_bytes);
+        formspec_canonical::compute_digest(&payload, formspec_canonical::DigestAlgorithm::Sha256)
+    }
+
     #[test]
     fn parse_authored_signatures_accepts_new_formspec_shape() {
         let response = signed_response();
@@ -1127,12 +1298,32 @@ mod tests {
         assert_eq!(signatures.len(), 1);
         assert_eq!(signatures[0].signature_id, "sig-2026-0001");
         assert_eq!(
+            signatures[0].signature_method.as_deref(),
+            Some("provider-managed")
+        );
+        assert_eq!(
             signatures[0].signed_payload.digest,
             expected_signed_payload_digest
         );
         assert_eq!(
             signatures[0].document_hash,
             "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        );
+    }
+
+    #[test]
+    fn parse_authored_signatures_rejects_legacy_nul_separated_digest() {
+        let mut response = signed_response();
+        let legacy_digest = legacy_nul_separated_signed_payload_digest(&response);
+        response["authoredSignatures"][0]["signedPayload"]["digest"] =
+            serde_json::Value::String(legacy_digest);
+
+        let error = parse_authored_signatures(&response).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("signedPayload.digest does not match"),
+            "unexpected error: {error}"
         );
     }
 
@@ -1153,12 +1344,151 @@ mod tests {
 
         assert_eq!(evidence.len(), 1);
         assert_eq!(
+            evidence[0].signature_method.as_deref(),
+            Some("provider-managed")
+        );
+        assert_eq!(
             evidence[0].primitive_verification,
             SignaturePrimitiveStatus::DeferredPendingHelper {
                 reason: FORMSPEC_SIGNING_HELPER_PENDING_REASON.to_string(),
             },
             "Formspec binding must emit DeferredPendingHelper while \
              FORMSPEC-SIGN-HELPER-001 is unshipped"
+        );
+        assert!(
+            evidence[0].admission_failure.is_none(),
+            "legacy provider-managed method remains deferred until fixture recast"
+        );
+        assert!(evidence[0].verification_receipt.is_none());
+    }
+
+    #[test]
+    fn signature_evidence_carries_verification_receipt_bytes() {
+        let adapter = FormspecBinding::new(StubProcessor);
+        let mut response = signed_response();
+        response["authoredSignatures"][0]["verificationReceipt"] =
+            serde_json::json!("0oRWoQExiQEFQnNpZ25lZA==");
+
+        let evidence = adapter
+            .signature_evidence(&formspec_task(), &response)
+            .expect("signature evidence parses")
+            .expect("signature evidence is present");
+
+        assert_eq!(
+            evidence[0].verification_receipt.as_deref(),
+            Some("0oRWoQExiQEFQnNpZ25lZA==")
+        );
+    }
+
+    #[test]
+    fn signature_evidence_reports_unregistered_registry_method() {
+        let adapter = FormspecBinding::new(StubProcessor);
+        let mut response = signed_response();
+        response["authoredSignatures"][0]["signatureMethod"] =
+            serde_json::json!("urn:formspec:sig-method:unknown@1");
+
+        let evidence = adapter
+            .signature_evidence(&formspec_task(), &response)
+            .expect("signature evidence parses")
+            .expect("signature evidence is present");
+        assert_eq!(
+            evidence[0].signature_method.as_deref(),
+            Some("urn:formspec:sig-method:unknown@1")
+        );
+        let admission_failure = evidence[0]
+            .admission_failure
+            .as_ref()
+            .expect("unknown registry method must produce admission failure");
+
+        assert_eq!(
+            admission_failure.reason,
+            SignatureAdmissionFailureReason::MethodUnregistered
+        );
+        let context = admission_failure
+            .failure_context
+            .as_ref()
+            .expect("method_unregistered should carry failure context");
+        assert_eq!(
+            context
+                .get("signatureMethod")
+                .and_then(serde_json::Value::as_str),
+            Some("urn:formspec:sig-method:unknown@1")
+        );
+        assert_eq!(
+            context
+                .get("registryVersion")
+                .and_then(serde_json::Value::as_str),
+            Some(FORMSPEC_SIGNATURE_METHOD_REGISTRY_VERSION)
+        );
+    }
+
+    #[test]
+    fn signature_evidence_reports_signed_payload_digest_divergence() {
+        let adapter = FormspecBinding::new(StubProcessor);
+        let mut response = signed_response();
+        response["authoredSignatures"][0]["signedPayload"]["digest"] =
+            serde_json::json!("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+
+        let evidence = adapter
+            .signature_evidence(&formspec_task(), &response)
+            .expect("signature evidence parses")
+            .expect("signature evidence is present");
+        let admission_failure = evidence[0]
+            .admission_failure
+            .as_ref()
+            .expect("digest divergence should produce admission failure");
+        assert_eq!(
+            admission_failure.reason,
+            SignatureAdmissionFailureReason::EvidenceDivergence
+        );
+        let context = admission_failure
+            .failure_context
+            .as_ref()
+            .expect("evidence divergence carries failure context");
+        assert_eq!(
+            context.get("field").and_then(serde_json::Value::as_str),
+            Some("signedPayload.digest")
+        );
+        assert_eq!(
+            context.get("actual").and_then(serde_json::Value::as_str),
+            Some("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+        );
+    }
+
+    #[test]
+    fn signature_evidence_reports_signed_payload_response_pin_divergence() {
+        let adapter = FormspecBinding::new(StubProcessor);
+        let mut response = signed_response();
+        response["authoredSignatures"][0]["signedPayload"]["responseId"] =
+            serde_json::json!("resp-stale");
+
+        let evidence = adapter
+            .signature_evidence(&formspec_task(), &response)
+            .expect("signature evidence parses")
+            .expect("signature evidence is present");
+        let admission_failure = evidence[0]
+            .admission_failure
+            .as_ref()
+            .expect("response pin divergence should produce admission failure");
+        assert_eq!(
+            admission_failure.reason,
+            SignatureAdmissionFailureReason::EvidenceDivergence
+        );
+        let context = admission_failure
+            .failure_context
+            .as_ref()
+            .expect("evidence divergence carries failure context");
+        assert_eq!(
+            context.get("field").and_then(serde_json::Value::as_str),
+            Some("signedPayload.responseId")
+        );
+        assert_eq!(
+            context.get("expected").and_then(serde_json::Value::as_str),
+            Some("resp-2026-0001")
+        );
+        assert_eq!(
+            context.get("actual").and_then(serde_json::Value::as_str),
+            Some("resp-stale")
         );
     }
 
@@ -1328,7 +1658,7 @@ mod tests {
                 },
                 &IntakeAcceptanceOutcome::Accepted {
                     case_disposition: IntakeCaseDisposition::CreateGovernedCase {
-                        case_ref: "urn:wos:case:case-2026-0042".to_string(),
+                        case_ref: TEST_CASE_LEDGER_ID.to_string(),
                         definition: wos_runtime::IntakeCaseDefinition {
                             definition_url: "urn:test:intake".to_string(),
                             definition_version: "1.0.0".to_string(),
@@ -1408,16 +1738,17 @@ mod tests {
 
         let record = case_created_provenance(
             &handoff,
-            "urn:wos:case:case-2026-0042",
+            TEST_CASE_LEDGER_ID,
             Some("urn:iam:actor:intake-service"),
         )
         .unwrap();
         let json = serde_json::to_value(&record).expect("serialize");
 
         assert_eq!(json["recordKind"], "caseCreated");
-        assert_eq!(json["event"], "case.created");
+        assert_eq!(json["event"], WOS_KERNEL_CASE_CREATED_EVENT);
         assert_eq!(json["actorId"], "urn:iam:actor:intake-service");
-        assert_eq!(json["data"]["caseRef"], "urn:wos:case:case-2026-0042");
+        assert_eq!(json["data"]["caseRef"], TEST_CASE_LEDGER_ID);
+        assert_eq!(json["data"]["caseLedgerId"], TEST_CASE_LEDGER_ID);
         assert_eq!(
             json["data"]["intakeHandoffRef"],
             "urn:formspec:intake-handoff:handoff-public-2026-0001"
@@ -1427,7 +1758,21 @@ mod tests {
             json["inputs"][0],
             "urn:formspec:intake-handoff:handoff-public-2026-0001"
         );
-        assert_eq!(json["outputs"][0], "urn:wos:case:case-2026-0042");
+        assert_eq!(json["outputs"][0], TEST_CASE_LEDGER_ID);
+    }
+
+    #[test]
+    fn case_created_provenance_rejects_non_typeid_case_ref() {
+        let handoff = parse_intake_handoff(&public_intake_handoff()).unwrap();
+
+        let err = case_created_provenance(
+            &handoff,
+            "urn:wos:case:case-2026-0042",
+            Some("urn:iam:actor:intake-service"),
+        )
+        .unwrap_err();
+
+        assert!(err.to_string().contains("case ledger TypeID"));
     }
 
     #[test]

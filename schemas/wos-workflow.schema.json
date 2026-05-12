@@ -4176,7 +4176,7 @@
             "verificationReportProduced",
             "zoneSatisfied"
           ],
-          "description": "Provenance record discriminator. Full 131-entry set aligned with schemas/record-kind-registry.json and the ProvenanceKind Rust enum. 21 entries carry schema-validated payload shapes (if/then guards or $def overlays); 110 are flat Facts-tier records. Literal-set MUST stay byte-aligned with the ProvenanceKind Rust enum (wos-core/src/provenance/kind.rs). Parity enforced by scripts/check-recordkind-parity.py.",
+          "description": "Provenance record discriminator. Full 132-entry set aligned with schemas/record-kind-registry.json and the ProvenanceKind Rust enum. 22 entries carry schema-validated payload shapes (if/then guards or $def overlays); 110 are flat Facts-tier records. Literal-set MUST stay byte-aligned with the ProvenanceKind Rust enum (wos-core/src/provenance/kind.rs). Parity enforced by scripts/check-recordkind-parity.py.",
           "examples": [
             "stateTransition",
             "caseStateMutation"
@@ -4234,7 +4234,7 @@
           "description": "Triggering event or reserved event literal carried by the record kind.",
           "examples": [
             "decide",
-            "case.intake.accepted"
+            "wos.kernel.intake_accepted"
           ],
           "x-wos": {
             "openStringKind": "tagLabel"
@@ -4396,6 +4396,300 @@
         }
       },
       "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "caseCreated",
+                "description": "D26 agreement guard source: the caseCreated record kind selects the case-created event literal when event is present."
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "const": "wos.kernel.case_created",
+                "description": "D26 agreement guard target for caseCreated facts records. The base workflow $def does not require event so fragment validation remains compatible."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "intakeAccepted",
+                "description": "D26 agreement guard source: the intakeAccepted record kind selects the intake-accepted event literal when event is present."
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "const": "wos.kernel.intake_accepted",
+                "description": "D26 agreement guard target for intakeAccepted facts records. The base workflow $def does not require event so fragment validation remains compatible."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "intakeRejected",
+                "description": "D26 agreement guard source: the intakeRejected record kind selects the intake-rejected event literal when event is present."
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "const": "wos.kernel.intake_rejected",
+                "description": "D26 agreement guard target for intakeRejected facts records. The base workflow $def does not require event so fragment validation remains compatible."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "intakeDeferred",
+                "description": "D26 agreement guard source: the intakeDeferred record kind selects the intake-deferred event literal when event is present."
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "const": "wos.kernel.intake_deferred",
+                "description": "D26 agreement guard target for intakeDeferred facts records. The base workflow $def does not require event so fragment validation remains compatible."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "forEachIterationStarted",
+                "description": "D26 agreement guard source: the forEachIterationStarted record kind selects the ForEach iteration-start event literal when event is present."
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "const": "wos.kernel.for_each_iteration_started",
+                "description": "D26 agreement guard target for forEachIterationStarted facts records. The base workflow $def does not require event so fragment validation remains compatible."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "forEachIterationCompleted",
+                "description": "D26 agreement guard source: the forEachIterationCompleted record kind selects the ForEach iteration-completed event literal when event is present."
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "const": "wos.kernel.for_each_iteration_completed",
+                "description": "D26 agreement guard target for forEachIterationCompleted facts records. The base workflow $def does not require event so fragment validation remains compatible."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "forEachCompleted",
+                "description": "D26 agreement guard source: the forEachCompleted record kind selects the ForEach completed event literal when event is present."
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "const": "wos.kernel.for_each_completed",
+                "description": "D26 agreement guard target for forEachCompleted facts records. The base workflow $def does not require event so fragment validation remains compatible."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "signatureAffirmation",
+                "description": "D26 agreement guard source: the signatureAffirmation record kind selects the signature-affirmation event literal when event is present."
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "const": "wos.kernel.signature_affirmation",
+                "description": "D26 agreement guard target for signatureAffirmation facts records. The base workflow $def does not require event so fragment validation remains compatible."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "signatureAdmissionFailed",
+                "description": "D26 agreement guard source: the signatureAdmissionFailed record kind selects the signature-admission-failed event literal when event is present."
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "const": "wos.kernel.signature_admission_failed",
+                "description": "D26 agreement guard target for signatureAdmissionFailed facts records. The base workflow $def does not require event so fragment validation remains compatible."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "determinationRescinded",
+                "description": "D26 agreement guard source: the determinationRescinded record kind selects the determination-rescinded event literal when event is present."
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "const": "wos.governance.determination_rescinded",
+                "description": "D26 agreement guard target for determinationRescinded facts records. The base workflow $def does not require event so fragment validation remains compatible."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "reinstated",
+                "description": "D26 agreement guard source: the reinstated record kind selects the reinstated event literal when event is present."
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "const": "wos.governance.reinstated",
+                "description": "D26 agreement guard target for reinstated facts records. The base workflow $def does not require event so fragment validation remains compatible."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "clockStarted",
+                "description": "D26 agreement guard source: the clockStarted record kind selects the clock-started event literal when event is present."
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "const": "wos.governance.clock_started",
+                "description": "D26 agreement guard target for clockStarted facts records. The base workflow $def does not require event so fragment validation remains compatible."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "clockResolved",
+                "description": "D26 agreement guard source: the clockResolved record kind selects the clock-resolved event literal when event is present."
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "const": "wos.governance.clock_resolved",
+                "description": "D26 agreement guard target for clockResolved facts records. The base workflow $def does not require event so fragment validation remains compatible."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "identityAttestation",
+                "description": "D26 agreement guard source: the identityAttestation record kind selects the identity-attestation event literal when event is present."
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "const": "wos.assurance.identity_attestation",
+                "description": "D26 agreement guard target for identityAttestation facts records. The base workflow $def does not require event so fragment validation remains compatible."
+              }
+            }
+          }
+        },
         {
           "if": {
             "properties": {

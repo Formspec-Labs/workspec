@@ -1,11 +1,26 @@
 {
   "binding": "formspec",
-  "id": "SIG-025-unregistered-non-allowlisted-intent",
+  "id": "SIG-027-posture-method-unsupported",
   "rule": "SIG-RT",
-  "description": "Workflow's deploymentLocalSigningIntents allowlist does NOT contain the submitted intent and the intent is not in the §2.11.1 registered WOS set; runtime emits SignatureAdmissionFailed(method_unsupported) and leaves the signing task active per Signature Profile §2.11.2.",
+  "description": "Posture Declaration allowedMethods excludes the submitted Formspec signatureMethod; runtime emits SignatureAdmissionFailed(method_unsupported).",
   "documents": {
     "kernel": "../../../../fixtures/kernel/signature-runtime.json",
-    "signatureProfile": "../../../../fixtures/profiles/signature-runtime-unregistered-intent.json"
+    "signatureProfile": "../../../../fixtures/profiles/signature-runtime-posture.json",
+    "postureDeclaration": "inline"
+  },
+  "inline_documents": {
+    "postureDeclaration": {
+      "$postureDeclaration": "1.0",
+      "url": "https://example.gov/posture/signature-conformance.json",
+      "version": "1.0.0",
+      "signaturePolicy": {
+        "allowedMethods": [
+          "urn:formspec:sig-method:ecdsa-p256-cose-sign1@1"
+        ],
+        "minimumPrimitiveVerification": "deferredPendingHelper",
+        "receiptSigningRequired": false
+      }
+    }
   },
   "event_sequence": [
     {
@@ -23,21 +38,21 @@
           "data": {
             "signerId": "applicant",
             "signatureProvider": "formspec",
-            "ceremonyId": "ceremony-sig-025",
+            "ceremonyId": "ceremony-sig-027",
             "signature": {
               "acceptedAt": "2026-05-08T12:00:00Z",
               "affirmed": true,
               "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
             }
           },
-          "id": "resp-sig-025-unregistered-non-allowlisted-intent-applicantTask",
+          "id": "resp-sig-027-posture-method-unsupported-applicantTask",
           "authoredSignatures": [
             {
-              "signatureId": "sig-sig-025-unregistered-non-allowlisted-intent-applicantTask",
+              "signatureId": "sig-sig-027-posture-method-unsupported-applicantTask",
               "documentId": "application",
-              "signingIntent": "urn:acme:signing-intent:unknown",
-              "signatureValue": "urn:test:signature:SIG-025-unregistered-non-allowlisted-intent:applicantTask",
-              "signatureMethod": "provider-managed",
+              "signingIntent": "urn:wos:signing-intent:applicant-signature",
+              "signatureValue": "urn:test:signature:SIG-027-posture-method-unsupported:applicantTask",
+              "signatureMethod": "urn:formspec:sig-method:ed25519-cose-sign1@1",
               "signerId": "applicant",
               "signerName": "Applicant",
               "signedAt": "2026-05-08T12:00:00Z",
@@ -48,15 +63,15 @@
               "signedPayload": {
                 "canonicalization": "formspec-response-signing-v1",
                 "digestAlgorithm": "sha-256",
-                "digest": "67fbe799bef57a7d9b62d441c8f038afbe57ecdc11bf1656a4ddeb4943882cd3",
-                "responseId": "resp-sig-025-unregistered-non-allowlisted-intent-applicantTask",
+                "digest": "cf5196d19ede39a596a800af2d31f527edd230d0840f9a3426f50682605b2b02",
+                "responseId": "resp-sig-027-posture-method-unsupported-applicantTask",
                 "definitionUrl": "urn:test:formspec:signature",
                 "definitionVersion": "1.0.0"
               },
               "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
               "documentHashAlgorithm": "sha-256",
               "signatureProvider": "formspec",
-              "ceremonyId": "ceremony-sig-025"
+              "ceremonyId": "ceremony-sig-027"
             }
           ]
         }
@@ -76,10 +91,9 @@
       "data": {
         "reason": "method_unsupported",
         "evidenceBindings": {
-          "signingIntent": "urn:acme:signing-intent:unknown"
+          "signingIntent": "urn:wos:signing-intent:applicant-signature"
         }
       }
     }
-  ],
-  "expected_errors": []
+  ]
 }

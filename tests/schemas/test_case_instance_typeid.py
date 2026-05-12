@@ -1,9 +1,9 @@
 """CaseInstance TypeID regression tests.
 
 Guards the runtime-artifact CaseInstance schema after T1-3 tightened
-`instanceId` to the custody-bound `case` TypeID family. The same pattern
-also applies to Formspec task context handoff data nested under the
-instance schema.
+`instanceId` to WOS TypeID families. The transitional bridge accepts the
+legacy `case` family and the new workflow `process` family while the explicit
+`caseLedgerId` and `processId` fields carry the split identity.
 """
 
 from __future__ import annotations
@@ -44,13 +44,69 @@ def test_case_instance_accepts_case_typeid():
     assert errors == [], f"valid CaseInstance rejected: {errors}"
 
 
-def test_case_instance_rejects_non_case_typeid():
+def test_case_instance_accepts_process_typeid():
+    schema = json.loads(CASE_INSTANCE_SCHEMA.read_text())
+    validator = Draft202012Validator(schema)
+    doc = _minimal_instance()
+    doc["instanceId"] = "sba-poc_process_01jqrpd32jf8xtx9qxkkv3rqsd"
+    doc["caseLedgerId"] = "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd"
+    errors = list(validator.iter_errors(doc))
+    assert errors == [], f"valid process-backed CaseInstance rejected: {errors}"
+
+
+def test_case_instance_accepts_explicit_dual_identity_fields():
+    schema = json.loads(CASE_INSTANCE_SCHEMA.read_text())
+    validator = Draft202012Validator(schema)
+    doc = _minimal_instance()
+    doc["processId"] = "sba-poc_process_01jqrpd32jf8xtx9qxkkv3rqsd"
+    doc["caseLedgerId"] = "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd"
+    errors = list(validator.iter_errors(doc))
+    assert errors == [], f"valid dual-identity CaseInstance rejected: {errors}"
+
+
+def test_case_instance_rejects_non_runtime_typeid():
     schema = json.loads(CASE_INSTANCE_SCHEMA.read_text())
     validator = Draft202012Validator(schema)
     doc = _minimal_instance()
     doc["instanceId"] = "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd"
     errors = list(validator.iter_errors(doc))
-    assert errors, "CaseInstance.instanceId must use the reserved `case` family prefix"
+    assert errors, "CaseInstance.instanceId must use `case` or `process`"
+
+
+def test_case_instance_rejects_swapped_dual_identity_families():
+    schema = json.loads(CASE_INSTANCE_SCHEMA.read_text())
+    validator = Draft202012Validator(schema)
+    doc = _minimal_instance()
+    doc["processId"] = "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd"
+    doc["caseLedgerId"] = "sba-poc_process_01jqrpd32jf8xtx9qxkkv3rqsd"
+    errors = list(validator.iter_errors(doc))
+    assert errors, "processId and caseLedgerId must use their reserved families"
+
+
+def test_formspec_task_context_accepts_process_instance_id():
+    schema = json.loads(CASE_INSTANCE_SCHEMA.read_text())
+    validator = Draft202012Validator(schema)
+    doc = _minimal_instance()
+    doc["activeTasks"] = [
+        {
+            "taskId": "task-1",
+            "taskRef": "complete-intake",
+            "status": "created",
+            "context": {
+                "taskId": "task-1",
+                "instanceId": "sba-poc_process_01jqrpd32jf8xtx9qxkkv3rqsd",
+                "contractRef": "intakeApplication",
+                "definitionUrl": "urn:formspec:intake",
+                "definitionVersion": "1.0.0",
+                "binding": "formspec",
+                "assignedActor": "applicant-123",
+            },
+            "createdAt": "2026-04-21T12:00:00Z",
+            "updatedAt": "2026-04-21T12:00:00Z",
+        }
+    ]
+    errors = list(validator.iter_errors(doc))
+    assert errors == [], f"valid process task context rejected: {errors}"
 
 
 def test_case_instance_omitted_tenant_still_validates():

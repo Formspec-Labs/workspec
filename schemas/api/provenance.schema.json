@@ -25,7 +25,7 @@
   ],
   "$defs": {
     "FactsRecordKind": {
-      "description": "Facts-tier record kind. The full closed reserved-literal set is aligned with `schemas/record-kind-registry.json` (131 ProvenanceKind variants, all camelCase). 21 carry schema-validated payload shapes (if/then or $def overlay); the remaining 110 are flat Facts-tier records. The `^x-[a-z][a-z0-9-]*$` extension arm adds vendor extensibility (ADR 0082 D-12). Literal-set parity against the Rust `ProvenanceKind` enum is enforced by `scripts/check-recordkind-parity.py`.",
+      "description": "Facts-tier record kind. The full closed reserved-literal set is aligned with `schemas/record-kind-registry.json` (132 ProvenanceKind variants, all camelCase). 22 carry schema-validated payload shapes (if/then or $def overlay); the remaining 110 are flat Facts-tier records. The `^x-[a-z][a-z0-9-]*$` extension arm adds vendor extensibility (ADR 0082 D-12). Literal-set parity against the Rust `ProvenanceKind` enum is enforced by `scripts/check-recordkind-parity.py`.",
       "oneOf": [
         {
           "enum": [
@@ -139,6 +139,7 @@
             "separationViolation",
             "sessionPaused",
             "shadowModeDivergence",
+            "signatureAdmissionFailed",
             "signatureAffirmation",
             "stateTransition",
             "stepResultPersisted",
@@ -627,7 +628,7 @@
     "AssembledExplanation": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Server-assembled adverse-decision explanation (governance §3.8; workflow-governance.md:166-238). The §3.8.1 algorithm's output structure — Reasoning records ordered by authority rank + Counterfactual records partitioned positive/negative + assembly metadata — projected as a typed read-only resource so clients do not re-implement the deterministic-assembly MUST. Returned by `GET /api/v1/instances/{id}/explanation`. Two conformant processors MUST produce the byte-identical assembled explanation from the same provenance log (workflow-governance.md:170).",
+      "description": "Server-assembled adverse-decision explanation (governance §3.8; workflow-governance.md:166-238). The §3.8.1 algorithm's output structure — Reasoning records ordered by authority rank + Counterfactual records partitioned positive/negative + assembly metadata — projected as a typed read-only resource so clients do not re-implement the deterministic-assembly MUST. Returned by `GET /api/v1/cases/{case_id}/processes/{process_id}/explanation`. Two conformant processors MUST produce the byte-identical assembled explanation from the same provenance log (workflow-governance.md:170).",
       "required": [
         "instanceId",
         "assembledAt",
@@ -831,7 +832,7 @@
           "description": "Triggering event or reserved event literal carried by the record kind.",
           "examples": [
             "decide",
-            "case.intake.accepted"
+            "wos.kernel.intake_accepted"
           ],
           "x-wos": {
             "openStringKind": "tagLabel"
@@ -1143,7 +1144,345 @@
           "$ref": "#/$defs/QuorumReductionRecord",
           "description": "Typed payload when a governance operation explicitly reduces a quorum requirement. Optional only because the wire envelope is shared across all Facts-tier kinds; servers recording quorum reduction MUST populate this and use an explicit policy-transition `recordKind` rather than silently changing quorum state."
         }
-      }
+      },
+      "oneOf": [
+        {
+          "description": "D26 agreement guard: caseCreated selects the case-created event literal.",
+          "required": ["recordKind", "event"],
+          "properties": {
+            "recordKind": {
+              "const": "caseCreated",
+              "description": "D26 agreement guard source: case-created facts record kind."
+            },
+            "event": {
+              "const": "wos.kernel.case_created",
+              "description": "D26 agreement guard target: case-created event literal."
+            }
+          }
+        },
+        {
+          "description": "D26 agreement guard: intakeAccepted selects the intake-accepted event literal.",
+          "required": ["recordKind", "event"],
+          "properties": {
+            "recordKind": {
+              "const": "intakeAccepted",
+              "description": "D26 agreement guard source: intake-accepted facts record kind."
+            },
+            "event": {
+              "const": "wos.kernel.intake_accepted",
+              "description": "D26 agreement guard target: intake-accepted event literal."
+            }
+          }
+        },
+        {
+          "description": "D26 agreement guard: intakeRejected selects the intake-rejected event literal.",
+          "required": ["recordKind", "event"],
+          "properties": {
+            "recordKind": {
+              "const": "intakeRejected",
+              "description": "D26 agreement guard source: intake-rejected facts record kind."
+            },
+            "event": {
+              "const": "wos.kernel.intake_rejected",
+              "description": "D26 agreement guard target: intake-rejected event literal."
+            }
+          }
+        },
+        {
+          "description": "D26 agreement guard: intakeDeferred selects the intake-deferred event literal.",
+          "required": ["recordKind", "event"],
+          "properties": {
+            "recordKind": {
+              "const": "intakeDeferred",
+              "description": "D26 agreement guard source: intake-deferred facts record kind."
+            },
+            "event": {
+              "const": "wos.kernel.intake_deferred",
+              "description": "D26 agreement guard target: intake-deferred event literal."
+            }
+          }
+        },
+        {
+          "description": "D26 agreement guard: forEachIterationStarted selects the ForEach iteration-start event literal.",
+          "required": ["recordKind", "event"],
+          "properties": {
+            "recordKind": {
+              "const": "forEachIterationStarted",
+              "description": "D26 agreement guard source: ForEach iteration-start facts record kind."
+            },
+            "event": {
+              "const": "wos.kernel.for_each_iteration_started",
+              "description": "D26 agreement guard target: ForEach iteration-start event literal."
+            }
+          }
+        },
+        {
+          "description": "D26 agreement guard: forEachIterationCompleted selects the ForEach iteration-completed event literal.",
+          "required": ["recordKind", "event"],
+          "properties": {
+            "recordKind": {
+              "const": "forEachIterationCompleted",
+              "description": "D26 agreement guard source: ForEach iteration-completed facts record kind."
+            },
+            "event": {
+              "const": "wos.kernel.for_each_iteration_completed",
+              "description": "D26 agreement guard target: ForEach iteration-completed event literal."
+            }
+          }
+        },
+        {
+          "description": "D26 agreement guard: forEachCompleted selects the ForEach completed event literal.",
+          "required": ["recordKind", "event"],
+          "properties": {
+            "recordKind": {
+              "const": "forEachCompleted",
+              "description": "D26 agreement guard source: ForEach completed facts record kind."
+            },
+            "event": {
+              "const": "wos.kernel.for_each_completed",
+              "description": "D26 agreement guard target: ForEach completed event literal."
+            }
+          }
+        },
+        {
+          "description": "D26 agreement guard: signatureAffirmation selects the signature-affirmation event literal.",
+          "required": ["recordKind", "event"],
+          "properties": {
+            "recordKind": {
+              "const": "signatureAffirmation",
+              "description": "D26 agreement guard source: signature-affirmation facts record kind."
+            },
+            "event": {
+              "const": "wos.kernel.signature_affirmation",
+              "description": "D26 agreement guard target: signature-affirmation event literal."
+            }
+          }
+        },
+        {
+          "description": "D26 agreement guard: signatureAdmissionFailed selects the signature-admission-failed event literal.",
+          "required": ["recordKind", "event"],
+          "properties": {
+            "recordKind": {
+              "const": "signatureAdmissionFailed",
+              "description": "D26 agreement guard source: signature-admission-failed facts record kind."
+            },
+            "event": {
+              "const": "wos.kernel.signature_admission_failed",
+              "description": "D26 agreement guard target: signature-admission-failed event literal."
+            }
+          }
+        },
+        {
+          "description": "D26 agreement guard: determinationRescinded selects the determination-rescinded event literal.",
+          "required": ["recordKind", "event"],
+          "properties": {
+            "recordKind": {
+              "const": "determinationRescinded",
+              "description": "D26 agreement guard source: determination-rescinded facts record kind."
+            },
+            "event": {
+              "const": "wos.governance.determination_rescinded",
+              "description": "D26 agreement guard target: determination-rescinded event literal."
+            }
+          }
+        },
+        {
+          "description": "D26 agreement guard: reinstated selects the reinstated event literal.",
+          "required": ["recordKind", "event"],
+          "properties": {
+            "recordKind": {
+              "const": "reinstated",
+              "description": "D26 agreement guard source: reinstated facts record kind."
+            },
+            "event": {
+              "const": "wos.governance.reinstated",
+              "description": "D26 agreement guard target: reinstated event literal."
+            }
+          }
+        },
+        {
+          "description": "D26 agreement guard: clockStarted selects the clock-started event literal.",
+          "required": ["recordKind", "event"],
+          "properties": {
+            "recordKind": {
+              "const": "clockStarted",
+              "description": "D26 agreement guard source: clock-started facts record kind."
+            },
+            "event": {
+              "const": "wos.governance.clock_started",
+              "description": "D26 agreement guard target: clock-started event literal."
+            }
+          }
+        },
+        {
+          "description": "D26 agreement guard: clockResolved selects the clock-resolved event literal.",
+          "required": ["recordKind", "event"],
+          "properties": {
+            "recordKind": {
+              "const": "clockResolved",
+              "description": "D26 agreement guard source: clock-resolved facts record kind."
+            },
+            "event": {
+              "const": "wos.governance.clock_resolved",
+              "description": "D26 agreement guard target: clock-resolved event literal."
+            }
+          }
+        },
+        {
+          "description": "D26 agreement guard: identityAttestation selects the identity-attestation event literal.",
+          "required": ["recordKind", "event"],
+          "properties": {
+            "recordKind": {
+              "const": "identityAttestation",
+              "description": "D26 agreement guard source: identity-attestation facts record kind."
+            },
+            "event": {
+              "const": "wos.assurance.identity_attestation",
+              "description": "D26 agreement guard target: identity-attestation event literal."
+            }
+          }
+        },
+        {
+          "description": "Facts records outside the current D26 event-literal seed retain their existing open event vocabulary.",
+          "required": ["recordKind"],
+          "properties": {
+            "recordKind": {
+              "description": "Built-in facts record kinds that are outside the current D26 event-literal seed.",
+              "enum": [
+                "actionExecuted",
+                "activationBlocked",
+                "actorTypeViolation",
+                "agentOutput",
+                "agentProvenanceAnnotation",
+                "agentStateTransition",
+                "agentVersionChange",
+                "amendmentAuthorized",
+                "appealFiled",
+                "arazzoStep",
+                "authorizationAttestation",
+                "authorizationRejected",
+                "autonomyCapped",
+                "autonomyComputed",
+                "autonomyDemotion",
+                "autonomyEscalation",
+                "autonomyViolation",
+                "calendarIgnored",
+                "callbackPending",
+                "callbackReceived",
+                "capabilityInvocation",
+                "caseStateMutation",
+                "circuitBreakerReset",
+                "circuitBreakerTripped",
+                "clockSkewObserved",
+                "commitAttemptFailure",
+                "compensationExecuted",
+                "compensationLogEntry",
+                "compensationScopeBoundary",
+                "confidenceDecay",
+                "confidenceViolation",
+                "configurationWarning",
+                "consistencyViolation",
+                "constraintTamperBlocked",
+                "continuationOfServicesActivated",
+                "contractValidation",
+                "convergenceCapReached",
+                "correctionAuthorized",
+                "cumulativeConfidenceViolation",
+                "dataMapping",
+                "dcrActivityExecuted",
+                "dcrRelationEvaluated",
+                "dcrResolutionError",
+                "dcrZoneViolation",
+                "delegationViolation",
+                "deonticBypass",
+                "deonticEvaluation",
+                "deonticResolution",
+                "deonticViolation",
+                "determinationAmended",
+                "dispositiveViolation",
+                "driftAlert",
+                "driftReclassification",
+                "equityAlert",
+                "escalationPending",
+                "eventConsumed",
+                "eventEmitted",
+                "fallbackAttempt",
+                "fallbackTerminal",
+                "fallbackTriggered",
+                "groundTruthLabel",
+                "historyCleared",
+                "humanTaskCreated",
+                "idempotencyDedup",
+                "immutabilityViolation",
+                "independentFirstEnforced",
+                "instanceMigrated",
+                "instanceResumed",
+                "instanceSuspended",
+                "instanceTerminated",
+                "invalidDuration",
+                "legalHoldDestructionRejected",
+                "legalHoldPlaced",
+                "legalHoldReleased",
+                "migrationPinChanged",
+                "milestoneFired",
+                "narrativeTierRecorded",
+                "noticeSent",
+                "notificationSuppressed",
+                "onEntry",
+                "onExit",
+                "overrideRecorded",
+                "overrideViolation",
+                "parameterResolved",
+                "pipelineRejection",
+                "pipelineRiskProfile",
+                "pipelineStageCompleted",
+                "policyDecision",
+                "protocolViolation",
+                "proxyInvocation",
+                "relationshipChanged",
+                "reportTimedOut",
+                "rescissionAuthorized",
+                "rightsViolation",
+                "samplingDecision",
+                "separationViolation",
+                "sessionPaused",
+                "shadowModeDivergence",
+                "stateTransition",
+                "stepResultPersisted",
+                "taskCompleted",
+                "taskCreated",
+                "taskDismissed",
+                "taskDraftPersisted",
+                "taskFailed",
+                "taskPresented",
+                "taskResponseRejected",
+                "taskResponseSubmitted",
+                "taskSkipped",
+                "timerCancelled",
+                "timerCreated",
+                "timerFired",
+                "toleranceViolation",
+                "toolInvoked",
+                "toolViolation",
+                "unmatchedEvent",
+                "verificationReportProduced",
+                "zoneSatisfied"
+              ]
+            }
+          }
+        },
+        {
+          "description": "Vendor-extension facts records retain their existing open event vocabulary.",
+          "required": ["recordKind"],
+          "properties": {
+            "recordKind": {
+              "type": "string",
+              "pattern": "^x-[a-z][a-z0-9-]*$",
+              "description": "Vendor-extension facts record kind outside the current D26 event-literal seed."
+            }
+          }
+        }
+      ]
     },
     "OverrideRecord": {
       "type": "object",

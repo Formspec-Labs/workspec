@@ -51,7 +51,7 @@
               "signedPayload": {
                 "canonicalization": "formspec-response-signing-v1",
                 "digestAlgorithm": "sha-256",
-                "digest": "2eaa18e7db8cb77f094cfa93facfb30871e1e7b4c7d8f12adbb3e6ed424273cb",
+                "digest": "d8e18b8e6ce0e09338724207fae095cfe52ac6c74efcb1c510ad9435833285f5",
                 "responseId": "resp-sig-007-witness-countersignature-applicantTask",
                 "definitionUrl": "urn:test:formspec:signature",
                 "definitionVersion": "1.0.0"
@@ -117,7 +117,7 @@
               "signedPayload": {
                 "canonicalization": "formspec-response-signing-v1",
                 "digestAlgorithm": "sha-256",
-                "digest": "6ae68262570e2a284f78d81c085f22b3e5ddda0d94469113c3bd7ae2e79502a0",
+                "digest": "96c38b8e90916040774d28c0aa46da064788b02680dfba6788b906d0960491ad",
                 "responseId": "resp-sig-007-witness-countersignature-witnessTask",
                 "definitionUrl": "urn:test:formspec:signature",
                 "definitionVersion": "1.0.0"

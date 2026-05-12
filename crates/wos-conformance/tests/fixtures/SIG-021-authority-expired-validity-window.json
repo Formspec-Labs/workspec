@@ -2,7 +2,7 @@
   "binding": "formspec",
   "id": "SIG-021-authority-expired-validity-window",
   "rule": "SIG-RT",
-  "description": "Notary signerAuthority validUntil precedes signedAt (§2.12.4 step 6) blocks SignatureAffirmation.",
+  "description": "Notary signerAuthority validUntil precedes signedAt (§2.12.4 step 6) emits SignatureAdmissionFailed(posture_floor_unmet).",
   "documents": {
     "kernel": "../../../../fixtures/kernel/signature-runtime.json",
     "signatureProfile": "../../../../fixtures/profiles/signature-runtime-notary.json"
@@ -59,7 +59,7 @@
               "signedPayload": {
                 "canonicalization": "formspec-response-signing-v1",
                 "digestAlgorithm": "sha-256",
-                "digest": "cd634abca771dc8015c47727e759149797492487af43ced751b143fdd18cce22",
+                "digest": "3dd55943e5d9443d68cdc378861eabfe34915a59156a21742616155712c4c229",
                 "responseId": "resp-sig-021-authority-expired-validity-window-notaryTask",
                 "definitionUrl": "urn:test:formspec:signature",
                 "definitionVersion": "1.0.0"
@@ -81,8 +81,19 @@
       "event": "start"
     }
   ],
-  "expected_provenance": [],
-  "expected_errors": [
-    "validUntil"
-  ]
+  "expected_provenance": [
+    {
+      "recordKind": "signatureAdmissionFailed",
+      "data": {
+        "reason": "posture_floor_unmet",
+        "failureContext": {
+          "field": "signerAuthority.validUntil"
+        },
+        "evidenceBindings": {
+          "signingIntent": "urn:wos:signing-intent:notarial-attestation"
+        }
+      }
+    }
+  ],
+  "expected_errors": []
 }

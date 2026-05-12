@@ -425,6 +425,51 @@ fn audit_layer_for_kind_maps_narrative_only() {
     );
 }
 
+#[test]
+fn provenance_kind_reports_only_registry_seeded_d26_event_literals() {
+    let seeded = [
+        (ProvenanceKind::CaseCreated, "wos.kernel.case_created"),
+        (ProvenanceKind::IntakeAccepted, "wos.kernel.intake_accepted"),
+        (ProvenanceKind::IntakeRejected, "wos.kernel.intake_rejected"),
+        (ProvenanceKind::IntakeDeferred, "wos.kernel.intake_deferred"),
+        (
+            ProvenanceKind::SignatureAffirmation,
+            "wos.kernel.signature_affirmation",
+        ),
+        (
+            ProvenanceKind::SignatureAdmissionFailed,
+            "wos.kernel.signature_admission_failed",
+        ),
+        (
+            ProvenanceKind::DeterminationRescinded,
+            "wos.governance.determination_rescinded",
+        ),
+        (ProvenanceKind::Reinstated, "wos.governance.reinstated"),
+        (ProvenanceKind::ClockStarted, "wos.governance.clock_started"),
+        (
+            ProvenanceKind::ClockResolved,
+            "wos.governance.clock_resolved",
+        ),
+        (
+            ProvenanceKind::IdentityAttestation,
+            "wos.assurance.identity_attestation",
+        ),
+    ];
+
+    for (kind, event_literal) in seeded {
+        assert_eq!(kind.canonical_event_literal(), Some(event_literal));
+    }
+
+    assert_eq!(
+        ProvenanceKind::StateTransition.canonical_event_literal(),
+        None
+    );
+    assert_eq!(
+        ProvenanceKind::CaseStateMutation.canonical_event_literal(),
+        None
+    );
+}
+
 /// Finding 3 regression: every `ProvenanceKind` variant must map to a
 /// tier via an explicit match arm — no wildcard fallback. The hand-list
 /// below mirrors the enum; adding a new variant upstream fails this
@@ -550,6 +595,7 @@ fn audit_layer_for_kind_covers_every_variant() {
         ProvenanceKind::ToolInvoked,
         ProvenanceKind::PolicyDecision,
         ProvenanceKind::SignatureAffirmation,
+        ProvenanceKind::SignatureAdmissionFailed,
         ProvenanceKind::CorrectionAuthorized,
         ProvenanceKind::AmendmentAuthorized,
         ProvenanceKind::DeterminationAmended,
@@ -568,8 +614,8 @@ fn audit_layer_for_kind_covers_every_variant() {
 
     assert_eq!(
         all.len(),
-        131,
-        "ProvenanceKind has 131 variants at HEAD; a new variant upstream MUST add an entry here"
+        132,
+        "ProvenanceKind has 132 variants at HEAD; a new variant upstream MUST add an entry here"
     );
 
     for kind in all {
@@ -650,6 +696,7 @@ fn signature_affirmation_input() -> SignatureAffirmationInput<'static> {
             "status": "deferredPendingHelper",
             "reason": "formspec-signing-helper-pending",
         }),
+        verification_receipt: None,
     }
 }
 
@@ -659,6 +706,7 @@ fn signature_affirmation_constructor_serializes_required_fields() {
     let json = serde_json::to_value(&record).expect("serialize");
 
     assert_eq!(json["recordKind"], "signatureAffirmation");
+    assert_eq!(json["event"], "wos.kernel.signature_affirmation");
     assert_eq!(json["actorId"], "applicant");
     assert_eq!(json["data"]["signerId"], "applicant");
     assert_eq!(json["data"]["roleId"], "applicantSigner");
@@ -698,6 +746,20 @@ fn signature_affirmation_constructor_serializes_required_fields() {
 }
 
 #[test]
+fn signature_affirmation_carries_verification_receipt_when_present() {
+    let mut input = signature_affirmation_input();
+    input.verification_receipt = Some("0oRWoQExiQEFQnNpZ25lZA==");
+
+    let record = ProvenanceRecord::signature_affirmation(input);
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(
+        json["data"]["verificationReceipt"],
+        "0oRWoQExiQEFQnNpZ25lZA=="
+    );
+}
+
+#[test]
 fn signature_affirmation_carries_primitive_verification_deferred() {
     // The reference Formspec binding emits
     // SignaturePrimitiveStatus::DeferredPendingHelper while
@@ -722,6 +784,92 @@ fn signature_affirmation_carries_primitive_verification_deferred() {
         json["data"]["primitiveVerification"]["reason"],
         "formspec-signing-helper-pending"
     );
+}
+
+fn signature_admission_failed_input() -> SignatureAdmissionFailedInput<'static> {
+    SignatureAdmissionFailedInput {
+        reason: "methodUnsupported",
+        response_id: "response-2026-0001",
+        signed_payload_digest: "abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        signature_id: "sig-2026-0001",
+        signing_intent: "urn:wos:signing-intent:applicant-signature",
+        signer_id: Some("applicant"),
+        signer_authority: Some(serde_json::json!({
+            "kind": "self",
+            "basis": "applicant-attestation"
+        })),
+        failure_context: None,
+        emitted_at: "2026-04-22T14:31:00Z",
+    }
+}
+
+#[test]
+fn signature_admission_failed_constructor_serializes_required_fields() {
+    let record = ProvenanceRecord::signature_admission_failed(signature_admission_failed_input());
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["recordKind"], "signatureAdmissionFailed");
+    assert_eq!(json["event"], "wos.kernel.signature_admission_failed");
+    assert_eq!(json["actorId"], "applicant");
+    assert_eq!(json["data"]["reason"], "methodUnsupported");
+    assert_eq!(
+        json["data"]["evidenceBindings"]["responseId"],
+        "response-2026-0001"
+    );
+    assert_eq!(
+        json["data"]["evidenceBindings"]["signedPayloadDigest"],
+        "abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+    );
+    assert_eq!(
+        json["data"]["evidenceBindings"]["signatureId"],
+        "sig-2026-0001"
+    );
+    assert_eq!(
+        json["data"]["evidenceBindings"]["signingIntent"],
+        "urn:wos:signing-intent:applicant-signature"
+    );
+    assert_eq!(json["data"]["emittedAt"], "2026-04-22T14:31:00Z");
+    assert_eq!(json["data"]["signerId"], "applicant");
+    assert_eq!(json["data"]["signerAuthority"]["kind"], "self");
+}
+
+#[test]
+fn signature_admission_failed_omits_optional_fields_when_absent() {
+    let mut input = signature_admission_failed_input();
+    input.signer_id = None;
+    input.signer_authority = None;
+    input.failure_context = None;
+    let record = ProvenanceRecord::signature_admission_failed(input);
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert!(json.get("actorId").is_none());
+    assert!(json["data"].get("signerId").is_none());
+    assert!(json["data"].get("signerAuthority").is_none());
+    assert!(json["data"].get("failureContext").is_none());
+}
+
+#[test]
+fn signature_admission_failed_carries_failure_context() {
+    let mut context = serde_json::Map::new();
+    context.insert(
+        "method".to_string(),
+        serde_json::Value::String("urn:formspec:signature-method:unknown".to_string()),
+    );
+    context.insert(
+        "registryVersion".to_string(),
+        serde_json::Value::String("1.0.0".to_string()),
+    );
+    let mut input = signature_admission_failed_input();
+    input.failure_context = Some(context);
+
+    let record = ProvenanceRecord::signature_admission_failed(input);
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(
+        json["data"]["failureContext"]["method"],
+        "urn:formspec:signature-method:unknown"
+    );
+    assert_eq!(json["data"]["failureContext"]["registryVersion"], "1.0.0");
 }
 
 #[test]
@@ -1255,6 +1403,7 @@ fn determination_rescinded_constructor_serializes_required_fields() {
     let json = serde_json::to_value(&record).expect("serialize");
 
     assert_eq!(json["recordKind"], "determinationRescinded");
+    assert_eq!(json["event"], "wos.governance.determination_rescinded");
     assert_eq!(json["data"]["priorDeterminationHash"], "sha256:det-1");
     assert_eq!(
         json["data"]["rescissionAuthorizationEventHash"],
@@ -1313,6 +1462,7 @@ fn reinstated_constructor_serializes_required_fields() {
     let json = serde_json::to_value(&record).expect("serialize");
 
     assert_eq!(json["recordKind"], "reinstated");
+    assert_eq!(json["event"], "wos.governance.reinstated");
     assert_eq!(json["data"]["priorRescissionEventHash"], "sha256:event-4");
     assert_eq!(
         json["data"]["reactivationAuthorizationEventHash"],
@@ -1455,6 +1605,7 @@ fn clock_started_constructor_serializes_required_fields() {
     let json = serde_json::to_value(&record).expect("serialize");
 
     assert_eq!(json["recordKind"], "clockStarted");
+    assert_eq!(json["event"], "wos.governance.clock_started");
     assert_eq!(json["data"]["clockId"], "clock-appeal-001");
     assert_eq!(json["data"]["clockKind"], "AppealClock");
     assert_eq!(json["data"]["originEventHash"], "sha256:origin-1");
@@ -1532,6 +1683,7 @@ fn clock_resolved_constructor_serializes_required_fields() {
     let json = serde_json::to_value(&record).expect("serialize");
 
     assert_eq!(json["recordKind"], "clockResolved");
+    assert_eq!(json["event"], "wos.governance.clock_resolved");
     assert_eq!(json["data"]["clockId"], "clock-appeal-001");
     assert_eq!(json["data"]["originClockHash"], "sha256:clock-origin-1");
     assert_eq!(json["data"]["resolution"], "satisfied");
@@ -1646,6 +1798,7 @@ fn identity_attestation_constructor_serializes_required_fields() {
     let json = serde_json::to_value(&record).expect("serialize");
 
     assert_eq!(json["recordKind"], "identityAttestation");
+    assert_eq!(json["event"], "wos.assurance.identity_attestation");
     assert_eq!(json["data"]["subjectGlobalId"], "did:example:applicant-001");
     assert_eq!(json["data"]["assuranceLevel"], "high");
     assert_eq!(

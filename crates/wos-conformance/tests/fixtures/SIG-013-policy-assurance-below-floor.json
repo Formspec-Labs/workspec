@@ -52,7 +52,7 @@
               "signedPayload": {
                 "canonicalization": "formspec-response-signing-v1",
                 "digestAlgorithm": "sha-256",
-                "digest": "cc8bcbfb7e359eac43316453c86aab22cb08bd4d18657b68ba835c5fa084364e",
+                "digest": "5205e01b9f84a2b82142aaeafa07cda2c1ce1f1eff45f2e03917bacd9b5dc883",
                 "responseId": "resp-sig-013-policy-assurance-below-floor-applicantTask",
                 "definitionUrl": "urn:test:formspec:signature",
                 "definitionVersion": "1.0.0"

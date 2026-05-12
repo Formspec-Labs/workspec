@@ -17,12 +17,12 @@
     },
     "WosResourceUrn": {
       "type": "string",
-      "pattern": "^urn:wos:[a-z][a-z0-9-]*_(case|prov|gov|ai|assurance|x-[a-z]+-[a-z]+)_[0-9a-hjkmnp-tv-z]{26}(?:/tasks/[a-zA-Z0-9._-]+)?$",
-      "description": "Public WOS API resource URN (ADR 0092 D-1). Shape `urn:wos:<typeid>` — 3-segment URN whose namespace-specific string IS the TypeID. Strip `urn:wos:` to extract the canonical TypeID. The TypeID prefix carries the record family (`case | prov | gov | ai | assurance`); sub-resources (tasks, delegations, holds) are identified by URL path context, not independent TypeIDs. Task sub-resources append `/tasks/{taskId}` to the parent instance URN.",
+      "pattern": "^urn:wos:[a-z][a-z0-9-]*_(case|process|prov|gov|ai|assurance|x-[a-z]+-[a-z]+)_[0-9a-hjkmnp-tv-z]{26}(?:/tasks/[a-zA-Z0-9._-]+)?$",
+      "description": "Public WOS API resource URN (ADR 0092 D-1). Shape `urn:wos:<typeid>` — 3-segment URN whose namespace-specific string IS the TypeID. Strip `urn:wos:` to extract the canonical TypeID. The TypeID prefix carries the record family (`case | process | prov | gov | ai | assurance`); `case` identifies the durable case ledger, while `process` identifies a workflow runtime process bound to that ledger. Sub-resources (tasks, delegations, holds) are identified by URL path context, not independent TypeIDs. Task sub-resources append `/tasks/{taskId}` to the parent process URN.",
       "examples": [
         "urn:wos:sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc",
         "urn:wos:default_case_01hw7rm71vfay8vvw14d2pf2db",
-        "urn:wos:default_case_01hw7rm71vfay8vvw14d2pf2db/tasks/complete-intake",
+        "urn:wos:default_process_01hw7rm71vfay8vvw14d2pf2db/tasks/complete-intake",
         "urn:wos:agency-gov_prov_01jqrxabcd3f8xtx9qxkkv3raa",
         "urn:wos:acme-corp_ai_01jqrpd32jf8xtx9qxkkv3rqsc"
       ]

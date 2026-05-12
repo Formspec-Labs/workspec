@@ -7,7 +7,7 @@
 
 ## Purpose
 
-`CaseInstance` is the public projection of a running WOS workflow instance — the case-file state, lifecycle posture, and identity that drive the case-portal and SDK consumers. Greenfield per ADR 0082 D-15: the kernel runtime artifact (`wos-case-instance.schema.json`) and the prior `case-portal/src/ports/types.ts` `CaseInstanceView` are prior art, not this contract. Per ADR 0082 D-3, the resource carries lifecycle and `caseState` only; governance, tasks, timers, holds, compensation, and cross-case relationships are subresources and the `?include=` aggregation seam is closed. `CustodyReceipt` exposes the Trellis custody-anchoring receipt projection; `CompensationLogEntry` and `CompensationLogEntryPage` supply the kernel compensation log (Kernel §9.5).
+`CaseInstance` is the public projection of a running WOS workflow instance — the case-file state, lifecycle posture, and identity that drive the case-portal and SDK consumers. `CaseLedgerProjection` is the durable case-level view keyed by the governed case ledger; it can exist before any workflow process starts and aggregates bound `CaseInstance` process projections. `CaseLedgerEventSummary` summarizes the latest direct case-ledger provenance event when one exists and exposes the D26 event literal rather than the redundant inner `recordKind` discriminator. Greenfield per ADR 0082 D-15: the kernel runtime artifact (`wos-case-instance.schema.json`) and the prior `case-portal/src/ports/types.ts` `CaseInstanceView` are prior art, not this contract. Per ADR 0082 D-3, process resources carry lifecycle and `caseState` only; governance, tasks, timers, holds, compensation, and cross-case relationships are subresources and the `?include=` aggregation seam is closed. `CustodyReceipt` exposes the Trellis custody-anchoring receipt projection; `CompensationLogEntry` and `CompensationLogEntryPage` supply the kernel compensation log (Kernel §9.5).
 
 ## Resource Shape
 
@@ -40,9 +40,10 @@ Per ADR 0082 D-3, subresource endpoints scale pagination per resource and preven
 | Governance | `GET /api/v1/instances/{id}/governance` | `CaseInstanceGovernance` | `governance` | not paginated; small bounded set |
 | Tasks | `GET /api/v1/instances/{id}/tasks` | `TaskPage` (from `task.schema.json`) | `tasks` | cursor (D-7) |
 | Timers | `GET /api/v1/instances/{id}/timers` | `CaseInstanceTimerList` | `timers` | not paginated |
-| Holds | `GET /api/v1/instances/{id}/holds` | `CaseInstanceHoldList` | `holds` | not paginated |
+| Holds | `GET /api/v1/instances/{id}/holds`; case/process bridge `GET /api/v1/cases/{case_id}/processes/{process_id}/holds` | `CaseInstanceHoldList` | `holds` | not paginated |
 | Related cases | `GET /api/v1/instances/{id}/related` | `CaseInstanceRelatedList` | `related` | not paginated |
-| Provenance | `GET /api/v1/instances/{id}/provenance` | `ProvenanceRecordPage` (from `provenance.schema.json`) | NOT in `?include=` | cursor (D-7); query filters per `ProvenanceListOptions` |
+| Provenance | `GET /api/v1/instances/{id}/provenance`; case/process bridge `GET /api/v1/cases/{case_id}/processes/{process_id}/provenance` | `ProvenanceRecordPage` (from `provenance.schema.json`) | NOT in `?include=` | cursor (D-7); query filters per `ProvenanceListOptions` |
+| Correspondence | `GET /api/v1/instances/{instanceId}/correspondence`; case/process bridge `GET /api/v1/cases/{case_id}/processes/{process_id}/correspondence` | `CorrespondenceMessagePage` (from `correspondence.schema.json`) | `correspondence` | cursor (D-7); query filters per `CorrespondenceListOptions` |
 
 Provenance is intentionally NOT in the `?include=` taxonomy because the cardinality is unbounded and provenance domain-ratification (ADR 0082 D-15 step 3) already supplies a dedicated paginated endpoint.
 
@@ -98,6 +99,14 @@ POST  /api/v1/instances/{id}/suspend          -> CaseInstance                (Id
 POST  /api/v1/instances/{id}/resume           -> CaseInstance                (Idempotency-Key REQUIRED)
 POST  /api/v1/instances/{id}/terminate        -> CaseInstance                (Idempotency-Key REQUIRED)
 POST  /api/v1/instances/{id}/migrate          -> MigrationResult             (Idempotency-Key REQUIRED)
+GET   /api/v1/cases/{case_id}                 -> CaseLedgerProjection
+GET   /api/v1/cases/{case_id}/processes       -> CaseInstance[]
+POST  /api/v1/cases/{case_id}/processes       -> CaseInstance
+GET   /api/v1/cases/{case_id}/processes/{process_id}/explanation -> AssembledExplanation
+GET   /api/v1/cases/{case_id}/processes/{process_id}/provenance  -> ProvenanceRecordPage        (cursor-paginated)
+GET   /api/v1/cases/{case_id}/processes/{process_id}/correspondence -> CorrespondenceMessagePage (cursor-paginated)
+GET   /api/v1/cases/{case_id}/processes/{process_id}/holds       -> CaseInstanceHoldList
+POST  /api/v1/cases/{case_id}/processes/{process_id}/migrate     -> MigrationResult             (Idempotency-Key REQUIRED)
 ```
 
 `GET /api/v1/instances` accepts `CaseInstanceListOptions`: `lifecycleState`, `workflowUrl`, `createdAfter`, `createdBefore`, `tenant`, `include`, `cursor`, `limit` (max 200). Returns `CaseInstancePage` (cursor envelope per `pagination.schema.json`, ADR 0082 D-7). Filters compose with the standard `X-WOS-Tenant` / `X-WOS-Organization` scope headers (ADR 0082 D-9).
@@ -120,11 +129,11 @@ The five mutations below close the kernel S11.3 / S4.9 instance-operations gap i
 
 `POST /api/v1/instances/{id}/terminate` accepts `TerminateInstanceRequest { reason, terminationKind, actorRef }` and returns the updated `CaseInstance` (now `lifecycleState == terminated`, irreversible per Kernel S11.5). `TerminationKind` is closed-with-vendor-extension per ADR 0082 D-12 — reserved literals `policy-violation | applicant-withdrawn | duplicate | error | administrative` plus `^x-[a-z]+-` extensions. Submissions to a `completed` or already-`terminated` instance are rejected with `WOS-1409`. Fires an `instanceTerminated` Facts-tier record.
 
-`POST /api/v1/instances/{id}/migrate` accepts `MigrateInstanceRequest { targetDefinitionUrl?, targetDefinitionVersion, migrationMap, actorRef, justification }` and returns `MigrationResult { instance, migratedAt, instanceMigratedRecordId, migrationPinChangedRecordId, previousWorkflowVersion, newWorkflowVersion, previousWorkflowUrl?, newWorkflowUrl? }`. `MigrationMap` mirrors the kernel four-key bag (Kernel S11.2 step 2) but exposes each operation as a typed array of `{path, ...}` objects (`FieldRename`, `FieldDefault`, `FieldCoercion`, plus a bare `FieldPath` array for removals) instead of an open key-value map so D-12 closed-taxonomy discipline holds at the API boundary. Migration is atomic: any step failure leaves the instance on its prior version (Kernel S11.2). Submissions to a `completed` or `terminated` instance are rejected with `WOS-1409`; a target definition lacking a state currently in the configuration is rejected with `WOS-1422` (kernel `stateNotFound`). Fires both `instanceMigrated` (Kernel S11.3) AND `migrationPinChanged` (ADR 0071 D-4 — the cross-layer provenance record kind anchoring the chain transition for offline verifier reconstruction) Facts-tier records; the response carries both URNs.
+`POST /api/v1/instances/{id}/migrate` and the case/process bridge `POST /api/v1/cases/{case_id}/processes/{process_id}/migrate` accept `MigrateInstanceRequest { targetDefinitionUrl?, targetDefinitionVersion, migrationMap, actorRef, justification }` and return `MigrationResult { instance, migratedAt, instanceMigratedRecordId, migrationPinChangedRecordId, previousWorkflowVersion, newWorkflowVersion, previousWorkflowUrl?, newWorkflowUrl? }`. The case/process bridge validates that `{process_id}` belongs to `{case_id}` before invoking migration; mismatch returns 404. `MigrationMap` mirrors the kernel four-key bag (Kernel S11.2 step 2) but exposes each operation as a typed array of `{path, ...}` objects (`FieldRename`, `FieldDefault`, `FieldCoercion`, plus a bare `FieldPath` array for removals) instead of an open key-value map so D-12 closed-taxonomy discipline holds at the API boundary. Migration is atomic: any step failure leaves the instance on its prior version (Kernel S11.2). Submissions to a `completed` or `terminated` instance are rejected with `WOS-1409`; a target definition lacking a state currently in the configuration is rejected with `WOS-1422` (kernel `stateNotFound`). Fires both `instanceMigrated` (Kernel S11.3) AND `migrationPinChanged` (ADR 0071 D-4 — the cross-layer provenance record kind anchoring the chain transition for offline verifier reconstruction) Facts-tier records; the response carries both URNs.
 
 ### Companion provenance kinds
 
-Each lifecycle-control mutation produces at least one Facts-tier provenance record (Kernel S11.3 column 4). The required `FactsRecordKind` reserved literals are:
+Each lifecycle-control mutation produces at least one Facts-tier provenance record (Kernel S11.3 column 4). The required `FactsRecordKind` reserved literals below are inner `recordKind` names, not F-13 event-type literals:
 
 | Endpoint | Record kind(s) | Status on `provenance.schema.json` |
 |---|---|---|

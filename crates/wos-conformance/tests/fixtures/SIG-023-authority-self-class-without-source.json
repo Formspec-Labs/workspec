@@ -51,7 +51,7 @@
               "signedPayload": {
                 "canonicalization": "formspec-response-signing-v1",
                 "digestAlgorithm": "sha-256",
-                "digest": "db147636a3151dd4707670d213c1575c30b33872cdb4f73533de6f03eea8da8e",
+                "digest": "d2448b2ee582dda4bf9df8d7f939c108988b0ea4627005da6bfa83d42e0dd6b3",
                 "responseId": "resp-sig-023-authority-self-class-without-source-applicantTask",
                 "definitionUrl": "urn:test:formspec:signature",
                 "definitionVersion": "1.0.0"

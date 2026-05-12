@@ -217,6 +217,8 @@ mod tests {
 
         let instance = CaseInstance {
             instance_id: "test-001".to_string(),
+            process_id: None,
+            case_ledger_id: None,
             tenant: "default".to_string(),
             definition_url: "https://example.com/workflow".to_string(),
             definition_version: "1.0".to_string(),

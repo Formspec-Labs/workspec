@@ -8,6 +8,9 @@
       "$ref": "#/$defs/CaseInstance"
     },
     {
+      "$ref": "#/$defs/CaseLedgerProjection"
+    },
+    {
       "$ref": "#/$defs/CaseInstanceWithIncludes"
     },
     {
@@ -511,6 +514,8 @@
       "description": "Public case-instance resource (ADR 0082 D-3). Carries identity, workflow binding, lifecycle posture, current configuration, `impactLevel` (Kernel S6 proportionality index), and `caseState` only; subresources are accessed via dedicated endpoints or the closed `?include=` aggregation seam (`CaseInstanceWithIncludes`). Mirrors structural fields from the kernel runtime artifact `wos-case-instance.schema.json` but is a wire projection: identifiers are URNs (D-4), `lifecycleState` is the closed posture taxonomy (not the kernel raw `status`), and subresource fields (`activeTasks`, `timers`, `holds`, etc.) are intentionally absent.",
       "required": [
         "id",
+        "caseLedgerId",
+        "processId",
         "workflowUrl",
         "workflowVersion",
         "lifecycleState",
@@ -523,7 +528,15 @@
       "properties": {
         "id": {
           "$ref": "#/$defs/WosResourceUrn",
-          "description": "Stable public URN for this case instance."
+          "description": "Stable public URN for this runtime process projection. During the `/instances` compatibility bridge this may carry either the legacy case URN or the process URN; `processId` is the canonical runtime-process identity."
+        },
+        "caseLedgerId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Durable governed case-ledger URN (`urn:wos:<tenant>_case_<ulid>`). Multiple workflow runtime processes may append to the same case ledger."
+        },
+        "processId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Workflow runtime process URN (`urn:wos:<tenant>_process_<ulid>`) that owns this live execution projection. Direct case-ledger appends omit process identity; `CaseInstance` resources always carry it."
         },
         "workflowUrl": {
           "$ref": "#/$defs/WorkflowUrl",
@@ -615,6 +628,91 @@
           ],
           "x-wos": {
             "openStringKind": "identifier"
+          }
+        }
+      }
+    },
+    "CaseLedgerEventSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Latest direct case-ledger event summary for `GET /api/v1/cases/{case_id}`. This summarizes the durable case provenance chain keyed by the case ledger, not workflow-process provenance rows.",
+      "required": [
+        "eventId",
+        "sequence",
+        "eventHash",
+        "previousHash",
+        "timestamp"
+      ],
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Storage-local provenance row identifier for the direct case-ledger event."
+        },
+        "event": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Registered WOS event literal carried by the provenance payload when present. This is the authoritative D26 dispatch value; the case-ledger projection does not expose the redundant inner `recordKind` discriminator.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Monotonic sequence number within the direct case-ledger provenance chain."
+        },
+        "eventHash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Hash-chain digest for this direct case-ledger event."
+        },
+        "previousHash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Hash-chain predecessor digest for this direct case-ledger event."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the event row was appended."
+        }
+      }
+    },
+    "CaseLedgerProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Durable case-ledger projection returned by `GET /api/v1/cases/{case_id}`. Unlike `CaseInstance`, this resource is keyed by the governed case ledger and may have zero workflow processes when the case was created through the direct genesis append surface.",
+      "required": [
+        "caseLedgerId",
+        "eventCount",
+        "processCount",
+        "processes"
+      ],
+      "properties": {
+        "caseLedgerId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Durable governed case-ledger URN (`urn:wos:<tenant>_case_<ulid>`)."
+        },
+        "eventCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Count of direct case-ledger provenance events keyed by this case ledger. Process-routed provenance remains attached to each workflow process."
+        },
+        "latestEvent": {
+          "$ref": "#/$defs/CaseLedgerEventSummary",
+          "description": "Latest direct case-ledger event when the case has a direct provenance chain. Absent for process-only cases."
+        },
+        "processCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of workflow runtime processes currently bound to this durable case ledger."
+        },
+        "processes": {
+          "type": "array",
+          "description": "Workflow process projections bound to this case ledger. Empty for a direct case-ledger genesis with no process started yet.",
+          "items": {
+            "$ref": "#/$defs/CaseInstance"
           }
         }
       }
@@ -1199,7 +1297,7 @@
     "CaseInstanceCreateRequest": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Request body for `POST /api/v1/instances`. The `Idempotency-Key` HTTP header is REQUIRED (ADR 0082 D-16); a repeat request within the retention window returns the original instance unchanged. Servers create the URN, pin `workflowVersion`, and set the initial `caseState` from the supplied `seedCaseState` after applying the workflow's prefill mapping.",
+      "description": "Request body for the legacy compatibility route `POST /api/v1/instances` and the case/process route `POST /api/v1/cases/{case_id}/processes`. The `Idempotency-Key` HTTP header is REQUIRED (ADR 0082 D-16) on the legacy compatibility route; a repeat request within the retention window returns the original instance unchanged. Servers create the process URN, pin `workflowVersion`, and set the initial `caseState` from the supplied `seedCaseState` after applying the workflow's prefill mapping.",
       "required": [
         "workflowUrl"
       ],
@@ -1238,7 +1336,7 @@
         "attachToExistingCase",
         "deferred"
       ],
-      "description": "Closed-no-extension outcome of `acceptIntakeHandoff` policy evaluation (ADR 0073 D-7; Kernel S11.4.1 step 5). Reserved literals: `accepted` -- the handoff was accepted and a new governed case was born (corresponds to the kernel `accepted + createGovernedCase` policy decision and emits the `intakeAccepted` + `caseCreated` Facts records); `attachToExistingCase` -- the handoff was accepted and attached to a pre-existing governed case (kernel `accepted + attachToExistingCase`; emits `intakeAccepted` only); `deferred` -- the handoff was received but withheld from governed-case mutation pending later host action (kernel `deferred`; emits `intakeDeferred`). Closed-no-extension because the kernel-defined acceptance vocabulary is normative; vendor extension would create rival case-truth semantics (ADR 0073 D-1).",
+      "description": "Closed-no-extension outcome of `acceptIntakeHandoff` policy evaluation (ADR 0073 D-7; Kernel S11.4.1 step 5). Reserved literals: `accepted` -- the handoff was accepted and a new governed case was born (corresponds to the kernel `accepted + createGovernedCase` policy decision and emits the `intakeAccepted` + `caseCreated` Facts `recordKind` values); `attachToExistingCase` -- the handoff was accepted and attached to a pre-existing governed case (kernel `accepted + attachToExistingCase`; emits `intakeAccepted` only); `deferred` -- the handoff was received but withheld from governed-case mutation pending later host action (kernel `deferred`; emits `intakeDeferred`). Closed-no-extension because the kernel-defined acceptance vocabulary is normative; vendor extension would create rival case-truth semantics (ADR 0073 D-1).",
       "examples": [
         "accepted",
         "attachToExistingCase",
@@ -1280,7 +1378,7 @@
     "EventSubmissionRequest": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Request body for `POST /api/v1/instances/{id}/events` (Kernel S4.9 + S11.3 `processEvent`). Submits an authored event for evaluation against the running instance; the server runs the kernel transition algorithm and returns the resulting `EvaluationResult` plus the post-evaluation `lifecycleState`. The `Idempotency-Key` HTTP header is REQUIRED (ADR 0082 D-16); a repeat request within the retention window returns the original `EventSubmissionResponse` unchanged. Submissions to an instance whose `lifecycleState` is not `active` (Kernel S11.5) are rejected with `WOS-1409`.",
+      "description": "Request body for workflow input submission through `POST /api/v1/cases/{case_id}/processes/{process_id}/inputs` and the legacy compatibility route `POST /api/v1/instances/{id}/events` (Kernel S4.9 + S11.3 `processEvent`). Submits an authored event for evaluation against the running process; the server runs the kernel transition algorithm and returns the resulting `EvaluationResult` plus the post-evaluation `lifecycleState`. The `Idempotency-Key` HTTP header is REQUIRED (ADR 0082 D-16) on the legacy compatibility route; a repeat request within the retention window returns the original `EventSubmissionResponse` unchanged. Submissions to a process whose `lifecycleState` is not `active` (Kernel S11.5) are rejected with `WOS-1409`.",
       "required": [
         "eventName",
         "actorRef"

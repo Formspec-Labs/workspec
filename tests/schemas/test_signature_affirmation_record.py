@@ -37,8 +37,11 @@ def _record() -> dict:
         "recordKind": "signatureAffirmation",
         "timestamp": "2026-04-22T14:30:00Z",
         "auditLayer": "facts",
+        "event": "wos.kernel.signature_affirmation",
         "definitionVersion": "1.0.0",
         "data": {
+            "caseLedgerId": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+            "processId": "sba-poc_process_01jqrpd32jf8xtx9qxkkv3rqsd",
             "signerId": "applicant",
             "roleId": "applicantSigner",
             "role": "signer",
@@ -101,6 +104,7 @@ def test_signature_affirmation_missing_data_is_rejected(schema):
 @pytest.mark.parametrize(
     "field",
     [
+        "caseLedgerId",
         "signerId",
         "roleId",
         "role",
@@ -132,6 +136,17 @@ def test_signature_affirmation_required_data_fields_are_rejected_when_missing(
     errors = list(validator.iter_errors(_log(record)))
 
     assert errors, f"SignatureAffirmation missing {field} must fail"
+
+
+def test_signature_affirmation_rejects_swapped_identity_families(schema):
+    validator = _document_validator(schema)
+    record = _record()
+    record["data"]["caseLedgerId"] = "sba-poc_process_01jqrpd32jf8xtx9qxkkv3rqsd"
+    record["data"]["processId"] = "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc"
+
+    errors = list(validator.iter_errors(_log(record)))
+
+    assert errors, "signature decision identity fields must use their reserved families"
 
 
 def test_signature_affirmation_requires_profile_ref_or_key(schema):
@@ -179,8 +194,74 @@ def test_non_signature_record_is_not_forced_into_signature_shape(schema):
     validator = _document_validator(schema)
     record = copy.deepcopy(_record())
     record["recordKind"] = "stateTransition"
+    record["event"] = "decide"
     record["data"] = {"some": "payload"}
 
     errors = list(validator.iter_errors(_log(record)))
 
     assert errors == [], f"non-signature records must remain unaffected: {errors}"
+
+
+def test_signature_affirmation_event_selects_signature_shape(schema):
+    validator = _document_validator(schema)
+    record = copy.deepcopy(_record())
+    record["recordKind"] = "stateTransition"
+    del record["data"]["signerId"]
+
+    errors = list(validator.iter_errors(_log(record)))
+
+    assert errors, "wos.kernel.signature_affirmation must select SignatureAffirmation data"
+
+
+def _admission_failed_record() -> dict:
+    return {
+        "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
+        "recordKind": "signatureAdmissionFailed",
+        "timestamp": "2026-05-08T10:30:00Z",
+        "auditLayer": "facts",
+        "event": "wos.kernel.signature_admission_failed",
+        "definitionVersion": "1.0.0",
+        "data": {
+            "caseLedgerId": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+            "processId": "sba-poc_process_01jqrpd32jf8xtx9qxkkv3rqsd",
+            "reason": "primitive_verification_failed",
+            "evidenceBindings": {
+                "responseId": "resp-2026-0001",
+                "signedPayloadDigest": "abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+                "signatureId": "sig-2026-0001",
+                "signingIntent": "urn:wos:signing-intent:applicant-signature",
+            },
+            "emittedAt": "2026-05-08T10:30:00Z",
+        },
+    }
+
+
+def test_signature_admission_failed_accepts_f11_identity(schema):
+    validator = _document_validator(schema)
+    errors = list(validator.iter_errors(_log(_admission_failed_record())))
+
+    assert errors == [], f"valid SignatureAdmissionFailed rejected: {errors}"
+
+
+def test_signature_admission_failed_event_selects_failure_shape(schema):
+    validator = _document_validator(schema)
+    record = _admission_failed_record()
+    record["recordKind"] = "stateTransition"
+    del record["data"]["reason"]
+
+    errors = list(validator.iter_errors(_log(record)))
+
+    assert errors, (
+        "wos.kernel.signature_admission_failed must select "
+        "SignatureAdmissionFailed data"
+    )
+
+
+def test_signature_admission_failed_requires_case_ledger_id(schema):
+    validator = _document_validator(schema)
+    record = _admission_failed_record()
+    del record["data"]["caseLedgerId"]
+
+    errors = list(validator.iter_errors(_log(record)))
+
+    assert errors, "SignatureAdmissionFailed MUST carry caseLedgerId"

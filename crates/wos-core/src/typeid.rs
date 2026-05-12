@@ -12,8 +12,11 @@ use uuid::{Uuid, Version};
 /// Default deployment tenant for local development and tests.
 pub const DEFAULT_TENANT: &str = "default";
 
-/// Reserved WOS TypeID prefix for case instances.
+/// Reserved WOS TypeID prefix for case ledgers.
 pub const CASE_PREFIX: &str = "case";
+
+/// Reserved WOS TypeID prefix for workflow runtime processes.
+pub const PROCESS_PREFIX: &str = "process";
 
 /// Reserved WOS TypeID prefix for Kernel provenance records.
 pub const PROVENANCE_PREFIX: &str = "prov";
@@ -48,10 +51,22 @@ pub fn tenant() -> String {
     tenant_from_env_value(std::env::var("WOS_TYPEID_TENANT").ok().as_deref())
 }
 
-/// Mints a new case identifier.
+/// Mints a new case ledger identifier.
+#[must_use]
+pub fn mint_case_ledger_id() -> String {
+    mint_type_id(&tenant(), CASE_PREFIX)
+}
+
+/// Mints a new case ledger identifier.
 #[must_use]
 pub fn mint_case_id() -> String {
-    mint_type_id(&tenant(), CASE_PREFIX)
+    mint_case_ledger_id()
+}
+
+/// Mints a new workflow runtime process identifier.
+#[must_use]
+pub fn mint_process_id() -> String {
+    mint_type_id(&tenant(), PROCESS_PREFIX)
 }
 
 /// Mints a new Kernel provenance identifier.
@@ -238,9 +253,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn minted_case_ids_match_reserved_shape() {
+    fn minted_case_ledger_ids_match_reserved_shape() {
+        let minted = mint_case_ledger_id();
+        assert!(is_valid_type_id(&minted, Some(CASE_PREFIX)));
+    }
+
+    #[test]
+    fn legacy_case_minter_still_mints_case_ledger_ids() {
         let minted = mint_case_id();
         assert!(is_valid_type_id(&minted, Some(CASE_PREFIX)));
+    }
+
+    #[test]
+    fn minted_process_ids_match_reserved_shape() {
+        let minted = mint_process_id();
+        assert!(is_valid_type_id(&minted, Some(PROCESS_PREFIX)));
     }
 
     #[test]
@@ -296,6 +323,12 @@ mod tests {
             "expected acme-corp tenant, got {id}"
         );
         assert!(is_valid_type_id(&id, Some(CASE_PREFIX)));
+        let process_id = mint_type_id(&tenant, PROCESS_PREFIX);
+        assert!(
+            process_id.starts_with("acme-corp_process_"),
+            "expected acme-corp tenant, got {process_id}"
+        );
+        assert!(is_valid_type_id(&process_id, Some(PROCESS_PREFIX)));
     }
 
     #[test]

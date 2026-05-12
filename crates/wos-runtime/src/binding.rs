@@ -71,6 +71,49 @@ pub enum SignaturePrimitiveStatus {
     },
 }
 
+/// Closed reason for binding-reported signature admission failure.
+///
+/// These values mirror the `signatureAdmissionFailed.reason` schema enum.
+/// Bindings use this type only after they have enough source evidence for WOS
+/// to build the required evidence bindings; shape errors without those
+/// bindings should remain regular binding errors.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SignatureAdmissionFailureReason {
+    /// The cryptographic signature primitive ran and rejected the signature.
+    PrimitiveVerificationFailed,
+
+    /// The identity method or signing intent is unsupported by this deployment.
+    MethodUnsupported,
+
+    /// The signature method URI is not registered.
+    MethodUnregistered,
+
+    /// Source evidence diverged from the binding-verified evidence.
+    EvidenceDivergence,
+
+    /// The active posture floor is not met.
+    PostureFloorUnmet,
+
+    /// The signature-method registry document cannot be trusted.
+    RegistryUnrecognizedMethod,
+
+    /// The required verification adapter is unavailable.
+    AdapterUnavailable,
+}
+
+/// Binding-reported signature admission failure.
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SignatureAdmissionFailure {
+    /// Closed failure reason consumed by WOS provenance emission.
+    pub reason: SignatureAdmissionFailureReason,
+
+    /// Reason-specific structured context for the provenance record.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure_context: Option<serde_json::Map<String, serde_json::Value>>,
+}
+
 /// Binding-neutral verified signature evidence for WOS Signature Profile
 /// admission.
 #[derive(Debug, Clone, PartialEq)]
@@ -92,6 +135,12 @@ pub struct SignatureEvidence {
 
     /// WOS signing-intent URI carried by the source evidence.
     pub signing_intent: String,
+
+    /// Cryptographic signature method URI from the source evidence.
+    ///
+    /// Formspec authored signatures carry this as `signatureMethod`. WOS posture
+    /// admission uses the value to compare against `allowedMethods`.
+    pub signature_method: Option<String>,
 
     /// Digest of the signed payload verified by the binding.
     pub signed_payload_digest: String,
@@ -129,6 +178,18 @@ pub struct SignatureEvidence {
     /// records the verification gap honestly. Bindings that have run and
     /// passed the primitive emit [`SignaturePrimitiveStatus::Verified`].
     pub primitive_verification: SignaturePrimitiveStatus,
+
+    /// Base64-encoded COSE_Sign1 VerificationReceipt bytes, when a verifier
+    /// has produced a signed receipt for this signature.
+    pub verification_receipt: Option<String>,
+
+    /// Terminal admission failure reported by the binding.
+    ///
+    /// This is used for verifier/registry outcomes such as unregistered
+    /// methods, corrupt registries, unavailable adapters, and source-evidence
+    /// divergence. When present, WOS emits `SignatureAdmissionFailed` and does
+    /// not continue toward `SignatureAffirmation`.
+    pub admission_failure: Option<SignatureAdmissionFailure>,
 }
 
 /// Errors produced by binding adapters.

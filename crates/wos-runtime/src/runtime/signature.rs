@@ -17,7 +17,10 @@ use wos_core::context::EvalContext;
 use wos_core::instance::{ActiveTask, CaseInstance, PendingEvent};
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord, SignatureAffirmationInput};
 
-use crate::binding::{SignatureEvidence as VerifiedSignatureEvidence, SignaturePrimitiveStatus};
+use crate::binding::{
+    SignatureAdmissionFailureReason as BindingAdmissionFailureReason,
+    SignatureEvidence as VerifiedSignatureEvidence, SignaturePrimitiveStatus,
+};
 use crate::store::RuntimeRecord;
 
 use super::{RuntimeError, TaskSubmissionResult, WosRuntime};
@@ -382,10 +385,12 @@ pub struct SignatureAdmissionFailedOutcome {
     pub signer_authority: Option<serde_json::Value>,
     /// RFC 3339 timestamp when the admission was evaluated.
     pub emitted_at: String,
+    /// Reason-specific context supplied by the failing gate.
+    pub failure_context: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 /// Closed-enum reason for a signature admission failure.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SignatureAdmissionFailedReason {
     /// The cryptographic signature primitive ran and rejected the signature.
@@ -402,6 +407,24 @@ pub enum SignatureAdmissionFailedReason {
     RegistryUnrecognizedMethod,
     /// The adapter required to verify this method is unavailable.
     AdapterUnavailable,
+}
+
+impl From<&BindingAdmissionFailureReason> for SignatureAdmissionFailedReason {
+    fn from(reason: &BindingAdmissionFailureReason) -> Self {
+        match reason {
+            BindingAdmissionFailureReason::PrimitiveVerificationFailed => {
+                Self::PrimitiveVerificationFailed
+            }
+            BindingAdmissionFailureReason::MethodUnsupported => Self::MethodUnsupported,
+            BindingAdmissionFailureReason::MethodUnregistered => Self::MethodUnregistered,
+            BindingAdmissionFailureReason::EvidenceDivergence => Self::EvidenceDivergence,
+            BindingAdmissionFailureReason::PostureFloorUnmet => Self::PostureFloorUnmet,
+            BindingAdmissionFailureReason::RegistryUnrecognizedMethod => {
+                Self::RegistryUnrecognizedMethod
+            }
+            BindingAdmissionFailureReason::AdapterUnavailable => Self::AdapterUnavailable,
+        }
+    }
 }
 
 /// Evidence identities binding a failed admission to its source.
@@ -424,6 +447,68 @@ pub enum AdmissionOutcome {
     Affirmation(SignatureAffirmationOutcome),
     /// Admission was rejected; the signature step is not complete.
     AdmissionFailed(SignatureAdmissionFailedOutcome),
+}
+
+fn admission_failed_outcome(
+    task_id: &str,
+    signature_evidence: &VerifiedSignatureEvidence,
+    reason: SignatureAdmissionFailedReason,
+    signer_id: Option<String>,
+    emitted_at: &str,
+    failure_context: Option<serde_json::Map<String, serde_json::Value>>,
+) -> AdmissionOutcome {
+    AdmissionOutcome::AdmissionFailed(SignatureAdmissionFailedOutcome {
+        reason,
+        evidence_bindings: EvidenceBindings {
+            response_id: task_id.to_string(),
+            signed_payload_digest: signature_evidence.signed_payload_digest.clone(),
+            signature_id: signature_evidence.source_signature_id.clone(),
+            signing_intent: signature_evidence.signing_intent.clone(),
+        },
+        signer_id,
+        signer_authority: signature_evidence.signer_authority.clone(),
+        emitted_at: emitted_at.to_string(),
+        failure_context,
+    })
+}
+
+fn admission_failure_context(
+    field: &str,
+    expected: &str,
+    actual: &str,
+) -> serde_json::Map<String, serde_json::Value> {
+    serde_json::Map::from_iter([
+        (
+            "field".to_string(),
+            serde_json::Value::String(field.to_string()),
+        ),
+        (
+            "expected".to_string(),
+            serde_json::Value::String(expected.to_string()),
+        ),
+        (
+            "actual".to_string(),
+            serde_json::Value::String(actual.to_string()),
+        ),
+    ])
+}
+
+fn signed_at_divergence_context(
+    record: &RuntimeRecord,
+    response: &serde_json::Value,
+    consent_accepted_at_path: &str,
+    evidence_signed_at: &str,
+) -> Option<serde_json::Map<String, serde_json::Value>> {
+    let consent_signed_at = resolve_path(record, response, consent_accepted_at_path)
+        .and_then(serde_json::Value::as_str)?;
+    if consent_signed_at.is_empty() || consent_signed_at == evidence_signed_at {
+        return None;
+    }
+    Some(admission_failure_context(
+        consent_accepted_at_path,
+        evidence_signed_at,
+        consent_signed_at,
+    ))
 }
 
 /// Reference to a deployment's Posture Declaration document (ADR-0090).
@@ -613,6 +698,15 @@ impl WosRuntime {
         self
     }
 
+    /// Attach a cached Posture Declaration.
+    #[must_use]
+    pub fn with_posture_declaration(self, declaration: PostureDeclaration) -> Self {
+        self.posture_declarations
+            .borrow_mut()
+            .insert(declaration.url.clone(), declaration);
+        self
+    }
+
     pub(super) fn is_signature_task(task: &ActiveTask) -> bool {
         task.extensions
             .contains_key(SIGNATURE_PROFILE_KEY_EXTENSION)
@@ -676,23 +770,71 @@ impl WosRuntime {
             document,
             profile,
         )?;
+        if let Some(failure) = signature_evidence.admission_failure.as_ref() {
+            return Ok(Some(admission_failed_outcome(
+                &task.task_id,
+                &signature_evidence,
+                SignatureAdmissionFailedReason::from(&failure.reason),
+                signature_evidence.signer_id.clone(),
+                signed_at_default,
+                failure.failure_context.clone(),
+            )));
+        }
+        if let Some(expected_intent) = &step.signing_intent
+            && signature_evidence.signing_intent != *expected_intent
+        {
+            return Ok(Some(admission_failed_outcome(
+                &task.task_id,
+                &signature_evidence,
+                SignatureAdmissionFailedReason::EvidenceDivergence,
+                signature_evidence.signer_id.clone(),
+                signed_at_default,
+                Some(admission_failure_context(
+                    "signingIntent",
+                    expected_intent,
+                    &signature_evidence.signing_intent,
+                )),
+            )));
+        }
+        if signature_evidence.document_hash != document.document_hash {
+            return Ok(Some(admission_failed_outcome(
+                &task.task_id,
+                &signature_evidence,
+                SignatureAdmissionFailedReason::EvidenceDivergence,
+                signature_evidence.signer_id.clone(),
+                signed_at_default,
+                Some(admission_failure_context(
+                    "documentHash",
+                    &document.document_hash,
+                    &signature_evidence.document_hash,
+                )),
+            )));
+        }
+        if signature_evidence.document_hash_algorithm != document.document_hash_algorithm {
+            return Ok(Some(admission_failed_outcome(
+                &task.task_id,
+                &signature_evidence,
+                SignatureAdmissionFailedReason::EvidenceDivergence,
+                signature_evidence.signer_id.clone(),
+                signed_at_default,
+                Some(admission_failure_context(
+                    "documentHashAlgorithm",
+                    &document.document_hash_algorithm,
+                    &signature_evidence.document_hash_algorithm,
+                )),
+            )));
+        }
         if let Err(_reason) = ensure_signing_intent_admitted(
             &signature_evidence.signing_intent,
             &profile.deployment_local_signing_intents,
         ) {
-            return Ok(Some(AdmissionOutcome::AdmissionFailed(
-                SignatureAdmissionFailedOutcome {
-                    reason: SignatureAdmissionFailedReason::MethodUnsupported,
-                    evidence_bindings: EvidenceBindings {
-                        response_id: task.task_id.clone(),
-                        signed_payload_digest: signature_evidence.signed_payload_digest.clone(),
-                        signature_id: signature_evidence.source_signature_id.clone(),
-                        signing_intent: signature_evidence.signing_intent.clone(),
-                    },
-                    signer_id: signature_evidence.signer_id.clone(),
-                    signer_authority: signature_evidence.signer_authority.clone(),
-                    emitted_at: signed_at_default.to_string(),
-                },
+            return Ok(Some(admission_failed_outcome(
+                &task.task_id,
+                &signature_evidence,
+                SignatureAdmissionFailedReason::MethodUnsupported,
+                signature_evidence.signer_id.clone(),
+                signed_at_default,
+                None,
             )));
         }
         let identity_binding = signature_evidence
@@ -700,11 +842,15 @@ impl WosRuntime {
             .clone()
             .map(Ok)
             .unwrap_or_else(|| self.identity_binding_for_submission(response, &profile.evidence))?;
-        let signing_method = identity_binding
+        let identity_method = identity_binding
             .get("method")
             .and_then(serde_json::Value::as_str)
             .unwrap_or("none")
             .to_string();
+        let signature_method = signature_evidence
+            .signature_method
+            .as_deref()
+            .unwrap_or(identity_method.as_str());
         self.ensure_identity_satisfies_role(profile, role, &identity_binding)?;
         self.ensure_identity_satisfies_signing_intent(
             &signature_evidence.signing_intent,
@@ -724,24 +870,40 @@ impl WosRuntime {
             signature_evidence.signed_at.as_str()
         };
         // Source of truth = verified evidence record. If the response carries
-        // a separate consent-path `signedAt` (as may appear when bindings stage
-        // consent acceptance and signing acts independently) and it diverges
-        // from the evidence's `signed_at`, fail closed: the provenance record
-        // and the completion-state record would otherwise disagree, and
-        // divergence here is an early signal of tampering or stale state.
-        ensure_signed_at_consistency(
-            signed_at,
+        // a separate consent-path `signedAt` and it diverges from the
+        // evidence's `signed_at`, WOS records an admission failure instead of
+        // creating a conflicting completion entry.
+        if let Some(failure_context) = signed_at_divergence_context(
             record,
             response,
             &profile.evidence.consent_reference.accepted_at_path,
-        )?;
+            signed_at,
+        ) {
+            return Ok(Some(admission_failed_outcome(
+                &task.task_id,
+                &signature_evidence,
+                SignatureAdmissionFailedReason::EvidenceDivergence,
+                signature_evidence.signer_id.clone(),
+                signed_at_default,
+                Some(failure_context),
+            )));
+        }
         let signer_id = signature_evidence.signer_id.as_deref().unwrap_or(actor_id);
-        self.ensure_signer_authority_satisfies_intent(
+        if let Err(detail) = validate_signer_authority_detail(
             &signature_evidence.signing_intent,
             signature_evidence.signer_authority.as_ref(),
             Some(signed_at),
             Some(signer_id),
-        )?;
+        ) {
+            return Ok(Some(admission_failed_outcome(
+                &task.task_id,
+                &signature_evidence,
+                SignatureAdmissionFailedReason::PostureFloorUnmet,
+                Some(signer_id.to_string()),
+                signed_at_default,
+                Some(detail.into_failure_context()),
+            )));
+        }
         let signature_provider = signature_evidence
             .signature_provider
             .as_deref()
@@ -797,6 +959,7 @@ impl WosRuntime {
                     &signature_evidence.primitive_verification,
                 )
                 .map_err(|error| RuntimeError::Signature(error.to_string()))?,
+                verification_receipt: signature_evidence.verification_receipt.as_deref(),
             });
         let signed_at_owned = signed_at.to_string();
         let signer_id_owned = signer_id.to_string();
@@ -808,51 +971,68 @@ impl WosRuntime {
                 .signature_policy
                 .allowed_methods
                 .iter()
-                .any(|m| m == &signing_method)
+                .any(|m| m == signature_method)
             {
-                return Ok(Some(AdmissionOutcome::AdmissionFailed(
-                    SignatureAdmissionFailedOutcome {
-                        reason: SignatureAdmissionFailedReason::MethodUnsupported,
-                        evidence_bindings: EvidenceBindings {
-                            response_id: task.task_id.clone(),
-                            signed_payload_digest: signature_evidence.signed_payload_digest.clone(),
-                            signature_id: signature_evidence.source_signature_id.clone(),
-                            signing_intent: signature_evidence.signing_intent.clone(),
-                        },
-                        signer_id: Some(signer_id_owned),
-                        signer_authority: signature_evidence.signer_authority.clone(),
-                        emitted_at: signed_at_default.to_string(),
-                    },
+                return Ok(Some(admission_failed_outcome(
+                    &task.task_id,
+                    &signature_evidence,
+                    SignatureAdmissionFailedReason::MethodUnsupported,
+                    Some(signer_id_owned),
+                    signed_at_default,
+                    None,
+                )));
+            }
+            if !posture.signature_policy.allowed_signing_intents.is_empty()
+                && !posture
+                    .signature_policy
+                    .allowed_signing_intents
+                    .iter()
+                    .any(|intent| intent == &signature_evidence.signing_intent)
+            {
+                return Ok(Some(admission_failed_outcome(
+                    &task.task_id,
+                    &signature_evidence,
+                    SignatureAdmissionFailedReason::MethodUnsupported,
+                    Some(signer_id_owned),
+                    signed_at_default,
+                    None,
                 )));
             }
             match &signature_evidence.primitive_verification {
                 SignaturePrimitiveStatus::Verified => {}
                 SignaturePrimitiveStatus::DeferredPendingHelper { .. } => {
                     if posture.signature_policy.minimum_primitive_verification == "verified" {
-                        return Ok(Some(AdmissionOutcome::AdmissionFailed(
-                            SignatureAdmissionFailedOutcome {
-                                reason: SignatureAdmissionFailedReason::PostureFloorUnmet,
-                                evidence_bindings: EvidenceBindings {
-                                    response_id: task.task_id.clone(),
-                                    signed_payload_digest: signature_evidence
-                                        .signed_payload_digest
-                                        .clone(),
-                                    signature_id: signature_evidence.source_signature_id.clone(),
-                                    signing_intent: signature_evidence.signing_intent.clone(),
-                                },
-                                signer_id: Some(signer_id_owned),
-                                signer_authority: signature_evidence.signer_authority.clone(),
-                                emitted_at: signed_at_default.to_string(),
-                            },
+                        return Ok(Some(admission_failed_outcome(
+                            &task.task_id,
+                            &signature_evidence,
+                            SignatureAdmissionFailedReason::PostureFloorUnmet,
+                            Some(signer_id_owned),
+                            signed_at_default,
+                            None,
                         )));
                     }
                 }
                 SignaturePrimitiveStatus::Failed { .. } => {}
             }
-            // TODO(Phase 3.3): if receipt_signing_required && receipt has no receiptBytes,
-            // return AdmissionFailed(PostureFloorUnmet)
-            // TODO(Phase 3.3): if signing_intent not in allowed_signing_intents,
-            // return AdmissionFailed(MethodUnsupported)
+            if posture.signature_policy.receipt_signing_required
+                && signature_evidence
+                    .verification_receipt
+                    .as_deref()
+                    .is_none_or(str::is_empty)
+            {
+                return Ok(Some(admission_failed_outcome(
+                    &task.task_id,
+                    &signature_evidence,
+                    SignatureAdmissionFailedReason::PostureFloorUnmet,
+                    Some(signer_id_owned),
+                    signed_at_default,
+                    Some(admission_failure_context(
+                        "verificationReceipt",
+                        "signed receipt bytes",
+                        "missing",
+                    )),
+                )));
+            }
             // TODO(Phase 3.3): enforce revocation_policy when present
         }
 
@@ -871,19 +1051,13 @@ impl WosRuntime {
                     signer_id: signer_id_owned,
                 }),
             )),
-            SignaturePrimitiveStatus::Failed { .. } => Ok(Some(AdmissionOutcome::AdmissionFailed(
-                SignatureAdmissionFailedOutcome {
-                    reason: SignatureAdmissionFailedReason::PrimitiveVerificationFailed,
-                    evidence_bindings: EvidenceBindings {
-                        response_id: task.task_id.clone(),
-                        signed_payload_digest: signature_evidence.signed_payload_digest.clone(),
-                        signature_id: signature_evidence.source_signature_id.clone(),
-                        signing_intent: signature_evidence.signing_intent.clone(),
-                    },
-                    signer_id: Some(signer_id_owned),
-                    signer_authority: signature_evidence.signer_authority.clone(),
-                    emitted_at: signed_at_default.to_string(),
-                },
+            SignaturePrimitiveStatus::Failed { .. } => Ok(Some(admission_failed_outcome(
+                &task.task_id,
+                &signature_evidence,
+                SignatureAdmissionFailedReason::PrimitiveVerificationFailed,
+                Some(signer_id_owned),
+                signed_at_default,
+                None,
             ))),
         }
     }
@@ -1479,11 +1653,10 @@ impl WosRuntime {
         &self,
         signature_evidence: Option<&[VerifiedSignatureEvidence]>,
         actor_id: &str,
-        step: &SigningStep,
+        _step: &SigningStep,
         document: &SignatureDocument,
-        profile: &SignatureProfileDocument,
+        _profile: &SignatureProfileDocument,
     ) -> Result<VerifiedSignatureEvidence, RuntimeError> {
-        let _ = profile;
         let evidence = signature_evidence.ok_or_else(|| {
             RuntimeError::Signature(
                 "signature binding did not provide verified signature evidence".to_string(),
@@ -1510,30 +1683,6 @@ impl WosRuntime {
             )));
         }
 
-        ensure_signing_intent_admitted(
-            &signature.signing_intent,
-            &profile.deployment_local_signing_intents,
-        )?;
-        if let Some(expected_intent) = &step.signing_intent
-            && signature.signing_intent != *expected_intent
-        {
-            return Err(RuntimeError::Signature(format!(
-                "verified signingIntent '{}' does not match signature step '{}'",
-                signature.signing_intent, step.id
-            )));
-        }
-        if signature.document_hash != document.document_hash {
-            return Err(RuntimeError::Signature(format!(
-                "verified signature documentHash does not match profile document '{}'",
-                document.id
-            )));
-        }
-        if signature.document_hash_algorithm != document.document_hash_algorithm {
-            return Err(RuntimeError::Signature(format!(
-                "verified signature documentHashAlgorithm does not match profile document '{}'",
-                document.id
-            )));
-        }
         Ok(signature.clone())
     }
 
@@ -1572,16 +1721,6 @@ impl WosRuntime {
             }
         }
         Ok(())
-    }
-
-    fn ensure_signer_authority_satisfies_intent(
-        &self,
-        signing_intent: &str,
-        signer_authority: Option<&serde_json::Value>,
-        signed_at: Option<&str>,
-        signer_id: Option<&str>,
-    ) -> Result<(), RuntimeError> {
-        validate_signer_authority(signing_intent, signer_authority, signed_at, signer_id)
     }
 
     fn require_signature_reason(
@@ -1923,19 +2062,61 @@ fn evidence_hash_algorithm_permitted(algorithm: &str) -> bool {
 /// 6. For delegating classes (`as-officer-of`, `as-attorney-in-fact`):
 ///    `principal` is REQUIRED and MUST NOT equal `signerId`.
 /// 7. `validFrom` / `validUntil` (when present) bracket `signedAt`.
+#[cfg(test)]
 fn validate_signer_authority(
     signing_intent: &str,
     signer_authority: Option<&serde_json::Value>,
     signed_at: Option<&str>,
     signer_id: Option<&str>,
 ) -> Result<(), RuntimeError> {
+    validate_signer_authority_detail(signing_intent, signer_authority, signed_at, signer_id)
+        .map_err(SignatureAdmissionFailureDetail::into_runtime_error)
+}
+
+#[derive(Debug, Clone)]
+struct SignatureAdmissionFailureDetail {
+    field: &'static str,
+    message: String,
+}
+
+impl SignatureAdmissionFailureDetail {
+    fn new(field: &'static str, message: String) -> Self {
+        Self { field, message }
+    }
+
+    #[cfg(test)]
+    fn into_runtime_error(self) -> RuntimeError {
+        RuntimeError::Signature(self.message)
+    }
+
+    fn into_failure_context(self) -> serde_json::Map<String, serde_json::Value> {
+        serde_json::Map::from_iter([
+            (
+                "field".to_string(),
+                serde_json::Value::String(self.field.to_string()),
+            ),
+            (
+                "message".to_string(),
+                serde_json::Value::String(self.message),
+            ),
+        ])
+    }
+}
+
+fn validate_signer_authority_detail(
+    signing_intent: &str,
+    signer_authority: Option<&serde_json::Value>,
+    signed_at: Option<&str>,
+    signer_id: Option<&str>,
+) -> Result<(), SignatureAdmissionFailureDetail> {
     let allowed_classes = required_authority_classes(signing_intent);
 
     let Some(authority) = signer_authority else {
         if allowed_classes.is_some() {
-            return Err(RuntimeError::Signature(format!(
-                "signing intent '{signing_intent}' requires signerAuthority"
-            )));
+            return Err(SignatureAdmissionFailureDetail::new(
+                "signerAuthority",
+                format!("signing intent '{signing_intent}' requires signerAuthority"),
+            ));
         }
         return Ok(());
     };
@@ -1943,14 +2124,22 @@ fn validate_signer_authority(
     let class = authority
         .get("class")
         .and_then(serde_json::Value::as_str)
-        .ok_or_else(|| RuntimeError::Signature("signerAuthority.class missing".to_string()))?;
+        .ok_or_else(|| {
+            SignatureAdmissionFailureDetail::new(
+                "signerAuthority.class",
+                "signerAuthority.class missing".to_string(),
+            )
+        })?;
 
     if let Some(allowed) = allowed_classes
         && !allowed.contains(&class)
     {
-        return Err(RuntimeError::Signature(format!(
-            "signerAuthority.class '{class}' does not satisfy signing intent '{signing_intent}'"
-        )));
+        return Err(SignatureAdmissionFailureDetail::new(
+            "signerAuthority.class",
+            format!(
+                "signerAuthority.class '{class}' does not satisfy signing intent '{signing_intent}'"
+            ),
+        ));
     }
 
     if is_non_self_class(class) {
@@ -1968,14 +2157,17 @@ fn validate_signer_authority(
     Ok(())
 }
 
-fn validate_authority_source(authority: &serde_json::Value) -> Result<(), RuntimeError> {
+fn validate_authority_source(
+    authority: &serde_json::Value,
+) -> Result<(), SignatureAdmissionFailureDetail> {
     let value = authority
         .get("authoritySource")
         .and_then(serde_json::Value::as_str)
         .map(str::trim)
         .filter(|value| !value.is_empty());
     if value.is_none() {
-        return Err(RuntimeError::Signature(
+        return Err(SignatureAdmissionFailureDetail::new(
+            "signerAuthority.authoritySource",
             "signerAuthority.authoritySource is required for this class".to_string(),
         ));
     }
@@ -1985,30 +2177,37 @@ fn validate_authority_source(authority: &serde_json::Value) -> Result<(), Runtim
 fn validate_principal(
     authority: &serde_json::Value,
     signer_id: Option<&str>,
-) -> Result<(), RuntimeError> {
+) -> Result<(), SignatureAdmissionFailureDetail> {
     let principal = authority
         .get("principal")
         .and_then(serde_json::Value::as_str)
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .ok_or_else(|| {
-            RuntimeError::Signature(
+            SignatureAdmissionFailureDetail::new(
+                "signerAuthority.principal",
                 "signerAuthority.principal is required for this class".to_string(),
             )
         })?;
     if let Some(signer) = signer_id
         && signer == principal
     {
-        return Err(RuntimeError::Signature(format!(
-            "signerAuthority.principal '{principal}' must not equal signerId for a delegating class"
-        )));
+        return Err(SignatureAdmissionFailureDetail::new(
+            "signerAuthority.principal",
+            format!(
+                "signerAuthority.principal '{principal}' must not equal signerId for a delegating class"
+            ),
+        ));
     }
     Ok(())
 }
 
-fn validate_evidence_binding(authority: &serde_json::Value) -> Result<(), RuntimeError> {
+fn validate_evidence_binding(
+    authority: &serde_json::Value,
+) -> Result<(), SignatureAdmissionFailureDetail> {
     let binding = authority.get("evidenceBinding").ok_or_else(|| {
-        RuntimeError::Signature(
+        SignatureAdmissionFailureDetail::new(
+            "signerAuthority.evidenceBinding",
             "signerAuthority.evidenceBinding is required for non-self classes".to_string(),
         )
     })?;
@@ -2018,7 +2217,8 @@ fn validate_evidence_binding(authority: &serde_json::Value) -> Result<(), Runtim
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .ok_or_else(|| {
-            RuntimeError::Signature(
+            SignatureAdmissionFailureDetail::new(
+                "signerAuthority.evidenceBinding.evidenceHash",
                 "signerAuthority.evidenceBinding.evidenceHash is required".to_string(),
             )
         })?;
@@ -2027,9 +2227,12 @@ fn validate_evidence_binding(authority: &serde_json::Value) -> Result<(), Runtim
         && hash.len() <= 128
         && hash.chars().all(|character| character.is_ascii_hexdigit());
     if !hex_ok {
-        return Err(RuntimeError::Signature(format!(
-            "signerAuthority.evidenceBinding.evidenceHash '{hash}' is not a valid hex digest"
-        )));
+        return Err(SignatureAdmissionFailureDetail::new(
+            "signerAuthority.evidenceBinding.evidenceHash",
+            format!(
+                "signerAuthority.evidenceBinding.evidenceHash '{hash}' is not a valid hex digest"
+            ),
+        ));
     }
     let algorithm = binding
         .get("evidenceHashAlgorithm")
@@ -2037,14 +2240,18 @@ fn validate_evidence_binding(authority: &serde_json::Value) -> Result<(), Runtim
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .ok_or_else(|| {
-            RuntimeError::Signature(
+            SignatureAdmissionFailureDetail::new(
+                "signerAuthority.evidenceBinding.evidenceHashAlgorithm",
                 "signerAuthority.evidenceBinding.evidenceHashAlgorithm is required".to_string(),
             )
         })?;
     if !evidence_hash_algorithm_permitted(algorithm) {
-        return Err(RuntimeError::Signature(format!(
-            "signerAuthority.evidenceBinding.evidenceHashAlgorithm '{algorithm}' is not permitted by §2.7"
-        )));
+        return Err(SignatureAdmissionFailureDetail::new(
+            "signerAuthority.evidenceBinding.evidenceHashAlgorithm",
+            format!(
+                "signerAuthority.evidenceBinding.evidenceHashAlgorithm '{algorithm}' is not permitted by §2.7"
+            ),
+        ));
     }
     Ok(())
 }
@@ -2052,7 +2259,7 @@ fn validate_evidence_binding(authority: &serde_json::Value) -> Result<(), Runtim
 fn validate_validity_window(
     authority: &serde_json::Value,
     signed_at: Option<&str>,
-) -> Result<(), RuntimeError> {
+) -> Result<(), SignatureAdmissionFailureDetail> {
     let valid_from = authority
         .get("validFrom")
         .and_then(serde_json::Value::as_str);
@@ -2063,36 +2270,42 @@ fn validate_validity_window(
         return Ok(());
     }
     let signed_at = signed_at.ok_or_else(|| {
-        RuntimeError::Signature(
+        SignatureAdmissionFailureDetail::new(
+            "signedAt",
             "signerAuthority validity window present but signedAt is unavailable".to_string(),
         )
     })?;
-    let signed = parse_rfc3339(signed_at, "signedAt")?;
+    let signed = parse_rfc3339_for_admission(signed_at, "signedAt")?;
     if let Some(from_str) = valid_from {
-        let from = parse_rfc3339(from_str, "signerAuthority.validFrom")?;
+        let from = parse_rfc3339_for_admission(from_str, "signerAuthority.validFrom")?;
         if signed < from {
-            return Err(RuntimeError::Signature(format!(
-                "signedAt '{signed_at}' precedes signerAuthority.validFrom '{from_str}'"
-            )));
+            return Err(SignatureAdmissionFailureDetail::new(
+                "signerAuthority.validFrom",
+                format!("signedAt '{signed_at}' precedes signerAuthority.validFrom '{from_str}'"),
+            ));
         }
     }
     if let Some(until_str) = valid_until {
-        let until = parse_rfc3339(until_str, "signerAuthority.validUntil")?;
+        let until = parse_rfc3339_for_admission(until_str, "signerAuthority.validUntil")?;
         if signed > until {
-            return Err(RuntimeError::Signature(format!(
-                "signedAt '{signed_at}' follows signerAuthority.validUntil '{until_str}'"
-            )));
+            return Err(SignatureAdmissionFailureDetail::new(
+                "signerAuthority.validUntil",
+                format!("signedAt '{signed_at}' follows signerAuthority.validUntil '{until_str}'"),
+            ));
         }
     }
     Ok(())
 }
 
-fn parse_rfc3339(
+fn parse_rfc3339_for_admission(
     value: &str,
-    field: &str,
-) -> Result<chrono::DateTime<chrono::FixedOffset>, RuntimeError> {
+    field: &'static str,
+) -> Result<chrono::DateTime<chrono::FixedOffset>, SignatureAdmissionFailureDetail> {
     chrono::DateTime::parse_from_rfc3339(value).map_err(|error| {
-        RuntimeError::Signature(format!("{field} '{value}' is not RFC 3339: {error}"))
+        SignatureAdmissionFailureDetail::new(
+            field,
+            format!("{field} '{value}' is not RFC 3339: {error}"),
+        )
     })
 }
 
@@ -2238,37 +2451,11 @@ fn identity_binding_meets_policy(
     Ok(())
 }
 
-/// Reject a submission whose response carries a consent-path `signedAt` that
-/// disagrees with the verified evidence's `signed_at`.
+/// Pure signed-at consistency check for unit testing without a `RuntimeRecord`.
 ///
-/// The verified evidence record is the source of truth for completion timing
-/// (review F4). When the response *also* carries a non-empty consent-path
-/// timestamp, the two MUST byte-equal — otherwise the `SignatureAffirmation`
-/// provenance record and the `x-wos-signature-completions` completion entry
-/// would carry disagreeing timestamps for the same signature event. Treat
-/// that disagreement as evidence of tampering or stale staging and fail
-/// closed.
-///
-/// Absent the consent-path field, no divergence to detect; admission proceeds
-/// with the evidence's `signed_at` as authoritative.
-pub(super) fn ensure_signed_at_consistency(
-    evidence_signed_at: &str,
-    record: &RuntimeRecord,
-    response: &serde_json::Value,
-    consent_accepted_at_path: &str,
-) -> Result<(), RuntimeError> {
-    let consent_signed_at = resolve_path(record, response, consent_accepted_at_path)
-        .and_then(serde_json::Value::as_str);
-    ensure_signed_at_consistency_pure(
-        evidence_signed_at,
-        consent_signed_at,
-        consent_accepted_at_path,
-    )
-}
-
-/// Pure form of [`ensure_signed_at_consistency`] for unit testing without a
-/// `RuntimeRecord`. Equivalent semantics: empty / absent consent value =
-/// admission proceeds; non-empty divergent value = fail closed.
+/// Equivalent semantics: empty / absent consent value = admission proceeds;
+/// non-empty divergent value = fail closed.
+#[cfg(test)]
 fn ensure_signed_at_consistency_pure(
     evidence_signed_at: &str,
     consent_signed_at: Option<&str>,
