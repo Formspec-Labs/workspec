@@ -41,7 +41,7 @@ impl IntegrationBindingHandler for RequestResponseHandler {
         now_iso: &str,
     ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
         let mut provenance = Vec::new();
-        let input = build_integration_input(binding, kernel, observed, &record.instance)?;
+        let input = build_integration_input(binding, kernel, observed, &record.process)?;
         if let Some(prov_record) = validate_integration_contract(
             ctx.validator,
             service_ref,
@@ -60,7 +60,7 @@ impl IntegrationBindingHandler for RequestResponseHandler {
                     Some(value_to_idempotency_key(evaluate_integration_expression(
                         expression,
                         kernel,
-                        &record.instance,
+                        &record.process,
                         observed,
                     )?)?)
                 }
@@ -148,7 +148,7 @@ impl IntegrationBindingHandler for RequestResponseHandler {
         }
 
         let updates = apply_output_binding(
-            &mut record.instance.case_state,
+            &mut record.process.case_state,
             &binding.output_binding,
             &step_result.output,
         )?;
@@ -185,8 +185,8 @@ impl IntegrationBindingHandler for RequestResponseHandler {
         // binding, before any reactive transitions drain (Kernel S4.13).  Records
         // follow any DataMapping record so the provenance stream reads:
         // data changed → milestone fired.
-        let post_state = record.instance.case_state.clone();
-        let milestone_records = evaluate_milestones(kernel, &mut record.instance, &post_state);
+        let post_state = record.process.case_state.clone();
+        let milestone_records = evaluate_milestones(kernel, &mut record.process, &post_state);
         provenance.extend(milestone_records);
 
         Ok(provenance)

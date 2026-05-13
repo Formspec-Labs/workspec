@@ -77,9 +77,9 @@
       }
     }
   },
-  "registryVersion": "1.1.0",
+    "registryVersion": "1.2.0",
   "lastAudited": "2026-05-13",
-  "totalCount": 133,
+  "totalCount": 134,
   "schemaValidatedCount": 23,
   "sources": {
     "rustEnum": "crates/wos-core/src/provenance/kind.rs",
@@ -134,6 +134,14 @@
       "category": "foundation",
       "schemaValidated": true,
       "eventLiteral": "wos.kernel.intake_accepted",
+      "specReference": "ADR 0073"
+    },
+    {
+      "literal": "noteAdded",
+      "rustVariant": "NoteAdded",
+      "category": "foundation",
+      "schemaValidated": false,
+      "eventLiteral": "wos.kernel.note_added",
       "specReference": "ADR 0073"
     },
     {

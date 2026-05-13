@@ -76,7 +76,7 @@ pub(crate) trait IntegrationBindingHandler {
 
     /// Execute the binding and return the provenance records it produces.
     ///
-    /// The handler MAY mutate `record.instance.case_state` (output binding) and
+    /// The handler MAY mutate `record.process.case_state` (output binding) and
     /// MAY append to `record.step_results` (idempotency replay). All other
     /// runtime state is accessed read-only through `ctx`.
     fn execute(

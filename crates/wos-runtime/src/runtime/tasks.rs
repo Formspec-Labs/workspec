@@ -56,7 +56,7 @@ impl WosRuntime {
         let task_index = find_task_index(&record, task_id)
             .ok_or_else(|| RuntimeError::TaskNotFound(task_id.to_string()))?;
 
-        let task = record.instance.active_tasks[task_index].clone();
+        let task = record.process.active_tasks[task_index].clone();
         authorize_actor(&*self.access_control, &task, actor_id)?;
         let status = response
             .get("status")
@@ -92,17 +92,17 @@ impl WosRuntime {
         );
         provenance.timestamp = now_iso.clone();
         let kernel = self.resolver.resolve_kernel(
-            &record.instance.definition_url,
-            &record.instance.definition_version,
+            &record.process.definition_url,
+            &record.process.definition_version,
         )?;
         populate_provenance_record_fields(
             std::slice::from_mut(&mut provenance),
             &kernel,
-            &record.instance.definition_version,
+            &record.process.definition_version,
         );
-        record.instance.provenance_position += 1;
+        record.process.provenance_position += 1;
         record.provenance_log.push(provenance);
-        record.instance.updated_at = now_iso;
+        record.process.updated_at = now_iso;
 
         if let Some(token) = idempotency_token {
             record.replay_entries.insert(
@@ -130,12 +130,12 @@ impl WosRuntime {
         let mut record = self.load_record_for_task_id(task_id)?;
         let task_index = find_task_index(&record, task_id)
             .ok_or_else(|| RuntimeError::TaskNotFound(task_id.to_string()))?;
-        let task = &record.instance.active_tasks[task_index];
+        let task = &record.process.active_tasks[task_index];
         if task.context.is_some() {
             self.presenter.dismiss_task(task_id, reason)?;
         }
 
-        record.instance.provenance_position += 1;
+        record.process.provenance_position += 1;
         let mut dismissal = ProvenanceRecord::task_lifecycle(
             ProvenanceKind::TaskDismissed,
             task_id,
@@ -144,16 +144,16 @@ impl WosRuntime {
         );
         dismissal.timestamp = now_iso.clone();
         let kernel = self.resolver.resolve_kernel(
-            &record.instance.definition_url,
-            &record.instance.definition_version,
+            &record.process.definition_url,
+            &record.process.definition_version,
         )?;
         populate_provenance_record_fields(
             std::slice::from_mut(&mut dismissal),
             &kernel,
-            &record.instance.definition_version,
+            &record.process.definition_version,
         );
         record.provenance_log.push(dismissal);
-        record.instance.updated_at = now_iso;
+        record.process.updated_at = now_iso;
         self.store.save_record(record)?;
         Ok(())
     }
@@ -187,7 +187,7 @@ impl WosRuntime {
         let task_index = find_task_index(&record, task_id)
             .ok_or_else(|| RuntimeError::TaskNotFound(task_id.to_string()))?;
 
-        let task = record.instance.active_tasks[task_index].clone();
+        let task = record.process.active_tasks[task_index].clone();
         authorize_actor(&*self.access_control, &task, actor_id)?;
         let status = response
             .get("status")
@@ -258,7 +258,7 @@ impl WosRuntime {
 
         if !validation_passed(&validation) {
             let emitted_event = remove_task_with_event(
-                &mut record.instance,
+                &mut record.process,
                 task_index,
                 FAILURE_EVENT_EXTENSION_KEY,
                 actor_id,
@@ -274,19 +274,19 @@ impl WosRuntime {
                 })),
             ));
             let kernel = self.resolver.resolve_kernel(
-                &record.instance.definition_url,
-                &record.instance.definition_version,
+                &record.process.definition_url,
+                &record.process.definition_version,
             )?;
             populate_provenance_record_fields(
                 &mut provenance,
                 &kernel,
-                &record.instance.definition_version,
+                &record.process.definition_version,
             );
-            stamp_signature_decision_identity(&mut provenance, &record.instance);
+            stamp_signature_decision_identity(&mut provenance, &record.process);
             stamp_provenance(&mut provenance, &now_iso);
-            record.instance.provenance_position += provenance.len() as u64;
+            record.process.provenance_position += provenance.len() as u64;
             record.provenance_log.extend(provenance);
-            record.instance.updated_at = now_iso;
+            record.process.updated_at = now_iso;
             let result = TaskSubmissionResult::Failed {
                 code: "validationFailed".to_string(),
                 emitted_event,
@@ -351,19 +351,19 @@ impl WosRuntime {
                 })),
             ));
             let kernel = self.resolver.resolve_kernel(
-                &record.instance.definition_url,
-                &record.instance.definition_version,
+                &record.process.definition_url,
+                &record.process.definition_version,
             )?;
             populate_provenance_record_fields(
                 &mut provenance,
                 &kernel,
-                &record.instance.definition_version,
+                &record.process.definition_version,
             );
-            stamp_signature_decision_identity(&mut provenance, &record.instance);
+            stamp_signature_decision_identity(&mut provenance, &record.process);
             stamp_provenance(&mut provenance, &now_iso);
-            record.instance.provenance_position += provenance.len() as u64;
+            record.process.provenance_position += provenance.len() as u64;
             record.provenance_log.extend(provenance);
-            record.instance.updated_at = now_iso;
+            record.process.updated_at = now_iso;
             let result = TaskSubmissionResult::Failed {
                 code: "signatureAdmissionFailed".to_string(),
                 emitted_event: None,
@@ -403,7 +403,7 @@ impl WosRuntime {
             && !bundle.field_updates.is_empty()
         {
             merge_case_state(
-                &mut record.instance.case_state,
+                &mut record.process.case_state,
                 &serde_json::Value::Object(bundle.field_updates.clone()),
             );
             provenance.push(ProvenanceRecord::task_lifecycle(
@@ -418,20 +418,20 @@ impl WosRuntime {
         }
 
         let kernel = self.resolver.resolve_kernel(
-            &record.instance.definition_url,
-            &record.instance.definition_version,
+            &record.process.definition_url,
+            &record.process.definition_version,
         )?;
-        let post_state = record.instance.case_state.clone();
-        let milestone_records = evaluate_milestones(&kernel, &mut record.instance, &post_state);
+        let post_state = record.process.case_state.clone();
+        let milestone_records = evaluate_milestones(&kernel, &mut record.process, &post_state);
         provenance.extend(milestone_records);
 
-        let completion_event_key = if self.signature_flow_complete_after(&record.instance, &task)? {
+        let completion_event_key = if self.signature_flow_complete_after(&record.process, &task)? {
             COMPLETION_EVENT_EXTENSION_KEY
         } else {
             "x-wos-runtime-no-completion-event"
         };
         let emitted_event = remove_task_with_event(
-            &mut record.instance,
+            &mut record.process,
             task_index,
             completion_event_key,
             actor_id,
@@ -446,7 +446,7 @@ impl WosRuntime {
                     // `x-wos-signature-completions` cannot disagree for a given
                     // signature event.
                     self.record_signature_completion(
-                        &mut record.instance,
+                        &mut record.process,
                         &task,
                         &outcome.signer_id,
                         &outcome.signed_at,
@@ -480,13 +480,13 @@ impl WosRuntime {
         populate_provenance_record_fields(
             &mut provenance,
             &kernel,
-            &record.instance.definition_version,
+            &record.process.definition_version,
         );
-        stamp_signature_decision_identity(&mut provenance, &record.instance);
+        stamp_signature_decision_identity(&mut provenance, &record.process);
         stamp_provenance(&mut provenance, &now_iso);
-        record.instance.provenance_position += provenance.len() as u64;
+        record.process.provenance_position += provenance.len() as u64;
         record.provenance_log.extend(provenance);
-        record.instance.updated_at = now_iso;
+        record.process.updated_at = now_iso;
 
         let result = TaskSubmissionResult::Completed {
             artifact_id: accepted_artifact.artifact_id,
@@ -546,7 +546,7 @@ impl WosRuntime {
         idempotency_token: Option<&str>,
         result: TaskSubmissionResult,
     ) -> Result<(), RuntimeError> {
-        record.instance.provenance_position += 1;
+        record.process.provenance_position += 1;
         let mut rejection = ProvenanceRecord::task_lifecycle(
             ProvenanceKind::TaskResponseRejected,
             task_id,
@@ -555,16 +555,16 @@ impl WosRuntime {
         );
         rejection.timestamp = updated_at.to_string();
         let kernel = self.resolver.resolve_kernel(
-            &record.instance.definition_url,
-            &record.instance.definition_version,
+            &record.process.definition_url,
+            &record.process.definition_version,
         )?;
         populate_provenance_record_fields(
             std::slice::from_mut(&mut rejection),
             &kernel,
-            &record.instance.definition_version,
+            &record.process.definition_version,
         );
         record.provenance_log.push(rejection);
-        record.instance.updated_at = updated_at.to_string();
+        record.process.updated_at = updated_at.to_string();
         if let Some(token) = idempotency_token {
             record.replay_entries.insert(
                 ReplayKey {
@@ -600,7 +600,7 @@ fn task_process_id(task_id: &str) -> Result<String, RuntimeError> {
 
 fn find_task_index(record: &RuntimeRecord, task_id: &str) -> Option<usize> {
     record
-        .instance
+        .process
         .active_tasks
         .iter()
         .position(|task| task.task_id == task_id)

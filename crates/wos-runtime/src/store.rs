@@ -16,8 +16,8 @@ use crate::runtime::{PersistDraftResult, TaskSubmissionResult};
 #[derive(Debug, Clone)]
 pub struct RuntimeRecord {
     /// Canonical WOS workflow process state.
-    pub instance: WorkflowProcess,
-    /// Append-only provenance for the instance.
+    pub process: WorkflowProcess,
+    /// Append-only provenance for the process.
     pub provenance_log: Vec<ProvenanceRecord>,
     /// Persisted results from `invokeService` actions.
     pub step_results: Vec<StepResultRecord>,
@@ -28,10 +28,10 @@ pub struct RuntimeRecord {
 }
 
 impl RuntimeRecord {
-    /// Create a new record around a freshly-created instance.
+    /// Create a new record around a freshly-created process.
     pub fn new(instance: WorkflowProcess) -> Self {
         Self {
-            instance,
+            process: instance,
             provenance_log: Vec::new(),
             step_results: Vec::new(),
             artifacts: HashMap::new(),
@@ -242,13 +242,13 @@ fn append_provenance_via_process_round_trip<S: RuntimeStore + ?Sized>(
     record: ProvenanceRecord,
 ) -> Result<(), StoreError> {
     let mut runtime_record = store.load_record(process_id)?;
-    if runtime_record.instance.case_ledger_id != case_ledger_id {
+    if runtime_record.process.case_ledger_id != case_ledger_id {
         return Err(StoreError::NotFound(format!(
             "process `{process_id}` is not bound to case ledger `{case_ledger_id}`"
         )));
     }
     runtime_record.provenance_log.push(record);
-    runtime_record.instance.provenance_position = runtime_record.provenance_log.len() as u64;
+    runtime_record.process.provenance_position = runtime_record.provenance_log.len() as u64;
     store.save_record(runtime_record)
 }
 
@@ -274,12 +274,12 @@ impl InMemoryStore {
 
 impl RuntimeStore for InMemoryStore {
     fn create_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
-        let process_id = record.instance.process_id.clone();
+        let process_id = record.process.process_id.clone();
         if self.records.contains_key(&process_id) {
             return Err(StoreError::AlreadyExists(process_id));
         }
 
-        let case_ledger_id = record.instance.case_ledger_id.clone();
+        let case_ledger_id = record.process.case_ledger_id.clone();
         self.records.insert(process_id.clone(), record);
         self.case_index
             .entry(case_ledger_id)
@@ -351,11 +351,11 @@ impl RuntimeStore for InMemoryStore {
     }
 
     fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
-        let process_id = record.instance.process_id.clone();
+        let process_id = record.process.process_id.clone();
         let Some(existing) = self.records.get(&process_id) else {
             return Err(StoreError::NotFound(process_id));
         };
-        if existing.instance.case_ledger_id != record.instance.case_ledger_id {
+        if existing.process.case_ledger_id != record.process.case_ledger_id {
             return Err(StoreError::Failed(format!(
                 "case ledger binding for process `{process_id}` is immutable"
             )));
@@ -835,7 +835,7 @@ mod tests {
             .unwrap();
 
         let mut record = store.load_record(process_id).unwrap();
-        record.instance.case_ledger_id = mutated_case.to_string();
+        record.process.case_ledger_id = mutated_case.to_string();
         let err = store
             .save_record(record)
             .expect_err("case-ledger binding mutation must fail");
@@ -857,7 +857,7 @@ mod tests {
             store
                 .load_record(process_id)
                 .unwrap()
-                .instance
+                .process
                 .case_ledger_id,
             original_case
         );
@@ -882,7 +882,7 @@ mod tests {
 
         let record = store.load_record(process_id).unwrap();
         assert_eq!(
-            record.instance.provenance_position, 1,
+            record.process.provenance_position, 1,
             "position tracks log length"
         );
     }

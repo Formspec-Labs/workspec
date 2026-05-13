@@ -15,14 +15,14 @@ use crate::durable::DurableRuntime;
 use crate::intake::{IntakeAcceptanceDecision, IntakeAcceptanceRequest};
 
 use super::{
-    CreateInstanceRequest, DrainOnceResult, PersistDraftResult, RuntimeError, TaskSubmissionResult,
+    CreateProcessRequest, DrainOnceResult, PersistDraftResult, RuntimeError, TaskSubmissionResult,
     WosRuntime,
 };
 
 impl DurableRuntime for WosRuntime {
     fn create_process(
         &mut self,
-        request: CreateInstanceRequest,
+        request: CreateProcessRequest,
     ) -> Result<WorkflowProcess, RuntimeError> {
         WosRuntime::create_process(self, request)
     }

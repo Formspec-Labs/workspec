@@ -29,7 +29,7 @@ use wos_core::model::kernel::KernelDocument;
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
 use wos_core::traits::{DocumentResolver, TaskPresenter};
 use wos_runtime::{
-    BindingRegistry, BusinessCalendarDocument, Clock, CreateInstanceRequest, DrainOnceResult,
+    BindingRegistry, BusinessCalendarDocument, Clock, CreateProcessRequest, DrainOnceResult,
     IntegrationProfileDocument, MigrationMap, ReferenceCompanionPolicy, RuntimeError, WosRuntime,
     stamp_provenance,
 };
@@ -351,7 +351,7 @@ impl WorkflowEngine {
         fixture: &ConformanceFixture,
     ) -> Result<crate::ConformanceResult, ConformanceError> {
         self.runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: CONFORMANCE_INSTANCE_ID.to_string(),
                 tenant: None,
                 definition_url: self.definition_url.clone(),

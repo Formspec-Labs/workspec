@@ -29,35 +29,35 @@ impl WosRuntime {
         let now_iso = format_timestamp(now_ms)?;
         let mut record = self.store.load_record(process_id)?;
         let mut appended_provenance =
-            materialize_due_timers(&mut record.instance, now_ms, &now_iso)?;
+            materialize_due_timers(&mut record.process, now_ms, &now_iso)?;
 
-        let Some(event) = record.instance.pending_events.first().cloned() else {
+        let Some(event) = record.process.pending_events.first().cloned() else {
             if !appended_provenance.is_empty() {
                 // Resolve kernel for SP §5.3/§5.4 field population (due-timer
                 // materialization path). The kernel is always resolvable here
                 // because the instance is persisted.
                 let kernel = self.resolver.resolve_kernel(
-                    &record.instance.definition_url,
-                    &record.instance.definition_version,
+                    &record.process.definition_url,
+                    &record.process.definition_version,
                 )?;
                 populate_provenance_record_fields(
                     &mut appended_provenance,
                     &kernel,
-                    &record.instance.definition_version,
+                    &record.process.definition_version,
                 );
                 stamp_provenance(&mut appended_provenance, &now_iso);
-                record.instance.updated_at = now_iso;
-                record.instance.provenance_position += appended_provenance.len() as u64;
+                record.process.updated_at = now_iso;
+                record.process.provenance_position += appended_provenance.len() as u64;
                 record.provenance_log.extend(appended_provenance);
                 self.store.save_record(record)?;
             }
             return Ok(DrainOnceResult::default());
         };
 
-        record.instance.pending_events.remove(0);
+        record.process.pending_events.remove(0);
         let kernel = self.resolver.resolve_kernel(
-            &record.instance.definition_url,
-            &record.instance.definition_version,
+            &record.process.definition_url,
+            &record.process.definition_version,
         )?;
         let mut runtime_result = DrainOnceResult {
             processed_event: Some(event.event.clone()),
@@ -72,7 +72,7 @@ impl WosRuntime {
         let drained_event_name = event.event.clone();
         let decision = self.companion_policy.evaluate_event(RuntimeEventContext {
             kernel: kernel.clone(),
-            instance: record.instance.clone(),
+            instance: record.process.clone(),
             event,
             now_ms,
             now_iso: now_iso.clone(),
@@ -83,11 +83,11 @@ impl WosRuntime {
             populate_provenance_record_fields(
                 &mut appended_provenance,
                 &kernel,
-                &record.instance.definition_version,
+                &record.process.definition_version,
             );
             stamp_provenance(&mut appended_provenance, &now_iso);
-            record.instance.updated_at = now_iso;
-            record.instance.provenance_position += appended_provenance.len() as u64;
+            record.process.updated_at = now_iso;
+            record.process.provenance_position += appended_provenance.len() as u64;
             record.provenance_log.extend(appended_provenance.clone());
             self.store.save_record(record)?;
             runtime_result.provenance = appended_provenance;
@@ -101,7 +101,7 @@ impl WosRuntime {
             &now_iso,
         )?);
 
-        let mut evaluator = Evaluator::from_instance(kernel.clone(), &record.instance, now_ms)
+        let mut evaluator = Evaluator::from_instance(kernel.clone(), &record.process, now_ms)
             .map_err(|error| RuntimeError::Evaluator(error.to_string()))?;
         evaluator
             .process_event(&event.event, event.actor_id.as_deref(), event.data.as_ref())
@@ -120,8 +120,8 @@ impl WosRuntime {
             &record.provenance_log,
             &appended_provenance,
         ));
-        record.instance.configuration = evaluator.configuration().active_states().to_vec();
-        record.instance.case_state = evaluator.case_state_json();
+        record.process.configuration = evaluator.configuration().active_states().to_vec();
+        record.process.case_state = evaluator.case_state_json();
         let (timer_states, convergence_error_ids) =
             timers_to_state(evaluator.timers(), self.business_calendar.as_ref())?;
         // Annotate TimerCreated records for any timers whose calendar deadline did not converge.
@@ -129,9 +129,9 @@ impl WosRuntime {
             &mut appended_provenance,
             &convergence_error_ids,
         );
-        record.instance.timers = timer_states;
-        record.instance.history_store = evaluator.history_store().clone();
-        record.instance.updated_at = now_iso.clone();
+        record.process.timers = timer_states;
+        record.process.history_store = evaluator.history_store().clone();
+        record.process.updated_at = now_iso.clone();
 
         let case_state_can_mutate_explicitly = record
             .provenance_log
@@ -168,8 +168,8 @@ impl WosRuntime {
         // (createTask/emitEvent) that would enqueue follow-on events (Kernel S4.13).
         // Records are appended in lexicographic milestone-id order so the provenance
         // stream is deterministic.
-        let post_state = record.instance.case_state.clone();
-        let milestone_records = evaluate_milestones(&kernel, &mut record.instance, &post_state);
+        let post_state = record.process.case_state.clone();
+        let milestone_records = evaluate_milestones(&kernel, &mut record.process, &post_state);
         appended_provenance.extend(milestone_records);
 
         let actions = evaluator.take_executed_actions();
@@ -199,10 +199,10 @@ impl WosRuntime {
         populate_provenance_record_fields(
             &mut appended_provenance,
             &kernel,
-            &record.instance.definition_version,
+            &record.process.definition_version,
         );
         stamp_provenance(&mut appended_provenance, &now_iso);
-        record.instance.provenance_position += appended_provenance.len() as u64;
+        record.process.provenance_position += appended_provenance.len() as u64;
         record.provenance_log.extend(appended_provenance.clone());
         self.store.save_record(record.clone())?;
 

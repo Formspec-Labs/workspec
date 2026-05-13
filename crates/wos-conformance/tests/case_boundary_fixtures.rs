@@ -598,14 +598,12 @@ fn cbr_4c1_n_to_one_concurrent_processes_on_one_case_ledger() {
 }
 
 /// Task 4C.2 — Direct-append fixture (CBR §4.6). Genesis `wos.kernel.case_created`
-/// creates the ledger; a follow-up `wos.kernel.intake_accepted` direct-append
+/// creates the ledger; a follow-up `wos.kernel.note_added` direct-append
 /// reaches the case view without invoking any workflow drain.
 ///
-/// CBR §4.6 names `wos.kernel.note_added` but that kind is NOT yet registered
-/// in `work-spec/schemas/record-kind-registry.json`. The fixture substitutes
-/// `IntakeAccepted` (foundation category, post-ledger, eventLiteral
-/// `wos.kernel.intake_accepted`) as the closest existing analog. Re-target to
-/// `wos.kernel.note_added` once that kind lands in the registry.
+/// `ProvenanceKind::NoteAdded` is a flat Facts-tier foundation-category kind
+/// (`wos.kernel.note_added`, schemaValidated: false) registered in
+/// `work-spec/schemas/record-kind-registry.json`.
 #[test]
 fn cbr_4c2_direct_append_post_ledger_without_workflow_drain() {
     let fixture = load_fixture("direct-append-intake-accepted.json");

@@ -29,7 +29,7 @@ use wos_core::traits::{DocumentResolver, ExternalService, TaskPresenter};
 use wos_formspec_binding::{FormspecBinding, FormspecProcessor};
 use wos_runtime::binding::{BindingError, BindingRegistry, CaseMutationBundle};
 use wos_runtime::{
-    AutoCreatePublicIntakePolicy, Clock, CreateInstanceRequest, InMemoryStore,
+    AutoCreatePublicIntakePolicy, Clock, CreateProcessRequest, InMemoryStore,
     IntakeAcceptanceOutcome, IntakeAcceptanceRegistry, IntakeAcceptanceRequest,
     IntakeCaseDefinition, IntakeCaseDisposition, WosRuntime,
 };
@@ -243,7 +243,7 @@ fn runtime_formspec_intake_workflow_attach_uses_case_ledger_identity() {
 
     let created = runtime
         .create_process_bound_to_case(
-            CreateInstanceRequest {
+            CreateProcessRequest {
                 process_id: TEST_PROCESS_ID.to_string(),
                 tenant: None,
                 definition_url: "urn:test:formspec-intake-runtime-it".to_string(),

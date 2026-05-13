@@ -1,7 +1,7 @@
 {
-  "id": "CBR-4C-2-direct-append-intake-accepted",
+  "id": "CBR-4C-2-direct-append-note-added",
   "rule": "CBR-§4.6",
-  "description": "Direct-append case-boundary fixture (CBR §4.6, REFACTOR-TODO 4C.2). Exercises POST /cases/{case_id}/events for a non-workflow-driven post-ledger event. Uses ProvenanceKind::IntakeAccepted (eventLiteral wos.kernel.intake_accepted, schemas/record-kind-registry.json line 77) as the closest existing registered foundation-category kind with an eventLiteral — wos.kernel.note_added is referenced in CBR §4.6 prose but is NOT yet a registered ProvenanceKind. IntakeAccepted models the same authorization shape: foundation category, post-ledger branch, no workflow drain required. The genesis event creates the ledger; the direct-append event appears in the case view without going through any workflow process drain.",
+  "description": "Direct-append case-boundary fixture (CBR §4.6). Exercises POST /cases/{case_id}/events for a non-workflow-driven post-ledger note append. Uses ProvenanceKind::NoteAdded (eventLiteral wos.kernel.note_added) — a flat Facts-tier foundation-category kind with schemaValidated: false in the record-kind registry. The genesis event creates the ledger; the direct-append note event appears in the case view without going through any workflow process drain.",
   "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2dc_direct_append",
   "processes": [
     {
@@ -24,7 +24,7 @@
       "kind": "directAppend",
       "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2dc_direct_append",
       "process_id": "process_01hw7rm71vfay8vvw14d2pf2dc_anchor",
-      "event_type": "wos.kernel.intake_accepted",
+      "event_type": "wos.kernel.note_added",
       "actor_id": "system:direct-append-caller",
       "timestamp": "2026-05-12T11:00:01Z",
       "label": "note"
@@ -39,7 +39,7 @@
   ],
   "expected_case_view_events": [
     { "event": "wos.kernel.case_created", "process_id": "process_01hw7rm71vfay8vvw14d2pf2dc_anchor" },
-    { "event": "wos.kernel.intake_accepted", "process_id": "process_01hw7rm71vfay8vvw14d2pf2dc_anchor" }
+    { "event": "wos.kernel.note_added", "process_id": "process_01hw7rm71vfay8vvw14d2pf2dc_anchor" }
   ],
   "expected_no_workflow_drain": true
 }

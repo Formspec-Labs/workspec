@@ -48,6 +48,7 @@ impl From<K> for ProvenanceAuditTier {
             | K::IntakeAccepted
             | K::IntakeRejected
             | K::IntakeDeferred
+            | K::NoteAdded
             | K::TimerCreated
             | K::TimerFired
             | K::ForEachIterationStarted

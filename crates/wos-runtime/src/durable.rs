@@ -12,7 +12,7 @@ use wos_core::provenance::ProvenanceRecord;
 use crate::custody::{CustodyAppendContext, CustodyAppendInput, CustodyAppendReceipt};
 use crate::intake::{IntakeAcceptanceDecision, IntakeAcceptanceRequest};
 use crate::runtime::{
-    CreateInstanceRequest, DrainOnceResult, PersistDraftResult, RuntimeError, TaskSubmissionResult,
+    CreateProcessRequest, DrainOnceResult, PersistDraftResult, RuntimeError, TaskSubmissionResult,
 };
 
 /// Executes durable WOS runtime commands.
@@ -28,7 +28,7 @@ pub trait DurableRuntime {
     /// or persistence fails.
     fn create_process(
         &mut self,
-        request: CreateInstanceRequest,
+        request: CreateProcessRequest,
     ) -> Result<WorkflowProcess, RuntimeError>;
 
     /// Loads the canonical workflow process state.

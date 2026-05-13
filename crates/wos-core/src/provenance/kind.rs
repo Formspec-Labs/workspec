@@ -20,6 +20,12 @@ pub enum ProvenanceKind {
     CaseCreated,
     /// Intake handoff was accepted by host runtime policy.
     IntakeAccepted,
+    /// A freeform note was appended to the case ledger by an authorized actor.
+    ///
+    /// Flat Facts-tier kind. `data` carries arbitrary note payload keyed by
+    /// the calling adapter; no fixed schema is imposed beyond a key uniqueness
+    /// constraint to avoid collision with kind-keyed overlays.
+    NoteAdded,
     /// Intake handoff was rejected by host runtime policy.
     IntakeRejected,
     /// Intake handoff was deferred by host runtime policy.
@@ -448,6 +454,7 @@ impl ProvenanceKind {
             Self::StateTransition => Some("wos.kernel.state_transition"),
             Self::CaseCreated => Some("wos.kernel.case_created"),
             Self::IntakeAccepted => Some("wos.kernel.intake_accepted"),
+            Self::NoteAdded => Some("wos.kernel.note_added"),
             Self::IntakeRejected => Some("wos.kernel.intake_rejected"),
             Self::IntakeDeferred => Some("wos.kernel.intake_deferred"),
             Self::CapabilityInvocation => Some("wos.ai.capability_invocation"),
@@ -483,6 +490,7 @@ impl ProvenanceKind {
             "wos.kernel.state_transition" => Some(Self::StateTransition),
             "wos.kernel.case_created" => Some(Self::CaseCreated),
             "wos.kernel.intake_accepted" => Some(Self::IntakeAccepted),
+            "wos.kernel.note_added" => Some(Self::NoteAdded),
             "wos.kernel.intake_rejected" => Some(Self::IntakeRejected),
             "wos.kernel.intake_deferred" => Some(Self::IntakeDeferred),
             "wos.ai.capability_invocation" => Some(Self::CapabilityInvocation),

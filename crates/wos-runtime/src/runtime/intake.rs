@@ -17,7 +17,7 @@ use crate::intake::{
 use crate::store::{IntakeRecord, StoreError};
 
 use super::{
-    CreateInstanceRequest, RuntimeError, WosRuntime, format_timestamp,
+    CreateProcessRequest, RuntimeError, WosRuntime, format_timestamp,
     populate_provenance_record_fields, stamp_provenance,
 };
 
@@ -175,7 +175,7 @@ impl WosRuntime {
         match outcome {
             IntakeAcceptanceOutcome::Accepted { case_disposition } => match case_disposition {
                 IntakeCaseDisposition::AttachToExistingCase { case_ref } => {
-                    let case = self.load_record_for_case_ref(case_ref)?.instance;
+                    let case = self.load_record_for_case_ref(case_ref)?.process;
                     Ok(IntakeAcceptanceOutcome::Accepted {
                         case_disposition: IntakeCaseDisposition::AttachToExistingCase {
                             case_ref: case.case_ledger_id,
@@ -190,15 +190,15 @@ impl WosRuntime {
                     let case = match self.load_record_for_case_ref(case_ref) {
                         Ok(existing) => {
                             self.ensure_matching_case_definition(
-                                &existing.instance,
+                                &existing.process,
                                 definition,
                                 case_ref,
                             )?;
-                            existing.instance
+                            existing.process
                         }
                         Err(RuntimeError::Store(StoreError::NotFound(_))) => self
                             .create_process_bound_to_case(
-                                CreateInstanceRequest {
+                                CreateProcessRequest {
                                     process_id: String::new(),
                                     tenant: None,
                                     definition_url: definition.definition_url.clone(),
@@ -278,14 +278,14 @@ impl WosRuntime {
         let mut record = self.load_record_for_case_ref(case_ref)?;
         let now_iso = format_timestamp(self.clock.now_ms())?;
         let kernel = self.resolver.resolve_kernel(
-            &record.instance.definition_url,
-            &record.instance.definition_version,
+            &record.process.definition_url,
+            &record.process.definition_version,
         )?;
 
         let mut appended = Vec::new();
         let mut final_provenance = Vec::with_capacity(provenance.len());
         let lifecycle_state = record
-            .instance
+            .process
             .configuration
             .first()
             .cloned()
@@ -306,11 +306,11 @@ impl WosRuntime {
                 &kernel,
                 &lifecycle_state,
             );
-            stamp_case_boundary_identity(slice::from_mut(&mut prepared), &record.instance);
+            stamp_case_boundary_identity(slice::from_mut(&mut prepared), &record.process);
             populate_provenance_record_fields(
                 slice::from_mut(&mut prepared),
                 &kernel,
-                &record.instance.definition_version,
+                &record.process.definition_version,
             );
             stamp_provenance(slice::from_mut(&mut prepared), &now_iso);
             appended.push(prepared.clone());
@@ -318,8 +318,8 @@ impl WosRuntime {
         }
 
         if !appended.is_empty() {
-            record.instance.provenance_position += appended.len() as u64;
-            record.instance.updated_at = now_iso;
+            record.process.provenance_position += appended.len() as u64;
+            record.process.updated_at = now_iso;
             record.provenance_log.extend(appended);
             self.store.save_record(record)?;
         }
@@ -336,7 +336,7 @@ impl WosRuntime {
         let lifecycle_state = if let Some(case_ref) = request.governed_case_ref.as_deref() {
             match self.load_record_for_case_ref(case_ref) {
                 Ok(record) => record
-                    .instance
+                    .process
                     .configuration
                     .first()
                     .cloned()
@@ -365,10 +365,10 @@ impl WosRuntime {
             match self.load_record_for_case_ref(case_ref) {
                 Ok(record) => {
                     let kernel = self.resolver.resolve_kernel(
-                        &record.instance.definition_url,
-                        &record.instance.definition_version,
+                        &record.process.definition_url,
+                        &record.process.definition_version,
                     )?;
-                    return Ok((kernel, record.instance.definition_version));
+                    return Ok((kernel, record.process.definition_version));
                 }
                 Err(RuntimeError::Store(StoreError::NotFound(_))) => {}
                 Err(error) => return Err(error),

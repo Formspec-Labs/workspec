@@ -53,13 +53,13 @@ impl WosRuntime {
                             "binding": task.binding,
                         })),
                     ));
-                    record.instance.active_tasks.push(task);
+                    record.process.active_tasks.push(task);
                 }
                 ActionKind::EmitEvent => {
                     let event_name = observed.action.event_type.clone().ok_or_else(|| {
                         RuntimeError::UnsupportedAction("emitEvent missing eventType".to_string())
                     })?;
-                    record.instance.pending_events.push(PendingEvent {
+                    record.process.pending_events.push(PendingEvent {
                         event: event_name.clone(),
                         actor_id: observed.actor_id.clone(),
                         data: observed.action.data.clone(),
@@ -214,7 +214,7 @@ impl WosRuntime {
         binding: &IntegrationBinding,
         now_iso: &str,
     ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
-        self.validate_integration_profile_target(kernel, &record.instance)?;
+        self.validate_integration_profile_target(kernel, &record.process)?;
         let ctx = InvocationContext {
             service: self.service.as_ref(),
             validator: self.validator.as_ref(),
@@ -288,7 +288,7 @@ impl WosRuntime {
         let mut pending_presentations = Vec::new();
         let mut provenance = Vec::new();
 
-        for task in &mut record.instance.active_tasks {
+        for task in &mut record.process.active_tasks {
             let Some(context) = task.context.as_ref() else {
                 continue;
             };
@@ -337,9 +337,9 @@ impl WosRuntime {
         let task_ref = action.task_ref.clone().ok_or_else(|| {
             RuntimeError::MissingMetadata("createTask missing taskRef".to_string())
         })?;
-        let task_sequence = record.instance.next_task_sequence + 1;
-        record.instance.next_task_sequence = task_sequence;
-        let task_id = make_task_id(&record.instance.process_id, task_sequence, &task_ref);
+        let task_sequence = record.process.next_task_sequence + 1;
+        record.process.next_task_sequence = task_sequence;
+        let task_id = make_task_id(&record.process.process_id, task_sequence, &task_ref);
 
         let mut task = ActiveTask {
             task_id,
@@ -403,10 +403,10 @@ impl WosRuntime {
                     .bindings
                     .get(&contract.binding)
                     .ok_or_else(|| RuntimeError::UnsupportedBinding(contract.binding.clone()))?;
-                let prepared = adapter.prepare_task(&task, &record.instance.case_state)?;
+                let prepared = adapter.prepare_task(&task, &record.process.case_state)?;
                 task.context = Some(FormspecTaskContext {
                     task_id: task.task_id.clone(),
-                    process_id: record.instance.process_id.clone(),
+                    process_id: record.process.process_id.clone(),
                     contract_ref: contract_key.clone(),
                     definition_url: task.definition_url.clone().unwrap_or_default(),
                     definition_version: task.definition_version.clone().unwrap_or_default(),

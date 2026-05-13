@@ -78,7 +78,7 @@ impl IntegrationBindingHandler for CallbackHandler {
         binding: &IntegrationBinding,
         now_iso: &str,
     ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
-        match classify_invocation(observed, &record.instance.pending_callbacks) {
+        match classify_invocation(observed, &record.process.pending_callbacks) {
             CallbackInvocationKind::Outbound => {
                 handle_outbound(ctx, record, kernel, observed, service_ref, binding, now_iso)
             }
@@ -133,12 +133,12 @@ fn handle_outbound(
     let outbound_event_id = next_outbound_event_id(record, service_ref, "cb");
     let subject = compute_subject(
         binding,
-        record.instance.correlation_process_id(),
+        record.process.correlation_process_id(),
         service_ref,
         &outbound_event_id,
     );
 
-    let event_data = build_event_data_from_binding(binding, kernel, observed, &record.instance)?;
+    let event_data = build_event_data_from_binding(binding, kernel, observed, &record.process)?;
 
     let envelope = CloudEvent {
         id: outbound_event_id.clone(),
@@ -185,7 +185,7 @@ fn handle_outbound(
         .map(str::to_string);
 
     // Register the pending callback for later resolution.
-    record.instance.pending_callbacks.insert(
+    record.process.pending_callbacks.insert(
         subject.clone(),
         PendingCallback {
             invocation_id: outbound_event_id.clone(),
@@ -258,7 +258,7 @@ fn handle_inbound(
     })?;
 
     // Remove the pending entry.
-    record.instance.pending_callbacks.remove(&subject);
+    record.process.pending_callbacks.remove(&subject);
 
     // Apply output binding using the envelope's data payload.
     let event_data = envelope
@@ -266,7 +266,7 @@ fn handle_inbound(
         .clone()
         .unwrap_or_else(|| serde_json::json!({}));
     let updates = apply_output_binding(
-        &mut record.instance.case_state,
+        &mut record.process.case_state,
         &binding.output_binding,
         &event_data,
     )?;

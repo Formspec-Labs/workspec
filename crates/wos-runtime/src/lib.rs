@@ -52,7 +52,7 @@ pub use restate_fixture_support::{
     signature_runtime_fixture_profile,
 };
 pub use runtime::{
-    Clock, CompanionPolicy, CompletionRequirementKind, CreateInstanceRequest, DrainOnceResult,
+    Clock, CompanionPolicy, CompletionRequirementKind, CreateProcessRequest, DrainOnceResult,
     HttpPostureResolver, MigrationMap, MigrationOutcome, PersistDraftResult, PostureDeclaration,
     PostureResolver, ResolvedPostureDeclaration, RuntimeError, RuntimeEventContext,
     RuntimeEventDecision, SIGNATURE_PROFILE_KEY_EXTENSION, SIGNATURE_PROFILE_REF_EXTENSION,

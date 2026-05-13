@@ -56,7 +56,7 @@ impl IntegrationBindingHandler for ToolHandler {
             .unwrap_or(service_ref)
             .to_string();
 
-        let input = build_integration_input(binding, kernel, observed, &record.instance)?;
+        let input = build_integration_input(binding, kernel, observed, &record.process)?;
 
         if let Some(prov_record) = validate_integration_contract(
             ctx.validator,
@@ -76,7 +76,7 @@ impl IntegrationBindingHandler for ToolHandler {
                     Some(value_to_idempotency_key(evaluate_integration_expression(
                         expression,
                         kernel,
-                        &record.instance,
+                        &record.process,
                         observed,
                     )?)?)
                 }
@@ -166,7 +166,7 @@ impl IntegrationBindingHandler for ToolHandler {
         }
 
         let updates = apply_output_binding(
-            &mut record.instance.case_state,
+            &mut record.process.case_state,
             &binding.output_binding,
             &step_result.output,
         )?;
@@ -200,8 +200,8 @@ impl IntegrationBindingHandler for ToolHandler {
             });
         }
 
-        let post_state = record.instance.case_state.clone();
-        let milestone_records = evaluate_milestones(kernel, &mut record.instance, &post_state);
+        let post_state = record.process.case_state.clone();
+        let milestone_records = evaluate_milestones(kernel, &mut record.process, &post_state);
         provenance.extend(milestone_records);
 
         Ok(provenance)

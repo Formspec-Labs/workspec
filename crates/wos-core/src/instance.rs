@@ -29,7 +29,7 @@ pub struct WorkflowProcess {
     /// Tenant this process belongs to (ADR 0068 D-1 / PLN-0004).
     ///
     /// MUST match the TypeID prefix when `process_id` is a WOS process TypeID.
-    /// At creation, processors resolve this from `CreateInstanceRequest.tenant`
+    /// At creation, processors resolve this from `CreateProcessRequest.tenant`
     /// when set (and consistent with the TypeID prefix when both are present),
     /// else from the `process_id` prefix, else [`crate::typeid::DEFAULT_TENANT`].
     #[serde(default = "default_tenant")]

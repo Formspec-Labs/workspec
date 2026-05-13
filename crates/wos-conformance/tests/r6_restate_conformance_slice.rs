@@ -13,13 +13,13 @@ use wos_core::instance::PendingEvent;
 use wos_core::provenance::ProvenanceRecord;
 use wos_core::typeid;
 use wos_runtime::restate_signature_fixture_runtime;
-use wos_runtime::runtime::CreateInstanceRequest;
+use wos_runtime::runtime::CreateProcessRequest;
 use wos_runtime::{InMemoryStore, SharedInMemoryStore};
 use wos_server_ports::runtime::{RuntimeOps, SeamAccess};
 use wos_server_runtime_restate::RestateRuntimeAdapter;
 
-fn signature_start_request(process_id: &str) -> CreateInstanceRequest {
-    CreateInstanceRequest {
+fn signature_start_request(process_id: &str) -> CreateProcessRequest {
+    CreateProcessRequest {
         definition_url: "urn:test:signature-runtime".into(),
         definition_version: "1.0.0".into(),
         process_id: process_id.to_string(),

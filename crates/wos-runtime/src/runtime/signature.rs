@@ -1333,24 +1333,24 @@ impl WosRuntime {
         now_iso: &str,
         status: &str,
     ) -> Result<Option<TaskSubmissionResult>, RuntimeError> {
-        if !Self::is_signature_task(&record.instance.active_tasks[task_index]) {
+        if !Self::is_signature_task(&record.process.active_tasks[task_index]) {
             return Ok(None);
         }
         match status {
             "declined" => {
                 let reason = response_string(response, "reason");
                 self.require_signature_reason(
-                    &record.instance.active_tasks[task_index],
+                    &record.process.active_tasks[task_index],
                     reason,
                     SignatureReasonPolicy::Decline,
                 )?;
-                let task = record.instance.active_tasks.remove(task_index);
+                let task = record.process.active_tasks.remove(task_index);
                 let (_selector, profile) = self.signature_profile_for_task(&task)?;
                 let signer_id = task.assigned_actor.clone();
                 let document_id = signature_document_id_for_task(profile, &task);
                 let emitted_event = profile.decline_policy.as_ref().map(|policy| {
                     let event = policy.transition_id.clone();
-                    record.instance.pending_events.push(PendingEvent {
+                    record.process.pending_events.push(PendingEvent {
                         event: event.clone(),
                         actor_id: Some(actor_id.to_string()),
                         data: Some(serde_json::json!({
@@ -1382,17 +1382,17 @@ impl WosRuntime {
             }
             "voided" => {
                 let reason = response_string(response, "reason");
-                let task = record.instance.active_tasks[task_index].clone();
+                let task = record.process.active_tasks[task_index].clone();
                 self.require_signature_reason(&task, reason, SignatureReasonPolicy::Void)?;
                 self.ensure_signature_actor_authorized(&task, actor_id, SignaturePolicyKind::Void)?;
                 let (selector, _profile) = self.signature_profile_for_task(&task)?;
-                let task_count_before_void = record.instance.active_tasks.len();
+                let task_count_before_void = record.process.active_tasks.len();
                 record
-                    .instance
+                    .process
                     .active_tasks
                     .retain(|candidate| !selector.matches_task(candidate));
                 let cancelled_task_count =
-                    task_count_before_void.saturating_sub(record.instance.active_tasks.len());
+                    task_count_before_void.saturating_sub(record.process.active_tasks.len());
                 self.push_signature_lifecycle_record(
                     record,
                     ProvenanceKind::TaskDismissed,
@@ -1417,18 +1417,18 @@ impl WosRuntime {
                         "signature reassignment requires newActorId".to_string(),
                     )
                 })?;
-                let task = record.instance.active_tasks[task_index].clone();
+                let task = record.process.active_tasks[task_index].clone();
                 self.require_signature_reason(&task, reason, SignatureReasonPolicy::Reassignment)?;
                 self.ensure_signature_actor_authorized(
                     &task,
                     actor_id,
                     SignaturePolicyKind::Reassignment,
                 )?;
-                record.instance.active_tasks[task_index].assigned_actor =
+                record.process.active_tasks[task_index].assigned_actor =
                     Some(new_actor.to_string());
-                record.instance.active_tasks[task_index].updated_at = now_iso.to_string();
+                record.process.active_tasks[task_index].updated_at = now_iso.to_string();
                 let assignments = record
-                    .instance
+                    .process
                     .extensions
                     .entry(SIGNATURE_ASSIGNMENTS_EXTENSION.to_string())
                     .or_insert_with(|| serde_json::Value::Array(Vec::new()));
@@ -1466,11 +1466,11 @@ impl WosRuntime {
                 }));
             }
             "expired" => {
-                let task = record.instance.active_tasks.remove(task_index);
+                let task = record.process.active_tasks.remove(task_index);
                 let (_selector, profile) = self.signature_profile_for_task(&task)?;
                 let emitted_event = profile.expiry_policy.as_ref().map(|policy| {
                     let event = policy.event_name.clone();
-                    record.instance.pending_events.push(PendingEvent {
+                    record.process.pending_events.push(PendingEvent {
                         event: event.clone(),
                         actor_id: Some(actor_id.to_string()),
                         data: Some(serde_json::json!({ "taskId": task.task_id })),
@@ -1526,8 +1526,8 @@ impl WosRuntime {
             };
 
             let expiring_tasks: Vec<ActiveTask> = record
-                .instance
-                .active_tasks
+                    .process
+                    .active_tasks
                 .iter()
                 .filter(|task| selector.matches_task(task))
                 .cloned()
@@ -1562,9 +1562,9 @@ impl WosRuntime {
             expired_document_ids.sort();
 
             record
-                .instance
-                .active_tasks
-                .retain(|task| !selector.matches_task(task));
+                    .process
+                    .active_tasks
+                    .retain(|task| !selector.matches_task(task));
 
             let mut provenance = ProvenanceRecord::task_lifecycle(
                 ProvenanceKind::TaskFailed,
@@ -1627,14 +1627,14 @@ impl WosRuntime {
         profile: &SignatureProfileDocument,
         step: &SigningStep,
     ) -> Result<(), RuntimeError> {
-        if !step_selected(profile, step, &record.instance.case_state)? {
+        if !step_selected(profile, step, &record.process.case_state)? {
             return Err(RuntimeError::Signature(format!(
                 "signature step '{}' is not selected by its guard",
                 step.id
             )));
         }
 
-        let completed = completed_signature_steps(&record.instance);
+        let completed = completed_signature_steps(&record.process);
         for dependency in &step.depends_on {
             if !completed.contains(dependency) {
                 return Err(RuntimeError::Signature(format!(
@@ -1650,7 +1650,7 @@ impl WosRuntime {
                     break;
                 }
                 if prior.required
-                    && step_selected(profile, prior, &record.instance.case_state)?
+                    && step_selected(profile, prior, &record.process.case_state)?
                     && !completed.contains(&prior.id)
                 {
                     return Err(RuntimeError::Signature(format!(
@@ -1937,17 +1937,17 @@ impl WosRuntime {
             ProvenanceRecord::task_lifecycle(kind, &task.task_id, Some(actor_id), Some(details));
         provenance.timestamp = now_iso.to_string();
         let kernel = self.resolver.resolve_kernel(
-            &record.instance.definition_url,
-            &record.instance.definition_version,
+            &record.process.definition_url,
+            &record.process.definition_version,
         )?;
         super::populate_provenance_record_fields(
             std::slice::from_mut(&mut provenance),
             &kernel,
-            &record.instance.definition_version,
+            &record.process.definition_version,
         );
-        record.instance.provenance_position += 1;
+        record.process.provenance_position += 1;
         record.provenance_log.push(provenance);
-        record.instance.updated_at = now_iso.to_string();
+        record.process.updated_at = now_iso.to_string();
         Ok(())
     }
 
@@ -2479,9 +2479,9 @@ fn resolve_path<'a>(
         return response_path(response, rest);
     }
     if let Some(rest) = path.strip_prefix("caseFile.") {
-        return value_at_path(&record.instance.case_state, rest);
+        return value_at_path(&record.process.case_state, rest);
     }
-    response_path(response, path).or_else(|| value_at_path(&record.instance.case_state, path))
+    response_path(response, path).or_else(|| value_at_path(&record.process.case_state, path))
 }
 
 fn value_at_path<'a>(root: &'a serde_json::Value, path: &str) -> Option<&'a serde_json::Value> {

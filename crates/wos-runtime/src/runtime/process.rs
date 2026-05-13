@@ -23,7 +23,7 @@ use super::timers::{
     timers_to_state,
 };
 use super::{
-    CreateInstanceRequest, MigrationMap, MigrationOutcome, RuntimeError, WosRuntime,
+    CreateProcessRequest, MigrationMap, MigrationOutcome, RuntimeError, WosRuntime,
     format_timestamp, populate_provenance_record_fields, stamp_custody_receipt, stamp_provenance,
 };
 
@@ -124,7 +124,7 @@ impl WosRuntime {
     /// persistence fails.
     pub fn create_process(
         &mut self,
-        request: CreateInstanceRequest,
+        request: CreateProcessRequest,
     ) -> Result<WorkflowProcess, RuntimeError> {
         self.create_process_inner(request, None)
     }
@@ -136,7 +136,7 @@ impl WosRuntime {
     /// with the process id, or normal process creation fails.
     pub fn create_process_bound_to_case(
         &mut self,
-        request: CreateInstanceRequest,
+        request: CreateProcessRequest,
         case_ledger_id: String,
     ) -> Result<WorkflowProcess, RuntimeError> {
         self.create_process_inner(request, Some(case_ledger_id))
@@ -144,12 +144,12 @@ impl WosRuntime {
 
     fn create_process_inner(
         &mut self,
-        request: CreateInstanceRequest,
+        request: CreateProcessRequest,
         bound_case_ledger_id: Option<String>,
     ) -> Result<WorkflowProcess, RuntimeError> {
         let now_ms = self.clock.now_ms();
         let now_iso = format_timestamp(now_ms)?;
-        let CreateInstanceRequest {
+        let CreateProcessRequest {
             process_id,
             tenant: requested_tenant,
             definition_url,
@@ -306,17 +306,17 @@ impl WosRuntime {
         populate_provenance_record_fields(
             &mut appended_provenance,
             &kernel,
-            &record.instance.definition_version,
+            &record.process.definition_version,
         );
         stamp_provenance(&mut appended_provenance, &now_iso);
-        record.instance.provenance_position = appended_provenance.len() as u64;
+        record.process.provenance_position = appended_provenance.len() as u64;
         record.provenance_log.extend(appended_provenance);
         self.store.create_record(record.clone())?;
 
         self.deliver_pending_presentations(&pending_presentations)?;
 
         let _ = (created_task_ids, emitted_events);
-        Ok(record.instance)
+        Ok(record.process)
     }
 
     /// Load the canonical workflow process state.
@@ -326,7 +326,7 @@ impl WosRuntime {
     pub fn load_process(&self, process_id: &str) -> Result<WorkflowProcess, RuntimeError> {
         Ok(self
             .load_record_by_process_or_case_ref(process_id)?
-            .instance)
+            .process)
     }
 
     /// Return the `process_id` of every workflow process bound to the given
@@ -395,8 +395,8 @@ impl WosRuntime {
         if event.timestamp.is_empty() {
             event.timestamp = format_timestamp(self.clock.now_ms())?;
         }
-        record.instance.pending_events.push(event);
-        record.instance.updated_at = format_timestamp(self.clock.now_ms())?;
+        record.process.pending_events.push(event);
+        record.process.updated_at = format_timestamp(self.clock.now_ms())?;
         self.store.save_record(record.clone())?;
         Ok(())
     }
@@ -422,7 +422,7 @@ impl WosRuntime {
             .take(limit)
             .map(|(position, provenance)| {
                 let metadata = context.metadata_for_provenance_record(
-                    &record.instance.case_ledger_id,
+                    &record.process.case_ledger_id,
                     position,
                     provenance,
                 )?;
@@ -454,7 +454,7 @@ impl WosRuntime {
             ));
         };
         stamp_custody_receipt(provenance, &receipt)?;
-        record.instance.updated_at = format_timestamp(self.clock.now_ms())?;
+        record.process.updated_at = format_timestamp(self.clock.now_ms())?;
         self.store.save_record(record)?;
         Ok(())
     }
@@ -484,24 +484,24 @@ impl WosRuntime {
         let now_ms = self.clock.now_ms();
         let now_iso = format_timestamp(now_ms)?;
         let mut record = self.store.load_record(process_id)?;
-        if record.instance.definition_version == target_definition_version {
+        if record.process.definition_version == target_definition_version {
             return Ok(MigrationOutcome {
                 process_id: process_id.to_string(),
-                previous_definition_version: record.instance.definition_version.clone(),
+                previous_definition_version: record.process.definition_version.clone(),
                 new_definition_version: target_definition_version.to_string(),
                 migration_map,
             });
         }
 
-        let url = record.instance.definition_url.clone();
-        let previous_definition_version = record.instance.definition_version.clone();
+        let url = record.process.definition_url.clone();
+        let previous_definition_version = record.process.definition_version.clone();
         let target_kernel = self
             .resolver
             .resolve_kernel(&url, target_definition_version)?;
-        validate_migration_configuration(&target_kernel, &record.instance.configuration)
+        validate_migration_configuration(&target_kernel, &record.process.configuration)
             .map_err(|e| RuntimeError::MigrationRejected(e.to_string()))?;
 
-        let mut new_case_state = record.instance.case_state.clone();
+        let mut new_case_state = record.process.case_state.clone();
         apply_migration_map(&mut new_case_state, &migration_map)?;
 
         let migration_map_json = serde_json::to_value(&migration_map)
@@ -516,11 +516,11 @@ impl WosRuntime {
         populate_provenance_record_fields(&mut appended, &target_kernel, target_definition_version);
         stamp_provenance(&mut appended, &now_iso);
 
-        record.instance.case_state = new_case_state;
-        record.instance.definition_version = target_definition_version.to_string();
-        record.instance.updated_at = now_iso;
+        record.process.case_state = new_case_state;
+        record.process.definition_version = target_definition_version.to_string();
+        record.process.updated_at = now_iso;
         record.provenance_log.extend(appended);
-        record.instance.provenance_position = record.provenance_log.len() as u64;
+        record.process.provenance_position = record.provenance_log.len() as u64;
         self.store.save_record(record)?;
 
         Ok(MigrationOutcome {

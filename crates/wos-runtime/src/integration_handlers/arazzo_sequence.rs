@@ -108,7 +108,7 @@ impl IntegrationBindingHandler for ArazzoHandler {
                     // Apply per-step output mapping to case state immediately.
                     if !step.output_mapping.is_empty() {
                         let updates = apply_output_binding(
-                            &mut record.instance.case_state,
+                            &mut record.process.case_state,
                             &step.output_mapping,
                             &output,
                         )?;
@@ -164,7 +164,7 @@ impl IntegrationBindingHandler for ArazzoHandler {
                 .collect();
             let step_context_value = serde_json::json!({ "steps": steps_map });
             let updates = apply_output_binding(
-                &mut record.instance.case_state,
+                &mut record.process.case_state,
                 &binding.output_binding,
                 &step_context_value,
             )?;
@@ -199,8 +199,8 @@ impl IntegrationBindingHandler for ArazzoHandler {
             }
         }
 
-        let post_state = record.instance.case_state.clone();
-        let milestone_records = evaluate_milestones(kernel, &mut record.instance, &post_state);
+        let post_state = record.process.case_state.clone();
+        let milestone_records = evaluate_milestones(kernel, &mut record.process, &post_state);
         provenance.extend(milestone_records);
 
         Ok(provenance)
@@ -231,7 +231,7 @@ fn execute_step(
     // Build an ephemeral binding for this step using the step's own mappings.
     // We reuse the shared helpers (build_integration_input, etc.) but with
     // a step-scoped IntegrationBinding so input_mapping and contracts apply per-step.
-    let step_binding = build_step_binding(step, step_context, kernel, observed, &record.instance);
+    let step_binding = build_step_binding(step, step_context, kernel, observed, &record.process);
 
     let step_binding = match step_binding {
         Ok(b) => b,

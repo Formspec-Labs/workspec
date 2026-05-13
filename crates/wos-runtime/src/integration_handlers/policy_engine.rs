@@ -50,7 +50,7 @@ impl IntegrationBindingHandler for PolicyEngineHandler {
         let mut provenance = Vec::new();
 
         // Build the policy input (context) from the input_mapping expressions.
-        let input = build_integration_input(binding, kernel, observed, &record.instance)?;
+        let input = build_integration_input(binding, kernel, observed, &record.process)?;
 
         if let Some(prov_record) = validate_integration_contract(
             ctx.validator,
@@ -123,7 +123,7 @@ impl IntegrationBindingHandler for PolicyEngineHandler {
         })?;
 
         let updates = apply_output_binding(
-            &mut record.instance.case_state,
+            &mut record.process.case_state,
             &binding.output_binding,
             &decision_value,
         )?;
@@ -156,8 +156,8 @@ impl IntegrationBindingHandler for PolicyEngineHandler {
             });
         }
 
-        let post_state = record.instance.case_state.clone();
-        let milestone_records = evaluate_milestones(kernel, &mut record.instance, &post_state);
+        let post_state = record.process.case_state.clone();
+        let milestone_records = evaluate_milestones(kernel, &mut record.process, &post_state);
         provenance.extend(milestone_records);
 
         Ok(provenance)

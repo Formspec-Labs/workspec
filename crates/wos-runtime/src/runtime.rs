@@ -59,7 +59,7 @@ const FAILURE_EVENT_EXTENSION_KEY: &str = "x-wos-runtime-failure-event";
 
 /// Request for instance creation.
 #[derive(Debug, Clone)]
-pub struct CreateInstanceRequest {
+pub struct CreateProcessRequest {
     /// Stable WOS workflow-process identifier.
     pub process_id: String,
     /// Tenant this instance belongs to (ADR 0068 D-1).
@@ -894,7 +894,7 @@ mod tests {
         });
 
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-determination").to_string(),
                 tenant: None,
                 definition_url: "urn:test:determination-snapshot".to_string(),
@@ -988,7 +988,7 @@ mod tests {
         let mut runtime = runtime_with_kernel(kernel);
 
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-join-determination").to_string(),
                 tenant: None,
                 definition_url: "urn:test:join-determination-snapshot".to_string(),
@@ -1074,7 +1074,7 @@ mod tests {
         let mut runtime = runtime_with_kernel(kernel);
 
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-multi-determination").to_string(),
                 tenant: None,
                 definition_url: "urn:test:multi-determination-snapshot".to_string(),
@@ -1555,7 +1555,7 @@ mod tests {
                 .load_record(&context.process_id)
                 .unwrap();
             let task = record
-                .instance
+                .process
                 .active_tasks
                 .iter()
                 .find(|task| task.task_id == context.task_id)
@@ -2408,7 +2408,7 @@ mod tests {
     fn durable_runtime_trait_supports_instance_round_trip() {
         fn exercise_all_trait_methods(runtime: &mut impl DurableRuntime) {
             let created = runtime
-                .create_process(CreateInstanceRequest {
+                .create_process(CreateProcessRequest {
                     process_id: test_process_id("case-trait").to_string(),
                     tenant: None,
                     definition_url: "urn:test:durable-trait".to_string(),
@@ -2602,7 +2602,7 @@ mod tests {
 
         let created = runtime
             .create_process_bound_to_case(
-                CreateInstanceRequest {
+                CreateProcessRequest {
                     process_id: test_process_id("case-2026-0042").to_string(),
                     tenant: None,
                     definition_url: "urn:test:intake-dispatch".to_string(),
@@ -2671,7 +2671,7 @@ mod tests {
         let case_ref = format!("urn:wos:{case_ledger_id}");
         let created_a = runtime
             .create_process_bound_to_case(
-                CreateInstanceRequest {
+                CreateProcessRequest {
                     process_id: wos_core::typeid::mint_process_id(),
                     tenant: None,
                     definition_url: "urn:test:intake-ambiguous".to_string(),
@@ -2683,7 +2683,7 @@ mod tests {
             .expect("create process a");
         let created_b = runtime
             .create_process_bound_to_case(
-                CreateInstanceRequest {
+                CreateProcessRequest {
                     process_id: wos_core::typeid::mint_process_id(),
                     tenant: None,
                     definition_url: "urn:test:intake-ambiguous".to_string(),
@@ -2746,7 +2746,7 @@ mod tests {
 
         runtime
             .create_process_bound_to_case(
-                CreateInstanceRequest {
+                CreateProcessRequest {
                     process_id: test_process_id("case-policy-prov").to_string(),
                     tenant: None,
                     definition_url: "urn:test:intake-policy-prov".to_string(),
@@ -2842,7 +2842,7 @@ mod tests {
             .store
             .load_record_by_case_ledger_id(&created_case_ref)
             .expect("created intake case by case ledger")
-            .instance;
+            .process;
         assert_eq!(created.case_ledger_id, created_case_ref);
         assert_eq!(
             created.case_state.get("source"),
@@ -2905,7 +2905,7 @@ mod tests {
 
         runtime
             .create_process_bound_to_case(
-                CreateInstanceRequest {
+                CreateProcessRequest {
                     process_id: test_process_id("case-2026-0042").to_string(),
                     tenant: None,
                     definition_url: "urn:test:intake-policy-reject".to_string(),
@@ -3144,7 +3144,7 @@ mod tests {
             .store
             .load_record_by_case_ledger_id(&created_case_ref)
             .expect("created case record")
-            .instance;
+            .process;
         let provenance = runtime
             .load_provenance_window(&created.process_id, 0, 20)
             .expect("load created case provenance");
@@ -3211,7 +3211,7 @@ mod tests {
             .store
             .load_record_by_case_ledger_id(&case_ref)
             .expect("load created case by case ledger")
-            .instance;
+            .process;
         assert_eq!(loaded_by_case.case_ledger_id, case_ref);
         assert_ne!(loaded_by_case.process_id, loaded_by_case.case_ledger_id);
 
@@ -3418,7 +3418,7 @@ mod tests {
         .expect("kernel json");
         let mut runtime = runtime_with_kernel(kernel);
         let created = runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-receipt").to_string(),
                 tenant: None,
                 definition_url: "urn:test:receipt".to_string(),
@@ -3468,7 +3468,7 @@ mod tests {
         .expect("kernel json");
         let mut runtime = runtime_with_kernel(kernel);
         let _created = runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-receipt-idem").to_string(),
                 tenant: None,
                 definition_url: "urn:test:receipt-idem".to_string(),
@@ -3516,7 +3516,7 @@ mod tests {
         .expect("kernel json");
         let mut runtime = runtime_with_kernel(kernel);
         let _created = runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-receipt-conflict").to_string(),
                 tenant: None,
                 definition_url: "urn:test:receipt-conflict".to_string(),
@@ -3559,7 +3559,7 @@ mod tests {
         let mut runtime = runtime_with_kernel(kernel);
         let pre_minted = wos_core::typeid::mint_case_ledger_id();
         let err = runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: pre_minted.clone(),
                 tenant: None,
                 definition_url: "urn:test:populator".to_string(),
@@ -3576,7 +3576,7 @@ mod tests {
         let mut runtime = runtime_with_kernel(kernel);
         let pre_minted = wos_core::typeid::mint_process_id();
         let created = runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: pre_minted.clone(),
                 tenant: None,
                 definition_url: "urn:test:populator".to_string(),
@@ -3606,7 +3606,7 @@ mod tests {
 
         let created_a = runtime
             .create_process_bound_to_case(
-                CreateInstanceRequest {
+                CreateProcessRequest {
                     process_id: format!("urn:wos:{process_a}"),
                     tenant: None,
                     definition_url: "urn:test:populator".to_string(),
@@ -3618,7 +3618,7 @@ mod tests {
             .expect("create process a");
         let created_b = runtime
             .create_process_bound_to_case(
-                CreateInstanceRequest {
+                CreateProcessRequest {
                     process_id: format!("urn:wos:{process_b}"),
                     tenant: None,
                     definition_url: "urn:test:populator".to_string(),
@@ -3666,7 +3666,7 @@ mod tests {
         let case_ledger_id = wos_core::typeid::mint_case_ledger_id();
         let created_a = runtime
             .create_process_bound_to_case(
-                CreateInstanceRequest {
+                CreateProcessRequest {
                     process_id: wos_core::typeid::mint_process_id(),
                     tenant: None,
                     definition_url: "urn:test:populator".to_string(),
@@ -3678,7 +3678,7 @@ mod tests {
             .expect("create process a");
         let created_b = runtime
             .create_process_bound_to_case(
-                CreateInstanceRequest {
+                CreateProcessRequest {
                     process_id: wos_core::typeid::mint_process_id(),
                     tenant: None,
                     definition_url: "urn:test:populator".to_string(),
@@ -3716,7 +3716,7 @@ mod tests {
         let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
         let mut runtime = runtime_with_kernel(kernel);
         let created = runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: "   ".to_string(),
                 tenant: None,
                 definition_url: "urn:test:populator".to_string(),
@@ -3744,7 +3744,7 @@ mod tests {
         let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
         let mut runtime = runtime_with_kernel(kernel);
         let err = runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: "legacy-case-42".to_string(),
                 tenant: None,
                 definition_url: "urn:test:populator".to_string(),
@@ -3787,7 +3787,7 @@ mod tests {
         token_prefix: &str,
     ) -> TaskSubmissionResult {
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: process_id.to_string(),
                 tenant: None,
                 definition_url: kernel.url.clone().unwrap(),
@@ -3930,7 +3930,7 @@ mod tests {
         let mut runtime = runtime_with_kernel(kernel);
 
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-1").to_string(),
                 tenant: None,
                 definition_url: "urn:test:kernel".to_string(),
@@ -3997,7 +3997,7 @@ mod tests {
 
         let mut runtime = runtime_with_kernel(kernel);
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-token").to_string(),
                 tenant: None,
                 definition_url: "urn:test:event-token".to_string(),
@@ -4054,7 +4054,7 @@ mod tests {
             .with_companion_policy(crate::ReferenceCompanionPolicy::default());
         for process_id in [test_process_id("case-a"), test_process_id("case-b")] {
             runtime
-                .create_process(CreateInstanceRequest {
+                .create_process(CreateProcessRequest {
                     process_id: process_id.to_string(),
                     tenant: None,
                     definition_url: "urn:test:companion-idempotency".to_string(),
@@ -4142,7 +4142,7 @@ mod tests {
         );
 
         let error = runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-1a").to_string(),
                 tenant: None,
                 definition_url: "urn:test:presenter-order".to_string(),
@@ -4202,7 +4202,7 @@ mod tests {
         );
 
         let instance = runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-1a").to_string(),
                 tenant: None,
                 definition_url: "urn:test:presented-state-order".to_string(),
@@ -4240,7 +4240,7 @@ mod tests {
 
         let mut runtime = runtime_with_kernel(kernel.clone());
         let instance = runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-1b").to_string(),
                 tenant: None,
                 definition_url: "urn:test:timer-metadata".to_string(),
@@ -4257,7 +4257,7 @@ mod tests {
             .store
             .load_record(test_process_id("case-1b"))
             .unwrap();
-        let evaluator = Evaluator::from_instance(kernel, &record.instance, 1_710_000_000_000)
+        let evaluator = Evaluator::from_instance(kernel, &record.process, 1_710_000_000_000)
             .expect("restore evaluator");
         let timer = evaluator.timers().iter().next().expect("restored timer");
         assert_eq!(timer.duration_iso, "PT2H");
@@ -4282,7 +4282,7 @@ mod tests {
         };
         let mut runtime = runtime_with_kernels(vec![mk("1.0.0"), mk("1.1.0")]);
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("m-case-1").to_string(),
                 tenant: None,
                 definition_url: "urn:test:migrate-kernel".into(),
@@ -4337,7 +4337,7 @@ mod tests {
         .unwrap();
         let mut runtime = runtime_with_kernels(vec![k1, k2]);
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("m-case-2").to_string(),
                 tenant: None,
                 definition_url: "urn:test:migrate-mismatch".into(),
@@ -4387,7 +4387,7 @@ mod tests {
 
         let mut runtime = runtime_with_kernel(kernel);
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-2").to_string(),
                 tenant: None,
                 definition_url: "urn:test:submit-kernel".to_string(),
@@ -4407,7 +4407,7 @@ mod tests {
             COMPLETION_EVENT_EXTENSION_KEY.to_string(),
             serde_json::Value::String("review.completed".to_string()),
         );
-        record.instance.active_tasks.push(task);
+        record.process.active_tasks.push(task);
         runtime.store.save_record(record).unwrap();
 
         let result = runtime
@@ -4453,7 +4453,7 @@ mod tests {
             .with_signature_profile("signatureProfile", profile);
         let process_id = test_process_id("case-sig013-submit-harness");
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: process_id.to_string(),
                 tenant: None,
                 definition_url: kernel.url.clone().unwrap(),
@@ -4526,7 +4526,7 @@ mod tests {
             .with_signature_profile("signatureProfile", profile);
         let process_id = test_process_id("case-sig013-submit-affirmation");
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: process_id.to_string(),
                 tenant: None,
                 definition_url: kernel.url.clone().unwrap(),
@@ -4610,11 +4610,11 @@ mod tests {
             .expect("signature affirmation carries data");
         assert_eq!(
             data["caseLedgerId"],
-            serde_json::json!(record.instance.case_ledger_id.as_str())
+            serde_json::json!(record.process.case_ledger_id.as_str())
         );
         assert_eq!(
             data["processId"],
-            serde_json::json!(record.instance.process_id.as_str())
+            serde_json::json!(record.process.process_id.as_str())
         );
         assert_eq!(data["signerId"], serde_json::json!("applicant"));
         assert_eq!(
@@ -4637,7 +4637,7 @@ mod tests {
             .with_signature_profile("signatureProfile", profile);
         let process_id = test_process_id("case-sig013-submit-receipt");
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: process_id.to_string(),
                 tenant: None,
                 definition_url: kernel.url.clone().unwrap(),
@@ -4734,7 +4734,7 @@ mod tests {
             .with_signature_profile("signatureProfile", profile);
         let process_id = test_process_id("case-sig013-submit-admission-failed");
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: process_id.to_string(),
                 tenant: None,
                 definition_url: kernel.url.clone().unwrap(),
@@ -4810,7 +4810,7 @@ mod tests {
         let record = runtime.store.load_record(process_id).expect("load record");
         assert!(
             record
-                .instance
+                .process
                 .active_tasks
                 .iter()
                 .any(|task| task.task_id == task_id),
@@ -4833,11 +4833,11 @@ mod tests {
             .expect("SignatureAdmissionFailed carries data");
         assert_eq!(
             admission_failed_data["caseLedgerId"],
-            serde_json::json!(record.instance.case_ledger_id.as_str())
+            serde_json::json!(record.process.case_ledger_id.as_str())
         );
         assert_eq!(
             admission_failed_data["processId"],
-            serde_json::json!(record.instance.process_id.as_str())
+            serde_json::json!(record.process.process_id.as_str())
         );
         assert!(
             record.provenance_log.iter().any(|record| {
@@ -4885,7 +4885,7 @@ mod tests {
             let process_label = format!("case-sig013-binding-failed-{id_suffix}");
             let process_id = test_process_id(&process_label);
             runtime
-                .create_process(CreateInstanceRequest {
+                .create_process(CreateProcessRequest {
                     process_id: process_id.to_string(),
                     tenant: None,
                     definition_url: kernel.url.clone().unwrap(),
@@ -4966,7 +4966,7 @@ mod tests {
             let record = runtime.store.load_record(&process_id).expect("load record");
             assert!(
                 record
-                    .instance
+                    .process
                     .active_tasks
                     .iter()
                     .any(|task| task.task_id == task_id),
@@ -5032,7 +5032,7 @@ mod tests {
 
         let process_id = test_process_id("case-sig013-posture-method-unsupported");
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: process_id.to_string(),
                 tenant: None,
                 definition_url: kernel.url.clone().unwrap(),
@@ -5241,7 +5241,7 @@ mod tests {
 
         let process_id = test_process_id("case-sig013-posture-intent-unsupported");
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: process_id.to_string(),
                 tenant: None,
                 definition_url: kernel.url.clone().unwrap(),
@@ -5365,7 +5365,7 @@ mod tests {
 
         let process_id = test_process_id("case-sig013-posture-receipt-required");
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: process_id.to_string(),
                 tenant: None,
                 definition_url: kernel.url.clone().unwrap(),
@@ -5480,7 +5480,7 @@ mod tests {
 
         let mut runtime = runtime_with_kernel(kernel);
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-3").to_string(),
                 tenant: None,
                 definition_url: "urn:test:draft-kernel".to_string(),
@@ -5495,7 +5495,7 @@ mod tests {
             .unwrap();
         let task = manual_formspec_task(test_process_id("case-3"), 1, Some("urn:mapping:response"));
         let task_id = task.task_id.clone();
-        record.instance.active_tasks.push(task);
+        record.process.active_tasks.push(task);
         runtime.store.save_record(record).unwrap();
 
         let draft = runtime
@@ -5518,10 +5518,10 @@ mod tests {
             .unwrap();
         assert!(record.artifacts.contains_key(&draft.artifact_id));
         assert_eq!(
-            record.instance.case_state["decision"],
+            record.process.case_state["decision"],
             serde_json::json!("pending")
         );
-        assert_eq!(record.instance.active_tasks.len(), 1);
+        assert_eq!(record.process.active_tasks.len(), 1);
         assert!(
             record
                 .provenance_log
@@ -5552,7 +5552,7 @@ mod tests {
 
         let mut runtime = runtime_with_kernel(kernel);
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-draft-pop").to_string(),
                 tenant: None,
                 definition_url: "urn:test:draft-kernel".to_string(),
@@ -5571,7 +5571,7 @@ mod tests {
             Some("urn:mapping:response"),
         );
         let task_id = task.task_id.clone();
-        record.instance.active_tasks.push(task);
+        record.process.active_tasks.push(task);
         runtime.store.save_record(record).unwrap();
 
         runtime
@@ -5626,7 +5626,7 @@ mod tests {
 
         let mut runtime = runtime_with_kernel(kernel);
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-4").to_string(),
                 tenant: None,
                 definition_url: "urn:test:dismiss-kernel".to_string(),
@@ -5641,7 +5641,7 @@ mod tests {
             .unwrap();
         let task = manual_formspec_task(test_process_id("case-4"), 1, Some("urn:mapping:response"));
         let task_id = task.task_id.clone();
-        record.instance.active_tasks.push(task);
+        record.process.active_tasks.push(task);
         runtime.store.save_record(record).unwrap();
 
         runtime.dismiss_task(&task_id, "snoozed").unwrap();
@@ -5650,7 +5650,7 @@ mod tests {
             .store
             .load_record(test_process_id("case-4"))
             .unwrap();
-        assert_eq!(record.instance.active_tasks.len(), 1);
+        assert_eq!(record.process.active_tasks.len(), 1);
         assert!(
             record
                 .provenance_log
@@ -5676,7 +5676,7 @@ mod tests {
 
         let mut runtime = runtime_with_kernel(kernel);
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-5").to_string(),
                 tenant: None,
                 definition_url: "urn:test:replay-kernel".to_string(),
@@ -5696,7 +5696,7 @@ mod tests {
             COMPLETION_EVENT_EXTENSION_KEY.to_string(),
             serde_json::Value::String("review.completed".to_string()),
         );
-        record.instance.active_tasks.push(task);
+        record.process.active_tasks.push(task);
         runtime.store.save_record(record).unwrap();
 
         let response = serde_json::json!({
@@ -5730,7 +5730,7 @@ mod tests {
             .store
             .load_record(test_process_id("case-5"))
             .unwrap();
-        assert_eq!(record.instance.pending_events.len(), 1);
+        assert_eq!(record.process.pending_events.len(), 1);
         assert_eq!(
             record
                 .provenance_log
@@ -5758,7 +5758,7 @@ mod tests {
 
         let mut runtime = runtime_with_kernel(kernel);
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-6").to_string(),
                 tenant: None,
                 definition_url: "urn:test:actor-replay-kernel".to_string(),
@@ -5773,7 +5773,7 @@ mod tests {
             .unwrap();
         let task = manual_formspec_task(test_process_id("case-6"), 1, Some("urn:mapping:response"));
         let task_id = task.task_id.clone();
-        record.instance.active_tasks.push(task);
+        record.process.active_tasks.push(task);
         runtime.store.save_record(record).unwrap();
 
         let response = serde_json::json!({
@@ -5846,7 +5846,7 @@ mod tests {
 
         let mut runtime = runtime_with_kernel(kernel);
         let instance = runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-7").to_string(),
                 tenant: None,
                 definition_url: "urn:test:timer-kernel".to_string(),
@@ -5918,7 +5918,7 @@ mod tests {
             BindingRegistry::new(),
         );
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-8").to_string(),
                 tenant: None,
                 definition_url: "urn:test:unsupported-binding".to_string(),
@@ -5992,7 +5992,7 @@ mod tests {
             formspec_bindings(),
         );
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-9").to_string(),
                 tenant: None,
                 definition_url: "urn:test:atomic-kernel".to_string(),
@@ -6057,7 +6057,7 @@ mod tests {
             unavailable_bindings(),
         );
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-10").to_string(),
                 tenant: None,
                 definition_url: "urn:test:unavailable-kernel".to_string(),
@@ -6074,7 +6074,7 @@ mod tests {
         let task =
             manual_formspec_task(test_process_id("case-10"), 1, Some("urn:mapping:response"));
         let task_id = task.task_id.clone();
-        record.instance.active_tasks.push(task);
+        record.process.active_tasks.push(task);
         runtime.store.save_record(record).unwrap();
 
         let error = runtime
@@ -6099,7 +6099,7 @@ mod tests {
             .store
             .load_record(test_process_id("case-10"))
             .unwrap();
-        assert_eq!(record.instance.active_tasks.len(), 1);
+        assert_eq!(record.process.active_tasks.len(), 1);
         assert_eq!(record.provenance_log.len(), provenance_len_before_failure);
     }
 
@@ -6155,7 +6155,7 @@ mod tests {
         );
 
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-service").to_string(),
                 tenant: None,
                 definition_url: "urn:test:service-kernel".to_string(),
@@ -6275,7 +6275,7 @@ mod tests {
         .with_integration_profile(profile);
 
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-integration").to_string(),
                 tenant: None,
                 definition_url: "urn:test:integration-profile-kernel".to_string(),
@@ -6456,7 +6456,7 @@ mod tests {
         .with_integration_profile(profile);
 
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-target-mismatch").to_string(),
                 tenant: None,
                 definition_url: "urn:test:integration-profile-kernel".to_string(),
@@ -6557,7 +6557,7 @@ mod tests {
         .with_integration_profile(profile);
 
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-tool-integration-binding").to_string(),
                 tenant: None,
                 definition_url: "urn:test:tool-integration-binding".to_string(),
@@ -6670,7 +6670,7 @@ mod tests {
         .with_integration_profile(profile);
 
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-invalid-idempotency").to_string(),
                 tenant: None,
                 definition_url: "urn:test:invalid-idempotency-expression".to_string(),
@@ -6742,7 +6742,7 @@ mod tests {
 
         let mut runtime = runtime_with_kernel(kernel);
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-guards").to_string(),
                 tenant: None,
                 definition_url: "urn:test:drain-guard-evals".to_string(),
@@ -6821,7 +6821,7 @@ mod tests {
 
         let mut runtime = runtime_with_kernel(kernel);
         runtime
-            .create_process(CreateInstanceRequest {
+            .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-scope").to_string(),
                 tenant: None,
                 definition_url: "urn:test:guard-scope".to_string(),

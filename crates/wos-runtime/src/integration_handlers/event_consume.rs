@@ -75,7 +75,7 @@ impl IntegrationBindingHandler for EventConsumeHandler {
             .clone()
             .unwrap_or_else(|| serde_json::json!({}));
         let updates = apply_output_binding(
-            &mut record.instance.case_state,
+            &mut record.process.case_state,
             &binding.output_binding,
             &event_data,
         )?;
