@@ -14,6 +14,11 @@ from jsonschema import Draft202012Validator
 
 from .conftest import validator_for_def
 
+_EVENT_BY_KIND = {
+    "capabilityInvocation": "wos.ai.capability_invocation",
+    "stateTransition": "wos.kernel.state_transition",
+}
+
 
 @pytest.fixture(scope="module")
 def cap_validator() -> Draft202012Validator:
@@ -23,7 +28,7 @@ def cap_validator() -> Draft202012Validator:
 def _facts_record(record_kind: str, **extra) -> dict:
     record = {
         "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
-        "recordKind": record_kind,
+        "event": _EVENT_BY_KIND[record_kind],
         "timestamp": "2026-04-22T14:30:00Z",
         "auditLayer": "facts",
         "definitionVersion": "1.0.0",
@@ -130,11 +135,11 @@ def test_absent_invocation_blocked_not_required_outcome(cap_validator):
     )
 
 
-def test_non_capability_record_kind_with_blocked_flag_not_required_outcome(cap_validator):
+def test_non_capability_event_with_blocked_flag_not_required_outcome(cap_validator):
     """Review B Finding 5: the if-guard is keyed on
-    `recordKind == "capabilityInvocation"` AND `data.invocationBlocked == true`.
-    A record with a DIFFERENT recordKind that happens to carry
-    `data.invocationBlocked: true` MUST NOT be forced to
+    `event == "wos.ai.capability_invocation"` AND
+    `data.invocationBlocked == true`. A record with a DIFFERENT event that
+    happens to carry `data.invocationBlocked: true` MUST NOT be forced to
     `outcome = "preconditionNotSatisfied"` -- the MUST is scoped to the
     AI §3.3.1 capability-invocation path, not every provenance record
     whose payload reuses the field name."""
@@ -150,7 +155,7 @@ def test_non_capability_record_kind_with_blocked_flag_not_required_outcome(cap_v
     errors = list(validator.iter_errors(record))
 
     assert errors == [], (
-        "A record with a non-`capabilityInvocation` recordKind must "
+        "A record with a non-capability-invocation event must "
         f"validate without `outcome` even when its data reuses the "
         f"invocationBlocked field: {errors}"
     )

@@ -2486,11 +2486,19 @@ mod tests {
                 "unexpected custody event type: {}",
                 custody_window[0].event_type
             );
+            let mut expected_custody_record =
+                serde_json::to_value(&window[0]).expect("json provenance");
+            if window[0].record_kind.canonical_event_literal().is_some() {
+                expected_custody_record
+                    .as_object_mut()
+                    .expect("provenance object")
+                    .remove("recordKind");
+            }
             assert_eq!(
                 custody_window[0]
                     .record_json_view()
                     .expect("decoded custody json"),
-                serde_json::to_value(&window[0]).expect("json provenance")
+                expected_custody_record
             );
 
             runtime

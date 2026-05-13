@@ -766,7 +766,14 @@ mod tests {
         let merged = store.provenance_for_case(case_ledger_id);
         let events: Vec<_> = merged
             .iter()
-            .map(|record| record.event.as_deref().unwrap_or(""))
+            .map(|record| {
+                record
+                    .data
+                    .as_ref()
+                    .and_then(|data| data.get("transitionEvent"))
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("")
+            })
             .collect();
         assert_eq!(events, vec!["b1", "b2", "a1", "a2"]);
     }

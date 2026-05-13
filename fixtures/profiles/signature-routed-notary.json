@@ -77,7 +77,6 @@
     }
   },
   "evidence": {
-    "recordKind": "signatureAffirmation",
     "requiredFields": [
       "response.affidavit.signedAt",
       "response.affidavit.affirmed",

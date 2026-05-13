@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use wos_core::instance::{InstanceStatus, WorkflowProcess};
-use wos_core::provenance::ProvenanceRecord;
+use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
 use wos_runtime::{InMemoryStore, RuntimeRecord, RuntimeStore};
 
 /// Case-boundary fixture format. Distinct from `ConformanceFixture` because
@@ -226,14 +226,26 @@ fn stamped_direct_append(
     actor_id: Option<&str>,
     timestamp: &str,
 ) -> ProvenanceRecord {
-    let mut record = ProvenanceRecord::state_transition(
-        "(direct-append)",
-        "(direct-append)",
-        event_type,
-        actor_id,
-    );
+    let mut record = ProvenanceRecord::unmatched_event(event_type, actor_id);
+    if let Some(record_kind) = ProvenanceKind::from_canonical_event_literal(event_type) {
+        record.record_kind = record_kind;
+    }
     record.timestamp = timestamp.to_string();
     record
+}
+
+fn case_view_event_name(record: &ProvenanceRecord) -> &str {
+    if record.record_kind == ProvenanceKind::StateTransition
+        && let Some(event) = record
+            .data
+            .as_ref()
+            .and_then(|data| data.get("transitionEvent"))
+            .and_then(serde_json::Value::as_str)
+    {
+        return event;
+    }
+
+    record.event.as_deref().unwrap_or_default()
 }
 
 fn execute_fixture(fixture: &CaseBoundaryFixture) -> FixtureExecution {
@@ -342,7 +354,7 @@ fn assert_fixture_invariants(fixture: &CaseBoundaryFixture, execution: &FixtureE
         .zip(fixture.expected_case_view_events.iter())
         .enumerate()
     {
-        let actual_event = actual.event.as_deref().unwrap_or_default();
+        let actual_event = case_view_event_name(actual);
         assert_eq!(
             actual_event, expected.event,
             "fixture {}: case-view event[{idx}] name mismatch",
@@ -362,7 +374,7 @@ fn assert_fixture_invariants(fixture: &CaseBoundaryFixture, execution: &FixtureE
                 .provenance_log
                 .iter()
                 .any(|r| r.timestamp == actual.timestamp
-                    && r.event.as_deref() == Some(expected.event.as_str())),
+                    && case_view_event_name(r) == expected.event),
             "fixture {}: case-view event[{idx}] ({}) not attributable to process {}",
             fixture.id,
             expected.event,
@@ -492,7 +504,7 @@ fn case_view_from_store(
         .iter()
         .zip(fixture.expected_case_view_events.iter())
         .map(|(actual, expected)| {
-            let actual_event = actual.event.as_deref().unwrap_or_default();
+            let actual_event = case_view_event_name(actual);
             assert_eq!(
                 actual_event, expected.event,
                 "fixture {}: store projection event mismatch",

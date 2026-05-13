@@ -347,9 +347,9 @@ def test_api_schema_refs_resolve_to_existing_api_schema_targets():
 
 
 def test_api_facts_record_kind_reserved_literals_match_kernel():
-    kernel_schema = load_schema(SCHEMA_DIR / "wos-workflow.schema.json")
-    kernel_record_kind = set(
-        kernel_schema["$defs"]["FactsTierRecord"]["properties"]["recordKind"]["enum"]
+    registry = load_schema(SCHEMA_DIR / "record-kind-registry.json")
+    registry_record_kinds = set(
+        entry["literal"] for entry in registry["recordKinds"]
     )
 
     api_schema = load_schema(API_SCHEMA_DIR / "provenance.schema.json")
@@ -364,7 +364,7 @@ def test_api_facts_record_kind_reserved_literals_match_kernel():
 
     assert len(reserved_arms) == 1, "FactsRecordKind must have one reserved enum arm"
     assert len(extension_arms) == 1, "FactsRecordKind must allow exactly the API vendor arm"
-    assert set(reserved_arms[0]["enum"]) == kernel_record_kind
+    assert set(reserved_arms[0]["enum"]) == registry_record_kinds
 
 
 def _api_facts_record(record_kind: str, event: str) -> dict:
@@ -372,7 +372,6 @@ def _api_facts_record(record_kind: str, event: str) -> dict:
         "tier": "facts",
         "id": "urn:wos:agency-gov_prov_01jqrxabcd3f8xtx9qxkkv3raa",
         "processId": "urn:wos:sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc",
-        "recordKind": record_kind,
         "timestamp": "2026-04-23T12:00:00Z",
         "definitionVersion": "1.0.0",
         "event": event,
@@ -383,6 +382,14 @@ def _api_facts_record(record_kind: str, event: str) -> dict:
             "attemptedAction": "transition:approve",
             "targetResourceRef": "urn:wos:sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc",
             "rejectionReason": "actor lacks approval-authority predicate",
+        }
+    if event == "wos.assurance.key_rebind":
+        record["keyRebindRecord"] = {
+            "priorKid": "00112233445566778899aabbccddeeff",
+            "newKid": "ffeeddccbbaa99887766554433221100",
+            "priorAssurance": "standard",
+            "newAssurance": "high",
+            "rebindAttestationRef": "urn:agency.gov:identity:attestations:rebind-2026-0001",
         }
     return record
 
@@ -399,9 +406,10 @@ def test_api_facts_record_kind_event_literals_agree_for_d26_seed():
         valid = _api_facts_record(record_kind, event)
         assert list(validator.iter_errors(valid)) == []
 
-        wrong_event = _api_facts_record(record_kind, "decide")
-        assert list(validator.iter_errors(wrong_event)), (
-            f"{record_kind} must require {event}"
+        legacy = _api_facts_record(record_kind, event)
+        legacy["recordKind"] = record_kind
+        assert list(validator.iter_errors(legacy)), (
+            f"{record_kind} must reject legacy inner recordKind"
         )
 
 

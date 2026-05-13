@@ -168,6 +168,7 @@ impl From<K> for ProvenanceAuditTier {
             | K::ClockStarted
             | K::ClockResolved
             | K::IdentityAttestation
+            | K::KeyRebind
             | K::ClockSkewObserved
             | K::CommitAttemptFailure
             | K::AuthorizationRejected

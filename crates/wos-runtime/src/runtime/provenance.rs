@@ -84,7 +84,7 @@ pub fn populate_provenance_record_fields(
         match record.record_kind {
             ProvenanceKind::StateTransition => {
                 if record.inputs.is_empty()
-                    && let Some(event) = record.event.as_deref()
+                    && let Some(event) = state_transition_input_event(record)
                 {
                     record.inputs = vec![event.to_string()];
                 }
@@ -120,6 +120,15 @@ pub fn populate_provenance_record_fields(
             record.output_digest = digest_of(&record.outputs);
         }
     }
+}
+
+fn state_transition_input_event(record: &ProvenanceRecord) -> Option<&str> {
+    record
+        .data
+        .as_ref()
+        .and_then(|data| data.get("transitionEvent"))
+        .and_then(serde_json::Value::as_str)
+        .or(record.event.as_deref())
 }
 
 /// Stamps workflow identity into signature decision payloads.

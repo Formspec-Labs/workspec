@@ -50,7 +50,6 @@
     }
   },
   "evidence": {
-    "recordKind": "signatureAffirmation",
     "requiredFields": [
       "response.signature.acceptedAt",
       "response.signature.affirmed",

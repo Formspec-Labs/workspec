@@ -38,6 +38,7 @@ import pytest
 from jsonschema import Draft202012Validator
 
 from .conftest import validator_for_def
+from .test_record_kind_registry import event_literal_mappings
 
 WOS_SPEC_ROOT = Path(__file__).resolve().parents[2]
 PROVENANCE_SCHEMA = (
@@ -76,7 +77,7 @@ def _validator_for_def(schema: dict, def_name: str) -> Draft202012Validator:
 def _facts_record(record_kind: str, record_id: str | None = None, **extra) -> dict:
     record = {
         "id": record_id or "sba-poc_prov_01jqt0wn4yh3p5q9r2x6t7v8w0",
-        "recordKind": record_kind,
+        "event": event_literal_mappings().get(record_kind, f"x-test.{record_kind}"),
         "timestamp": "2026-04-28T14:00:00Z",
         "auditLayer": "facts",
         "definitionVersion": "1.0.0",
@@ -542,6 +543,55 @@ class TestIdentityAttestation:
             },
         )
         assert list(validator.iter_errors(record)) == []
+
+
+# ---------------------------------------------------------------------------
+# ADR-0091: key rebind recovery
+# ---------------------------------------------------------------------------
+
+
+class TestKeyRebind:
+    def test_happy_path(self, schema):
+        validator = _validator_for_def(schema, "KeyRebindRecord")
+        record = _facts_record(
+            "keyRebind",
+            data={
+                "priorKid": "00112233445566778899aabbccddeeff",
+                "newKid": "ffeeddccbbaa99887766554433221100",
+                "priorAssurance": "standard",
+                "newAssurance": "high",
+                "rebindAttestationRef": "urn:agency.gov:identity:attestations:rebind-2026-0001",
+                "reason": "subject lost prior device and completed in-person recovery",
+            },
+        )
+        assert list(validator.iter_errors(record)) == []
+
+    def test_requires_rebind_attestation_ref(self, schema):
+        validator = _validator_for_def(schema, "KeyRebindRecord")
+        record = _facts_record(
+            "keyRebind",
+            data={
+                "priorKid": "00112233445566778899aabbccddeeff",
+                "newKid": "ffeeddccbbaa99887766554433221100",
+                "priorAssurance": "standard",
+                "newAssurance": "high",
+            },
+        )
+        assert list(validator.iter_errors(record))
+
+    def test_kids_must_be_16_byte_lower_hex(self, schema):
+        validator = _validator_for_def(schema, "KeyRebindRecord")
+        record = _facts_record(
+            "keyRebind",
+            data={
+                "priorKid": "001122",
+                "newKid": "ffeeddccbbaa99887766554433221100",
+                "priorAssurance": "standard",
+                "newAssurance": "high",
+                "rebindAttestationRef": "urn:agency.gov:identity:attestations:rebind-2026-0001",
+            },
+        )
+        assert list(validator.iter_errors(record))
 
 
 # ---------------------------------------------------------------------------

@@ -78,7 +78,6 @@ def _minimal_profile() -> dict:
                 "completion": {"type": "all-required"},
             },
             "evidence": {
-                "recordKind": "signatureAffirmation",
                 "requiredFields": [
                     "response.signature.acceptedAt",
                     "response.signature.affirmed",

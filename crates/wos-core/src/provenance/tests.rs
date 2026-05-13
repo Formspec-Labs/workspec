@@ -428,10 +428,18 @@ fn audit_layer_for_kind_maps_narrative_only() {
 #[test]
 fn provenance_kind_reports_only_registry_seeded_d26_event_literals() {
     let seeded = [
+        (
+            ProvenanceKind::StateTransition,
+            "wos.kernel.state_transition",
+        ),
         (ProvenanceKind::CaseCreated, "wos.kernel.case_created"),
         (ProvenanceKind::IntakeAccepted, "wos.kernel.intake_accepted"),
         (ProvenanceKind::IntakeRejected, "wos.kernel.intake_rejected"),
         (ProvenanceKind::IntakeDeferred, "wos.kernel.intake_deferred"),
+        (
+            ProvenanceKind::CapabilityInvocation,
+            "wos.ai.capability_invocation",
+        ),
         (
             ProvenanceKind::ForEachIterationStarted,
             "wos.kernel.for_each_iteration_started",
@@ -453,10 +461,30 @@ fn provenance_kind_reports_only_registry_seeded_d26_event_literals() {
             "wos.kernel.signature_admission_failed",
         ),
         (
+            ProvenanceKind::CorrectionAuthorized,
+            "wos.governance.correction_authorized",
+        ),
+        (
+            ProvenanceKind::AmendmentAuthorized,
+            "wos.governance.amendment_authorized",
+        ),
+        (
+            ProvenanceKind::DeterminationAmended,
+            "wos.governance.determination_amended",
+        ),
+        (
+            ProvenanceKind::RescissionAuthorized,
+            "wos.governance.rescission_authorized",
+        ),
+        (
             ProvenanceKind::DeterminationRescinded,
             "wos.governance.determination_rescinded",
         ),
         (ProvenanceKind::Reinstated, "wos.governance.reinstated"),
+        (
+            ProvenanceKind::AuthorizationAttestation,
+            "wos.governance.authorization_attestation",
+        ),
         (ProvenanceKind::ClockStarted, "wos.governance.clock_started"),
         (
             ProvenanceKind::ClockResolved,
@@ -466,19 +494,45 @@ fn provenance_kind_reports_only_registry_seeded_d26_event_literals() {
             ProvenanceKind::IdentityAttestation,
             "wos.assurance.identity_attestation",
         ),
+        (ProvenanceKind::KeyRebind, "wos.assurance.key_rebind"),
+        (
+            ProvenanceKind::ClockSkewObserved,
+            "wos.governance.clock_skew_observed",
+        ),
+        (
+            ProvenanceKind::CommitAttemptFailure,
+            "wos.kernel.commit_attempt_failure",
+        ),
+        (
+            ProvenanceKind::AuthorizationRejected,
+            "wos.governance.authorization_rejected",
+        ),
+        (
+            ProvenanceKind::InstanceMigrated,
+            "wos.kernel.instance_migrated",
+        ),
+        (
+            ProvenanceKind::MigrationPinChanged,
+            "wos.kernel.migration_pin_changed",
+        ),
     ];
 
     for (kind, event_literal) in seeded {
         assert_eq!(kind.canonical_event_literal(), Some(event_literal));
+        assert_eq!(
+            ProvenanceRecord::blank(kind).event.as_deref(),
+            Some(event_literal),
+            "{kind:?} constructors must inherit the canonical event literal"
+        );
     }
-
-    assert_eq!(
-        ProvenanceKind::StateTransition.canonical_event_literal(),
-        None
-    );
     assert_eq!(
         ProvenanceKind::CaseStateMutation.canonical_event_literal(),
         None
+    );
+    assert!(
+        ProvenanceRecord::blank(ProvenanceKind::CaseStateMutation)
+            .event
+            .is_none()
     );
 }
 
@@ -618,6 +672,7 @@ fn audit_layer_for_kind_covers_every_variant() {
         ProvenanceKind::ClockStarted,
         ProvenanceKind::ClockResolved,
         ProvenanceKind::IdentityAttestation,
+        ProvenanceKind::KeyRebind,
         ProvenanceKind::ClockSkewObserved,
         ProvenanceKind::CommitAttemptFailure,
         ProvenanceKind::AuthorizationRejected,
@@ -626,8 +681,8 @@ fn audit_layer_for_kind_covers_every_variant() {
 
     assert_eq!(
         all.len(),
-        132,
-        "ProvenanceKind has 132 variants at HEAD; a new variant upstream MUST add an entry here"
+        133,
+        "ProvenanceKind has 133 variants at HEAD; a new variant upstream MUST add an entry here"
     );
 
     for kind in all {
@@ -1869,6 +1924,113 @@ fn identity_attestation_round_trips_through_serde() {
     let json = serde_json::to_string(&record).expect("serialize");
     let restored: ProvenanceRecord = serde_json::from_str(&json).expect("deserialize");
     assert_eq!(restored.record_kind, ProvenanceKind::IdentityAttestation);
+}
+
+// ── Key rebind recovery (ADR 0091) ────────────────────────────────────────
+
+fn key_rebind_input() -> KeyRebindInput<'static> {
+    KeyRebindInput {
+        prior_kid: "00112233445566778899aabbccddeeff",
+        new_kid: "ffeeddccbbaa99887766554433221100",
+        prior_assurance: "standard",
+        new_assurance: "high",
+        rebind_attestation_ref: "urn:agency.gov:identity:attestations:rebind-2026-0001",
+        reason: Some("subject lost prior device and completed in-person recovery"),
+        context: None,
+    }
+}
+
+#[test]
+fn key_rebind_constructor_serializes_required_fields() {
+    let record = ProvenanceRecord::key_rebind(key_rebind_input()).expect("key rebind");
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["recordKind"], "keyRebind");
+    assert_eq!(json["event"], "wos.assurance.key_rebind");
+    assert_eq!(json["data"]["priorKid"], "00112233445566778899aabbccddeeff");
+    assert_eq!(json["data"]["newKid"], "ffeeddccbbaa99887766554433221100");
+    assert_eq!(json["data"]["priorAssurance"], "standard");
+    assert_eq!(json["data"]["newAssurance"], "high");
+    assert_eq!(
+        json["data"]["rebindAttestationRef"],
+        "urn:agency.gov:identity:attestations:rebind-2026-0001"
+    );
+}
+
+#[test]
+fn key_rebind_rejects_assurance_downgrade() {
+    let mut input = key_rebind_input();
+    input.prior_assurance = "very-high";
+    input.new_assurance = "low";
+
+    let err = ProvenanceRecord::key_rebind(input).expect_err("downgrade");
+
+    assert!(matches!(err, KeyRebindError::AssuranceDowngrade { .. }));
+}
+
+#[test]
+fn key_rebind_rejects_unranked_vendor_assurance_without_policy_ordering() {
+    let mut input = key_rebind_input();
+    input.new_assurance = "x-agency-tier-2";
+
+    let err = ProvenanceRecord::key_rebind(input).expect_err("unranked assurance");
+
+    assert!(matches!(
+        err,
+        KeyRebindError::UnrankedAssurance {
+            field: "newAssurance",
+            ..
+        }
+    ));
+}
+
+#[test]
+fn key_rebind_rejects_malformed_kid() {
+    let mut input = key_rebind_input();
+    input.prior_kid = "001122";
+
+    let err = ProvenanceRecord::key_rebind(input).expect_err("malformed kid");
+
+    assert!(matches!(
+        err,
+        KeyRebindError::InvalidKid {
+            field: "priorKid",
+            ..
+        }
+    ));
+}
+
+#[test]
+fn key_rebind_drops_context_keys_that_collide_with_required_fields() {
+    let mut context = serde_json::Map::new();
+    context.insert(
+        "priorKid".to_string(),
+        serde_json::Value::String("attacker".to_string()),
+    );
+    context.insert(
+        "auxNote".to_string(),
+        serde_json::Value::String("kept".to_string()),
+    );
+    let mut input = key_rebind_input();
+    input.context = Some(context);
+    let record = ProvenanceRecord::key_rebind(input).expect("key rebind");
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["data"]["priorKid"], "00112233445566778899aabbccddeeff");
+    assert_eq!(json["data"]["auxNote"], "kept");
+}
+
+#[test]
+fn key_rebind_classifies_as_facts() {
+    assert_eq!(audit_layer_for_kind(ProvenanceKind::KeyRebind), "facts");
+}
+
+#[test]
+fn key_rebind_round_trips_through_serde() {
+    let record = ProvenanceRecord::key_rebind(key_rebind_input()).expect("key rebind");
+    let json = serde_json::to_string(&record).expect("serialize");
+    let restored: ProvenanceRecord = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(restored.record_kind, ProvenanceKind::KeyRebind);
 }
 
 // ── Clock skew (ADR 0069) ───────────────────────────────────────────────

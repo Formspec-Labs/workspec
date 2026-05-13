@@ -19,15 +19,22 @@ from jsonschema import Draft202012Validator
 
 from .conftest import validator_for_def
 
+_EVENT_BY_KIND = {
+    "capabilityInvocation": "wos.ai.capability_invocation",
+    "stateTransition": "wos.kernel.state_transition",
+}
+
 
 def _facts_record(record_kind: str, **extra) -> dict:
     record = {
         "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
-        "recordKind": record_kind,
+        "event": _EVENT_BY_KIND.get(record_kind, f"x-test.{record_kind}"),
         "timestamp": "2026-04-19T12:00:00Z",
         "auditLayer": "facts",
         "definitionVersion": "1.0.0",
     }
+    if record_kind == "stateTransition" and "data" not in extra:
+        record["data"] = {"transitionEvent": "submit"}
     record.update(extra)
     return record
 

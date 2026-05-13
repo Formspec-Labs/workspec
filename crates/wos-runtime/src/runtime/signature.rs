@@ -467,7 +467,11 @@ pub struct CompletionRequirement {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SignatureEvidence {
-    /// Record kind, fixed to `signatureAffirmation`.
+    /// Historical record kind, fixed to `signatureAffirmation`.
+    #[serde(
+        default = "default_signature_evidence_record_kind",
+        skip_serializing_if = "is_signature_evidence_record_kind_default"
+    )]
     pub record_kind: String,
     /// Required evidence paths.
     pub required_fields: Vec<String>,
@@ -477,6 +481,14 @@ pub struct SignatureEvidence {
     pub identity_binding: IdentityBindingRequirement,
     /// Whether emitted records are custody eligible.
     pub custody_hook_eligible: bool,
+}
+
+fn default_signature_evidence_record_kind() -> String {
+    "signatureAffirmation".to_string()
+}
+
+fn is_signature_evidence_record_kind_default(value: &str) -> bool {
+    value == "signatureAffirmation"
 }
 
 /// Outcome of signature admission for a task submission.

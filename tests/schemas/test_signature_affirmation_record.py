@@ -34,7 +34,6 @@ def _document_validator(schema: dict) -> Draft202012Validator:
 def _record() -> dict:
     return {
         "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
-        "recordKind": "signatureAffirmation",
         "timestamp": "2026-04-22T14:30:00Z",
         "auditLayer": "facts",
         "event": "wos.kernel.signature_affirmation",
@@ -193,8 +192,7 @@ def test_signature_affirmation_custody_hook_eligible_must_be_true(schema):
 def test_non_signature_record_is_not_forced_into_signature_shape(schema):
     validator = _document_validator(schema)
     record = copy.deepcopy(_record())
-    record["recordKind"] = "caseStateMutation"
-    record["event"] = "decide"
+    record["event"] = "x-test.case_state_mutation"
     record["data"] = {"some": "payload"}
 
     errors = list(validator.iter_errors(_log(record)))
@@ -205,7 +203,6 @@ def test_non_signature_record_is_not_forced_into_signature_shape(schema):
 def test_signature_affirmation_event_selects_signature_shape(schema):
     validator = _document_validator(schema)
     record = copy.deepcopy(_record())
-    record["recordKind"] = "stateTransition"
     del record["data"]["signerId"]
 
     errors = list(validator.iter_errors(_log(record)))
@@ -216,7 +213,6 @@ def test_signature_affirmation_event_selects_signature_shape(schema):
 def _admission_failed_record() -> dict:
     return {
         "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
-        "recordKind": "signatureAdmissionFailed",
         "timestamp": "2026-05-08T10:30:00Z",
         "auditLayer": "facts",
         "event": "wos.kernel.signature_admission_failed",
@@ -246,7 +242,6 @@ def test_signature_admission_failed_accepts_f11_identity(schema):
 def test_signature_admission_failed_event_selects_failure_shape(schema):
     validator = _document_validator(schema)
     record = _admission_failed_record()
-    record["recordKind"] = "stateTransition"
     del record["data"]["reason"]
 
     errors = list(validator.iter_errors(_log(record)))

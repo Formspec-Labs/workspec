@@ -131,8 +131,7 @@ impl CustodyAppendInput {
         metadata: CustodyAppendMetadata,
     ) -> Result<Self, CustodyAppendError> {
         metadata.validate()?;
-        let authored = serde_json::to_value(record)
-            .map_err(|error| CustodyAppendError::JsonSerialization(error.to_string()))?;
+        let authored = provenance_record_to_custody_json(record)?;
         let encoded = record_json_to_dcbor(
             &authored,
             context.max_inline_record_bytes(),
@@ -264,6 +263,34 @@ fn provenance_event_type(
         "{event_type_prefix}.{}",
         camel_case_record_kind_to_event_tail(kind)
     ))
+}
+
+fn provenance_record_to_custody_json(
+    record: &ProvenanceRecord,
+) -> Result<serde_json::Value, CustodyAppendError> {
+    let mut authored = serde_json::to_value(record)
+        .map_err(|error| CustodyAppendError::JsonSerialization(error.to_string()))?;
+
+    if let Some(expected) = record.record_kind.canonical_event_literal() {
+        match record.event.as_deref() {
+            Some(actual) if actual == expected => {
+                let Some(authored) = authored.as_object_mut() else {
+                    return Err(CustodyAppendError::JsonSerialization(
+                        "provenance record did not serialize to an object".to_string(),
+                    ));
+                };
+                authored.remove("recordKind");
+            }
+            _ => {
+                return Err(CustodyAppendError::EventLiteralMismatch {
+                    expected,
+                    actual: record.event.clone(),
+                });
+            }
+        }
+    }
+
+    Ok(authored)
 }
 
 fn camel_case_record_kind_to_event_tail(kind: &str) -> String {
@@ -475,7 +502,8 @@ mod tests {
         assert_eq!(input.idempotency_tuple().1, input.record_id);
         let view = input.record_json_view().expect("decode json view");
         assert_eq!(view["id"], record.id);
-        assert_eq!(view["recordKind"], "stateTransition");
+        assert_eq!(view.get("recordKind"), None);
+        assert_eq!(view["event"], "wos.kernel.state_transition");
         assert_eq!(view["timestamp"], "2026-04-21T14:30:00Z");
     }
 
@@ -513,10 +541,18 @@ mod tests {
     #[test]
     fn provenance_event_type_uses_seeded_event_literal() {
         let seeded = [
+            (
+                ProvenanceKind::StateTransition,
+                "wos.kernel.state_transition",
+            ),
             (ProvenanceKind::CaseCreated, "wos.kernel.case_created"),
             (ProvenanceKind::IntakeAccepted, "wos.kernel.intake_accepted"),
             (ProvenanceKind::IntakeRejected, "wos.kernel.intake_rejected"),
             (ProvenanceKind::IntakeDeferred, "wos.kernel.intake_deferred"),
+            (
+                ProvenanceKind::CapabilityInvocation,
+                "wos.ai.capability_invocation",
+            ),
             (
                 ProvenanceKind::ForEachIterationStarted,
                 "wos.kernel.for_each_iteration_started",
@@ -538,10 +574,30 @@ mod tests {
                 "wos.kernel.signature_admission_failed",
             ),
             (
+                ProvenanceKind::CorrectionAuthorized,
+                "wos.governance.correction_authorized",
+            ),
+            (
+                ProvenanceKind::AmendmentAuthorized,
+                "wos.governance.amendment_authorized",
+            ),
+            (
+                ProvenanceKind::DeterminationAmended,
+                "wos.governance.determination_amended",
+            ),
+            (
+                ProvenanceKind::RescissionAuthorized,
+                "wos.governance.rescission_authorized",
+            ),
+            (
                 ProvenanceKind::DeterminationRescinded,
                 "wos.governance.determination_rescinded",
             ),
             (ProvenanceKind::Reinstated, "wos.governance.reinstated"),
+            (
+                ProvenanceKind::AuthorizationAttestation,
+                "wos.governance.authorization_attestation",
+            ),
             (ProvenanceKind::ClockStarted, "wos.governance.clock_started"),
             (
                 ProvenanceKind::ClockResolved,
@@ -550,6 +606,23 @@ mod tests {
             (
                 ProvenanceKind::IdentityAttestation,
                 "wos.assurance.identity_attestation",
+            ),
+            (ProvenanceKind::KeyRebind, "wos.assurance.key_rebind"),
+            (
+                ProvenanceKind::ClockSkewObserved,
+                "wos.governance.clock_skew_observed",
+            ),
+            (
+                ProvenanceKind::CommitAttemptFailure,
+                "wos.kernel.commit_attempt_failure",
+            ),
+            (
+                ProvenanceKind::AuthorizationRejected,
+                "wos.governance.authorization_rejected",
+            ),
+            (
+                ProvenanceKind::MigrationPinChanged,
+                "wos.kernel.migration_pin_changed",
             ),
         ];
 
@@ -743,9 +816,13 @@ mod tests {
 
         assert_eq!(input.record_bytes(), expected_bytes);
         assert_eq!(actual_sha256, expected_sha256);
+        let expected_json: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(fixture_dir.join("record.json")).expect("fixture json"),
+        )
+        .expect("fixture json value");
         assert_eq!(
             input.record_json_view().expect("decode json view"),
-            serde_json::to_value(&authored).expect("json authored record")
+            expected_json
         );
     }
 
@@ -798,7 +875,8 @@ mod tests {
 
         assert_eq!(input.event_type, "wos.kernel.signature_affirmation");
         assert_eq!(input.record_id, record.id);
-        assert_eq!(view["recordKind"], "signatureAffirmation");
+        assert_eq!(view.get("recordKind"), None);
+        assert_eq!(view["event"], "wos.kernel.signature_affirmation");
         assert_eq!(view["data"]["signerId"], "applicant");
         assert_eq!(view["data"]["custodyHookEligible"], true);
     }

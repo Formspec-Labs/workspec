@@ -25,7 +25,7 @@
   ],
   "$defs": {
     "FactsRecordKind": {
-      "description": "Facts-tier record kind. The full closed reserved-literal set is aligned with `schemas/record-kind-registry.json` (132 ProvenanceKind variants, all camelCase). 22 carry schema-validated payload shapes (if/then or $def overlay); the remaining 110 are flat Facts-tier records. The `^x-[a-z][a-z0-9-]*$` extension arm adds vendor extensibility (ADR 0082 D-12). Literal-set parity against the Rust `ProvenanceKind` enum is enforced by `scripts/check-recordkind-parity.py`.",
+      "description": "Facts-tier record category. The full closed reserved-literal set is aligned with `schemas/record-kind-registry.json` (133 ProvenanceKind variants, all camelCase). 23 carry schema-validated payload shapes (if/then or $def overlay); the remaining 110 are flat Facts-tier records. The `^x-[a-z][a-z0-9-]*$` extension arm adds vendor extensibility (ADR 0082 D-12). Literal-set parity against the Rust `ProvenanceKind` enum is enforced by `scripts/check-recordkind-parity.py`.",
       "oneOf": [
         {
           "enum": [
@@ -110,6 +110,7 @@
             "intakeAccepted",
             "intakeDeferred",
             "intakeRejected",
+            "keyRebind",
             "invalidDuration",
             "legalHoldDestructionRejected",
             "legalHoldPlaced",
@@ -776,16 +777,21 @@
     "FactsTierRecord": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Facts-tier provenance record (kernel S8). Authoritative, immutable layer recording what happened. The wire shape carries the kernel `FactsTierRecord` envelope; the API layer renames `id`, `processId`, `actorRef` to URNs (D-4, D-9) and exposes `recordKind` as a closed enum (with vendor extension). Each tier variant is fully self-contained -- no shared envelope or `allOf` composition -- so codegen produces a clean discriminated union.",
+      "description": "Facts-tier provenance record (kernel S8). Authoritative, immutable layer recording what happened. The wire shape carries the kernel `FactsTierRecord` envelope; the API layer renames `id`, `processId`, and `actorRef` to URNs (D-4, D-9). Each tier variant is fully self-contained -- no shared envelope or `allOf` composition -- so codegen produces a clean discriminated union.",
       "required": [
         "tier",
         "id",
         "processId",
-        "recordKind",
         "timestamp",
         "definitionVersion",
         "event"
       ],
+      "not": {
+        "required": [
+          "recordKind"
+        ],
+        "description": "D26 removed the inner recordKind discriminator from API facts records; use the required event literal."
+      },
       "properties": {
         "tier": {
           "const": "facts",
@@ -798,10 +804,6 @@
         "processId": {
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
           "description": "Workflow process URN this record belongs to."
-        },
-        "recordKind": {
-          "$ref": "#/$defs/FactsRecordKind",
-          "description": "Kernel-defined kind of facts record."
         },
         "timestamp": {
           "type": "string",
@@ -829,7 +831,7 @@
         "event": {
           "type": "string",
           "minLength": 1,
-          "description": "Triggering event or reserved event literal carried by the record kind.",
+          "description": "Triggering event or reserved event literal carried by the record category.",
           "examples": [
             "decide",
             "wos.kernel.intake_accepted"
@@ -927,17 +929,17 @@
         },
         "data": {
           "type": "object",
-          "description": "Record-kind-specific structured payload. Discriminated by `recordKind`. Common fields surface here; kind-specific structured contracts are pinned via the dedicated typed sub-shape fields (`overrideRecord`, `noticeSent`) and the kernel `CapabilityInvocationRecord` `invocationBlocked` if/then guard. Carries the AI §3.3.1 `invocationBlocked` discriminator for `capabilityInvocation` records, AI §3.4 `agentVersionChange` `priorVersion` / `newVersion`, AI §5.5 `autonomyDemotion` `trigger` / `newLevel`, AI §7.5 `confidenceDecay` `halfLife` / `effectiveConfidence`, AI §7.7 cumulative-confidence pause `cumulative` / `floor`, governance §7.1 `samplingDecision` `method` / `bucket`, advanced equity guardrail breach (`equityAlert`) carrying `guardrailId`, `protectedCategoryId`, `disparityScore`, `threshold`, and `occurredAt`, and similar lightweight payloads. Heavier structured contracts (override, notice) MUST use the dedicated typed sub-shape fields above.",
+          "description": "Event-specific structured payload. Discriminated by `event`. Common fields surface here; kind-specific structured contracts are pinned via the dedicated typed sub-shape fields (`overrideRecord`, `noticeSent`) and the kernel `CapabilityInvocationRecord` `invocationBlocked` if/then guard. Carries the AI §3.3.1 `invocationBlocked` discriminator for `capabilityInvocation` records, AI §3.4 `agentVersionChange` `priorVersion` / `newVersion`, AI §5.5 `autonomyDemotion` `trigger` / `newLevel`, AI §7.5 `confidenceDecay` `halfLife` / `effectiveConfidence`, AI §7.7 cumulative-confidence pause `cumulative` / `floor`, governance §7.1 `samplingDecision` `method` / `bucket`, advanced equity guardrail breach (`equityAlert`) carrying `guardrailId`, `protectedCategoryId`, `disparityScore`, `threshold`, and `occurredAt`, and similar lightweight payloads. Heavier structured contracts (override, notice) MUST use the dedicated typed sub-shape fields above.",
           "additionalProperties": false,
           "properties": {
             "invocationBlocked": {
               "type": "boolean",
-              "description": "AI §3.3.1: true when the processor declined to invoke the capability because a precondition evaluated false. Pairs with `outcome: \"preconditionNotSatisfied\"` on the parent envelope. Present only when `recordKind == \"capabilityInvocation\"`."
+              "description": "AI §3.3.1: true when the processor declined to invoke the capability because a precondition evaluated false. Pairs with `outcome: \"preconditionNotSatisfied\"` on the parent envelope. Present only when the corresponding event literal is present."
             },
             "capabilityId": {
               "type": "string",
               "minLength": 1,
-              "description": "AI §3.3.1: identifier of the capability being invoked or blocked. Present only when `recordKind == \"capabilityInvocation\"`.",
+              "description": "AI §3.3.1: identifier of the capability being invoked or blocked. Present only when the corresponding event literal is present.",
               "x-wos": {
                 "openStringKind": "identifier"
               }
@@ -945,7 +947,7 @@
             "milestoneId": {
               "type": "string",
               "minLength": 1,
-              "description": "Kernel S4.13: identifier of the milestone that fired. Present only when `recordKind == \"milestoneFired\"`.",
+              "description": "Kernel S4.13: identifier of the milestone that fired. Present only when the corresponding event literal is present.",
               "x-wos": {
                 "openStringKind": "identifier"
               }
@@ -953,7 +955,7 @@
             "timerId": {
               "type": "string",
               "minLength": 1,
-              "description": "Kernel S9.7.7: identifier of the timer. Present only when `recordKind` is `timerCreated`, `timerCancelled`, or `timerFired`.",
+              "description": "Kernel S9.7.7: identifier of the timer. Present only when the corresponding event literal is present.",
               "x-wos": {
                 "openStringKind": "identifier"
               }
@@ -961,7 +963,7 @@
             "priorVersion": {
               "type": "string",
               "minLength": 1,
-              "description": "AI §3.4: prior model version string before the change. Present only when `recordKind == \"agentVersionChange\"`.",
+              "description": "AI §3.4: prior model version string before the change. Present only when the corresponding event literal is present.",
               "x-wos": {
                 "openStringKind": "identifier"
               }
@@ -969,7 +971,7 @@
             "newVersion": {
               "type": "string",
               "minLength": 1,
-              "description": "AI §3.4: new model version string after the change. Present only when `recordKind == \"agentVersionChange\"`.",
+              "description": "AI §3.4: new model version string after the change. Present only when the corresponding event literal is present.",
               "x-wos": {
                 "openStringKind": "identifier"
               }
@@ -996,7 +998,7 @@
             "halfLife": {
               "type": "string",
               "minLength": 1,
-              "description": "AI §7.5: ISO 8601 duration string for the confidence half-life. Present only when `recordKind == \"confidenceDecay\"`.",
+              "description": "AI §7.5: ISO 8601 duration string for the confidence half-life. Present only when the corresponding event literal is present.",
               "x-wos": {
                 "openStringKind": "duration"
               }
@@ -1011,7 +1013,7 @@
               "type": "number",
               "minimum": 0,
               "maximum": 1,
-              "description": "AI §7.7: cumulative-confidence value at the moment of pause. Present only when `recordKind == \"cumulativeConfidenceViolation\"`."
+              "description": "AI §7.7: cumulative-confidence value at the moment of pause. Present only when the corresponding event literal is present."
             },
             "floor": {
               "type": "number",
@@ -1033,7 +1035,7 @@
                   "pattern": "^x-[a-z][a-z0-9-]*$"
                 }
               ],
-              "description": "Governance §7.1 / AI §11.2: sampling method used to select this case for review. Present only when `recordKind == \"samplingDecision\"`. Closed-with-vendor-extension."
+              "description": "Governance §7.1 / AI §11.2: sampling method used to select this case for review. Present only when the corresponding event literal is present. Closed-with-vendor-extension."
             },
             "bucket": {
               "type": "string",
@@ -1046,7 +1048,7 @@
             "constraintId": {
               "type": "string",
               "minLength": 1,
-              "description": "AI §4.7: identifier of the deontic constraint being bypassed. Present only when `recordKind == \"deonticBypass\"`.",
+              "description": "AI §4.7: identifier of the deontic constraint being bypassed. Present only when the corresponding event literal is present.",
               "x-wos": {
                 "openStringKind": "identifier"
               }
@@ -1054,7 +1056,7 @@
             "rationale": {
               "type": "string",
               "minLength": 1,
-              "description": "AI §4.7: structured rationale for a deontic bypass. Present only when `recordKind == \"deonticBypass\"`. Distinct from the heavier `OverrideRecord.rationale` which carries citations.",
+              "description": "AI §4.7: structured rationale for a deontic bypass. Present only when the corresponding event literal is present. Distinct from the heavier `OverrideRecord.rationale` which carries citations.",
               "x-wos": {
                 "openStringKind": "prose"
               }
@@ -1074,21 +1076,21 @@
                   "pattern": "^x-[a-z][a-z0-9-]*$"
                 }
               ],
-              "description": "AI §8.2.4: fallback option taken on this attempt. Present only when `recordKind` is `fallbackTriggered`, `fallbackAttempt`, or `fallbackTerminal`."
+              "description": "AI §8.2.4: fallback option taken on this attempt. Present only when the corresponding event literal is present."
             },
             "attemptIndex": {
               "type": "integer",
               "minimum": 0,
-              "description": "AI §8.2.4: zero-based index of this fallback attempt within the chain. Present only when `recordKind == \"fallbackAttempt\"`."
+              "description": "AI §8.2.4: zero-based index of this fallback attempt within the chain. Present only when the corresponding event literal is present."
             },
             "succeeded": {
               "type": "boolean",
-              "description": "AI §8.2.4: whether this fallback attempt succeeded. Present only when `recordKind == \"fallbackAttempt\"`."
+              "description": "AI §8.2.4: whether this fallback attempt succeeded. Present only when the corresponding event literal is present."
             },
             "zoneId": {
               "type": "string",
               "minLength": 1,
-              "description": "Advanced §4: identifier of the constraint zone whose satisfaction is being recorded. Present only when `recordKind == \"zoneSatisfied\"`.",
+              "description": "Advanced §4: identifier of the constraint zone whose satisfaction is being recorded. Present only when the corresponding event literal is present.",
               "x-wos": {
                 "openStringKind": "identifier"
               }
@@ -1106,535 +1108,54 @@
         },
         "overrideRecord": {
           "$ref": "#/$defs/OverrideRecord",
-          "description": "Typed payload when `recordKind == \"overrideRecorded\"` (governance §7.3). Carries the structured rationale, authority verification, and supporting evidence required for an override to be auditable. Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting `overrideRecorded` MUST populate this."
+          "description": "Typed payload when the corresponding event literal is present (governance §7.3). Carries the structured rationale, authority verification, and supporting evidence required for an override to be auditable. Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting `overrideRecorded` MUST populate this."
         },
         "noticeSent": {
           "$ref": "#/$defs/NoticeSentRecord",
-          "description": "Typed payload when `recordKind == \"noticeSent\"` (governance §3.2, workflow-governance.md:127). Carries the byte-deterministic notice metadata so applicants can retrieve the notice that was actually sent with verifiable hash equality. Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting `noticeSent` MUST populate this."
+          "description": "Typed payload when the corresponding event literal is present (governance §3.2, workflow-governance.md:127). Carries the byte-deterministic notice metadata so applicants can retrieve the notice that was actually sent with verifiable hash equality. Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting `noticeSent` MUST populate this."
         },
         "authorizationRejectedRecord": {
           "$ref": "#/$defs/AuthorizationRejectedRecord",
-          "description": "Typed payload when `event == \"wos.governance.authorization_rejected\"` (ADR 0070 D-3). Optional on the shared envelope, but required by the event-based authorization-rejection guard."
+          "description": "Typed payload when `event == \"wos.governance.authorization_rejected\"` (ADR 0070 D-3). Optional on the shared API envelope because typify cannot consume event-conditioned `if`/`then` guards; kernel and provenance-log schemas enforce the event-to-payload binding."
+        },
+        "keyRebindRecord": {
+          "$ref": "#/$defs/KeyRebindRecord",
+          "description": "Typed payload when `event == \"wos.assurance.key_rebind\"` (ADR 0091). Optional on the shared API envelope because typify cannot consume event-conditioned `if`/`then` guards; kernel and provenance-log schemas enforce the event-to-payload binding."
         },
         "legalHoldRecord": {
           "$ref": "#/$defs/LegalHoldRecord",
-          "description": "Typed payload when `recordKind` is `legalHoldPlaced`, `legalHoldReleased`, or `legalHoldDestructionRejected` (governance §12 legal holds). Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting any legal-hold literal MUST populate this."
+          "description": "Typed payload when the corresponding event literal is present. Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting any legal-hold literal MUST populate this."
         },
         "circuitBreakerEvent": {
           "$ref": "#/$defs/CircuitBreakerEventRecord",
-          "description": "Typed payload when `recordKind` is `circuitBreakerTripped` or `circuitBreakerReset` (advanced-governance.md circuit breaker). Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting a circuit-breaker literal MUST populate this."
+          "description": "Typed payload when the corresponding event literal is present.md circuit breaker). Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting a circuit-breaker literal MUST populate this."
         },
         "shadowModeDivergence": {
           "$ref": "#/$defs/ShadowModeDivergenceRecord",
-          "description": "Typed payload when `recordKind == \"shadowModeDivergence\"` (advanced-governance.md shadow mode). Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting `shadowModeDivergence` MUST populate this."
+          "description": "Typed payload when the corresponding event literal is present (advanced-governance.md shadow mode). Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting `shadowModeDivergence` MUST populate this."
         },
         "dcrZoneViolation": {
           "$ref": "#/$defs/DcrZoneViolationRecord",
-          "description": "Typed payload when `recordKind == \"dcrZoneViolation\"` (advanced-governance.md DCR constraint zones). Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting `dcrZoneViolation` MUST populate this."
+          "description": "Typed payload when the corresponding event literal is present (advanced-governance.md DCR constraint zones). Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting `dcrZoneViolation` MUST populate this."
         },
         "driftAlert": {
           "$ref": "#/$defs/DriftAlertRecord",
-          "description": "Typed payload when `recordKind == \"driftAlert\"` (advanced-governance.md drift monitoring). Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting `driftAlert` MUST populate this."
+          "description": "Typed payload when the corresponding event literal is present (advanced-governance.md drift monitoring). Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting `driftAlert` MUST populate this."
         },
         "reportTimedOut": {
           "$ref": "#/$defs/ReportTimedOutRecord",
-          "description": "Typed payload when `recordKind == \"reportTimedOut\"` (reports.md WOS-1408). Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting `reportTimedOut` MUST populate this."
+          "description": "Typed payload when the corresponding event literal is present (reports.md WOS-1408). Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting `reportTimedOut` MUST populate this."
         },
         "quorumReduction": {
           "$ref": "#/$defs/QuorumReductionRecord",
-          "description": "Typed payload when a governance operation explicitly reduces a quorum requirement. Optional only because the wire envelope is shared across all Facts-tier kinds; servers recording quorum reduction MUST populate this and use an explicit policy-transition `recordKind` rather than silently changing quorum state."
+          "description": "Typed payload when a governance operation explicitly reduces a quorum requirement. Optional only because the wire envelope is shared across all Facts-tier kinds; servers recording quorum reduction MUST populate this and use an explicit policy-transition `event` rather than silently changing quorum state."
         }
-      },
-      "oneOf": [
-        {
-          "description": "D26 agreement guard: caseCreated selects the case-created event literal.",
-          "required": ["recordKind", "event"],
-          "properties": {
-            "recordKind": {
-              "const": "caseCreated",
-              "description": "D26 agreement guard source: case-created facts record kind."
-            },
-            "event": {
-              "const": "wos.kernel.case_created",
-              "description": "D26 agreement guard target: case-created event literal."
-            }
-          }
-        },
-        {
-          "description": "D26 agreement guard: intakeAccepted selects the intake-accepted event literal.",
-          "required": ["recordKind", "event"],
-          "properties": {
-            "recordKind": {
-              "const": "intakeAccepted",
-              "description": "D26 agreement guard source: intake-accepted facts record kind."
-            },
-            "event": {
-              "const": "wos.kernel.intake_accepted",
-              "description": "D26 agreement guard target: intake-accepted event literal."
-            }
-          }
-        },
-        {
-          "description": "D26 agreement guard: intakeRejected selects the intake-rejected event literal.",
-          "required": ["recordKind", "event"],
-          "properties": {
-            "recordKind": {
-              "const": "intakeRejected",
-              "description": "D26 agreement guard source: intake-rejected facts record kind."
-            },
-            "event": {
-              "const": "wos.kernel.intake_rejected",
-              "description": "D26 agreement guard target: intake-rejected event literal."
-            }
-          }
-        },
-        {
-          "description": "D26 agreement guard: intakeDeferred selects the intake-deferred event literal.",
-          "required": ["recordKind", "event"],
-          "properties": {
-            "recordKind": {
-              "const": "intakeDeferred",
-              "description": "D26 agreement guard source: intake-deferred facts record kind."
-            },
-            "event": {
-              "const": "wos.kernel.intake_deferred",
-              "description": "D26 agreement guard target: intake-deferred event literal."
-            }
-          }
-        },
-        {
-          "description": "D26 agreement guard: forEachIterationStarted selects the ForEach iteration-start event literal.",
-          "required": ["recordKind", "event"],
-          "properties": {
-            "recordKind": {
-              "const": "forEachIterationStarted",
-              "description": "D26 agreement guard source: ForEach iteration-start facts record kind."
-            },
-            "event": {
-              "const": "wos.kernel.for_each_iteration_started",
-              "description": "D26 agreement guard target: ForEach iteration-start event literal."
-            }
-          }
-        },
-        {
-          "description": "D26 agreement guard: forEachIterationCompleted selects the ForEach iteration-completed event literal.",
-          "required": ["recordKind", "event"],
-          "properties": {
-            "recordKind": {
-              "const": "forEachIterationCompleted",
-              "description": "D26 agreement guard source: ForEach iteration-completed facts record kind."
-            },
-            "event": {
-              "const": "wos.kernel.for_each_iteration_completed",
-              "description": "D26 agreement guard target: ForEach iteration-completed event literal."
-            }
-          }
-        },
-        {
-          "description": "D26 agreement guard: forEachCompleted selects the ForEach completed event literal.",
-          "required": ["recordKind", "event"],
-          "properties": {
-            "recordKind": {
-              "const": "forEachCompleted",
-              "description": "D26 agreement guard source: ForEach completed facts record kind."
-            },
-            "event": {
-              "const": "wos.kernel.for_each_completed",
-              "description": "D26 agreement guard target: ForEach completed event literal."
-            }
-          }
-        },
-        {
-          "description": "D26 agreement guard: signatureAffirmation selects the signature-affirmation event literal.",
-          "required": ["recordKind", "event"],
-          "properties": {
-            "recordKind": {
-              "const": "signatureAffirmation",
-              "description": "D26 agreement guard source: signature-affirmation facts record kind."
-            },
-            "event": {
-              "const": "wos.kernel.signature_affirmation",
-              "description": "D26 agreement guard target: signature-affirmation event literal."
-            }
-          }
-        },
-        {
-          "description": "D26 agreement guard: signatureAdmissionFailed selects the signature-admission-failed event literal.",
-          "required": ["recordKind", "event"],
-          "properties": {
-            "recordKind": {
-              "const": "signatureAdmissionFailed",
-              "description": "D26 agreement guard source: signature-admission-failed facts record kind."
-            },
-            "event": {
-              "const": "wos.kernel.signature_admission_failed",
-              "description": "D26 agreement guard target: signature-admission-failed event literal."
-            }
-          }
-        },
-        {
-          "description": "D26 agreement guard: determinationRescinded selects the determination-rescinded event literal.",
-          "required": ["recordKind", "event"],
-          "properties": {
-            "recordKind": {
-              "const": "determinationRescinded",
-              "description": "D26 agreement guard source: determination-rescinded facts record kind."
-            },
-            "event": {
-              "const": "wos.governance.determination_rescinded",
-              "description": "D26 agreement guard target: determination-rescinded event literal."
-            }
-          }
-        },
-        {
-          "description": "D26 agreement guard: reinstated selects the reinstated event literal.",
-          "required": ["recordKind", "event"],
-          "properties": {
-            "recordKind": {
-              "const": "reinstated",
-              "description": "D26 agreement guard source: reinstated facts record kind."
-            },
-            "event": {
-              "const": "wos.governance.reinstated",
-              "description": "D26 agreement guard target: reinstated event literal."
-            }
-          }
-        },
-        {
-          "description": "D26 agreement guard: clockStarted selects the clock-started event literal.",
-          "required": ["recordKind", "event"],
-          "properties": {
-            "recordKind": {
-              "const": "clockStarted",
-              "description": "D26 agreement guard source: clock-started facts record kind."
-            },
-            "event": {
-              "const": "wos.governance.clock_started",
-              "description": "D26 agreement guard target: clock-started event literal."
-            }
-          }
-        },
-        {
-          "description": "D26 agreement guard: clockResolved selects the clock-resolved event literal.",
-          "required": ["recordKind", "event"],
-          "properties": {
-            "recordKind": {
-              "const": "clockResolved",
-              "description": "D26 agreement guard source: clock-resolved facts record kind."
-            },
-            "event": {
-              "const": "wos.governance.clock_resolved",
-              "description": "D26 agreement guard target: clock-resolved event literal."
-            }
-          }
-        },
-        {
-          "description": "D26 agreement guard: identityAttestation selects the identity-attestation event literal.",
-          "required": ["recordKind", "event"],
-          "properties": {
-            "recordKind": {
-              "const": "identityAttestation",
-              "description": "D26 agreement guard source: identity-attestation facts record kind."
-            },
-            "event": {
-              "const": "wos.assurance.identity_attestation",
-              "description": "D26 agreement guard target: identity-attestation event literal."
-            }
-          }
-        },
-        {
-          "description": "D26 agreement guard: stateTransition selects the state-transition event literal.",
-          "required": ["recordKind", "event"],
-          "properties": {
-            "recordKind": {
-              "const": "stateTransition",
-              "description": "D26 agreement guard source: state-transition facts record kind."
-            },
-            "event": {
-              "const": "wos.kernel.state_transition",
-              "description": "D26 agreement guard target: state-transition event literal."
-            }
-          }
-        },
-        {
-          "description": "D26 agreement guard: capabilityInvocation selects the capability-invocation event literal.",
-          "required": ["recordKind", "event"],
-          "properties": {
-            "recordKind": {
-              "const": "capabilityInvocation",
-              "description": "D26 agreement guard source: capability-invocation facts record kind."
-            },
-            "event": {
-              "const": "wos.ai.capability_invocation",
-              "description": "D26 agreement guard target: capability-invocation event literal."
-            }
-          }
-        },
-        {
-          "description": "D26 agreement guard: correctionAuthorized selects the correction-authorized event literal.",
-          "required": ["recordKind", "event"],
-          "properties": {
-            "recordKind": {
-              "const": "correctionAuthorized",
-              "description": "D26 agreement guard source: correction-authorized facts record kind."
-            },
-            "event": {
-              "const": "wos.governance.correction_authorized",
-              "description": "D26 agreement guard target: correction-authorized event literal."
-            }
-          }
-        },
-        {
-          "description": "D26 agreement guard: amendmentAuthorized selects the amendment-authorized event literal.",
-          "required": ["recordKind", "event"],
-          "properties": {
-            "recordKind": {
-              "const": "amendmentAuthorized",
-              "description": "D26 agreement guard source: amendment-authorized facts record kind."
-            },
-            "event": {
-              "const": "wos.governance.amendment_authorized",
-              "description": "D26 agreement guard target: amendment-authorized event literal."
-            }
-          }
-        },
-        {
-          "description": "D26 agreement guard: determinationAmended selects the determination-amended event literal.",
-          "required": ["recordKind", "event"],
-          "properties": {
-            "recordKind": {
-              "const": "determinationAmended",
-              "description": "D26 agreement guard source: determination-amended facts record kind."
-            },
-            "event": {
-              "const": "wos.governance.determination_amended",
-              "description": "D26 agreement guard target: determination-amended event literal."
-            }
-          }
-        },
-        {
-          "description": "D26 agreement guard: rescissionAuthorized selects the rescission-authorized event literal.",
-          "required": ["recordKind", "event"],
-          "properties": {
-            "recordKind": {
-              "const": "rescissionAuthorized",
-              "description": "D26 agreement guard source: rescission-authorized facts record kind."
-            },
-            "event": {
-              "const": "wos.governance.rescission_authorized",
-              "description": "D26 agreement guard target: rescission-authorized event literal."
-            }
-          }
-        },
-        {
-          "description": "D26 agreement guard: authorizationAttestation selects the authorization-attestation event literal.",
-          "required": ["recordKind", "event"],
-          "properties": {
-            "recordKind": {
-              "const": "authorizationAttestation",
-              "description": "D26 agreement guard source: authorization-attestation facts record kind."
-            },
-            "event": {
-              "const": "wos.governance.authorization_attestation",
-              "description": "D26 agreement guard target: authorization-attestation event literal."
-            }
-          }
-        },
-        {
-          "description": "D26 agreement guard: clockSkewObserved selects the clock-skew-observed event literal.",
-          "required": ["recordKind", "event"],
-          "properties": {
-            "recordKind": {
-              "const": "clockSkewObserved",
-              "description": "D26 agreement guard source: clock-skew-observed facts record kind."
-            },
-            "event": {
-              "const": "wos.governance.clock_skew_observed",
-              "description": "D26 agreement guard target: clock-skew-observed event literal."
-            }
-          }
-        },
-        {
-          "description": "D26 agreement guard: commitAttemptFailure selects the commit-attempt-failure event literal.",
-          "required": ["recordKind", "event"],
-          "properties": {
-            "recordKind": {
-              "const": "commitAttemptFailure",
-              "description": "D26 agreement guard source: commit-attempt-failure facts record kind."
-            },
-            "event": {
-              "const": "wos.kernel.commit_attempt_failure",
-              "description": "D26 agreement guard target: commit-attempt-failure event literal."
-            }
-          }
-        },
-        {
-          "description": "D26 agreement guard: authorizationRejected selects the authorization-rejected event literal and typed payload.",
-          "required": ["recordKind", "event", "authorizationRejectedRecord"],
-          "properties": {
-            "recordKind": {
-              "const": "authorizationRejected",
-              "description": "D26 agreement guard source: authorization-rejected facts record kind."
-            },
-            "event": {
-              "const": "wos.governance.authorization_rejected",
-              "description": "D26 agreement guard target: authorization-rejected event literal."
-            },
-            "authorizationRejectedRecord": {
-              "$ref": "#/$defs/AuthorizationRejectedRecord",
-              "description": "Typed payload required for authorization-rejection events."
-            }
-          }
-        },
-        {
-          "description": "D26 agreement guard: migrationPinChanged selects the migration-pin-changed event literal.",
-          "required": ["recordKind", "event"],
-          "properties": {
-            "recordKind": {
-              "const": "migrationPinChanged",
-              "description": "D26 agreement guard source: migration-pin-changed facts record kind."
-            },
-            "event": {
-              "const": "wos.kernel.migration_pin_changed",
-              "description": "D26 agreement guard target: migration-pin-changed event literal."
-            }
-          }
-        },
-        {
-          "description": "Facts records outside the current D26 event-literal seed retain their existing open event vocabulary.",
-          "required": ["recordKind"],
-          "properties": {
-            "recordKind": {
-              "description": "Built-in facts record kinds that are outside the current D26 event-literal seed.",
-              "enum": [
-                "actionExecuted",
-                "activationBlocked",
-                "actorTypeViolation",
-                "agentOutput",
-                "agentProvenanceAnnotation",
-                "agentStateTransition",
-                "agentVersionChange",
-                "appealFiled",
-                "arazzoStep",
-                "autonomyCapped",
-                "autonomyComputed",
-                "autonomyDemotion",
-                "autonomyEscalation",
-                "autonomyViolation",
-                "calendarIgnored",
-                "callbackPending",
-                "callbackReceived",
-                "caseStateMutation",
-                "circuitBreakerReset",
-                "circuitBreakerTripped",
-                "compensationExecuted",
-                "compensationLogEntry",
-                "compensationScopeBoundary",
-                "confidenceDecay",
-                "confidenceViolation",
-                "configurationWarning",
-                "consistencyViolation",
-                "constraintTamperBlocked",
-                "continuationOfServicesActivated",
-                "contractValidation",
-                "convergenceCapReached",
-                "cumulativeConfidenceViolation",
-                "dataMapping",
-                "dcrActivityExecuted",
-                "dcrRelationEvaluated",
-                "dcrResolutionError",
-                "dcrZoneViolation",
-                "delegationViolation",
-                "deonticBypass",
-                "deonticEvaluation",
-                "deonticResolution",
-                "deonticViolation",
-                "dispositiveViolation",
-                "driftAlert",
-                "driftReclassification",
-                "equityAlert",
-                "escalationPending",
-                "eventConsumed",
-                "eventEmitted",
-                "fallbackAttempt",
-                "fallbackTerminal",
-                "fallbackTriggered",
-                "groundTruthLabel",
-                "historyCleared",
-                "humanTaskCreated",
-                "idempotencyDedup",
-                "immutabilityViolation",
-                "independentFirstEnforced",
-                "instanceMigrated",
-                "instanceResumed",
-                "instanceSuspended",
-                "instanceTerminated",
-                "invalidDuration",
-                "legalHoldDestructionRejected",
-                "legalHoldPlaced",
-                "legalHoldReleased",
-                "milestoneFired",
-                "narrativeTierRecorded",
-                "noticeSent",
-                "notificationSuppressed",
-                "onEntry",
-                "onExit",
-                "overrideRecorded",
-                "overrideViolation",
-                "parameterResolved",
-                "pipelineRejection",
-                "pipelineRiskProfile",
-                "pipelineStageCompleted",
-                "policyDecision",
-                "protocolViolation",
-                "proxyInvocation",
-                "relationshipChanged",
-                "reportTimedOut",
-                "rightsViolation",
-                "samplingDecision",
-                "separationViolation",
-                "sessionPaused",
-                "shadowModeDivergence",
-                "stepResultPersisted",
-                "taskCompleted",
-                "taskCreated",
-                "taskDismissed",
-                "taskDraftPersisted",
-                "taskFailed",
-                "taskPresented",
-                "taskResponseRejected",
-                "taskResponseSubmitted",
-                "taskSkipped",
-                "timerCancelled",
-                "timerCreated",
-                "timerFired",
-                "toleranceViolation",
-                "toolInvoked",
-                "toolViolation",
-                "unmatchedEvent",
-                "verificationReportProduced",
-                "zoneSatisfied"
-              ]
-            }
-          }
-        },
-        {
-          "description": "Vendor-extension facts records retain their existing open event vocabulary.",
-          "required": ["recordKind"],
-          "properties": {
-            "recordKind": {
-              "type": "string",
-              "pattern": "^x-[a-z][a-z0-9-]*$",
-              "description": "Vendor-extension facts record kind outside the current D26 event-literal seed."
-            }
-          }
-        }
-      ]
+      }
     },
     "OverrideRecord": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Typed runtime payload appended to `FactsTierRecord` when `recordKind == \"overrideRecorded\"` (governance §7.3, workflow-governance.md:400-407). Mirrors the kernel `OverrideRecord` $def (`wos-workflow.schema.json#/$defs/OverrideRecord`); the API projection uses `workflowProcessRef` (URN per ADR 0082 D-4) rather than the kernel TypeID. Three required structured fields correspond to the three OverrideAuthority policy switches: `requireStructuredRationale → rationale`, `requireAuthorityVerification → authorityVerification`, `requireSupportingEvidence → supportingEvidence`. The audit query `recordKindFilter: [\"overrideRecorded\"]` returns `FactsTierRecord` envelopes carrying this payload in `overrideRecord`.",
+      "description": "Typed runtime payload appended to `FactsTierRecord` when the corresponding event literal is present (governance §7.3, workflow-governance.md:400-407). Mirrors the kernel `OverrideRecord` $def (`wos-workflow.schema.json#/$defs/OverrideRecord`); the API projection uses `workflowProcessRef` (URN per ADR 0082 D-4) rather than the kernel TypeID. Three required structured fields correspond to the three OverrideAuthority policy switches: `requireStructuredRationale → rationale`, `requireAuthorityVerification → authorityVerification`, `requireSupportingEvidence → supportingEvidence`. The audit query `eventFilter: [\"overrideRecorded\"]` returns `FactsTierRecord` envelopes carrying this payload in `overrideRecord`.",
       "required": [
         "rationale",
         "authorityVerification",
@@ -1713,7 +1234,7 @@
     "NoticeSentRecord": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Typed runtime payload appended to `FactsTierRecord` when `recordKind == \"noticeSent\"` (governance §3.2, workflow-governance.md:127). The byte-deterministic adverse-decision notice obligation requires that an applicant can retrieve the notice that was actually sent and verify hash equality against the Trellis-anchored copy. The four fields here are the load-bearing minimum: kind discriminator, content hash, recipient, and delivery timestamp. The full rendered notice body lives behind a `correspondenceRenderingRef` URN (claim-check pattern — D-3 subresource decomposition).",
+      "description": "Typed runtime payload appended to `FactsTierRecord` when the corresponding event literal is present (governance §3.2, workflow-governance.md:127). The byte-deterministic adverse-decision notice obligation requires that an applicant can retrieve the notice that was actually sent and verify hash equality against the Trellis-anchored copy. The four fields here are the load-bearing minimum: kind discriminator, content hash, recipient, and delivery timestamp. The full rendered notice body lives behind a `correspondenceRenderingRef` URN (claim-check pattern — D-3 subresource decomposition).",
       "required": [
         "noticeKind",
         "snapshotSha256",
@@ -1827,6 +1348,78 @@
         }
       ]
     },
+    "KeyRebindRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Typed public payload for `FactsTierRecord.keyRebindRecord` when `event == \"wos.assurance.key_rebind\"` (ADR 0091). Captures explicit key-recovery ceremony evidence without rewriting historical signatures.",
+      "required": [
+        "priorKid",
+        "newKid",
+        "priorAssurance",
+        "newAssurance",
+        "rebindAttestationRef"
+      ],
+      "properties": {
+        "priorKid": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{32}$",
+          "description": "Sixteen-byte lowercase-hex key identifier for the prior signing key."
+        },
+        "newKid": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{32}$",
+          "description": "Sixteen-byte lowercase-hex key identifier for the replacement signing key."
+        },
+        "priorAssurance": {
+          "$ref": "#/$defs/KeyRebindAssuranceLevel",
+          "description": "Assurance level held by the prior key binding."
+        },
+        "newAssurance": {
+          "$ref": "#/$defs/KeyRebindAssuranceLevel",
+          "description": "Assurance reached by the recovery ceremony. Runtime/verifier logic MUST enforce `newAssurance >= priorAssurance` under the assurance ladder."
+        },
+        "rebindAttestationRef": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI for the recovery attestation evidence, such as an in-person clerk ceremony, IdP claim, or recovery-code proof."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "description": "Human-readable recovery rationale."
+        }
+      },
+      "examples": [
+        {
+          "priorKid": "00112233445566778899aabbccddeeff",
+          "newKid": "ffeeddccbbaa99887766554433221100",
+          "priorAssurance": "standard",
+          "newAssurance": "high",
+          "rebindAttestationRef": "urn:agency.gov:identity:attestations:rebind-2026-0001",
+          "reason": "subject lost prior device and completed in-person recovery"
+        }
+      ]
+    },
+    "KeyRebindAssuranceLevel": {
+      "type": "string",
+      "description": "Assurance level used by keyRebind. Ranked reserved levels are `low < standard < high < very-high`; vendor extensions use `x-*` and require deployment-specific ordering before they can satisfy the forward-only gate.",
+      "oneOf": [
+        {
+          "enum": [
+            "low",
+            "standard",
+            "high",
+            "very-high"
+          ]
+        },
+        {
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ]
+    },
     "LegalHoldRecord": {
       "type": "object",
       "additionalProperties": false,
@@ -1850,7 +1443,7 @@
             "released",
             "destructionRejected"
           ],
-          "description": "Legal-hold action represented by the parent record kind."
+          "description": "Legal-hold action represented by the parent record category."
         },
         "actorRef": {
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
@@ -1925,7 +1518,7 @@
             "tripped",
             "reset"
           ],
-          "description": "Circuit-breaker action represented by the parent record kind."
+          "description": "Circuit-breaker action represented by the parent record category."
         },
         "status": {
           "type": "string",
@@ -2253,7 +1846,6 @@
         "tier",
         "id",
         "processId",
-        "recordKind",
         "timestamp",
         "definitionVersion",
         "event",
@@ -2273,10 +1865,6 @@
         "processId": {
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
           "description": "Workflow process URN this record belongs to."
-        },
-        "recordKind": {
-          "$ref": "#/$defs/FactsRecordKind",
-          "description": "Underlying kernel record kind being interpreted (typically `stateTransition`)."
         },
         "timestamp": {
           "type": "string",
@@ -2354,7 +1942,6 @@
         "tier",
         "id",
         "processId",
-        "recordKind",
         "timestamp",
         "definitionVersion",
         "event",
@@ -2373,10 +1960,6 @@
         "processId": {
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
           "description": "Workflow process URN this record belongs to."
-        },
-        "recordKind": {
-          "$ref": "#/$defs/FactsRecordKind",
-          "description": "Underlying kernel record kind being interpreted."
         },
         "timestamp": {
           "type": "string",
@@ -2431,7 +2014,6 @@
         "tier",
         "id",
         "processId",
-        "recordKind",
         "timestamp",
         "definitionVersion",
         "event",
@@ -2452,10 +2034,6 @@
         "processId": {
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
           "description": "Workflow process URN this record belongs to."
-        },
-        "recordKind": {
-          "$ref": "#/$defs/FactsRecordKind",
-          "description": "Underlying kernel record kind being narrated."
         },
         "timestamp": {
           "type": "string",
@@ -2585,7 +2163,7 @@
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
-          "description": "Optional record-kind filter — restrict the page to one or more Facts-tier `recordKind` literals (for example `stateTransition`, `caseStateMutation`, `signatureAffirmation`). Cross-`$ref`s the closed-with-vendor-extension `FactsRecordKind` taxonomy declared in this schema. Empty array is forbidden; omit the field to span every record kind. Composes with AND semantics against `tier`, `timeRange`, and `actorRefFilter`.",
+          "description": "Optional record-kind filter — restrict the page to one or more Facts-tier `event` literals (for example `stateTransition`, `caseStateMutation`, `signatureAffirmation`). Cross-`$ref`s the closed-with-vendor-extension `FactsRecordKind` taxonomy declared in this schema. Empty array is forbidden; omit the field to span every record category. Composes with AND semantics against `tier`, `timeRange`, and `actorRefFilter`.",
           "items": {
             "$ref": "#/$defs/FactsRecordKind"
           },

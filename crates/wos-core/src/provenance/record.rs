@@ -1,6 +1,6 @@
 // Rust guideline compliant 2026-02-21
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de};
 
 use crate::model::kernel::{ActorKind, AuditLayer, MutationSource, VerificationLevel};
 use crate::typeid;
@@ -11,6 +11,7 @@ use super::snapshot::CaseFileSnapshot;
 // F-13 event literals are consumed by Trellis custody/export verification and
 // WOS D26 schema dispatch; changing them requires a coordinated registry
 // migration and fixture regeneration.
+const WOS_KERNEL_STATE_TRANSITION_EVENT: &str = "wos.kernel.state_transition";
 const WOS_KERNEL_SIGNATURE_AFFIRMATION_EVENT: &str = "wos.kernel.signature_affirmation";
 const WOS_KERNEL_SIGNATURE_ADMISSION_FAILED_EVENT: &str = "wos.kernel.signature_admission_failed";
 const WOS_GOVERNANCE_DETERMINATION_RESCINDED_EVENT: &str = "wos.governance.determination_rescinded";
@@ -18,6 +19,7 @@ const WOS_GOVERNANCE_REINSTATED_EVENT: &str = "wos.governance.reinstated";
 const WOS_GOVERNANCE_CLOCK_STARTED_EVENT: &str = "wos.governance.clock_started";
 const WOS_GOVERNANCE_CLOCK_RESOLVED_EVENT: &str = "wos.governance.clock_resolved";
 const WOS_ASSURANCE_IDENTITY_ATTESTATION_EVENT: &str = "wos.assurance.identity_attestation";
+const WOS_ASSURANCE_KEY_REBIND_EVENT: &str = "wos.assurance.key_rebind";
 const WOS_KERNEL_FOR_EACH_ITERATION_STARTED_EVENT: &str = "wos.kernel.for_each_iteration_started";
 const WOS_KERNEL_FOR_EACH_ITERATION_COMPLETED_EVENT: &str =
     "wos.kernel.for_each_iteration_completed";
@@ -312,6 +314,56 @@ pub struct IdentityAttestationInput<'a> {
     pub context: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
+/// Key-rebind recovery provenance input (ADR 0091).
+pub struct KeyRebindInput<'a> {
+    /// Sixteen-byte lowercase-hex key identifier for the prior signing key.
+    pub prior_kid: &'a str,
+    /// Sixteen-byte lowercase-hex key identifier for the replacement key.
+    pub new_kid: &'a str,
+    /// Assurance level held by the prior key binding.
+    pub prior_assurance: &'a str,
+    /// Assurance reached by the recovery ceremony.
+    pub new_assurance: &'a str,
+    /// URI for the recovery attestation evidence.
+    pub rebind_attestation_ref: &'a str,
+    /// Optional human-readable recovery rationale.
+    pub reason: Option<&'a str>,
+    /// Optional context payload; required-field keys win on collision.
+    pub context: Option<serde_json::Map<String, serde_json::Value>>,
+}
+
+/// Error returned when a key-rebind record violates ADR 0091.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum KeyRebindError {
+    /// A key identifier is not a 16-byte lowercase-hex string.
+    InvalidKid { field: &'static str, value: String },
+    /// An assurance token has no portable ordering.
+    UnrankedAssurance { field: &'static str, value: String },
+    /// The recovery ceremony would lower the subject's assurance.
+    AssuranceDowngrade { prior: String, new: String },
+}
+
+impl std::fmt::Display for KeyRebindError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidKid { field, value } => {
+                write!(f, "{field} must be 16-byte lowercase hex, got {value:?}")
+            }
+            Self::UnrankedAssurance { field, value } => {
+                write!(f, "{field} has no portable assurance ordering: {value:?}")
+            }
+            Self::AssuranceDowngrade { prior, new } => {
+                write!(
+                    f,
+                    "key rebind assurance downgrade rejected: prior={prior:?}, new={new:?}"
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for KeyRebindError {}
+
 /// Instance-migrated provenance input (Kernel S11.2, ADR 0083).
 pub struct InstanceMigratedInput<'a> {
     /// Definition version before migration.
@@ -481,7 +533,7 @@ pub struct SignatureAdmissionFailedInput<'a> {
 /// reach the runtime may carry an empty `timestamp` — exporters and
 /// downstream consumers (PROV-O, XES, OCEL) MUST treat an empty value as
 /// "unknown" rather than emitting it verbatim.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProvenanceRecord {
     /// TypeID-structured identifier minted at authoring time.
@@ -583,6 +635,89 @@ pub struct ProvenanceRecord {
     pub outcome: Option<String>,
 }
 
+impl<'de> Deserialize<'de> for ProvenanceRecord {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Wire {
+            id: String,
+            #[serde(default)]
+            record_kind: Option<ProvenanceKind>,
+            #[serde(default)]
+            timestamp: String,
+            #[serde(default)]
+            actor_id: Option<String>,
+            #[serde(default)]
+            from_state: Option<String>,
+            #[serde(default)]
+            to_state: Option<String>,
+            #[serde(default)]
+            event: Option<String>,
+            #[serde(default)]
+            data: Option<serde_json::Value>,
+            #[serde(default)]
+            audit_layer: Option<String>,
+            #[serde(default)]
+            actor_type: Option<String>,
+            #[serde(default)]
+            lifecycle_state: Option<String>,
+            #[serde(default)]
+            definition_version: Option<String>,
+            #[serde(default)]
+            inputs: Vec<String>,
+            #[serde(default)]
+            outputs: Vec<String>,
+            #[serde(default)]
+            input_digest: Option<String>,
+            #[serde(default)]
+            output_digest: Option<String>,
+            #[serde(default)]
+            canonical_event_hash: Option<String>,
+            #[serde(default)]
+            transition_tags: Vec<String>,
+            #[serde(default)]
+            case_file_snapshot: Option<CaseFileSnapshot>,
+            #[serde(default)]
+            outcome: Option<String>,
+        }
+
+        let wire = Wire::deserialize(deserializer)?;
+        let record_kind = match wire.record_kind {
+            Some(record_kind) => record_kind,
+            None => wire
+                .event
+                .as_deref()
+                .and_then(ProvenanceKind::from_canonical_event_literal)
+                .ok_or_else(|| de::Error::missing_field("recordKind"))?,
+        };
+        Ok(Self {
+            id: wire.id,
+            record_kind,
+            timestamp: wire.timestamp,
+            actor_id: wire.actor_id,
+            from_state: wire.from_state,
+            to_state: wire.to_state,
+            event: wire.event,
+            data: wire.data,
+            audit_layer: wire.audit_layer,
+            actor_type: wire.actor_type,
+            lifecycle_state: wire.lifecycle_state,
+            definition_version: wire.definition_version,
+            inputs: wire.inputs,
+            outputs: wire.outputs,
+            input_digest: wire.input_digest,
+            output_digest: wire.output_digest,
+            canonical_event_hash: wire.canonical_event_hash,
+            transition_tags: wire.transition_tags,
+            case_file_snapshot: wire.case_file_snapshot,
+            outcome: wire.outcome,
+        })
+    }
+}
+
 impl ProvenanceRecord {
     /// Mints a new provenance-record identifier.
     #[must_use]
@@ -590,7 +725,7 @@ impl ProvenanceRecord {
         typeid::mint_provenance_id()
     }
 
-    fn blank(record_kind: ProvenanceKind) -> Self {
+    pub(crate) fn blank(record_kind: ProvenanceKind) -> Self {
         Self {
             id: Self::mint_id(),
             record_kind,
@@ -598,7 +733,7 @@ impl ProvenanceRecord {
             actor_id: None,
             from_state: None,
             to_state: None,
-            event: None,
+            event: record_kind.canonical_event_literal().map(str::to_string),
             data: None,
             audit_layer: None,
             actor_type: None,
@@ -663,7 +798,8 @@ impl ProvenanceRecord {
         record.actor_id = actor_id.map(String::from);
         record.from_state = Some(from.to_string());
         record.to_state = Some(to.to_string());
-        record.event = Some(event.to_string());
+        record.event = Some(WOS_KERNEL_STATE_TRANSITION_EVENT.to_string());
+        record.data = Some(serde_json::json!({ "transitionEvent": event }));
         record
     }
 
@@ -1548,6 +1684,58 @@ impl ProvenanceRecord {
         record
     }
 
+    // ── Key rebind recovery (ADR 0091) ─────────────────────────────
+
+    /// Create a key-rebind recovery record (ADR 0091).
+    ///
+    /// # Errors
+    /// Returns an error when the key ids are malformed, when either assurance
+    /// token has no portable ordering, or when the recovery would lower
+    /// assurance.
+    pub fn key_rebind(input: KeyRebindInput<'_>) -> Result<Self, KeyRebindError> {
+        const REQUIRED: &[&str] = &[
+            "priorKid",
+            "newKid",
+            "priorAssurance",
+            "newAssurance",
+            "rebindAttestationRef",
+            "reason",
+        ];
+        validate_key_rebind_input(&input)?;
+        let mut data = merge_context(input.context, REQUIRED);
+        data.insert(
+            "priorKid".to_string(),
+            serde_json::Value::String(input.prior_kid.to_string()),
+        );
+        data.insert(
+            "newKid".to_string(),
+            serde_json::Value::String(input.new_kid.to_string()),
+        );
+        data.insert(
+            "priorAssurance".to_string(),
+            serde_json::Value::String(input.prior_assurance.to_string()),
+        );
+        data.insert(
+            "newAssurance".to_string(),
+            serde_json::Value::String(input.new_assurance.to_string()),
+        );
+        data.insert(
+            "rebindAttestationRef".to_string(),
+            serde_json::Value::String(input.rebind_attestation_ref.to_string()),
+        );
+        if let Some(reason) = input.reason {
+            data.insert(
+                "reason".to_string(),
+                serde_json::Value::String(reason.to_string()),
+            );
+        }
+
+        let mut record = Self::blank(ProvenanceKind::KeyRebind);
+        record.event = Some(WOS_ASSURANCE_KEY_REBIND_EVENT.to_string());
+        record.data = Some(serde_json::Value::Object(data));
+        Ok(record)
+    }
+
     // ── Clock skew (ADR 0069) ────────────────────────────────────
 
     /// Create a clock-skew-observed record (ADR 0069 §3).
@@ -1742,6 +1930,53 @@ fn merge_context(
         }
     }
     data
+}
+
+fn validate_key_rebind_input(input: &KeyRebindInput<'_>) -> Result<(), KeyRebindError> {
+    validate_key_rebind_kid("priorKid", input.prior_kid)?;
+    validate_key_rebind_kid("newKid", input.new_kid)?;
+    let prior_rank =
+        assurance_rank(input.prior_assurance).ok_or_else(|| KeyRebindError::UnrankedAssurance {
+            field: "priorAssurance",
+            value: input.prior_assurance.to_string(),
+        })?;
+    let new_rank =
+        assurance_rank(input.new_assurance).ok_or_else(|| KeyRebindError::UnrankedAssurance {
+            field: "newAssurance",
+            value: input.new_assurance.to_string(),
+        })?;
+    if new_rank < prior_rank {
+        return Err(KeyRebindError::AssuranceDowngrade {
+            prior: input.prior_assurance.to_string(),
+            new: input.new_assurance.to_string(),
+        });
+    }
+    Ok(())
+}
+
+fn validate_key_rebind_kid(field: &'static str, value: &str) -> Result<(), KeyRebindError> {
+    if value.len() == 32
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
+        Ok(())
+    } else {
+        Err(KeyRebindError::InvalidKid {
+            field,
+            value: value.to_string(),
+        })
+    }
+}
+
+fn assurance_rank(value: &str) -> Option<u8> {
+    match value {
+        "low" => Some(1),
+        "standard" => Some(2),
+        "high" => Some(3),
+        "very-high" => Some(4),
+        _ => None,
+    }
 }
 
 impl std::fmt::Display for ProvenanceRecord {

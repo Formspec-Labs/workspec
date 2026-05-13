@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://wos.standard/schemas/record-kind-registry.json",
   "title": "WOS Record Kind Registry",
-  "description": "Canonical registry of all ProvenanceKind variants. 132 total — 22 carry schema-validated payload shapes (if/then guards or prov-log $def overlays), 110 are flat Facts-tier records. Every literal maps 1:1 to a ProvenanceKind Rust enum variant (crate::provenance::kind) under serde(rename_all=\"camelCase\"). Both the kernel FactsTierRecord.recordKind enum and the API FactsRecordKind taxonomy derive from this registry. See specs/provenance-registry.md for governance policy on adding/removing record kinds.",
+  "description": "Canonical registry of all ProvenanceKind variants. 133 total — 23 carry schema-validated payload shapes (if/then guards or prov-log $def overlays), 110 are flat Facts-tier records. Every literal maps 1:1 to a ProvenanceKind Rust enum variant (crate::provenance::kind) under serde(rename_all=\"camelCase\"). The API FactsRecordKind taxonomy derives from this registry; D26 wire records dispatch by event literal. See specs/provenance-registry.md for governance policy on adding/removing record categories.",
   "type": "object",
   "properties": {
     "registryVersion": {
@@ -24,11 +24,24 @@
     "sources": {
       "type": "object",
       "properties": {
-        "rustEnum": { "type": "string" },
-        "kernelSchema": { "type": "string" },
-        "apiProvenanceSchema": { "type": "string" },
-        "parityScript": { "type": "string" },
-        "adrs": { "type": "array", "items": { "type": "string" } }
+        "rustEnum": {
+          "type": "string"
+        },
+        "kernelSchema": {
+          "type": "string"
+        },
+        "apiProvenanceSchema": {
+          "type": "string"
+        },
+        "parityScript": {
+          "type": "string"
+        },
+        "adrs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       }
     },
     "recordKinds": {
@@ -36,24 +49,38 @@
       "items": {
         "type": "object",
         "properties": {
-          "literal": { "type": "string" },
-          "rustVariant": { "type": "string" },
-          "category": { "type": "string" },
-          "schemaValidated": { "type": "boolean" },
+          "literal": {
+            "type": "string"
+          },
+          "rustVariant": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "schemaValidated": {
+            "type": "boolean"
+          },
           "eventLiteral": {
             "type": "string",
-            "description": "Optional F-13 custody/export event literal when this record kind has a ratified WOS-owned event type. The event literal is the authoritative dispatch key for migrated overlays; `literal` remains the inner ProvenanceKind wire name until D26 removes recordKind dispatch globally."
+            "description": "Optional F-13 custody/export event literal when this record category has a ratified WOS-owned event type. The event literal is the authoritative dispatch key for migrated overlays; `literal` remains the internal ProvenanceKind name."
           },
-          "specReference": { "type": "string" }
+          "specReference": {
+            "type": "string"
+          }
         },
-        "required": ["literal", "rustVariant", "category"]
+        "required": [
+          "literal",
+          "rustVariant",
+          "category"
+        ]
       }
     }
   },
-  "registryVersion": "1.0.0",
-  "lastAudited": "2026-05-07",
-  "totalCount": 132,
-  "schemaValidatedCount": 22,
+  "registryVersion": "1.1.0",
+  "lastAudited": "2026-05-13",
+  "totalCount": 133,
+  "schemaValidatedCount": 23,
   "sources": {
     "rustEnum": "crates/wos-core/src/provenance/kind.rs",
     "kernelSchema": "schemas/wos-workflow.schema.json",
@@ -66,141 +93,968 @@
       "thoughts/adr/0068-stack-tenant-and-scope-composition.md",
       "thoughts/adr/0069-stack-time-semantics.md",
       "thoughts/adr/0070-stack-failure-and-compensation.md",
-      "thoughts/adr/0071-stack-cross-layer-migration-and-versioning.md"
+      "thoughts/adr/0071-stack-cross-layer-migration-and-versioning.md",
+      "thoughts/adr/0091-keyrebind-recovery-flow.md"
     ]
   },
   "recordKinds": [
-    { "literal": "stateTransition", "rustVariant": "StateTransition", "category": "foundation", "schemaValidated": true, "eventLiteral": "wos.kernel.state_transition", "specReference": "Kernel" },
-    { "literal": "unmatchedEvent", "rustVariant": "UnmatchedEvent", "category": "foundation", "schemaValidated": false, "specReference": "Kernel S4.9" },
-    { "literal": "caseStateMutation", "rustVariant": "CaseStateMutation", "category": "foundation", "schemaValidated": false, "specReference": "Kernel S5.4" },
-    { "literal": "caseCreated", "rustVariant": "CaseCreated", "category": "foundation", "schemaValidated": true, "eventLiteral": "wos.kernel.case_created", "specReference": "Kernel" },
-    { "literal": "intakeAccepted", "rustVariant": "IntakeAccepted", "category": "foundation", "schemaValidated": true, "eventLiteral": "wos.kernel.intake_accepted", "specReference": "ADR 0073" },
-    { "literal": "intakeRejected", "rustVariant": "IntakeRejected", "category": "foundation", "schemaValidated": true, "eventLiteral": "wos.kernel.intake_rejected", "specReference": "ADR 0073" },
-    { "literal": "intakeDeferred", "rustVariant": "IntakeDeferred", "category": "foundation", "schemaValidated": true, "eventLiteral": "wos.kernel.intake_deferred", "specReference": "ADR 0073" },
-    { "literal": "timerCreated", "rustVariant": "TimerCreated", "category": "lifecycle", "schemaValidated": false, "specReference": "Lifecycle Detail S6.7" },
-    { "literal": "timerFired", "rustVariant": "TimerFired", "category": "lifecycle", "schemaValidated": false, "specReference": "Lifecycle Detail S6.7" },
-    { "literal": "forEachIterationStarted", "rustVariant": "ForEachIterationStarted", "category": "lifecycle", "schemaValidated": false, "eventLiteral": "wos.kernel.for_each_iteration_started", "specReference": "Kernel §4.3.1" },
-    { "literal": "forEachIterationCompleted", "rustVariant": "ForEachIterationCompleted", "category": "lifecycle", "schemaValidated": false, "eventLiteral": "wos.kernel.for_each_iteration_completed", "specReference": "Kernel §4.3.1" },
-    { "literal": "forEachCompleted", "rustVariant": "ForEachCompleted", "category": "lifecycle", "schemaValidated": false, "eventLiteral": "wos.kernel.for_each_completed", "specReference": "Kernel §4.3.1" },
-    { "literal": "timerCancelled", "rustVariant": "TimerCancelled", "category": "lifecycle", "schemaValidated": false, "specReference": "Lifecycle Detail S6.7" },
-    { "literal": "onEntry", "rustVariant": "OnEntry", "category": "internal", "schemaValidated": false, "specReference": "Kernel" },
-    { "literal": "onExit", "rustVariant": "OnExit", "category": "internal", "schemaValidated": false, "specReference": "Kernel" },
-    { "literal": "actionExecuted", "rustVariant": "ActionExecuted", "category": "internal", "schemaValidated": false, "specReference": "Kernel" },
-    { "literal": "invalidDuration", "rustVariant": "InvalidDuration", "category": "internal", "schemaValidated": false, "specReference": "Kernel" },
-    { "literal": "toleranceViolation", "rustVariant": "ToleranceViolation", "category": "internal", "schemaValidated": false, "specReference": "LCD S6.6, Runtime S7.2" },
-    { "literal": "convergenceCapReached", "rustVariant": "ConvergenceCapReached", "category": "internal", "schemaValidated": false, "specReference": "Runtime §10.3" },
-    { "literal": "capabilityInvocation", "rustVariant": "CapabilityInvocation", "category": "ai", "schemaValidated": true, "eventLiteral": "wos.ai.capability_invocation", "specReference": "AI S3.3.1" },
-    { "literal": "deonticViolation", "rustVariant": "DeonticViolation", "category": "ai", "schemaValidated": false, "specReference": "AI S4.2–S4.4" },
-    { "literal": "deonticEvaluation", "rustVariant": "DeonticEvaluation", "category": "ai", "schemaValidated": false, "specReference": "AI S4.6" },
-    { "literal": "deonticResolution", "rustVariant": "DeonticResolution", "category": "ai", "schemaValidated": false, "specReference": "AI S4.6" },
-    { "literal": "deonticBypass", "rustVariant": "DeonticBypass", "category": "ai", "schemaValidated": false, "specReference": "AI S4.7" },
-    { "literal": "rightsViolation", "rustVariant": "RightsViolation", "category": "ai", "schemaValidated": false, "specReference": "AI S4.5" },
-    { "literal": "consistencyViolation", "rustVariant": "ConsistencyViolation", "category": "ai", "schemaValidated": false, "specReference": "AI S4.7" },
-    { "literal": "autonomyViolation", "rustVariant": "AutonomyViolation", "category": "ai", "schemaValidated": false, "specReference": "AI S3.7" },
-    { "literal": "autonomyCapped", "rustVariant": "AutonomyCapped", "category": "ai", "schemaValidated": false, "specReference": "AI S5.3" },
-    { "literal": "autonomyComputed", "rustVariant": "AutonomyComputed", "category": "ai", "schemaValidated": false, "specReference": "AI S5.3" },
-    { "literal": "humanTaskCreated", "rustVariant": "HumanTaskCreated", "category": "ai", "schemaValidated": false, "specReference": "AI S5.3" },
-    { "literal": "toolViolation", "rustVariant": "ToolViolation", "category": "ai", "schemaValidated": false, "specReference": "AdvGov S6.1" },
-    { "literal": "escalationPending", "rustVariant": "EscalationPending", "category": "ai", "schemaValidated": false, "specReference": "AI S5.4" },
-    { "literal": "autonomyDemotion", "rustVariant": "AutonomyDemotion", "category": "ai", "schemaValidated": false, "specReference": "AI S5.5" },
-    { "literal": "autonomyEscalation", "rustVariant": "AutonomyEscalation", "category": "ai", "schemaValidated": false, "specReference": "AI" },
-    { "literal": "confidenceViolation", "rustVariant": "ConfidenceViolation", "category": "ai", "schemaValidated": false, "specReference": "AI S7" },
-    { "literal": "confidenceDecay", "rustVariant": "ConfidenceDecay", "category": "ai", "schemaValidated": false, "specReference": "AI S7.5" },
-    { "literal": "cumulativeConfidenceViolation", "rustVariant": "CumulativeConfidenceViolation", "category": "ai", "schemaValidated": false, "specReference": "AI S7.7" },
-    { "literal": "sessionPaused", "rustVariant": "SessionPaused", "category": "ai", "schemaValidated": false, "specReference": "AdvGov S5.4" },
-    { "literal": "groundTruthLabel", "rustVariant": "GroundTruthLabel", "category": "ai", "schemaValidated": false, "specReference": "AdvGov S9.3" },
-    { "literal": "agentOutput", "rustVariant": "AgentOutput", "category": "ai", "schemaValidated": false, "specReference": "AI S3, S6" },
-    { "literal": "actorTypeViolation", "rustVariant": "ActorTypeViolation", "category": "ai", "schemaValidated": false, "specReference": "AI S3, S6" },
-    { "literal": "agentProvenanceAnnotation", "rustVariant": "AgentProvenanceAnnotation", "category": "ai", "schemaValidated": false, "specReference": "AI S3, S6" },
-    { "literal": "agentVersionChange", "rustVariant": "AgentVersionChange", "category": "ai", "schemaValidated": false, "specReference": "AI S3, S6" },
-    { "literal": "narrativeTierRecorded", "rustVariant": "NarrativeTierRecorded", "category": "ai", "schemaValidated": false, "specReference": "AI S3, S6" },
-    { "literal": "constraintTamperBlocked", "rustVariant": "ConstraintTamperBlocked", "category": "ai", "schemaValidated": false, "specReference": "AI S3, S6" },
-    { "literal": "driftReclassification", "rustVariant": "DriftReclassification", "category": "ai", "schemaValidated": false, "specReference": "AI S3, S6" },
-    { "literal": "agentStateTransition", "rustVariant": "AgentStateTransition", "category": "ai", "schemaValidated": false, "specReference": "AI S3, S6" },
-    { "literal": "proxyInvocation", "rustVariant": "ProxyInvocation", "category": "ai", "schemaValidated": false, "specReference": "AI S3, S6" },
-    { "literal": "dispositiveViolation", "rustVariant": "DispositiveViolation", "category": "ai", "schemaValidated": false, "specReference": "AI S3, S6" },
-    { "literal": "fallbackTriggered", "rustVariant": "FallbackTriggered", "category": "ai", "schemaValidated": false, "specReference": "AI S8" },
-    { "literal": "fallbackAttempt", "rustVariant": "FallbackAttempt", "category": "ai", "schemaValidated": false, "specReference": "AI S8" },
-    { "literal": "fallbackTerminal", "rustVariant": "FallbackTerminal", "category": "ai", "schemaValidated": false, "specReference": "AI S8" },
-    { "literal": "noticeSent", "rustVariant": "NoticeSent", "category": "governance", "schemaValidated": false, "specReference": "WG S4, S6, S7" },
-    { "literal": "separationViolation", "rustVariant": "SeparationViolation", "category": "governance", "schemaValidated": false, "specReference": "WG S4, S6, S7" },
-    { "literal": "appealFiled", "rustVariant": "AppealFiled", "category": "governance", "schemaValidated": false, "specReference": "WG S4, S6, S7" },
-    { "literal": "protocolViolation", "rustVariant": "ProtocolViolation", "category": "governance", "schemaValidated": false, "specReference": "WG S4, S6, S7" },
-    { "literal": "independentFirstEnforced", "rustVariant": "IndependentFirstEnforced", "category": "governance", "schemaValidated": false, "specReference": "WG S4, S6, S7" },
-    { "literal": "samplingDecision", "rustVariant": "SamplingDecision", "category": "governance", "schemaValidated": false, "specReference": "WG S4, S6, S7" },
-    { "literal": "overrideViolation", "rustVariant": "OverrideViolation", "category": "governance", "schemaValidated": false, "specReference": "WG S4, S6, S7" },
-    { "literal": "overrideRecorded", "rustVariant": "OverrideRecorded", "category": "governance", "schemaValidated": false, "specReference": "WG S4, S6, S7" },
-    { "literal": "legalHoldPlaced", "rustVariant": "LegalHoldPlaced", "category": "governance", "schemaValidated": false, "specReference": "WG" },
-    { "literal": "legalHoldReleased", "rustVariant": "LegalHoldReleased", "category": "governance", "schemaValidated": false, "specReference": "WG" },
-    { "literal": "legalHoldDestructionRejected", "rustVariant": "LegalHoldDestructionRejected", "category": "governance", "schemaValidated": false, "specReference": "WG" },
-    { "literal": "continuationOfServicesActivated", "rustVariant": "ContinuationOfServicesActivated", "category": "governance", "schemaValidated": false, "specReference": "WG" },
-    { "literal": "pipelineStageCompleted", "rustVariant": "PipelineStageCompleted", "category": "governance", "schemaValidated": false, "specReference": "WG S8" },
-    { "literal": "pipelineRiskProfile", "rustVariant": "PipelineRiskProfile", "category": "governance", "schemaValidated": false, "specReference": "WG S8" },
-    { "literal": "pipelineRejection", "rustVariant": "PipelineRejection", "category": "governance", "schemaValidated": false, "specReference": "WG S8" },
-    { "literal": "taskCreated", "rustVariant": "TaskCreated", "category": "governance", "schemaValidated": false, "specReference": "WG S8" },
-    { "literal": "taskPresented", "rustVariant": "TaskPresented", "category": "governance", "schemaValidated": false, "specReference": "WG S8" },
-    { "literal": "taskDismissed", "rustVariant": "TaskDismissed", "category": "governance", "schemaValidated": false, "specReference": "WG S8" },
-    { "literal": "taskDraftPersisted", "rustVariant": "TaskDraftPersisted", "category": "governance", "schemaValidated": false, "specReference": "WG S8" },
-    { "literal": "taskResponseSubmitted", "rustVariant": "TaskResponseSubmitted", "category": "governance", "schemaValidated": false, "specReference": "WG S8" },
-    { "literal": "taskResponseRejected", "rustVariant": "TaskResponseRejected", "category": "governance", "schemaValidated": false, "specReference": "WG S8" },
-    { "literal": "dataMapping", "rustVariant": "DataMapping", "category": "governance", "schemaValidated": false, "specReference": "WG S8" },
-    { "literal": "taskCompleted", "rustVariant": "TaskCompleted", "category": "governance", "schemaValidated": false, "specReference": "WG S8" },
-    { "literal": "taskFailed", "rustVariant": "TaskFailed", "category": "governance", "schemaValidated": false, "specReference": "WG S8" },
-    { "literal": "taskSkipped", "rustVariant": "TaskSkipped", "category": "governance", "schemaValidated": false, "specReference": "WG S8" },
-    { "literal": "parameterResolved", "rustVariant": "ParameterResolved", "category": "governance", "schemaValidated": false, "specReference": "WG S8" },
-    { "literal": "compensationLogEntry", "rustVariant": "CompensationLogEntry", "category": "compensation", "schemaValidated": false, "specReference": "Kernel S9.8" },
-    { "literal": "compensationExecuted", "rustVariant": "CompensationExecuted", "category": "compensation", "schemaValidated": false, "specReference": "Kernel S9.8" },
-    { "literal": "compensationScopeBoundary", "rustVariant": "CompensationScopeBoundary", "category": "compensation", "schemaValidated": false, "specReference": "Kernel S9.8" },
-    { "literal": "delegationViolation", "rustVariant": "DelegationViolation", "category": "delegation", "schemaValidated": false, "specReference": "WG S9" },
-    { "literal": "instanceSuspended", "rustVariant": "InstanceSuspended", "category": "lifecycle", "schemaValidated": false, "specReference": "Kernel S10" },
-    { "literal": "instanceResumed", "rustVariant": "InstanceResumed", "category": "lifecycle", "schemaValidated": false, "specReference": "Kernel S10" },
-    { "literal": "instanceTerminated", "rustVariant": "InstanceTerminated", "category": "lifecycle", "schemaValidated": false, "specReference": "Kernel S10" },
-    { "literal": "stepResultPersisted", "rustVariant": "StepResultPersisted", "category": "lifecycle", "schemaValidated": false, "specReference": "Kernel S10" },
-    { "literal": "idempotencyDedup", "rustVariant": "IdempotencyDedup", "category": "lifecycle", "schemaValidated": false, "specReference": "Kernel S10" },
-    { "literal": "instanceMigrated", "rustVariant": "InstanceMigrated", "category": "lifecycle", "schemaValidated": false, "specReference": "Kernel S10" },
-    { "literal": "contractValidation", "rustVariant": "ContractValidation", "category": "lifecycle", "schemaValidated": false, "specReference": "Kernel S10" },
-    { "literal": "historyCleared", "rustVariant": "HistoryCleared", "category": "internal", "schemaValidated": false, "specReference": "Kernel" },
-    { "literal": "dcrActivityExecuted", "rustVariant": "DcrActivityExecuted", "category": "advanced", "schemaValidated": false, "specReference": "Advanced Governance" },
-    { "literal": "dcrRelationEvaluated", "rustVariant": "DcrRelationEvaluated", "category": "advanced", "schemaValidated": false, "specReference": "Advanced Governance" },
-    { "literal": "dcrResolutionError", "rustVariant": "DcrResolutionError", "category": "advanced", "schemaValidated": false, "specReference": "Advanced Governance" },
-    { "literal": "zoneSatisfied", "rustVariant": "ZoneSatisfied", "category": "advanced", "schemaValidated": false, "specReference": "Advanced Governance" },
-    { "literal": "dcrZoneViolation", "rustVariant": "DcrZoneViolation", "category": "advanced", "schemaValidated": false, "specReference": "Advanced Governance" },
-    { "literal": "equityAlert", "rustVariant": "EquityAlert", "category": "advanced", "schemaValidated": false, "specReference": "Advanced Governance" },
-    { "literal": "circuitBreakerTripped", "rustVariant": "CircuitBreakerTripped", "category": "advanced", "schemaValidated": false, "specReference": "Advanced Governance" },
-    { "literal": "circuitBreakerReset", "rustVariant": "CircuitBreakerReset", "category": "advanced", "schemaValidated": false, "specReference": "Advanced Governance" },
-    { "literal": "shadowModeDivergence", "rustVariant": "ShadowModeDivergence", "category": "advanced", "schemaValidated": false, "specReference": "Advanced Governance" },
-    { "literal": "driftAlert", "rustVariant": "DriftAlert", "category": "advanced", "schemaValidated": false, "specReference": "Advanced Governance" },
-    { "literal": "verificationReportProduced", "rustVariant": "VerificationReportProduced", "category": "advanced", "schemaValidated": false, "specReference": "Advanced Governance" },
-    { "literal": "immutabilityViolation", "rustVariant": "ImmutabilityViolation", "category": "advanced", "schemaValidated": false, "specReference": "Advanced Governance" },
-    { "literal": "activationBlocked", "rustVariant": "ActivationBlocked", "category": "advanced", "schemaValidated": false, "specReference": "Advanced Governance" },
-    { "literal": "calendarIgnored", "rustVariant": "CalendarIgnored", "category": "sidecar", "schemaValidated": false, "specReference": "Sidecar" },
-    { "literal": "notificationSuppressed", "rustVariant": "NotificationSuppressed", "category": "sidecar", "schemaValidated": false, "specReference": "Sidecar" },
-    { "literal": "reportTimedOut", "rustVariant": "ReportTimedOut", "category": "sidecar", "schemaValidated": false, "specReference": "Sidecar" },
-    { "literal": "configurationWarning", "rustVariant": "ConfigurationWarning", "category": "config", "schemaValidated": false, "specReference": "Cross-cutting" },
-    { "literal": "relationshipChanged", "rustVariant": "RelationshipChanged", "category": "internal", "schemaValidated": false, "specReference": "Kernel S7" },
-    { "literal": "milestoneFired", "rustVariant": "MilestoneFired", "category": "foundation", "schemaValidated": false, "specReference": "Kernel S4.13" },
-    { "literal": "eventEmitted", "rustVariant": "EventEmitted", "category": "integration", "schemaValidated": false, "specReference": "Integration Profile NB.3" },
-    { "literal": "eventConsumed", "rustVariant": "EventConsumed", "category": "integration", "schemaValidated": false, "specReference": "Integration Profile NB.3" },
-    { "literal": "callbackReceived", "rustVariant": "CallbackReceived", "category": "integration", "schemaValidated": false, "specReference": "Integration Profile NB.3" },
-    { "literal": "callbackPending", "rustVariant": "CallbackPending", "category": "integration", "schemaValidated": false, "specReference": "Integration Profile NB.3" },
-    { "literal": "arazzoStep", "rustVariant": "ArazzoStep", "category": "integration", "schemaValidated": false, "specReference": "Integration Profile NB.4" },
-    { "literal": "toolInvoked", "rustVariant": "ToolInvoked", "category": "integration", "schemaValidated": false, "specReference": "Integration Profile NB.4" },
-    { "literal": "policyDecision", "rustVariant": "PolicyDecision", "category": "integration", "schemaValidated": false, "specReference": "Integration Profile NB.4" },
-    { "literal": "signatureAffirmation", "rustVariant": "SignatureAffirmation", "category": "signature", "schemaValidated": true, "eventLiteral": "wos.kernel.signature_affirmation", "specReference": "WOS-T4" },
-    { "literal": "signatureAdmissionFailed", "rustVariant": "SignatureAdmissionFailed", "category": "signature", "schemaValidated": true, "eventLiteral": "wos.kernel.signature_admission_failed", "specReference": "ADR 0089" },
-    { "literal": "correctionAuthorized", "rustVariant": "CorrectionAuthorized", "category": "amendment", "schemaValidated": true, "eventLiteral": "wos.governance.correction_authorized", "specReference": "ADR 0066 §1" },
-    { "literal": "amendmentAuthorized", "rustVariant": "AmendmentAuthorized", "category": "amendment", "schemaValidated": true, "eventLiteral": "wos.governance.amendment_authorized", "specReference": "ADR 0066 §2" },
-    { "literal": "determinationAmended", "rustVariant": "DeterminationAmended", "category": "amendment", "schemaValidated": true, "eventLiteral": "wos.governance.determination_amended", "specReference": "ADR 0066 §2" },
-    { "literal": "rescissionAuthorized", "rustVariant": "RescissionAuthorized", "category": "amendment", "schemaValidated": true, "eventLiteral": "wos.governance.rescission_authorized", "specReference": "ADR 0066 §3" },
-    { "literal": "determinationRescinded", "rustVariant": "DeterminationRescinded", "category": "amendment", "schemaValidated": true, "eventLiteral": "wos.governance.determination_rescinded", "specReference": "ADR 0066 §3" },
-    { "literal": "reinstated", "rustVariant": "Reinstated", "category": "amendment", "schemaValidated": true, "eventLiteral": "wos.governance.reinstated", "specReference": "ADR 0066 §4" },
-    { "literal": "authorizationAttestation", "rustVariant": "AuthorizationAttestation", "category": "amendment", "schemaValidated": true, "eventLiteral": "wos.governance.authorization_attestation", "specReference": "ADR 0066 §5" },
-    { "literal": "clockStarted", "rustVariant": "ClockStarted", "category": "clock", "schemaValidated": true, "eventLiteral": "wos.governance.clock_started", "specReference": "ADR 0067 §2" },
-    { "literal": "clockResolved", "rustVariant": "ClockResolved", "category": "clock", "schemaValidated": true, "eventLiteral": "wos.governance.clock_resolved", "specReference": "ADR 0067 §3" },
-    { "literal": "identityAttestation", "rustVariant": "IdentityAttestation", "category": "identity", "schemaValidated": true, "eventLiteral": "wos.assurance.identity_attestation", "specReference": "ADR 0068 §4" },
-    { "literal": "clockSkewObserved", "rustVariant": "ClockSkewObserved", "category": "clock", "schemaValidated": true, "eventLiteral": "wos.governance.clock_skew_observed", "specReference": "ADR 0069 §3" },
-    { "literal": "commitAttemptFailure", "rustVariant": "CommitAttemptFailure", "category": "failure", "schemaValidated": true, "eventLiteral": "wos.kernel.commit_attempt_failure", "specReference": "ADR 0070 §2" },
-    { "literal": "authorizationRejected", "rustVariant": "AuthorizationRejected", "category": "failure", "schemaValidated": true, "eventLiteral": "wos.governance.authorization_rejected", "specReference": "ADR 0070 §4" },
-    { "literal": "migrationPinChanged", "rustVariant": "MigrationPinChanged", "category": "migration", "schemaValidated": true, "eventLiteral": "wos.kernel.migration_pin_changed", "specReference": "ADR 0071 §3" }
+    {
+      "literal": "stateTransition",
+      "rustVariant": "StateTransition",
+      "category": "foundation",
+      "schemaValidated": true,
+      "eventLiteral": "wos.kernel.state_transition",
+      "specReference": "Kernel"
+    },
+    {
+      "literal": "unmatchedEvent",
+      "rustVariant": "UnmatchedEvent",
+      "category": "foundation",
+      "schemaValidated": false,
+      "specReference": "Kernel S4.9"
+    },
+    {
+      "literal": "caseStateMutation",
+      "rustVariant": "CaseStateMutation",
+      "category": "foundation",
+      "schemaValidated": false,
+      "specReference": "Kernel S5.4"
+    },
+    {
+      "literal": "caseCreated",
+      "rustVariant": "CaseCreated",
+      "category": "foundation",
+      "schemaValidated": true,
+      "eventLiteral": "wos.kernel.case_created",
+      "specReference": "Kernel"
+    },
+    {
+      "literal": "intakeAccepted",
+      "rustVariant": "IntakeAccepted",
+      "category": "foundation",
+      "schemaValidated": true,
+      "eventLiteral": "wos.kernel.intake_accepted",
+      "specReference": "ADR 0073"
+    },
+    {
+      "literal": "intakeRejected",
+      "rustVariant": "IntakeRejected",
+      "category": "foundation",
+      "schemaValidated": true,
+      "eventLiteral": "wos.kernel.intake_rejected",
+      "specReference": "ADR 0073"
+    },
+    {
+      "literal": "intakeDeferred",
+      "rustVariant": "IntakeDeferred",
+      "category": "foundation",
+      "schemaValidated": true,
+      "eventLiteral": "wos.kernel.intake_deferred",
+      "specReference": "ADR 0073"
+    },
+    {
+      "literal": "timerCreated",
+      "rustVariant": "TimerCreated",
+      "category": "lifecycle",
+      "schemaValidated": false,
+      "specReference": "Lifecycle Detail S6.7"
+    },
+    {
+      "literal": "timerFired",
+      "rustVariant": "TimerFired",
+      "category": "lifecycle",
+      "schemaValidated": false,
+      "specReference": "Lifecycle Detail S6.7"
+    },
+    {
+      "literal": "forEachIterationStarted",
+      "rustVariant": "ForEachIterationStarted",
+      "category": "lifecycle",
+      "schemaValidated": false,
+      "eventLiteral": "wos.kernel.for_each_iteration_started",
+      "specReference": "Kernel §4.3.1"
+    },
+    {
+      "literal": "forEachIterationCompleted",
+      "rustVariant": "ForEachIterationCompleted",
+      "category": "lifecycle",
+      "schemaValidated": false,
+      "eventLiteral": "wos.kernel.for_each_iteration_completed",
+      "specReference": "Kernel §4.3.1"
+    },
+    {
+      "literal": "forEachCompleted",
+      "rustVariant": "ForEachCompleted",
+      "category": "lifecycle",
+      "schemaValidated": false,
+      "eventLiteral": "wos.kernel.for_each_completed",
+      "specReference": "Kernel §4.3.1"
+    },
+    {
+      "literal": "timerCancelled",
+      "rustVariant": "TimerCancelled",
+      "category": "lifecycle",
+      "schemaValidated": false,
+      "specReference": "Lifecycle Detail S6.7"
+    },
+    {
+      "literal": "onEntry",
+      "rustVariant": "OnEntry",
+      "category": "internal",
+      "schemaValidated": false,
+      "specReference": "Kernel"
+    },
+    {
+      "literal": "onExit",
+      "rustVariant": "OnExit",
+      "category": "internal",
+      "schemaValidated": false,
+      "specReference": "Kernel"
+    },
+    {
+      "literal": "actionExecuted",
+      "rustVariant": "ActionExecuted",
+      "category": "internal",
+      "schemaValidated": false,
+      "specReference": "Kernel"
+    },
+    {
+      "literal": "invalidDuration",
+      "rustVariant": "InvalidDuration",
+      "category": "internal",
+      "schemaValidated": false,
+      "specReference": "Kernel"
+    },
+    {
+      "literal": "toleranceViolation",
+      "rustVariant": "ToleranceViolation",
+      "category": "internal",
+      "schemaValidated": false,
+      "specReference": "LCD S6.6, Runtime S7.2"
+    },
+    {
+      "literal": "convergenceCapReached",
+      "rustVariant": "ConvergenceCapReached",
+      "category": "internal",
+      "schemaValidated": false,
+      "specReference": "Runtime §10.3"
+    },
+    {
+      "literal": "capabilityInvocation",
+      "rustVariant": "CapabilityInvocation",
+      "category": "ai",
+      "schemaValidated": true,
+      "eventLiteral": "wos.ai.capability_invocation",
+      "specReference": "AI S3.3.1"
+    },
+    {
+      "literal": "deonticViolation",
+      "rustVariant": "DeonticViolation",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S4.2–S4.4"
+    },
+    {
+      "literal": "deonticEvaluation",
+      "rustVariant": "DeonticEvaluation",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S4.6"
+    },
+    {
+      "literal": "deonticResolution",
+      "rustVariant": "DeonticResolution",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S4.6"
+    },
+    {
+      "literal": "deonticBypass",
+      "rustVariant": "DeonticBypass",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S4.7"
+    },
+    {
+      "literal": "rightsViolation",
+      "rustVariant": "RightsViolation",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S4.5"
+    },
+    {
+      "literal": "consistencyViolation",
+      "rustVariant": "ConsistencyViolation",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S4.7"
+    },
+    {
+      "literal": "autonomyViolation",
+      "rustVariant": "AutonomyViolation",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S3.7"
+    },
+    {
+      "literal": "autonomyCapped",
+      "rustVariant": "AutonomyCapped",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S5.3"
+    },
+    {
+      "literal": "autonomyComputed",
+      "rustVariant": "AutonomyComputed",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S5.3"
+    },
+    {
+      "literal": "humanTaskCreated",
+      "rustVariant": "HumanTaskCreated",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S5.3"
+    },
+    {
+      "literal": "toolViolation",
+      "rustVariant": "ToolViolation",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AdvGov S6.1"
+    },
+    {
+      "literal": "escalationPending",
+      "rustVariant": "EscalationPending",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S5.4"
+    },
+    {
+      "literal": "autonomyDemotion",
+      "rustVariant": "AutonomyDemotion",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S5.5"
+    },
+    {
+      "literal": "autonomyEscalation",
+      "rustVariant": "AutonomyEscalation",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI"
+    },
+    {
+      "literal": "confidenceViolation",
+      "rustVariant": "ConfidenceViolation",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S7"
+    },
+    {
+      "literal": "confidenceDecay",
+      "rustVariant": "ConfidenceDecay",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S7.5"
+    },
+    {
+      "literal": "cumulativeConfidenceViolation",
+      "rustVariant": "CumulativeConfidenceViolation",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S7.7"
+    },
+    {
+      "literal": "sessionPaused",
+      "rustVariant": "SessionPaused",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AdvGov S5.4"
+    },
+    {
+      "literal": "groundTruthLabel",
+      "rustVariant": "GroundTruthLabel",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AdvGov S9.3"
+    },
+    {
+      "literal": "agentOutput",
+      "rustVariant": "AgentOutput",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S3, S6"
+    },
+    {
+      "literal": "actorTypeViolation",
+      "rustVariant": "ActorTypeViolation",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S3, S6"
+    },
+    {
+      "literal": "agentProvenanceAnnotation",
+      "rustVariant": "AgentProvenanceAnnotation",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S3, S6"
+    },
+    {
+      "literal": "agentVersionChange",
+      "rustVariant": "AgentVersionChange",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S3, S6"
+    },
+    {
+      "literal": "narrativeTierRecorded",
+      "rustVariant": "NarrativeTierRecorded",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S3, S6"
+    },
+    {
+      "literal": "constraintTamperBlocked",
+      "rustVariant": "ConstraintTamperBlocked",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S3, S6"
+    },
+    {
+      "literal": "driftReclassification",
+      "rustVariant": "DriftReclassification",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S3, S6"
+    },
+    {
+      "literal": "agentStateTransition",
+      "rustVariant": "AgentStateTransition",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S3, S6"
+    },
+    {
+      "literal": "proxyInvocation",
+      "rustVariant": "ProxyInvocation",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S3, S6"
+    },
+    {
+      "literal": "dispositiveViolation",
+      "rustVariant": "DispositiveViolation",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S3, S6"
+    },
+    {
+      "literal": "fallbackTriggered",
+      "rustVariant": "FallbackTriggered",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S8"
+    },
+    {
+      "literal": "fallbackAttempt",
+      "rustVariant": "FallbackAttempt",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S8"
+    },
+    {
+      "literal": "fallbackTerminal",
+      "rustVariant": "FallbackTerminal",
+      "category": "ai",
+      "schemaValidated": false,
+      "specReference": "AI S8"
+    },
+    {
+      "literal": "noticeSent",
+      "rustVariant": "NoticeSent",
+      "category": "governance",
+      "schemaValidated": false,
+      "specReference": "WG S4, S6, S7"
+    },
+    {
+      "literal": "separationViolation",
+      "rustVariant": "SeparationViolation",
+      "category": "governance",
+      "schemaValidated": false,
+      "specReference": "WG S4, S6, S7"
+    },
+    {
+      "literal": "appealFiled",
+      "rustVariant": "AppealFiled",
+      "category": "governance",
+      "schemaValidated": false,
+      "specReference": "WG S4, S6, S7"
+    },
+    {
+      "literal": "protocolViolation",
+      "rustVariant": "ProtocolViolation",
+      "category": "governance",
+      "schemaValidated": false,
+      "specReference": "WG S4, S6, S7"
+    },
+    {
+      "literal": "independentFirstEnforced",
+      "rustVariant": "IndependentFirstEnforced",
+      "category": "governance",
+      "schemaValidated": false,
+      "specReference": "WG S4, S6, S7"
+    },
+    {
+      "literal": "samplingDecision",
+      "rustVariant": "SamplingDecision",
+      "category": "governance",
+      "schemaValidated": false,
+      "specReference": "WG S4, S6, S7"
+    },
+    {
+      "literal": "overrideViolation",
+      "rustVariant": "OverrideViolation",
+      "category": "governance",
+      "schemaValidated": false,
+      "specReference": "WG S4, S6, S7"
+    },
+    {
+      "literal": "overrideRecorded",
+      "rustVariant": "OverrideRecorded",
+      "category": "governance",
+      "schemaValidated": false,
+      "specReference": "WG S4, S6, S7"
+    },
+    {
+      "literal": "legalHoldPlaced",
+      "rustVariant": "LegalHoldPlaced",
+      "category": "governance",
+      "schemaValidated": false,
+      "specReference": "WG"
+    },
+    {
+      "literal": "legalHoldReleased",
+      "rustVariant": "LegalHoldReleased",
+      "category": "governance",
+      "schemaValidated": false,
+      "specReference": "WG"
+    },
+    {
+      "literal": "legalHoldDestructionRejected",
+      "rustVariant": "LegalHoldDestructionRejected",
+      "category": "governance",
+      "schemaValidated": false,
+      "specReference": "WG"
+    },
+    {
+      "literal": "continuationOfServicesActivated",
+      "rustVariant": "ContinuationOfServicesActivated",
+      "category": "governance",
+      "schemaValidated": false,
+      "specReference": "WG"
+    },
+    {
+      "literal": "pipelineStageCompleted",
+      "rustVariant": "PipelineStageCompleted",
+      "category": "governance",
+      "schemaValidated": false,
+      "specReference": "WG S8"
+    },
+    {
+      "literal": "pipelineRiskProfile",
+      "rustVariant": "PipelineRiskProfile",
+      "category": "governance",
+      "schemaValidated": false,
+      "specReference": "WG S8"
+    },
+    {
+      "literal": "pipelineRejection",
+      "rustVariant": "PipelineRejection",
+      "category": "governance",
+      "schemaValidated": false,
+      "specReference": "WG S8"
+    },
+    {
+      "literal": "taskCreated",
+      "rustVariant": "TaskCreated",
+      "category": "governance",
+      "schemaValidated": false,
+      "specReference": "WG S8"
+    },
+    {
+      "literal": "taskPresented",
+      "rustVariant": "TaskPresented",
+      "category": "governance",
+      "schemaValidated": false,
+      "specReference": "WG S8"
+    },
+    {
+      "literal": "taskDismissed",
+      "rustVariant": "TaskDismissed",
+      "category": "governance",
+      "schemaValidated": false,
+      "specReference": "WG S8"
+    },
+    {
+      "literal": "taskDraftPersisted",
+      "rustVariant": "TaskDraftPersisted",
+      "category": "governance",
+      "schemaValidated": false,
+      "specReference": "WG S8"
+    },
+    {
+      "literal": "taskResponseSubmitted",
+      "rustVariant": "TaskResponseSubmitted",
+      "category": "governance",
+      "schemaValidated": false,
+      "specReference": "WG S8"
+    },
+    {
+      "literal": "taskResponseRejected",
+      "rustVariant": "TaskResponseRejected",
+      "category": "governance",
+      "schemaValidated": false,
+      "specReference": "WG S8"
+    },
+    {
+      "literal": "dataMapping",
+      "rustVariant": "DataMapping",
+      "category": "governance",
+      "schemaValidated": false,
+      "specReference": "WG S8"
+    },
+    {
+      "literal": "taskCompleted",
+      "rustVariant": "TaskCompleted",
+      "category": "governance",
+      "schemaValidated": false,
+      "specReference": "WG S8"
+    },
+    {
+      "literal": "taskFailed",
+      "rustVariant": "TaskFailed",
+      "category": "governance",
+      "schemaValidated": false,
+      "specReference": "WG S8"
+    },
+    {
+      "literal": "taskSkipped",
+      "rustVariant": "TaskSkipped",
+      "category": "governance",
+      "schemaValidated": false,
+      "specReference": "WG S8"
+    },
+    {
+      "literal": "parameterResolved",
+      "rustVariant": "ParameterResolved",
+      "category": "governance",
+      "schemaValidated": false,
+      "specReference": "WG S8"
+    },
+    {
+      "literal": "compensationLogEntry",
+      "rustVariant": "CompensationLogEntry",
+      "category": "compensation",
+      "schemaValidated": false,
+      "specReference": "Kernel S9.8"
+    },
+    {
+      "literal": "compensationExecuted",
+      "rustVariant": "CompensationExecuted",
+      "category": "compensation",
+      "schemaValidated": false,
+      "specReference": "Kernel S9.8"
+    },
+    {
+      "literal": "compensationScopeBoundary",
+      "rustVariant": "CompensationScopeBoundary",
+      "category": "compensation",
+      "schemaValidated": false,
+      "specReference": "Kernel S9.8"
+    },
+    {
+      "literal": "delegationViolation",
+      "rustVariant": "DelegationViolation",
+      "category": "delegation",
+      "schemaValidated": false,
+      "specReference": "WG S9"
+    },
+    {
+      "literal": "instanceSuspended",
+      "rustVariant": "InstanceSuspended",
+      "category": "lifecycle",
+      "schemaValidated": false,
+      "specReference": "Kernel S10"
+    },
+    {
+      "literal": "instanceResumed",
+      "rustVariant": "InstanceResumed",
+      "category": "lifecycle",
+      "schemaValidated": false,
+      "specReference": "Kernel S10"
+    },
+    {
+      "literal": "instanceTerminated",
+      "rustVariant": "InstanceTerminated",
+      "category": "lifecycle",
+      "schemaValidated": false,
+      "specReference": "Kernel S10"
+    },
+    {
+      "literal": "stepResultPersisted",
+      "rustVariant": "StepResultPersisted",
+      "category": "lifecycle",
+      "schemaValidated": false,
+      "specReference": "Kernel S10"
+    },
+    {
+      "literal": "idempotencyDedup",
+      "rustVariant": "IdempotencyDedup",
+      "category": "lifecycle",
+      "schemaValidated": false,
+      "specReference": "Kernel S10"
+    },
+    {
+      "literal": "instanceMigrated",
+      "rustVariant": "InstanceMigrated",
+      "category": "lifecycle",
+      "eventLiteral": "wos.kernel.instance_migrated",
+      "schemaValidated": false,
+      "specReference": "Kernel S10"
+    },
+    {
+      "literal": "contractValidation",
+      "rustVariant": "ContractValidation",
+      "category": "lifecycle",
+      "schemaValidated": false,
+      "specReference": "Kernel S10"
+    },
+    {
+      "literal": "historyCleared",
+      "rustVariant": "HistoryCleared",
+      "category": "internal",
+      "schemaValidated": false,
+      "specReference": "Kernel"
+    },
+    {
+      "literal": "dcrActivityExecuted",
+      "rustVariant": "DcrActivityExecuted",
+      "category": "advanced",
+      "schemaValidated": false,
+      "specReference": "Advanced Governance"
+    },
+    {
+      "literal": "dcrRelationEvaluated",
+      "rustVariant": "DcrRelationEvaluated",
+      "category": "advanced",
+      "schemaValidated": false,
+      "specReference": "Advanced Governance"
+    },
+    {
+      "literal": "dcrResolutionError",
+      "rustVariant": "DcrResolutionError",
+      "category": "advanced",
+      "schemaValidated": false,
+      "specReference": "Advanced Governance"
+    },
+    {
+      "literal": "zoneSatisfied",
+      "rustVariant": "ZoneSatisfied",
+      "category": "advanced",
+      "schemaValidated": false,
+      "specReference": "Advanced Governance"
+    },
+    {
+      "literal": "dcrZoneViolation",
+      "rustVariant": "DcrZoneViolation",
+      "category": "advanced",
+      "schemaValidated": false,
+      "specReference": "Advanced Governance"
+    },
+    {
+      "literal": "equityAlert",
+      "rustVariant": "EquityAlert",
+      "category": "advanced",
+      "schemaValidated": false,
+      "specReference": "Advanced Governance"
+    },
+    {
+      "literal": "circuitBreakerTripped",
+      "rustVariant": "CircuitBreakerTripped",
+      "category": "advanced",
+      "schemaValidated": false,
+      "specReference": "Advanced Governance"
+    },
+    {
+      "literal": "circuitBreakerReset",
+      "rustVariant": "CircuitBreakerReset",
+      "category": "advanced",
+      "schemaValidated": false,
+      "specReference": "Advanced Governance"
+    },
+    {
+      "literal": "shadowModeDivergence",
+      "rustVariant": "ShadowModeDivergence",
+      "category": "advanced",
+      "schemaValidated": false,
+      "specReference": "Advanced Governance"
+    },
+    {
+      "literal": "driftAlert",
+      "rustVariant": "DriftAlert",
+      "category": "advanced",
+      "schemaValidated": false,
+      "specReference": "Advanced Governance"
+    },
+    {
+      "literal": "verificationReportProduced",
+      "rustVariant": "VerificationReportProduced",
+      "category": "advanced",
+      "schemaValidated": false,
+      "specReference": "Advanced Governance"
+    },
+    {
+      "literal": "immutabilityViolation",
+      "rustVariant": "ImmutabilityViolation",
+      "category": "advanced",
+      "schemaValidated": false,
+      "specReference": "Advanced Governance"
+    },
+    {
+      "literal": "activationBlocked",
+      "rustVariant": "ActivationBlocked",
+      "category": "advanced",
+      "schemaValidated": false,
+      "specReference": "Advanced Governance"
+    },
+    {
+      "literal": "calendarIgnored",
+      "rustVariant": "CalendarIgnored",
+      "category": "sidecar",
+      "schemaValidated": false,
+      "specReference": "Sidecar"
+    },
+    {
+      "literal": "notificationSuppressed",
+      "rustVariant": "NotificationSuppressed",
+      "category": "sidecar",
+      "schemaValidated": false,
+      "specReference": "Sidecar"
+    },
+    {
+      "literal": "reportTimedOut",
+      "rustVariant": "ReportTimedOut",
+      "category": "sidecar",
+      "schemaValidated": false,
+      "specReference": "Sidecar"
+    },
+    {
+      "literal": "configurationWarning",
+      "rustVariant": "ConfigurationWarning",
+      "category": "config",
+      "schemaValidated": false,
+      "specReference": "Cross-cutting"
+    },
+    {
+      "literal": "relationshipChanged",
+      "rustVariant": "RelationshipChanged",
+      "category": "internal",
+      "schemaValidated": false,
+      "specReference": "Kernel S7"
+    },
+    {
+      "literal": "milestoneFired",
+      "rustVariant": "MilestoneFired",
+      "category": "foundation",
+      "schemaValidated": false,
+      "specReference": "Kernel S4.13"
+    },
+    {
+      "literal": "eventEmitted",
+      "rustVariant": "EventEmitted",
+      "category": "integration",
+      "schemaValidated": false,
+      "specReference": "Integration Profile NB.3"
+    },
+    {
+      "literal": "eventConsumed",
+      "rustVariant": "EventConsumed",
+      "category": "integration",
+      "schemaValidated": false,
+      "specReference": "Integration Profile NB.3"
+    },
+    {
+      "literal": "callbackReceived",
+      "rustVariant": "CallbackReceived",
+      "category": "integration",
+      "schemaValidated": false,
+      "specReference": "Integration Profile NB.3"
+    },
+    {
+      "literal": "callbackPending",
+      "rustVariant": "CallbackPending",
+      "category": "integration",
+      "schemaValidated": false,
+      "specReference": "Integration Profile NB.3"
+    },
+    {
+      "literal": "arazzoStep",
+      "rustVariant": "ArazzoStep",
+      "category": "integration",
+      "schemaValidated": false,
+      "specReference": "Integration Profile NB.4"
+    },
+    {
+      "literal": "toolInvoked",
+      "rustVariant": "ToolInvoked",
+      "category": "integration",
+      "schemaValidated": false,
+      "specReference": "Integration Profile NB.4"
+    },
+    {
+      "literal": "policyDecision",
+      "rustVariant": "PolicyDecision",
+      "category": "integration",
+      "schemaValidated": false,
+      "specReference": "Integration Profile NB.4"
+    },
+    {
+      "literal": "signatureAffirmation",
+      "rustVariant": "SignatureAffirmation",
+      "category": "signature",
+      "schemaValidated": true,
+      "eventLiteral": "wos.kernel.signature_affirmation",
+      "specReference": "WOS-T4"
+    },
+    {
+      "literal": "signatureAdmissionFailed",
+      "rustVariant": "SignatureAdmissionFailed",
+      "category": "signature",
+      "schemaValidated": true,
+      "eventLiteral": "wos.kernel.signature_admission_failed",
+      "specReference": "ADR 0089"
+    },
+    {
+      "literal": "correctionAuthorized",
+      "rustVariant": "CorrectionAuthorized",
+      "category": "amendment",
+      "schemaValidated": true,
+      "eventLiteral": "wos.governance.correction_authorized",
+      "specReference": "ADR 0066 §1"
+    },
+    {
+      "literal": "amendmentAuthorized",
+      "rustVariant": "AmendmentAuthorized",
+      "category": "amendment",
+      "schemaValidated": true,
+      "eventLiteral": "wos.governance.amendment_authorized",
+      "specReference": "ADR 0066 §2"
+    },
+    {
+      "literal": "determinationAmended",
+      "rustVariant": "DeterminationAmended",
+      "category": "amendment",
+      "schemaValidated": true,
+      "eventLiteral": "wos.governance.determination_amended",
+      "specReference": "ADR 0066 §2"
+    },
+    {
+      "literal": "rescissionAuthorized",
+      "rustVariant": "RescissionAuthorized",
+      "category": "amendment",
+      "schemaValidated": true,
+      "eventLiteral": "wos.governance.rescission_authorized",
+      "specReference": "ADR 0066 §3"
+    },
+    {
+      "literal": "determinationRescinded",
+      "rustVariant": "DeterminationRescinded",
+      "category": "amendment",
+      "schemaValidated": true,
+      "eventLiteral": "wos.governance.determination_rescinded",
+      "specReference": "ADR 0066 §3"
+    },
+    {
+      "literal": "reinstated",
+      "rustVariant": "Reinstated",
+      "category": "amendment",
+      "schemaValidated": true,
+      "eventLiteral": "wos.governance.reinstated",
+      "specReference": "ADR 0066 §4"
+    },
+    {
+      "literal": "authorizationAttestation",
+      "rustVariant": "AuthorizationAttestation",
+      "category": "amendment",
+      "schemaValidated": true,
+      "eventLiteral": "wos.governance.authorization_attestation",
+      "specReference": "ADR 0066 §5"
+    },
+    {
+      "literal": "clockStarted",
+      "rustVariant": "ClockStarted",
+      "category": "clock",
+      "schemaValidated": true,
+      "eventLiteral": "wos.governance.clock_started",
+      "specReference": "ADR 0067 §2"
+    },
+    {
+      "literal": "clockResolved",
+      "rustVariant": "ClockResolved",
+      "category": "clock",
+      "schemaValidated": true,
+      "eventLiteral": "wos.governance.clock_resolved",
+      "specReference": "ADR 0067 §3"
+    },
+    {
+      "literal": "identityAttestation",
+      "rustVariant": "IdentityAttestation",
+      "category": "identity",
+      "schemaValidated": true,
+      "eventLiteral": "wos.assurance.identity_attestation",
+      "specReference": "ADR 0068 §4"
+    },
+    {
+      "literal": "keyRebind",
+      "rustVariant": "KeyRebind",
+      "category": "identity",
+      "schemaValidated": true,
+      "eventLiteral": "wos.assurance.key_rebind",
+      "specReference": "ADR 0091"
+    },
+    {
+      "literal": "clockSkewObserved",
+      "rustVariant": "ClockSkewObserved",
+      "category": "clock",
+      "schemaValidated": true,
+      "eventLiteral": "wos.governance.clock_skew_observed",
+      "specReference": "ADR 0069 §3"
+    },
+    {
+      "literal": "commitAttemptFailure",
+      "rustVariant": "CommitAttemptFailure",
+      "category": "failure",
+      "schemaValidated": true,
+      "eventLiteral": "wos.kernel.commit_attempt_failure",
+      "specReference": "ADR 0070 §2"
+    },
+    {
+      "literal": "authorizationRejected",
+      "rustVariant": "AuthorizationRejected",
+      "category": "failure",
+      "schemaValidated": true,
+      "eventLiteral": "wos.governance.authorization_rejected",
+      "specReference": "ADR 0070 §4"
+    },
+    {
+      "literal": "migrationPinChanged",
+      "rustVariant": "MigrationPinChanged",
+      "category": "migration",
+      "schemaValidated": true,
+      "eventLiteral": "wos.kernel.migration_pin_changed",
+      "specReference": "ADR 0071 §3"
+    }
   ]
 }

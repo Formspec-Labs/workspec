@@ -60,13 +60,16 @@ def _snapshot() -> dict:
 
 
 def _facts_record(record_kind: str, **extra) -> dict:
+    event = event_literal_mappings().get(record_kind, f"x-test.{record_kind}")
     record = {
         "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
-        "recordKind": record_kind,
+        "event": event,
         "timestamp": "2026-04-19T12:00:00Z",
         "auditLayer": "facts",
         "definitionVersion": "1.0.0",
     }
+    if record_kind == "stateTransition" and "data" not in extra:
+        record["data"] = {"transitionEvent": "submit"}
     record.update(extra)
     return record
 
@@ -137,6 +140,13 @@ _VALID_SEED_DATA_BY_KIND = {
         "attestedAt": "2026-04-28T10:55:00Z",
         "attestedPredicates": ["legal-name-verified"],
     },
+    "keyRebind": {
+        "priorKid": "00112233445566778899aabbccddeeff",
+        "newKid": "ffeeddccbbaa99887766554433221100",
+        "priorAssurance": "standard",
+        "newAssurance": "high",
+        "rebindAttestationRef": "urn:agency.gov:identity:attestations:rebind-2026-0001",
+    },
     "authorizationAttestation": {
         "authorizingActorId": "supervisor-001",
         "authorityBasis": {
@@ -197,34 +207,63 @@ def _valid_seed_record(record_kind: str, **extra) -> dict:
     ("record_kind", "event"),
     sorted(event_literal_mappings().items()),
 )
-def test_d26_seed_record_kind_rejects_wrong_event_when_present(
+def test_d26_seed_record_kind_uses_event_and_rejects_legacy_record_kind(
     schema, record_kind, event
 ):
     validator = _validator_for_def(schema, "FactsTierRecord")
 
+    valid = _valid_seed_record(record_kind)
+    assert valid["event"] == event
     assert list(
-        validator.iter_errors(_valid_seed_record(record_kind, event=event))
+        validator.iter_errors(valid)
     ) == []
-    assert list(
-        validator.iter_errors(_valid_seed_record(record_kind, event="decide"))
-    ), f"{record_kind} must reject an explicit non-canonical event"
+
+    legacy = dict(valid)
+    legacy["recordKind"] = record_kind
+    assert list(validator.iter_errors(legacy)), (
+        f"{record_kind} must reject legacy inner recordKind"
+    )
 
 
 @pytest.mark.parametrize(
     "record_kind",
     sorted(event_literal_mappings()),
 )
-def test_d26_seed_record_kind_does_not_require_event_on_base_facts_def(
+def test_d26_seed_record_kind_requires_event_on_base_facts_def(
     schema, record_kind
 ):
     validator = _validator_for_def(schema, "FactsTierRecord")
 
-    errors = list(validator.iter_errors(_valid_seed_record(record_kind)))
+    record = _valid_seed_record(record_kind)
+    record.pop("event")
+    errors = list(validator.iter_errors(record))
 
-    assert errors == [], (
-        f"{record_kind} fragments without event must remain valid against "
-        "the base FactsTierRecord $def"
+    assert errors, (
+        f"{record_kind} fragments without event must fail against "
+        "the base FactsTierRecord $def after D26"
     )
+
+
+def test_key_rebind_facts_tier_envelope_requires_typed_payload(schema):
+    validator = _validator_for_def(schema, "FactsTierRecord")
+    record = _facts_record(
+        "keyRebind",
+        event="wos.assurance.key_rebind",
+        data={
+            "priorKid": "00112233445566778899aabbccddeeff",
+            "newKid": "ffeeddccbbaa99887766554433221100",
+            "priorAssurance": "standard",
+            "newAssurance": "high",
+            "rebindAttestationRef": "urn:agency.gov:identity:attestations:rebind-2026-0001",
+        },
+    )
+    missing_payload = _facts_record(
+        "keyRebind",
+        event="wos.assurance.key_rebind",
+    )
+
+    assert list(validator.iter_errors(record)) == []
+    assert list(validator.iter_errors(missing_payload))
 
 
 def test_determination_transition_without_snapshot_is_rejected(schema):
@@ -262,6 +301,32 @@ def test_non_determination_transition_without_snapshot_is_accepted(schema):
     errors = list(validator.iter_errors(record))
 
     assert errors == [], f"non-determination snapshot should remain optional: {errors}"
+
+
+def test_state_transition_without_transition_event_is_rejected(schema):
+    validator = _validator_for_def(schema, "FactsTierRecord")
+    record = _facts_record(
+        "stateTransition",
+        transitionTags=["review"],
+    )
+    del record["data"]
+
+    errors = list(validator.iter_errors(record))
+
+    assert errors, "stateTransition must preserve the workflow trigger in data.transitionEvent"
+
+
+def test_state_transition_with_empty_transition_event_is_rejected(schema):
+    validator = _validator_for_def(schema, "FactsTierRecord")
+    record = _facts_record(
+        "stateTransition",
+        data={"transitionEvent": ""},
+        transitionTags=["review"],
+    )
+
+    errors = list(validator.iter_errors(record))
+
+    assert errors, "stateTransition data.transitionEvent must be non-empty"
 
 
 def test_snapshot_rejects_malformed_sha256(schema):

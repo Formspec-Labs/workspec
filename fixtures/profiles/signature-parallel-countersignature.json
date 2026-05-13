@@ -69,7 +69,6 @@
     }
   },
   "evidence": {
-    "recordKind": "signatureAffirmation",
     "requiredFields": [
       "caseFile.contract.signature.acceptedAt",
       "caseFile.contract.signature.intent",

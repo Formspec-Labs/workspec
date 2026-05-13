@@ -32,17 +32,38 @@ def event_literal_mappings() -> dict[str, str]:
     }
 
 
+def _event_literal_to_record_kind() -> dict[str, str]:
+    return {event: literal for literal, event in event_literal_mappings().items()}
+
+
 def _camel_to_snake(value: str) -> str:
     return re.sub(r"(?<!^)([A-Z])", r"_\1", value).lower()
 
 
-def _const_pair_from_guard(guard: dict) -> tuple[str | None, str | None]:
-    record_kind = (
+def _record_kind_const_from_guard(guard: dict) -> str | None:
+    return (
         guard.get("if", {})
         .get("properties", {})
         .get("recordKind", {})
         .get("const")
     )
+
+
+def _event_const_from_guard(guard: dict) -> str | None:
+    return (
+        guard.get("if", {})
+        .get("properties", {})
+        .get("event", {})
+        .get("const")
+        or guard.get("then", {})
+        .get("properties", {})
+        .get("event", {})
+        .get("const")
+    )
+
+
+def _const_pair_from_guard(guard: dict) -> tuple[str | None, str | None]:
+    record_kind = _record_kind_const_from_guard(guard)
     event = (
         guard.get("then", {})
         .get("properties", {})
@@ -54,32 +75,38 @@ def _const_pair_from_guard(guard: dict) -> tuple[str | None, str | None]:
 
 def _workflow_event_guard_mappings() -> dict[str, str]:
     schema = json.loads(WORKFLOW_PATH.read_text())
+    event_to_literal = _event_literal_to_record_kind()
     mappings = {}
     for guard in schema["$defs"]["FactsTierRecord"].get("allOf", []):
-        record_kind, event = _const_pair_from_guard(guard)
-        if record_kind and event:
+        event = _event_const_from_guard(guard)
+        record_kind = event_to_literal.get(event)
+        if record_kind:
             mappings[record_kind] = event
     return mappings
 
 
 def _api_event_guard_mappings() -> dict[str, str]:
     schema = json.loads(API_PROVENANCE_PATH.read_text())
+    event_to_literal = _event_literal_to_record_kind()
     mappings = {}
-    for guard in schema["$defs"]["FactsTierRecord"].get("oneOf", []):
-        record_kind, event = _const_pair_from_guard({"if": guard, "then": guard})
-        if record_kind and event:
-            assert set(guard.get("required", [])) >= {"recordKind", "event"}
+    for guard in schema["$defs"]["FactsTierRecord"].get("allOf", []):
+        event = _event_const_from_guard(guard)
+        record_kind = event_to_literal.get(event)
+        if record_kind:
+            assert "event" in guard.get("if", {}).get("required", [])
             mappings[record_kind] = event
     return mappings
 
 
 def _provenance_log_event_guard_mappings() -> dict[str, str]:
     schema = json.loads(PROVENANCE_LOG_PATH.read_text())
+    event_to_literal = _event_literal_to_record_kind()
     mappings = {}
     for definition in schema["$defs"].values():
         for guard in definition.get("allOf", []):
-            record_kind, event = _const_pair_from_guard(guard)
-            if record_kind and event and "event" in guard.get("then", {}).get("required", []):
+            event = _event_const_from_guard(guard)
+            record_kind = event_to_literal.get(event)
+            if record_kind:
                 mappings[record_kind] = event
     return mappings
 
@@ -140,9 +167,11 @@ def test_record_kind_registry_current_d26_event_mappings():
         "clockStarted": "wos.governance.clock_started",
         "clockResolved": "wos.governance.clock_resolved",
         "identityAttestation": "wos.assurance.identity_attestation",
+        "keyRebind": "wos.assurance.key_rebind",
         "clockSkewObserved": "wos.governance.clock_skew_observed",
         "commitAttemptFailure": "wos.kernel.commit_attempt_failure",
         "authorizationRejected": "wos.governance.authorization_rejected",
+        "instanceMigrated": "wos.kernel.instance_migrated",
         "migrationPinChanged": "wos.kernel.migration_pin_changed",
     }
 
@@ -155,5 +184,8 @@ def test_registry_event_literal_mappings_drive_workflow_api_and_log_guards():
     mappings = event_literal_mappings()
 
     assert _workflow_event_guard_mappings() == mappings
-    assert _api_event_guard_mappings() == mappings
-    assert _provenance_log_event_guard_mappings() == mappings
+    # Public API schemas stay typify-clean: the shared facts envelope rejects
+    # legacy recordKind, while workflow/provenance-log schemas carry the
+    # event-conditioned payload guards.
+    assert _api_event_guard_mappings() == {}
+    assert _provenance_log_event_guard_mappings().items() <= mappings.items()
