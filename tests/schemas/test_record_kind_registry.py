@@ -119,20 +119,31 @@ def test_record_kind_registry_current_d26_event_mappings():
     entries = _by_literal(_registry())
 
     expected = {
+        "stateTransition": "wos.kernel.state_transition",
         "caseCreated": "wos.kernel.case_created",
         "intakeAccepted": "wos.kernel.intake_accepted",
         "intakeRejected": "wos.kernel.intake_rejected",
         "intakeDeferred": "wos.kernel.intake_deferred",
+        "capabilityInvocation": "wos.ai.capability_invocation",
         "forEachIterationStarted": "wos.kernel.for_each_iteration_started",
         "forEachIterationCompleted": "wos.kernel.for_each_iteration_completed",
         "forEachCompleted": "wos.kernel.for_each_completed",
         "signatureAffirmation": "wos.kernel.signature_affirmation",
         "signatureAdmissionFailed": "wos.kernel.signature_admission_failed",
+        "correctionAuthorized": "wos.governance.correction_authorized",
+        "amendmentAuthorized": "wos.governance.amendment_authorized",
+        "determinationAmended": "wos.governance.determination_amended",
+        "rescissionAuthorized": "wos.governance.rescission_authorized",
         "determinationRescinded": "wos.governance.determination_rescinded",
         "reinstated": "wos.governance.reinstated",
+        "authorizationAttestation": "wos.governance.authorization_attestation",
         "clockStarted": "wos.governance.clock_started",
         "clockResolved": "wos.governance.clock_resolved",
         "identityAttestation": "wos.assurance.identity_attestation",
+        "clockSkewObserved": "wos.governance.clock_skew_observed",
+        "commitAttemptFailure": "wos.kernel.commit_attempt_failure",
+        "authorizationRejected": "wos.governance.authorization_rejected",
+        "migrationPinChanged": "wos.kernel.migration_pin_changed",
     }
 
     assert event_literal_mappings() == expected

@@ -4020,7 +4020,7 @@
           "actorType": "human",
           "fromState": "review",
           "toState": "decided",
-          "event": "decide",
+          "event": "wos.kernel.state_transition",
           "definitionVersion": "1.0.0",
           "lifecycleState": "review",
           "transitionTags": [
@@ -4698,6 +4698,237 @@
               "event": {
                 "const": "wos.assurance.identity_attestation",
                 "description": "D26 agreement guard target for identityAttestation facts records. The base workflow $def does not require event so fragment validation remains compatible."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "stateTransition",
+                "description": "D26 agreement guard source: the stateTransition record kind selects the state-transition event literal when event is present."
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "const": "wos.kernel.state_transition",
+                "description": "D26 agreement guard target for stateTransition facts records. The base workflow $def does not require event so fragment validation remains compatible."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "capabilityInvocation",
+                "description": "D26 agreement guard source: the capabilityInvocation record kind selects the capability-invocation event literal when event is present."
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "const": "wos.ai.capability_invocation",
+                "description": "D26 agreement guard target for capabilityInvocation facts records. The base workflow $def does not require event so fragment validation remains compatible."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "correctionAuthorized",
+                "description": "D26 agreement guard source: the correctionAuthorized record kind selects the correction-authorized event literal when event is present."
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "const": "wos.governance.correction_authorized",
+                "description": "D26 agreement guard target for correctionAuthorized facts records. The base workflow $def does not require event so fragment validation remains compatible."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "amendmentAuthorized",
+                "description": "D26 agreement guard source: the amendmentAuthorized record kind selects the amendment-authorized event literal when event is present."
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "const": "wos.governance.amendment_authorized",
+                "description": "D26 agreement guard target for amendmentAuthorized facts records. The base workflow $def does not require event so fragment validation remains compatible."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "determinationAmended",
+                "description": "D26 agreement guard source: the determinationAmended record kind selects the determination-amended event literal when event is present."
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "const": "wos.governance.determination_amended",
+                "description": "D26 agreement guard target for determinationAmended facts records. The base workflow $def does not require event so fragment validation remains compatible."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "rescissionAuthorized",
+                "description": "D26 agreement guard source: the rescissionAuthorized record kind selects the rescission-authorized event literal when event is present."
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "const": "wos.governance.rescission_authorized",
+                "description": "D26 agreement guard target for rescissionAuthorized facts records. The base workflow $def does not require event so fragment validation remains compatible."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "authorizationAttestation",
+                "description": "D26 agreement guard source: the authorizationAttestation record kind selects the authorization-attestation event literal when event is present."
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "const": "wos.governance.authorization_attestation",
+                "description": "D26 agreement guard target for authorizationAttestation facts records. The base workflow $def does not require event so fragment validation remains compatible."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "clockSkewObserved",
+                "description": "D26 agreement guard source: the clockSkewObserved record kind selects the clock-skew-observed event literal when event is present."
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "const": "wos.governance.clock_skew_observed",
+                "description": "D26 agreement guard target for clockSkewObserved facts records. The base workflow $def does not require event so fragment validation remains compatible."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "commitAttemptFailure",
+                "description": "D26 agreement guard source: the commitAttemptFailure record kind selects the commit-attempt-failure event literal when event is present."
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "const": "wos.kernel.commit_attempt_failure",
+                "description": "D26 agreement guard target for commitAttemptFailure facts records. The base workflow $def does not require event so fragment validation remains compatible."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "authorizationRejected",
+                "description": "D26 agreement guard source: the authorizationRejected record kind selects the authorization-rejected event literal when event is present."
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "const": "wos.governance.authorization_rejected",
+                "description": "D26 agreement guard target for authorizationRejected facts records. The base workflow $def does not require event so fragment validation remains compatible."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "migrationPinChanged",
+                "description": "D26 agreement guard source: the migrationPinChanged record kind selects the migration-pin-changed event literal when event is present."
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "const": "wos.kernel.migration_pin_changed",
+                "description": "D26 agreement guard target for migrationPinChanged facts records. The base workflow $def does not require event so fragment validation remains compatible."
               }
             }
           }

@@ -32,7 +32,7 @@
             "actorType": "human",
             "fromState": "review",
             "toState": "decided",
-            "event": "decide",
+            "event": "wos.kernel.state_transition",
             "definitionVersion": "1.0.0",
             "lifecycleState": "review",
             "transitionTags": [
@@ -95,6 +95,39 @@
           },
           {
             "$ref": "#/$defs/IdentityAttestationEventRecord"
+          },
+          {
+            "$ref": "#/$defs/StateTransitionEventRecord"
+          },
+          {
+            "$ref": "#/$defs/CapabilityInvocationEventRecord"
+          },
+          {
+            "$ref": "#/$defs/CorrectionAuthorizedEventRecord"
+          },
+          {
+            "$ref": "#/$defs/AmendmentAuthorizedEventRecord"
+          },
+          {
+            "$ref": "#/$defs/DeterminationAmendedEventRecord"
+          },
+          {
+            "$ref": "#/$defs/RescissionAuthorizedEventRecord"
+          },
+          {
+            "$ref": "#/$defs/AuthorizationAttestationEventRecord"
+          },
+          {
+            "$ref": "#/$defs/ClockSkewObservedEventRecord"
+          },
+          {
+            "$ref": "#/$defs/CommitAttemptFailureEventRecord"
+          },
+          {
+            "$ref": "#/$defs/AuthorizationRejectedEventRecord"
+          },
+          {
+            "$ref": "#/$defs/MigrationPinChangedEventRecord"
           }
         ]
       }
@@ -1036,6 +1069,314 @@
             "properties": {
               "event": {
                 "const": "wos.assurance.identity_attestation"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "StateTransitionEventRecord": {
+      "type": "object",
+      "description": "D26 compatibility guard layered on provenance-log exports for state-transition records. Runtime exports with `recordKind == \"stateTransition\"` MUST carry the canonical F-13 event literal.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "stateTransition"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "required": [
+              "event"
+            ],
+            "properties": {
+              "event": {
+                "const": "wos.kernel.state_transition"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "CapabilityInvocationEventRecord": {
+      "type": "object",
+      "description": "D26 compatibility guard layered on provenance-log exports for capability-invocation records. Runtime exports with `recordKind == \"capabilityInvocation\"` MUST carry the canonical F-13 event literal.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "capabilityInvocation"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "required": [
+              "event"
+            ],
+            "properties": {
+              "event": {
+                "const": "wos.ai.capability_invocation"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "CorrectionAuthorizedEventRecord": {
+      "type": "object",
+      "description": "D26 compatibility guard layered on provenance-log exports for correction-authorization records. Runtime exports with `recordKind == \"correctionAuthorized\"` MUST carry the canonical F-13 event literal.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "correctionAuthorized"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "required": [
+              "event"
+            ],
+            "properties": {
+              "event": {
+                "const": "wos.governance.correction_authorized"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "AmendmentAuthorizedEventRecord": {
+      "type": "object",
+      "description": "D26 compatibility guard layered on provenance-log exports for amendment-authorization records. Runtime exports with `recordKind == \"amendmentAuthorized\"` MUST carry the canonical F-13 event literal.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "amendmentAuthorized"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "required": [
+              "event"
+            ],
+            "properties": {
+              "event": {
+                "const": "wos.governance.amendment_authorized"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "DeterminationAmendedEventRecord": {
+      "type": "object",
+      "description": "D26 compatibility guard layered on provenance-log exports for determination-amended records. Runtime exports with `recordKind == \"determinationAmended\"` MUST carry the canonical F-13 event literal.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "determinationAmended"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "required": [
+              "event"
+            ],
+            "properties": {
+              "event": {
+                "const": "wos.governance.determination_amended"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "RescissionAuthorizedEventRecord": {
+      "type": "object",
+      "description": "D26 compatibility guard layered on provenance-log exports for rescission-authorization records. Runtime exports with `recordKind == \"rescissionAuthorized\"` MUST carry the canonical F-13 event literal.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "rescissionAuthorized"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "required": [
+              "event"
+            ],
+            "properties": {
+              "event": {
+                "const": "wos.governance.rescission_authorized"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "AuthorizationAttestationEventRecord": {
+      "type": "object",
+      "description": "D26 compatibility guard layered on provenance-log exports for authorization-attestation records. Runtime exports with `recordKind == \"authorizationAttestation\"` MUST carry the canonical F-13 event literal.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "authorizationAttestation"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "required": [
+              "event"
+            ],
+            "properties": {
+              "event": {
+                "const": "wos.governance.authorization_attestation"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ClockSkewObservedEventRecord": {
+      "type": "object",
+      "description": "D26 compatibility guard layered on provenance-log exports for clock-skew observation records. Runtime exports with `recordKind == \"clockSkewObserved\"` MUST carry the canonical F-13 event literal.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "clockSkewObserved"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "required": [
+              "event"
+            ],
+            "properties": {
+              "event": {
+                "const": "wos.governance.clock_skew_observed"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "CommitAttemptFailureEventRecord": {
+      "type": "object",
+      "description": "D26 compatibility guard layered on provenance-log exports for commit-attempt failure records. Runtime exports with `recordKind == \"commitAttemptFailure\"` MUST carry the canonical F-13 event literal.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "commitAttemptFailure"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "required": [
+              "event"
+            ],
+            "properties": {
+              "event": {
+                "const": "wos.kernel.commit_attempt_failure"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "AuthorizationRejectedEventRecord": {
+      "type": "object",
+      "description": "D26 compatibility guard layered on provenance-log exports for authorization-rejection records. Runtime exports with `recordKind == \"authorizationRejected\"` MUST carry the canonical F-13 event literal.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "authorizationRejected"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "required": [
+              "event"
+            ],
+            "properties": {
+              "event": {
+                "const": "wos.governance.authorization_rejected"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "MigrationPinChangedEventRecord": {
+      "type": "object",
+      "description": "D26 compatibility guard layered on provenance-log exports for migration-pin-change records. Runtime exports with `recordKind == \"migrationPinChanged\"` MUST carry the canonical F-13 event literal.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "migrationPinChanged"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "required": [
+              "event"
+            ],
+            "properties": {
+              "event": {
+                "const": "wos.kernel.migration_pin_changed"
               }
             }
           }

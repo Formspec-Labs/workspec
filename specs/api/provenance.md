@@ -64,7 +64,7 @@ The variants are flattened, not composed: each variant's `required` array enumer
 
 ### Resource shape — `AssembledExplanation`
 
-`AssembledExplanation` is the server-assembled adverse-decision explanation projected as a typed read-only resource (governance §3.8.1; workflow-governance.md:166-238). The §3.8.1 algorithm runs deterministically server-side — two conformant processors MUST produce byte-identical output (workflow-governance.md:170) — and clients consume the result via `GET /api/v1/instances/{id}/explanation`. Eliminates the prior client-side re-implementation of §3.8.1 ordering.
+`AssembledExplanation` is the server-assembled adverse-decision explanation projected as a typed read-only resource (governance §3.8.1; workflow-governance.md:166-238). The §3.8.1 algorithm runs deterministically server-side — two conformant processors MUST produce byte-identical output (workflow-governance.md:170) — and clients consume the result via `GET /api/v1/cases/{case_id}/processes/{process_id}/explanation`. Eliminates the prior client-side re-implementation of §3.8.1 ordering.
 
 Required fields: `processId`, `assembledAt`, `assembledBy: ActorRef`, `narrative: prose`, `factsTrace: WosResourceUrn[]` (ordered Facts-tier record URNs walked by §3.8.1 step 1), `rulesApplied: RuleReference[]` (ordered by authority rank descending per §3.8.2). Optional: `positiveCounterfactuals`, `negativeCounterfactuals`, `transitionId`. Cross-`$ref`s `RuleReference` and `Counterfactual` from this same schema rather than redefining (ADR 0082 D-14).
 
@@ -90,11 +90,11 @@ Each mirrored definition links back to its kernel source in its `description`. C
 
 | Method | Path | Body in / out |
 |---|---|---|
-| `GET` | `/api/v1/instances/{id}/provenance` | `ProvenanceListOptions` (query) → `ProvenanceRecordPage` |
-| `GET` | `/api/v1/instances/{id}/provenance/{recordId}` | → `ProvenanceRecord` |
-| `GET` | `/api/v1/instances/{id}/explanation` | → `AssembledExplanation` |
+| `GET` | `/api/v1/cases/{case_id}/processes/{process_id}/provenance` | `ProvenanceListOptions` (query) → `ProvenanceRecordPage` |
+| `GET` | `/api/v1/cases/{case_id}/processes/{process_id}/provenance` | → `ProvenanceRecord` |
+| `GET` | `/api/v1/cases/{case_id}/processes/{process_id}/explanation` | → `AssembledExplanation` |
 
-`GET /api/v1/instances/{id}/provenance` is cursor-paginated per ADR 0082 D-7 and accepts the `ProvenanceListOptions` query envelope. Filters compose with **AND semantics** — a record is returned only when it satisfies every supplied filter independently.
+`GET /api/v1/cases/{case_id}/processes/{process_id}/provenance` is cursor-paginated per ADR 0082 D-7 and accepts the `ProvenanceListOptions` query envelope. Filters compose with **AND semantics** — a record is returned only when it satisfies every supplied filter independently.
 
 | Field | Type | Semantics |
 |---|---|---|
@@ -109,9 +109,9 @@ Response is `ProvenanceRecordPage`: `items: ProvenanceRecord[]`, optional `curso
 
 These filters share intent — but not wire shape — with `AuditQueryRequest` in [`audit.schema.json`](../../schemas/api/audit.schema.json): per-case provenance uses `tier` scalar / `actorRefFilter` array / `since,until`, while cross-case audit uses `tierFilter` array / `actorRef` scalar / `start,end`. The divergence predates this row; clients writing a generic query layer should treat the two domains as parallel surfaces rather than byte-equivalent shapes.
 
-`GET /api/v1/instances/{id}/provenance/{recordId}` returns a single `ProvenanceRecord` of any tier. The `recordId` path parameter is a provenance-record URN; `404` (with `wosErrorCode: WOS-1404`) when the record is not visible to the caller's scope (ADR 0082 D-8).
+`GET /api/v1/cases/{case_id}/processes/{process_id}/provenance` returns a single `ProvenanceRecord` of any tier. The `recordId` path parameter is a provenance-record URN; `404` (with `wosErrorCode: WOS-1404`) when the record is not visible to the caller's scope (ADR 0082 D-8).
 
-The aggregate `GET /api/v1/instances/{id}?include=...` (ADR 0082 D-3) does not include `provenance` in its `include` enum. Provenance is volume-unbounded and always paginated — the aggregator never embeds it. Clients render "show recent activity" via a separate paginated call.
+The aggregate `GET /api/v1/cases/{case_id}/processes/{process_id}?include=...` (ADR 0082 D-3) does not include `provenance` in its `include` enum. Provenance is volume-unbounded and always paginated — the aggregator never embeds it. Clients render "show recent activity" via a separate paginated call.
 
 ## Codegen
 

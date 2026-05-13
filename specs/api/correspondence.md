@@ -50,17 +50,11 @@ Query fields per `CorrespondenceListOptions`: `processId`, `direction`, `status`
 
 Returns the `CorrespondenceMessage`. Responds `WOS-1404` when the URN is not visible in the caller's scope.
 
-### Instance-scoped correspondence subresource
-
-`GET /api/v1/instances/{processId}/correspondence`
-
-Per ADR 0082 D-3 (composition over flattening). Same `CorrespondenceListOptions` query fields except `processId` is implicit from the path. Same `CorrespondenceMessagePage` envelope. The instance aggregation endpoint at `GET /api/v1/instances/{id}?include=correspondence` extends the closed `?include=` enum (D-3) with the literal `correspondence`; consumers that want a count alongside the embedded slice request `?include=correspondence(limit=10)` per the existing aggregation grammar.
-
 ### Case/process-scoped correspondence subresource
 
 `GET /api/v1/cases/{case_id}/processes/{process_id}/correspondence`
 
-Case/process bridge for ADR 0093 dual identity. Same `CorrespondenceListOptions` query fields except `processId` is implicit from the bound process path. The server validates that `{process_id}` belongs to `{case_id}` before listing the same `CorrespondenceMessagePage`; mismatch returns `WOS-1404`/404 and does not fall back to the process alone.
+Per ADR 0093 dual identity and ADR 0082 D-3 composition over flattening, the server validates that `{process_id}` belongs to `{case_id}` before listing the same `CorrespondenceMessagePage`; mismatch returns `WOS-1404`/404 and does not fall back to the process alone. `CorrespondenceListOptions.processId` is implicit from the bound process path.
 
 ### Log a correspondence message
 
@@ -105,7 +99,7 @@ Tenant and scope headers per ADR 0082 D-9 (`X-WOS-Tenant`, `X-WOS-Organization`,
 Public WOS error codes used by this domain (registry: [`error-registry.md`](./error-registry.md)):
 
 - `WOS-1400` — request body fails JSON Schema validation against `LogCorrespondenceMessageRequest` or `RenderCorrespondenceRequest`.
-- `WOS-1404` — correspondence URN, rendering URN, instance URN, or workflow URI is not visible in the caller's scope.
+- `WOS-1404` — correspondence URN, rendering URN, process URN, or workflow URI is not visible in the caller's scope.
 - `WOS-1409` — `Idempotency-Key` conflict (a different request body was previously seen for the same key, route, and scope).
 - `WOS-1410` — list cursor expired (ADR 0082 D-7); restart pagination.
 - `WOS-1422` — semantic validation failure: `templateRef` does not resolve in the workflow's delivery sidecar; `direction` mismatches the resolved entry template; `LogCorrespondenceMessageRequest.renderingId` references a rendering with non-empty `missingVariables`; an `adverse-decision` rendering omits a due-process section per delivery sidecar §3.2.
@@ -119,7 +113,7 @@ Cursor-based per ADR 0082 D-7 with the `CorrespondenceMessagePage` envelope. No 
 
 ## Aggregation Include
 
-The workflow-process aggregation endpoint extends its closed `?include=` enum (ADR 0082 D-3) with the literal `correspondence`. The embedded slice carries up to the negotiated `correspondence(limit=N)` cap (server enforces a maximum); clients that need the full feed page through `GET /api/v1/instances/{processId}/correspondence`.
+The workflow-process aggregation endpoint extends its closed `?include=` enum (ADR 0082 D-3) with the literal `correspondence`. The embedded slice carries up to the negotiated `correspondence(limit=N)` cap (server enforces a maximum); clients that need the full feed page through `GET /api/v1/cases/{case_id}/processes/{process_id}/correspondence`.
 
 ## Closed Taxonomies
 

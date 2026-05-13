@@ -368,7 +368,7 @@ def test_api_facts_record_kind_reserved_literals_match_kernel():
 
 
 def _api_facts_record(record_kind: str, event: str) -> dict:
-    return {
+    record = {
         "tier": "facts",
         "id": "urn:wos:agency-gov_prov_01jqrxabcd3f8xtx9qxkkv3raa",
         "processId": "urn:wos:sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc",
@@ -377,6 +377,14 @@ def _api_facts_record(record_kind: str, event: str) -> dict:
         "definitionVersion": "1.0.0",
         "event": event,
     }
+    if event == "wos.governance.authorization_rejected":
+        record["authorizationRejectedRecord"] = {
+            "attemptedActorRef": "actor:human:intern-042",
+            "attemptedAction": "transition:approve",
+            "targetResourceRef": "urn:wos:sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+            "rejectionReason": "actor lacks approval-authority predicate",
+        }
+    return record
 
 
 def test_api_facts_record_kind_event_literals_agree_for_d26_seed():

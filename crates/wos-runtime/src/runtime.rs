@@ -308,6 +308,10 @@ pub enum RuntimeError {
     #[error("intake handoff id conflict: {0}")]
     IntakeConflict(String),
 
+    /// A case ledger reference cannot identify one workflow process.
+    #[error("case ledger reference conflict: {0}")]
+    CaseLedgerConflict(String),
+
     /// The integration binding kind is not yet implemented by the runtime.
     #[error("integration binding kind unsupported: {0:?}")]
     UnsupportedBindingKind(crate::integration::IntegrationBindingKind),
@@ -1448,6 +1452,22 @@ mod tests {
                 .load_record_by_case_ledger_id(case_ledger_id)
         }
 
+        fn processes_for_case(&self, case_ledger_id: &str) -> Vec<String> {
+            self.0.lock().unwrap().processes_for_case(case_ledger_id)
+        }
+
+        fn append_provenance_for_case(
+            &mut self,
+            case_ledger_id: &str,
+            process_id: &str,
+            record: ProvenanceRecord,
+        ) -> Result<(), StoreError> {
+            self.0
+                .lock()
+                .unwrap()
+                .append_provenance_for_case(case_ledger_id, process_id, record)
+        }
+
         fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
             self.0.lock().unwrap().save_record(record)
         }
@@ -2103,6 +2123,20 @@ mod tests {
             self.inner.load_record_by_case_ledger_id(case_ledger_id)
         }
 
+        fn processes_for_case(&self, case_ledger_id: &str) -> Vec<String> {
+            self.inner.processes_for_case(case_ledger_id)
+        }
+
+        fn append_provenance_for_case(
+            &mut self,
+            case_ledger_id: &str,
+            process_id: &str,
+            record: ProvenanceRecord,
+        ) -> Result<(), StoreError> {
+            self.inner
+                .append_provenance_for_case(case_ledger_id, process_id, record)
+        }
+
         fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
             self.inner.save_record(record)
         }
@@ -2144,6 +2178,20 @@ mod tests {
             case_ledger_id: &str,
         ) -> Result<RuntimeRecord, StoreError> {
             self.inner.load_record_by_case_ledger_id(case_ledger_id)
+        }
+
+        fn processes_for_case(&self, case_ledger_id: &str) -> Vec<String> {
+            self.inner.processes_for_case(case_ledger_id)
+        }
+
+        fn append_provenance_for_case(
+            &mut self,
+            case_ledger_id: &str,
+            process_id: &str,
+            record: ProvenanceRecord,
+        ) -> Result<(), StoreError> {
+            self.inner
+                .append_provenance_for_case(case_ledger_id, process_id, record)
         }
 
         fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
@@ -2190,6 +2238,20 @@ mod tests {
             case_ledger_id: &str,
         ) -> Result<RuntimeRecord, StoreError> {
             self.inner.load_record_by_case_ledger_id(case_ledger_id)
+        }
+
+        fn processes_for_case(&self, case_ledger_id: &str) -> Vec<String> {
+            self.inner.processes_for_case(case_ledger_id)
+        }
+
+        fn append_provenance_for_case(
+            &mut self,
+            case_ledger_id: &str,
+            process_id: &str,
+            record: ProvenanceRecord,
+        ) -> Result<(), StoreError> {
+            self.inner
+                .append_provenance_for_case(case_ledger_id, process_id, record)
         }
 
         fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
@@ -2579,6 +2641,81 @@ mod tests {
                 .and_then(serde_json::Value::as_str),
             Some(created.case_ledger_id.as_str())
         );
+    }
+
+    #[test]
+    fn accept_intake_handoff_rejects_ambiguous_case_ledger_ref() {
+        let mut runtime = runtime_with_kernel(
+            serde_json::from_value(serde_json::json!({
+                "$wosWorkflow": "1.0",
+                "url": "urn:test:intake-ambiguous",
+                "version": "1.0.0",
+                "lifecycle": {
+                    "initialState": "open",
+                    "states": {
+                        "open": { "type": "atomic" }
+                    }
+                }
+            }))
+            .expect("kernel json"),
+        );
+        let case_ledger_id = wos_core::typeid::mint_case_ledger_id();
+        let case_ref = format!("urn:wos:{case_ledger_id}");
+        let created_a = runtime
+            .create_process_bound_to_case(
+                CreateInstanceRequest {
+                    process_id: wos_core::typeid::mint_process_id(),
+                    tenant: None,
+                    definition_url: "urn:test:intake-ambiguous".to_string(),
+                    definition_version: "1.0.0".to_string(),
+                    initial_case_state: None,
+                },
+                case_ref.clone(),
+            )
+            .expect("create process a");
+        let created_b = runtime
+            .create_process_bound_to_case(
+                CreateInstanceRequest {
+                    process_id: wos_core::typeid::mint_process_id(),
+                    tenant: None,
+                    definition_url: "urn:test:intake-ambiguous".to_string(),
+                    definition_version: "1.0.0".to_string(),
+                    initial_case_state: None,
+                },
+                case_ref.clone(),
+            )
+            .expect("create process b");
+
+        let err = runtime
+            .accept_intake_handoff(
+                "formspec",
+                workflow_intake_request("ih-ambiguous", &case_ref),
+            )
+            .expect_err("ambiguous case-ledger intake must fail closed");
+
+        let RuntimeError::IntakeConflict(message) = err else {
+            panic!("expected intake conflict for ambiguous case ledger, got {err:?}");
+        };
+        assert!(
+            message.contains("multiple processes"),
+            "unexpected conflict: {message}",
+        );
+        assert!(
+            message.contains(&created_a.process_id) && message.contains(&created_b.process_id),
+            "conflict should name the competing processes: {message}",
+        );
+
+        for process_id in [&created_a.process_id, &created_b.process_id] {
+            let provenance = runtime
+                .load_provenance_window(process_id, 0, 20)
+                .expect("load process provenance");
+            assert!(
+                !provenance
+                    .iter()
+                    .any(|record| record.record_kind == ProvenanceKind::IntakeAccepted),
+                "ambiguous intake must not append IntakeAccepted to {process_id}",
+            );
+        }
     }
 
     #[test]
@@ -3512,6 +3649,58 @@ mod tests {
             runtime.processes_for_case(unrelated.as_str()).is_empty(),
             "unbound case ledger should return empty Vec",
         );
+    }
+
+    #[test]
+    fn process_api_rejects_ambiguous_case_ledger_ref() {
+        let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
+        let mut runtime = runtime_with_kernel(kernel);
+        let case_ledger_id = wos_core::typeid::mint_case_ledger_id();
+        let created_a = runtime
+            .create_process_bound_to_case(
+                CreateInstanceRequest {
+                    process_id: wos_core::typeid::mint_process_id(),
+                    tenant: None,
+                    definition_url: "urn:test:populator".to_string(),
+                    definition_version: "1.0.0".to_string(),
+                    initial_case_state: None,
+                },
+                case_ledger_id.clone(),
+            )
+            .expect("create process a");
+        let created_b = runtime
+            .create_process_bound_to_case(
+                CreateInstanceRequest {
+                    process_id: wos_core::typeid::mint_process_id(),
+                    tenant: None,
+                    definition_url: "urn:test:populator".to_string(),
+                    definition_version: "1.0.0".to_string(),
+                    initial_case_state: None,
+                },
+                case_ledger_id.clone(),
+            )
+            .expect("create process b");
+
+        for err in [
+            runtime
+                .load_process(&case_ledger_id)
+                .expect_err("load_process must reject ambiguous case ledger"),
+            runtime
+                .load_provenance_window(&case_ledger_id, 0, 20)
+                .expect_err("load_provenance_window must reject ambiguous case ledger"),
+        ] {
+            let RuntimeError::CaseLedgerConflict(message) = err else {
+                panic!("expected case ledger conflict, got {err:?}");
+            };
+            assert!(
+                message.contains("multiple processes"),
+                "unexpected conflict: {message}",
+            );
+            assert!(
+                message.contains(&created_a.process_id) && message.contains(&created_b.process_id),
+                "conflict should name the competing processes: {message}",
+            );
+        }
     }
 
     #[test]

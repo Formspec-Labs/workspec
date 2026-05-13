@@ -22,7 +22,7 @@ Greenfield projection per ADR 0082 D-15: kernel governance `$defs` (`Delegation`
 
 ## Relationship to per-case governance projection
 
-The per-case projection lives on `instance.schema.json` (`WorkflowProcessGovernance`, `DelegationEntry`, `ReviewState`, `HoldEntry`). That subresource summarizes the in-effect governance state for a single workflow process — minimum fields necessary for case-portal rendering — and is reachable through `GET /api/v1/instances/{id}/governance` and the `?include=governance` aggregation seam (ADR 0082 D-3). This domain authors the cross-case authoritative shapes those summaries project from:
+The per-case projection lives on `instance.schema.json` (`WorkflowProcessGovernance`, `DelegationEntry`, `ReviewState`, `HoldEntry`). That subresource summarizes the in-effect governance state for a single workflow process — minimum fields necessary for case-portal rendering — and is reachable through `GET /api/v1/cases/{case_id}/processes/{process_id}/governance` and the `?include=governance` aggregation seam (ADR 0082 D-3). This domain authors the cross-case authoritative shapes those summaries project from:
 
 | Per-case (instance.schema.json) | Cross-case (this domain) | Relationship |
 |---|---|---|
@@ -100,8 +100,8 @@ GET   /api/v1/governance/policies/{policyUrl}/versions/{version}        -> Polic
 Per-case scoped delegations remain accessible via the workflow-process subresource per ADR 0082 D-3:
 
 ```
-GET   /api/v1/instances/{id}/governance                                 -> WorkflowProcessGovernance  (instance.schema.json)
-GET   /api/v1/instances/{id}?include=governance                         -> WorkflowProcessWithIncludes (instance.schema.json)
+GET   /api/v1/cases/{case_id}/processes/{process_id}/governance                                 -> WorkflowProcessGovernance  (instance.schema.json)
+GET   /api/v1/cases/{case_id}/processes/{process_id}?include=governance                         -> WorkflowProcessWithIncludes (instance.schema.json)
 ```
 
 `GET /api/v1/governance/agents` accepts `AgentListOptions`: `workflowUrl?`, `autonomyLevel?`, `driftStatus?`, `cursor?`, `limit?`. Returns `AgentPage` (cursor envelope per `pagination.schema.json`, ADR 0082 D-7). Default ordering is `id` ascending.

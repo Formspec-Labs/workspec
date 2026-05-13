@@ -70,7 +70,7 @@
     ]
   },
   "recordKinds": [
-    { "literal": "stateTransition", "rustVariant": "StateTransition", "category": "foundation", "schemaValidated": true, "specReference": "Kernel" },
+    { "literal": "stateTransition", "rustVariant": "StateTransition", "category": "foundation", "schemaValidated": true, "eventLiteral": "wos.kernel.state_transition", "specReference": "Kernel" },
     { "literal": "unmatchedEvent", "rustVariant": "UnmatchedEvent", "category": "foundation", "schemaValidated": false, "specReference": "Kernel S4.9" },
     { "literal": "caseStateMutation", "rustVariant": "CaseStateMutation", "category": "foundation", "schemaValidated": false, "specReference": "Kernel S5.4" },
     { "literal": "caseCreated", "rustVariant": "CaseCreated", "category": "foundation", "schemaValidated": true, "eventLiteral": "wos.kernel.case_created", "specReference": "Kernel" },
@@ -89,7 +89,7 @@
     { "literal": "invalidDuration", "rustVariant": "InvalidDuration", "category": "internal", "schemaValidated": false, "specReference": "Kernel" },
     { "literal": "toleranceViolation", "rustVariant": "ToleranceViolation", "category": "internal", "schemaValidated": false, "specReference": "LCD S6.6, Runtime S7.2" },
     { "literal": "convergenceCapReached", "rustVariant": "ConvergenceCapReached", "category": "internal", "schemaValidated": false, "specReference": "Runtime §10.3" },
-    { "literal": "capabilityInvocation", "rustVariant": "CapabilityInvocation", "category": "ai", "schemaValidated": true, "specReference": "AI S3.3.1" },
+    { "literal": "capabilityInvocation", "rustVariant": "CapabilityInvocation", "category": "ai", "schemaValidated": true, "eventLiteral": "wos.ai.capability_invocation", "specReference": "AI S3.3.1" },
     { "literal": "deonticViolation", "rustVariant": "DeonticViolation", "category": "ai", "schemaValidated": false, "specReference": "AI S4.2–S4.4" },
     { "literal": "deonticEvaluation", "rustVariant": "DeonticEvaluation", "category": "ai", "schemaValidated": false, "specReference": "AI S4.6" },
     { "literal": "deonticResolution", "rustVariant": "DeonticResolution", "category": "ai", "schemaValidated": false, "specReference": "AI S4.6" },
@@ -188,19 +188,19 @@
     { "literal": "policyDecision", "rustVariant": "PolicyDecision", "category": "integration", "schemaValidated": false, "specReference": "Integration Profile NB.4" },
     { "literal": "signatureAffirmation", "rustVariant": "SignatureAffirmation", "category": "signature", "schemaValidated": true, "eventLiteral": "wos.kernel.signature_affirmation", "specReference": "WOS-T4" },
     { "literal": "signatureAdmissionFailed", "rustVariant": "SignatureAdmissionFailed", "category": "signature", "schemaValidated": true, "eventLiteral": "wos.kernel.signature_admission_failed", "specReference": "ADR 0089" },
-    { "literal": "correctionAuthorized", "rustVariant": "CorrectionAuthorized", "category": "amendment", "schemaValidated": true, "specReference": "ADR 0066 §1" },
-    { "literal": "amendmentAuthorized", "rustVariant": "AmendmentAuthorized", "category": "amendment", "schemaValidated": true, "specReference": "ADR 0066 §2" },
-    { "literal": "determinationAmended", "rustVariant": "DeterminationAmended", "category": "amendment", "schemaValidated": true, "specReference": "ADR 0066 §2" },
-    { "literal": "rescissionAuthorized", "rustVariant": "RescissionAuthorized", "category": "amendment", "schemaValidated": true, "specReference": "ADR 0066 §3" },
+    { "literal": "correctionAuthorized", "rustVariant": "CorrectionAuthorized", "category": "amendment", "schemaValidated": true, "eventLiteral": "wos.governance.correction_authorized", "specReference": "ADR 0066 §1" },
+    { "literal": "amendmentAuthorized", "rustVariant": "AmendmentAuthorized", "category": "amendment", "schemaValidated": true, "eventLiteral": "wos.governance.amendment_authorized", "specReference": "ADR 0066 §2" },
+    { "literal": "determinationAmended", "rustVariant": "DeterminationAmended", "category": "amendment", "schemaValidated": true, "eventLiteral": "wos.governance.determination_amended", "specReference": "ADR 0066 §2" },
+    { "literal": "rescissionAuthorized", "rustVariant": "RescissionAuthorized", "category": "amendment", "schemaValidated": true, "eventLiteral": "wos.governance.rescission_authorized", "specReference": "ADR 0066 §3" },
     { "literal": "determinationRescinded", "rustVariant": "DeterminationRescinded", "category": "amendment", "schemaValidated": true, "eventLiteral": "wos.governance.determination_rescinded", "specReference": "ADR 0066 §3" },
     { "literal": "reinstated", "rustVariant": "Reinstated", "category": "amendment", "schemaValidated": true, "eventLiteral": "wos.governance.reinstated", "specReference": "ADR 0066 §4" },
-    { "literal": "authorizationAttestation", "rustVariant": "AuthorizationAttestation", "category": "amendment", "schemaValidated": true, "specReference": "ADR 0066 §5" },
+    { "literal": "authorizationAttestation", "rustVariant": "AuthorizationAttestation", "category": "amendment", "schemaValidated": true, "eventLiteral": "wos.governance.authorization_attestation", "specReference": "ADR 0066 §5" },
     { "literal": "clockStarted", "rustVariant": "ClockStarted", "category": "clock", "schemaValidated": true, "eventLiteral": "wos.governance.clock_started", "specReference": "ADR 0067 §2" },
     { "literal": "clockResolved", "rustVariant": "ClockResolved", "category": "clock", "schemaValidated": true, "eventLiteral": "wos.governance.clock_resolved", "specReference": "ADR 0067 §3" },
     { "literal": "identityAttestation", "rustVariant": "IdentityAttestation", "category": "identity", "schemaValidated": true, "eventLiteral": "wos.assurance.identity_attestation", "specReference": "ADR 0068 §4" },
-    { "literal": "clockSkewObserved", "rustVariant": "ClockSkewObserved", "category": "clock", "schemaValidated": true, "specReference": "ADR 0069 §3" },
-    { "literal": "commitAttemptFailure", "rustVariant": "CommitAttemptFailure", "category": "failure", "schemaValidated": true, "specReference": "ADR 0070 §2" },
-    { "literal": "authorizationRejected", "rustVariant": "AuthorizationRejected", "category": "failure", "schemaValidated": true, "specReference": "ADR 0070 §4" },
-    { "literal": "migrationPinChanged", "rustVariant": "MigrationPinChanged", "category": "migration", "schemaValidated": true, "specReference": "ADR 0071 §3" }
+    { "literal": "clockSkewObserved", "rustVariant": "ClockSkewObserved", "category": "clock", "schemaValidated": true, "eventLiteral": "wos.governance.clock_skew_observed", "specReference": "ADR 0069 §3" },
+    { "literal": "commitAttemptFailure", "rustVariant": "CommitAttemptFailure", "category": "failure", "schemaValidated": true, "eventLiteral": "wos.kernel.commit_attempt_failure", "specReference": "ADR 0070 §2" },
+    { "literal": "authorizationRejected", "rustVariant": "AuthorizationRejected", "category": "failure", "schemaValidated": true, "eventLiteral": "wos.governance.authorization_rejected", "specReference": "ADR 0070 §4" },
+    { "literal": "migrationPinChanged", "rustVariant": "MigrationPinChanged", "category": "migration", "schemaValidated": true, "eventLiteral": "wos.kernel.migration_pin_changed", "specReference": "ADR 0071 §3" }
   ]
 }

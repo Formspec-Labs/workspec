@@ -3,7 +3,7 @@
 **Status:** Schema authored — Refactor 3A.2 / pre-release execution.
 **Schema:** [`api/case-view.schema.json`](../../schemas/api/case-view.schema.json)
 **Schema ID:** `https://schemas.formspec.io/wos-api/case-view/v1`
-**OpenAPI:** [`wos-public-api.openapi.json`](../../api/wos-public-api.openapi.json) (route rewrite follows in 3A.4).
+**OpenAPI:** [`wos-public-api.openapi.json`](../../api/wos-public-api.openapi.json) (case/process route surface).
 **ADR anchors:** [ADR 0082](../../../thoughts/adr/0082-stack-public-api-contract-and-schema-discipline.md) D-4 (URN), D-12 (closed taxonomies). [ADR 0093](../../thoughts/adr/0093-case-is-its-trellis-ledger.md) §2.3 (closed event-type enum), §5 (route surface).
 **Gating analysis:** [Case Boundary Decision Report](../../thoughts/analysis/case-boundary-decision-report.md) §4.4 (HTTP surface), §4.5 (schema updates), §4.7 (replay-vs-projection conformance).
 
@@ -35,12 +35,15 @@ N:1 (N workflow processes per one case ledger) is supported from day one per CBR
 | Method | Path | Body in / out | Idempotency-Key |
 |---|---|---|---|
 | `GET` | `/api/v1/cases/{case_id}` | -> `CaseView` | n/a |
+| `POST` | `/api/v1/cases/{case_id}/events` | `CaseEventAppendRequest` -> `CaseEventAppendReceipt` | REQUIRED |
 
 `GET /api/v1/cases/{case_id}` returns the staff `CaseView` projection. Returns `404` (`WOS-1404`) when no workflow process is bound to the case ledger AND no direct-append provenance row exists at that ledger URN. Returns `400` when `case_id` is not a valid case TypeID or `urn:wos:` case URN.
 
 The applicant-audience route at `GET /api/v1/applicant/cases/{id}` returns a different shape (`ApplicantCaseDetail`) and is documented in [`applicant.md`](./applicant.md).
 
 The case-scoped process subresource routes — `GET /api/v1/cases/{case_id}/processes/{process_id}` and its lifecycle/provenance siblings — return the full `WorkflowProcess` projection from [`instance.md`](./instance.md). The case view intentionally does NOT inline full process bodies (ADR-0082 D-3 subresource discipline).
+
+`POST /api/v1/cases/{case_id}/events` is the direct case-ledger append surface. `CaseEventAppendRequest` carries the registered WOS event literal, actor identifier, idempotency token, and optional event-contract data; `CaseEventAppendReceipt` returns the committed case ledger, provenance event id, hash, and sequence.
 
 ## Pagination
 
@@ -100,4 +103,4 @@ All non-2xx responses use `application/problem+json` per ADR-0082 D-8 and `api/e
 
 ## Exported Models
 
-The schema exports four interface models through its top-level `oneOf`: `CaseView`, `CaseStatus`, `CaseViewEvent`, `AudienceProjection`. `CaseView` is the response body for `GET /api/v1/cases/{case_id}`; the other three are nested resource models reused by the view.
+The schema exports six interface models through its top-level `oneOf`: `CaseView`, `CaseStatus`, `CaseViewEvent`, `CaseEventAppendRequest`, `CaseEventAppendReceipt`, and `AudienceProjection`. `CaseView` is the response body for `GET /api/v1/cases/{case_id}`; the append models bind `POST /api/v1/cases/{case_id}/events`; the other three are nested resource models reused by the view.

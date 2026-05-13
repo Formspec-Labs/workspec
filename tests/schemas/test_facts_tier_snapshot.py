@@ -72,6 +72,41 @@ def _facts_record(record_kind: str, **extra) -> dict:
 
 
 _VALID_SEED_DATA_BY_KIND = {
+    "correctionAuthorized": {
+        "correctionTargetEventHash": "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c",
+        "correctedFieldSet": ["/applicantName"],
+        "reason": "transcription correction",
+        "authorizingActorId": "supervisor-001",
+        "authorityBasis": {
+            "kind": "actorPolicyRef",
+            "value": "intake-supervisor-correction-policy",
+        },
+    },
+    "amendmentAuthorized": {
+        "amendmentTargetEventHash": "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c",
+        "priorDeterminationHash": "8ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090b",
+        "reason": "appeal sustained",
+        "authorizingActorId": "appeals-officer-007",
+        "authorityBasis": {
+            "kind": "uri",
+            "value": "https://agency.gov/regulations/benefits-act/section-7.3",
+        },
+    },
+    "determinationAmended": {
+        "priorDeterminationHash": "8ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090b",
+        "newDeterminationValue": {"eligible": True},
+        "amendmentAuthorizationEventHash": "5ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5092f",
+    },
+    "rescissionAuthorized": {
+        "rescissionTargetEventHash": "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c",
+        "priorDeterminationHash": "8ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090b",
+        "reason": "determination issued under wrong workflow version",
+        "authorizingActorId": "program-director-002",
+        "authorityBasis": {
+            "kind": "uri",
+            "value": "https://agency.gov/policies/rescission/v1",
+        },
+    },
     "determinationRescinded": {
         "priorDeterminationHash": "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c",
         "rescissionAuthorizationEventHash": "6ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5093f",
@@ -101,6 +136,53 @@ _VALID_SEED_DATA_BY_KIND = {
         "providerAttestationId": "idme-attestation-2026-04-28-0042",
         "attestedAt": "2026-04-28T10:55:00Z",
         "attestedPredicates": ["legal-name-verified"],
+    },
+    "authorizationAttestation": {
+        "authorizingActorId": "supervisor-001",
+        "authorityBasis": {
+            "kind": "actorPolicyRef",
+            "value": "approval-authority-policy",
+        },
+        "policyPredicate": "amendment-authority",
+    },
+    "clockSkewObserved": {
+        "processorAuthoredAt": "2026-04-28T12:00:00.000Z",
+        "substrateCreatedAt": "2026-04-28T12:00:01.500Z",
+        "skewMilliseconds": 1500,
+        "thresholdMilliseconds": 1000,
+        "eventHash": "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c",
+    },
+    "commitAttemptFailure": {
+        "targetEventHash": "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c",
+        "failureKind": "networkTimeout",
+        "attemptCount": 1,
+        "retryBudgetRemainingMs": 60000,
+    },
+    "authorizationRejected": {
+        "attemptedActorId": "intern-042",
+        "attemptedAction": "transition:approve",
+        "targetResourceId": "case-2026-0042",
+        "rejectionReason": "actor lacks approval-authority predicate",
+    },
+    "migrationPinChanged": {
+        "priorPinSet": {
+            "formspec.definitionVersion": "1.0.0",
+            "wos.$wosWorkflowVersion": "1.0",
+            "trellis.envelopeVersion": "1.0",
+            "trellis.conformanceClass": "core",
+        },
+        "newPinSet": {
+            "formspec.definitionVersion": "1.1.0",
+            "wos.$wosWorkflowVersion": "1.0",
+            "trellis.envelopeVersion": "1.0",
+            "trellis.conformanceClass": "core+aead",
+        },
+        "authorizingActorId": "platform-migration-officer",
+        "authorityBasis": {
+            "kind": "uri",
+            "value": "https://agency.gov/regulations/migration-policy/v2",
+        },
+        "migrationRationale": "uplift Trellis conformance class",
     },
 }
 
@@ -224,6 +306,7 @@ def test_full_document_accepts_determination_record_with_snapshot(schema):
         "provenanceLog": [
             {
                 **_facts_record("stateTransition"),
+                "event": "wos.kernel.state_transition",
                 "transitionTags": ["determination"],
                 "caseFileSnapshot": _snapshot(),
             },

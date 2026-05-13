@@ -590,7 +590,7 @@
     "TaskListOptions": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Query fields for `GET /api/v1/tasks` and `GET /api/v1/instances/{processId}/tasks` (ADR 0082 D-7). The default scope is the calling actor's inbox; admins MAY pass `assignedActor` to widen the scope subject to ReBAC checks.",
+      "description": "Query fields for `GET /api/v1/tasks` and `GET /api/v1/cases/{case_id}/processes/{process_id}/tasks` (ADR 0082 D-7). The default scope is the calling actor's inbox; admins MAY pass `assignedActor` to widen the scope subject to ReBAC checks.",
       "properties": {
         "assignedActor": {
           "$ref": "#/$defs/ActorRef",
@@ -606,7 +606,7 @@
         },
         "processId": {
           "$ref": "#/$defs/WosResourceUrn",
-          "description": "Filter to tasks on the supplied workflow process. Implied (and required to match) when the request is the `/instances/{processId}/tasks` subresource."
+          "description": "Filter to tasks on the supplied workflow process. Implied (and required to match) when the request is the `/cases/{case_id}/processes/{process_id}/tasks` subresource."
         },
         "workflowUrl": {
           "$ref": "#/$defs/WorkflowUrl",

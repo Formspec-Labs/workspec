@@ -1,0 +1,63 @@
+{
+  "id": "CBR-4C-5-replay-projection-byte-identity",
+  "rule": "CBR-§4.7",
+  "description": "Replay-vs-projection byte-identity fixture (REFACTOR-TODO 4C.5). The action stream and the case-ledger replay view must serialize to identical case-view JSON bytes.",
+  "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2df_byte_identity",
+  "processes": [
+    {
+      "process_id": "process_01hw7rm71vfay8vvw14d2pf2df_a",
+      "definition_url": "urn:test:case-boundary:byte-identity:a",
+      "definition_version": "1.0.0"
+    },
+    {
+      "process_id": "process_01hw7rm71vfay8vvw14d2pf2df_b",
+      "definition_url": "urn:test:case-boundary:byte-identity:b",
+      "definition_version": "1.0.0"
+    }
+  ],
+  "actions": [
+    {
+      "kind": "directAppend",
+      "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2df_byte_identity",
+      "process_id": "process_01hw7rm71vfay8vvw14d2pf2df_a",
+      "event_type": "wos.kernel.case_created",
+      "actor_id": "system:case-genesis",
+      "timestamp": "2026-05-12T12:20:00Z",
+      "label": "genesis"
+    },
+    {
+      "kind": "appendProvenance",
+      "process_id": "process_01hw7rm71vfay8vvw14d2pf2df_b",
+      "event": "projection.second_process_ready",
+      "from_state": "Draft",
+      "to_state": "Ready",
+      "actor_id": "actor:process-b",
+      "timestamp": "2026-05-12T12:20:01Z",
+      "label": "process-b"
+    },
+    {
+      "kind": "appendProvenance",
+      "process_id": "process_01hw7rm71vfay8vvw14d2pf2df_a",
+      "event": "projection.first_process_ready",
+      "from_state": "Draft",
+      "to_state": "Ready",
+      "actor_id": "actor:process-a",
+      "timestamp": "2026-05-12T12:20:02Z",
+      "label": "process-a"
+    }
+  ],
+  "expected_processes_for_case": [
+    "process_01hw7rm71vfay8vvw14d2pf2df_a",
+    "process_01hw7rm71vfay8vvw14d2pf2df_b"
+  ],
+  "expected_case_view_timestamps": [
+    "2026-05-12T12:20:00Z",
+    "2026-05-12T12:20:01Z",
+    "2026-05-12T12:20:02Z"
+  ],
+  "expected_case_view_events": [
+    { "event": "wos.kernel.case_created", "process_id": "process_01hw7rm71vfay8vvw14d2pf2df_a" },
+    { "event": "projection.second_process_ready", "process_id": "process_01hw7rm71vfay8vvw14d2pf2df_b" },
+    { "event": "projection.first_process_ready", "process_id": "process_01hw7rm71vfay8vvw14d2pf2df_a" }
+  ]
+}

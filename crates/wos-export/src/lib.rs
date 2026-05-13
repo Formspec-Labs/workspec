@@ -6,6 +6,11 @@
 //! Takes a [`wos_core::provenance::ProvenanceLog`] and export configuration
 //! and produces serialized output in the requested format.
 //!
+//! This crate is not the deterministic archive/export-package implementation.
+//! It emits provenance and process-mining projections for semantic consumers;
+//! deterministic ZIP package bytes, member ordering, and bundle structural
+//! verification belong to `integrity-bundle` in `integrity-stack/`.
+//!
 //! # Empty-timestamp policy (intentionally divergent)
 //!
 //! The three serializers handle `ProvenanceRecord.timestamp == ""` (see

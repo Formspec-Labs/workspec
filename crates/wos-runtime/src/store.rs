@@ -160,7 +160,11 @@ pub trait RuntimeStore {
     /// Load the current record for a workflow process.
     fn load_record(&self, process_id: &str) -> Result<RuntimeRecord, StoreError>;
 
-    /// Load the current record bound to a case ledger.
+    /// Legacy last-resort lookup for one record bound to a case ledger.
+    ///
+    /// This accessor is unsafe for normal case-ledger routing because one case
+    /// ledger may bind multiple workflow processes. New callers should use
+    /// [`Self::processes_for_case`] and disambiguate explicitly.
     fn load_record_by_case_ledger_id(
         &self,
         case_ledger_id: &str,
@@ -170,20 +174,19 @@ pub trait RuntimeStore {
 
     /// Return the `process_id`s of every record bound to `case_ledger_id`.
     ///
-    /// Empty vector when no records match. Default implementation returns
-    /// empty; in-memory and storage-backed adapters override.
-    fn processes_for_case(&self, _case_ledger_id: &str) -> Vec<String> {
-        Vec::new()
-    }
+    /// Empty vector when no records match.
+    fn processes_for_case(&self, case_ledger_id: &str) -> Vec<String>;
 
     /// Return every provenance record across every workflow process bound to
-    /// `case_ledger_id`, merged in `(timestamp, process_id, position)` order.
+    /// `case_ledger_id`, merged in `(timestamp, encounter_order)` order.
     ///
     /// This is the N:1 traversal primitive — one case file aggregating events
     /// from many workflow processes (see case-boundary report §4.3). Records
-    /// with an empty `timestamp` (unit-test fixtures that never reached the
-    /// runtime stamper) sort to the front in encounter order — exporters
-    /// should treat empty timestamps as "unknown" per
+    /// `encounter_order` is the case-index process traversal order plus each
+    /// process log's insertion order. Records with an empty `timestamp`
+    /// (unit-test fixtures that never reached the runtime stamper) sort to the
+    /// front in encounter order — exporters should treat empty timestamps as
+    /// "unknown" per
     /// [`ProvenanceRecord`] docs.
     ///
     /// Empty vector when no processes are bound to the case ledger or when
@@ -201,10 +204,9 @@ pub trait RuntimeStore {
     /// exists as the case-scoped writer counterpart to [`Self::provenance_for_case`]
     /// so callers traversing case-keyed routes (ADR-0093 §2.8) need not load
     /// the record first. Returns [`StoreError::NotFound`] when the process is
-    /// missing or bound to a different case ledger. The default implementation
-    /// performs the load/validate/save round-trip atop the existing
-    /// process-scoped methods; adapters with a direct case-ledger index may
-    /// override.
+    /// missing or bound to a different case ledger. Storage adapters MUST
+    /// implement this explicitly so their atomicity and index-consistency
+    /// behavior is visible at the adapter boundary.
     ///
     /// # Errors
     /// Returns an error when the record cannot be loaded, the case-ledger
@@ -214,17 +216,7 @@ pub trait RuntimeStore {
         case_ledger_id: &str,
         process_id: &str,
         record: ProvenanceRecord,
-    ) -> Result<(), StoreError> {
-        let mut runtime_record = self.load_record(process_id)?;
-        if runtime_record.instance.case_ledger_id != case_ledger_id {
-            return Err(StoreError::NotFound(format!(
-                "process `{process_id}` is not bound to case ledger `{case_ledger_id}`"
-            )));
-        }
-        runtime_record.provenance_log.push(record);
-        runtime_record.instance.provenance_position = runtime_record.provenance_log.len() as u64;
-        self.save_record(runtime_record)
-    }
+    ) -> Result<(), StoreError>;
 
     /// Atomically replace a workflow-process record.
     fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError>;
@@ -241,6 +233,23 @@ pub trait RuntimeStore {
 
     /// Atomically replace an intake record.
     fn save_intake_record(&mut self, record: IntakeRecord) -> Result<(), StoreError>;
+}
+
+fn append_provenance_via_process_round_trip<S: RuntimeStore + ?Sized>(
+    store: &mut S,
+    case_ledger_id: &str,
+    process_id: &str,
+    record: ProvenanceRecord,
+) -> Result<(), StoreError> {
+    let mut runtime_record = store.load_record(process_id)?;
+    if runtime_record.instance.case_ledger_id != case_ledger_id {
+        return Err(StoreError::NotFound(format!(
+            "process `{process_id}` is not bound to case ledger `{case_ledger_id}`"
+        )));
+    }
+    runtime_record.provenance_log.push(record);
+    runtime_record.instance.provenance_position = runtime_record.provenance_log.len() as u64;
+    store.save_record(runtime_record)
 }
 
 /// In-memory runtime record store.
@@ -290,11 +299,17 @@ impl RuntimeStore for InMemoryStore {
         &self,
         case_ledger_id: &str,
     ) -> Result<RuntimeRecord, StoreError> {
-        self.records
-            .values()
-            .find(|record| record.instance.case_ledger_id == case_ledger_id)
-            .cloned()
-            .ok_or_else(|| StoreError::NotFound(case_ledger_id.to_string()))
+        let Some(process_ids) = self.case_index.get(case_ledger_id) else {
+            return Err(StoreError::NotFound(case_ledger_id.to_string()));
+        };
+
+        match process_ids.as_slice() {
+            [] => Err(StoreError::NotFound(case_ledger_id.to_string())),
+            [process_id] => self.load_record(process_id),
+            _ => Err(StoreError::Failed(format!(
+                "case ledger `{case_ledger_id}` is bound to multiple processes; use processes_for_case"
+            ))),
+        }
     }
 
     fn processes_for_case(&self, case_ledger_id: &str) -> Vec<String> {
@@ -326,10 +341,24 @@ impl RuntimeStore for InMemoryStore {
         merged.into_iter().map(|(_, _, record)| record).collect()
     }
 
+    fn append_provenance_for_case(
+        &mut self,
+        case_ledger_id: &str,
+        process_id: &str,
+        record: ProvenanceRecord,
+    ) -> Result<(), StoreError> {
+        append_provenance_via_process_round_trip(self, case_ledger_id, process_id, record)
+    }
+
     fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
         let process_id = record.instance.process_id.clone();
-        if !self.records.contains_key(&process_id) {
+        let Some(existing) = self.records.get(&process_id) else {
             return Err(StoreError::NotFound(process_id));
+        };
+        if existing.instance.case_ledger_id != record.instance.case_ledger_id {
+            return Err(StoreError::Failed(format!(
+                "case ledger binding for process `{process_id}` is immutable"
+            )));
         }
 
         self.records.insert(process_id, record);
@@ -642,11 +671,15 @@ mod tests {
         RuntimeRecord::new(instance)
     }
 
-    fn stamped(timestamp: &str) -> ProvenanceRecord {
+    fn stamped_event(timestamp: &str, event: &str) -> ProvenanceRecord {
         let mut record =
-            ProvenanceRecord::state_transition("from", "to", "evt", Some("actor:test"));
+            ProvenanceRecord::state_transition("from", "to", event, Some("actor:test"));
         record.timestamp = timestamp.to_string();
         record
+    }
+
+    fn stamped(timestamp: &str) -> ProvenanceRecord {
+        stamped_event(timestamp, "evt")
     }
 
     #[test]
@@ -656,18 +689,30 @@ mod tests {
         let process_a = "process_01h_a";
         let process_b = "process_01h_b";
 
-        store.create_record(record_with(process_a, case_ledger_id)).unwrap();
-        store.create_record(record_with(process_b, case_ledger_id)).unwrap();
+        store
+            .create_record(record_with(process_a, case_ledger_id))
+            .unwrap();
+        store
+            .create_record(record_with(process_b, case_ledger_id))
+            .unwrap();
 
         // Interleave timestamps across both processes — t1 (a), t2 (b), t3 (a), t4 (b).
         let mut record_a = store.load_record(process_a).unwrap();
-        record_a.provenance_log.push(stamped("2026-05-12T10:00:01Z"));
-        record_a.provenance_log.push(stamped("2026-05-12T10:00:03Z"));
+        record_a
+            .provenance_log
+            .push(stamped("2026-05-12T10:00:01Z"));
+        record_a
+            .provenance_log
+            .push(stamped("2026-05-12T10:00:03Z"));
         store.save_record(record_a).unwrap();
 
         let mut record_b = store.load_record(process_b).unwrap();
-        record_b.provenance_log.push(stamped("2026-05-12T10:00:02Z"));
-        record_b.provenance_log.push(stamped("2026-05-12T10:00:04Z"));
+        record_b
+            .provenance_log
+            .push(stamped("2026-05-12T10:00:02Z"));
+        record_b
+            .provenance_log
+            .push(stamped("2026-05-12T10:00:04Z"));
         store.save_record(record_b).unwrap();
 
         let merged = store.provenance_for_case(case_ledger_id);
@@ -685,7 +730,45 @@ mod tests {
 
         let mut process_ids = store.processes_for_case(case_ledger_id);
         process_ids.sort();
-        assert_eq!(process_ids, vec![process_a.to_string(), process_b.to_string()]);
+        assert_eq!(
+            process_ids,
+            vec![process_a.to_string(), process_b.to_string()]
+        );
+    }
+
+    #[test]
+    fn provenance_for_case_preserves_encounter_order_for_identical_timestamps() {
+        let mut store = InMemoryStore::new();
+        let case_ledger_id = "case_01h_same_timestamp";
+        let process_a = "process_01h_a";
+        let process_b = "process_01h_b";
+        let timestamp = "2026-05-12T10:00:00Z";
+
+        // Create B before A to prove the tie-break is encounter order, not
+        // process-id lexical ordering.
+        store
+            .create_record(record_with(process_b, case_ledger_id))
+            .unwrap();
+        store
+            .create_record(record_with(process_a, case_ledger_id))
+            .unwrap();
+
+        let mut record_a = store.load_record(process_a).unwrap();
+        record_a.provenance_log.push(stamped_event(timestamp, "a1"));
+        record_a.provenance_log.push(stamped_event(timestamp, "a2"));
+        store.save_record(record_a).unwrap();
+
+        let mut record_b = store.load_record(process_b).unwrap();
+        record_b.provenance_log.push(stamped_event(timestamp, "b1"));
+        record_b.provenance_log.push(stamped_event(timestamp, "b2"));
+        store.save_record(record_b).unwrap();
+
+        let merged = store.provenance_for_case(case_ledger_id);
+        let events: Vec<_> = merged
+            .iter()
+            .map(|record| record.event.as_deref().unwrap_or(""))
+            .collect();
+        assert_eq!(events, vec!["b1", "b2", "a1", "a2"]);
     }
 
     #[test]
@@ -696,10 +779,81 @@ mod tests {
             .unwrap();
 
         assert!(
-            store.provenance_for_case("case_01h_does_not_exist").is_empty(),
+            store
+                .provenance_for_case("case_01h_does_not_exist")
+                .is_empty(),
             "unknown case ledger MUST yield an empty Vec, not panic or NotFound",
         );
-        assert!(store.processes_for_case("case_01h_does_not_exist").is_empty());
+        assert!(
+            store
+                .processes_for_case("case_01h_does_not_exist")
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn legacy_case_ledger_lookup_rejects_multiple_bound_processes() {
+        let mut store = InMemoryStore::new();
+        let case_ledger_id = "case_01h_ambiguous";
+
+        store
+            .create_record(record_with("process_01h_a", case_ledger_id))
+            .unwrap();
+        store
+            .create_record(record_with("process_01h_b", case_ledger_id))
+            .unwrap();
+
+        let err = store
+            .load_record_by_case_ledger_id(case_ledger_id)
+            .expect_err("legacy single-record lookup must not choose an arbitrary process");
+
+        assert!(
+            matches!(err, StoreError::Failed(_)),
+            "ambiguous case ledger should fail closed, got {err:?}",
+        );
+        assert!(
+            err.to_string().contains("multiple processes"),
+            "unexpected error: {err}",
+        );
+    }
+
+    #[test]
+    fn save_record_rejects_case_ledger_id_mutation_without_reindexing() {
+        let mut store = InMemoryStore::new();
+        let process_id = "process_01h_reindex";
+        let original_case = "case_01h_original";
+        let mutated_case = "case_01h_mutated";
+        store
+            .create_record(record_with(process_id, original_case))
+            .unwrap();
+
+        let mut record = store.load_record(process_id).unwrap();
+        record.instance.case_ledger_id = mutated_case.to_string();
+        let err = store
+            .save_record(record)
+            .expect_err("case-ledger binding mutation must fail");
+
+        assert!(
+            matches!(err, StoreError::Failed(_)),
+            "case-ledger binding mutation should fail closed, got {err:?}",
+        );
+        assert!(
+            err.to_string().contains("immutable"),
+            "unexpected error: {err}",
+        );
+        assert_eq!(
+            store.processes_for_case(original_case),
+            vec![process_id.to_string()]
+        );
+        assert!(store.processes_for_case(mutated_case).is_empty());
+        assert_eq!(
+            store
+                .load_record(process_id)
+                .unwrap()
+                .instance
+                .case_ledger_id,
+            original_case
+        );
     }
 
     #[test]
@@ -720,7 +874,10 @@ mod tests {
         assert_eq!(merged[0].timestamp, "2026-05-12T11:00:00Z");
 
         let record = store.load_record(process_id).unwrap();
-        assert_eq!(record.instance.provenance_position, 1, "position tracks log length");
+        assert_eq!(
+            record.instance.provenance_position, 1,
+            "position tracks log length"
+        );
     }
 
     #[test]

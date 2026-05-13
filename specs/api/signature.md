@@ -37,16 +37,16 @@ The ceremony aggregate lets the case portal answer "who hasn't signed yet?" and 
 
 | Method | Path | Body | Idempotency-Key |
 |--------|------|------|-----------------|
-| GET | /api/v1/instances/{id}/signatures | → SignatureCeremonyPage | n/a |
-| GET | /api/v1/instances/{id}/signatures/{ceremonyId} | → SignatureCeremony | n/a |
+| GET | /api/v1/cases/{case_id}/processes/{process_id}/signatures | → SignatureCeremonyPage | n/a |
+| GET | /api/v1/cases/{case_id}/processes/{process_id}/signatures/{ceremonyId} | → SignatureCeremony | n/a |
 
-`GET /api/v1/instances/{id}/signatures` lists ceremonies for a workflow process. Response is `SignatureCeremonyPage`: `items: SignatureCeremony[]`, optional `cursor`, required `hasMore`. Cursor-paginated per ADR 0082 D-7. No `total`, no `page`. Cursors are deploy-lifetime stable; `WOS-1410` on expiry triggers client restart from the top.
+`GET /api/v1/cases/{case_id}/processes/{process_id}/signatures` lists ceremonies for a workflow process. Response is `SignatureCeremonyPage`: `items: SignatureCeremony[]`, optional `cursor`, required `hasMore`. Cursor-paginated per ADR 0082 D-7. No `total`, no `page`. Cursors are deploy-lifetime stable; `WOS-1410` on expiry triggers client restart from the top.
 
-`GET /api/v1/instances/{id}/signatures/{ceremonyId}` returns a single `SignatureCeremony`. The `ceremonyId` path parameter is a signature-ceremony URN; `404` (`WOS-1404`) when the ceremony is not visible to the caller's scope.
+`GET /api/v1/cases/{case_id}/processes/{process_id}/signatures/{ceremonyId}` returns a single `SignatureCeremony`. The `ceremonyId` path parameter is a signature-ceremony URN; `404` (`WOS-1404`) when the ceremony is not visible to the caller's scope.
 
 ## Pagination
 
-`GET /api/v1/instances/{id}/signatures` uses cursor pagination per `api/pagination.schema.json`. Cursors are opaque, single-use within the issuing deploy. Cursor expiry returns `410 Gone` with `WOS-1410`.
+`GET /api/v1/cases/{case_id}/processes/{process_id}/signatures` uses cursor pagination per `api/pagination.schema.json`. Cursors are opaque, single-use within the issuing deploy. Cursor expiry returns `410 Gone` with `WOS-1410`.
 
 ## Errors
 

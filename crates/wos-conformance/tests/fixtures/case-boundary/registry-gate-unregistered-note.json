@@ -1,0 +1,43 @@
+{
+  "id": "CBR-4C-7-registry-gate-unregistered-note",
+  "rule": "CBR-§4.7",
+  "description": "Trellis registry gate fixture (REFACTOR-TODO 4C.7). `wos.kernel.note_added` remains an intentionally unregistered WOS event literal and must be rejected by registry-aware lint/runtime surfaces until the kind is ratified. The rejected action stays in the fixture stream as negative input and is intentionally absent from the expected case view.",
+  "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2dh_registry_gate",
+  "processes": [
+    {
+      "process_id": "process_01hw7rm71vfay8vvw14d2pf2dh_anchor",
+      "definition_url": "urn:test:case-boundary:registry-gate:anchor",
+      "definition_version": "1.0.0"
+    }
+  ],
+  "actions": [
+    {
+      "kind": "directAppend",
+      "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2dh_registry_gate",
+      "process_id": "process_01hw7rm71vfay8vvw14d2pf2dh_anchor",
+      "event_type": "wos.kernel.case_created",
+      "actor_id": "system:case-genesis",
+      "timestamp": "2026-05-12T12:40:00Z",
+      "label": "genesis"
+    },
+    {
+      "kind": "directAppend",
+      "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2dh_registry_gate",
+      "process_id": "process_01hw7rm71vfay8vvw14d2pf2dh_anchor",
+      "event_type": "wos.kernel.note_added",
+      "actor_id": "system:registry-gate",
+      "timestamp": "2026-05-12T12:40:01Z",
+      "label": "unregistered-note"
+    }
+  ],
+  "expected_processes_for_case": [
+    "process_01hw7rm71vfay8vvw14d2pf2dh_anchor"
+  ],
+  "expected_case_view_timestamps": [
+    "2026-05-12T12:40:00Z"
+  ],
+  "expected_case_view_events": [
+    { "event": "wos.kernel.case_created", "process_id": "process_01hw7rm71vfay8vvw14d2pf2dh_anchor" }
+  ],
+  "expected_registry_rejection_event": "wos.kernel.note_added"
+}

@@ -1456,7 +1456,7 @@
         },
         "processId": {
           "$ref": "#/$defs/WosResourceUrn",
-          "description": "Workflow process URN whose governance state escalated. Entity-type segment MUST be `instance`."
+          "description": "Workflow process URN whose governance state escalated. Entity-type segment MUST be `process`."
         },
         "taskId": {
           "$ref": "#/$defs/WosResourceUrn",

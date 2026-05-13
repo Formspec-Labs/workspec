@@ -6,32 +6,36 @@
 **Pre-release framing:** No registry-version bump, no deprecation period. This audit precedes
 Task 5.2 (inner `recordKind` drop), which depends on this enumeration.
 
+**Phase 5.2 prerequisite update (2026-05-13):** The 11 schema-validated gap rows
+identified by this audit now carry ratified `eventLiteral` values plus workflow, provenance-log
+overlay, and API-view guards. `authorizationRejectedRecord` API selection now keys off the
+outer `event == "wos.governance.authorization_rejected"` guard.
+
 ## Summary
 
 | Metric | Value |
 |---|---|
 | Total kinds enumerated | **132** |
 | Schema-validated | 22 |
-| With `eventLiteral` | **14 / 132** (10.6%); **14 / 22** (63.6% of schema-validated) |
-| Overlay `event` const present | **14 / 132** (10.6%) |
-| Overlay ↔ registry agreement (where both exist) | **14 / 14 = 100%** |
-| API-view (`api/provenance.schema.json`) const agreement | **14 / 14 = 100%** (lines 1158–1340) |
+| With `eventLiteral` | **25 / 132** (18.9%); **22 / 22** (100% of schema-validated) |
+| Overlay `event` const present | **25 / 132** (18.9%) |
+| Overlay ↔ registry agreement (where both exist) | **25 / 25 = 100%** |
+| API-view (`api/provenance.schema.json`) const agreement | **25 / 25 = 100%** |
 | Mismatches found | **0** |
-| Schema-validated kinds missing `eventLiteral` | **11** (see "Gaps to fix in 5.2") |
-| Flat (non-validated) kinds without `eventLiteral` | **110** (correct posture; flat Facts-tier records do not require dispatch keys) |
+| Schema-validated kinds missing `eventLiteral` | **0** |
+| Flat (non-validated) kinds without `eventLiteral` | **107** (correct posture; flat Facts-tier records do not require dispatch keys) |
 
 **Verdict:** Every `eventLiteral` declared in the registry has a matching `event` const in both the
-provenance-log overlay and the API view. There are **zero mismatches**. The audit is green for the
-inner-`recordKind` drop in 5.2 for the 14 kinds that have ratified event literals. The 11
-schema-validated-but-eventLiteral-less kinds are a separate, pre-existing gap (no F-13 event literal
-ratified yet) and must be resolved before 5.2 can drop `recordKind` for those kinds without losing
-their dispatch identity.
+provenance-log overlay and the API view. There are **zero mismatches**. After the 2026-05-13
+Phase 5.2 prerequisite update, every schema-validated kind has a ratified F-13 event literal and
+matching workflow/API/provenance-log guard. The remaining 5.2 work is the atomic inner-`recordKind`
+drop plus Trellis parser/fixture regeneration.
 
 ## Sources
 
 - Registry: `work-spec/schemas/record-kind-registry.json` (206 lines; v1.0.0; lastAudited 2026-05-07)
-- Overlay: `work-spec/schemas/wos-provenance-log.schema.json` (1797 lines)
-- API view: `work-spec/schemas/api/provenance.schema.json` (2520 lines)
+- Overlay: `work-spec/schemas/wos-provenance-log.schema.json` (2138 lines after the 2026-05-13 guard update)
+- API view: `work-spec/schemas/api/provenance.schema.json` (2693 lines after the 2026-05-13 guard update)
 - Governance policy doc (`specs/provenance-registry.md`): not present at audit time; cited by
   registry `description` but absent from `work-spec/specs/`.
 
@@ -39,15 +43,15 @@ their dispatch identity.
 
 1. Loaded all 132 entries from `record-kind-registry.json#/recordKinds`.
 2. Scanned `wos-provenance-log.schema.json#/$defs/*` for every `recordKind`/`event` const pair.
-3. Cross-referenced the 14 `eventLiteral` declarations in the registry against the 14 overlay
-   `$defs` and the 14 API-view if/then guards (`api/provenance.schema.json` lines 1149–1346).
+3. Cross-referenced the 25 `eventLiteral` declarations in the registry against the 25 overlay
+   `$defs` and the 25 API-view if/then guards.
 4. Recorded `kind | eventLiteral | overlay_const | agreement` per row.
 
 ## Full enumeration (132 rows)
 
 | # | kind | category | sv | eventLiteral | overlay $def line | agreement |
 |---|------|----------|----|--------------|---------------------|-----------|
-| 1 | `stateTransition` | foundation | ✓ | — | — | gap (sv, no eventLiteral) |
+| 1 | `stateTransition` | foundation | ✓ | `wos.kernel.state_transition` | 1078 | **MATCH** |
 | 2 | `unmatchedEvent` | foundation |  | — | — | flat |
 | 3 | `caseStateMutation` | foundation |  | — | — | flat |
 | 4 | `caseCreated` | foundation | ✓ | `wos.kernel.case_created` | 104 | **MATCH** |
@@ -66,7 +70,7 @@ their dispatch identity.
 | 17 | `invalidDuration` | internal |  | — | — | flat |
 | 18 | `toleranceViolation` | internal |  | — | — | flat |
 | 19 | `convergenceCapReached` | internal |  | — | — | flat |
-| 20 | `capabilityInvocation` | ai | ✓ | — | — | gap (sv, no eventLiteral) |
+| 20 | `capabilityInvocation` | ai | ✓ | `wos.ai.capability_invocation` | 1106 | **MATCH** |
 | 21 | `deonticViolation` | ai |  | — | — | flat |
 | 22 | `deonticEvaluation` | ai |  | — | — | flat |
 | 23 | `deonticResolution` | ai |  | — | — | flat |
@@ -165,53 +169,59 @@ their dispatch identity.
 | 116 | `policyDecision` | integration |  | — | — | flat |
 | 117 | `signatureAffirmation` | signature | ✓ | `wos.kernel.signature_affirmation` | 655 | **MATCH** |
 | 118 | `signatureAdmissionFailed` | signature | ✓ | `wos.kernel.signature_admission_failed` | 800 | **MATCH** |
-| 119 | `correctionAuthorized` | amendment | ✓ | — | — | gap (sv, no eventLiteral) |
-| 120 | `amendmentAuthorized` | amendment | ✓ | — | — | gap (sv, no eventLiteral) |
-| 121 | `determinationAmended` | amendment | ✓ | — | — | gap (sv, no eventLiteral) |
-| 122 | `rescissionAuthorized` | amendment | ✓ | — | — | gap (sv, no eventLiteral) |
+| 119 | `correctionAuthorized` | amendment | ✓ | `wos.governance.correction_authorized` | 1134 | **MATCH** |
+| 120 | `amendmentAuthorized` | amendment | ✓ | `wos.governance.amendment_authorized` | 1162 | **MATCH** |
+| 121 | `determinationAmended` | amendment | ✓ | `wos.governance.determination_amended` | 1190 | **MATCH** |
+| 122 | `rescissionAuthorized` | amendment | ✓ | `wos.governance.rescission_authorized` | 1218 | **MATCH** |
 | 123 | `determinationRescinded` | amendment | ✓ | `wos.governance.determination_rescinded` | 905 | **MATCH** |
 | 124 | `reinstated` | amendment | ✓ | `wos.governance.reinstated` | 933 | **MATCH** |
-| 125 | `authorizationAttestation` | amendment | ✓ | — | — | gap (sv, no eventLiteral) |
+| 125 | `authorizationAttestation` | amendment | ✓ | `wos.governance.authorization_attestation` | 1246 | **MATCH** |
 | 126 | `clockStarted` | clock | ✓ | `wos.governance.clock_started` | 961 | **MATCH** |
 | 127 | `clockResolved` | clock | ✓ | `wos.governance.clock_resolved` | 989 | **MATCH** |
 | 128 | `identityAttestation` | identity | ✓ | `wos.assurance.identity_attestation` | 1017 | **MATCH** |
-| 129 | `clockSkewObserved` | clock | ✓ | — | — | gap (sv, no eventLiteral) |
-| 130 | `commitAttemptFailure` | failure | ✓ | — | — | gap (sv, no eventLiteral) |
-| 131 | `authorizationRejected` | failure | ✓ | — | — | gap (sv, no eventLiteral) |
-| 132 | `migrationPinChanged` | migration | ✓ | — | — | gap (sv, no eventLiteral) |
+| 129 | `clockSkewObserved` | clock | ✓ | `wos.governance.clock_skew_observed` | 1274 | **MATCH** |
+| 130 | `commitAttemptFailure` | failure | ✓ | `wos.kernel.commit_attempt_failure` | 1302 | **MATCH** |
+| 131 | `authorizationRejected` | failure | ✓ | `wos.governance.authorization_rejected` | 1330 | **MATCH** |
+| 132 | `migrationPinChanged` | migration | ✓ | `wos.kernel.migration_pin_changed` | 1358 | **MATCH** |
 
 Legend:
 - **sv** = `schemaValidated: true` in the registry.
 - **MATCH** = `eventLiteral` and overlay `event` const are present and identical (and the API view
   carries the same const at the cited line in `api/provenance.schema.json`).
-- **gap (sv, no eventLiteral)** = schema-validated kind missing an F-13 event literal in the
-  registry; no overlay or API-view event const exists. This is a pre-existing condition.
+- **gap (sv, no eventLiteral)** = original audit marker for schema-validated kinds that were
+  missing an F-13 event literal before the 2026-05-13 Phase 5.2 prerequisite update.
 - **flat** = non-schema-validated Facts-tier kind, dispatched on inner `recordKind` only.
 
-## Gaps to fix in 5.2 (or before 5.2 can proceed on these kinds)
+## Gaps fixed before 5.2 inner-drop work
 
 5.2 plans to drop the inner `recordKind` field outright (pre-release, no deprecation). Doing so on a
 kind without a ratified outer `event` literal would erase the kind's only dispatch identity. The
-following 11 kinds therefore block 5.2 unless one of two paths is taken per kind: (a) ratify an
-`eventLiteral` and add an overlay `$def` guard + API-view if/then, or (b) leave inner `recordKind`
-in place for these specific kinds (contradicting 5.2's "atomic drop" framing). Recommendation: (a)
-on all 11, since 5.2 is gated on full atomic removal.
+following 11 kinds were therefore blockers at 5.1 time. The 2026-05-13 Phase 5.2 prerequisite slice
+took path (a) for all 11: ratify an `eventLiteral` and add workflow, provenance-log overlay, and
+API-view guards.
 
-The 11 schema-validated kinds without an `eventLiteral`:
+The 11 formerly missing schema-validated event literals:
 
 | # | kind | registry line | category | spec reference | required action |
 |---|------|---------------|----------|----------------|-----------------|
-| 1 | `stateTransition` | `record-kind-registry.json:73` | foundation | Kernel | Add `eventLiteral` (e.g. `wos.kernel.state_transition`) + overlay `$def` guard in `wos-provenance-log.schema.json` + API-view if/then in `api/provenance.schema.json`. |
-| 2 | `capabilityInvocation` | `record-kind-registry.json:92` | ai | AI §3.3.1 | Add `eventLiteral` (e.g. `wos.ai.capability_invocation`) + overlay guard + API guard. |
-| 3 | `correctionAuthorized` | `record-kind-registry.json:191` | amendment | ADR 0066 §1 | Add `eventLiteral` (e.g. `wos.governance.correction_authorized`) + overlay guard + API guard. |
-| 4 | `amendmentAuthorized` | `record-kind-registry.json:192` | amendment | ADR 0066 §2 | Add `eventLiteral` (e.g. `wos.governance.amendment_authorized`) + overlay guard + API guard. |
-| 5 | `determinationAmended` | `record-kind-registry.json:193` | amendment | ADR 0066 §2 | Add `eventLiteral` (e.g. `wos.governance.determination_amended`) + overlay guard + API guard. |
-| 6 | `rescissionAuthorized` | `record-kind-registry.json:194` | amendment | ADR 0066 §3 | Add `eventLiteral` (e.g. `wos.governance.rescission_authorized`) + overlay guard + API guard. |
-| 7 | `authorizationAttestation` | `record-kind-registry.json:197` | amendment | ADR 0066 §5 | Add `eventLiteral` (e.g. `wos.governance.authorization_attestation`) + overlay guard + API guard. |
-| 8 | `clockSkewObserved` | `record-kind-registry.json:201` | clock | ADR 0069 §3 | Add `eventLiteral` (e.g. `wos.governance.clock_skew_observed`) + overlay guard + API guard. |
-| 9 | `commitAttemptFailure` | `record-kind-registry.json:202` | failure | ADR 0070 §2 | Add `eventLiteral` (e.g. `wos.kernel.commit_attempt_failure`) + overlay guard + API guard. |
-| 10 | `authorizationRejected` | `record-kind-registry.json:203` | failure | ADR 0070 §4 | Add `eventLiteral` (e.g. `wos.governance.authorization_rejected`) + overlay guard + API guard. Note: API view already references a typed `authorizationRejectedRecord` payload (`api/provenance.schema.json:1117`) discriminated on `recordKind`; that discriminator path must move to `event` in 5.2. |
-| 11 | `migrationPinChanged` | `record-kind-registry.json:204` | migration | ADR 0071 §3 | Add `eventLiteral` (e.g. `wos.kernel.migration_pin_changed`) + overlay guard + API guard. |
+| 1 | `stateTransition` | `record-kind-registry.json:73` | foundation | Kernel | Fixed: `wos.kernel.state_transition` + overlay/API/workflow guards. |
+| 2 | `capabilityInvocation` | `record-kind-registry.json:92` | ai | AI §3.3.1 | Fixed: `wos.ai.capability_invocation` + overlay/API/workflow guards. |
+| 3 | `correctionAuthorized` | `record-kind-registry.json:191` | amendment | ADR 0066 §1 | Fixed: `wos.governance.correction_authorized` + overlay/API/workflow guards. |
+| 4 | `amendmentAuthorized` | `record-kind-registry.json:192` | amendment | ADR 0066 §2 | Fixed: `wos.governance.amendment_authorized` + overlay/API/workflow guards. |
+| 5 | `determinationAmended` | `record-kind-registry.json:193` | amendment | ADR 0066 §2 | Fixed: `wos.governance.determination_amended` + overlay/API/workflow guards. |
+| 6 | `rescissionAuthorized` | `record-kind-registry.json:194` | amendment | ADR 0066 §3 | Fixed: `wos.governance.rescission_authorized` + overlay/API/workflow guards. |
+| 7 | `authorizationAttestation` | `record-kind-registry.json:197` | amendment | ADR 0066 §5 | Fixed: `wos.governance.authorization_attestation` + overlay/API/workflow guards. |
+| 8 | `clockSkewObserved` | `record-kind-registry.json:201` | clock | ADR 0069 §3 | Fixed: `wos.governance.clock_skew_observed` + overlay/API/workflow guards. |
+| 9 | `commitAttemptFailure` | `record-kind-registry.json:202` | failure | ADR 0070 §2 | Fixed: `wos.kernel.commit_attempt_failure` + overlay/API/workflow guards. |
+| 10 | `authorizationRejected` | `record-kind-registry.json:203` | failure | ADR 0070 §4 | Fixed: `wos.governance.authorization_rejected` + overlay/API/workflow guards. API `authorizationRejectedRecord` is now selected by the outer `event` guard. |
+| 11 | `migrationPinChanged` | `record-kind-registry.json:204` | migration | ADR 0071 §3 | Fixed: `wos.kernel.migration_pin_changed` + overlay/API/workflow guards. |
+
+**Blocking 5.2 dependency (resolved 2026-05-13).** `authorizationRejected` was not only a missing
+event-literal row. It was the schema-validated kind with an API-view typed payload
+(`authorizationRejectedRecord`) whose downstream selection depended on the inner `recordKind` path.
+The API schema now requires `authorizationRejectedRecord` when the outer event is
+`wos.governance.authorization_rejected`, so the typed payload remains reachable to event-dispatch
+parsers after the inner `recordKind` drop.
 
 Namespacing recommendations (kernel vs governance vs ai vs assurance) above are conservative
 suggestions drawn from the existing 14 ratified literals; the actual namespace choice per kind is
@@ -220,8 +230,9 @@ ADR-territory and not load-bearing for this audit. The audit's load-bearing clai
 
 ## What is NOT in this audit (deferred to 5.2)
 
-- No schema edits. Files in `work-spec/schemas/` are read-only for this task.
-- No inner `recordKind` field removal. That is Task 5.2's atomic replace-only operation across
+- The original 5.1 pass made no schema edits. The 2026-05-13 Phase 5.2 prerequisite update did edit
+  `work-spec/schemas/` to ratify the 11 missing event literals and guards.
+- No inner `recordKind` field removal. That remains Task 5.2's atomic replace-only operation across
   `wos-provenance-log.schema.json`, `wos-workflow.schema.json`, `api/provenance.schema.json`, and
   the Trellis-side parsers cited in `REFACTOR-TODO.md:411`.
 - No fixture regeneration. That is Task 5.3.
@@ -229,11 +240,13 @@ ADR-territory and not load-bearing for this audit. The audit's load-bearing clai
 ## Files inspected (read-only)
 
 - `work-spec/schemas/record-kind-registry.json` (lines 1–206)
-- `work-spec/schemas/wos-provenance-log.schema.json` (lines 1–1797)
-- `work-spec/schemas/api/provenance.schema.json` (lines 779–1346 for the Facts-tier envelope and
+- `work-spec/schemas/wos-provenance-log.schema.json` (lines 1–2138)
+- `work-spec/schemas/api/provenance.schema.json` (lines 779–1522 for the Facts-tier envelope and
   D26 if/then guards)
 
 ## Acceptance
 
-`python3 -m pytest tests/schemas -q` was run after this report was authored; no schemas were
-modified, only this markdown report was written.
+`uv run pytest tests/schemas -q` was run after the 2026-05-13 prerequisite update: 458 passed,
+1 xfailed. `python3 scripts/check-recordkind-parity.py` and
+`python3 scripts/check-api-mirror-parity.py` passed. `node scripts/check-api-schema-validity.mjs`
+was blocked locally by missing package `ajv`.

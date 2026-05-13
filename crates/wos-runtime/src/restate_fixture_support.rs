@@ -16,6 +16,7 @@ use crate::runtime::{SignatureProfileDocument, SystemClock, WosRuntime};
 use crate::store::{InMemoryStore, RuntimeRecord, RuntimeStore, StoreError};
 use wos_core::instance::{ActiveTask, ValidationOutcome};
 use wos_core::model::kernel::KernelDocument;
+use wos_core::provenance::ProvenanceRecord;
 use wos_core::traits::{DocumentResolver, ExternalService};
 
 /// In-memory store behind `Arc<Mutex<_>>` for embedding [`WosRuntime`] in Restate handlers.
@@ -53,6 +54,32 @@ impl RuntimeStore for SharedInMemoryStore {
             .load_record_by_case_ledger_id(case_ledger_id)
     }
 
+    fn processes_for_case(&self, case_ledger_id: &str) -> Vec<String> {
+        self.0
+            .lock()
+            .expect("store mutex poisoned")
+            .processes_for_case(case_ledger_id)
+    }
+
+    fn provenance_for_case(&self, case_ledger_id: &str) -> Vec<ProvenanceRecord> {
+        self.0
+            .lock()
+            .expect("store mutex poisoned")
+            .provenance_for_case(case_ledger_id)
+    }
+
+    fn append_provenance_for_case(
+        &mut self,
+        case_ledger_id: &str,
+        process_id: &str,
+        record: ProvenanceRecord,
+    ) -> Result<(), StoreError> {
+        self.0
+            .lock()
+            .expect("store mutex poisoned")
+            .append_provenance_for_case(case_ledger_id, process_id, record)
+    }
+
     fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
         self.0
             .lock()
@@ -86,6 +113,86 @@ impl RuntimeStore for SharedInMemoryStore {
             .lock()
             .expect("store mutex poisoned")
             .save_intake_record(record)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wos_core::instance::{InstanceStatus, WorkflowProcess};
+
+    fn record_with(process_id: &str, case_ledger_id: &str) -> RuntimeRecord {
+        let instance = WorkflowProcess {
+            process_id: process_id.to_string(),
+            case_ledger_id: case_ledger_id.to_string(),
+            tenant: wos_core::typeid::DEFAULT_TENANT.to_string(),
+            definition_url: "urn:test:shared-in-memory-store".to_string(),
+            definition_version: "1.0.0".to_string(),
+            configuration: Vec::new(),
+            case_state: serde_json::Value::Null,
+            provenance_position: 0,
+            next_task_sequence: 0,
+            timers: Vec::new(),
+            active_tasks: Vec::new(),
+            history_store: Default::default(),
+            compensation_logs: Default::default(),
+            status: InstanceStatus::Active,
+            stalled_since: None,
+            decline_reason: None,
+            voided_by: None,
+            voided_at: None,
+            expired_at: None,
+            pending_events: Vec::new(),
+            governance_state: None,
+            volume_counters: None,
+            fired_milestones: Default::default(),
+            pending_callbacks: Default::default(),
+            created_at: "1970-01-01T00:00:00Z".to_string(),
+            updated_at: "1970-01-01T00:00:00Z".to_string(),
+            extensions: Default::default(),
+        };
+        RuntimeRecord::new(instance)
+    }
+
+    fn stamped(timestamp: &str) -> ProvenanceRecord {
+        let mut record =
+            ProvenanceRecord::state_transition("from", "to", "evt", Some("actor:test"));
+        record.timestamp = timestamp.to_string();
+        record
+    }
+
+    #[test]
+    fn shared_in_memory_store_forwards_case_scoped_traversals() {
+        let mut store = SharedInMemoryStore::default();
+        let case_ledger_id = "case_01h_shared";
+        let process_a = "process_01h_shared_a";
+        let process_b = "process_01h_shared_b";
+
+        store
+            .create_record(record_with(process_a, case_ledger_id))
+            .expect("process A created");
+        store
+            .create_record(record_with(process_b, case_ledger_id))
+            .expect("process B created");
+        store
+            .append_provenance_for_case(case_ledger_id, process_a, stamped("2026-05-12T12:00:01Z"))
+            .expect("append through shared wrapper");
+
+        let mut process_ids = store.processes_for_case(case_ledger_id);
+        process_ids.sort();
+        assert_eq!(
+            process_ids,
+            vec![process_a.to_string(), process_b.to_string()],
+            "shared wrapper must expose the inner store's case-process index"
+        );
+
+        let merged = store.provenance_for_case(case_ledger_id);
+        assert_eq!(
+            merged.len(),
+            1,
+            "shared wrapper must not fall back to the trait default empty traversal"
+        );
+        assert_eq!(merged[0].timestamp, "2026-05-12T12:00:01Z");
     }
 }
 

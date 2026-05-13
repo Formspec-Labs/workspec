@@ -193,7 +193,7 @@ def test_signature_affirmation_custody_hook_eligible_must_be_true(schema):
 def test_non_signature_record_is_not_forced_into_signature_shape(schema):
     validator = _document_validator(schema)
     record = copy.deepcopy(_record())
-    record["recordKind"] = "stateTransition"
+    record["recordKind"] = "caseStateMutation"
     record["event"] = "decide"
     record["data"] = {"some": "payload"}
 

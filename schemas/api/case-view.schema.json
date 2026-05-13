@@ -14,6 +14,12 @@
       "$ref": "#/$defs/CaseViewEvent"
     },
     {
+      "$ref": "#/$defs/CaseEventAppendRequest"
+    },
+    {
+      "$ref": "#/$defs/CaseEventAppendReceipt"
+    },
+    {
       "$ref": "#/$defs/AudienceProjection"
     }
   ],
@@ -85,6 +91,74 @@
           "type": "string",
           "format": "date-time",
           "description": "UTC RFC 3339 timestamp when the row was appended. Primary sort key for the merged stream."
+        }
+      }
+    },
+    "CaseEventAppendRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Request body for `POST /api/v1/cases/{case_id}/events`, the direct case-ledger append surface. `wos.kernel.case_created` opens a new ledger; registered post-ledger WOS event literals run relationship authorization and append only after an allow decision plus event-contract validation.",
+      "required": [
+        "event",
+        "actorId",
+        "idempotencyToken"
+      ],
+      "properties": {
+        "event": {
+          "type": "string",
+          "pattern": "^wos\\.(kernel|governance|assurance)\\.[a-z][a-z0-9_]*$",
+          "description": "Registered WOS event literal. The reference server persists `wos.kernel.case_created` before ledger creation and persists post-ledger literals only after relationship authorization allows and the direct writer can enforce the event contract."
+        },
+        "actorId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Actor identifier for the direct append. Greenfield callers SHOULD supply the canonical `ActorRef`; legacy storage adapters may still preserve the opaque actor identifier that signed the append.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "idempotencyToken": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Replay token scoped to `(tenant, token)` for pre-ledger creation and `(case_id, token)` for post-ledger direct append.",
+          "x-wos": {
+            "openStringKind": "opaque-token"
+          }
+        },
+        "data": {
+          "description": "Optional event-contract data. `caseRef` and `caseLedgerId` are supplied from the path for generic direct appends and must match if present. The concrete event contract validates the payload before persistence."
+        }
+      }
+    },
+    "CaseEventAppendReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Receipt returned after a direct case-ledger append commits.",
+      "required": [
+        "caseLedgerId",
+        "eventId",
+        "eventHash",
+        "sequence"
+      ],
+      "properties": {
+        "caseLedgerId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Durable governed case-ledger URN that received the direct append."
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*_prov_[0-9a-hjkmnp-tv-z]{26}$",
+          "description": "TypeID of the provenance row produced by the append."
+        },
+        "eventHash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Hash-chain digest for the appended event."
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Monotonic sequence number assigned within the case ledger's event stream."
         }
       }
     },

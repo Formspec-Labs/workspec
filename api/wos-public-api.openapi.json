@@ -322,15 +322,7 @@
             "required": true,
             "description": "Durable case-ledger TypeID or WOS resource URN.",
             "schema": {
-              "oneOf": [
-                {
-                  "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
-                },
-                {
-                  "type": "string",
-                  "pattern": "^[a-z][a-z0-9-]*_case_[0-9a-hjkmnp-tv-z]{26}$"
-                }
-              ]
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/CaseLedgerPathId"
             }
           }
         ],
@@ -349,7 +341,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/CaseLedgerProjection"
+                  "$ref": "https://schemas.formspec.io/wos-api/case-view/v1#/$defs/CaseView"
                 }
               }
             }
@@ -393,15 +385,7 @@
             "required": true,
             "description": "Durable case-ledger TypeID or WOS resource URN.",
             "schema": {
-              "oneOf": [
-                {
-                  "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
-                },
-                {
-                  "type": "string",
-                  "pattern": "^[a-z][a-z0-9-]*_case_[0-9a-hjkmnp-tv-z]{26}$"
-                }
-              ]
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/CaseLedgerPathId"
             }
           }
         ],
@@ -411,34 +395,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "event",
-                  "actorId",
-                  "idempotencyToken"
-                ],
-                "properties": {
-                  "event": {
-                    "type": "string",
-                    "pattern": "^wos\\.(kernel|governance|assurance)\\.[a-z][a-z0-9_]*$",
-                    "description": "Registered WOS event literal. The reference server persists `wos.kernel.case_created` before ledger creation and persists post-ledger literals only after relationship authorization allows and the direct writer can enforce the event contract."
-                  },
-                  "actorId": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "idempotencyToken": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "Replay token scoped to `(tenant, token)` for pre-ledger creation and `(case_id, token)` for post-ledger direct append."
-                  },
-                  "data": {
-                    "type": "object",
-                    "additionalProperties": true,
-                    "description": "Optional event-contract data. `caseRef` and `caseLedgerId` are supplied from the path for generic direct appends and must match if present."
-                  }
-                }
+                "$ref": "https://schemas.formspec.io/wos-api/case-view/v1#/$defs/CaseEventAppendRequest"
               }
             }
           }
@@ -458,31 +415,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "caseLedgerId",
-                    "eventId",
-                    "eventHash",
-                    "sequence"
-                  ],
-                  "properties": {
-                    "caseLedgerId": {
-                      "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
-                    },
-                    "eventId": {
-                      "type": "string",
-                      "pattern": "^[a-z][a-z0-9-]*_prov_[0-9a-hjkmnp-tv-z]{26}$"
-                    },
-                    "eventHash": {
-                      "type": "string",
-                      "pattern": "^sha256:[0-9a-f]{64}$"
-                    },
-                    "sequence": {
-                      "type": "integer",
-                      "minimum": 1
-                    }
-                  }
+                  "$ref": "https://schemas.formspec.io/wos-api/case-view/v1#/$defs/CaseEventAppendReceipt"
                 }
               }
             }
@@ -521,15 +454,15 @@
       "get": {
         "operationId": "listCaseProcesses",
         "summary": "List workflow processes bound to a durable case ledger.",
-        "description": "Case/process read bridge for ADR 0093 dual identity. The route lists runtime workflow process projections whose `caseLedgerId` matches the supplied durable case ledger.",
+        "description": "Case/process read route for ADR 0093 dual identity. The route lists runtime workflow process projections whose `caseLedgerId` matches the supplied durable case ledger.",
         "parameters": [
           {
             "name": "case_id",
             "in": "path",
             "required": true,
-            "description": "Durable case-ledger WOS resource URN.",
+            "description": "Durable case-ledger TypeID or WOS resource URN.",
             "schema": {
-              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/CaseLedgerPathId"
             }
           }
         ],
@@ -548,10 +481,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcess"
-                  }
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcessList"
                 }
               }
             }
@@ -585,15 +515,15 @@
       "post": {
         "operationId": "createCaseProcess",
         "summary": "Start a workflow process on a durable case ledger.",
-        "description": "Case/process creation bridge for ADR 0093 dual identity. The route creates a new runtime process bound to the supplied durable case ledger; repeated calls can create multiple process IDs for the same case ledger.",
+        "description": "Case/process creation route for ADR 0093 dual identity. The route creates a new runtime process bound to the supplied durable case ledger; repeated calls can create multiple process IDs for the same case ledger.",
         "parameters": [
           {
             "name": "case_id",
             "in": "path",
             "required": true,
-            "description": "Durable case-ledger WOS resource URN.",
+            "description": "Durable case-ledger TypeID or WOS resource URN.",
             "schema": {
-              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/CaseLedgerPathId"
             }
           }
         ],
@@ -659,24 +589,24 @@
       "get": {
         "operationId": "getCaseProcess",
         "summary": "Fetch one workflow process bound to a durable case ledger.",
-        "description": "Case/process bridge for ADR 0093 dual identity. `case_id` identifies the durable case ledger; `process_id` identifies the runtime workflow process. The server returns 404 when the process exists but is not bound to the supplied case ledger.",
+        "description": "Case/process route for ADR 0093 dual identity. `case_id` identifies the durable case ledger; `process_id` identifies the runtime workflow process. The server returns 404 when the process exists but is not bound to the supplied case ledger.",
         "parameters": [
           {
             "name": "case_id",
             "in": "path",
             "required": true,
-            "description": "Durable case-ledger WOS resource URN.",
+            "description": "Durable case-ledger TypeID or WOS resource URN.",
             "schema": {
-              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/CaseLedgerPathId"
             }
           },
           {
             "name": "process_id",
             "in": "path",
             "required": true,
-            "description": "Workflow runtime process WOS resource URN.",
+            "description": "Workflow process TypeID or WOS resource URN bound to the case ledger.",
             "schema": {
-              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ProcessPathId"
             }
           }
         ],
@@ -731,24 +661,24 @@
       "post": {
         "operationId": "submitCaseProcessInput",
         "summary": "Submit a workflow input to one process bound to a durable case ledger.",
-        "description": "Workflow-submission bridge for ADR 0093 dual identity. This route validates the case/process binding before enqueuing the authored input for kernel evaluation. Direct case-ledger appends use the separate case event surface.",
+        "description": "Workflow-submission route for ADR 0093 dual identity. This route validates the case/process binding before enqueuing the authored input for kernel evaluation. Direct case-ledger appends use the separate case event surface.",
         "parameters": [
           {
             "name": "case_id",
             "in": "path",
             "required": true,
-            "description": "Durable case-ledger WOS resource URN.",
+            "description": "Durable case-ledger TypeID or WOS resource URN.",
             "schema": {
-              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/CaseLedgerPathId"
             }
           },
           {
             "name": "process_id",
             "in": "path",
             "required": true,
-            "description": "Workflow runtime process WOS resource URN.",
+            "description": "Workflow process TypeID or WOS resource URN bound to the case ledger.",
             "schema": {
-              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ProcessPathId"
             }
           }
         ],
@@ -814,24 +744,24 @@
       "post": {
         "operationId": "drainCaseProcess",
         "summary": "Drain queued workflow inputs for one process bound to a durable case ledger.",
-        "description": "Case/process bridge for ADR 0093 dual identity. This route validates the case/process binding before draining queued runtime events for the process.",
+        "description": "Case/process route for ADR 0093 dual identity. This route validates the case/process binding before draining queued runtime events for the process.",
         "parameters": [
           {
             "name": "case_id",
             "in": "path",
             "required": true,
-            "description": "Durable case-ledger WOS resource URN.",
+            "description": "Durable case-ledger TypeID or WOS resource URN.",
             "schema": {
-              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/CaseLedgerPathId"
             }
           },
           {
             "name": "process_id",
             "in": "path",
             "required": true,
-            "description": "Workflow runtime process WOS resource URN.",
+            "description": "Workflow process TypeID or WOS resource URN bound to the case ledger.",
             "schema": {
-              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ProcessPathId"
             }
           }
         ],
@@ -850,43 +780,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": [
-                      "transitionsCount",
-                      "provenanceCount",
-                      "createdTaskIds",
-                      "emittedEvents"
-                    ],
-                    "properties": {
-                      "processedEvent": {
-                        "type": "string",
-                        "description": "Event name processed by this drain step, when a queued event was present."
-                      },
-                      "transitionsCount": {
-                        "type": "integer",
-                        "minimum": 0
-                      },
-                      "provenanceCount": {
-                        "type": "integer",
-                        "minimum": 0
-                      },
-                      "createdTaskIds": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      },
-                      "emittedEvents": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      }
-                    }
-                  }
+                  "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/RuntimeDrainStepList"
                 }
               }
             }
@@ -927,18 +821,18 @@
             "name": "case_id",
             "in": "path",
             "required": true,
-            "description": "Durable case ledger WOS resource URN.",
+            "description": "Durable case-ledger TypeID or WOS resource URN.",
             "schema": {
-              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/CaseLedgerPathId"
             }
           },
           {
             "name": "process_id",
             "in": "path",
             "required": true,
-            "description": "Workflow process WOS resource URN bound to the case ledger.",
+            "description": "Workflow process TypeID or WOS resource URN bound to the case ledger.",
             "schema": {
-              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ProcessPathId"
             }
           }
         ],
@@ -998,18 +892,18 @@
             "name": "case_id",
             "in": "path",
             "required": true,
-            "description": "Durable case ledger WOS resource URN.",
+            "description": "Durable case-ledger TypeID or WOS resource URN.",
             "schema": {
-              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/CaseLedgerPathId"
             }
           },
           {
             "name": "process_id",
             "in": "path",
             "required": true,
-            "description": "Workflow process WOS resource URN bound to the case ledger.",
+            "description": "Workflow process TypeID or WOS resource URN bound to the case ledger.",
             "schema": {
-              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ProcessPathId"
             }
           }
         ],
@@ -1064,24 +958,24 @@
       "get": {
         "operationId": "listCaseProcessCorrespondence",
         "summary": "List correspondence messages for a workflow process in a case ledger.",
-        "description": "Case/process bridge for ADR 0093 dual identity. The server validates the case/process binding before listing the correspondence feed for the bound workflow process.",
+        "description": "Case/process route for ADR 0093 dual identity. The server validates the case/process binding before listing the correspondence feed for the bound workflow process.",
         "parameters": [
           {
             "name": "case_id",
             "in": "path",
             "required": true,
-            "description": "Durable case ledger WOS resource URN.",
+            "description": "Durable case-ledger TypeID or WOS resource URN.",
             "schema": {
-              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/CaseLedgerPathId"
             }
           },
           {
             "name": "process_id",
             "in": "path",
             "required": true,
-            "description": "Workflow process WOS resource URN bound to the case ledger.",
+            "description": "Workflow process TypeID or WOS resource URN bound to the case ledger.",
             "schema": {
-              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ProcessPathId"
             }
           },
           {
@@ -1210,24 +1104,24 @@
       "get": {
         "operationId": "listCaseProcessTasks",
         "summary": "List tasks for a workflow process in a case ledger.",
-        "description": "Case/process bridge for ADR 0093 dual identity. The server validates the case/process binding before listing tasks for the bound workflow process.",
+        "description": "Case/process route for ADR 0093 dual identity. The server validates the case/process binding before listing tasks for the bound workflow process.",
         "parameters": [
           {
             "name": "case_id",
             "in": "path",
             "required": true,
-            "description": "Durable case ledger WOS resource URN.",
+            "description": "Durable case-ledger TypeID or WOS resource URN.",
             "schema": {
-              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/CaseLedgerPathId"
             }
           },
           {
             "name": "process_id",
             "in": "path",
             "required": true,
-            "description": "Workflow process WOS resource URN bound to the case ledger.",
+            "description": "Workflow process TypeID or WOS resource URN bound to the case ledger.",
             "schema": {
-              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ProcessPathId"
             }
           },
           {
@@ -1337,24 +1231,24 @@
       "get": {
         "operationId": "getCaseProcessHolds",
         "summary": "Fetch the holds subresource for a workflow process in a case ledger.",
-        "description": "Case/process bridge for ADR 0093 dual identity. The server returns 404 when the process exists but is not bound to the supplied case ledger.",
+        "description": "Case/process route for ADR 0093 dual identity. The server returns 404 when the process exists but is not bound to the supplied case ledger.",
         "parameters": [
           {
             "name": "case_id",
             "in": "path",
             "required": true,
-            "description": "Durable case ledger WOS resource URN.",
+            "description": "Durable case-ledger TypeID or WOS resource URN.",
             "schema": {
-              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/CaseLedgerPathId"
             }
           },
           {
             "name": "process_id",
             "in": "path",
             "required": true,
-            "description": "Workflow process WOS resource URN bound to the case ledger.",
+            "description": "Workflow process TypeID or WOS resource URN bound to the case ledger.",
             "schema": {
-              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ProcessPathId"
             }
           }
         ],
@@ -1409,24 +1303,24 @@
       "post": {
         "operationId": "migrateCaseProcess",
         "summary": "Migrate a workflow process in a durable case ledger.",
-        "description": "Case/process bridge for ADR 0093 dual identity. The server validates the case/process binding before invoking the same migration semantics as the legacy instance-keyed route.",
+        "description": "Case/process route for ADR 0093 dual identity. The server validates the case/process binding before invoking workflow migration semantics for the bound process.",
         "parameters": [
           {
             "name": "case_id",
             "in": "path",
             "required": true,
-            "description": "Durable case ledger WOS resource URN.",
+            "description": "Durable case-ledger TypeID or WOS resource URN.",
             "schema": {
-              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/CaseLedgerPathId"
             }
           },
           {
             "name": "process_id",
             "in": "path",
             "required": true,
-            "description": "Workflow process WOS resource URN bound to the case ledger.",
+            "description": "Workflow process TypeID or WOS resource URN bound to the case ledger.",
             "schema": {
-              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ProcessPathId"
             }
           },
           {
@@ -5552,6 +5446,9 @@
       },
       "SignatureCeremonyPage": {
         "$ref": "https://schemas.formspec.io/wos-api/signature/v1#/$defs/SignatureCeremonyPage"
+      },
+      "WorkflowProcessList": {
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcessList"
       }
     },
     "responses": {

@@ -26,6 +26,32 @@
         "urn:wos:agency-gov_prov_01jqrxabcd3f8xtx9qxkkv3raa",
         "urn:wos:acme-corp_ai_01jqrpd32jf8xtx9qxkkv3rqsc"
       ]
+    },
+    "CaseLedgerPathId": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^urn:wos:[a-z][a-z0-9-]*_case_[0-9a-hjkmnp-tv-z]{26}$"
+        },
+        {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*_case_[0-9a-hjkmnp-tv-z]{26}$"
+        }
+      ],
+      "description": "Path parameter accepted by case-ledger routes. Deployments MAY accept either the full WOS resource URN (`urn:wos:<tenant>_case_<ulid>`) or the bare TypeID (`<tenant>_case_<ulid>`) while response bodies always carry the full `WosResourceUrn`."
+    },
+    "ProcessPathId": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^urn:wos:[a-z][a-z0-9-]*_process_[0-9a-hjkmnp-tv-z]{26}$"
+        },
+        {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*_process_[0-9a-hjkmnp-tv-z]{26}$"
+        }
+      ],
+      "description": "Path parameter accepted by workflow-process routes. Deployments MAY accept either the full WOS process URN (`urn:wos:<tenant>_process_<ulid>`) or the bare TypeID (`<tenant>_process_<ulid>`) while response bodies always carry the full `WosResourceUrn`."
     }
   }
 }

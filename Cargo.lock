@@ -840,6 +840,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "formspec-signature-port"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "fraction"
 version = "0.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3467,7 +3476,6 @@ dependencies = [
  "idna",
  "percent-encoding",
  "serde",
- "serde_derive",
 ]
 
 [[package]]
@@ -4098,7 +4106,6 @@ dependencies = [
  "indexmap",
  "serde",
  "serde_json",
- "thiserror 2.0.18",
  "wos-core",
 ]
 
@@ -4175,7 +4182,6 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror 2.0.18",
- "url",
  "wos-core",
 ]
 
@@ -4222,6 +4228,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "formspec-signature-port",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -4253,7 +4260,6 @@ dependencies = [
  "anthropic-sdk",
  "async-trait",
  "serde_json",
- "tokio",
  "wos-synth-core",
 ]
 
@@ -4279,8 +4285,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
- "wos-conformance",
- "wos-core",
  "wos-lint",
 ]
 
@@ -4299,13 +4303,10 @@ version = "0.1.0"
 dependencies = [
  "anthropic-sdk",
  "clap",
- "reqwest 0.12.28",
- "serde",
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
  "wos-conformance",
- "wos-core",
  "wos-lint",
 ]
 

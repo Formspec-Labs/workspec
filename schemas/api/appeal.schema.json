@@ -62,7 +62,7 @@
     "Appeal": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Appeal resource against a closed workflow process's adverse determination (governance S3.5). An appeal is filed by an appellant actor, reviewed by an adjudicator, and terminates with a closed disposition. This shape is the cross-case authoritative record; per-case projections on `WorkflowProcessGovernance` (instance.schema.json) summarize the appeal state for the consuming instance.",
+      "description": "Appeal resource against a closed workflow process's adverse determination (governance S3.5). An appeal is filed by an appellant actor, reviewed by an adjudicator, and terminates with a closed disposition. This shape is the cross-case authoritative record; per-case projections on `WorkflowProcessGovernance` (instance.schema.json) summarize the appeal state for the consuming process.",
       "required": [
         "id",
         "processId",
@@ -77,7 +77,7 @@
         },
         "processId": {
           "$ref": "#/$defs/WosResourceUrn",
-          "description": "Workflow process URN this appeal was filed against. Entity-type segment MUST be `instance`."
+          "description": "Workflow process URN this appeal was filed against. Entity-type segment MUST be `process`."
         },
         "appellantRef": {
           "$ref": "#/$defs/ActorRef",
@@ -132,7 +132,7 @@
     "AppealCreateRequest": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Request body for `POST /api/v1/instances/{id}/appeals` — files an appeal against a closed workflow process's adverse determination. The `Idempotency-Key` HTTP header is REQUIRED per ADR 0082 D-16; a repeat request within the retention window returns the original `Appeal` resource unchanged. Server assigns the URN, `filedAt`, and `createdAt`; clients MUST NOT supply them.",
+      "description": "Request body for `POST /api/v1/cases/{case_id}/processes/{process_id}/appeals` — files an appeal against a closed workflow process's adverse determination. The `Idempotency-Key` HTTP header is REQUIRED per ADR 0082 D-16; a repeat request within the retention window returns the original `Appeal` resource unchanged. Server assigns the URN, `filedAt`, and `createdAt`; clients MUST NOT supply them.",
       "required": [
         "processId",
         "appellantRef",
@@ -141,11 +141,11 @@
       "properties": {
         "processId": {
           "$ref": "#/$defs/WosResourceUrn",
-          "description": "Workflow process URN to file the appeal against. Entity-type segment MUST be `instance`. Server validates the instance is in a completed lifecycle state."
+          "description": "Workflow process URN to file the appeal against. Entity-type segment MUST be `process`. Server validates the process is in a completed lifecycle state."
         },
         "appellantRef": {
           "$ref": "#/$defs/ActorRef",
-          "description": "URN-form reference to the appellant actor filing the appeal. Server verifies the appellant has standing to appeal this instance."
+          "description": "URN-form reference to the appellant actor filing the appeal. Server verifies the appellant has standing to appeal this process."
         },
         "groundForAppeal": {
           "type": "string",
@@ -160,7 +160,7 @@
     "AppealListOptions": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Query fields for `GET /api/v1/instances/{id}/appeals`.",
+      "description": "Query fields for `GET /api/v1/cases/{case_id}/processes/{process_id}/appeals`.",
       "properties": {
         "processId": {
           "$ref": "#/$defs/WosResourceUrn",

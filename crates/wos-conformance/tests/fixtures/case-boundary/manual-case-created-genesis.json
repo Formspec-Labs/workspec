@@ -1,0 +1,34 @@
+{
+  "id": "CBR-4C-3-manual-case-created-genesis",
+  "rule": "CBR-§4.7",
+  "description": "Manual case-genesis ordering fixture (REFACTOR-TODO 4C.3). The first observable case-boundary event is a direct `wos.kernel.case_created` append, with no workflow-style drain action in the fixture stream. This in-memory store fixture uses an anchor process because wos-conformance drives `append_provenance_for_case`; true no-process pre-ledger runtime semantics are covered by the wos-server direct append integration test.",
+  "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2dd_manual_genesis",
+  "processes": [
+    {
+      "process_id": "process_01hw7rm71vfay8vvw14d2pf2dd_anchor",
+      "definition_url": "urn:test:case-boundary:manual-genesis:anchor",
+      "definition_version": "1.0.0"
+    }
+  ],
+  "actions": [
+    {
+      "kind": "directAppend",
+      "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2dd_manual_genesis",
+      "process_id": "process_01hw7rm71vfay8vvw14d2pf2dd_anchor",
+      "event_type": "wos.kernel.case_created",
+      "actor_id": "system:manual-case-genesis",
+      "timestamp": "2026-05-12T12:00:00Z",
+      "label": "manual-genesis"
+    }
+  ],
+  "expected_processes_for_case": [
+    "process_01hw7rm71vfay8vvw14d2pf2dd_anchor"
+  ],
+  "expected_case_view_timestamps": [
+    "2026-05-12T12:00:00Z"
+  ],
+  "expected_case_view_events": [
+    { "event": "wos.kernel.case_created", "process_id": "process_01hw7rm71vfay8vvw14d2pf2dd_anchor" }
+  ],
+  "expected_no_workflow_drain": true
+}

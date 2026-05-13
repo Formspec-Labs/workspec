@@ -16,7 +16,7 @@ use wos_core::provenance::{InstanceMigratedInput, ProvenanceRecord};
 use wos_core::typeid;
 
 use crate::custody::{CustodyAppendContext, CustodyAppendInput};
-use crate::store::RuntimeRecord;
+use crate::store::{RuntimeRecord, StoreError};
 
 use super::timers::{
     annotate_timer_created_with_calendar_version, annotate_timer_created_with_convergence_error,
@@ -332,13 +332,31 @@ impl WosRuntime {
     /// Return the `process_id` of every workflow process bound to the given
     /// case ledger.
     ///
-    /// In-memory N:1 traversal — iterates the runtime's store and filters
-    /// by `case_ledger_id`. Returns an empty vector when no processes are
-    /// bound (including when the case ledger does not exist). Order is
-    /// insertion order in the in-memory adapter; callers MUST NOT depend on
-    /// ordering.
+    /// Case-ledger N:1 traversal delegated to the configured store. Returns an
+    /// empty vector when no processes are bound, including when the case ledger
+    /// does not exist. `InMemoryStore` uses its case-ledger index, so traversal
+    /// is O(processes-per-case); callers MUST NOT depend on ordering.
     pub fn processes_for_case(&self, case_ledger_id: &str) -> Vec<String> {
         self.store.processes_for_case(case_ledger_id)
+    }
+
+    pub(super) fn load_single_record_by_case_ledger_id(
+        &self,
+        case_ledger_id: &str,
+    ) -> Result<RuntimeRecord, RuntimeError> {
+        let process_ids = self.store.processes_for_case(case_ledger_id);
+        match process_ids.as_slice() {
+            [] => Err(RuntimeError::from(StoreError::NotFound(
+                case_ledger_id.to_string(),
+            ))),
+            [process_id] => self
+                .store
+                .load_record(process_id)
+                .map_err(RuntimeError::from),
+            _ => Err(RuntimeError::CaseLedgerConflict(
+                multiple_processes_for_case_message(case_ledger_id, &process_ids),
+            )),
+        }
     }
 
     pub(super) fn load_record_by_process_or_case_ref(
@@ -360,9 +378,7 @@ impl WosRuntime {
             }
         }
 
-        self.store
-            .load_record_by_case_ledger_id(normalized)
-            .map_err(RuntimeError::from)
+        self.load_single_record_by_case_ledger_id(normalized)
     }
 
     /// Append an event to the instance queue.
@@ -514,4 +530,11 @@ impl WosRuntime {
             migration_map,
         })
     }
+}
+
+fn multiple_processes_for_case_message(case_ledger_id: &str, process_ids: &[String]) -> String {
+    format!(
+        "case ledger `{case_ledger_id}` is bound to multiple processes ({}); use a process id or explicit disambiguation",
+        process_ids.join(", ")
+    )
 }

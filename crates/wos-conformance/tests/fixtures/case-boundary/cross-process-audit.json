@@ -1,0 +1,63 @@
+{
+  "id": "CBR-4C-4-cross-process-audit",
+  "rule": "CBR-§4.7",
+  "description": "Cross-process audit fixture (REFACTOR-TODO 4C.4). Events from two workflow processes bound to one case ledger retain distinct process attribution when the case view is rebuilt.",
+  "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2de_cross_audit",
+  "processes": [
+    {
+      "process_id": "process_01hw7rm71vfay8vvw14d2pf2de_a",
+      "definition_url": "urn:test:case-boundary:cross-audit:a",
+      "definition_version": "1.0.0"
+    },
+    {
+      "process_id": "process_01hw7rm71vfay8vvw14d2pf2de_b",
+      "definition_url": "urn:test:case-boundary:cross-audit:b",
+      "definition_version": "1.0.0"
+    }
+  ],
+  "actions": [
+    {
+      "kind": "directAppend",
+      "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2de_cross_audit",
+      "process_id": "process_01hw7rm71vfay8vvw14d2pf2de_a",
+      "event_type": "wos.kernel.case_created",
+      "actor_id": "system:case-genesis",
+      "timestamp": "2026-05-12T12:10:00Z",
+      "label": "genesis"
+    },
+    {
+      "kind": "appendProvenance",
+      "process_id": "process_01hw7rm71vfay8vvw14d2pf2de_a",
+      "event": "audit.process_a_reviewed",
+      "from_state": "Open",
+      "to_state": "Reviewed",
+      "actor_id": "actor:process-a",
+      "timestamp": "2026-05-12T12:10:01Z",
+      "label": "audit-a"
+    },
+    {
+      "kind": "appendProvenance",
+      "process_id": "process_01hw7rm71vfay8vvw14d2pf2de_b",
+      "event": "audit.process_b_reviewed",
+      "from_state": "Open",
+      "to_state": "Reviewed",
+      "actor_id": "actor:process-b",
+      "timestamp": "2026-05-12T12:10:02Z",
+      "label": "audit-b"
+    }
+  ],
+  "expected_processes_for_case": [
+    "process_01hw7rm71vfay8vvw14d2pf2de_a",
+    "process_01hw7rm71vfay8vvw14d2pf2de_b"
+  ],
+  "expected_case_view_timestamps": [
+    "2026-05-12T12:10:00Z",
+    "2026-05-12T12:10:01Z",
+    "2026-05-12T12:10:02Z"
+  ],
+  "expected_case_view_events": [
+    { "event": "wos.kernel.case_created", "process_id": "process_01hw7rm71vfay8vvw14d2pf2de_a" },
+    { "event": "audit.process_a_reviewed", "process_id": "process_01hw7rm71vfay8vvw14d2pf2de_a" },
+    { "event": "audit.process_b_reviewed", "process_id": "process_01hw7rm71vfay8vvw14d2pf2de_b" }
+  ]
+}

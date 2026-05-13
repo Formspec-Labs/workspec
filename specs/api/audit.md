@@ -89,7 +89,7 @@ Closed: `timestamp-asc | timestamp-desc`. No vendor-extension seam — sort orde
 
 `GET /api/v1/audit/queries/{queryId}/results?cursor=...` paginates the materialized result set per ADR 0082 D-7. Available only when `status == succeeded`; returns `409 Conflict` (`WOS-1409`) otherwise.
 
-`GET /api/v1/audit/records/{provenanceUrn}` fetches a single provenance record by URN — the same shape `provenance.schema.json` returns for the per-case `GET /api/v1/instances/{id}/provenance/{recordId}` endpoint, but accessible cross-case under audit scope. Useful for "I have a record URN from a federated investigation, give me the record" workflows. Returns `404` (`WOS-1404`) when the URN is not visible to the caller's scope.
+`GET /api/v1/audit/records/{provenanceUrn}` fetches a single provenance record by URN — the same shape `provenance.schema.json` returns for the per-case `GET /api/v1/cases/{case_id}/processes/{process_id}/provenance` endpoint, but accessible cross-case under audit scope. Useful for "I have a record URN from a federated investigation, give me the record" workflows. Returns `404` (`WOS-1404`) when the URN is not visible to the caller's scope.
 
 ## Pagination
 

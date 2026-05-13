@@ -640,7 +640,7 @@
       "properties": {
         "processId": {
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
-          "description": "Workflow process URN this explanation was assembled for. Entity-type segment MUST be `instance`."
+          "description": "Workflow process URN this explanation was assembled for. Entity-type segment MUST be `process`."
         },
         "assembledAt": {
           "type": "string",
@@ -664,7 +664,7 @@
         },
         "factsTrace": {
           "type": "array",
-          "description": "Ordered URNs of the Facts-tier provenance records the assembly walked (governance §3.8.1 step 1 — `provenanceLog.filter(tier=\"facts\")` ordering preserved). Lets clients verify the explanation's input set against the per-instance provenance feed.",
+          "description": "Ordered URNs of the Facts-tier provenance records the assembly walked (governance §3.8.1 step 1 — `provenanceLog.filter(tier=\"facts\")` ordering preserved). Lets clients verify the explanation's input set against the per-process provenance feed.",
           "items": {
             "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
           }
@@ -1114,7 +1114,7 @@
         },
         "authorizationRejectedRecord": {
           "$ref": "#/$defs/AuthorizationRejectedRecord",
-          "description": "Typed payload when `recordKind == \"authorizationRejected\"` (ADR 0070 D-3). Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting `authorizationRejected` MUST populate this."
+          "description": "Typed payload when `event == \"wos.governance.authorization_rejected\"` (ADR 0070 D-3). Optional on the shared envelope, but required by the event-based authorization-rejection guard."
         },
         "legalHoldRecord": {
           "$ref": "#/$defs/LegalHoldRecord",
@@ -1343,6 +1343,164 @@
           }
         },
         {
+          "description": "D26 agreement guard: stateTransition selects the state-transition event literal.",
+          "required": ["recordKind", "event"],
+          "properties": {
+            "recordKind": {
+              "const": "stateTransition",
+              "description": "D26 agreement guard source: state-transition facts record kind."
+            },
+            "event": {
+              "const": "wos.kernel.state_transition",
+              "description": "D26 agreement guard target: state-transition event literal."
+            }
+          }
+        },
+        {
+          "description": "D26 agreement guard: capabilityInvocation selects the capability-invocation event literal.",
+          "required": ["recordKind", "event"],
+          "properties": {
+            "recordKind": {
+              "const": "capabilityInvocation",
+              "description": "D26 agreement guard source: capability-invocation facts record kind."
+            },
+            "event": {
+              "const": "wos.ai.capability_invocation",
+              "description": "D26 agreement guard target: capability-invocation event literal."
+            }
+          }
+        },
+        {
+          "description": "D26 agreement guard: correctionAuthorized selects the correction-authorized event literal.",
+          "required": ["recordKind", "event"],
+          "properties": {
+            "recordKind": {
+              "const": "correctionAuthorized",
+              "description": "D26 agreement guard source: correction-authorized facts record kind."
+            },
+            "event": {
+              "const": "wos.governance.correction_authorized",
+              "description": "D26 agreement guard target: correction-authorized event literal."
+            }
+          }
+        },
+        {
+          "description": "D26 agreement guard: amendmentAuthorized selects the amendment-authorized event literal.",
+          "required": ["recordKind", "event"],
+          "properties": {
+            "recordKind": {
+              "const": "amendmentAuthorized",
+              "description": "D26 agreement guard source: amendment-authorized facts record kind."
+            },
+            "event": {
+              "const": "wos.governance.amendment_authorized",
+              "description": "D26 agreement guard target: amendment-authorized event literal."
+            }
+          }
+        },
+        {
+          "description": "D26 agreement guard: determinationAmended selects the determination-amended event literal.",
+          "required": ["recordKind", "event"],
+          "properties": {
+            "recordKind": {
+              "const": "determinationAmended",
+              "description": "D26 agreement guard source: determination-amended facts record kind."
+            },
+            "event": {
+              "const": "wos.governance.determination_amended",
+              "description": "D26 agreement guard target: determination-amended event literal."
+            }
+          }
+        },
+        {
+          "description": "D26 agreement guard: rescissionAuthorized selects the rescission-authorized event literal.",
+          "required": ["recordKind", "event"],
+          "properties": {
+            "recordKind": {
+              "const": "rescissionAuthorized",
+              "description": "D26 agreement guard source: rescission-authorized facts record kind."
+            },
+            "event": {
+              "const": "wos.governance.rescission_authorized",
+              "description": "D26 agreement guard target: rescission-authorized event literal."
+            }
+          }
+        },
+        {
+          "description": "D26 agreement guard: authorizationAttestation selects the authorization-attestation event literal.",
+          "required": ["recordKind", "event"],
+          "properties": {
+            "recordKind": {
+              "const": "authorizationAttestation",
+              "description": "D26 agreement guard source: authorization-attestation facts record kind."
+            },
+            "event": {
+              "const": "wos.governance.authorization_attestation",
+              "description": "D26 agreement guard target: authorization-attestation event literal."
+            }
+          }
+        },
+        {
+          "description": "D26 agreement guard: clockSkewObserved selects the clock-skew-observed event literal.",
+          "required": ["recordKind", "event"],
+          "properties": {
+            "recordKind": {
+              "const": "clockSkewObserved",
+              "description": "D26 agreement guard source: clock-skew-observed facts record kind."
+            },
+            "event": {
+              "const": "wos.governance.clock_skew_observed",
+              "description": "D26 agreement guard target: clock-skew-observed event literal."
+            }
+          }
+        },
+        {
+          "description": "D26 agreement guard: commitAttemptFailure selects the commit-attempt-failure event literal.",
+          "required": ["recordKind", "event"],
+          "properties": {
+            "recordKind": {
+              "const": "commitAttemptFailure",
+              "description": "D26 agreement guard source: commit-attempt-failure facts record kind."
+            },
+            "event": {
+              "const": "wos.kernel.commit_attempt_failure",
+              "description": "D26 agreement guard target: commit-attempt-failure event literal."
+            }
+          }
+        },
+        {
+          "description": "D26 agreement guard: authorizationRejected selects the authorization-rejected event literal and typed payload.",
+          "required": ["recordKind", "event", "authorizationRejectedRecord"],
+          "properties": {
+            "recordKind": {
+              "const": "authorizationRejected",
+              "description": "D26 agreement guard source: authorization-rejected facts record kind."
+            },
+            "event": {
+              "const": "wos.governance.authorization_rejected",
+              "description": "D26 agreement guard target: authorization-rejected event literal."
+            },
+            "authorizationRejectedRecord": {
+              "$ref": "#/$defs/AuthorizationRejectedRecord",
+              "description": "Typed payload required for authorization-rejection events."
+            }
+          }
+        },
+        {
+          "description": "D26 agreement guard: migrationPinChanged selects the migration-pin-changed event literal.",
+          "required": ["recordKind", "event"],
+          "properties": {
+            "recordKind": {
+              "const": "migrationPinChanged",
+              "description": "D26 agreement guard source: migration-pin-changed facts record kind."
+            },
+            "event": {
+              "const": "wos.kernel.migration_pin_changed",
+              "description": "D26 agreement guard target: migration-pin-changed event literal."
+            }
+          }
+        },
+        {
           "description": "Facts records outside the current D26 event-literal seed retain their existing open event vocabulary.",
           "required": ["recordKind"],
           "properties": {
@@ -1356,11 +1514,8 @@
                 "agentProvenanceAnnotation",
                 "agentStateTransition",
                 "agentVersionChange",
-                "amendmentAuthorized",
                 "appealFiled",
                 "arazzoStep",
-                "authorizationAttestation",
-                "authorizationRejected",
                 "autonomyCapped",
                 "autonomyComputed",
                 "autonomyDemotion",
@@ -1369,12 +1524,9 @@
                 "calendarIgnored",
                 "callbackPending",
                 "callbackReceived",
-                "capabilityInvocation",
                 "caseStateMutation",
                 "circuitBreakerReset",
                 "circuitBreakerTripped",
-                "clockSkewObserved",
-                "commitAttemptFailure",
                 "compensationExecuted",
                 "compensationLogEntry",
                 "compensationScopeBoundary",
@@ -1386,7 +1538,6 @@
                 "continuationOfServicesActivated",
                 "contractValidation",
                 "convergenceCapReached",
-                "correctionAuthorized",
                 "cumulativeConfidenceViolation",
                 "dataMapping",
                 "dcrActivityExecuted",
@@ -1398,7 +1549,6 @@
                 "deonticEvaluation",
                 "deonticResolution",
                 "deonticViolation",
-                "determinationAmended",
                 "dispositiveViolation",
                 "driftAlert",
                 "driftReclassification",
@@ -1423,7 +1573,6 @@
                 "legalHoldDestructionRejected",
                 "legalHoldPlaced",
                 "legalHoldReleased",
-                "migrationPinChanged",
                 "milestoneFired",
                 "narrativeTierRecorded",
                 "noticeSent",
@@ -1441,13 +1590,11 @@
                 "proxyInvocation",
                 "relationshipChanged",
                 "reportTimedOut",
-                "rescissionAuthorized",
                 "rightsViolation",
                 "samplingDecision",
                 "separationViolation",
                 "sessionPaused",
                 "shadowModeDivergence",
-                "stateTransition",
                 "stepResultPersisted",
                 "taskCompleted",
                 "taskCreated",
@@ -1634,7 +1781,7 @@
     "AuthorizationRejectedRecord": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Typed public payload for `FactsTierRecord.authorizationRejectedRecord` when `recordKind == \"authorizationRejected\"` (ADR 0070 D-3). Captures who attempted which action against which resource and why policy denied it.",
+      "description": "Typed public payload for `FactsTierRecord.authorizationRejectedRecord` when `event == \"wos.governance.authorization_rejected\"` (ADR 0070 D-3). Captures who attempted which action against which resource and why policy denied it.",
       "required": [
         "attemptedActorRef",
         "attemptedAction",
@@ -2423,7 +2570,7 @@
     "ProvenanceListOptions": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Query fields for `GET /api/v1/instances/{id}/provenance` (ADR 0082 D-7). Filters compose with AND semantics — a record matches when it satisfies every supplied filter independently. Mirrors the `AuditQueryRequest` filter shape from `audit.schema.json` so cross-case audit and per-case provenance use the same query patterns.",
+      "description": "Query fields for `GET /api/v1/cases/{case_id}/processes/{process_id}/provenance` (ADR 0082 D-7). Filters compose with AND semantics — a record matches when it satisfies every supplied filter independently. Mirrors the `AuditQueryRequest` filter shape from `audit.schema.json` so cross-case audit and per-case provenance use the same query patterns.",
       "properties": {
         "tier": {
           "enum": [

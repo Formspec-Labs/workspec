@@ -396,12 +396,18 @@ impl WosRuntime {
             Ok(record) => Ok(record),
             Err(StoreError::NotFound(_)) => {
                 let normalized = WorkflowProcess::extract_urn_type_id(case_ref).unwrap_or(case_ref);
-                self.store
-                    .load_record_by_case_ledger_id(normalized)
-                    .map_err(RuntimeError::from)
+                self.load_single_record_by_case_ledger_id(normalized)
+                    .map_err(intake_case_lookup_error)
             }
             Err(error) => Err(RuntimeError::from(error)),
         }
+    }
+}
+
+fn intake_case_lookup_error(error: RuntimeError) -> RuntimeError {
+    match error {
+        RuntimeError::CaseLedgerConflict(message) => RuntimeError::IntakeConflict(message),
+        other => other,
     }
 }
 
