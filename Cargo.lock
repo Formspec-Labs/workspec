@@ -195,6 +195,58 @@ dependencies = [
 ]
 
 [[package]]
+name = "axum"
+version = "0.8.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "31b698c5f9a010f6573133b09e0de5408834d0c82f8d7475a89fc1867a71cd90"
+dependencies = [
+ "axum-core",
+ "bytes",
+ "form_urlencoded",
+ "futures-util",
+ "http",
+ "http-body",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "itoa",
+ "matchit",
+ "memchr",
+ "mime",
+ "percent-encoding",
+ "pin-project-lite",
+ "serde_core",
+ "serde_json",
+ "serde_path_to_error",
+ "serde_urlencoded",
+ "sync_wrapper",
+ "tokio",
+ "tower",
+ "tower-layer",
+ "tower-service",
+ "tracing",
+]
+
+[[package]]
+name = "axum-core"
+version = "0.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08c78f31d7b1291f7ee735c1c6780ccde7785daae9a9206026862dab7d8792d1"
+dependencies = [
+ "bytes",
+ "futures-core",
+ "http",
+ "http-body",
+ "http-body-util",
+ "mime",
+ "pin-project-lite",
+ "sync_wrapper",
+ "tower-layer",
+ "tower-service",
+ "tracing",
+]
+
+[[package]]
 name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1631,6 +1683,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "matchit"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
+
+[[package]]
 name = "memchr"
 version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2292,6 +2350,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "regress"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "158a764437582235e3501f683b93a0a6f8d825d04a789dbe5ed30b8799b8908a"
+dependencies = [
+ "hashbrown 0.16.1",
+ "memchr",
+]
+
+[[package]]
 name = "rend"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2410,7 +2478,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "typify",
+ "typify 0.1.0",
  "uuid",
 ]
 
@@ -2775,6 +2843,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_path_to_error"
+version = "0.1.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10a9ff822e371bb5403e391ecd83e182e0e77ba7f6fe0160b795797109d1b457"
+dependencies = [
+ "itoa",
+ "serde",
+ "serde_core",
+]
+
+[[package]]
 name = "serde_tokenstream"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2908,6 +2987,24 @@ name = "stable_deref_trait"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
+
+[[package]]
+name = "stack-common-error"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "http",
+ "once_cell",
+ "prettyplease",
+ "regex",
+ "regress 0.11.1",
+ "schemars",
+ "serde",
+ "serde_json",
+ "syn 2.0.117",
+ "thiserror 1.0.69",
+ "typify 0.6.2",
+]
 
 [[package]]
 name = "strsim"
@@ -3240,6 +3337,7 @@ dependencies = [
  "tokio",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -3278,6 +3376,7 @@ version = "0.1.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "63e71662fa4b2a2c3a26f570f037eb95bb1f85397f3cd8076caed2f026a6d100"
 dependencies = [
+ "log",
  "pin-project-lite",
  "tracing-attributes",
  "tracing-core",
@@ -3351,8 +3450,18 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adb6beec125971dda80a086f90b4a70f60f222990ce4d63ad0fc140492f53444"
 dependencies = [
- "typify-impl",
- "typify-macro",
+ "typify-impl 0.1.0",
+ "typify-macro 0.1.0",
+]
+
+[[package]]
+name = "typify"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc0b89f47309feaeb23c4509c15c9a04234f7deccef6f96c3bfe95319819a304"
+dependencies = [
+ "typify-impl 0.6.2",
+ "typify-macro 0.6.2",
 ]
 
 [[package]]
@@ -3376,6 +3485,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "typify-impl"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa7b026f540b148b81043c720889dbb942b08659aa8a43f624ac4f04dbfc1861"
+dependencies = [
+ "heck",
+ "log",
+ "proc-macro2",
+ "quote",
+ "regress 0.11.1",
+ "schemars",
+ "semver",
+ "serde",
+ "serde_json",
+ "syn 2.0.117",
+ "thiserror 2.0.18",
+ "unicode-ident",
+]
+
+[[package]]
 name = "typify-macro"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3389,7 +3518,24 @@ dependencies = [
  "serde_json",
  "serde_tokenstream",
  "syn 2.0.117",
- "typify-impl",
+ "typify-impl 0.1.0",
+]
+
+[[package]]
+name = "typify-macro"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "39ed96c57f06ae0839416b986921a98f18b220da63bbb243a8570a00c8492183"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "schemars",
+ "semver",
+ "serde",
+ "serde_json",
+ "serde_tokenstream",
+ "syn 2.0.117",
+ "typify-impl 0.6.2",
 ]
 
 [[package]]
@@ -4231,6 +4377,7 @@ dependencies = [
  "formspec-signature-port",
  "serde",
  "serde_json",
+ "stack-common-error",
  "thiserror 2.0.18",
  "wos-core",
  "wos-runtime",
