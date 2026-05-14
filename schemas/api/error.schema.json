@@ -1,40 +1,43 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.formspec.io/wos-api/error/v1",
-  "title": "WOS API Error",
-  "description": "RFC 7807 problem details for non-2xx public WOS REST API responses. Every problem carries a stable WOS error code plus optional structured context.",
+  "title": "Stack API Error",
+  "description": "RFC 7807 problem details for non-2xx public stack REST API responses. Every problem carries a stable stack error code plus optional structured context.",
   "$ref": "#/$defs/Problem",
   "$defs": {
     "ProblemTypeUri": {
       "type": "string",
-      "format": "uri",
+      "format": "uri-reference",
       "description": "Dereferenceable URI for the documented error type.",
       "examples": [
         "https://schemas.formspec.io/wos-api/errors/WOS-1404"
       ]
     },
-    "WosErrorCode": {
+    "ErrorCode": {
       "type": "string",
-      "pattern": "^WOS-[0-9]{4,5}$",
-      "description": "Stable machine-readable WOS error code from the public API error registry.",
+      "pattern": "^[A-Z]+-\\d{4}$",
+      "description": "Stable machine-readable stack error code. Prefixes are governed by ADR 0092a.",
       "examples": [
-        "WOS-1404"
+        "WOS-1404",
+        "FORMSPEC-4001",
+        "STUDIO-4091",
+        "INFRA-5000"
       ]
     },
     "Problem": {
       "type": "object",
       "additionalProperties": false,
-      "description": "RFC 7807 problem details response with WOS-specific machine code and context.",
+      "description": "RFC 7807 problem details response with stack-generic machine code and optional context.",
       "required": [
         "type",
         "title",
         "status",
-        "wosErrorCode"
+        "error_code"
       ],
       "properties": {
         "type": {
           "type": "string",
-          "format": "uri",
+          "format": "uri-reference",
           "description": "Dereferenceable URI for the documented error type.",
           "examples": [
             "https://schemas.formspec.io/wos-api/errors/WOS-1404"
@@ -70,13 +73,13 @@
           ]
         },
         "instance": {
-          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
-          "description": "URN of the affected WOS resource when a single resource caused the problem. Entity-type enum is shared across the schemas/api/ family via `_common.schema.json` (ADR 0082 D-4)."
-        },
-        "wosErrorCode": {
           "type": "string",
-          "pattern": "^WOS-[0-9]{4,5}$",
-          "description": "Stable machine-readable WOS error code from the public API error registry.",
+          "format": "uri-reference",
+          "description": "URI reference for the affected resource when a single resource caused the problem."
+        },
+        "error_code": {
+          "$ref": "#/$defs/ErrorCode",
+          "description": "Stable machine-readable stack error code.",
           "examples": [
             "WOS-1404"
           ]

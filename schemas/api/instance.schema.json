@@ -1453,7 +1453,7 @@
           ]
         },
         "failureCode": {
-          "$ref": "https://schemas.formspec.io/wos-api/error/v1#/$defs/WosErrorCode",
+          "$ref": "https://schemas.formspec.io/wos-api/error/v1#/$defs/ErrorCode",
           "description": "Stable WOS error code classifying the per-instance failure. REQUIRED when `status == failed`; absent on `succeeded` or `skipped`. Drawn from the public registry (`error-registry.md`) -- typically `WOS-1409` (lifecycle-posture mismatch) or `WOS-1422` (payload validation against the related instance's workflow event schema)."
         },
         "evaluatedAt": {
