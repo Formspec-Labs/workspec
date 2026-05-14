@@ -47,8 +47,7 @@ impl IntegrationBindingHandler for EventEmitHandler {
             &outbound_event_id,
         );
 
-        let event_data =
-            build_event_data_from_binding(binding, kernel, observed, &record.process)?;
+        let event_data = build_event_data_from_binding(binding, kernel, observed, &record.process)?;
 
         let envelope = CloudEvent {
             id: outbound_event_id.clone(),

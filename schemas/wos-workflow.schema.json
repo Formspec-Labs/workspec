@@ -4313,6 +4313,26 @@
           "if": {
             "properties": {
               "event": {
+                "const": "wos.kernel.note_added"
+              }
+            },
+            "required": [
+              "event"
+            ]
+          },
+          "then": {
+            "properties": {
+              "event": {
+                "const": "wos.kernel.note_added",
+                "description": "D26 agreement guard target for noteAdded facts records. FactsTierRecord requires event after D26; this guard dispatches the flat Facts-tier event shape."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "event": {
                 "const": "wos.assurance.key_rebind"
               }
             },

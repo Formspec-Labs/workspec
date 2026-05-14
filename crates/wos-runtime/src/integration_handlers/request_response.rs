@@ -56,14 +56,9 @@ impl IntegrationBindingHandler for RequestResponseHandler {
         let idempotency_key = match observed.action.idempotency_key.clone() {
             Some(key) => Some(key),
             None => match binding.idempotency_key_expression.as_deref() {
-                Some(expression) => {
-                    Some(value_to_idempotency_key(evaluate_integration_expression(
-                        expression,
-                        kernel,
-                        &record.process,
-                        observed,
-                    )?)?)
-                }
+                Some(expression) => Some(value_to_idempotency_key(
+                    evaluate_integration_expression(expression, kernel, &record.process, observed)?,
+                )?),
                 None => None,
             },
         };

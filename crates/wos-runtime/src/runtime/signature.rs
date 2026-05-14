@@ -1526,8 +1526,8 @@ impl WosRuntime {
             };
 
             let expiring_tasks: Vec<ActiveTask> = record
-                    .process
-                    .active_tasks
+                .process
+                .active_tasks
                 .iter()
                 .filter(|task| selector.matches_task(task))
                 .cloned()
@@ -1562,9 +1562,9 @@ impl WosRuntime {
             expired_document_ids.sort();
 
             record
-                    .process
-                    .active_tasks
-                    .retain(|task| !selector.matches_task(task));
+                .process
+                .active_tasks
+                .retain(|task| !selector.matches_task(task));
 
             let mut provenance = ProvenanceRecord::task_lifecycle(
                 ProvenanceKind::TaskFailed,

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://wos.standard/schemas/record-kind-registry.json",
   "title": "WOS Record Kind Registry",
-  "description": "Canonical registry of all ProvenanceKind variants. 133 total — 23 carry schema-validated payload shapes (if/then guards or prov-log $def overlays), 110 are flat Facts-tier records. Every literal maps 1:1 to a ProvenanceKind Rust enum variant (crate::provenance::kind) under serde(rename_all=\"camelCase\"). The API FactsRecordKind taxonomy derives from this registry; D26 wire records dispatch by event literal. See specs/provenance-registry.md for governance policy on adding/removing record categories.",
+  "description": "Canonical registry of all ProvenanceKind variants. 134 total — 23 carry schema-validated payload shapes (if/then guards or prov-log $def overlays), 111 are flat Facts-tier records. Every literal maps 1:1 to a ProvenanceKind Rust enum variant (crate::provenance::kind) under serde(rename_all=\"camelCase\"). The API FactsRecordKind taxonomy derives from this registry; D26 wire records dispatch by event literal. See specs/provenance-registry.md for governance policy on adding/removing record categories.",
   "type": "object",
   "properties": {
     "registryVersion": {

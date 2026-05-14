@@ -25,7 +25,7 @@
   ],
   "$defs": {
     "FactsRecordKind": {
-      "description": "Facts-tier record category. The full closed reserved-literal set is aligned with `schemas/record-kind-registry.json` (133 ProvenanceKind variants, all camelCase). 23 carry schema-validated payload shapes (if/then or $def overlay); the remaining 110 are flat Facts-tier records. The `^x-[a-z][a-z0-9-]*$` extension arm adds vendor extensibility (ADR 0082 D-12). Literal-set parity against the Rust `ProvenanceKind` enum is enforced by `scripts/check-recordkind-parity.py`.",
+      "description": "Facts-tier record category. The full closed reserved-literal set is aligned with `schemas/record-kind-registry.json` (134 ProvenanceKind variants, all camelCase). 23 carry schema-validated payload shapes (if/then or $def overlay); the remaining 111 are flat Facts-tier records. The `^x-[a-z][a-z0-9-]*$` extension arm adds vendor extensibility (ADR 0082 D-12). Literal-set parity against the Rust `ProvenanceKind` enum is enforced by `scripts/check-recordkind-parity.py`.",
       "oneOf": [
         {
           "enum": [
@@ -118,6 +118,7 @@
             "migrationPinChanged",
             "milestoneFired",
             "narrativeTierRecorded",
+            "noteAdded",
             "noticeSent",
             "notificationSuppressed",
             "onEntry",

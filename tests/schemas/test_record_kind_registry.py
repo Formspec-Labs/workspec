@@ -149,6 +149,7 @@ def test_record_kind_registry_current_d26_event_mappings():
         "stateTransition": "wos.kernel.state_transition",
         "caseCreated": "wos.kernel.case_created",
         "intakeAccepted": "wos.kernel.intake_accepted",
+        "noteAdded": "wos.kernel.note_added",
         "intakeRejected": "wos.kernel.intake_rejected",
         "intakeDeferred": "wos.kernel.intake_deferred",
         "capabilityInvocation": "wos.ai.capability_invocation",

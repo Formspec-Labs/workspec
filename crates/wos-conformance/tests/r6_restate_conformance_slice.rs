@@ -83,7 +83,7 @@ async fn r6_memory_parity_signature_start_drain_matches_reference_runtime() {
     let ref_inst = rt.load_process(&process_id).expect("reference load");
 
     let adapter = RestateRuntimeAdapter::new();
-    adapter.create_instance(req).await.expect("adapter create");
+    adapter.create_process(req).await.expect("adapter create");
     adapter
         .enqueue_event(
             &process_id,
@@ -101,7 +101,7 @@ async fn r6_memory_parity_signature_start_drain_matches_reference_runtime() {
         .await
         .expect("adapter drain");
     let ad_inst = adapter
-        .load_instance(&process_id)
+        .load_process(&process_id)
         .await
         .expect("adapter load");
 
@@ -139,7 +139,7 @@ async fn r6_c1_full_drain_result_shape_parity() {
     let ref_inst = rt.load_process(&process_id).expect("reference load");
 
     let adapter = RestateRuntimeAdapter::new();
-    adapter.create_instance(req).await.expect("adapter create");
+    adapter.create_process(req).await.expect("adapter create");
     adapter
         .enqueue_event(
             &process_id,
@@ -157,7 +157,7 @@ async fn r6_c1_full_drain_result_shape_parity() {
         .await
         .expect("adapter drain_until_idle");
     let ad_inst = adapter
-        .load_instance(&process_id)
+        .load_process(&process_id)
         .await
         .expect("adapter load");
 

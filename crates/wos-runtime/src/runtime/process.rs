@@ -324,9 +324,7 @@ impl WosRuntime {
     /// # Errors
     /// Returns an error when the process cannot be found or loaded.
     pub fn load_process(&self, process_id: &str) -> Result<WorkflowProcess, RuntimeError> {
-        Ok(self
-            .load_record_by_process_or_case_ref(process_id)?
-            .process)
+        Ok(self.load_record_by_process_or_case_ref(process_id)?.process)
     }
 
     /// Return the `process_id` of every workflow process bound to the given
