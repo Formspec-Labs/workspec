@@ -1,20 +1,17 @@
 # WOS TODO
 
-Active backlog. Completed work → [COMPLETED.md](COMPLETED.md). Stack architecture → [`VISION.md`](../VISION.md).
-
-**Last audited:** 2026-05-07 — parallel execution: §4.5 structural merges closed, ADR 0092 TypeID-in-URN core landed (WS-1–4+7), #7 Advanced $defs recovered + additionalProperties:false, #58 envelope status (Declined/Voided/Expired), #43 assurance impact-level floor. Session commits: 494dfb8c → be9bd135.
+Active backlog. Completed work → [COMPLETED.md](COMPLETED.md). Stack architecture → [`VISION.md`](../VISION.md). Ordering = **`Imp × Debt`** per [`user_profile.md`](../.claude/user_profile.md) economic model (dev/time free, architectural drift expensive); Cx is scheduling-only. Score notation in ticket headers: `[Imp / Cx / Debt]`. Last audited 2026-05-15.
 
 ## Snapshot
 
-| Health | Value |
+**Where specs / schemas / crates live:** invoke the `formspec-specs:wos-core` skill — it carries the 4-layer architectural navigation (L0 Kernel / L1 Governance / L2 AI / L3 Advanced), the sidecar + profile + companion inventory, the 19 REST API spec/schema pairs, and the complete `work-spec/` file map. Don't inline that content here; it drifts.
+
+| Operational state | |
 |---|---|
-| Specs / schemas | 41+18 spec/docs under `specs/` (`specs/api/` adds 17 ADR 0082 docs) · 22 schemas (4 core + 2 sidecars + 16 under `schemas/api/`) · 0 SCHEMA-DOC-001 violations |
-| Crates | 6 production (`wos-core`, `wos-lint`, `wos-conformance`, `wos-runtime`, `wos-formspec-binding`, `wos-export`) · 1 production agent (`wos-agent-stub`) · 6 authoring/synth (`wos-authoring`, `wos-mcp`, `wos-synth-core/-mock/-anthropic/-cli`) · 5 agent-adapter skeletons (`wos-agent-anthropic/-mcp/-a2a/-http/-claude-sdk`, `unimplemented!()` bodies per ADR 0064) · 1 spike (`wos-synth-spike`, keep-with-deletion-horizon) |
-| Tests | Latest targeted gates: `cargo check --workspace` green; `cargo nextest run -p wos-core --lib` green; `cargo test -p wos-runtime --lib` 171 passed; `cargo test -p wos-formspec-binding` 31 passed; `cargo nextest run -p wos-lint` green; `cargo test -p wos-conformance --test signature_profile` 31 passed; `pytest tests/schemas -q` 397 passed / 1 xfailed (post-ADR-0082; was 255 pre-session). API discipline test 15/15 (incl. cross-schema `$ref` resolution + facts-record-kind kernel parity + open-string-via-`oneOf`-arm recursion). |
-| Lint matrix | 116 rules (35 T1 · 72 T2 · 9 T3 · 1 LoadBearing · 11 Tested · 104 Draft) |
-| CI gates | `schema_doc_zero_regression` · `every_promoted_*_rule_has_executable_or_annotated_evidence` · `every_load_bearing_conformance_rule_has_at_least_two_executable_fixtures` · `discover_and_report_promotion_candidates` ratchet · **ADR 0082 D-13 Gates 1–6** under `.github/workflows/api-contract-guardrails.yml`: schema validity (ajv), OpenAPI `$ref` discipline, route coverage, oasdiff breaking-change, response conformance (server + portal), mirror byte-parity |
-| Case/process identity | ADR-0093 Option B groundwork in progress: `process` TypeID family + `mint_process_id()` landed; `WosResourceUrn` admits `process`; `WorkflowProcess` serializes optional `processId` / `caseLedgerId`; `create_instance` now populates both while preserving legacy case-ID and alias callers; public API `WorkflowProcess` projections now require `caseLedgerId` + `processId`, wos-server creates new unkeyed instances with process TypeIDs, applicant case list/detail/task routes resolve process-backed rows by durable `caseLedgerId`, public `POST /cases/{case_id}/processes`, `GET /cases/{case_id}/processes/{process_id}`, `POST /cases/{case_id}/processes/{process_id}/inputs`, and `POST /cases/{case_id}/processes/{process_id}/drain` bridge routes validate the case/process binding, public `POST /cases/{case_id}/events` now admits `wos.kernel.case_created` as a direct case-ledger genesis append with `(tenant, idempotencyToken)` replay and case-ledger provenance storage, and dispatches registered post-ledger WOS event types through the post-ledger branch where they hard-deny at the relationship-authorization gate until ReBAC is wired, public `GET /cases/{case_id}` now returns a durable case-ledger projection across direct genesis events and bound processes, and runtime/HTTP tests now prove distinct process IDs can bind to the same durable case ledger; custody append windows use `caseLedgerId` when present; signature admission/affirmation decision payloads now require `caseLedgerId` and carry `processId` when workflow-emitted; `caseCreated` / `intakeAccepted` payloads now require `caseLedgerId`; runtime appends stamp it on accepted governed-case records and the Formspec finalizer emits it for canonical case-ledger TypeIDs. Remaining: full `WorkflowProcess` → `WorkflowProcess` rename, server route/storage vocabulary migration from `/instances` to case/process surfaces, post-ledger ReBAC/event-contract append writers such as `wos.kernel.note_added` after registry binding, generic `DecisionEvent` shape, and broader N:1 conformance fixtures. |
-| E2E/API coverage | Current server coverage is mostly Rust integration/in-process HTTP. Durable plan now exists for Playwright API + browser E2E against real `wos-server`, using `WOS-FEATURE-MATRIX.md`'s 130 numbered rows as the manifest contract: [`../thoughts/plans/2026-05-09-wos-feature-matrix-e2e-test-plan.md`](../thoughts/plans/2026-05-09-wos-feature-matrix-e2e-test-plan.md). |
+| CI ratchets | `schema_doc_zero_regression` · promotion-evidence + LoadBearing-fixture coverage · promotion-candidate ratchet · **ADR 0082 D-13 Gates 1–6** (schema validity, OpenAPI `$ref` discipline, route coverage, `oasdiff` breaking-change, response conformance, mirror byte-parity) under [`.github/workflows/api-contract-guardrails.yml`](.github/workflows/api-contract-guardrails.yml) |
+| Case/process identity | ADR-0093 Option B groundwork in progress (process TypeID family, `WosResourceUrn` admits `process`, N:1 process-to-case-ledger bridge routes wired). Remaining: `WorkflowProcess` rename, `/instances` → case/process route migration, post-ledger ReBAC, generic `DecisionEvent`, broader N:1 conformance. Session detail in [`COMPLETED.md`](COMPLETED.md). |
+| E2E/API coverage | Server tests mostly Rust integration / in-process HTTP. Playwright API + browser E2E plan against real `wos-server`, manifest-driven from [`WOS-FEATURE-MATRIX.md`](WOS-FEATURE-MATRIX.md) 130 rows: [`../thoughts/plans/2026-05-09-wos-feature-matrix-e2e-test-plan.md`](../thoughts/plans/2026-05-09-wos-feature-matrix-e2e-test-plan.md). |
+| Agent adapter state | `wos-agent-stub` ships; 5 skeleton crates (`-anthropic/-mcp/-a2a/-http/-claude-sdk`) have `unimplemented!()` invoke bodies pending orchestrator seam (ADR 0064 residual epic). |
 
 **Navigation:** [**User profile** (read first)](../.claude/user_profile.md) · [**Stack vision**](../VISION.md) (canonical; WOS §X) · [`work-spec/CLAUDE.md`](CLAUDE.md) · [LINT-MATRIX](LINT-MATRIX.md) · [Feature Matrix](WOS-FEATURE-MATRIX.md) · [Implementation Status](WOS-IMPLEMENTATION-STATUS.md) · [IDEA_SCRATCH](IDEA_SCRATCH.md) · [POSITIONING](POSITIONING.md) · [CONVENTIONS](CONVENTIONS.md) · [Runtime Companion](specs/companions/runtime.md) · [ADRs](../thoughts/adr/) · [Plans](thoughts/plans/) · [Parallel-agent dispatch discipline](thoughts/practices/2026-04-17-parallel-agent-dispatch.md)
 
@@ -22,118 +19,22 @@ Active backlog. Completed work → [COMPLETED.md](COMPLETED.md). Stack architect
 
 ## Gate typology & parallelization plan
 
-Audited 2026-05-06. Every item classified by gate type; ADR status + cross-repo dependencies mapped; independent workstreams designed.
-
-### ADR status summary
-
-Four ADRs (all Accepted 2026-05-06) gate the heavyweight Do-next items. All four are **independent** of each other. ADRs 0066/0067/0070/0071 share the same cluster-ratification gate (ratified); 0092 is standalone (amends ADR 0082, also ratified).
-
-| ADR | Status | Gates WOS TODO | Ratification |
-|-----|--------|----------------|-------------|
-| **0066** — Amendment & Supersession | **Accepted** 2026-05-06 | #3, #4, #71 | Cluster ratification sweep |
-| **0067** — Statutory Clocks | **Accepted** 2026-05-06 | #5 | Cluster ratification sweep |
-| **0070** — Failure & Compensation | **Accepted** 2026-05-06 | #70, #72 | Cluster ratification sweep |
-| **0092** — TypeID-in-URN Identity | **Accepted** 2026-05-06 | #6 | Standalone; amends ADR 0082 |
-
-**Ratified 2026-05-06.** All four ADRs accepted (cluster 0066–0071 + standalone 0092). Do-next #3–#6 + backlog #70–#72 now unblocked (8 items, 296 combined Imp×Debt).
-
-### Items by gate type
-
-**No gate — start immediately (15 items):**
-
-| Item | Score | Work type | Stream |
-|------|-------|-----------|--------|
-| #7 Multi-step session DAG | 20 | Schema + spec + API endpoint | A | ✅ 2026-05-07 |
-| #58 Envelope status extension | 35 | Schema + spec | C | ✅ 2026-05-07 |
-| #26a AccessControl.canRead semantics | 24 | Spec + conformance | C |
-| #43 Assurance × impact-level | 24 | Spec + conformance | C | ✅ 2026-05-07 |
-| #50 EU AI Act alignment | 28 | Spec | C |
-| #38 G-064 Assertion Library lint | 15 | Lint impl | C |
-| #28 Claim-check artifact refs | 20 | Schema + spec | C |
-| #30 WS-HumanTask lifecycle | 10 | Schema + spec | C |
-| #27 Cancellation regions | 12 | Schema + spec | C |
-| #29b Milestone reactive firing | 12 | Runtime | C |
-| #53 OMB M-24-10 compliance | 18 | Spec | C |
-| Bulk Operations spec | — | Spec | C |
-| §5.6 Repositioning/demo artifacts | 8 | Docs | D |
-| #66a–#66g Runtime Companion §15 | various | Runtime + conformance | B |
-| #32 Multi-Instance Iteration | 30 | Spec + runtime (trigger #20 met; promote from Deferred) | C |
-
-**ADR-gated — now unblocked (ratified 2026-05-06):**
-
-| Item | Score | Gate | Stream |
-|------|-------|------|--------|
-| #3 AuthorizationAttestation actor shape | 35 | ADR 0066 Accepted | B |
-| #4 Amendment/supersession/rescission/correction | 35 | ADR 0066 Accepted | B |
-| #5 Statutory clocks implementation | 35 | ADR 0067 Accepted | B |
-| #6 TypeID-in-URN identity | 35 | ADR 0092 Accepted | A | ✅ Landed 2026-05-07 (WS-1–8: schema, wos-core, server, specs, tests, case-portal verified) |
-| #70 AppendFailure typed enum | 30 | ADR 0070 Accepted | B |
-| #71 ReinstatementPolicy + K-A-010 | 24 | ADR 0066 Accepted | B |
-| #72 Cluster variant emission wiring | 24 | ADR 0070 Accepted + #70 | B |
-| Identity attestation generalize | 20 | PLN-0381 parent ADR pending | C |
-
-**Code-gated — requires another TODO item first:**
-
-| Item | Gate | Depends on | Stream |
-|------|------|------------|--------|
-| #2 Capability-precondition emission | ADR 0064 orchestrator missing | AgentRuntime trait / DurableRuntime method design | E |
-| #35 Equity Config enforcement | #36 must resolve first | FEL restricted-domain profile | C |
-| #36 Equity RemediationTrigger expr | FEL restricted-domain profile | fel-core work | C |
-| #26b caseFieldPolicy schema | #26a must land first | #26a | C |
-| #40 Task SLA runtime | ADR 0067 D-2.1 migration | ADR 0067 runtime emission | B |
-| #59 CloudEvent envelope catalog | #20 + #30 | Typed events + task lifecycle | C |
-| #60 Envelope reference fixtures | #20 + #30 | Typed events + task lifecycle | C |
-| #61 SoD conformance fixtures | #23 OverrideRecord | OverrideRecord schema landing | C |
-| #3b Policy-based migration routing | DurableRuntime tenant contract | Tenant-scope sub-question | C |
-
-**Cross-repo-gated — dependent on sibling repo work:**
-
-| WOS item | Cross-repo dependency | Owner repo | Status |
-|----------|----------------------|------------|--------|
-| #1 T4 COC rendering (T4-10) | Trellis HTML-to-PDF reference renderer | Trellis | Open — byte composition done (Wave 25); rendering not yet landed |
-| #1 T4 Studio UI (T4-11) | formspec-studio 11 items | formspec-studio | Open |
-| #1 T4 vendor x-* floor | PLN-0384 event taxonomy ratification | WOS/Stack | P0 Open |
-| #1 T4 shared fixture bundle (T4-12) | PLN-0067/0068/0069 + Trellis items #1/#2 | Stack/Trellis | P1 Open |
-| Identity attestation shape | PLN-0381 + Trellis item #3 | Stack/Trellis | P0 Open (gated on PLN-0384) |
-| #66f amendment task linkage | WS-072 wos-server ADR 0066 prove-out | workspec-server | Gated on ADR 0066 |
-| #66 clock parity | WS-073/074/075 wos-server | workspec-server | Gated on ADR 0067 |
-| ADR 0066 runtime + conformance | WS-072 + Trellis COMPLETED Waves 40/47 + PLN-0050/51/55/56 | workspec-server/Trellis/Formspec | Gated on ADR 0066 acceptance |
-| ADR 0067 runtime + export | WS-073 + Trellis COMPLETED Wave 39 + PLN-0157/59/60/61 | workspec-server/Trellis/Formspec | Gated on ADR 0067 acceptance |
-
-**Owner-decision-gated — unblocks with verdict:**
-
-| Item | Decision needed | Stream |
-|------|----------------|--------|
-| #7 scope (additionalProperties) | false + reconcile 4 missing fields per owner decision | A |
-
-### Parallelization plan — 5 workstreams
-
-When ADR ratification sweep completes, work distributes across 5 independent tracks:
+Sequenced across 5 independent workstreams. Full gate audit + ADR ratification history archived to [`thoughts/plans/2026-05-06-gate-typology.md`](thoughts/plans/2026-05-06-gate-typology.md). Stream A (Identity) fully landed 2026-05-07 (#6 ADR 0092 TypeID + #7 multi-step session DAG); row retired.
 
 | Stream | Items | Work type | Scope |
 |--------|-------|-----------|-------|
-| **A — Identity** | #6 (TypeID), #7 (session DAG) | Schema refactor + URN parsers + ~55 fixtures + 10 spec docs + API endpoint | WOS only, self-contained |
-| **B — Provisioning** | #3, #4, #5, #70, #71, #72, #66a–#66g, #40 | Governance policies, runtime emission wiring, export, conformance, Runtime Companion parity | WOS center + wos-export + wos-conformance + wos-runtime |
-| **C — Spec & Schema** | #58, #26a, #26b, #43, #50, #28, #30, #27, #29b, #53, Bulk Ops, #32, #35, #36, #38, #59, #60, #61, identity attestation, #24b/#25, #3 | Schema additions, spec prose, conformance fixtures, lint impl | WOS schemas + specs + lint |
-| **D — Authoring & Tooling** | #65a–#65o (ADR 0065), §5.5 wos-bench, §4.4 release trains, §5.6, structural merges | MCP/synth/authoring cleanup, benchmarking, CI, docs | wos-{mcp,synth-core,authoring,bench} crates |
-| **E — Cross-repo** | #1 T4 closeout, #2 AI orchestrator, identity attestation cross-repo | Trellis COC, Studio UI, AgentRuntime trait, cross-repo ADR coordination | Trellis + formspec-studio + WOS crates |
-
-Streams A–D are WOS-internal and fully independent of each other. Stream E coordinates across repos but does not block A–D.
+| **B — Provisioning** | #3, #4, #5, #70, #71, #72, #66 (and #66a–#66g sub-items), #40 | Governance policies, runtime emission wiring, export, conformance, Runtime Companion parity | WOS center + wos-export + wos-conformance + wos-runtime |
+| **C — Spec & Schema** | #26a, #26b, #50, #28, #30, #27, #29b, #53, Bulk Ops, #32, #35, #36, #38, #59, #60, #61, identity attestation, #24b/#25, #3 (migration) | Schema additions, spec prose, conformance fixtures, lint impl | WOS schemas + specs + lint |
+| **D — Authoring & Tooling** | ADR 0065 cluster (`fs-uqpw`/`fs-d79a`/`fs-xkui`/`fs-s5wm`/`fs-k63f` — production seam, MCP validation, spike closure, provider hygiene, plan reconcile), §5.5 `wos-bench`, §4.4 release trains, §5.6 | MCP/synth/authoring cleanup, benchmarking, CI, docs | `wos-{mcp,synth-core,authoring,bench}` crates |
+| **E — Cross-repo** | #1 T4 closeout, #2 AI orchestrator + 5 agent adapters, identity attestation cross-repo | Trellis COC, Studio UI, AgentRuntime trait, cross-repo ADR coordination | Trellis + formspec-studio + WOS crates |
+| **F — Envelope productization** (added 2026-05-14) | Content-Attestation Envelope epic `fs-m8ic` + 15 child tickets — port-catalog spec (P-1..P-14), verifier facade (P-13), conformance bundles, two design decisions (`fs-n357` `documentRef` shape, `fs-wi8a` intent baseline, `fs-fqt1` port-catalog home) | DocuSign-class envelope-routed signed-content evidence | Formspec Definition + Response schema, WOS Signature Profile §2.11/§2.13.1, Trellis clarifying ADR, port catalog (likely WOS sidecar), verifier facade |
 
 **Stream-internal sequencing:**
-- **A:** #6 (TypeID URN rewrite) is prerequisite for all URN-using work → run first; #7 runs in parallel (touches different schema surface)
-- **B:** Governance policies (#3/#4/#71) are independent of each other once ADRs accepted; #70 must land before #72; export work (#4/#5 export paths) independent of runtime emission; #66a–#66g are mostly independent sub-items
-- **C:** #26a → #26b (sequential); #30 pairs with #58; #35 blocked on #36; #59/#60 blocked on #20/#30; rest are fully independent
-- **D:** #65a → #65b → #65c (sequential ToolContext chain); #65g–#65j are independent of each other; #65n → #65o (sequential plan reconciliation)
-- **E:** AI orchestrator (#2) semi-blocked until AgentRuntime seam design complete; T4 COC and Studio UI are independent of each other
-
-**Highest-leverage first moves:**
-1. ~~Ratify ADRs 0066/0067/0070/0092~~ **Done 2026-05-06** — 8 items unblocked
-2. ~~Structural merges (§4.5)~~ **Done 2026-05-07** — assertion-library + due-process-config absorbed
-3. Ratify PLN-0384 (unblocks vendor x-* floor + identity attestation + Trellis item #3)
-4. Start Stream A #6 + Stream C ungated spec items in parallel
-5. Start Stream B governance policies + export alongside Stream A
-6. Spin up Stream D authoring cleanup + Stream E cross-repo coordination
+- **B:** Governance policies (#3/#4/#71) independent once ADRs accepted; #70 → #72 (typed-enum prerequisite for emission wiring, encoded as `fs-zjpl` deps `fs-vmsx`); export work (#4/#5) independent of runtime emission; #66a–#66g mostly independent
+- **C:** #26a → #26b (encoded); #30 pairs with #58 (landed 2026-05-07); #35 → #36 (encoded); #59/#60 dependency on typed events + task lifecycle lives in ticket prose, not encoded as deps
+- **D:** ADR 0065 production-seam ticket parents the synth/MCP follow-ups; plan-reconcile (`fs-k63f`) → production-seam (`fs-uqpw`); spike-closure tickets independent
+- **E:** AI orchestrator (#2) blocks the 5 agent adapter invoke bodies (`fs-ixl3`/`fs-mhhv`/`fs-njef`/`fs-pizw`/`fs-wzps` all dep `fs-w9dv`); T4 COC and Studio UI independent
+- **F:** Port-catalog home decision (`fs-fqt1`) → port-catalog spec (`fs-acyi`) → verifier facade (`fs-jjwc`) → conformance bundles (`fs-6pb7` → `fs-o1lw`); two foundational design choices (`fs-n357`, `fs-wi8a`) gate the schema cascade
 
 ---
 
@@ -141,171 +42,195 @@ Streams A–D are WOS-internal and fully independent of each other. Stream E coo
 
 Pick from the top. Each item has a gate (what unblocks it) and a plan or ADR.
 
-**Scoring note.** Per [`user_profile.md`](../.claude/user_profile.md) economic model: dev/time is free, architectural drift is expensive. Ordering uses **`Imp × Debt`**; Cx is preserved as a scheduling dimension but does not change priority. Debt values trend **up** between sessions on pre-1.0 work. Score notation: `[Imp / Cx / Debt]`; the number in parentheses is `Imp × Debt`.
+<!-- tk:start epic=fs-ttv6 -->
+<!-- GENERATED by scripts/generate-todo.mjs from tk epic fs-ttv6 — edit tickets via tk, not this section -->
 
-1. **Signature Profile workflow semantics** `[7 / 5 / 5]` (**35**) — **WOS-T4 ACTIVE (cross-repo closeout).** **[Stream: E]** Workflow-tier slice of the **DocuSign 100% parity bar** per VISION §X (parent PLN-0370 reframe holds the marketing line until full parity lands; PLN-0355 ESIGN/UETA gate Trigger): signer roles via `actorExtension`, sequential/parallel/routed/free-for-all flows, intent capture, identity binding, signer-authentication policy schema, reminders, expiry, decline, void, reassignment, and `SignatureAffirmation` provenance. Cryptographic integrity + certificate-of-completion live in Trellis; WOS only emits the semantic evidence record from neutral verified signature evidence supplied by a binding/profile adapter. **Path back to original DocuSign-100% framing** lands via parent **PLN-0380** (`signature.md` §1.3 scope reopen + signing-intent URI registry + signer-authority claim shape distinct from §2.6 authentication-method) + parent **PLN-0398** (Trigger — administrative surface: template libraries, bulk-send, send-for-signature dashboards, signer status views, reminder cadence configuration, audit history view). Trellis user-content Attestation primitive at parent **PLN-0379** (Trellis ADR 0010) composes for byte-level signing-intent URI carriage. **Execution plan:** [T4-TODO.md](T4-TODO.md). **Landed 2026-04-22 (WOS center):** [ADR-0062](thoughts/adr/0062-signature-profile-workflow-semantics.md), [Signature Profile spec](specs/profiles/signature.md), Signature Profile schema (embedded `signature` block in `wos-workflow.schema.json` per ADR 0076), schema fixtures/tests, Studio generated type binding, `ProvenanceKind::SignatureAffirmation`, schema-constrained `SignatureAffirmation` payload, Rust constructor/helper, Facts-tier classification, custody append inclusion, SIG-001..SIG-012 + WOS-SIG-COVER-001 lint (13 total), runtime profile loading, signing task evidence validation, `SignatureAffirmation` emission, sequential/parallel/routed/free-for-all/witness/notary/decline/void/reassignment/expiry semantics, and 13 SIG-* conformance tests. **Boundary reconciliation landed 2026-05-08:** `SignatureEvidence` is neutral in `wos-runtime`; `wos-formspec-binding` owns Formspec `authoredSignatures` parsing and signed-payload digest mapping; `SignatureAffirmationData` uses neutral source-signature fields; SIG-014..SIG-017 cover digest mismatch, signing-intent mismatch, signer-authority floor failure, and stale response pin. Trellis signature catalog / certificate vectors consume the same neutral fields without moving Formspec semantics into Trellis Core. **Next T4 slice:** shared fixture bundle end-to-end (design doc at parent [`thoughts/specs/2026-04-24-shared-cross-seam-fixture-bundle-design.md`](../thoughts/specs/2026-04-24-shared-cross-seam-fixture-bundle-design.md)), Studio authoring/validation UX, Trellis human certificate-of-completion rendering/template UX per [Trellis ADR 0007](../trellis/thoughts/adr/0007-certificate-of-completion-composition.md) (accepted 2026-04-24), and vendor `x-*` assurance-floor enforcement gated by PLN-0384.\n\n  Signature substrate boundary architecture landed 2026-05-08 (Phases 0-3 of 6-phase plan):\n  Landed:\n    • COSE_Sign1 universal wire (ADR-0087, D1) — schema updated, signatureValue typed as base64 COSE_Sign1\n    • VerificationReceipt shape (ADR-0088, D2) — schema, Rust struct, TS interface, JSON round-trip tests\n    • Admission record split (ADR-0089, D3) — SignatureAdmissionFailed record kind in schema + ProvenanceKind,\n      collapsed primitiveVerification.status to {verified, deferredPendingHelper}\n    • Source-of-truth table (D5) — formspec Core §2.1.N, 8-row normative table\n    • Signature-method registry v1.0.0 (D7) — 5 entries, spec + machine-readable JSON\n    • Posture Declaration schema (ADR-0090, D8) — posturePolicy field in wos-workflow.schema.json,\n      deploymentLocalSigningIntents sunset notice\n    • Verifier port (formspec-signature-port) — common::Verifier trait + TS interface, VerifyRequest, registry types\n    • Canonicalization helper (formspec-canonical) — digest computation, co-signature stability, domain separation\n    • Shared COSE helpers (formspec-signature-cose + /signature-cose) — COSE_Sign1 decode and RFC 9052 Sig_structure construction\n    • Ed25519 COSE adapter verification — webcrypto, ring, and trellis-formspec-signature verify detached signed payload bytes\n    • WOS admission alignment — AdmissionOutcome enum, SignatureAdmissionFailedReason (7 variants), posture declaration loading,\n      ensure_signing_intent_admitted produces AdmissionFailed, TaskCompleted gated behind Affirmation only\n    • 7-bundle cross-stack fixture skeleton — manifests validate, harness passes (9 tests incl. 3 negative)\n  Remaining (follow-up plan):\n    • SIG-014..026 fixture re-casting — old primitiveVerification.status: failed → SignatureAdmissionFailed records\n    • SIG-027..030 new fixtures — method_unsupported, posture_floor_unmet, posture_declaration_loaded, method_unregistered\n    • Byte-populated fixture bundles 001-007 — actual formspec-response.json, verification-receipt.cose, trellis-events.cbor\n    • workspec-server integration test fixup (signature_affirmations.rs)\n    • receipt signing, ECDSA/RSA-PSS vectors, cross-adapter byte-equivalence, and certificate receipt embedding\n\n   **WOS-T4 -COMPLETE- criteria:** Formspec captures ✓ · WOS routes ✓ · WOS emits `SignatureAffirmation` ✓ · Trellis machine-verifiable export accepts ✓ · Conformance proves patterns ✓ · COC rendering (T4-10) ✗ — **note:** no active Trellis TODO row owns COC byte composition; that landed in Trellis Wave 25, while HTML-to-PDF reference rendering is tracked in parent [`TODO-STACK.md`](../TODO-STACK.md) Load-Bearing. · vendor `x-*` assurance floor (fail-open gap, gated on PLN-0384) ✗ · Studio authoring UI (T4-11, 11 items) ✗. Execution detail moved into this file (T4-TODO.md merged 2026-05-06; replaced with redirect pointer).
-2. **AI-runtime capability-precondition emission wiring** `[6 / 5 / 4]` (**24**) **[Stream: E]** — typed Rust path landed 2026-04-28; 5 unit tests + 6 Python schema tests pass. **Still open:** (a) runtime emission site — AI §3.3.1 step 1-3 specifies precondition evaluation but no runtime path actually evaluates `Capability.preconditions` (`crates/wos-core/src/model/ai.rs:197`); the field is declarable but not fired. (b) JSON conformance fixture pair (blocked + permitted) under `fixtures/conformance/`. (c) Ergonomic constructor variant once call-site count justifies. (d) **Blocker freshness (verified 2026-05-14):** ADR 0064 `AgentInvoker` port landed (trait + 6 adapter crates: `wos-agent-stub`/`-anthropic`/`-mcp`/`-a2a`/`-http`/`-claude-sdk`) and `WosRuntime` now accepts an `AgentInvokerRegistry`, but the **orchestrator** that calls `AgentInvoker::invoke()` from transition execution still does not exist. `DurableRuntime` has no `invoke_agent` method; a new `AgentRuntime` trait or method addition may be required. Five of the six adapter crates are skeletons with `unimplemented!()` invoke bodies, tracked in [ADR 0064 residual → agent-adapter implementations](#adr-0064-residual). **Gate: AI-runtime invocation seam design — registry half-landed, orchestrator missing.** Discovered 2026-04-28 audit ([`thoughts/audit-2026-04-28-provenance-emission-completeness.md`](thoughts/audit-2026-04-28-provenance-emission-completeness.md) Gap 1). **Debt bumped 3→4** (ADR 0064 orchestrator adds surface area).
-3. **Actor authorization shape (`AuthorizationAttestation`)** `[7 / 4 / 5]` (**35**) **[Stream: B]** — stack contract per ADR 0066 D-2. WOS-center provenance already landed: `ProvenanceKind::AuthorizationAttestation` at `kind.rs:350`, schema `$defs/AuthorizationAttestationRecord`, Facts-tier classification, export adapters (PROV-O/XES; OCEL pending). Remaining: governance policy sections + runtime emission wiring. **Gate: ADR 0066 Accepted 2026-05-06.** Tracked in [ADR 0066 execution checklist](#adr-0066-exec-checklist) items 1-2.
-4. **ADR 0066 implementation — amendment / supersession / rescission / correction** `[7 / 6 / 5]` (**35**) **[Stream: B]** — seven provenance record kinds (6 listed + `Reinstated` from maximalist cluster), `caseRelationship.type = supersedes`, Workflow Governance policy sections, exporter coverage. WOS-center provenance + export (2/3 paths) landed; governance policies + runtime wiring + conformance remain open. **ADR 0066 Accepted 2026-05-06.** Full WOS-scoped breakdown: [ADR 0066 — execution checklist](#adr-0066-exec-checklist).
-5. **ADR 0067 implementation — statutory clocks** `[7 / 5 / 5]` (**35**) **[Stream: B]** — `clockStarted` / `clockResolved` provenance kinds, `Clock` `$def`, four-kind runtime wiring, `#40` / `#51` composition, export mappings, conformance. WOS-center provenance + schema $defs landed; runtime emission + export + conformance remain open. **ADR 0067 Accepted 2026-05-06.** Execution checklist: [ADR 0067 — execution checklist](#adr-0067-exec-checklist).
-6. **ADR 0092 — TypeID-in-URN identity landing** `[7 / 5 / 5]` (**35**) **[Stream: A]** — ~~Narrow `WosResourceUrn` from 5-segment to 3-segment `urn:wos:<typeid>`.~~ **Landed 2026-05-07 (WS-1–8: schema, wos-core, server, specs, tests, case-portal verified).** This item is closed; see gate-type table for ✅ marker.
-7. **Multi-step session DAG topology (P2, §21 from API coverage audit)** `[5 / 2 / 4]` (**20**) **[Stream: A]** — ~~Schema-only close of the single deferred gap.~~ **Landed 2026-05-07.** This item is closed; see gate-type table for ✅ marker.
+Cross-repo Do-next #1 (WOS-T4) — workflow-tier signature slice; cross-stack rollup at `fs-w0li`. Other items below are WOS-spec-internal slices, parented here.
 
-8. **WOS-SIGNATURE-ADMISSION-FAILED-RECORD-001 — SignatureAdmissionFailed provenance record** `[7 / 5 / 4]` (**28**)
-   Landed: SignatureAdmissionFailedRecord $def in wos-provenance-log.schema.json,
-   SignatureAdmissionFailedData with 7-reason enum + evidenceBindings, recordKind enum entry in FactsTierRecord
-   (wos-workflow.schema.json), ProvenanceKind::SignatureAdmissionFailed variant in wos-core, Facts-tier
-   audit classification, SignatureAdmissionFailedInput constructor + focused Rust serialization tests,
-   AdmissionOutcome enum in wos-runtime, runtime PrimitiveVerificationFailed / MethodUnsupported /
-   PostureFloorUnmet paths, and binding-reported terminal admission failures now carry a closed failure reason plus
-   object-shaped failureContext into SignatureAdmissionFailed; runtime submit_task_response tests prove all 7
-   schema reasons persist as SignatureAdmissionFailed, keep the signature task active, and block SignatureAffirmation;
-   Formspec binding now parses and carries signatureMethod, reports registry-shaped unknown methods as
-   MethodUnregistered, reports stale signedPayload pin/digest mismatches as EvidenceDivergence, and runtime
-   posture allowedMethods compares against the binding-supplied signature method while posture
-   allowedSigningIntents rejects non-allowlisted signing intents; both preserve legacy provider-managed fixture
-   compatibility. Unregistered-but-step-matching signing intents now reach the admission-failure branch instead
-   of short-circuiting during evidence selection. Runtime-side step intent, signer-authority, and consent signedAt
-   divergence gates now emit SignatureAdmissionFailed instead of engine errors, with structured failureContext
-   carried into the provenance record.
-   Remaining: actual Formspec verifier/posture/registry-corrupt/adapter paths that populate the remaining
-   nonprimitive binding-reported failure reasons beyond the current runtime/test adapters.
-   Debt unchanged 4: schema + runtime structure landed; wiring to all reason paths remains.
+**P2 — standard:**
 
-9. **WOS-FORMSPEC-CANONICALIZATION-001 — Consume Formspec canonical signed-payload helper** `[7 / 3 / 6]` (**42**)
-   Archived stack plan: [`../thoughts/archive/plans/2026-05-09-signature-wire-convergence-plan.md`](../thoughts/archive/plans/2026-05-09-signature-wire-convergence-plan.md).
-   Landed: `wos-formspec-binding` now depends on `formspec-canonical` for
-   `signedPayload.digest` computation and no longer owns a local `serde_json_canonicalizer`
-   + NUL-separated domain clone; a regression test proves the legacy NUL-separated preimage is rejected.
-   Bundle 001-003 cross-stack harness coverage recomputes signed-payload digests through
-   `formspec-canonical`, verifies WOS digest equality for admitted/failed records, and verifies
-   receipt byte equality for the byte-populated fixture bundles.
-   Remaining: none for this canonicalization row.
-   Done: WOS binding, Formspec harness, and cross-stack fixture bundles compute identical
-   signed-payload digests, and no WOS path owns Formspec canonicalization logic.
+- **#4 — ADR 0066 implementation (WOS center: 7 record kinds + policies + runtime + export)** `[7/6/5]=35` · `fs-j94f` · P2
+   links ADR 0066 — amendment and supersession (cross-stack rollup) `fs-lwsj`
 
-10. **WOS-SIGNATURE-RECEIPT-CONSUMPTION-001 — VerificationReceipt consumption in wos-formspec-binding** `[6 / 4 / 5]` (**30**)
-   Landed: VerificationReceipt types exist (Rust + TS), signature_evidence() signature ready for
-   receipt injection; shared Formspec
-   COSE helpers and Ed25519 webcrypto/ring/Trellis adapters can verify COSE_Sign1 bytes.
-   Runtime now carries optional Formspec `authoredSignatures[*].verificationReceipt` bytes through
-   `SignatureEvidence` into `SignatureAffirmation.verificationReceipt`, and Posture Declaration
-   `receiptSigningRequired: true` emits SignatureAdmissionFailed(posture_floor_unmet) when those
-   signed receipt bytes are absent.
-   Remaining: dispatch to the real Verifier port, produce signed VerificationReceipt bytes from the adapter,
-   map failed/unsupported receipt results into SignatureAdmissionFailed.receipt, and populate byte bundles with
-   real receipt COSE.
-   Debt remains 5: COSE decode is shared, but adapter dispatch + receipt injection remain deep surfaces.
+   WOS center slice of ADR 0066 (amendment/supersession/rescission/correction). ADR Accepted 2026-05-06; cluster ratification sweep complete. LANDED: 7 ProvenanceKind variants + schema $defs + Facts-tier classification + audit_layer_for_kind tests + 2/3 export paths (PROV-O + XES). REMAINING (per checklist :256-281): governance policy sections (amendmentPolicy, rescissionPolicy, reinstatementPolicy, correctionPolicy, supersessionPolicy) each binding AppealMechanism-shaped gate + impact-level assurance floor; lint K-A-010; companion examples + fixtures emitting superseding workflow process + runtime targetCase URI validation; runtime emission on governed transitions (gated by #72); OCEL export; wos-conformance fixtures; WOS-IMPLEMENTATION-STATUS.md updates.
 
-11. **WOS-POSTURE-DECLARATION-CONSUMPTION-001 — Posture Declaration consumption** `[6 / 4 / 5]` (**30**)
-    Landed: posturePolicy field in wos-workflow.schema.json (url + optional version),
-    deploymentLocalSigningIntents sunset notice, PostureDeclaration schema in both
-    formspec/schemas/ and work-spec/schemas/, load_posture_declaration URL fetch/parse/cache path
-    in wos-runtime, posture-floor admission-path tests, and posture allowedMethods now gates on binding-supplied
-    signatureMethod instead of identityBinding.method; posture allowedSigningIntents now rejects
-    non-allowlisted signing intents with SignatureAdmissionFailed(method_unsupported).
-    Remaining: binding-driven registry-corrupt / adapter-unavailable conformance coverage once
-    receipt/verifier dispatch exists.
-    Debt bumped 4→5: posture loading adds HTTP fetch + cache + version-pinning surface.
+   **Acceptance:**
+     - All 6 checklist sections green (kernel/provenance done; workflow governance, caseRelationship, runtime+binding, OCEL export, conformance+docs remaining).
+     - Composes onto LB_T4 (fs-w0li — workflow-tier slice) and parent ADR 0066 rollup (fs-lwsj).
 
-12. **WOS-CONFORMANCE-SIG-FIXTURES-001 — SIG-027..030 + re-cast SIG-014..026** `[6 / 4 / 4]` (**24**)
-    Landed: SIG-014/SIG-017 now prove Formspec signedPayload pin/digest divergence as
-    SignatureAdmissionFailed(evidence_divergence), SIG-025 now proves unregistered, non-allowlisted
-    signing intents as SignatureAdmissionFailed(method_unsupported) instead of a runtime engine error;
-    SIG-015 proves step signing-intent mismatch as SignatureAdmissionFailed(evidence_divergence);
-    SIG-016/SIG-020/SIG-021/SIG-022 prove signer-authority floor/evidence/validity/hash failures as
-    SignatureAdmissionFailed(posture_floor_unmet); SIG-026 proves response consent signedAt divergence as
-    SignatureAdmissionFailed(evidence_divergence);
-    SIG-027..030 cover method_unsupported, posture_floor_unmet, posture_declaration_loaded, and
-    method_unregistered.
-    Remaining: none for the SIG-014..030 recast row; next signature convergence work is tracked by
-    receipt consumption and byte-populated fixture bundle rows.
-    Gate: WOS-SIGNATURE-ADMISSION-FAILED-RECORD-001 constructor + WOS-POSTURE-DECLARATION-CONSUMPTION-001
-    posture loading must land first.
+- **#5 — ADR 0067 implementation (WOS center: clocks runtime + export + conformance)** `[7/5/5]=35` · `fs-lq08` · P2
+   links ADR 0067 — statutory clocks (cross-stack rollup) `fs-olho`
 
-13. **WORKSPEC-SERVER-SIGNATURE-FIXUP-001 — workspec-server integration test fixup** `[5 / 3 / 3]` (**15**)
-    Landed: workspec-server now compiles against the current `WorkflowProcess` field set, the
-    signature read service exposes separate `SignatureAffirmation` and `SignatureAdmissionFailed`
-    provenance streams, and the integration fixture proves receipt-bearing affirmations are not
-    conflated with failed-admission records.
-    Remaining: none for this server fixup row.
-    Gate: WOS-CONFORMANCE-SIG-FIXTURES-001 landed first; server verification is covered by
-    `cargo test -p wos-server --test integration signature_affirmations -- --nocapture`,
-    `cargo test -p wos-server-runtime-local runtime_store -- --nocapture`, and
-    `python scripts/check-route-coverage.py`.
-14. **WOS-SIGNATURE-ADMISSION-REVOCATION-001 — revocation_policy enforcement in admission path** `[7 / 3 / 2]` (**21**)
-    `wos-runtime/src/runtime/signature.rs:1182` carries `TODO(Phase 3.3): enforce revocation_policy when present`. The `SignaturePolicy.revocation_policy` field is declared (line 686) but never inspected after the admission gate at line 1182 — admission succeeds even when revocation would block the signature. No TODO.md entry tracked this gap.
-    - **Done:** admission path inspects `revocation_policy` and rejects admission when the policy blocks; negative conformance fixture proves a revocable signer is rejected after revocation; positive fixture proves non-revoked signer still admits.
-    - **Why:** signature profile production readiness gates on complete enforcement. A deployment that sets `revocation_policy` gets silent non-compliance today.
-    - **Gate:** none.
+   WOS center slice of ADR 0067 (statutory clocks). ADR Accepted 2026-05-06. LANDED: clockStarted / clockResolved ProvenanceKind + schema $defs (Clock with clockId/clockKind/originEventHash/duration/calendarRef/statuteReference/computedDeadline + ClockResolved with resolution/resolvingEventHash/resolvedAt) + Facts-tier classification + Task SLA authoring surface + business calendar §7.1 infrastructure. REMAINING (per checklist :283-308): runtime emission for 4 clock kinds (AppealClock / ProcessingSLA / GrantExpiry / StatuteClock) + pause/resume per D-4; Task SLA runtime + ADR 0067 D-2.1 SlaDefinition→ProcessingSLA migration; #51 statutory deadline chain composition with §7.1; wos-export PROV-O/OCEL/XES paths for clock kinds; wos-conformance fixtures (start, satisfied, elapsed, paused segment); kernel/companion prose for MUST behavior; ADR §Open questions resolution.
 
-### Agent task extract (from this file)
+   **Acceptance:** All 6 checklist sections green. Cross-stack rollup ADR_67 (fs-olho); workspec-server prove-out at wos-server WS-073.
 
-| Task ID | Stream | Tracks | Deliverable | Depends on |
-|---------|--------|--------|-------------|------------|
-| **WOS-T4** | E | Do next **#1** | Signature Profile end-to-end — WOS center + neutral Formspec binding + Trellis machine-verifiable export landed; remaining cross-repo: shared fixture bundle, Trellis COC rendering, Studio UI, vendor assurance floor | T4-10 (COC renderer) · T4-11 (Studio UI) · T4-12 (shared bundle) · vendor x-* assurance floor (gated on PLN-0384) |
-| **WOS-T5** | A | Do next **#7** | ~~Multi-step session DAG topology~~ — **Landed 2026-05-07.** Closed. | — |
-| **WOS-T6** | A | Do next **#6** | ~~ADR 0092 TypeID-in-URN landing~~ — **Landed 2026-05-07 (WS-1–8).** Closed. | — |
-| **WOS-B1** | D | Backlog | ~~§4.5 structural merges~~ — **Closed 2026-05-07.** | — |
-| **WOS-B2** | C | Backlog | Kernel-Basic profile **LoadBearing** declaration + lint-matrix wire | None |
-| **WOS-B3** | D | Backlog | [ADR 0065](thoughts/adr/0065-wos-authoring-stack-mirrors-formspec.md) authoring-stack closure — MCP↔synth `ToolContext` seam, spike/Q-V0 follow-ups, `wos-bench`, conformance/lint API hygiene | See **ADR 0065 — authoring stack closure** in Backlog |
-| **WOS-B4** | B | Backlog | Runtime Companion **§15** / Phase 11 — `wos-runtime` parity vs published MUSTs (`#66`–`#66g`), PARITY drift (**WS-074**), HTTP §15 fixtures (**WS-075**); ADR 0066 server slice **WS-072**; ADR 0067 clock prove-out **WS-073** | [§ Runtime Companion §15 / Phase 11](#runtime-companion-parity-stream-b) · [`crates/wos-server/TODO.md`](crates/wos-server/TODO.md) **WS-011**, **WS-072–WS-073**, **WS-074–WS-075** |
+- **#3 — Actor authorization shape (AuthorizationAttestation) — governance policy + runtime emission** `[7/4/5]=35` · `fs-u2on` · P2
+   blocked-by ADR 0066 implementation (WOS center: 7 record kinds +… `fs-j94f`
 
-*Falling off Do next at Imp × Debt < 30:* §4.5 structural merges (owner decision needed), **ADR 0065 authoring-stack closure** (Backlog — MCP/synth seam + spike follow-ups + `wos-bench`; consolidated 2026-04-24), §4.4 release-trains Tasks 4-5 (15). All live in Backlog.
+   Stack contract per ADR 0066 D-2. WOS-center provenance ALREADY LANDED: ProvenanceKind::AuthorizationAttestation at kind.rs:350, schema $defs/AuthorizationAttestationRecord, Facts-tier classification, export adapters (PROV-O/XES; OCEL pending). REMAINING: governance policy sections + runtime emission wiring. ADR 0066 Accepted 2026-05-06.
+
+   **Acceptance:**
+     - Governance policy sections (workflow-governance.md) bind AuthorizationAttestation to authorizing actor; runtime emits on governed transitions; OCEL export path.
+     - Tracked in ADR 0066 execution checklist items 1-2.
+
+- **#10 — WOS-SIGNATURE-RECEIPT-CONSUMPTION-001 — VerificationReceipt consumption in wos-formspec-binding** `[6/4/5]=30` · `fs-f5ls` · P2
+   links WOS-T4 cross-stack proof + signature-attestation /… `fs-w0li`
+
+   LANDED: VerificationReceipt types (Rust + TS); signature_evidence() signature ready for receipt injection; shared Formspec COSE helpers + Ed25519 webcrypto/ring/Trellis adapters verify COSE_Sign1; runtime carries optional Formspec authoredSignatures[*].verificationReceipt bytes through SignatureEvidence into SignatureAffirmation.verificationReceipt; Posture Declaration receiptSigningRequired:true emits SignatureAdmissionFailed(posture_floor_unmet) when signed receipt bytes absent. REMAINING: dispatch to real Verifier port; produce signed VerificationReceipt bytes from adapter; map failed/unsupported receipt results into SignatureAdmissionFailed.receipt; populate byte bundles with real receipt COSE.
+
+   **Acceptance:**
+     - Real Verifier port dispatch; signed receipt bytes produced; receipt failure mapping; byte bundles carry real receipt COSE.
+     - Debt 5: COSE decode shared but adapter dispatch + receipt injection remain deep surfaces.
+
+- **#11 — WOS-POSTURE-DECLARATION-CONSUMPTION-001 — Posture Declaration consumption residual** `[6/4/5]=30` · `fs-sf0g` · P2
+   links WOS-T4 cross-stack proof + signature-attestation /… `fs-w0li`
+
+   LANDED: posturePolicy field in wos-workflow.schema.json (url + optional version); deploymentLocalSigningIntents sunset notice; PostureDeclaration schema in formspec/schemas/ and work-spec/schemas/; load_posture_declaration URL fetch/parse/cache path in wos-runtime; posture-floor admission-path tests; posture allowedMethods gates on binding-supplied signatureMethod; posture allowedSigningIntents rejects non-allowlisted intents with SignatureAdmissionFailed(method_unsupported). REMAINING: binding-driven registry-corrupt / adapter-unavailable conformance coverage once receipt/verifier dispatch exists.
+
+   **Acceptance:** Conformance coverage of registry-corrupt and adapter-unavailable paths via binding-driven fixtures. Debt 5: posture loading adds HTTP fetch + cache + version-pinning surface.
+
+- **#8 — WOS-SIGNATURE-ADMISSION-FAILED-RECORD-001 — SignatureAdmissionFailed wiring residual** `[7/5/4]=28` · `fs-wa59` · P2
+   links WOS-T4 cross-stack proof + signature-attestation /… `fs-w0li`
+
+   LANDED: SignatureAdmissionFailedRecord $def in wos-provenance-log.schema.json + SignatureAdmissionFailedData with 7-reason enum + recordKind enum entry + ProvenanceKind::SignatureAdmissionFailed variant + Facts-tier classification + Rust constructor + 7-reason runtime test coverage + Formspec binding parses/carries signatureMethod / reports MethodUnregistered + EvidenceDivergence / runtime posture allowedMethods/allowedSigningIntents enforcement + unregistered-but-step-matching signing intents reach admission-failure branch + runtime step intent/signer-authority/consent signedAt divergence gates emit SignatureAdmissionFailed with structured failureContext. REMAINING: actual Formspec verifier/posture/registry-corrupt/adapter paths populating remaining nonprimitive binding-reported failure reasons beyond current runtime/test adapters.
+
+   **Acceptance:**
+     - All 7 admission-failure reasons reachable from real Formspec verifier/posture/registry/adapter paths (not only test adapters).
+     - Debt 4: schema + runtime structure landed; wiring to all reason paths remains.
+
+**P3 — sustaining:**
+
+- **#2 — AI-runtime capability-precondition emission wiring** `[6/5/4]=24` · `fs-w9dv` · P3
+
+   Typed Rust path landed 2026-04-28 (5 unit + 6 Python schema tests pass). REMAINING: (a) runtime emission site — AI §3.3.1 step 1-3 specifies precondition evaluation but no runtime path actually evaluates Capability.preconditions (crates/wos-core/src/model/ai.rs:197); declarable but not fired. (b) JSON conformance fixture pair (blocked + permitted) under fixtures/conformance/. (c) Ergonomic constructor variant once call-site count justifies. BLOCKER (verified 2026-05-14): ADR 0064 AgentInvoker port landed (trait + 6 adapter crates) and WosRuntime accepts AgentInvokerRegistry, but ORCHESTRATOR that calls AgentInvoker::invoke() from transition execution still does not exist. DurableRuntime has no invoke_agent method; new AgentRuntime trait or method addition may be required.
+
+   **Acceptance:**
+     - Runtime emits CapabilityPreconditionEvaluated on agent invocation; JSON conformance fixture pair (blocked + permitted).
+     - GATE: AI-runtime invocation seam design (orchestrator missing).
+
+- **#14 — WOS-SIGNATURE-ADMISSION-REVOCATION-001 — revocation_policy enforcement** `[7/3/2]=14` · `fs-yciq` · P3
+   links WOS-T4 cross-stack proof + signature-attestation /… `fs-w0li`
+
+   wos-runtime/src/runtime/signature.rs:1182 carries TODO(Phase 3.3): enforce revocation_policy when present. SignaturePolicy.revocation_policy field declared (line 686) but never inspected after admission gate at line 1182 — admission succeeds even when revocation would block. No prior TODO.md entry tracked this gap.
+
+   **Acceptance:**
+     - Admission path inspects revocation_policy and rejects when policy blocks; negative conformance fixture proves revocable signer rejected after revocation; positive fixture proves non-revoked signer still admits.
+     - WHY: signature profile production-readiness gates on complete enforcement; deployment setting revocation_policy gets silent non-compliance today.
+
+**Recently closed (kept for traceability; archive when stale):**
+
+- ~~**#9 — WOS-FORMSPEC-CANONICALIZATION-001 — Consume Formspec canonical signed-payload helper**~~ `fs-q6kt` · CLOSED — wos-formspec-binding now depends on formspec-canonical for signedPayload.digest computation and no longer owns a local serde_json_canonicalizer + NUL-separated domain clone;…
+- ~~**#6 — ADR 0092 — TypeID-in-URN identity landing**~~ `fs-cccd` · CLOSED — Narrow WosResourceUrn from 5-segment to 3-segment urn:wos:<typeid>.
+- ~~**#12 — WOS-CONFORMANCE-SIG-FIXTURES-001 — SIG-027..030 + re-cast SIG-014..026**~~ `fs-j0vj` · CLOSED — SIG-014/SIG-017 prove Formspec signedPayload pin/digest divergence as SignatureAdmissionFailed(evidence_divergence); SIG-015 proves step signing-intent mismatch;…
+- ~~**#7 — Multi-step session DAG topology (P2, §21 from API coverage audit)**~~ `fs-n72b` · CLOSED — Schema-only close of the single deferred gap from API coverage audit.
+- ~~**#13 — WORKSPEC-SERVER-SIGNATURE-FIXUP-001 — workspec-server integration test fixup**~~ `fs-tdpx` · CLOSED — workspec-server now compiles against current WorkflowProcess field set; signature read service exposes separate SignatureAffirmation and SignatureAdmissionFailed provenance…
+
+<!-- tk:end -->
+
+---
+
+## ADR execution checklists
 
 ### ADR 0066 — execution checklist (WOS center) {#adr-0066-exec-checklist}
 
 **Gate:** [ADR 0066](../thoughts/adr/0066-stack-amendment-and-supersession.md) **Accepted 2026-05-06 (cluster ratification sweep).** Formspec Respondent Ledger work and Trellis vectors/verifier/export stay owned in parent [`TODO-STACK.md`](../TODO-STACK.md) and closed Trellis Waves 40/47 in [`../trellis/COMPLETED.md`](../trellis/COMPLETED.md); this block is the **WOS spec + schema + runtime + export** slice.
 
-1. **Kernel / provenance**
-   - [x] Add **seven** `ProvenanceKind` variants (6 + `Reinstated` from maximalist cluster) + schema `recordKind` registrations in `wos-workflow.schema.json` (not `wos-provenance-record.schema.json` — that path no longer exists post-ADR 0076): `correctionAuthorized`, `amendmentAuthorized`, `determinationAmended`, `rescissionAuthorized`, `determinationRescinded`, `reinstated`, `authorizationAttestation`. **Landed** — `crates/wos-core/src/provenance/kind.rs:304-359`, schema $defs at lines 4739-5301.
-   - [x] Payload `$defs` / `allOf` guards — all 7 record shapes landed: `CorrectionAuthorizedRecord`, `AmendmentAuthorizedRecord`, `DeterminationAmendedRecord`, `RescissionAuthorizedRecord`, `DeterminationRescindedRecord`, `ReinstatedRecord`, `AuthorizationAttestationRecord`.
-   - [x] Tier map: **Facts** for all seven — `crates/wos-core/src/provenance/audit_tier.rs:160-166`.
-   - [x] `wos-core` `audit_layer_for_kind` / conformance tests — enumeration at `tests.rs:553-559` + per-variant assertions at lines 945-1373.
-2. **Workflow Governance**
-   - [ ] Normative policy sections: `amendmentPolicy`, `rescissionPolicy`, `reinstatementPolicy`, `correctionPolicy`, `supersessionPolicy` — each binding an `AppealMechanism`-shaped gate; impact-level assurance floor (rights-impacting → authorizing actor `Assurance ≥ high`) per D-2. **Zero landed.**
-   - [ ] Lint rules + fixtures: K-A-010 (closed five-mode amendment taxonomy). **Zero landed.**
-3. **`caseRelationship.type = supersedes`**
-   - [x] Schema enum includes `supersedes` at `schemas/api/instance.schema.json:945,957`. Kernel spec prose landed at `specs/kernel/spec.md:772`. K-048 lint enforces `x-` prefix for non-standard values.
-   - [ ] Companion examples + fixtures emitting superseding workflow process + runtime validation of `targetCase` URI shape remain open.
-4. **Runtime + binding**
-   - [ ] `wos-runtime` (and `wos-formspec-binding` where intake/custody intersects): emit the new records on governed transitions; ensure intake paths never silently mutate prior responses when a correction lineage exists (ADR Context). **Zero landed — gated by #72.**
-5. **Export**
-   - [x] `wos-export`: PROV-O + XES event types for all seven kinds landed (`prov_o.rs:685-691`, `xes.rs:683-689`).
-   - [ ] OCEL event types remain unlanded.
-6. **Conformance + docs**
-   - [ ] `wos-conformance` fixtures per kind; update `WOS-IMPLEMENTATION-STATUS.md` / matrix rows as applicable. **Zero landed.**
+<!-- tk:start epic=fs-w5bz -->
+<!-- GENERATED by scripts/generate-todo.mjs from tk epic fs-w5bz — edit tickets via tk, not this section -->
 
-**Note:** #71 (`ReinstatementPolicy` schema $def + K-A-010 lint) belongs as item 7 in this checklist — tracked under Backlog behavioral items.
+Gate: ADR 0066 Accepted 2026-05-06 (cluster ratification sweep). Formspec Respondent Ledger work + Trellis vectors/verifier/export stay owned in parent TODO-STACK.md and closed Trellis Waves 40/47; this is the WOS spec + schema + runtime + export slice.
 
-**Related:** statutory “may this still be amended?” is [ADR 0067](../thoughts/adr/0067-stack-statutory-clocks.md) (separate acceptance). D-5 only requires composition, not 0067 implementation inside 0066.
+**P2 — standard:**
+
+- **ADR 0066 §2 — Workflow Governance (5 policy sections + K-A-010 lint)** · `fs-b4sa` · P2
+
+   Per ADR 0066 D-2. Zero landed. Cross-link: W_71 (fs-g5nu) covers the ReinstatementPolicy $def + K-A-010 lint slice.
+
+   **Acceptance:** Normative policy sections — amendmentPolicy, rescissionPolicy, reinstatementPolicy, correctionPolicy, supersessionPolicy — each binding an AppealMechanism-shaped gate; impact-level assurance floor (rights-impacting → authorizing actor Assurance ≥ high) per D-2; lint rule K-A-010 enforces closed five-mode amendment taxonomy; conformance fixtures.
+
+- **ADR 0066 §6 — Conformance + docs (wos-conformance fixtures per kind + matrix update)** · `fs-hsgi` · P2
+
+   Zero landed.
+
+   **Acceptance:** wos-conformance fixtures per kind; WOS-IMPLEMENTATION-STATUS.md / matrix rows updated as applicable.
+
+- **ADR 0066 §4 — Runtime + binding (governed-transition emission, intake protection)** · `fs-k54o` · P2
+
+   Zero landed. Cross-link: W_72 (fs-zjpl) covers the broader reference-runtime emission wiring for all 14 cluster variants; this slice is the ADR 0066 subset.
+
+   **Acceptance:**
+     - wos-runtime (and wos-formspec-binding where intake/custody intersects) emit the 7 new records on governed transitions; intake paths never silently mutate prior responses when a correction lineage exists (ADR Context).
+     - GATE: W_72 ($W_72).
+
+**P3 — sustaining:**
+
+- **ADR 0066 §3 — caseRelationship.type = supersedes (companion examples + runtime URI validation)** · `fs-mb3o` · P3
+
+   Schema enum includes supersedes at schemas/api/instance.schema.json:945,957; Kernel prose at specs/kernel/spec.md:772; K-048 lint enforces x- prefix for non-standard values. Remaining: examples + runtime validation.
+
+   **Acceptance:** Companion examples + fixtures emitting superseding workflow process; runtime validation of targetCase URI shape.
+
+- **ADR 0066 §5 — Export (OCEL event types for amendment/supersession kinds)** · `fs-z3ll` · P3
+
+   wos-export: PROV-O + XES event types for all 7 kinds landed (prov_o.rs:685-691, xes.rs:683-689). OCEL remains.
+
+   **Acceptance:** OCEL event types or annotations for all 7 ADR 0066 record kinds.
+
+**Recently closed (kept for traceability; archive when stale):**
+
+- ~~**ADR 0066 §1 — Kernel / provenance (7 ProvenanceKind variants + tier map + tests)**~~ `fs-xe7l` · CLOSED — Seven ProvenanceKind variants (correctionAuthorized, amendmentAuthorized, determinationAmended, rescissionAuthorized, determinationRescinded, reinstated, authorizationAttestation)…
+
+<!-- tk:end -->
 
 ### ADR 0067 — execution checklist (WOS center) {#adr-0067-exec-checklist}
 
 **Gate:** [ADR 0067](../thoughts/adr/0067-stack-statutory-clocks.md) **Accepted 2026-05-06 (cluster ratification sweep).** Trellis `open-clocks.json`, verifier advisories, append vectors **043–046**, `verify/018-export-043-open-clocks`, and `tamper/051-clock-calendar-mismatch` stay in parent [`TODO-STACK.md`](../TODO-STACK.md) and closed Trellis Wave 39 in [`../trellis/COMPLETED.md`](../trellis/COMPLETED.md); Formspec **StatuteClock** origination on respondent acts stays in parent [`TODO-STACK.md`](../TODO-STACK.md); reference-server prove-out is [`crates/wos-server/TODO.md`](crates/wos-server/TODO.md) **WS-073**.
 
-1. **Kernel / provenance**
-   - [x] Add `ProvenanceKind` variants + schema `recordKind` branches in `wos-workflow.schema.json`: `clockStarted`, `clockResolved`. **Landed** — `crates/wos-core/src/provenance/kind.rs:361-377`, schema enum at lines 3857/3859.
-   - [x] Payload `$defs` / `allOf`: **ClockStarted** (clockId, clockKind [AppealClock|ProcessingSLA|GrantExpiry|StatuteClock|x-*], originEventHash, duration, calendarRef, statuteReference, computedDeadline) and **ClockResolved** (clockId, originClockHash, resolution [satisfied|elapsed|paused|cancelled], resolvingEventHash, resolvedAt) — both landed at `schemas/wos-workflow.schema.json:5415-5691`.
-   - [x] Facts-tier classification — `crates/wos-core/src/provenance/audit_tier.rs:167-168`.
-2. **Runtime emission (ADR D-2 — four kinds)**
-   - [ ] **AppealClock** — adverse-decision / deterministic notice path (composes with Gov §4.1 #2).
-   - [ ] **ProcessingSLA** — intake accepted / intake-complete workflow event. Note: ADR 0067 D-2.1 deprecates `SlaDefinition` in favor of `ProcessingSLA` with `kind` discriminator — migration not yet done.
-   - [ ] **GrantExpiry** — benefit award issued transition.
-   - [ ] **StatuteClock** — WOS-owned triggers only on this slice; Formspec-originated statute clocks use the respondent-ledger path (parent repo).
-   - [ ] **Pause / resume (D-4):** `clockResolved` with `resolution: paused` plus a new `clockStarted` carrying **residual** duration — no separate `ClockPaused` record kind.
-3. **Task SLA (#40)**
-   - [x] Authoring surface landed (`schemas/wos-workflow.schema.json:7762-7789` — `slaDefinitions`, `SlaDefinition`, `warningThresholds`, `breachPolicy`, `escalationChain`).
-   - [ ] Runtime SLA implementation (TODO #40; `specs/governance/workflow-governance.md` §10.3).
-   - [ ] Cross-reference clock contract where Task SLA durations overlap rights-impacting deadlines (gated on ADR 0067 D-2.1 migration).
-4. **#51 statutory deadline chains**
-   - [x] Business calendar §7.1 infrastructure exists (`specs/sidecars/business-calendar.md:185-196` — 6-step normative algorithm).
-   - [ ] Compose with §7.1 business calendars + typed kernel events; revisit trigger-gate once center contract ships (i.e., ADR 0067 accepted + D-1/D-2 shipped).
-5. **`wos-export`**
-   - [ ] Distinct PROV-O / OCEL / XES event types or annotations for `clockStarted` / `clockResolved`. **Zero landed — all three export paths empty for clock kinds.**
-6. **Conformance + normative closure**
-   - [ ] `wos-conformance` fixtures (start, satisfied, elapsed, paused segment); kernel / companion prose for MUST-level behavior.
-   - [ ] Encode or explicitly defer ADR §Open questions: envelope timestamp granularity; post-hoc synthetic `elapsed` vs leave-open + verifier-only; multi-jurisdictional independent emits vs single jurisdiction.
+<!-- tk:start epic=fs-m25i -->
+<!-- GENERATED by scripts/generate-todo.mjs from tk epic fs-m25i — edit tickets via tk, not this section -->
+
+Gate: ADR 0067 Accepted 2026-05-06. Trellis Wave 39 closed; Formspec StatuteClock stays in parent TODO-STACK.md; reference-server prove-out at WS-073.
+
+**P2 — standard:**
+
+- **ADR 0067 §2 — Runtime emission (4 clock kinds + pause/resume per D-4)** · `fs-7yfo` · P2
+
+   Four clock kinds + pause/resume semantics. ADR 0067 D-2.1 deprecates SlaDefinition in favor of ProcessingSLA with kind discriminator — migration not yet done.
+
+   **Acceptance:** AppealClock — adverse-decision / deterministic notice path (composes with Gov §4.1 #2); ProcessingSLA — intake accepted / intake-complete workflow event (with SlaDefinition→ProcessingSLA migration per D-2.1); GrantExpiry — benefit award issued transition; StatuteClock — WOS-owned triggers only (Formspec-originated use respondent-ledger path); Pause/resume per D-4 (clockResolved with resolution:paused + new clockStarted carrying residual duration, no separate ClockPaused record kind).
+
+- **ADR 0067 §6 — Conformance + open-question encoding/deferral** · `fs-t9rl` · P2
+
+   Zero conformance landed. Plus 3 open questions to encode or defer — filed as decision sub-tickets.
+
+   **Acceptance:** wos-conformance fixtures (start, satisfied, elapsed, paused segment); kernel/companion prose for MUST-level behavior; resolve or formally defer the 3 ADR §Open questions (each a sibling decision ticket).
+
+**P3 — sustaining:**
+
+- **ADR 0067 §5 — wos-export (PROV-O / OCEL / XES for clockStarted + clockResolved)** · `fs-hfdc` · P3
+
+   Zero landed for clock kinds across all three export paths.
+
+   **Acceptance:** Distinct PROV-O / OCEL / XES event types or annotations for clockStarted / clockResolved.
+
+- **ADR 0067 §4 — #51 Statutory deadline chains (compose with business calendars + typed kernel events)** · `fs-lyt8` · P3
+
+   Business calendar §7.1 infrastructure exists at specs/sidecars/business-calendar.md:185-196 (6-step normative algorithm). Composition with typed kernel events trigger-gated. Tracked broader at W_51 (fs-wsf0).
+
+   **Acceptance:** Compose with §7.1 business calendars + typed kernel events; revisit trigger-gate once center contract ships (ADR 0067 accepted + D-1/D-2 shipped).
+
+- **ADR 0067 §3 — Task SLA (#40 runtime implementation)** · `fs-pdwr` · P3
+
+   Authoring surface landed at schemas/wos-workflow.schema.json:7762-7789 (slaDefinitions, SlaDefinition, warningThresholds, breachPolicy, escalationChain). Runtime implementation tracked at W_40 (fs-96nd); this row is the ADR 0067 cross-reference for clock contract overlap.
+
+   **Acceptance:** Runtime SLA implementation lands (per W_40); cross-reference clock contract where Task SLA durations overlap rights-impacting deadlines (gated on ADR 0067 D-2.1 migration via ADR67_L2).
+
+**Recently closed (kept for traceability; archive when stale):**
+
+- ~~**ADR 0067 §1 — Kernel / provenance (clockStarted + clockResolved + Clock $def)**~~ `fs-nx1i` · CLOSED — clockStarted + clockResolved ProvenanceKind variants landed at kind.rs:361-377; payload $defs (Clock with…
+
+<!-- tk:end -->
 
 ---
 
@@ -313,191 +238,592 @@ Pick from the top. Each item has a gate (what unblocks it) and a plan or ADR.
 
 ### Envelope-stack enablement (§4.7) **[Stream: C]**
 
-- [x] **#58 Envelope (instance-level) status extension** `[Imp 7 / Cx 3 / Debt 5]` — **Landed 2026-05-07.** Extend `WorkflowProcess.status` with first-class `declined | voided | expired` discriminators. Companions to #30: #30 is task-level, #58 is instance-level.
-- [ ] **#59 CloudEvent envelope-flow type catalog** `[Imp 6 / Cx 3 / Debt 4]` — Normative event-type catalog in `integration.md` for cross-system envelope coordination: `envelopeCreated`, `signerInvited`, `signerAuthenticated`, `signerSigned`, `signerDeclined`, `envelopeCompleted`, `envelopeVoided`, `envelopeExpired`, `reminderDue`. Distinct from #20 (which normalises **kernel-internal** event vocabulary per transition). #59 is the **cross-system wire contract** that identity providers, email adapters, and webhook consumers speak. Without it, every WOS-based signature stack defines its own event names and the integration ecosystem fragments.
-- [ ] **#60 Envelope reference fixtures** `[Imp 5 / Cx 3 / Debt 3]` — Three to five canonical kernel documents under `fixtures/kernel/envelope-*.json` demonstrating the composition patterns: `envelope-2signer-sequential.json`, `envelope-parallel-witness.json`, `envelope-decline-reroute.json`, `envelope-with-approver.json`, `envelope-reminder-expire.json`. Plus matching conformance fixtures exercising the full lifecycle (create → invite → sign → complete; create → invite → decline → void). **Fixture-only work** — no new schema surface, but critical for lock-in: locked patterns prevent divergent re-inventions across vendors building on WOS. Depends on #20 typed events and #30 task-lifecycle for the decline fixture.
-- [ ] **#61 Separation-of-duties conformance fixture batch** `[Imp 5 / Cx 2 / Debt 3]` — Two to three fixtures under `fixtures/conformance/` exercising the AccessControl seam's separation-of-duties rejection path: (1) agent attempts to review its own output → rejected; (2) delegated human attempts to re-review as the original author → rejected; (3) separation-of-duties bypass with authority override → recorded as provenance with `OverrideRecord`. Pairs with #23 OverrideRecord schema landing. Shape of the AccessControl seam is already in wos-core traits; what's missing is the conformance contract that reference processors MUST reject these attempts.
+<!-- tk:start epic=fs-cb7x -->
+<!-- GENERATED by scripts/generate-todo.mjs from tk epic fs-cb7x — edit tickets via tk, not this section -->
 
-### Structural merges (§4.5) — closed 2026-05-07 **[Stream: D]**
+Stream: C. Cross-system envelope coordination + fixtures + separation-of-duties. Spec home: integration.md.
 
-- [x] **Assertion Library → Workflow Governance** — prose absorbed as `workflow-governance.md` §14. `assertion-library.md` deleted.
-- [x] **Verification Report → Advanced Governance** — already absorbed per ADR 0076 D-4; standalone file never existed at HEAD.
-- [x] **Due Process Config partial merge → Workflow Governance** — prose absorbed as `workflow-governance.md` §15. `due-process-config.md` deleted.
+**P2 — standard:**
 
-M-1 Drift Monitor + Agent Config merge remains BLOCKED (standalone fixture). M-2 Notification Template + Due Process merge remains REJECTED (categories don't align).
+- **#59 — CloudEvent envelope-flow type catalog (integration.md)** `[6/3/4]=24` · `fs-nw43` · P2
+   links Content-Attestation Envelope — spec authoring `fs-m8ic`
 
+   Normative event-type catalog in integration.md for cross-system envelope coordination: envelopeCreated, signerInvited, signerAuthenticated, signerSigned, signerDeclined, envelopeCompleted, envelopeVoided, envelopeExpired, reminderDue. DISTINCT from #20 (kernel-internal event vocabulary per transition); #59 is cross-system wire contract that identity providers, email adapters, webhook consumers speak. Without it, every WOS-based signature stack defines own event names and integration ecosystem fragments.
+
+   **Acceptance:** 9 event types normatively defined in integration.md; CloudEvents-compliant envelope shape; conformance vector per type.
+
+**P3 — sustaining:**
+
+- **#60 — Envelope reference fixtures (3-5 canonical kernel docs)** `[5/3/3]=15` · `fs-eerp` · P3
+   links Content-Attestation Envelope — spec authoring `fs-m8ic`
+
+   Three to five canonical kernel documents under fixtures/kernel/envelope-*.json demonstrating composition patterns: envelope-2signer-sequential.json, envelope-parallel-witness.json, envelope-decline-reroute.json, envelope-with-approver.json, envelope-reminder-expire.json. Plus matching conformance fixtures exercising full lifecycle. FIXTURE-ONLY work — no new schema surface. Critical for lock-in: locked patterns prevent divergent re-inventions across vendors building on WOS.
+
+   **Acceptance:** 5 envelope fixtures + matching conformance fixtures land in fixtures/. Depends on #20 typed events and #30 task-lifecycle for the decline fixture.
+
+- **#61 — Separation-of-duties conformance fixture batch** `[5/2/3]=15` · `fs-ekr5` · P3
+   links Content-Attestation Envelope — spec authoring `fs-m8ic`
+
+   Two to three fixtures under fixtures/conformance/ exercising AccessControl seam separation-of-duties rejection: (1) agent attempts to review own output → rejected; (2) delegated human attempts to re-review as original author → rejected; (3) separation-of-duties bypass with authority override → recorded as provenance with OverrideRecord. Pairs with #23 OverrideRecord schema landing. AccessControl seam shape already in wos-core traits; missing: conformance contract that reference processors MUST reject these attempts.
+
+   **Acceptance:** 3 SoD conformance fixtures land; reference processor rejects (1) and (2), records (3) as OverrideRecord. GATE: #23 OverrideRecord schema landing.
+
+**Recently closed (kept for traceability; archive when stale):**
+
+- ~~**#58 — Envelope (instance-level) status extension**~~ `fs-rw2g` · CLOSED — Extend WorkflowProcess.status with first-class declined / voided / expired discriminators.
+
+<!-- tk:end -->
 ### Release + benchmarking — ready, lower priority **[Stream: D]**
 
-- **§4.4 Release trains Tasks 4-5** `[5 / 4 / 3]` (**15**) — Changesets tooling + GitHub Actions release workflow. Plan: [2026-04-16](thoughts/plans/2026-04-16-wos-release-trains.md). Tasks 1-3 landed session 8.
-- **§5.5 `wos-bench` synthesis benchmark** `[6 / 5 / 3]` (**18**) — Claim A falsification harness; pairs with [ADR 0065](thoughts/adr/0065-wos-authoring-stack-mirrors-formspec.md) Q6 / synth split. Plan: [2026-04-16](thoughts/plans/2026-04-16-wos-synthesis-benchmark.md). Spike open questions: [2026-04-20](thoughts/research/2026-04-20-wos-synth-v0-spike-findings.md#open-questions) (Q-V0-1..4 need **live** Anthropic runs; update that doc with numbers). **Sub-deliverables:** scaffold `crates/wos-bench` (`wos-synth-core` + `wos-synth-mock`, optional Anthropic flag); problem statements + `benchmarks/runs/<date>-<model>/results.json`; rubric library + CLI; `BENCHMARK.md` leaderboard + methodology; scheduled/manual CI with secrets; pick **inline `ConformanceFixture` wrapper vs** upstream `wos_conformance::smoke_test_document`-style API (spike Option B — reduces duplication with synth-core / spike).
+<!-- tk:start epic=fs-id17 -->
+<!-- GENERATED by scripts/generate-todo.mjs from tk epic fs-id17 — edit tickets via tk, not this section -->
 
+Stream: D. Release-train tooling + wos-bench synthesis benchmark. Lower priority.
+
+- **§5.5 — wos-bench synthesis benchmark (Claim A falsification harness)** `[6/5/3]=18` · `fs-6qj8` · P3
+
+   Pairs with ADR 0065 Q6 / synth split. Plan: thoughts/plans/2026-04-16-wos-synthesis-benchmark.md. Spike open questions: thoughts/research/2026-04-20-wos-synth-v0-spike-findings.md#open-questions (Q-V0-1..4 need LIVE Anthropic runs). Sub-deliverables: scaffold crates/wos-bench (wos-synth-core + wos-synth-mock, optional Anthropic flag); problem statements + benchmarks/runs/<date>-<model>/results.json; rubric library + CLI; BENCHMARK.md leaderboard + methodology; scheduled/manual CI with secrets; inline ConformanceFixture wrapper vs wos_conformance::smoke_test_document-style API (spike Option B).
+
+   **Acceptance:** crates/wos-bench scaffolded; CI runs benchmarks; BENCHMARK.md leaderboard; Q-V0-1..4 closed with live numbers.
+
+- **§4.4 — Release trains Tasks 4-5 (Changesets + GitHub Actions)** `[5/4/3]=15` · `fs-qzir` · P3
+
+   Plan: thoughts/plans/2026-04-16-wos-release-trains.md. Tasks 1-3 landed session 8. Remaining: Changesets tooling + GitHub Actions release workflow for the wos-* crate cluster.
+
+   **Acceptance:** Changesets configured across wos-* crates; GitHub Actions release workflow tags + publishes coordinated versions.
+
+<!-- tk:end -->
 ### ADR 0065 — authoring stack closure (MCP / synth / spike) **[Stream: D]**
 
 **Anchors:** [ADR 0065](thoughts/adr/0065-wos-authoring-stack-mirrors-formspec.md) · MCP plan [2026-04-17](thoughts/plans/2026-04-17-wos-mcp-crate.md) · Synth plan [2026-04-16](thoughts/plans/2026-04-16-wos-synth-crate.md) · Spike retrospective [2026-04-20](thoughts/research/2026-04-20-wos-synth-v0-spike-findings.md). Plan markdown checkboxes in those files are **stale vs `main`** in places; this subsection is the working backlog until checkboxes are rebased.
 
-**Production seam (ADR D-3; MCP plan completion §2)** `[7 / 5 / 4]` (**28**)
+<!-- tk:start epic=fs-d59u -->
+<!-- GENERATED by scripts/generate-todo.mjs from tk epic fs-d59u — edit tickets via tk, not this section -->
 
-- [ ] **#65a `ToolContext` via shared MCP handlers** — Implement a **second** `ToolContext` implementation whose lint/conformance behavior matches `wos_mcp` tools (`wos_lint`, `wos_run_conformance` code paths), not a parallel copy in `wos-synth-core` only. Needs a small adapter design: synth loop holds **document JSON**; `wos_mcp::dispatch` expects **`ProjectRegistry` + `project_id`**. Options: implicit scratch project per session, or a thin `wos_mcp` (or adjacent) type that implements `ToolContext` by delegating to existing `tools::*` internals.
-- [ ] **#65b `wos-synth-cli` default wiring** — Switch CLI from **`DirectToolContext`** to the MCP-aligned **`ToolContext`** from #65a (ADR: production wiring injects MCP-backed dispatch, not stopgap-only).
-- [ ] **#65c Optional purity pass** — Once #65a/#65b are real, consider **removing direct `wos-lint` / `wos-conformance` dependencies from `wos-synth-core`** so the loop crate stays provider- and lint-free at the crate edge (ADR D-2/D-3 intent). Only if no in-crate stopgap remains required for tests.
+**P2 — standard:**
 
-**MCP transport + docs** `[5 / 4 / 3]` (**15**)
+- **ADR-0065 — Production seam (ToolContext via shared MCP handlers + CLI wiring + purity)** `[7/5/4]=28` · `fs-uqpw` · P2
 
-- [ ] **#65e SDK migration follow-up** — `wos-mcp` `Cargo.toml` **TODO**: revisit `rust-mcp-sdk` with `default-features = false` + minimal features vs current hand-rolled stdio (~transport swap).
-- [ ] **#65f Real MCP client validation** — Exercise `wos-mcp` binary under a **real** MCP host (e.g. Claude Desktop). Plan addendum + spike both state: **v0 spike never touched MCP**; silence is not proof of dual-entry correctness.
+   Score [7/5/4]=28 (cluster #65a/b/c). ADR D-3 production seam + MCP plan completion §2. #65a: Implement SECOND ToolContext impl whose lint/conformance behavior matches wos_mcp tools (wos_lint, wos_run_conformance), not a parallel copy in wos-synth-core only. Needs adapter design: synth loop holds document JSON; wos_mcp::dispatch expects ProjectRegistry + project_id. Options: implicit scratch project per session, or thin wos_mcp type implementing ToolContext by delegating to existing tools::* internals. #65b: Switch wos-synth-cli from DirectToolContext to MCP-aligned ToolContext from #65a. #65c: Once #65a/b real, consider removing direct wos-lint / wos-conformance deps from wos-synth-core so loop crate stays provider-and-lint-free at crate edge.
 
-**Spike + synth quality (research 2026-04-20; synth plan addendum)** `[6 / 4 / 4]` (**24**)
+   **Acceptance:** Second ToolContext impl uses MCP handlers; wos-synth-cli wires MCP-backed dispatch as default; wos-synth-core loses direct wos-lint/wos-conformance deps if no in-crate stopgap remains.
 
-- [ ] **#65g Q-V0-1..4 live closure** — Run synth against Anthropic on the PO fixture; record iteration counts, dominant first-pass diagnostics, whether conformance repair fires, schema vs FEL vs governance fix mix. Update [spike findings](thoughts/research/2026-04-20-wos-synth-v0-spike-findings.md) in place.
-- [ ] **#65h Structured repair prompt** — `wos-synth-core`: feed **`rule_id`**, **`suggested_fix`**, **`spec_ref`** (structured block or JSON), not only `LintDiagnostic` `Display` text (cheapest prompt-engineering win per spike).
-- [ ] **#65i Conformance document gate API** — Prefer upstream **`wos_conformance::smoke_test_document` (or equivalent)** over ad-hoc inline `ConformanceFixture` wrappers duplicated across spike, synth-core, and future bench (spike Option B).
-- [ ] **#65j `wos-lint` parse error typing** — Replace **substring** matching for missing `$wos*` marker with a typed discriminant or stable error code (spike finding).
-- [ ] **`wos-synth-spike` disposition** — Per spike doc: crate-level **`[spike — do not extend]`** on entrypoint, **port** inline-fixture + `classify_lint_error` coverage to `wos-synth-core` tests, **delete** spike on 2–3 month horizon. Snapshot row already notes keep-with-deletion.
+- **ADR-0065 — Spike + synth quality closure (#65g/h/i/j)** `[6/4/4]=24` · `fs-xkui` · P2
 
-**Synth provider + schema hygiene** `[5 / 3 / 3]` (**15**)
+   #65g: Run synth against Anthropic on PO fixture; record iteration counts, dominant first-pass diagnostics, conformance repair firing, schema/FEL/governance fix mix. Update thoughts/research/2026-04-20-wos-synth-v0-spike-findings.md in place. #65h: Feed rule_id, suggested_fix, spec_ref (structured block or JSON), not only LintDiagnostic Display text (cheapest prompt-engineering win per spike). #65i: Prefer upstream wos_conformance::smoke_test_document over ad-hoc inline ConformanceFixture wrappers (spike Option B). #65j: Replace substring matching for missing $wos* marker with typed discriminant or stable error code.
 
-- [ ] **#65k Anthropic prompt caching** — `AnthropicPrompter` currently folds `CacheAnchor` data into the system prompt verbatim until the Anthropic SDK exposes cache control; wire real cache blocks when available (`crates/wos-synth-anthropic/src/lib.rs`).
-- [ ] **#65l `SynthTrace` schema drift test** — `schemas/synth/wos-synth-trace.schema.json` exists; add/verify **schemars (or equivalent) round-trip validation test** per synth plan Task 7 if not already present.
-- [ ] **#65m `ToolContext` trait discipline** — Synth plan addendum: **do not extend** `ToolContext` with speculative methods until a second implementation (#65a) proves the shape.
+   **Acceptance:** Q-V0-1..4 closed with live numbers; structured repair prompt wired; upstream conformance document gate API adopted; wos-lint parse error typed.
 
-**Authoring plan vs shipped crate** `[4 / 3 / 2]` (**8**)
+**P3 — sustaining:**
 
-- [ ] **#65n Reconcile `2026-04-17-wos-authoring-crate.md`** — Plan file layout (`handlers/*.rs`, long checkbox ladder) **diverges** from shipped `raw.rs` / `command.rs` / `project.rs`. Either update the plan to match reality or extract a **gap list** (MCP tools ↔ `WosProject` helpers) so obsolete steps are not re-executed.
+- **ADR-0065 — MCP transport + real-client validation (#65e/f)** `[5/4/3]=15` · `fs-d79a` · P3
 
-**Hygiene**
+   #65e: wos-mcp Cargo.toml TODO — revisit rust-mcp-sdk with default-features=false + minimal features vs current hand-rolled stdio (transport swap). #65f: Exercise wos-mcp binary under REAL MCP host (e.g. Claude Desktop). Plan addendum + spike both state: v0 spike never touched MCP; silence is not proof of dual-entry correctness.
 
-- [ ] **#65o Plan checkbox refresh** — After #65n, mark landed MCP/synth/authoring plan `- [x]` steps against `main` (or add banner: *checkboxes frozen — see `work-spec/TODO.md` ADR 0065 section*).
+   **Acceptance:** rust-mcp-sdk transport swap decision recorded; wos-mcp binary validated against Claude Desktop (or alternative real MCP host).
 
+- **ADR-0065 — Synth provider + schema hygiene (#65k/l/m + Anthropic cache marker)** `[5/3/3]=15` · `fs-s5wm` · P3
+   links WOS-SYNTH-ANTHROPIC-CACHE-001 — Wire CacheAnchor to… `fs-6n85`
+
+   #65k: AnthropicPrompter folds CacheAnchor data into system prompt verbatim until Anthropic SDK exposes cache control; wire real cache blocks when available (crates/wos-synth-anthropic/src/lib.rs). PAIRS with monorepo audit row WOS-SYNTH-ANTHROPIC-CACHE-001 — this entry is the delivery item. #65l: schemas/synth/wos-synth-trace.schema.json exists; add/verify schemars round-trip validation test per synth plan Task 7. #65m: Do NOT extend ToolContext with speculative methods until second impl (W_65_SEAM) proves the shape.
+
+   **Acceptance:** CacheAnchor travels through Anthropic cache-control headers (not inline); SynthTrace schema drift test passes round-trip; ToolContext discipline preserved (no speculative methods).
+
+**P4 — backlog / trigger-gated:**
+
+- **ADR-0065 — Authoring plan reconciliation + checkbox refresh (#65n/o)** `[4/3/2]=8` · `fs-k63f` · P4
+   blocked-by ADR-0065 — Production seam (ToolContext via shared MCP… `fs-uqpw`
+
+   #65n: Reconcile thoughts/plans/2026-04-17-wos-authoring-crate.md. Plan file layout (handlers/*.rs, long checkbox ladder) DIVERGES from shipped raw.rs / command.rs / project.rs. Either update plan to match reality OR extract gap list (MCP tools ↔ WosProject helpers) so obsolete steps aren't re-executed. #65o: After #65n, mark landed MCP/synth/authoring plan [x] steps against main (or add banner: 'checkboxes frozen — see work-spec/TODO.md ADR 0065 section').
+
+   **Acceptance:** Plan file reflects shipped reality OR carries explicit gap list; landed checkboxes marked or freeze banner posted.
+
+<!-- tk:end -->
 ### Behavioral / governance (1.0 scope under minutes-not-days)
 
 Per repo-root [`VISION.md`](../VISION.md) operating frame: no "defer to 1.1" bucket on greenfield. These all land at 1.0 unless explicit architectural prerequisite unresolved. **[Stream assignments: B/C — see subsections below.]**
 
 **Stack contracts (ADRs 0066, 0067):** **[Stream: B/C]**
 
-- **Identity attestation shape — generalize beyond signatures** `[5 / 3 / 4]` (**20**) — WOS-T4 runtime emission now has `SignatureAffirmation.identityBinding` as the first concrete shape. This item generalizes that shape for reuse across non-signature evidence (reviewer-policy assurance refs, amendment-authority attestations, review-gate credentials). **Coordinates with parent PLN-0381, PLN-0380, PLN-0384. Gate: T4 runtime emission landed; parent stack ADR ratification pending.**
-- **ADR 0066 implementation** and **ADR 0067 implementation** are tracked as Do-next items #3–#5 above — not duplicated here. The Actor authorization shape is Do-next #3.
+<!-- tk:start epic=fs-wq1f -->
+<!-- GENERATED by scripts/generate-todo.mjs from tk epic fs-wq1f — edit tickets via tk, not this section -->
+
+Stream: B/C. 1.0 scope under minutes-not-days. Per repo-root VISION.md operating frame: no 'defer to 1.1' bucket on greenfield.
+
+- **Identity attestation shape — generalize beyond signatures** `[5/3/4]=20` · `fs-bmvg` · P3
+   links Stack ADR (TBD) — identity attestation (PLN-0381) `fs-cfi1`, Trellis #3 — Identity attestation bundle shape (use… `fs-cz3j`
+
+   WOS-T4 runtime emission now has SignatureAffirmation.identityBinding as first concrete shape. This item GENERALIZES that shape for reuse across non-signature evidence (reviewer-policy assurance refs, amendment-authority attestations, review-gate credentials). Coordinates with parent PLN-0381, PLN-0380, PLN-0384.
+
+   **Acceptance:**
+     - Generalized IdentityAttestation shape lands in wos-core; reused by reviewer-policy assurance refs, amendment-authority attestations, review-gate credentials.
+     - GATE: T4 runtime emission landed (✓); parent stack ADR ratification (SAI_IDATT = fs-cfi1).
+
+<!-- tk:end -->
 
 **Maximalist cluster follow-ups (post-Session 14–16):** **[Stream: B]**
 
 The 2026-04-28 cluster ratification landed 14 new `ProvenanceKind` variants + closed enums + DNS-tenant cap + five-mode amendment taxonomy + `InstanceStatus::Stalled` declaratively at HEAD. The items below close the **declarable-but-not-fired** gap at the runtime/adapter boundary — same shape as #2 (capability-precondition emission) and #67 ConfigurationWarning. Without them, schemas + lint ratchet ahead of the runtime and the next conformance-suite expansion will surface a wave of "declared-but-never-emitted" gaps.
 
-- [ ] **#70 `DurableRuntime::AppendFailure` typed enum** `[6 / 4 / 5]` (**30**) — Replace `Result<_, RuntimeError>` failure surface in the `DurableRuntime` adapter contract with a closed `AppendFailure { Retryable, BudgetExhausted, Terminal }` enum carrying typed reason codes. Today every adapter (in-memory + Restate + future) uses `RuntimeError` (not `String` as prior TODO claimed) but classification of commit-attempt outcomes still string-matches into branching logic. **Why:** [ADR 0070](../thoughts/adr/0070-stack-failure-and-compensation.md) D-4.3 pins commit-failure taxonomy as substrate-classified, retry-budget-aware, with `Stalled` as the terminal lifecycle state. **Not started:** no `AppendFailure` enum exists; `CommitFailureKind` enum exists in provenance layer only (`record.rs:96` — `NetworkTimeout|SubstrateDown|HashConflict|Other`); no `CommitAttemptFailure` conformance fixture. Composes with **#72**. **Gate: ADR 0070 Accepted 2026-05-06.**
-- [ ] **#71 `ReinstatementPolicy` schema $def + lint K-A-010** `[6 / 3 / 4]` (**24**) — Add `ReinstatementPolicy` $def to `wos-workflow.schema.json` Workflow Governance embedded block (parallel to `amendmentPolicy` / `rescissionPolicy`); register lint K-A-010 enforcing the closed five-mode amendment taxonomy. **Not started — `Reinstated` provenance kind exists (`kind.rs:350`) but no governance policy shape or lint.** **Gate: ADR 0066 Accepted 2026-05-06.**
-- [ ] **#72 Reference-runtime emission wiring for cluster variants** `[6 / 6 / 4]` (**24**) — Wire the 14 cluster `ProvenanceKind` variants into runtime emission sites. Constructors exist; schema guards exist; audit-tier dispatch exhaustive. **Zero runtime emission sites — blocked by #70.** **Gate: ADR 0070 Accepted 2026-05-06; #70 not started.**
-- [x] **#73 `ConfigurationWarning` runtime emission** `[6 / 4 / 5]` (**30**) — **Landed 2026-05-07.** Wired 3 of 4 spec MUST sites in `companion.rs`: (a) `drift-monitor.policyRef` — ConfigurationWarning emitted when policyRef unresolvable; (b) `notification-template.key` — ConfigurationWarning emitted on `NoticeTemplateResolution::NotFound`; (c) `notification-template.render` — ConfigurationWarning emitted when fallback rendering used (template is None). Site (d) `governance.continuationPolicyRef` requires a new resolution mechanism (ADR 0067 governance policy lookup) — noted in this item and deferred to ADR 0067 runtime work (#5). 137/137 runtime tests pass. ConfigurationWarning now has 3 live emission paths.
-- [x] **#74 `ProvenanceKind` enum ↔ schema `recordKind` parity** `[6 / 4 / 4]` (**24**) — **Landed 2026-05-07.** Created canonical registry at `schemas/record-kind-registry.json` (131 entries, 1:1 with Rust enum). Expanded kernel `FactsTierRecord.recordKind` enum from 57 to 131 entries. Expanded API `FactsRecordKind` from 57 to 131 entries. Both schemas and the registry now byte-align with the full ProvenanceKind Rust enum. 110 variants are flat Facts-tier (no schema-validated shape); 21 carry if/then guards or $def overlays. Forward parity CI gate unchanged; the registry is now the single source of truth.
+<!-- tk:start epic=fs-7a5t -->
+<!-- GENERATED by scripts/generate-todo.mjs from tk epic fs-7a5t — edit tickets via tk, not this section -->
+
+- **#70 — DurableRuntime::AppendFailure typed enum** `[6/4/5]=30` · `fs-vmsx` · P2
+   links ADR 0070 — cross-layer failure and compensation `fs-qzg6`, Trellis #6 — ADR 0070 execution: CommitAttemptFailure… `fs-uj32`
+
+   Replace Result<_, RuntimeError> failure surface in DurableRuntime adapter contract with closed AppendFailure { Retryable, BudgetExhausted, Terminal } enum carrying typed reason codes. Today every adapter (in-memory + Restate + future) uses RuntimeError (not String) but classification of commit-attempt outcomes still string-matches into branching logic. WHY: ADR 0070 D-4.3 pins commit-failure taxonomy as substrate-classified, retry-budget-aware, with Stalled as terminal lifecycle state. NOT STARTED: no AppendFailure enum exists; CommitFailureKind enum exists in provenance layer only (record.rs:96). Composes with #72. ADR 0070 Accepted 2026-05-06.
+
+   **Acceptance:** AppendFailure enum lands in wos-runtime DurableRuntime trait; adapters classify retryable vs budget-exhausted vs terminal; CommitAttemptFailure conformance fixture proves the three classes.
+
+- **#71 — ReinstatementPolicy schema $def + lint K-A-010** `[6/3/4]=24` · `fs-g5nu` · P2
+   links ADR 0066 — amendment and supersession (cross-stack rollup) `fs-lwsj`
+
+   Add ReinstatementPolicy $def to wos-workflow.schema.json Workflow Governance embedded block (parallel to amendmentPolicy / rescissionPolicy); register lint K-A-010 enforcing closed five-mode amendment taxonomy. NOT STARTED — Reinstated provenance kind exists (kind.rs:350) but no governance policy shape or lint. ADR 0066 Accepted 2026-05-06.
+
+   **Acceptance:** ReinstatementPolicy $def in wos-workflow.schema.json; K-A-010 lint enforces five-mode amendment taxonomy; conformance fixture proves reinstatement policy gates Reinstated emission.
+
+- **#72 — Reference-runtime emission wiring for cluster variants** `[6/6/4]=24` · `fs-zjpl` · P2
+   blocked-by DurableRuntime::AppendFailure typed enum `fs-vmsx` · links ADR 0070 — cross-layer failure and compensation `fs-qzg6`
+
+   Wire the 14 cluster ProvenanceKind variants into runtime emission sites. Constructors exist; schema guards exist; audit-tier dispatch exhaustive. ZERO runtime emission sites — blocked by #70. ADR 0070 Accepted 2026-05-06; #70 not started.
+
+   **Acceptance:** All 14 cluster ProvenanceKind variants fire from runtime emission sites; conformance fixture per variant. GATE: W_70 (fs-vmsx once filed) must land first.
+
+**Recently closed (kept for traceability; archive when stale):**
+
+- ~~**#73 — ConfigurationWarning runtime emission**~~ `fs-eqb7` · CLOSED — Wired 3 of 4 spec MUST sites in companion.rs: (a) drift-monitor.policyRef — ConfigurationWarning emitted when policyRef unresolvable; (b) notification-template.key — emitted on…
+- ~~**#74 — ProvenanceKind enum ↔ schema recordKind parity**~~ `fs-wvt7` · CLOSED — Created canonical registry at schemas/record-kind-registry.json (131 entries, 1:1 with Rust enum).
+
+<!-- tk:end -->
 
 **Prior behavioral items:** **[Stream: C]**
 
-- **#35 Equity Config enforcement semantics** `[7 / 5 / 4]` (**28**) — processor obligations for `RemediationTrigger.action`; wire `DisparityMethod` to runtime. Prerequisite: #36 resolved (stack vision: FEL + restricted-domain profile).
-- **#36 Equity RemediationTrigger expression language** `[6 / 4 / 4]` (**24**) — FEL + restricted-domain profile per [`VISION.md`](../VISION.md) / WOS §X; no windowing escape hatch. Implementation.
-- **#26a `AccessControl.canRead` enforcement semantics** `[6 / 3 / 4]` (**24**) — normative processor behavior on `canRead → false`: redact / null / raise / skip. Prerequisite to #26b.
-- **#26b `caseFieldPolicy` schema** `[6 / 6 / 4]` (**24**) — per-field read/write scopes by actor role.
-- **#43 Assurance × impact-level composition** `[6 / 5 / 4]` (**24**) — **Landed 2026-05-07.** Minimum Assurance floor per impact level (rights-impacting ≥ `high`; safety-impacting ≥ `high`; operational ≥ `standard`) per stack vision. Normative home for the signature-class ↔ assurance-level binding (ESIGN=L1, eIDAS-advanced=L3, QES=L4+QSCD).
-- **#24b + #25 joint design** `[#24b 7/6/4 · #25 6/7/6]` — Reasoning tier rule-firing trace + Catala-style defeasibility. Vision model: `workflow-governance` with `(sourceAuthority, priority)` lexicographic. After ADR.
-- **#38 G-064 Assertion Library resolution lint** `[5 / 3 / 3]` (**15**) — implementation of the lint designed in session 8.
-- **#40 Task SLA runtime implementation** — beyond the session-8 authoring surface; wire §10.3 runtime obligations. **§4.7:** the spec home for envelope reminders + expirations once runtime fires `slaDefinitions` / `warningThresholds` / `breachPolicy`.
-- **Bulk Operations spec** (relocated from Future specs) — admin-portal-driven; parallel case instantiation + bulk state transitions.
-- **#28 Claim-check artifact references** `[4 / 4 / 5]` (**20**) — typed `ExternalArtifactRef { uri, contentHash, hashAlgorithm, mediaType }`.
-- **#30 WS-HumanTask lifecycle completion** `[5 / 5 / 2]` (**10**) — task-level `Suspended`, distinct `Cancelled`, explicit `Return` with rework counter. **§4.7:** task-level decline / return is half of signer-decline semantics; pairs with #58 envelope-status for instance-level decline / void / expire.
-- **#27 Cancellation regions** `[4 / 6 / 3]` (**12**) — YAWL-style named regions distinct from `cancellationPolicy` join policy.
-- **#29b Milestone reactive transition firing (GSM-style)** `[6 / 5 / 2]` (**12**) — ships after #29a (landed session 4).
-- **#3 Policy-based migration routing** `[5 / 6 / 2]` (**10**) — `migrationPolicy: grandfather | migrateAll | migrateByState | expression`. Tenant-scope sub-question finalizes with `DurableRuntime` tenant contract. **§4.7:** tenant-scope sub-question blocks multi-tenant envelope deployments (Open Q7 refers).
-- **#75 DCR runtime evaluator** `[6 / 5 / 4]` (**24**) — Runtime evaluation of DCR constraint zones (Advanced §4). Schema + provenance record kinds + instance-schema DCR state exist; the actual condition/response/include/exclude/milestone relation evaluation algorithm needs a Rust runtime path. Maps to Feature Matrix 1.6.
-- **#76 SMT verification integration** `[5 / 6 / 3]` (**15**) — Advanced §8 specifies the verifiable constraint subset (decidable fragment, verification interface). At minimum a conformance fixture proving the interface claim; external SMT solver integration. Maps to Feature Matrix 5.4.
-- **#77 Canary deployment schema formalization** `[4 / 3 / 3]` (**12**) — `deploymentSequence` property in drift-monitor spec prose needs schema $def in Advanced block. Shadow mode already has schema; canary phase (canaryPercentage, canaryDuration) is prose-only. Maps to Feature Matrix 5.22.
-- **#78 Counterfactual tier emission** `[6 / 4 / 5]` (**30**) — Add `ProvenanceAuditTier::Counterfactual` variant + dedicated `ProvenanceKind` variant(s). Wire Layer 1 injection path so runtime can stamp `audit_layer = "counterfactual"`. Current: `AuditLayer::Counterfactual` exists for parsing but no runtime emission. Maps to Feature Matrix 8.3. Related to #24b but distinct (reasoning trace vs counterfactual tier).
+<!-- tk:start epic=fs-79nz -->
+<!-- GENERATED by scripts/generate-todo.mjs from tk epic fs-79nz — edit tickets via tk, not this section -->
 
+Stream: C. Per-feature 1.0 work surface: equity, access control, joint design, lint, SLA, claim-check, lifecycle, regions, milestones, migration, DCR, SMT, canary, counterfactual, multi-instance.
+
+**P2 — standard:**
+
+- **#78 — Counterfactual tier emission** `[6/4/5]=30` · `fs-jg0f` · P2
+
+   Add ProvenanceAuditTier::Counterfactual variant + dedicated ProvenanceKind variant(s). Wire Layer 1 injection path so runtime can stamp audit_layer='counterfactual'. CURRENT: AuditLayer::Counterfactual exists for parsing but no runtime emission. Maps to Feature Matrix 8.3. RELATED to #24b but distinct (reasoning trace vs counterfactual tier).
+
+   **Acceptance:** ProvenanceAuditTier::Counterfactual variant lands; runtime emits with audit_layer='counterfactual'; conformance fixture; Feature Matrix 8.3 row green.
+
+- **#32 — Multi-Instance Iteration (promoted from Deferred 2026-05-07)** `[6/7/5]=30` · `fs-zawy` · P2
+
+   Score [6/7/5]=30 (was Deferred 6/7/5; trigger met — promoted to active Backlog No-gate table 2026-05-07). Spec + runtime work for multi-instance iteration semantics.
+
+   **Acceptance:** Multi-instance iteration spec lands; runtime implements iteration semantics; conformance fixtures per iteration pattern.
+
+- **#35 — Equity Config enforcement semantics (processor obligations)** `[7/5/4]=28` · `fs-3bs4` · P2
+   blocked-by Equity RemediationTrigger expression language (FEL… `fs-ww51`
+
+   Processor obligations for RemediationTrigger.action; wire DisparityMethod to runtime. PREREQUISITE: #36 resolved (stack vision: FEL + restricted-domain profile).
+
+   **Acceptance:** Processor enforces RemediationTrigger.action per spec; DisparityMethod wired to runtime; conformance fixture per trigger action.
+
+- **#24b + #25 — Reasoning tier rule-firing trace + Catala-style defeasibility** `[7/6/4]` · `fs-paz1` · P2
+
+   Score: #24b [7/6/4]=28; #25 [6/7/6]=36 (cluster total ~64). Vision model: workflow-governance with (sourceAuthority, priority) lexicographic. After ADR.
+
+   **Acceptance:** Reasoning trace shape + Catala-style defeasibility lands per ADR; conformance fixture proves rule-firing ordering. GATE: ADR (to be authored).
+
+- **#75 — DCR runtime evaluator** `[6/5/4]=24` · `fs-1b2p` · P2
+
+   Runtime evaluation of DCR constraint zones (Advanced §4). Schema + provenance record kinds + instance-schema DCR state exist; actual condition/response/include/exclude/milestone relation evaluation algorithm needs Rust runtime path. Maps to Feature Matrix 1.6.
+
+   **Acceptance:** DCR runtime evaluator lands in wos-runtime; conformance fixture per relation kind; Feature Matrix 1.6 row green.
+
+- **#26a — AccessControl.canRead enforcement semantics** `[6/3/4]=24` · `fs-l2w3` · P2
+
+   Normative processor behavior on canRead → false: redact / null / raise / skip. Prerequisite to #26b.
+
+   **Acceptance:** Spec defines canRead→false processor behavior (closed enum); conformance fixture per mode.
+
+- **#26b — caseFieldPolicy schema (per-field read/write scopes)** `[6/6/4]=24` · `fs-mci3` · P2
+   blocked-by AccessControl.canRead enforcement semantics `fs-l2w3`
+
+   Per-field read/write scopes by actor role.
+
+   **Acceptance:** caseFieldPolicy $def lands in schema; per-field scoping enforced; conformance fixture proves cross-role read/write rejection. GATE: #26a (fs-l2w3) must land first.
+
+- **#36 — Equity RemediationTrigger expression language (FEL restricted-domain profile)** `[6/4/4]=24` · `fs-ww51` · P2
+
+   FEL + restricted-domain profile per VISION §X (no windowing escape hatch). Implementation. Gates #35.
+
+   **Acceptance:** FEL restricted-domain profile spec'd; fel-core implementation; #35 unblocked. CROSS-REPO: fel-core work.
+
+**P3 — sustaining:**
+
+- **#28 — Claim-check artifact references** `[4/4/5]=20` · `fs-fpjz` · P3
+
+   Typed ExternalArtifactRef { uri, contentHash, hashAlgorithm, mediaType }.
+
+   **Acceptance:** ExternalArtifactRef $def lands; lint enforces content-hash binding; conformance fixture proves hash-verified reference.
+
+- **#38 — G-064 Assertion Library resolution lint** `[5/3/3]=15` · `fs-4cse` · P3
+   links WS-033 — Pipeline validation endpoint (Gov §5.4) `fs-zhuj`
+
+   Implementation of the lint designed in session 8. Gates wos-server WS-033 (Pipeline validation endpoint).
+
+   **Acceptance:** G-064 lint rule lands; references resolve at same site pipelines read them; conformance fixture proves unresolved-reference rejection.
+
+- **#76 — SMT verification integration (Advanced §8)** `[5/6/3]=15` · `fs-mpx5` · P3
+
+   Advanced §8 specifies verifiable constraint subset (decidable fragment, verification interface). At minimum: conformance fixture proving interface claim; external SMT solver integration. Maps to Feature Matrix 5.4.
+
+   **Acceptance:** Conformance fixture proves Advanced §8 interface claim; external SMT solver integration; Feature Matrix 5.4 row green.
+
+- **#30 — WS-HumanTask lifecycle completion (Suspended / Cancelled / Return)** `[5/5/2]=10` · `fs-2iy1` · P3
+
+   Task-level Suspended, distinct Cancelled, explicit Return with rework counter. §4.7: task-level decline / return is half of signer-decline semantics; pairs with #58 envelope-status for instance-level decline / void / expire (#58 landed 2026-05-07).
+
+   **Acceptance:** Task lifecycle extends with Suspended / Cancelled / Return states; rework counter increments on Return; conformance per state.
+
+- **#40 — Task SLA runtime implementation** · `fs-96nd` · P3
+   blocked-by ADR 0067 implementation (WOS center: clocks runtime +… `fs-lq08`
+
+   Score per §10.3. Beyond session-8 authoring surface; wire §10.3 runtime obligations. §4.7: spec home for envelope reminders + expirations once runtime fires slaDefinitions / warningThresholds / breachPolicy. Gated on ADR 0067 D-2.1 migration (SlaDefinition→ProcessingSLA).
+
+   **Acceptance:**
+     - Runtime fires slaDefinitions; warningThresholds emit warnings; breachPolicy enforces escalationChain; conformance fixture covers SLA lifecycle.
+     - GATE: ADR 0067 D-2.1 migration (W_ADR0067).
+
+- **Bulk Operations spec (admin-portal-driven)** · `fs-vt0y` · P3
+   links WS-098 — DocuSign 100% admin surface (HTTP scaffold)… `fs-88yq`
+
+   Admin-portal-driven; parallel case instantiation + bulk state transitions. Relocated from Future specs.
+
+   **Acceptance:** Bulk Operations spec authored; schema + conformance fixtures land. Composes with wos-server WS-098 (DocuSign admin surface trigger).
+
+**P4 — backlog / trigger-gated:**
+
+- **#27 — Cancellation regions (YAWL-style)** `[4/6/3]=12` · `fs-2los` · P4
+
+   YAWL-style named regions distinct from cancellationPolicy join policy.
+
+   **Acceptance:** Named cancellation regions $def lands; runtime cancels region as unit; conformance fixture proves region-scoped cancellation.
+
+- **#77 — Canary deployment schema formalization** `[4/3/3]=12` · `fs-8rpq` · P4
+
+   deploymentSequence property in drift-monitor spec prose needs schema $def in Advanced block. Shadow mode already has schema; canary phase (canaryPercentage, canaryDuration) is prose-only. Maps to Feature Matrix 5.22.
+
+   **Acceptance:** deploymentSequence + canary $defs land in Advanced block; conformance fixture; Feature Matrix 5.22 row green.
+
+- **#29b — Milestone reactive transition firing (GSM-style)** `[6/5/2]=12` · `fs-s6oa` · P4
+
+   Ships after #29a (landed session 4). GSM-style reactive milestone firing.
+
+   **Acceptance:** Milestones fire reactively on condition match; conformance fixture proves multi-milestone choreography.
+
+- **#3 (migration) — Policy-based migration routing** `[5/6/2]=10` · `fs-imxz` · P4
+   links ADR 0071 — cross-layer migration and versioning `fs-i0lz`, Trellis #7 — ADR 0071 execution: CaseOpenPin and migration… `fs-n9qv`
+
+   migrationPolicy: grandfather | migrateAll | migrateByState | expression. Tenant-scope sub-question finalizes with DurableRuntime tenant contract. §4.7: tenant-scope sub-question blocks multi-tenant envelope deployments (Open Q7 refers).
+
+   **Acceptance:** migrationPolicy closed enum lands; tenant-scope contract resolves; conformance per policy mode. Cross-stack: SAI_71 (fs-i0lz) — ADR 0071 cross-layer migration.
+
+**Recently closed (kept for traceability; archive when stale):**
+
+- ~~**#43 — Assurance × impact-level composition**~~ `fs-dx9v` · CLOSED — Minimum Assurance floor per impact level (rights-impacting ≥ high; safety-impacting ≥ high; operational ≥ standard) per stack vision.
+
+<!-- tk:end -->
 ### Untracked debt (monorepo audit 2026-05-08)
 
-- **WOS-SYNTH-ANTHROPIC-CACHE-001 — Wire CacheAnchor to Anthropic cache control API** `[5 / 3 / 4]` (20) **[Stream: D]**
-  - `crates/wos-synth-anthropic/src/lib.rs:9-10` folds `CacheAnchor` data into the system prompt verbatim because the SDK doesn't expose cache control. Once the Anthropic SDK adds cache-control blocks, wire real cache breaks — reduces token spend and improves prompt coherence on long synth sessions.
-  - Pairs with existing #65k (`AnthropicPrompter` cache wiring) in this file — this item tracks the *source-level marker* discovered by the audit; #65k is the delivery item.
-  - **Done when:** `CacheAnchor` data travels through Anthropic cache-control headers, not inline in system prompt; synth benchmarks show reduced token usage.
+<!-- tk:start epic=fs-dyhj -->
+<!-- GENERATED by scripts/generate-todo.mjs from tk epic fs-dyhj — edit tickets via tk, not this section -->
 
-- **WOS-MCP-TYPED-ACCESSOR-001 — Replace untyped AIIntegrationDocument accessor in wos-mcp** `[4 / 2 / 3]` (12) **[Stream: D]**
-  - `crates/wos-mcp/src/tools/document.rs:169` still counts agents via raw `extensions["x-wos-ai"]["agents"]`. `wos_core::model::ai::AIIntegrationDocument` exists, but the MCP tool has not been moved to a typed accessor/deserialization path for the current merged-envelope workspace model. The untyped path is a latent source of drift if the document shape changes.
-  - **Done when:** wos-mcp uses a typed accessor that returns `AIIntegrationDocument` (or the typed embedded `agents` block) without raw extension walking; `cargo nextest run -p wos-mcp` green.
+**P3 — sustaining:**
 
+- **WOS-SYNTH-ANTHROPIC-CACHE-001 — Wire CacheAnchor to Anthropic cache control API** `[5/3/4]=20` · `fs-6n85` · P3
+   links ADR-0065 — Synth provider + schema hygiene (#65k/l/m +… `fs-s5wm`
+
+   crates/wos-synth-anthropic/src/lib.rs:9-10 folds CacheAnchor data into system prompt verbatim because SDK doesn't expose cache control. Once Anthropic SDK adds cache-control blocks, wire real cache breaks — reduces token spend, improves prompt coherence on long synth sessions. PAIRS with #65k (delivery item at W_65_PROVIDER = fs-s5wm) — this is the source-level marker discovered by audit.
+
+   **Acceptance:** CacheAnchor data travels through Anthropic cache-control headers, not inline in system prompt; synth benchmarks show reduced token usage.
+
+**P4 — backlog / trigger-gated:**
+
+- **WOS-MCP-TYPED-ACCESSOR-001 — Replace untyped AIIntegrationDocument accessor in wos-mcp** `[4/2/3]=12` · `fs-07x9` · P4
+
+   crates/wos-mcp/src/tools/document.rs:169 still counts agents via raw extensions['x-wos-ai']['agents']. wos_core::model::ai::AIIntegrationDocument exists, but MCP tool has not been moved to typed accessor/deserialization path for current merged-envelope workspace model. Untyped path is latent source of drift if document shape changes.
+
+   **Acceptance:** wos-mcp uses typed accessor returning AIIntegrationDocument (or typed embedded agents block) without raw extension walking; cargo nextest run -p wos-mcp green.
+
+<!-- tk:end -->
 ### Hygiene / refactors **[Stream: C]**
 
 Sequenced for module-bottleneck relief, not delayed by it.
 
-- **#22 Crate split along tier boundaries** `[5 / 3 / 3]` (**15**) — `wos-core` → `wos-{kernel,governance,ai,advanced}`; `wos-runtime/runtime.rs` (still a large single module; ≈3.7k lines) split along action-kind dispatch; CI fence. (**#22a** provenance module split + `ProvenanceAuditTier` landed 2026-04-21 — see [COMPLETED.md](COMPLETED.md).)
+<!-- tk:start epic=fs-ig53 -->
+<!-- GENERATED by scripts/generate-todo.mjs from tk epic fs-ig53 — edit tickets via tk, not this section -->
 
-### Reference server
+- **#22 — Crate split along tier boundaries (wos-core, wos-runtime)** `[5/3/3]=15` · `fs-0voe` · P3
 
-Work items, architecture, and adapter sequencing → [`crates/wos-server/TODO.md`](crates/wos-server/TODO.md) and [`crates/wos-server/VISION.md`](crates/wos-server/VISION.md).
+   wos-core → wos-{kernel,governance,ai,advanced}; wos-runtime/runtime.rs (still large single module ≈3.7k lines) split along action-kind dispatch; CI fence. #22a (provenance module split + ProvenanceAuditTier) landed 2026-04-21.
 
-**Active:** ADR 0082 wholesale greenfield landing bundle — plan at [`thoughts/plans/2026-05-06-adr0082-wholesale-greenfield-landing.md`](thoughts/plans/2026-05-06-adr0082-wholesale-greenfield-landing.md). Verified 2026-05-07 against the codebase by a 10-agent swarm.
+   **Acceptance:** wos-core split into 4 tier-aligned crates; wos-runtime/runtime.rs split along action-kind dispatch; CI fence enforces dep direction.
 
-- **WS-1 server (Phase A foundations + Phase B per-domain ratification):**
-  - ✅ **A1+A2** typify+utoipa wiring (`with_derive("utoipa::ToSchema")` + `NonZeroU64`→`u64` post-process; commit `2309797`).
-  - ✅ **A4** `IdempotencyStore` trait + `InMemoryIdempotencyStore` + `require_idempotency_key` middleware (8 MiB cap, `WOS-1422` problem; commit `1f91322`).
-  - ✅ **A5** `emit-openapi` binary writes `target/openapi-emitted.json` — 8 442 lines, 645 KB, 35 paths + 52 schemas registered.
-  - ✅ **B1 Auth** — 6 spec-aligned routes (`/auth/{login,logout,refresh,scope-swap,introspect,scope}`); legacy `/auth/me` + `/auth/has-role` retired; 33 auth tests green.
-  - ✅ **B2 Audit + Dashboard + Applicant** — 12 routes; `audit_service.rs` new; legacy `/dashboard/metrics`, `/dashboard/stage-metrics`, `/applicant/{id}/appeal` retired.
-  - ✅ **B3 Correspondence + Reports + PLN-0402 legacy `/render` deletion** — 7 corr + 6 reports handlers (commit `8e503bf`); `notifications.rs` slimmed to 3 routes; **PLN-0402 server-side blocker satisfied**. PUBLIC-ROUTES registry sync landed 2026-05-09; portal contract-removal follow-through remains under WS-3.
-  - ◐ **B4 Bundle + Governance** — handlers exist, but non-canonical bundle/governance helper routes are explicitly internal until the ADR 0082 schema paths land.
-  - ✅ **B5 Task** — 5 task routes are public-contract routes and covered by the route registry.
-  - ◐ **B6 Instance** — core instance/task/provenance routes are public-contract routes; explain, provenance verify/export, transitions, drain, and hold-release helpers remain internal until their contract paths land.
-  - ◐ **WS-1 C cleanup** — `domain/*` purge confirmed (the directory is gone); Gate 3 route coverage passed 2026-05-09 with hardened chained-method parser coverage, 47 public routes / 49 internal routes, and 48 registry entries. Verification-gate hardening (Gates 4–7) still owed.
-- **WS-2 portal:**
-  - ✅ **WS-2 A** typify-driven type regen (25 generated files under `src/types/wos/`, including `api-appeal.ts` and `api-signature.ts` as of 2026-05-09); `ports/types.ts` shrank 421→190 lines (commits `c437ab0` + `7e394e8`).
-  - ✅ **WS-2 B** 13 IPort interfaces + HTTP adapter (`NotImplementedError` stubs preserved) + fixture adapter reshape (`mutations: CaseStateMutation[]`); 0 tsc errors; 60/62 vitest pass (2 flaky `AuditViewer` waitFor races).
-  - ✅ **WS-2 C** component sweep (commit `00ea21f`) — 41 component files, 33 `safeCall` boundaries, fixture conformance test in place. 4 legacy type imports remain in components (`WOSKernelDocument`, `FieldDefinition`, signature-profile types, `WorkflowProcess`); fold judgment into WS-3.
-- **WS-3 cross-stack train (partial):** Route registry + Gate 3 coverage and portal generated-type freshness landed 2026-05-09. Remaining: PLN-0401 canonical utoipa-emit cutover, PLN-0402 portal contract-removal follow-through, PLN-0405 closure, parent submodule pointer bump, and final TODO bookkeeping across stack.
-- **WS-4 feature-matrix E2E coverage train (planned):** Full plan at [`../thoughts/plans/2026-05-09-wos-feature-matrix-e2e-test-plan.md`](../thoughts/plans/2026-05-09-wos-feature-matrix-e2e-test-plan.md). Target shape: Playwright `request` API runner plus portal checks where the user story needs UI proof; real `wos-server` binary, SQLite test DB, local runtime, persona auth, and a machine-readable coverage manifest for all 130 `WOS-FEATURE-MATRIX.md` rows. First deliverables: persona JWT harness (do not rely on current single-supervisor mock auth), `wos-feature-coverage.manifest.json`, route-registry/OpenAPI smoke, schema validation helper, and S1/S2 applicant + caseworker stories through public API.
-
+<!-- tk:end -->
 ### Runtime Companion parity **[Stream: B]**
 
-- **#66 Runtime §15 processor parity** `[7 / 5 / 5]` (**35**) — umbrella; decomposed into #66a–#66g below. Full context at [`crates/wos-server/TODO.md`](crates/wos-server/TODO.md) (WS-011, WS-074, WS-075).
-  - [ ] **#66a Typed submit rejections + replay**
-  - [ ] **#66b Agent submitters**
-  - [ ] **#66c `ledgerEvidenceMissing` placement**
-  - [ ] **#66d `contractHook` / Governance S5 post-pass**
-  - [ ] **#66e Abandonment + skip semantics** — `ProvenanceKind::TaskSkipped` is the only variant with zero live emission.
-  - [ ] **#66f Amendment task linkage** — coordinates with ADR 0066.
-  - [ ] **#66g Conformance fixtures** — auth reject, agent reject, ledger missing, hook fail, skip vs fail.
+<!-- tk:start epic=fs-yzcd -->
+<!-- GENERATED by scripts/generate-todo.mjs from tk epic fs-yzcd — edit tickets via tk, not this section -->
 
+Stream: B. wos-runtime parity vs published §15 MUSTs; PARITY drift; HTTP §15 fixtures. Decomposed into #66a-#66g sub-items. Full context: workspec-server/crates/wos-server/TODO.md (WS-011, WS-074, WS-075).
+
+- **#66 — Runtime §15 processor parity (umbrella)** `[7/5/5]=35` · `fs-9pjk` · P1
+   links WS-075 — Cross-stack §15 conformance fixtures (HTTP) `fs-fd0q`
+
+   Umbrella for Runtime Companion §15 / Phase 11 parity work. Decomposed into #66a-#66g children. Full context at workspec-server/crates/wos-server/TODO.md (WS-011, WS-074, WS-075). Cross-stack: wos-server WS-072 (ADR 0066 prove-out), WS-073 (ADR 0067 prove-out), WS-075 (§15 conformance fixtures HTTP).
+
+   **Acceptance:** All 7 #66a-#66g children closed; wos-runtime parity vs published MUSTs verified; conformance fixtures green.
+
+<!-- tk:end -->
 ### Verifiability **[Stream: C]**
 
-- **K-DET-001 determination-snapshot conformance + fixture migration** `[6 / 3 / 5]` (**30**) — conformance gate for Facts-tier snapshots on determination transitions.
-- **Seeded LoadBearing-promotion batch + rule-coverage CI** `[6 / 4 / 4]` (**24**) — 1 LoadBearing rule today; land promotion set + CI gate together.
-- **#52 Simulation trace format** `[4 / 3 / 2]` (**8**)
+<!-- tk:start epic=fs-r06l -->
+<!-- GENERATED by scripts/generate-todo.mjs from tk epic fs-r06l — edit tickets via tk, not this section -->
 
+Stream: C. Determination snapshots, LoadBearing promotion, simulation trace.
+
+**P2 — standard:**
+
+- **K-DET-001 — Determination-snapshot conformance + fixture migration** `[6/3/5]=30` · `fs-91cr` · P2
+
+   Conformance gate for Facts-tier snapshots on determination transitions.
+
+   **Acceptance:** K-DET-001 conformance gate active; existing fixtures migrated to new shape; CI ratchet.
+
+- **Seeded LoadBearing-promotion batch + rule-coverage CI** `[6/4/4]=24` · `fs-6w7l` · P2
+
+   1 LoadBearing rule today; land promotion set + CI gate together.
+
+   **Acceptance:** LoadBearing-promotion batch lands; rule-coverage CI gate active; LINT-MATRIX.md updated.
+
+**P3 — sustaining:**
+
+- **WOS-B2 — Kernel-Basic profile LoadBearing declaration + lint-matrix wire** · `fs-n1kj` · P3
+
+   Backlog. Kernel-Basic profile LoadBearing declaration + lint-matrix wire. No prerequisites.
+
+   **Acceptance:** Kernel-Basic profile declared LoadBearing; LINT-MATRIX.md updated; rule-coverage CI gate active.
+
+**P4 — backlog / trigger-gated:**
+
+- **#52 — Simulation trace format** `[4/3/2]=8` · `fs-nn0n` · P4
+
+   Simulation trace format spec.
+
+   **Acceptance:** Simulation trace format spec'd; reference implementation in wos-runtime; one fixture.
+
+<!-- tk:end -->
 ### ADR 0064 residual **[Stream: D]** {#adr-0064-residual}
 
-- [ ] **Structured `LintDiagnostic` output contract** `[6 / 5 / 4]` (**24**) — machine-stable JSON per rule; prerequisite for LLM repair loops.
-- [ ] **Trace-emitting conformance** `[6 / 5 / 5]` (**30**) — teachable traces/deltas, not only pass/fail.
-- [ ] **COMP-001 companion drift lint** `[4 / 2 / 4]` (**8**) — trigger-gated.
+<!-- tk:start epic=fs-y32q -->
+<!-- GENERATED by scripts/generate-todo.mjs from tk epic fs-y32q — edit tickets via tk, not this section -->
 
-ADR 0064 agent-adapter implementations — six crates declared, one shipped (`wos-agent-stub`), five are skeletons with only routing guards and `unimplemented!()` invoke bodies. `WosRuntime` has an `AgentInvokerRegistry` builder/lookup surface, but implementation is still trigger-gated on the orchestrator seam (Do-next #2): without a `DurableRuntime` method, `AgentRuntime` trait, or transition dispatch path that calls `AgentInvoker::invoke()`, wiring the adapters now would create dead code.
+Stream: D. ADR 0064 agent-adapter implementations + structured lint diagnostics + trace-emitting conformance + companion drift lint. Six adapter crates declared, one shipped (wos-agent-stub); five are skeletons with unimplemented!() invoke bodies trigger-gated on orchestrator seam (Do-next #2).
 
-**When the orchestrator seam lands**, implement in priority order:
+**P1 — high-leverage:**
 
-- [ ] **#A1 `wos-agent-anthropic` invoke body** `[7 / 4 / 5]` (**35**) — Wire the Anthropic SDK (`anthropic-sdk` 0.1.x currently used by `wos-synth-anthropic`) into the `AnthropicInvoker::invoke()` body. Reuse the streaming-collection pattern from `wos-synth-anthropic`. Needs `tokio` + `reqwest` deps added. **Gate: Do-next #2 AgentRuntime trait / DurableRuntime method landed.**
-- [ ] **#A2 `wos-agent-http` invoke body** `[6 / 5 / 5]` (**30**) — Generic HTTP/OpenAPI caller; parse `AgentSpec.http` config for endpoint + method + headers; POST `AgentContext` JSON, parse `AgentResponse` from response body. Needs `reqwest` + `tokio` deps. **Gate: Do-next #2.**
-- [ ] **#A3 `wos-agent-mcp` invoke body** `[6 / 6 / 5]` (**30**) — MCP client; connect to MCP server per `AgentSpec.mcp` config, marshal `AgentContext` into a tool call, collect tool result. Needs `rust-mcp-sdk` (same transport decision as #65e). **Gate: Do-next #2.**
-- [ ] **#A4 `wos-agent-a2a` invoke body** `[6 / 7 / 5]` (**30**) — A2A multi-agent orchestrator client; delegate to sub-agent per `AgentSpec.a2a` config. Needs A2A protocol client library. **Gate: Do-next #2 + A2A SDK maturity.**
-- [ ] **#A5 `wos-agent-claude-sdk` invoke body** `[5 / 5 / 5]` (**25**) — Claude Agent SDK client; delegate to Claude agent per `AgentSpec.claudeAgentSdk` config. **Gate: Do-next #2 + SDK maturity.**
+- **#A1 — wos-agent-anthropic invoke body** `[7/4/5]=35` · `fs-ixl3` · P1
+   blocked-by AI-runtime capability-precondition emission wiring `fs-w9dv`
 
-**Note:** `wos-agent-stub` is fully implemented and production-ready (used by conformance fixtures). Each skeleton currently has one test proving the `InvokerMismatch` routing guard.
+   Wire Anthropic SDK (anthropic-sdk 0.1.x currently used by wos-synth-anthropic) into AnthropicInvoker::invoke() body. Reuse streaming-collection pattern from wos-synth-anthropic. Needs tokio + reqwest deps. GATE: Do-next #2 (W_AI_PRECOND = fs-w9dv) AgentRuntime trait / DurableRuntime method landed.
 
+   **Acceptance:** AnthropicInvoker::invoke() body wired; tests prove Anthropic streaming integration; conformance fixture per agent type.
+
+**P2 — standard:**
+
+- **ADR 0064 residual — Trace-emitting conformance (teachable traces/deltas)** `[6/5/5]=30` · `fs-563r` · P2
+
+   Teachable traces/deltas, not only pass/fail.
+
+   **Acceptance:** Conformance harness emits structured traces (passing AND failing paths); deltas visible; LLM consumes them for repair.
+
+- **#A4 — wos-agent-a2a invoke body** `[6/7/5]=30` · `fs-njef` · P2
+   blocked-by AI-runtime capability-precondition emission wiring `fs-w9dv`
+
+   A2A multi-agent orchestrator client; delegate to sub-agent per AgentSpec.a2a config. Needs A2A protocol client library. GATE: Do-next #2 + A2A SDK maturity.
+
+   **Acceptance:** A2A agent adapter invoke body wired; multi-agent orchestrator delegation works; conformance fixture.
+
+- **#A3 — wos-agent-mcp invoke body** `[6/6/5]=30` · `fs-pizw` · P2
+   blocked-by AI-runtime capability-precondition emission wiring `fs-w9dv`, ADR-0065 — MCP transport + real-client validation (#65e/f) `fs-d79a`
+
+   MCP client; connect to MCP server per AgentSpec.mcp config; marshal AgentContext into tool call; collect tool result. Needs rust-mcp-sdk (same transport decision as #65e at W_65_MCP = fs-d79a). GATE: Do-next #2.
+
+   **Acceptance:** MCP agent adapter invoke body wired; tests prove tool-call marshalling; conformance fixture.
+
+- **#A2 — wos-agent-http invoke body** `[6/5/5]=30` · `fs-wzps` · P2
+   blocked-by AI-runtime capability-precondition emission wiring `fs-w9dv`
+
+   Generic HTTP/OpenAPI caller; parse AgentSpec.http config for endpoint + method + headers; POST AgentContext JSON; parse AgentResponse from response body. Needs reqwest + tokio deps. GATE: Do-next #2 (W_AI_PRECOND).
+
+   **Acceptance:** HTTP agent adapter invoke body wired; tests prove POST + parse; conformance fixture.
+
+- **#A5 — wos-agent-claude-sdk invoke body** `[5/5/5]=25` · `fs-mhhv` · P2
+   blocked-by AI-runtime capability-precondition emission wiring `fs-w9dv`
+
+   Claude Agent SDK client; delegate to Claude agent per AgentSpec.claudeAgentSdk config. GATE: Do-next #2 + SDK maturity.
+
+   **Acceptance:** Claude Agent SDK adapter invoke body wired; conformance fixture.
+
+- **ADR 0064 residual — Structured LintDiagnostic output contract** `[6/5/4]=24` · `fs-p2pd` · P2
+
+   Machine-stable JSON per rule; prerequisite for LLM repair loops.
+
+   **Acceptance:** LintDiagnostic JSON shape spec'd + schema; wos-lint emits structured JSON; LLM repair loop consumes it.
+
+**P4 — backlog / trigger-gated:**
+
+- **ADR 0064 residual — COMP-001 companion drift lint** `[4/2/4]=8` · `fs-pqwm` · P4
+
+   Companion drift lint — trigger-gated.
+
+   **Acceptance:** COMP-001 lint detects companion drift; trigger: companion spec changes break consumers in field.
+
+<!-- tk:end -->
 ### Regulatory (1.0) **[Stream: C]**
 
-- **#50 EU AI Act alignment** `[7 / 5 / 4]` (**28**) — Art. 13-14 alignment spec.
-- **#53 OMB M-24-10 compliance** `[6 / 4 / 3]` (**18**) — process-documentation-shaped; overlaps Assurance + impact-level plumbing.
+<!-- tk:start epic=fs-cmzh -->
+<!-- GENERATED by scripts/generate-todo.mjs from tk epic fs-cmzh — edit tickets via tk, not this section -->
 
-- [ ] **§5.6 Repositioning/demo artifacts — gap closure vs handoff** `[4 / 2 / 2]` (**8**) — Verify README.md leads with two-claim framing (not "AI-native" tagline) per handoff §5.6, and author a demo narrative (requirement → workflow trace) once `wos-synth` is stable. Partially satisfied by `POSITIONING.md`; gap closure never explicitly verified. Gate: none (lightweight docs).
+Stream: C. EU AI Act + OMB M-24-10 + repositioning docs.
 
-### Interoperability + speculative (trigger-gated)
+**P2 — standard:**
 
-- **SCXML interoperability** `[3 / 6 / 2]` (**6**) — bidirectional WOS ↔ SCXML mapping. Trigger: ecosystem demand.
-- **#51 Statutory deadline chains** `[4 / 7 / 5]` (**20**) — must compose with #31 business calendars + typed kernel events (`TransitionEvent`, #20). Trigger: first production deployment exposes concrete need.
+- **#50 — EU AI Act alignment (Art. 13-14)** `[7/5/4]=28` · `fs-tjeb` · P2
 
+   Art. 13-14 alignment spec.
+
+   **Acceptance:** EU AI Act Art. 13-14 alignment spec'd; aiOversight embedded block carries disclosure metadata; conformance fixture proves Art. 13 disclosure emission.
+
+**P3 — sustaining:**
+
+- **#53 — OMB M-24-10 compliance** `[6/4/3]=18` · `fs-jfdh` · P3
+
+   Process-documentation-shaped; overlaps Assurance + impact-level plumbing.
+
+   **Acceptance:** OMB M-24-10 compliance spec'd; assurance + impact-level fields carry required process-documentation metadata; conformance fixture.
+
+**P4 — backlog / trigger-gated:**
+
+- **§5.6 — Repositioning/demo artifacts (README + demo narrative)** `[4/2/2]=8` · `fs-k13g` · P4
+
+   Verify README.md leads with two-claim framing (not 'AI-native' tagline) per handoff §5.6; author demo narrative (requirement → workflow trace) once wos-synth is stable. Partially satisfied by POSITIONING.md; gap closure never explicitly verified.
+
+   **Acceptance:** README two-claim framing verified; demo narrative authored once wos-synth stable.
+
+<!-- tk:end -->
 ---
 
+## Trigger-gated
+
+Work that does not start until an explicit external trigger fires (commercial-request, ecosystem demand, production-deployment signal, sibling-repo ratification, vendor SDK maturity). Items here are real and tracked, just not actionable today.
+
+### FEL restricted-domain profile (#35/#36)
+
+Cross-repo dependency on fel-core. Not blocking WOS Stream B/C/D/E/F. Sequence when fel-core restricted-domain profile ships. See [`VISION.md`](../VISION.md) §X for FEL as the only expression language; [PLANNING.md](../PLANNING.md) for fel-core coordination.
+
+### Engine adapters (commercial-request-gated)
+
+WOS's first production runtime target is Restate (selected by WOS-T3). Additional adapters are gated on commercial adopter request or SDK maturity.
+
+<!-- tk:start epic=fs-x2m9 -->
+<!-- GENERATED by scripts/generate-todo.mjs from tk epic fs-x2m9 — edit tickets via tk, not this section -->
+
+- **#49a — Camunda 8 Worker engine adapter [TRIGGER-GATED]** `[5/8/3]=15` · `fs-5gg7` · P4
+
+   BPMN target; broadest external fixture diversity. WOS's first production runtime target is Restate adapter (selected by WOS-T3). Additional adapters trigger-gated on commercial adopter request or SDK maturity.
+
+   **Acceptance:** Camunda 8 Worker adapter implemented; conformance fixtures pass. TRIGGER: commercial adopter request.
+
+- **#49c — AWS Step Functions engine adapter [TRIGGER-GATED]** `[5/8/3]=15` · `fs-86vh` · P4
+
+   Broadest commercial reach; narrowest semantic fit. (#49b Temporal evaluated by WOS-T3 and deferred until Rust workflow API stabilizes.)
+
+   **Acceptance:** Step Functions adapter implemented; conformance fixtures pass (within semantic fit limits). TRIGGER: commercial adopter request.
+
+<!-- tk:end -->
+
+### Interoperability + speculative
+
+<!-- tk:start epic=fs-t0y5 -->
+<!-- GENERATED by scripts/generate-todo.mjs from tk epic fs-t0y5 — edit tickets via tk, not this section -->
+
+Trigger-gated. SCXML interop + statutory deadline chains. Land on ecosystem demand or production deployment trigger.
+
+- **#51 — Statutory deadline chains [TRIGGER-GATED]** `[4/7/5]=20` · `fs-wsf0` · P4
+
+   Must compose with #31 business calendars + typed kernel events (TransitionEvent, #20). Trigger: first production deployment exposes concrete need.
+
+   **Acceptance:** Statutory deadline chain spec composes with §7.1 business calendars + typed kernel events; conformance fixture. TRIGGER: first production deployment exposes concrete need.
+
+- **SCXML interoperability — bidirectional WOS ↔ SCXML mapping [TRIGGER-GATED]** `[3/6/2]=6` · `fs-srpg` · P4
+
+   Bidirectional WOS ↔ SCXML mapping. Trigger: ecosystem demand.
+
+   **Acceptance:** Bidirectional mapping spec'd; reference implementation; conformance fixture. TRIGGER: ecosystem demand surfaces.
+
+<!-- tk:end -->
+
+### Deferred (captured, awaiting trigger)
+
+Captured but not active; re-score when the trigger fires.
+
+<!-- tk:start epic=fs-8sv0 -->
+<!-- GENERATED by scripts/generate-todo.mjs from tk epic fs-8sv0 — edit tickets via tk, not this section -->
+
+- **#9 — JSON-LD Projection/Import Surface [DEFERRED]** `[5/5/3]=15` · `fs-66du` · P4
+
+   Trigger: ontology spec drafts begin OR shipped PROV-O pulls @context into authoring.
+
+   **Acceptance:** JSON-LD projection/import surface lands when triggered.
+
+- **#33 — Inclusive-OR / Event-Choice / Boundary Events [DEFERRED]** `[3/5/2]=6` · `fs-20sy` · P4
+
+   Trigger: authoring frustration with workarounds (externally observable signal).
+
+   **Acceptance:** Inclusive-OR / event-choice / boundary events land when trigger observed.
+
+- **Ontology field identity — semantic-field-identity protocol [DEFERRED]** · `fs-2jgz` · P4
+
+   ontology-spec.md does not exist. ADR 0076 (product-tier consolidation) settles the lane: semantic projection/import belongs to wos-ontology-alignment sidecar, not Kernel substrate. Move to active only once a draft exists.
+
+   **Acceptance:** Prerequisite design lands: (1) semantic-field-identity protocol; (2) cross-document alignment; (3) executable projection/import conformance. Then promote to active.
+
+- **FEEL-to-FEL migration guide [PARKED — trigger: first DMN shop asks]** · `fs-4ef3` · P4
+
+   On-demand documentation. Write when the first DMN shop asks; not speculative work.
+
+   **Acceptance:** Concrete external request from a DMN-shop user lands. Then author guide.
+
+- **JSON Patch for fine-grained provenance [PARKED]** · `fs-v532` · P4
+
+   Speculative — finer-grained provenance shape using JSON Patch operations. No active demand; recorded for transparency. Append-only provenance with full-record events remains current model.
+
+   **Acceptance:** Concrete use case where current provenance granularity fails to capture a needed audit signal.
+
+<!-- tk:end -->
+
+### Future specs (not yet authored)
+
+Federation Profile and Bulk Operations relocated — see "Moved to Trellis" and Backlog / behavioral items respectively.
+
+<!-- tk:start epic=fs-4uys -->
+<!-- GENERATED by scripts/generate-todo.mjs from tk epic fs-4uys — edit tickets via tk, not this section -->
+
+- **Learning Profile — retraining governance [TRIGGER-GATED]** · `fs-q0e6` · P4
+
+   Future spec. Retraining governance. Trigger: long-lived AI agents need retraining policy.
+
+   **Acceptance:** Learning Profile spec authored when long-lived AI agents need retraining policy.
+
+<!-- tk:end -->
 ## Moved to Trellis (scope-out)
 
 Per [`VISION.md`](../VISION.md) §XI, Trellis is the integrity layer and owns these concerns. WOS emits records via `custodyHook`; Trellis anchors them. Tracked here only to close the loop on items that used to be listed as WOS work.
@@ -508,59 +834,6 @@ Per [`VISION.md`](../VISION.md) §XI, Trellis is the integrity layer and owns th
 - **Checkpoint seal protocol** — Trellis.
 - **Proof-of-inclusion + transparency-log submission tooling** — Trellis.
 - **Certificate-of-completion export bundle format** — Trellis export-bundle primitive.
-
----
-
-## Blocked / needs decision
-
-Items that can't move without a verdict or an external trigger.
-
-**Resolved 2026-05-06:** ADRs 0066–0071 (cluster) + 0092 (standalone) ratified. 8 items now unblocked.
-
-**Resolved 2026-05-07:** §4.5 structural merges (1 PR) — assertion-library and due-process-config absorbed into workflow-governance.md; verification-report already absorbed per ADR 0076 D-4.
-
-### FEL restricted-domain profile (#35/#36)
-
-Cross-repo dependency on fel-core. Not blocking WOS Stream A/B/C. Sequence when fel-core restricted-domain profile ships. See [`VISION.md`](../VISION.md) §X for FEL as the only expression language. See [PLANNING.md](../PLANNING.md) for fel-core coordination.
-
-### Engine adapters — trigger-gated (commercial request)
-
-WOS's first production runtime target is now the Restate adapter selected by WOS-T3. Additional adapters are trigger-gated on commercial adopter request or SDK maturity.
-
-- **#49a Camunda 8 Worker** `[5 / 8 / 3]` — BPMN target; broadest external fixture diversity.
-- **#49c AWS Step Functions** `[5 / 8 / 3]` — broadest commercial reach; narrowest semantic fit.
-
-(#49b Temporal was evaluated by WOS-T3 and deferred until the Rust workflow API stabilizes.)
-
-### Ontology field identity — design not started
-
-`ontology-spec.md` does not exist. [ADR 0076 (product-tier consolidation)](../thoughts/adr/0076-product-tier-consolidation.md) settles the lane: semantic projection/import belongs to the `wos-ontology-alignment` sidecar, not Kernel substrate. (The earlier "ADR 0082" citation here was a stale draft-number reference; ADR 0082 is now the [Stack Public REST API Contract](../thoughts/adr/0082-stack-public-api-contract-and-schema-discipline.md) and is unrelated to ontology work.) Remaining prerequisite design: semantic-field-identity protocol, cross-document alignment, and executable projection/import conformance. Move to active only once a draft exists.
-
----
-
-## Deferred (with triggers)
-
-Captured but not active; re-score when the trigger fires.
-
-| IDEA # | Item | Imp/Cx/Debt | Trigger |
-|---|---|---|---|
-| #1 | Agent Behavioral Attestations | 2/7/1 | SLSA-style AI-agent attestation ecosystem matures. |
-| #4 | Tripartite Object Model | 2/9/3 | Activity-definition reuse across workflows becomes a real pattern. |
-| #6 | Typed Patch Operations | 1/8/0 | Authoring tool ships structural edits. |
-| #7 | OCEL 2.0 Object-Centric Case Model | 2/9/5 | Multi-object mutation emerges, or flat→OCEL export shows systematic loss. |
-| #9 | JSON-LD Projection/Import Surface | 5/5/3 | Ontology spec drafts begin OR shipped PROV-O pulls `@context` into authoring. |
-| ~~#32~~ | ~~Multi-Instance Iteration~~ | ~~6/7/5~~ | **Trigger met — promoted to active Backlog (No-gate table) 2026-05-07.** |
-| #33 | Inclusive-OR / Event-Choice / Boundary Events | 3/5/2 | Authoring frustration with workarounds (externally observable signal). |
-
----
-
-## Future specs (trigger-gated)
-
-Federation Profile and Bulk Operations relocated — see "Moved to Trellis" and Backlog / behavioral items respectively.
-
-| Spec | Description | Trigger |
-|---|---|---|
-| Learning Profile | Retraining governance | Long-lived AI agents need retraining policy. |
 
 ---
 
@@ -580,29 +853,8 @@ Decisions locked; do not re-litigate.
 
 ---
 
-## Parked
-
-- Full lifecycle soundness verification (e.g. linear-time logic). Advanced Governance SMT is the path.
-- JSON Patch for fine-grained provenance.
-- FEEL-to-FEL migration guide — on-demand, write when first DMN shop asks.
-
----
-
 ## Open architectural questions
 
-Prior open questions (OQ1, OQ4, #21 Registry composition, #25 Defeasibility, #36 Equity expression, #43 Assurance × impact-level, #9 JSON-LD authoring) are **resolved** per [`VISION.md`](../VISION.md) §X (WOS settled commitments) and linked ADRs.
-
-**Previously listed open Qs, now resolved or reframed:**
-
-1. ~~**§4.5 PR packaging**~~ — **resolved 2026-05-07.** Shipped as 1 PR per sidecar-audit recommendation; see *Blocked / needs decision → Resolved 2026-05-07* row above (assertion-library + due-process-config absorbed into `workflow-governance.md`; verification-report already absorbed per ADR 0076 D-4).
-2. ~~**`custodyHook` evidence path to Trellis**~~ — **not a decision.** Authored append wire is fixed by [ADR-0061](thoughts/adr/0061-custody-hook-trellis-wire-format.md) + WOS-T1 closeout (four-field input, `(caseId, recordId)` idempotency, `CustodyAppendReceipt` → `canonical_event_hash` on provenance). Remaining work is cross-stack **proof**, tracked at parent [`TODO-STACK.md`](../TODO-STACK.md) *Shared cross-seam fixture suite* row — not a WOS-internal architectural decision.
-
-**Stack-wide active uncertainties** (decisions still genuinely open at the platform level — pinned in [`VISION.md`](../VISION.md) §X *Active uncertainties (WOS-scope)* and filed in `tk` as decision tickets):
-
-- **DocuSign parity scope** — long-term posture: full-parity commitment vs envelope-routed signed-content evidence claim only.
-- **Multi-tenant on Restate vs Temporal** — multi-tenant posture on initial-default Restate adapter vs Temporal alternative.
-- **Rendering service for signature artifacts** — unified rendering crate vs reference-only vs host-application responsibility.
-
----
+Active decisions are tracked as P0–P2 tickets in `tk` (`tag:decision`). Three WOS-scope stack-wide uncertainties pinned in [`VISION.md`](../VISION.md) §X *Active uncertainties (WOS-scope)*: **DocuSign parity scope**, **multi-tenant on Restate vs Temporal**, **rendering service for signature artifacts**. Per-ADR open questions live alongside their ADR's execution checklist epic (e.g. ADR 0067 §6 has 3 sub-tickets covering timestamp granularity, post-hoc `elapsed` semantics, and multi-jurisdictional emit shape).
 
 *Closed-out work is archived in [COMPLETED.md](COMPLETED.md). Append there, not here.*
