@@ -234,7 +234,7 @@ ADR-territory and not load-bearing for this audit. The audit's load-bearing clai
   `work-spec/schemas/` to ratify the 11 missing event literals and guards.
 - No inner `recordKind` field removal. That remains Task 5.2's atomic replace-only operation across
   `wos-provenance-log.schema.json`, `wos-workflow.schema.json`, `api/provenance.schema.json`, and
-  the Trellis-side parsers cited in `REFACTOR-TODO.md:411`.
+  the Trellis-side parsers cited in `formspec-stack/thoughts/archive/plans/2026-05-12-integrity-stack-case-boundary-refactor.md:411`.
 - No fixture regeneration. That is Task 5.3.
 
 ## Files inspected (read-only)

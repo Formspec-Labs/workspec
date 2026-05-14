@@ -1,4 +1,4 @@
-> **Superseded.** This consultant memo is historical input only. Do not implement from it directly. The controlling case-management decisions are now in [`case-boundary-decision-report.md`](case-boundary-decision-report.md), with ADR basis in [`../adr/0093-case-is-its-trellis-ledger.md`](../adr/0093-case-is-its-trellis-ledger.md). In particular, the rejected separate `Case` aggregate model is superseded by "case is its ledger" plus dual identity (`case_<ulid>` ledger, `process_<ulid>` runtime).
+> **Superseded.** This consultant memo is historical input only. Do not implement from it directly. The controlling case-management decisions are now in [`../adr/0093-case-is-its-trellis-ledger.md`](../adr/0093-case-is-its-trellis-ledger.md); the decision-basis report is archived at [`../archive/analysis/2026-05-11-case-boundary-decision-report.md`](../archive/analysis/2026-05-11-case-boundary-decision-report.md). In particular, the rejected separate `Case` aggregate model is superseded by "case is its ledger" plus dual identity (`case_<ulid>` ledger, `process_<ulid>` runtime).
 
 You are taking over architecture work in the Formspec-Labs/work-spec repo.
 

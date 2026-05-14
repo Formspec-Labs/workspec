@@ -1,7 +1,7 @@
 {
   "id": "CBR-4C-3-manual-case-created-genesis",
   "rule": "CBR-§4.7",
-  "description": "Manual case-genesis ordering fixture (REFACTOR-TODO 4C.3). The first observable case-boundary event is a direct `wos.kernel.case_created` append, with no workflow-style drain action in the fixture stream. This in-memory store fixture uses an anchor process because wos-conformance drives `append_provenance_for_case`; true no-process pre-ledger runtime semantics are covered by the wos-server direct append integration test.",
+  "description": "Manual case-genesis ordering fixture (archived refactor tracker 4C.3). The first observable case-boundary event is a direct `wos.kernel.case_created` append, with no workflow-style drain action in the fixture stream. This in-memory store fixture uses an anchor process because wos-conformance drives `append_provenance_for_case`; true no-process pre-ledger runtime semantics are covered by the wos-server direct append integration test.",
   "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2dd_manual_genesis",
   "processes": [
     {

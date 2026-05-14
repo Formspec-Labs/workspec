@@ -1,6 +1,6 @@
 # Validation: case-management.md
 
-> **Superseded validation artifact.** This R-file is retained as derivation history. The controlling source of truth for case-management decisions is [`case-boundary-decision-report.md`](case-boundary-decision-report.md); when this file disagrees with that report, the report controls.
+> **Superseded validation artifact.** This R-file is retained as derivation history. Current case-boundary authority is [`../adr/0093-case-is-its-trellis-ledger.md`](../adr/0093-case-is-its-trellis-ledger.md); the decision-basis report is archived at [`../archive/analysis/2026-05-11-case-boundary-decision-report.md`](../archive/analysis/2026-05-11-case-boundary-decision-report.md).
 
 **Model:** zai-coding-plan/glm-5.1 (via opencode)
 **Date:** 2026-05-10

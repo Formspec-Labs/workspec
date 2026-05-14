@@ -1,7 +1,7 @@
 {
   "id": "CBR-4C-5-replay-projection-byte-identity",
   "rule": "CBR-§4.7",
-  "description": "Replay-vs-projection byte-identity fixture (REFACTOR-TODO 4C.5). The action stream and the case-ledger replay view must serialize to identical case-view JSON bytes.",
+  "description": "Replay-vs-projection byte-identity fixture (archived refactor tracker 4C.5). The action stream and the case-ledger replay view must serialize to identical case-view JSON bytes.",
   "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2df_byte_identity",
   "processes": [
     {

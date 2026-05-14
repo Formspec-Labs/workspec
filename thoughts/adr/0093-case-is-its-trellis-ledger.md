@@ -3,7 +3,7 @@
 **Status:** Proposed
 **Date:** 2026-05-11
 **Scope:** WOS — case identity, workflow-process identity, durable case state, governed output emission, provenance event family, direct ledger-append surface, multiple concurrent workflows per case.
-**Decision basis:** [`../analysis/case-boundary-decision-report.md`](../analysis/case-boundary-decision-report.md). This ADR encodes the **Option B** path (dual identity from day one) selected by owner directive after explicit comparison with Option A (defer N:1) and Option C (one workflow per case ever). Acknowledged in §4 as a values-driven structural front-load, not a strictly data-driven optimum.
+**Decision basis:** archived [`../archive/analysis/2026-05-11-case-boundary-decision-report.md`](../archive/analysis/2026-05-11-case-boundary-decision-report.md). This ADR encodes the **Option B** path (dual identity from day one) selected by owner directive after explicit comparison with Option A (defer N:1) and Option C (one workflow per case ever). Acknowledged in §4 as a values-driven structural front-load, not a strictly data-driven optimum.
 
 **Related:**
 [ADR 0070 (failure and compensation)](../../../thoughts/adr/0070-stack-failure-and-compensation.md) D-1 (Trellis is the commit point);
@@ -18,7 +18,7 @@
 [`work-spec/schemas/api/_common.schema.json`](../../schemas/api/_common.schema.json) `WosResourceUrn`;
 [`trellis/specs/trellis-core.md`](../../../trellis/specs/trellis-core.md) §1.2 (case ledger), §10.1, §10.4, §15, §23.2 item 2, §23.4 (`wos.*` namespace), §14.5 (registry migration discipline);
 [`workspec-server/crates/wos-server/VISION.md`](../../../workspec-server/crates/wos-server/VISION.md) `canonical`/`projections` schema split;
-companion: [`../../../thoughts/plans/2026-05-09-signature-wire-convergence-plan.md`](../../../thoughts/plans/2026-05-09-signature-wire-convergence-plan.md) (byte-primitive scope; F-11 / F-12 / F-13 / §17 step 0a alignment pins);
+companion: [`../../../thoughts/archive/plans/2026-05-09-signature-wire-convergence-plan.md`](../../../thoughts/archive/plans/2026-05-09-signature-wire-convergence-plan.md) (byte-primitive scope; F-11 / F-12 / F-13 / §17 step 0a alignment pins);
 synthesis: [`../analysis/case-management-aggregate-synthesis.md`](../analysis/case-management-aggregate-synthesis.md) v2.
 
 ---
@@ -53,7 +53,7 @@ This ADR keeps the case=ledger architectural commitment and **adds** the dual-id
 
 The owner-directive context: pre-release window (per `work-spec/CLAUDE.md` and the platform decision register, *no backwards compatibility / nothing is released*). The migration cost of front-loading the structural identity decision is bounded — no customer data depends on the current single-identity shape.
 
-Three options were considered explicitly in [`../analysis/case-boundary-decision-report.md`](../analysis/case-boundary-decision-report.md) §2.8:
+Three options were considered explicitly in archived [`../archive/analysis/2026-05-11-case-boundary-decision-report.md`](../archive/analysis/2026-05-11-case-boundary-decision-report.md) §2.8:
 
 - **Option A** — 1:1 hard constraint, defer N:1.
 - **Option B** — dual identity (`case_<ulid>` + `process_<ulid>`) from day one. **Chosen.**
@@ -99,7 +99,7 @@ The pre-release context absorbs the fixture-and-test rewrites that follow; no cu
 
 A closed enum under the `wos.*` namespace, registered in the Trellis bound registry per `trellis-core.md` **§23.2 item 2** + **§14** (namespace rules in **§23.4**; registration-precedes-emission discipline in **§14.5** *Registry migration discipline*).
 
-**Event-type naming convention (F-13 — coordinated amendment, not verbatim adoption).** Target form: `wos.<layer>.<record_kind>` snake_case, layer ∈ {`kernel`, `governance`, `ai`, `assurance`}. The convention is set in [plan §11 F-13] ([`../../../thoughts/plans/2026-05-09-signature-wire-convergence-plan.md`](../../../thoughts/plans/2026-05-09-signature-wire-convergence-plan.md)).
+**Event-type naming convention (F-13 — coordinated amendment, not verbatim adoption).** Target form: `wos.<layer>.<record_kind>` snake_case, layer ∈ {`kernel`, `governance`, `ai`, `assurance`}. The convention is set in [plan §11 F-13] ([`../../../thoughts/archive/plans/2026-05-09-signature-wire-convergence-plan.md`](../../../thoughts/archive/plans/2026-05-09-signature-wire-convergence-plan.md)).
 
 Historical sources carried three forms simultaneously: (i) `wos.<layer>.<recordKind>` camelCase in early `custody-hook-encoding.md §1.5` prose; (ii) dotted-camel Trellis constants in `trellis/crates/trellis-verify-wos/src/event_types.rs` (e.g. `"wos.kernel.caseCreated"`); (iii) bare-flat WOS schema literals (`"case.created"`). The Trellis/custody-hook side of F-13 has landed: §1.5 uses `<record_kind>`, Trellis Rust/Python constants and prose use snake_case, and WOS-facing fixture bytes were regenerated. Remaining WOS-owned work rewrites schemas/runtime/server surfaces and drops inner `recordKind` per D26 (see §5.9). Earlier framings that described F-13 as "adopting §1.5 verbatim" misrepresent both the work and the amendment history. The closed layer set {`kernel`, `governance`, `ai`, `assurance`} is preserved — that part is the shipped invariant; the snake_case spelling is the corrective.
 
@@ -327,7 +327,7 @@ This ADR's dual-identity model (§2.2) closes the gap by giving the runtime a se
 
 A 1:1 case-to-workflow constraint (one process per ledger, ever, in the seed deployment), with N:1 deferred to a future ADR.
 
-**Rejected because** the owner directive prioritized front-loading the structural identity decision while the migration surface is empty. The decision report ([`../analysis/case-boundary-decision-report.md`](../analysis/case-boundary-decision-report.md) §3.3) names this honestly: Option A is the smaller-scope play and remains defensible; Option B is the architectural-ambition play that accepts more scope to make the identity decision irreversible-by-default. The defense for B is identity-decisions-have-long-tails plus pre-release-window-is-narrow.
+**Rejected because** the owner directive prioritized front-loading the structural identity decision while the migration surface is empty. The archived decision report ([`../archive/analysis/2026-05-11-case-boundary-decision-report.md`](../archive/analysis/2026-05-11-case-boundary-decision-report.md) §3.3) names this honestly: Option A is the smaller-scope play and remains defensible; Option B is the architectural-ambition play that accepts more scope to make the identity decision irreversible-by-default. The defense for B is identity-decisions-have-long-tails plus pre-release-window-is-narrow.
 
 If future signals favor reverting to A (e.g., the dual-identity design proves shaky under N:1 conformance), the constraint to revert is small: declare 1:1 mandatory in deployment configuration, leave the runtime+API as designed for N:1 but unused. The implementation does not foreclose the option.
 
@@ -516,7 +516,7 @@ Three-way agreement (spec ↔ in-memory runtime ↔ Restate production adapter) 
 ## 7. Revision history
 
 - **2026-05-11 (this revision):** F-13 event-type naming convention corrected from the earlier 5-axis attempt (`{lifecycle, process, content, signature, extension}`) to the existing normative 4-layer form per `custody-hook-encoding.md §1.5`: `wos.<layer>.<record_kind>` snake_case with layer ∈ {`kernel`, `governance`, `ai`, `assurance`}. Triggered by trio-expert validation (wos-expert read `custody-hook-encoding.md §1.5` directly and surfaced the conflict). All event names in §2.3 rewritten per the layer mapping. D26 added: `event_type` is the authoritative dispatch discriminator; the inner `recordKind` field is redundant and replaced rather than retained as a parallel discriminator.
-- **2026-05-11 (this draft):** Option B — dual identity (`case_<ulid>` ledger + `process_<ulid>` workflow runtime). F-13 event-type naming convention applied across §2.3 and dependent sections. Authorization split for direct-append surface formalized in §2.5 (pre-ledger create-permission vs post-ledger relationship). Time and effort assertions removed from the ADR body; sequencing carried by §5.9 (Trellis-registry precedes WOS emission) and by the convergence plan §17 + decision report §4. Replaces the earlier same-day single-identity draft of this same ADR number, which conflated ledger and runtime identity, claimed N:1 without delivering routing infrastructure, and misrepresented `POST /api/v1/instances/{id}/events` as a direct-append surface. Decision context: [`../analysis/case-boundary-decision-report.md`](../analysis/case-boundary-decision-report.md).
+- **2026-05-11 (this draft):** Option B — dual identity (`case_<ulid>` ledger + `process_<ulid>` workflow runtime). F-13 event-type naming convention applied across §2.3 and dependent sections. Authorization split for direct-append surface formalized in §2.5 (pre-ledger create-permission vs post-ledger relationship). Time and effort assertions removed from the ADR body; sequencing carried by §5.9 (Trellis-registry precedes WOS emission) and by the convergence plan §17 + archived decision report §4. Replaces the earlier same-day single-identity draft of this same ADR number, which conflated ledger and runtime identity, claimed N:1 without delivering routing infrastructure, and misrepresented `POST /api/v1/instances/{id}/events` as a direct-append surface. Decision context: [`../archive/analysis/2026-05-11-case-boundary-decision-report.md`](../archive/analysis/2026-05-11-case-boundary-decision-report.md).
 - **2026-05-11 (earlier same-day, superseded):** Single-identity draft. `case_<ulid>` as both ledger and runtime ID; vague N:1 transition story; conflated workflow-event-enqueue surface with direct-ledger-append; bare-flat event-type names (`case.created` etc.).
 - **2026-05-10 (predecessor, superseded):** `0093-case-process-boundary.md` proposed a separate `Case` aggregate above WOS, with its own TypeID prefix (`casefile_`), its own schema, its own materialization engine, and a `target` discriminator on `$defs/OutputBinding`. Superseded by the case=ledger collapse in synthesis v2 (preserved in git history).
 
@@ -524,8 +524,8 @@ Three-way agreement (spec ↔ in-memory runtime ↔ Restate production adapter) 
 
 ## 8. Supporting documents
 
-- **Decision report** (full session arc, lessons learned, values-vs-data acknowledgment): [`../analysis/case-boundary-decision-report.md`](../analysis/case-boundary-decision-report.md).
+- **Decision report** (archived full session arc, lessons learned, values-vs-data acknowledgment): [`../archive/analysis/2026-05-11-case-boundary-decision-report.md`](../archive/analysis/2026-05-11-case-boundary-decision-report.md).
 - **Synthesis** (architectural derivation from user value backward): [`../analysis/case-management-aggregate-synthesis.md`](../analysis/case-management-aggregate-synthesis.md) v2.
-- **Byte-primitive companion** (F-11 / F-12 / F-13 / §17 step 0a alignment pins): [`../../../thoughts/plans/2026-05-09-signature-wire-convergence-plan.md`](../../../thoughts/plans/2026-05-09-signature-wire-convergence-plan.md).
+- **Byte-primitive companion** (F-11 / F-12 / F-13 / §17 step 0a alignment pins): [`../../../thoughts/archive/plans/2026-05-09-signature-wire-convergence-plan.md`](../../../thoughts/archive/plans/2026-05-09-signature-wire-convergence-plan.md).
 - **Validation corpus** (reviewer files R1–R5 from the v1 synthesis pass): `../analysis/case-management-validation-*.md` (5 files; preserved as historical record, not normative going forward).
 - **Original consultant memo** (the input that started the whole exercise; supersession banner pending): `../analysis/case-management.md`.

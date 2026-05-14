@@ -1,7 +1,7 @@
 {
   "id": "CBR-4C-6-crash-recovery-projection",
   "rule": "CBR-§4.7",
-  "description": "Crash-recovery fixture (REFACTOR-TODO 4C.6). A materialized case projection that crashes after two actions must converge to the same bytes as uninterrupted replay after restart.",
+  "description": "Crash-recovery fixture (archived refactor tracker 4C.6). A materialized case projection that crashes after two actions must converge to the same bytes as uninterrupted replay after restart.",
   "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2dg_crash_recovery",
   "processes": [
     {

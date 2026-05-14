@@ -5,7 +5,7 @@
 **Schema ID:** `https://schemas.formspec.io/wos-api/case-view/v1`
 **OpenAPI:** [`wos-public-api.openapi.json`](../../api/wos-public-api.openapi.json) (case/process route surface).
 **ADR anchors:** [ADR 0082](../../../thoughts/adr/0082-stack-public-api-contract-and-schema-discipline.md) D-4 (URN), D-12 (closed taxonomies). [ADR 0093](../../thoughts/adr/0093-case-is-its-trellis-ledger.md) §2.3 (closed event-type enum), §5 (route surface).
-**Gating analysis:** [Case Boundary Decision Report](../../thoughts/analysis/case-boundary-decision-report.md) §4.4 (HTTP surface), §4.5 (schema updates), §4.7 (replay-vs-projection conformance).
+**Gating analysis:** archived [Case Boundary Decision Report](../../thoughts/archive/analysis/2026-05-11-case-boundary-decision-report.md) §4.4 (HTTP surface), §4.5 (schema updates), §4.7 (replay-vs-projection conformance). Current authority is ADR-0093 plus this API spec.
 
 ## Purpose
 

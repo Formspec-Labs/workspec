@@ -1,7 +1,7 @@
 {
   "id": "CBR-4C-4-cross-process-audit",
   "rule": "CBR-§4.7",
-  "description": "Cross-process audit fixture (REFACTOR-TODO 4C.4). Events from two workflow processes bound to one case ledger retain distinct process attribution when the case view is rebuilt.",
+  "description": "Cross-process audit fixture (archived refactor tracker 4C.4). Events from two workflow processes bound to one case ledger retain distinct process attribution when the case view is rebuilt.",
   "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2de_cross_audit",
   "processes": [
     {

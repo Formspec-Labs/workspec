@@ -1,7 +1,7 @@
 {
   "id": "CBR-4C-7-registry-gate-unregistered-note",
   "rule": "CBR-§4.7",
-  "description": "Trellis registry gate fixture (REFACTOR-TODO 4C.7). `wos.kernel.note_updated` is an intentionally unregistered WOS event literal (a forward-looking kind not yet ratified) and must be rejected by registry-aware lint/runtime surfaces. The rejected action stays in the fixture stream as negative input and is intentionally absent from the expected case view.",
+  "description": "Trellis registry gate fixture (archived refactor tracker 4C.7). `wos.kernel.note_updated` is an intentionally unregistered WOS event literal (a forward-looking kind not yet ratified) and must be rejected by registry-aware lint/runtime surfaces. The rejected action stays in the fixture stream as negative input and is intentionally absent from the expected case view.",
   "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2dh_registry_gate",
   "processes": [
     {

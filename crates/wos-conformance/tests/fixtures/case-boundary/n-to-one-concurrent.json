@@ -1,7 +1,7 @@
 {
   "id": "CBR-4C-1-n-to-one-concurrent",
   "rule": "CBR-§4.3",
-  "description": "N:1 case-boundary fixture (CBR §4.3, REFACTOR-TODO 4C.1). Two workflow processes started on one case ledger; each emits provenance events with interleaved timestamps. The case view (provenance_for_case) MUST return all events in (timestamp, encounter-order) order, and processes_for_case MUST list both process_ids.",
+  "description": "N:1 case-boundary fixture (CBR §4.3, archived refactor tracker 4C.1). Two workflow processes started on one case ledger; each emits provenance events with interleaved timestamps. The case view (provenance_for_case) MUST return all events in (timestamp, encounter-order) order, and processes_for_case MUST list both process_ids.",
   "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2db_n_to_one",
   "processes": [
     {

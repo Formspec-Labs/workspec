@@ -1,6 +1,6 @@
 # Case Management Architecture: Aggregate Analysis Report
 
-> **Historical synthesis.** This report is retained as analysis context. The controlling source of truth for case-management decisions is [`case-boundary-decision-report.md`](case-boundary-decision-report.md), not this aggregate report.
+> **Historical synthesis.** This report is retained as analysis context. Current case-boundary authority is [`../adr/0093-case-is-its-trellis-ledger.md`](../adr/0093-case-is-its-trellis-ledger.md); the decision-basis report is archived at [`../archive/analysis/2026-05-11-case-boundary-decision-report.md`](../archive/analysis/2026-05-11-case-boundary-decision-report.md).
 
 **Context:** This report synthesizes the architectural exploration, multi-agent validation, and structural discoveries documented across the `case-management` lifecycle. It extracts the pure architectural analysis from the procedural decisions, providing a comprehensive assessment of the system's boundaries, constraints, and realized structures.
 
@@ -13,7 +13,7 @@
 - `case-management-validation-glm-5.1.md`
 - `case-management-validation-gpt-5-codex.md`
 - `case-management-aggregate-synthesis.md` (v2 Synthesis)
-- `case-boundary-decision-report.md` (Final Assessment)
+- `../archive/analysis/2026-05-11-case-boundary-decision-report.md` (archived final assessment)
 
 ---
 
@@ -81,7 +81,7 @@ This analytical shift proved that the existing primitives were sufficient. Workf
 
 ## 4. Operational Pluralism: The Dual Identity Model
 
-*Ref: `case-boundary-decision-report.md`*
+*Ref: archived `../archive/analysis/2026-05-11-case-boundary-decision-report.md`*
 
 While the data layer conceptually collapsed to a single source of truth, the Codex adversarial review exposed a critical operational reality: **Runtime identity cannot be collapsed.**
 

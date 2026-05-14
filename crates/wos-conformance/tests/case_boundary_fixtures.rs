@@ -1,6 +1,6 @@
 // Rust guideline compliant 2026-05-12
 
-//! Case-boundary conformance fixtures (REFACTOR-TODO Tasks 4C.1-4C.7).
+//! Case-boundary conformance fixtures (archived refactor tracker Tasks 4C.1-4C.7).
 //!
 //! Exercises the N:1 case-to-processes invariant (CBR §4.3) and the post-ledger
 //! direct-append surface (CBR §4.6) by driving the `wos-runtime` `InMemoryStore`
@@ -12,8 +12,9 @@
 //! by `tests/signature_profile.rs`: the case-boundary contract sits beneath
 //! workflow drains and MUST be observable independent of any kernel transition.
 //!
-//! See `work-spec/thoughts/analysis/case-boundary-decision-report.md`
-//! §4.3 (N:1) and §4.6-§4.7 (direct-append surface + conformance).
+//! Historical rationale: `work-spec/thoughts/archive/analysis/2026-05-11-case-boundary-decision-report.md`
+//! §4.3 (N:1) and §4.6-§4.7 (direct-append surface + conformance). Current
+//! authority is ADR-0093 plus the fixture contracts in this module.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};

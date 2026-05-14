@@ -1,12 +1,18 @@
 # Case Boundary Refactor: Final Decision Report
 
+> **Archived 2026-05-14.** This file is historical decision-basis context for
+> ADR-0093. Do not use §4 or §6 as a live implementation checklist. Current
+> authority is ADR-0093 for the case/process boundary decision, plus
+> `work-spec/TODO.md`, `workspec-server/crates/wos-server/TODO.md`, and parent
+> `PLANNING.md` for open implementation work.
+
 **Date:** 2026-05-11
 **Decision:** Option B — dual identity (`case_<ulid>` ledger + `process_<ulid>` runtime) from day one.
-**Status:** Decision made and applied to ADR-0093 + the v2 synthesis (within their respective scopes). Implementation work to follow per ADR-0093 §5.
+**Original status (2026-05-11):** Decision made and applied to ADR-0093 + the v2 synthesis (within their respective scopes). Implementation work to follow per ADR-0093 §5.
 **Working-tree truth note:** statements describing v3.1 corrections as "applied" refer to **working-tree state**, not to commits beyond parent `1d2cd72` / work-spec `56f78473`. Where commit state is mentioned in this report, treat as current evidence in the working tree; the git history is the authoritative record.
 **Scope:** Captures the full session's exploration arc, the chosen path, implementation implications, and the meta-lessons that justify pinning them now while the context is fresh.
-**Authority note:** This report is THE source of truth for all case-management decisions (D-1..D-4 + D-17 closed taxonomy). Its authority is permanent — not contingent on whether ADR-0093, the v2 synthesis, or any downstream artifact has been patched into alignment. Other artifacts derive their position from this report; this report does not derive its position from them. When a downstream artifact disagrees with the decisions recorded here, the downstream artifact is wrong and needs patching, not the report.
-**Companion artifact:** `thoughts/plans/2026-05-09-signature-wire-convergence-plan.md` (Integrity Stack Primitive Extraction Plan, recast 2026-05-11) — byte-primitive scope sibling. Both artifacts are **platform-critical at different architectural scopes**: this report owns the workflow-domain layer (dual identity, case-as-ledger, direct-append surface); the plan owns the byte-primitive layer (`integrity-stack/` extraction, profile-spec rebinding, verifier plugin host). They reconcile at four explicit pins — **plan F-11** (identity profile-payload scope), **F-12** (direct-append shape), **F-13** (event-type naming convention), and **plan §17 step 0a** (sequencing interlock). Both are required for v1; neither supersedes the other. See §6.7 for the full alignment block.
+**Original authority note:** This report was the source of truth for the 2026-05-11 decision session (D-1..D-4 + D-17 closed taxonomy). After the 2026-05-14 archive pass, ADR-0093 is the current decision record and live TODO/PLANNING rows own implementation status.
+**Companion artifact:** `thoughts/archive/plans/2026-05-09-signature-wire-convergence-plan.md` (Integrity Stack Primitive Extraction Plan, recast 2026-05-11) — byte-primitive scope sibling. Both artifacts are **platform-critical at different architectural scopes**: this report owns the workflow-domain layer (dual identity, case-as-ledger, direct-append surface); the plan owns the byte-primitive layer (`integrity-stack/` extraction, profile-spec rebinding, verifier plugin host). They reconcile at four explicit pins — **plan F-11** (identity profile-payload scope), **F-12** (direct-append shape), **F-13** (event-type naming convention), and **plan §17 step 0a** (sequencing interlock). Both are required for v1; neither supersedes the other. See §6.7 for the full alignment block.
 
 ---
 
@@ -427,7 +433,7 @@ The ADR was rewritten from scratch on 2026-05-11 (predecessor file deleted; new 
 6. **§6 Verification:** fifteen claims (V-1 through V-15), including V-15 covering the authorization-branch dispatch.
 7. **§2.3 Event family:** F-13 naming convention (`wos.<layer>.<record_kind>` snake_case, layer ∈ {`kernel`, `governance`, `ai`, `assurance`} per `custody-hook-encoding.md §1.5`) applied throughout, in lockstep with the convergence-plan's F-13 commitment.
 
-Additional v3.2 amendments to ADR-0093 are queued in [`thoughts/analysis/2026-05-11-proof-stack-five-reviewer-aggregate.md`](../../../thoughts/analysis/2026-05-11-proof-stack-five-reviewer-aggregate.md) (the source-of-truth patch driver) — covering F-13 amendment framing, identity-collision resolution, `/inputs` route rename, idempotency three-strand disambiguation, the §5.9 cross-repo amendment list, and V-15 negative-fixture replacement for unnamed static analysis. Future modifications track through that patch driver, through this report's §6, or through the convergence-plan §17 sequencing artifacts.
+Additional v3.2 amendments to ADR-0093 were queued in [`thoughts/analysis/2026-05-11-proof-stack-five-reviewer-aggregate.md`](../../../../thoughts/analysis/2026-05-11-proof-stack-five-reviewer-aggregate.md) — covering F-13 amendment framing, identity-collision resolution, `/inputs` route rename, idempotency three-strand disambiguation, the §5.9 cross-repo amendment list, and V-15 negative-fixture replacement for unnamed static analysis. That patch driver is historical after the 2026-05-14 archive pass; future modifications track through ADR-0093 and live TODO/PLANNING rows.
 
 ### 6.2 Synthesis update
 
@@ -487,7 +493,7 @@ After the implementation ships:
 
 ### 6.7 Cross-stack alignment with the integrity-stack primitive extraction plan
 
-The byte-primitive scope companion is `thoughts/plans/2026-05-09-signature-wire-convergence-plan.md` (the Integrity Stack Primitive Extraction Plan, recast 2026-05-11). It runs in parallel with this report's implementation and reconciles at four explicit pins:
+The byte-primitive scope companion is `thoughts/archive/plans/2026-05-09-signature-wire-convergence-plan.md` (the Integrity Stack Primitive Extraction Plan, recast 2026-05-11). It runs in parallel with this report's implementation and reconciles at four explicit pins:
 
 - **Plan F-11 — Identity placement.** `caseLedgerId` (required) + `processId` (optional, present when workflow-emitted) live in `DecisionEvent` profile payload (`wos-provenance-log.schema.json` per-event-type records), NOT in the byte-primitive `integrity-event` envelope. Honors this report's §4.5 per-event-type record placement; prevents the primitive layer from re-coupling to workflow-domain semantics.
 - **Plan F-12 — Direct-append shape.** Both this report's `POST /api/v1/cases/{case_id}/events` (§4.6) and workflow-emitted events compose `integrity-canonical-json-v1` + `integrity-cose` + `integrity-event` to produce a single `SignedInput`-shaped `DecisionEvent`. No parallel emission paths; admission distinguishes origin via posture rules + presence/absence of `processId`. Pre-extraction caveat: this is the target contract; current code still produces shape-divergent artifacts through two persistence seams (`ProvenanceRecord` for direct append vs `EvaluationResult` plus runtime emission for workflow output), and full `SignedInput` parity gates on the companion plan's steps 5-8.
@@ -532,9 +538,9 @@ These ratifications collapse PLN-0419 (version-bump) and several legacy-handling
 
 ### 6.8 Sister-artifact banner-mark reminder (M-3 follow-up)
 
-This report is THE source of truth for case-management decisions; its sister analysis artifacts in `work-spec/thoughts/analysis/` need supersession banners so future agents globbing the folder don't read them as live. Hygiene work; not blocking implementation.
+At authoring time, this report was the source of truth for case-management decisions; after the 2026-05-14 archive pass, ADR-0093 is the current decision record. The sister analysis artifacts in `work-spec/thoughts/analysis/` carry supersession banners so future agents globbing the folder don't read them as live. Hygiene work; not blocking implementation.
 
-- `case-management-aggregate-synthesis.md` — banner-mark as superseded by this report (the synthesis's D-1..D-16 closed taxonomy is now mirrored and extended in this report's authoritative decisions log; the synthesis remains useful as derivation history but should not be cited as the source of truth for new work).
+- `case-management-aggregate-synthesis.md` — banner-mark as superseded by ADR-0093 and this archived report (the synthesis's D-1..D-16 closed taxonomy is mirrored and extended here; the synthesis remains useful as derivation history but should not be cited as the source of truth for new work).
 - The five validation files (R1–R5: `case-management-validation-claude-opus-4.7.md`, `case-management-validation-glm-5.1.md`, `case-management-validation-gpt-5-codex.md`, `case-management-validation-claude-opus-4-7-1m.md`, `case-management-validation-gemini.md`) — banner-mark or archive to `thoughts/archive/analysis/2026-05-10/` per §6.6. R1-R5 served their validation role; their factual claims have been folded back into the synthesis and this report.
 - `case-management.md` (the original consultant memo) — already noted in §6.3 as needing banner or archive; reiterated here as part of the same hygiene sweep.
 
@@ -552,7 +558,7 @@ The session's working set, as of 2026-05-11:
 |------|--------|------|
 | `work-spec/thoughts/adr/0093-case-is-its-trellis-ledger.md` | Proposed | The ADR. Decision basis for this report; §6.1 patches applied 2026-05-11. v3.2 amendments pending per the patch driver below. |
 | `work-spec/thoughts/analysis/case-management-aggregate-synthesis.md` | v2 (current) | Synthesis. Needs §6.2 update. |
-| `work-spec/thoughts/analysis/case-boundary-decision-report.md` | This file | Source-of-truth report for D-1..D-4 + D-17 case-management decisions. Durable. |
+| `work-spec/thoughts/archive/analysis/2026-05-11-case-boundary-decision-report.md` | This file | Archived decision-basis report for D-1..D-4 + D-17 case-management decisions. Historical. |
 | `thoughts/analysis/2026-05-11-proof-stack-five-reviewer-aggregate.md` | Patch driver (not source of truth) | Validated patch queue across this report, ADR-0093, the convergence plan, and the cross-cutting findings. Treat as execution artifact; not a parallel decision authority. |
 | `thoughts/analysis/2026-05-11-proof-stack-five-reviewer-aggregate-archive.md` | Archive | Prior reviewer-aggregate narrative; preserved for history. Not execution input. |
 

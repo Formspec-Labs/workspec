@@ -1,9 +1,9 @@
 # Case Management Boundary: Synthesis (v2)
 
-> **Superseded synthesis.** This file is retained as derivation history. The controlling source of truth for case-management decisions is [`case-boundary-decision-report.md`](case-boundary-decision-report.md); when this synthesis disagrees with that report, the report controls.
+> **Superseded synthesis.** This file is retained as derivation history. Current case-boundary authority is [`../adr/0093-case-is-its-trellis-ledger.md`](../adr/0093-case-is-its-trellis-ledger.md); the decision-basis report is archived at [`../archive/analysis/2026-05-11-case-boundary-decision-report.md`](../archive/analysis/2026-05-11-case-boundary-decision-report.md).
 
 **Date:** 2026-05-11
-**Status:** Superseded as the case-management source of truth by [`case-boundary-decision-report.md`](case-boundary-decision-report.md). This synthesis is retained as derivation history and has been amended only where needed to reflect the report's dual-identity decision.
+**Status:** Superseded as the case-management source of truth by ADR-0093 and the archived decision-basis report. This synthesis is retained as derivation history and has been amended only where needed to reflect the report's dual-identity decision.
 **Supersedes:** prior `work-spec/thoughts/adr/0093-case-process-boundary.md` (Proposed, deleted 2026-05-11). Replacement landed at [`work-spec/thoughts/adr/0093-case-is-its-trellis-ledger.md`](../adr/0093-case-is-its-trellis-ledger.md) (Proposed, 2026-05-11). Withdraws ~⅔ of the v1 CASE-SYNTH register.
 **Author intent:** Greenfield re-think. Per owner direction (2026-05-11), every ADR/spec/plan/decision from v1 is treated as disposable. What follows reasons from user value first, then collapses architecture to the minimum that serves it.
 
