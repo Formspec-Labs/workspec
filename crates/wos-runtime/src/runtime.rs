@@ -19,24 +19,24 @@ use std::collections::HashMap;
 use std::error::Error as StdError;
 
 use serde::{Deserialize, Serialize};
+#[cfg(test)]
+use wos_core::ProvenanceKind;
+use wos_core::ProvenanceRecord;
 use wos_core::business_calendar::BusinessCalendarDocument;
 #[cfg(test)]
 use wos_core::eval::Evaluator;
 use wos_core::eval::{GuardEvaluation, ObservedTransition};
 use wos_core::instance::{FormspecTaskContext, PendingEvent, WorkflowProcess};
 use wos_core::model::kernel::KernelDocument;
-#[cfg(test)]
-use wos_core::provenance::ProvenanceKind;
-use wos_core::provenance::ProvenanceRecord;
 use wos_core::traits::{
     AccessControl, ContractValidator, DocumentResolver, ExternalService, TaskPresenter,
 };
 
 use crate::binding::{BindingError, BindingRegistry};
-use crate::custody::CustodyAppendError;
 use crate::intake::{IntakeAcceptancePolicy, IntakeAcceptanceRegistry, NoopIntakeAcceptancePolicy};
 use crate::integration::IntegrationProfileDocument;
 use crate::store::{RuntimeStore, StoreError};
+use wos_events::custody::CustodyAppendError;
 
 pub use provenance::{
     CustodyReceiptStampError, populate_provenance_record_fields, stamp_custody_receipt,
@@ -2537,11 +2537,9 @@ mod tests {
                 .apply_custody_receipt(
                     created.process_id.as_str(),
                     &record_id,
-                    crate::CustodyAppendReceipt {
-                        canonical_event_hash:
-                            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-                                .to_string(),
-                    },
+                    crate::CustodyAppendReceipt::new(
+                        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    ),
                 )
                 .expect("trait apply_custody_receipt");
         }
@@ -3435,11 +3433,9 @@ mod tests {
             .apply_custody_receipt(
                 test_process_id("case-receipt"),
                 &record_id,
-                crate::CustodyAppendReceipt {
-                    canonical_event_hash:
-                        "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c"
-                            .to_string(),
-                },
+                crate::CustodyAppendReceipt::new(
+                    "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c",
+                ),
             )
             .expect("apply receipt");
 
@@ -3481,9 +3477,7 @@ mod tests {
             .expect("load provenance");
         let record_id = provenance[0].id.clone();
         let hash = "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c";
-        let receipt = crate::CustodyAppendReceipt {
-            canonical_event_hash: hash.to_string(),
-        };
+        let receipt = crate::CustodyAppendReceipt::new(hash);
         runtime
             .apply_custody_receipt(
                 test_process_id("case-receipt-idem"),
@@ -3532,22 +3526,18 @@ mod tests {
             .apply_custody_receipt(
                 test_process_id("case-receipt-conflict"),
                 &record_id,
-                crate::CustodyAppendReceipt {
-                    canonical_event_hash:
-                        "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c"
-                            .to_string(),
-                },
+                crate::CustodyAppendReceipt::new(
+                    "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c",
+                ),
             )
             .expect("first apply");
         let err = runtime
             .apply_custody_receipt(
                 test_process_id("case-receipt-conflict"),
                 &record_id,
-                crate::CustodyAppendReceipt {
-                    canonical_event_hash:
-                        "0000000000000000000000000000000000000000000000000000000000000000"
-                            .to_string(),
-                },
+                crate::CustodyAppendReceipt::new(
+                    "0000000000000000000000000000000000000000000000000000000000000000",
+                ),
             )
             .expect_err("second hash must conflict");
         assert!(matches!(err, RuntimeError::CustodyReceiptConflict { .. }));
@@ -4596,9 +4586,7 @@ mod tests {
         let affirmation = record
             .provenance_log
             .iter()
-            .find(|record| {
-                record.record_kind == wos_core::provenance::ProvenanceKind::SignatureAffirmation
-            })
+            .find(|record| record.record_kind == wos_core::ProvenanceKind::SignatureAffirmation)
             .expect("signature affirmation provenance must be appended");
         assert_eq!(
             affirmation.event.as_deref(),
@@ -4709,9 +4697,7 @@ mod tests {
         let affirmation = record
             .provenance_log
             .iter()
-            .find(|record| {
-                record.record_kind == wos_core::provenance::ProvenanceKind::SignatureAffirmation
-            })
+            .find(|record| record.record_kind == wos_core::ProvenanceKind::SignatureAffirmation)
             .expect("signature affirmation provenance must be appended");
         let data = affirmation
             .data
@@ -4819,9 +4805,7 @@ mod tests {
         let admission_failed = record
             .provenance_log
             .iter()
-            .find(|record| {
-                record.record_kind == wos_core::provenance::ProvenanceKind::SignatureAdmissionFailed
-            })
+            .find(|record| record.record_kind == wos_core::ProvenanceKind::SignatureAdmissionFailed)
             .expect("admission failure must emit SignatureAdmissionFailed provenance");
         assert_eq!(
             admission_failed.event.as_deref(),
@@ -4841,7 +4825,7 @@ mod tests {
         );
         assert!(
             record.provenance_log.iter().any(|record| {
-                record.record_kind == wos_core::provenance::ProvenanceKind::TaskFailed
+                record.record_kind == wos_core::ProvenanceKind::TaskFailed
                     && record
                         .data
                         .as_ref()
@@ -4853,7 +4837,7 @@ mod tests {
         );
         assert!(
             !record.provenance_log.iter().any(|record| {
-                record.record_kind == wos_core::provenance::ProvenanceKind::TaskCompleted
+                record.record_kind == wos_core::ProvenanceKind::TaskCompleted
                     && record
                         .data
                         .as_ref()
@@ -4976,8 +4960,7 @@ mod tests {
                 .provenance_log
                 .iter()
                 .find(|record| {
-                    record.record_kind
-                        == wos_core::provenance::ProvenanceKind::SignatureAdmissionFailed
+                    record.record_kind == wos_core::ProvenanceKind::SignatureAdmissionFailed
                 })
                 .unwrap_or_else(|| {
                     panic!("admission failure must emit SignatureAdmissionFailed for {reason}")
@@ -5000,7 +4983,7 @@ mod tests {
             );
             assert!(
                 !record.provenance_log.iter().any(|record| {
-                    record.record_kind == wos_core::provenance::ProvenanceKind::SignatureAffirmation
+                    record.record_kind == wos_core::ProvenanceKind::SignatureAffirmation
                 }),
                 "binding-reported admission failure must not emit SignatureAffirmation for {reason}"
             );
@@ -5109,9 +5092,7 @@ mod tests {
         let admission_failed = record
             .provenance_log
             .iter()
-            .find(|record| {
-                record.record_kind == wos_core::provenance::ProvenanceKind::SignatureAdmissionFailed
-            })
+            .find(|record| record.record_kind == wos_core::ProvenanceKind::SignatureAdmissionFailed)
             .expect("posture method rejection emits SignatureAdmissionFailed");
         let data = admission_failed
             .data
@@ -5124,7 +5105,7 @@ mod tests {
         );
         assert!(
             !record.provenance_log.iter().any(|record| {
-                record.record_kind == wos_core::provenance::ProvenanceKind::SignatureAffirmation
+                record.record_kind == wos_core::ProvenanceKind::SignatureAffirmation
             }),
             "posture method rejection must not emit SignatureAffirmation"
         );
@@ -5203,9 +5184,7 @@ mod tests {
         let admission_failed = record
             .provenance_log
             .iter()
-            .find(|record| {
-                record.record_kind == wos_core::provenance::ProvenanceKind::SignatureAdmissionFailed
-            })
+            .find(|record| record.record_kind == wos_core::ProvenanceKind::SignatureAdmissionFailed)
             .expect("substituted posture content emits SignatureAdmissionFailed");
         let data = admission_failed
             .data
@@ -5318,9 +5297,7 @@ mod tests {
         let admission_failed = record
             .provenance_log
             .iter()
-            .find(|record| {
-                record.record_kind == wos_core::provenance::ProvenanceKind::SignatureAdmissionFailed
-            })
+            .find(|record| record.record_kind == wos_core::ProvenanceKind::SignatureAdmissionFailed)
             .expect("posture intent rejection emits SignatureAdmissionFailed");
         let data = admission_failed
             .data
@@ -5333,7 +5310,7 @@ mod tests {
         );
         assert!(
             !record.provenance_log.iter().any(|record| {
-                record.record_kind == wos_core::provenance::ProvenanceKind::SignatureAffirmation
+                record.record_kind == wos_core::ProvenanceKind::SignatureAffirmation
             }),
             "posture intent rejection must not emit SignatureAffirmation"
         );
@@ -5442,9 +5419,7 @@ mod tests {
         let admission_failed = record
             .provenance_log
             .iter()
-            .find(|record| {
-                record.record_kind == wos_core::provenance::ProvenanceKind::SignatureAdmissionFailed
-            })
+            .find(|record| record.record_kind == wos_core::ProvenanceKind::SignatureAdmissionFailed)
             .expect("posture receipt rejection emits SignatureAdmissionFailed");
         let data = admission_failed
             .data
@@ -5457,7 +5432,7 @@ mod tests {
         );
         assert!(
             !record.provenance_log.iter().any(|record| {
-                record.record_kind == wos_core::provenance::ProvenanceKind::SignatureAffirmation
+                record.record_kind == wos_core::ProvenanceKind::SignatureAffirmation
             }),
             "posture receipt rejection must not emit SignatureAffirmation"
         );
@@ -6591,7 +6566,7 @@ mod tests {
         assert_eq!(calls.load(Ordering::SeqCst), 1);
 
         // ToolInvoked provenance must be present.
-        use wos_core::provenance::ProvenanceKind;
+        use wos_core::ProvenanceKind;
         let tool_invoked = result
             .provenance
             .iter()

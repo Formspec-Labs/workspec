@@ -16,8 +16,8 @@ use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use wos_core::instance::{ActiveTask, PendingEvent, WorkflowProcess};
 use wos_core::model::governance::DelegationScope;
-use wos_core::provenance::{ProvenanceKind, ProvenanceRecord, SignatureAdmissionFailedInput};
 use wos_core::traits::AccessControl;
+use wos_core::{ProvenanceKind, ProvenanceRecord, SignatureAdmissionFailedInput};
 
 use super::{
     AdmissionOutcome, COMPLETION_EVENT_EXTENSION_KEY, FAILURE_EVENT_EXTENSION_KEY,

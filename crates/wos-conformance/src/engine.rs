@@ -26,8 +26,8 @@ use wos_core::instance::{FormspecTaskContext, PendingEvent};
 use wos_core::model::ai::AIIntegrationDocument;
 use wos_core::model::governance::GovernanceDocument;
 use wos_core::model::kernel::KernelDocument;
-use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
 use wos_core::traits::{DocumentResolver, TaskPresenter};
+use wos_core::{ProvenanceKind, ProvenanceRecord};
 use wos_runtime::{
     BindingRegistry, BusinessCalendarDocument, Clock, CreateProcessRequest, DrainOnceResult,
     IntegrationProfileDocument, MigrationMap, ReferenceCompanionPolicy, RuntimeError, WosRuntime,

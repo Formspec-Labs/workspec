@@ -9,7 +9,7 @@
 //! Temporal/Restate adapter spikes are introduced.
 
 use wos_core::eval::Evaluator;
-use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
+use wos_core::{ProvenanceKind, ProvenanceRecord};
 
 use crate::milestones::evaluate_milestones;
 

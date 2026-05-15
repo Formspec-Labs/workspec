@@ -16,7 +16,7 @@
 
 use crate::eval::Evaluator;
 use crate::model::kernel::EvaluationMode;
-use crate::provenance::{ProvenanceKind, ProvenanceRecord};
+use wos_events::provenance::{ProvenanceKind, ProvenanceRecord};
 
 /// Maximum re-evaluation cycles per triggering mutation (Runtime S10.3).
 pub const CONVERGENCE_CAP: u32 = 100;

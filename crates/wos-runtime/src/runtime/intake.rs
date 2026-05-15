@@ -7,7 +7,7 @@ use std::slice;
 use serde_json::{Map, Value};
 use wos_core::instance::WorkflowProcess;
 use wos_core::model::kernel::{ActorKind, KernelDocument};
-use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
+use wos_core::{ProvenanceKind, ProvenanceRecord};
 
 use crate::intake::{
     IntakeAcceptanceAdapter, IntakeAcceptanceDecision, IntakeAcceptanceOutcome,

@@ -2,7 +2,7 @@
 
 //! IEEE 1849-2016 XES XML serializer (WOS Semantic Profile §6.3).
 //!
-//! Serializes a [`wos_core::provenance::ProvenanceLog`] into an XES XML
+//! Serializes a [`wos_core::ProvenanceLog`] into an XES XML
 //! document as a single `<trace>` whose `<event>` elements correspond, in
 //! order, to the Facts-tier records in the log.
 //!
@@ -26,7 +26,7 @@
 //! # Missing timestamps
 //!
 //! Records whose `timestamp` is empty have never been persistence-stamped
-//! (see [`wos_core::provenance::ProvenanceRecord`]). For those events we
+//! (see [`wos_core::ProvenanceRecord`]). For those events we
 //! OMIT the `<date key="time:timestamp" ...>` element entirely — an empty
 //! string is not a valid `xs:dateTime` value and would poison any
 //! downstream tool. Consumers should treat the missing element as
@@ -35,7 +35,7 @@
 use quick_xml::events::{BytesDecl, Event};
 use quick_xml::writer::Writer;
 
-use wos_core::provenance::{ProvenanceLog, ProvenanceRecord};
+use wos_core::{ProvenanceLog, ProvenanceRecord};
 
 use crate::{ExportConfig, camel_case_record_kind, is_facts_tier};
 
@@ -258,7 +258,7 @@ mod tests {
     use super::*;
     use quick_xml::Reader;
     use quick_xml::events::Event as ReaderEvent;
-    use wos_core::provenance::{ProvenanceKind, ProvenanceLog, ProvenanceRecord};
+    use wos_core::{ProvenanceKind, ProvenanceLog, ProvenanceRecord};
 
     fn config() -> ExportConfig {
         ExportConfig {

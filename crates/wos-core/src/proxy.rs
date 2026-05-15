@@ -15,7 +15,7 @@ use crate::deontic;
 use crate::event_handler;
 use crate::model::ai::{AIIntegrationDocument, ViolationAction};
 use crate::model::kernel::ImpactLevel;
-use crate::provenance::ProvenanceKind;
+use wos_events::provenance::ProvenanceKind;
 
 /// Evidence that an Assist Governance Proxy preserves required constraints.
 #[derive(Debug, Clone, Serialize, Deserialize)]

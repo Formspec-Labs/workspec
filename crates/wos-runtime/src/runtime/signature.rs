@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use wos_core::context::EvalContext;
 use wos_core::instance::{ActiveTask, PendingEvent, WorkflowProcess};
-use wos_core::provenance::{ProvenanceKind, ProvenanceRecord, SignatureAffirmationInput};
+use wos_core::{ProvenanceKind, ProvenanceRecord, SignatureAffirmationInput};
 
 use crate::binding::{
     SignatureAdmissionFailureReason as BindingAdmissionFailureReason,
@@ -1082,7 +1082,13 @@ impl WosRuntime {
                 role_id: &role.id,
                 role: &role.role,
                 document_id: &document.id,
+                signing_act_id: &signature_evidence.source_signature_id,
+                document_ref: serde_json::json!({
+                    "documentId": document.id.as_str(),
+                    "locale": "und",
+                }),
                 document_hash: &document.document_hash,
+                presentation_hash: &document.document_hash,
                 document_hash_algorithm: &document.document_hash_algorithm,
                 source_signature_system: &signature_evidence.source_system,
                 source_signature_id: &signature_evidence.source_signature_id,
@@ -1106,6 +1112,7 @@ impl WosRuntime {
                 )
                 .map_err(|error| RuntimeError::Signature(error.to_string()))?,
                 verification_receipt: signature_evidence.verification_receipt.as_deref(),
+                witnessed_signature_ref: None,
             });
         let signed_at_owned = signed_at.to_string();
         let signer_id_owned = signer_id.to_string();

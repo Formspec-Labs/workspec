@@ -7,12 +7,12 @@
 //! module makes future adapter comparisons focus on command semantics rather
 //! than reference-runtime internals.
 
+use wos_core::ProvenanceRecord;
 use wos_core::instance::{PendingEvent, WorkflowProcess};
-use wos_core::provenance::ProvenanceRecord;
 
-use crate::custody::{CustodyAppendContext, CustodyAppendInput, CustodyAppendReceipt};
 use crate::durable::DurableRuntime;
 use crate::intake::{IntakeAcceptanceDecision, IntakeAcceptanceRequest};
+use wos_events::custody::{CustodyAppendContext, CustodyAppendInput, CustodyAppendReceipt};
 
 use super::{
     CreateProcessRequest, DrainOnceResult, PersistDraftResult, RuntimeError, TaskSubmissionResult,

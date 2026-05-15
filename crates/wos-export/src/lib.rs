@@ -3,7 +3,7 @@
 //! Provenance export to PROV-O JSON-LD, IEEE 1849 XES, and OCEL 2.0.
 //!
 //! Implements the WOS Semantic Profile §5 (PROV-O) and §6 (XES/OCEL).
-//! Takes a [`wos_core::provenance::ProvenanceLog`] and export configuration
+//! Takes a [`wos_core::ProvenanceLog`] and export configuration
 //! and produces serialized output in the requested format.
 //!
 //! This crate is not the deterministic archive/export-package implementation.
@@ -14,7 +14,7 @@
 //! # Empty-timestamp policy (intentionally divergent)
 //!
 //! The three serializers handle `ProvenanceRecord.timestamp == ""` (see
-//! [`wos_core::provenance::ProvenanceRecord::timestamp`]) differently, by
+//! [`wos_core::ProvenanceRecord::timestamp`]) differently, by
 //! design. Each policy is driven by its target format's schema and must
 //! not be "harmonized" by a future maintainer:
 //!
@@ -34,7 +34,7 @@
 
 use serde_json::Value;
 
-use wos_core::provenance::ProvenanceRecord;
+use wos_core::ProvenanceRecord;
 
 pub mod ocel;
 pub mod prov_o;
@@ -62,7 +62,7 @@ pub struct ExportConfig {
 }
 
 /// Render `record_kind` in camelCase by reusing the serde rename already
-/// attached to [`wos_core::provenance::ProvenanceKind`]. Keeping a single
+/// attached to [`wos_core::ProvenanceKind`]. Keeping a single
 /// source of truth means PROV-O, XES, and OCEL all emit the identical
 /// on-the-wire string (§5.3, §6.3, §6.4 examples: `"stateTransition"`).
 pub(crate) fn camel_case_record_kind(record: &ProvenanceRecord) -> String {
@@ -92,7 +92,7 @@ pub(crate) fn is_facts_tier(record: &ProvenanceRecord) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wos_core::provenance::ProvenanceRecord;
+    use wos_core::ProvenanceRecord;
 
     fn record_with_layer(layer: Option<&str>) -> ProvenanceRecord {
         let mut record = ProvenanceRecord::state_transition("a", "b", "ev", None);

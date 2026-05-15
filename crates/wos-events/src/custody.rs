@@ -9,8 +9,9 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use integrity_cbor::{JsonCborError, dcbor_bytes_to_json, json_to_dcbor_bytes_with_limit};
 use serde::{Deserialize, Serialize};
-use wos_core::provenance::ProvenanceRecord;
-use wos_core::typeid;
+use stack_common_typeid as typeid;
+
+use crate::provenance::ProvenanceRecord;
 
 /// WOS authored records are small governance facts and must stay inside the
 /// current inline-payload posture. If this bound changes, Trellis and WOS must
@@ -175,6 +176,17 @@ impl CustodyAppendInput {
 pub struct CustodyAppendReceipt {
     /// Lowercase hex rendering of Trellis's `canonical_event_hash`.
     pub canonical_event_hash: String,
+}
+
+impl CustodyAppendReceipt {
+    /// Build a receipt from the canonical event hash returned by the custody
+    /// substrate.
+    #[must_use]
+    pub fn new(canonical_event_hash: impl Into<String>) -> Self {
+        Self {
+            canonical_event_hash: canonical_event_hash.into(),
+        }
+    }
 }
 
 /// Errors building authored custody append inputs.
@@ -346,8 +358,8 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
+    use crate::provenance::{ProvenanceKind, SignatureAffirmationInput};
     use sha2::{Digest, Sha256};
-    use wos_core::provenance::{ProvenanceKind, SignatureAffirmationInput};
 
     fn metadata() -> CustodyAppendMetadata {
         CustodyAppendMetadata {
@@ -710,7 +722,13 @@ mod tests {
             role_id: "applicantSigner",
             role: "signer",
             document_id: "benefitsApplication",
+            signing_act_id: "01JQRPD32JF8XT9QXKKV3RQSD1",
+            document_ref: serde_json::json!({
+                "documentId": "benefitsApplication",
+                "locale": "en-US",
+            }),
             document_hash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            presentation_hash: "fedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedc",
             document_hash_algorithm: "sha-256",
             source_signature_system: "formspec",
             source_signature_id: "sig-2026-0001",
@@ -741,6 +759,7 @@ mod tests {
                 "reason": "formspec-signing-helper-pending",
             }),
             verification_receipt: None,
+            witnessed_signature_ref: None,
         });
         let metadata = context()
             .metadata_for_provenance_record(&typeid::mint_case_ledger_id(), 0, &record)
@@ -755,6 +774,20 @@ mod tests {
         assert_eq!(view.get("recordKind"), None);
         assert_eq!(view["event"], "wos.kernel.signature_affirmation");
         assert_eq!(view["data"]["signerId"], "applicant");
+        assert_eq!(view["data"]["signingActId"], "01JQRPD32JF8XT9QXKKV3RQSD1");
+        assert_eq!(
+            view["data"]["documentRef"]["documentId"],
+            "benefitsApplication"
+        );
+        assert_eq!(view["data"]["documentRef"]["locale"], "en-US");
+        assert_eq!(
+            view["data"]["presentationHash"],
+            "fedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedc"
+        );
+        assert_eq!(
+            view["data"]["witnessedSignatureRef"],
+            serde_json::Value::Null
+        );
         assert_eq!(view["data"]["custodyHookEligible"], true);
     }
 }

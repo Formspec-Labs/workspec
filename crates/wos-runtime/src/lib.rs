@@ -9,7 +9,6 @@
 pub mod binding;
 pub mod cloudevents;
 pub mod companion;
-pub mod custody;
 mod durable;
 pub mod intake;
 pub mod integration;
@@ -27,11 +26,6 @@ pub use binding::{
     SignaturePrimitiveStatus, SubmissionValidation,
 };
 pub use companion::ReferenceCompanionPolicy;
-#[doc(inline)]
-pub use custody::{
-    CustodyAppendContext, CustodyAppendError, CustodyAppendInput, CustodyAppendMetadata,
-    CustodyAppendReceipt,
-};
 #[doc(inline)]
 pub use durable::DurableRuntime;
 pub use intake::{
@@ -65,3 +59,8 @@ pub use store::{
     runtime_aux_to_json,
 };
 pub use wos_core::business_calendar::BusinessCalendarDocument;
+#[doc(inline)]
+pub use wos_events::custody::{
+    CustodyAppendContext, CustodyAppendError, CustodyAppendInput, CustodyAppendMetadata,
+    CustodyAppendReceipt,
+};

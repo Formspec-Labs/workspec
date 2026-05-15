@@ -733,7 +733,13 @@ fn signature_affirmation_input() -> SignatureAffirmationInput<'static> {
         role_id: "applicantSigner",
         role: "signer",
         document_id: "benefitsApplication",
+        signing_act_id: "01JQRPD32JF8XT9QXKKV3RQSD1",
+        document_ref: serde_json::json!({
+            "documentId": "benefitsApplication",
+            "locale": "en-US",
+        }),
         document_hash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        presentation_hash: "fedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedc",
         document_hash_algorithm: "sha-256",
         source_signature_system: "formspec",
         source_signature_id: "sig-2026-0001",
@@ -764,6 +770,7 @@ fn signature_affirmation_input() -> SignatureAffirmationInput<'static> {
             "reason": "formspec-signing-helper-pending",
         }),
         verification_receipt: None,
+        witnessed_signature_ref: None,
     }
 }
 
@@ -779,9 +786,19 @@ fn signature_affirmation_constructor_serializes_required_fields() {
     assert_eq!(json["data"]["roleId"], "applicantSigner");
     assert_eq!(json["data"]["role"], "signer");
     assert_eq!(json["data"]["documentId"], "benefitsApplication");
+    assert_eq!(json["data"]["signingActId"], "01JQRPD32JF8XT9QXKKV3RQSD1");
+    assert_eq!(
+        json["data"]["documentRef"]["documentId"],
+        "benefitsApplication"
+    );
+    assert_eq!(json["data"]["documentRef"]["locale"], "en-US");
     assert_eq!(
         json["data"]["documentHash"],
         "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    );
+    assert_eq!(
+        json["data"]["presentationHash"],
+        "fedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedc"
     );
     assert_eq!(json["data"]["documentHashAlgorithm"], "sha-256");
     assert_eq!(json["data"]["sourceSignatureSystem"], "formspec");
@@ -810,6 +827,10 @@ fn signature_affirmation_constructor_serializes_required_fields() {
         "urn:agency.gov:formspec:responses:benefits:case-2026-0001"
     );
     assert_eq!(json["data"]["custodyHookEligible"], true);
+    assert_eq!(
+        json["data"]["witnessedSignatureRef"],
+        serde_json::Value::Null
+    );
 }
 
 #[test]

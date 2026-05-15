@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/wos-core",
+    "crates/wos-events",
     "crates/wos-lint",
     "crates/wos-conformance",
     "crates/wos-runtime",

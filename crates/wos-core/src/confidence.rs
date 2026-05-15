@@ -6,7 +6,7 @@
 //! monitors cumulative confidence, and records ground-truth labels.
 
 use crate::model::ai::AIIntegrationDocument;
-use crate::provenance::{ProvenanceKind, ProvenanceRecord};
+use wos_events::provenance::{ProvenanceKind, ProvenanceRecord};
 
 /// Result of confidence evaluation.
 #[derive(Debug, Clone)]

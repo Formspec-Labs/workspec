@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use crate::instance::{FormspecTaskContext, WorkflowProcess};
 use crate::model::governance::{DelegationScope, GovernanceDocument};
 use crate::model::kernel::KernelDocument;
-use crate::provenance::ProvenanceRecord;
+use wos_events::provenance::ProvenanceRecord;
 
 /// Persists WorkflowProcess documents between events (Runtime S12.1).
 pub trait InstanceStore {

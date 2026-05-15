@@ -13,7 +13,7 @@ use wos_core::instance::{
     ActiveTask, ActiveTaskStatus, FormspecTaskContext, PendingEvent, WorkflowProcess,
 };
 use wos_core::model::kernel::{ActionKind, KernelDocument};
-use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
+use wos_core::{ProvenanceKind, ProvenanceRecord};
 
 use crate::integration::IntegrationBinding;
 use crate::integration_handlers::{

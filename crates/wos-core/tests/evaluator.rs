@@ -10,9 +10,9 @@ use std::collections::HashMap;
 
 use indexmap::IndexMap;
 use wos_core::Evaluator;
+use wos_core::ProvenanceKind;
 use wos_core::eval::GuardEvaluation;
 use wos_core::model::kernel::*;
-use wos_core::provenance::ProvenanceKind;
 
 /// Build a minimal kernel document with the given states and transitions.
 fn minimal_kernel(initial: &str, states: IndexMap<String, State>) -> KernelDocument {
@@ -814,7 +814,7 @@ fn count_foreach_body_on_exit(eval: &Evaluator, foreach_state_id: &str) -> usize
         .count()
 }
 
-fn first_record(eval: &Evaluator, kind: ProvenanceKind) -> &wos_core::provenance::ProvenanceRecord {
+fn first_record(eval: &Evaluator, kind: ProvenanceKind) -> &wos_core::ProvenanceRecord {
     eval.provenance()
         .records()
         .iter()

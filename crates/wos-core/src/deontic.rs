@@ -20,7 +20,7 @@ use fel_core::{MapEnvironment, evaluate, json_to_fel, parse, types::Value};
 
 use crate::model::ai::{AIIntegrationDocument, DeonticConstraints, NullBehavior, ViolationAction};
 use crate::model::kernel::ImpactLevel;
-use crate::provenance::{ProvenanceKind, ProvenanceRecord};
+use wos_events::provenance::{ProvenanceKind, ProvenanceRecord};
 
 /// Result of evaluating all deontic constraints for a single agent invocation.
 #[derive(Debug, Clone)]

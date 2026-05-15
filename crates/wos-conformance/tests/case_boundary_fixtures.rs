@@ -21,7 +21,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use wos_core::instance::{InstanceStatus, WorkflowProcess};
-use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
+use wos_core::{ProvenanceKind, ProvenanceRecord};
 use wos_runtime::{InMemoryStore, RuntimeRecord, RuntimeStore};
 
 /// Case-boundary fixture format. Distinct from `ConformanceFixture` because

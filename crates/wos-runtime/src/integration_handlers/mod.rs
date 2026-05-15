@@ -22,9 +22,9 @@ pub(crate) mod policy_engine;
 pub(crate) mod request_response;
 pub(crate) mod tool;
 
+use wos_core::ProvenanceRecord;
 use wos_core::eval::ObservedAction;
 use wos_core::model::kernel::KernelDocument;
-use wos_core::provenance::ProvenanceRecord;
 
 use crate::integration::{IntegrationBinding, IntegrationBindingKind};
 use crate::runtime::RuntimeError;

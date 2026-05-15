@@ -22,9 +22,9 @@
 use std::collections::HashMap;
 
 use serde_json::json;
+use wos_core::ProvenanceKind;
 use wos_core::instance::{FormspecTaskContext, WorkflowProcess};
 use wos_core::model::kernel::KernelDocument;
-use wos_core::provenance::ProvenanceKind;
 use wos_core::traits::{DocumentResolver, ExternalService, TaskPresenter};
 use wos_formspec_binding::{FormspecBinding, FormspecProcessor};
 use wos_runtime::binding::{BindingError, BindingRegistry, CaseMutationBundle};

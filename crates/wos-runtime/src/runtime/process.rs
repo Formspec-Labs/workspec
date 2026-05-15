@@ -12,11 +12,11 @@
 
 use wos_core::eval::{Evaluator, validate_migration_configuration};
 use wos_core::instance::{InstanceStatus, PendingEvent, WorkflowProcess};
-use wos_core::provenance::{InstanceMigratedInput, ProvenanceRecord};
 use wos_core::typeid;
+use wos_core::{InstanceMigratedInput, ProvenanceRecord};
 
-use crate::custody::{CustodyAppendContext, CustodyAppendInput};
 use crate::store::{RuntimeRecord, StoreError};
+use wos_events::custody::{CustodyAppendContext, CustodyAppendInput};
 
 use super::timers::{
     annotate_timer_created_with_calendar_version, annotate_timer_created_with_convergence_error,
@@ -439,7 +439,7 @@ impl WosRuntime {
         &mut self,
         process_id: &str,
         record_id: &str,
-        receipt: crate::custody::CustodyAppendReceipt,
+        receipt: wos_events::custody::CustodyAppendReceipt,
     ) -> Result<(), RuntimeError> {
         let mut record = self.store.load_record(process_id)?;
         let Some(provenance) = record

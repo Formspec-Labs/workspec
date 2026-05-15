@@ -32,12 +32,14 @@ pub mod explain;
 pub mod instance;
 pub mod model;
 pub mod project;
-pub mod provenance;
 pub mod proxy;
 pub mod studio_api;
 pub mod timer;
 pub mod traits;
 pub mod typeid;
+
+#[cfg(test)]
+mod provenance_tests;
 
 pub use agent::{
     AgentContext, AgentInvocationError, AgentInvoker, AgentInvokerRegistry, AgentResult, AgentTask,
@@ -60,7 +62,6 @@ pub use model::kernel::{ContractReference, EvaluationMode, ExecutionConfig};
 pub use model::kernel::{ImpactLevel, Lifecycle, Milestone, Region};
 pub use model::notification_template::NotificationTemplateDocument;
 pub use project::Project;
-pub use provenance::{ProvenanceAuditTier, ProvenanceKind, ProvenanceLog, ProvenanceRecord};
 pub use proxy::{AssistGovernanceProxyEvidence, observe_assist_governance_proxy};
 pub use timer::Timers;
 pub use typeid::{
@@ -69,4 +70,14 @@ pub use typeid::{
     mint_ai_id, mint_assurance_id, mint_case_ledger_id, mint_governance_id, mint_process_id,
     mint_provenance_id, mint_type_id, parse_case_ledger_id, parse_process_id, tenant,
     tenant_from_env_value,
+};
+pub use wos_events::provenance::{
+    AmendmentAuthorizedInput, AuthorizationAttestationInput, AuthorizationRejectedInput,
+    CapabilityInvocationInput, CaseFileSnapshot, ClockResolvedInput, ClockResolvedResolution,
+    ClockSkewObservedInput, ClockStartedInput, CommitAttemptFailureInput, CommitFailureKind,
+    ConfigurationWarningInput, CorrectionAuthorizedInput, DeterminationAmendedInput,
+    DeterminationRescindedInput, IdentityAttestationInput, InstanceMigratedInput, KeyRebindError,
+    KeyRebindInput, MigrationPinChangedInput, ProvenanceAuditTier, ProvenanceKind, ProvenanceLog,
+    ProvenanceRecord, ReinstatedInput, RescissionAuthorizedInput, SignatureAdmissionFailedInput,
+    SignatureAffirmationInput, audit_layer_for_kind,
 };

@@ -14,7 +14,7 @@ use serde_json::json;
 use wos_core::EvalContext;
 use wos_core::instance::WorkflowProcess;
 use wos_core::model::kernel::KernelDocument;
-use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
+use wos_core::{ProvenanceKind, ProvenanceRecord};
 
 /// Evaluate all un-fired milestones against `post_state`.
 ///

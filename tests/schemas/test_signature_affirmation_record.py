@@ -45,7 +45,13 @@ def _record() -> dict:
             "roleId": "applicantSigner",
             "role": "signer",
             "documentId": "benefitsApplication",
+            "signingActId": "01JQRPD32JF8XT9QXKKV3RQSD1",
+            "documentRef": {
+                "documentId": "benefitsApplication",
+                "locale": "en-US",
+            },
             "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "presentationHash": "fedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedc",
             "documentHashAlgorithm": "sha-256",
             "sourceSignatureSystem": "formspec",
             "sourceSignatureId": "sig-2026-0001",
@@ -75,6 +81,7 @@ def _record() -> dict:
                 "status": "deferredPendingHelper",
                 "reason": "formspec-signing-helper-pending",
             },
+            "witnessedSignatureRef": None,
         },
     }
 
@@ -108,7 +115,10 @@ def test_signature_affirmation_missing_data_is_rejected(schema):
         "roleId",
         "role",
         "documentId",
+        "signingActId",
+        "documentRef",
         "documentHash",
+        "presentationHash",
         "documentHashAlgorithm",
         "sourceSignatureSystem",
         "sourceSignatureId",
@@ -123,6 +133,7 @@ def test_signature_affirmation_missing_data_is_rejected(schema):
         "sourceResponseRef",
         "custodyHookEligible",
         "primitiveVerification",
+        "witnessedSignatureRef",
     ],
 )
 def test_signature_affirmation_required_data_fields_are_rejected_when_missing(

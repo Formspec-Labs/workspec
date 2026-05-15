@@ -4329,11 +4329,24 @@ dependencies = [
  "insta",
  "serde",
  "serde_json",
+ "stack-common-typeid",
+ "thiserror 2.0.18",
+ "time",
+ "wos-events",
+]
+
+[[package]]
+name = "wos-events"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "integrity-cbor",
+ "serde",
+ "serde_json",
  "serde_json_canonicalizer",
  "sha2 0.10.9",
  "stack-common-typeid",
  "thiserror 2.0.18",
- "time",
 ]
 
 [[package]]
@@ -4397,7 +4410,6 @@ dependencies = [
  "base64",
  "chrono",
  "fel-core",
- "integrity-cbor",
  "jsonschema",
  "semver",
  "serde",
@@ -4407,6 +4419,7 @@ dependencies = [
  "time",
  "ureq",
  "wos-core",
+ "wos-events",
 ]
 
 [[package]]

@@ -4,8 +4,8 @@
 
 use integrity_canonical::{CANONICALIZATION_PROFILE, DigestAlgorithm, build_signed_payload};
 use wos_core::{
+    ProvenanceKind, ProvenanceRecord,
     instance::{ActiveTask, ValidationOutcome, WorkflowProcess},
-    provenance::{ProvenanceKind, ProvenanceRecord},
 };
 use wos_runtime::binding::{
     BindingError, CaseMutationBundle, ContractBindingAdapter, PreparedTask,

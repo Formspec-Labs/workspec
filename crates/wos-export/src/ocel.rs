@@ -34,7 +34,7 @@
 
 use serde_json::{Map, Value, json};
 
-use wos_core::provenance::{ProvenanceLog, ProvenanceRecord};
+use wos_core::{ProvenanceLog, ProvenanceRecord};
 
 use crate::{ExportConfig, camel_case_record_kind, is_facts_tier};
 
@@ -234,7 +234,7 @@ fn event_attributes(record: &ProvenanceRecord) -> Vec<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wos_core::provenance::{ProvenanceKind, ProvenanceLog, ProvenanceRecord};
+    use wos_core::{ProvenanceKind, ProvenanceLog, ProvenanceRecord};
 
     fn config() -> ExportConfig {
         ExportConfig {

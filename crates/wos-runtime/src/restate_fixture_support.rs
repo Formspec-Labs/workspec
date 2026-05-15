@@ -14,9 +14,9 @@ use crate::binding::{
 use crate::intake::IntakeAcceptanceRegistry;
 use crate::runtime::{SignatureProfileDocument, SystemClock, WosRuntime};
 use crate::store::{InMemoryStore, RuntimeRecord, RuntimeStore, StoreError};
+use wos_core::ProvenanceRecord;
 use wos_core::instance::{ActiveTask, ValidationOutcome};
 use wos_core::model::kernel::KernelDocument;
-use wos_core::provenance::ProvenanceRecord;
 use wos_core::traits::{DocumentResolver, ExternalService};
 
 /// In-memory store behind `Arc<Mutex<_>>` for embedding [`WosRuntime`] in Restate handlers.

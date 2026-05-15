@@ -32,7 +32,7 @@ use serde::Serialize;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
 
-use wos_core::provenance::{ProvenanceLog, ProvenanceRecord};
+use wos_core::{ProvenanceLog, ProvenanceRecord};
 
 use crate::{ExportConfig, camel_case_record_kind, is_facts_tier};
 
@@ -260,7 +260,7 @@ fn agent_iri(actor_id: &str, config: &ExportConfig) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wos_core::provenance::{ProvenanceKind, ProvenanceLog, ProvenanceRecord};
+    use wos_core::{ProvenanceKind, ProvenanceLog, ProvenanceRecord};
 
     fn config() -> ExportConfig {
         ExportConfig {

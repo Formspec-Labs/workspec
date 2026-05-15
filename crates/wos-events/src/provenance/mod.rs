@@ -18,9 +18,6 @@ mod log;
 mod record;
 mod snapshot;
 
-#[cfg(test)]
-mod tests;
-
 pub use audit_tier::{ProvenanceAuditTier, audit_layer_for_kind};
 pub use kind::ProvenanceKind;
 pub use log::ProvenanceLog;

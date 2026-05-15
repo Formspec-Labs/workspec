@@ -22,8 +22,8 @@ use crate::model::kernel::{
     Action, ActionKind, CancellationPolicy, HistoryMode, KernelDocument, MergeStrategy, Region,
     State, StateKind, Transition, TransitionEvent,
 };
-use crate::provenance::{CaseFileSnapshot, ProvenanceLog, ProvenanceRecord};
 use crate::timer::Timers;
+use wos_events::provenance::{CaseFileSnapshot, ProvenanceLog, ProvenanceRecord};
 
 /// Active state configuration tracking leaf states.
 #[derive(Debug, Clone, Default)]

@@ -40,7 +40,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use wos_conformance::{ConformanceFixture, WorkflowEngine};
-use wos_core::provenance::{ProvenanceLog, ProvenanceRecord};
+use wos_core::{ProvenanceLog, ProvenanceRecord};
 use wos_export::{ExportConfig, ocel, prov_o, xes};
 
 // ── Fixture shape ────────────────────────────────────────────────
@@ -544,7 +544,7 @@ fn assert_prov_o(fixture: &ExportFixture, log: &ProvenanceLog, config: &ExportCo
         .records()
         .iter()
         .filter(|record| {
-            record.record_kind == wos_core::provenance::ProvenanceKind::StateTransition
+            record.record_kind == wos_core::ProvenanceKind::StateTransition
                 && !record.inputs.is_empty()
                 && !record.outputs.is_empty()
         })

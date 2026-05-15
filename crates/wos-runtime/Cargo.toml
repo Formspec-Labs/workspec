@@ -10,7 +10,6 @@ repository.workspace = true
 base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
 fel-core.workspace = true
-integrity-cbor = { path = "../../../integrity-stack/crates/integrity-cbor", features = ["json"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 semver = "1"
@@ -19,6 +18,7 @@ thiserror = "2"
 time = { version = "0.3", features = ["formatting", "parsing"] }
 ureq = { version = "3", features = ["json"] }
 wos-core = { path = "../wos-core" }
+wos-events = { path = "../wos-events" }
 
 [dev-dependencies]
 jsonschema = "0.46"

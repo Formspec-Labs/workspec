@@ -7,7 +7,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::provenance::{CaseFileSnapshot, ProvenanceKind, ProvenanceRecord};
+use wos_events::provenance::{CaseFileSnapshot, ProvenanceKind, ProvenanceRecord};
 
 /// Deterministic adverse-decision notice input.
 #[derive(Debug, Clone)]

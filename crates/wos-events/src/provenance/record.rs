@@ -1,9 +1,9 @@
 // Rust guideline compliant 2026-02-21
 
 use serde::{Deserialize, Deserializer, Serialize, de};
+use stack_common_typeid as typeid;
 
-use crate::model::kernel::{ActorKind, AuditLayer, MutationSource, VerificationLevel};
-use crate::typeid;
+use crate::{ActorKind, AuditLayer, MutationSource, VerificationLevel};
 
 use super::kind::ProvenanceKind;
 use super::snapshot::CaseFileSnapshot;
@@ -452,8 +452,17 @@ pub struct SignatureAffirmationInput<'a> {
     pub role: &'a str,
     /// Signature Profile document id.
     pub document_id: &'a str,
+    /// Opaque identifier for the signing act. One signing act may produce
+    /// multiple localized `SignatureAffirmation` records that share this id.
+    pub signing_act_id: &'a str,
+    /// Structured rendered-document reference carrying at least
+    /// `{documentId, locale}` for K-2 downstream grouping.
+    pub document_ref: serde_json::Value,
     /// Digest of the document bytes the signer affirmed.
     pub document_hash: &'a str,
+    /// Digest of the rendered presentation bytes under
+    /// `trellis-presentation-artifact-v1`.
+    pub presentation_hash: &'a str,
     /// Digest algorithm used for `document_hash`.
     pub document_hash_algorithm: &'a str,
     /// Source system that supplied the verified signature evidence.
@@ -496,6 +505,9 @@ pub struct SignatureAffirmationInput<'a> {
     pub primitive_verification: serde_json::Value,
     /// Optional base64-encoded COSE_Sign1 VerificationReceipt bytes.
     pub verification_receipt: Option<&'a str>,
+    /// Optional reference edge to a witnessed signature, when this affirmation
+    /// records a witness/counter-signature relationship.
+    pub witnessed_signature_ref: Option<&'a str>,
 }
 
 /// Signature admission failure provenance input.
@@ -725,7 +737,9 @@ impl ProvenanceRecord {
         typeid::mint_provenance_id()
     }
 
-    pub(crate) fn blank(record_kind: ProvenanceKind) -> Self {
+    #[doc(hidden)]
+    #[must_use]
+    pub fn blank(record_kind: ProvenanceKind) -> Self {
         Self {
             id: Self::mint_id(),
             record_kind,
@@ -1162,8 +1176,17 @@ impl ProvenanceRecord {
                 serde_json::Value::String(input.document_id.to_string()),
             ),
             (
+                "signingActId".to_string(),
+                serde_json::Value::String(input.signing_act_id.to_string()),
+            ),
+            ("documentRef".to_string(), input.document_ref),
+            (
                 "documentHash".to_string(),
                 serde_json::Value::String(input.document_hash.to_string()),
+            ),
+            (
+                "presentationHash".to_string(),
+                serde_json::Value::String(input.presentation_hash.to_string()),
             ),
             (
                 "documentHashAlgorithm".to_string(),
@@ -1214,6 +1237,14 @@ impl ProvenanceRecord {
             (
                 "primitiveVerification".to_string(),
                 input.primitive_verification,
+            ),
+            (
+                "witnessedSignatureRef".to_string(),
+                input
+                    .witnessed_signature_ref
+                    .map_or(serde_json::Value::Null, |value| {
+                        serde_json::Value::String(value.to_string())
+                    }),
             ),
         ]);
 

@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use wos_core::provenance::ProvenanceRecord;
+use wos_core::ProvenanceRecord;
 
 use crate::binding::BindingError;
 use crate::runtime::RuntimeError;

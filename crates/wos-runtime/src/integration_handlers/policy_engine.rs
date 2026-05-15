@@ -15,7 +15,7 @@
 
 use wos_core::eval::ObservedAction;
 use wos_core::model::kernel::KernelDocument;
-use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
+use wos_core::{ProvenanceKind, ProvenanceRecord};
 
 use crate::integration::{IntegrationBinding, IntegrationBindingKind};
 use crate::milestones::evaluate_milestones;

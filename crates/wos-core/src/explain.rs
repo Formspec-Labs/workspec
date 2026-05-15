@@ -12,7 +12,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::model::governance::SourceAuthority;
-use crate::provenance::ProvenanceRecord;
+use wos_events::provenance::ProvenanceRecord;
 
 /// Assembled explanation for an adverse decision (Runtime S9.4).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -241,7 +241,7 @@ fn authority_rank(authority: Option<SourceAuthority>) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::provenance::{ProvenanceKind, ProvenanceRecord};
+    use wos_events::provenance::{ProvenanceKind, ProvenanceRecord};
 
     fn make_reasoning_record(
         transition_id: &str,

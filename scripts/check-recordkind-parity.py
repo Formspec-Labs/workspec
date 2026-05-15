@@ -10,7 +10,7 @@ from the typed Rust path.
 `work-spec/schemas/` whose `properties.recordKind.const` (or single-element
 `enum`) pins a literal string, that literal MUST equal the camelCase
 serialization of some `ProvenanceKind` variant in
-`work-spec/crates/wos-core/src/provenance/kind.rs`. Mismatch fails CI.
+`work-spec/crates/wos-events/src/provenance/kind.rs`. Mismatch fails CI.
 
 **Reverse direction (informational, intentionally not enforced).** The
 script also lists variants that have *no* schema `$def` binding them. Most
@@ -202,7 +202,7 @@ def main() -> int:
 
     root: Path = args.root
     schemas_root = root / "schemas"
-    kind_rs = root / "crates" / "wos-core" / "src" / "provenance" / "kind.rs"
+    kind_rs = root / "crates" / "wos-events" / "src" / "provenance" / "kind.rs"
 
     if not schemas_root.is_dir():
         print(f"error: schemas/ not found under {root}", file=sys.stderr)

@@ -8,10 +8,10 @@
 
 use wos_core::instance::WorkflowProcess;
 use wos_core::model::kernel::{ActorKind, KernelDocument};
-use wos_core::provenance::{ProvenanceAuditTier, ProvenanceKind, ProvenanceRecord};
+use wos_core::{ProvenanceAuditTier, ProvenanceKind, ProvenanceRecord};
 
 use crate::binding::SubmissionValidation;
-use crate::custody::CustodyAppendReceipt;
+use wos_events::custody::CustodyAppendReceipt;
 
 /// Stamp every record whose `timestamp` is empty with `now_iso`.
 ///
@@ -356,7 +356,7 @@ fn digest_of(items: &[String]) -> Option<String> {
 #[cfg(test)]
 mod stamp_custody_receipt_tests {
     use super::*;
-    use crate::custody::CustodyAppendReceipt;
+    use wos_events::custody::CustodyAppendReceipt;
 
     const HASH_A: &str = "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c";
     const HASH_B: &str = "0000000000000000000000000000000000000000000000000000000000000000";
@@ -364,13 +364,7 @@ mod stamp_custody_receipt_tests {
     #[test]
     fn stamps_when_absent() {
         let mut record = ProvenanceRecord::unmatched_event("e", None);
-        stamp_custody_receipt(
-            &mut record,
-            &CustodyAppendReceipt {
-                canonical_event_hash: HASH_A.to_string(),
-            },
-        )
-        .expect("stamp");
+        stamp_custody_receipt(&mut record, &CustodyAppendReceipt::new(HASH_A)).expect("stamp");
         assert_eq!(record.canonical_event_hash.as_deref(), Some(HASH_A));
     }
 
@@ -378,13 +372,7 @@ mod stamp_custody_receipt_tests {
     fn no_op_when_hash_unchanged() {
         let mut record = ProvenanceRecord::unmatched_event("e", None);
         record.canonical_event_hash = Some(HASH_A.to_string());
-        stamp_custody_receipt(
-            &mut record,
-            &CustodyAppendReceipt {
-                canonical_event_hash: HASH_A.to_string(),
-            },
-        )
-        .expect("idempotent");
+        stamp_custody_receipt(&mut record, &CustodyAppendReceipt::new(HASH_A)).expect("idempotent");
         assert_eq!(record.canonical_event_hash.as_deref(), Some(HASH_A));
     }
 
@@ -392,13 +380,8 @@ mod stamp_custody_receipt_tests {
     fn conflict_when_hash_differs() {
         let mut record = ProvenanceRecord::unmatched_event("e", None);
         record.canonical_event_hash = Some(HASH_A.to_string());
-        let err = stamp_custody_receipt(
-            &mut record,
-            &CustodyAppendReceipt {
-                canonical_event_hash: HASH_B.to_string(),
-            },
-        )
-        .expect_err("conflict");
+        let err = stamp_custody_receipt(&mut record, &CustodyAppendReceipt::new(HASH_B))
+            .expect_err("conflict");
         assert_eq!(
             err,
             CustodyReceiptStampError::Conflict {

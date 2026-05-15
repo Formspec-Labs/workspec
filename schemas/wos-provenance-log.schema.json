@@ -552,7 +552,13 @@
             "roleId": "applicantSigner",
             "role": "signer",
             "documentId": "benefitsApplication",
+            "signingActId": "01JQRPD32JF8XT9QXKKV3RQSD1",
+            "documentRef": {
+              "documentId": "benefitsApplication",
+              "locale": "en-US"
+            },
             "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "presentationHash": "fedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedc",
             "documentHashAlgorithm": "sha-256",
             "sourceSignatureSystem": "formspec",
             "sourceSignatureId": "sig-2026-0001",
@@ -579,7 +585,8 @@
             "primitiveVerification": {
               "status": "deferredPendingHelper",
               "reason": "formspec-signing-helper-pending"
-            }
+            },
+            "witnessedSignatureRef": null
           }
         }
       ],
@@ -912,7 +919,10 @@
         "roleId",
         "role",
         "documentId",
+        "signingActId",
+        "documentRef",
         "documentHash",
+        "presentationHash",
         "documentHashAlgorithm",
         "sourceSignatureSystem",
         "sourceSignatureId",
@@ -926,7 +936,8 @@
         "ceremonyId",
         "sourceResponseRef",
         "custodyHookEligible",
-        "primitiveVerification"
+        "primitiveVerification",
+        "witnessedSignatureRef"
       ],
       "oneOf": [
         {
@@ -1013,6 +1024,47 @@
             "benefitsApplication"
           ]
         },
+        "signingActId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque signing-act identifier shared by all SignatureAffirmation records produced by one signer action, including localized document variants.",
+          "examples": [
+            "01JQRPD32JF8XT9QXKKV3RQSD1"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "documentRef": {
+          "type": "object",
+          "description": "Structured reference to the rendered document presentation the signer saw. K-2 requires documentId plus locale so multiple localized affirmations can share a signingActId without losing presentation identity.",
+          "required": [
+            "documentId",
+            "locale"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "documentId": {
+              "type": "string",
+              "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$",
+              "description": "Signature Profile document id for the rendered presentation.",
+              "examples": [
+                "benefitsApplication"
+              ]
+            },
+            "locale": {
+              "type": "string",
+              "minLength": 1,
+              "description": "BCP 47 locale token for the rendered presentation, or `und` when no locale was declared.",
+              "examples": [
+                "en-US"
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
+            }
+          }
+        },
         "documentHash": {
           "type": "string",
           "pattern": "^[A-Fa-f0-9]{64,128}$",
@@ -1020,6 +1072,17 @@
           "examples": [
             "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
           ]
+        },
+        "presentationHash": {
+          "type": "string",
+          "pattern": "^[A-Fa-f0-9]{64,128}$",
+          "description": "Digest of the rendered presentation bytes under `trellis-presentation-artifact-v1` that the signer saw.",
+          "examples": [
+            "fedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedc"
+          ],
+          "x-wos": {
+            "openStringKind": "hash"
+          }
         },
         "documentHashAlgorithm": {
           "type": "string",
@@ -1225,6 +1288,20 @@
           "description": "Optional base64-encoded COSE_Sign1 VerificationReceipt bytes. Present when primitiveVerification.status is 'verified' and a verifier ran. Absent when status is 'deferredPendingHelper'.",
           "examples": [
             "0oRWoQExiQEFQnNpZ25lZA=="
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "witnessedSignatureRef": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Reference edge to the witnessed signature when this affirmation is a witness/counter-signature; null when the signing act is not witnessing another signature.",
+          "examples": [
+            "sig-2026-0001",
+            null
           ],
           "x-wos": {
             "openStringKind": "identifier"

@@ -6,14 +6,14 @@
 //! WOS runtime. Concrete adapters can implement the trait directly, while the
 //! current `WosRuntime` remains the reference in-memory adapter.
 
+use wos_core::ProvenanceRecord;
 use wos_core::instance::{PendingEvent, WorkflowProcess};
-use wos_core::provenance::ProvenanceRecord;
 
-use crate::custody::{CustodyAppendContext, CustodyAppendInput, CustodyAppendReceipt};
 use crate::intake::{IntakeAcceptanceDecision, IntakeAcceptanceRequest};
 use crate::runtime::{
     CreateProcessRequest, DrainOnceResult, PersistDraftResult, RuntimeError, TaskSubmissionResult,
 };
+use wos_events::custody::{CustodyAppendContext, CustodyAppendInput, CustodyAppendReceipt};
 
 /// Executes durable WOS runtime commands.
 ///

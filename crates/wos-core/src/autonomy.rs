@@ -9,7 +9,7 @@
 
 use crate::model::ai::{AIIntegrationDocument, AgentDeclaration, AutonomyLevel};
 use crate::model::kernel::ImpactLevel;
-use crate::provenance::{ProvenanceKind, ProvenanceRecord};
+use wos_events::provenance::{ProvenanceKind, ProvenanceRecord};
 
 /// Result of autonomy evaluation for a single agent invocation.
 #[derive(Debug, Clone)]

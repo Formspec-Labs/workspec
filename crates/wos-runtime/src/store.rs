@@ -4,8 +4,8 @@
 
 use std::collections::HashMap;
 
+use wos_core::ProvenanceRecord;
 use wos_core::instance::WorkflowProcess;
-use wos_core::provenance::ProvenanceRecord;
 
 use crate::intake::{
     IntakeAcceptanceDecision, IntakeAcceptanceOutcome, IntakeAcceptanceRequest, IntakeRecordStatus,
@@ -635,8 +635,8 @@ pub fn runtime_aux_from_json(v: &serde_json::Value) -> RuntimeAuxFields {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wos_core::ProvenanceRecord;
     use wos_core::instance::InstanceStatus;
-    use wos_core::provenance::ProvenanceRecord;
 
     fn record_with(process_id: &str, case_ledger_id: &str) -> RuntimeRecord {
         let instance = WorkflowProcess {
