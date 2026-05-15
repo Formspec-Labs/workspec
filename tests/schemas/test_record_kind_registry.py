@@ -8,6 +8,9 @@ from pathlib import Path
 
 WOS_SPEC_ROOT = Path(__file__).resolve().parents[2]
 REGISTRY_PATH = WOS_SPEC_ROOT / "schemas" / "record-kind-registry.json"
+ADR_0093_PATH = (
+    WOS_SPEC_ROOT / "thoughts" / "adr" / "0093-case-is-its-trellis-ledger.md"
+)
 WORKFLOW_PATH = WOS_SPEC_ROOT / "schemas" / "wos-workflow.schema.json"
 API_PROVENANCE_PATH = WOS_SPEC_ROOT / "schemas" / "api" / "provenance.schema.json"
 PROVENANCE_LOG_PATH = WOS_SPEC_ROOT / "schemas" / "wos-provenance-log.schema.json"
@@ -51,8 +54,25 @@ def _pascal_to_camel(value: str) -> str:
 
 
 def _canonical_event_literals_from_rust() -> dict[str, str]:
-    mappings = {}
-    for line in PROVENANCE_KIND_RS.read_text().splitlines():
+    """Mirror `ProvenanceKind::canonical_event_literal` (substrate macro table)."""
+    text = PROVENANCE_KIND_RS.read_text()
+    mappings: dict[str, str] = {}
+    in_macro = False
+    for line in text.splitlines():
+        if "define_canonical_substrate_events! {" in line:
+            in_macro = True
+            continue
+        if in_macro and line.strip() == "}":
+            break
+        if not in_macro:
+            continue
+        match = re.match(r'^\s*"([^"]+)"\s*=>\s*([A-Za-z0-9_]+)\s*,\s*$', line)
+        if match:
+            event_literal, rust_variant = match.groups()
+            mappings[_pascal_to_camel(rust_variant)] = event_literal
+    if mappings:
+        return mappings
+    for line in text.splitlines():
         match = CANONICAL_EVENT_LITERAL_RE.match(line)
         if match:
             rust_variant, event_literal = match.groups()
@@ -181,6 +201,37 @@ def test_record_kind_registry_admission_contract_sources_runtime_catalog():
     assert contract["dispatchField"] == "event"
     assert contract["legacyRecordKindField"] == "recordKind"
     assert "recordKinds[].eventLiteral" in contract["instanceGeneration"]
+
+
+def test_adr_0093_registry_count_prose_matches_json():
+    """TWREF-061: ADR 0093 body must not drift from record-kind-registry.json totals."""
+    registry = _registry()
+    total = registry["totalCount"]
+    overlays = registry["schemaValidatedCount"]
+    flat = total - overlays
+    text = ADR_0093_PATH.read_text()
+
+    long_form = re.search(
+        rf"\({total} kinds; (\d+) with schema-validated overlays; (\d+) flat\)",
+        text,
+    )
+    assert long_form is not None, (
+        "ADR 0093 missing parenthetical registry counts "
+        f"({total} kinds; {overlays} with schema-validated overlays; {flat} flat)"
+    )
+    assert int(long_form.group(1)) == overlays
+    assert int(long_form.group(2)) == flat
+
+    short_form = re.search(
+        rf"\({total} kinds; (\d+) schema-validated; (\d+) flat\)",
+        text,
+    )
+    assert short_form is not None, (
+        "ADR 0093 missing short-form registry counts "
+        f"({total} kinds; {overlays} schema-validated; {flat} flat)"
+    )
+    assert int(short_form.group(1)) == overlays
+    assert int(short_form.group(2)) == flat
 
 
 def test_registry_event_literal_mappings_drive_workflow_api_and_log_guards():
