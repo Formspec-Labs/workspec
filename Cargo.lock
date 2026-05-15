@@ -1451,6 +1451,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "integrity-cbor"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "ciborium",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
 name = "intl_pluralrules"
 version = "7.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4386,8 +4396,8 @@ version = "0.1.0"
 dependencies = [
  "base64",
  "chrono",
- "ciborium",
  "fel-core",
+ "integrity-cbor",
  "jsonschema",
  "semver",
  "serde",

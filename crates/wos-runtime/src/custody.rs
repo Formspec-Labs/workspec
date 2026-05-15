@@ -5,11 +5,9 @@
 //! This module publishes the WOS-owned append surface from ADR-0061 without
 //! embedding any Trellis-, Temporal-, or Restate-specific adapter logic.
 
-use std::collections::HashMap;
-
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
-use ciborium::Value as CborValue;
+use integrity_cbor::{JsonCborError, dcbor_bytes_to_json, json_to_dcbor_bytes_with_limit};
 use serde::{Deserialize, Serialize};
 use wos_core::provenance::ProvenanceRecord;
 use wos_core::typeid;
@@ -132,11 +130,13 @@ impl CustodyAppendInput {
     ) -> Result<Self, CustodyAppendError> {
         metadata.validate()?;
         let authored = provenance_record_to_custody_json(record)?;
-        let encoded = record_json_to_dcbor(
+        let string_tags = provenance_string_tags();
+        let encoded = json_to_dcbor_bytes_with_limit(
             &authored,
             context.max_inline_record_bytes(),
-            &provenance_string_tags(),
-        )?;
+            &string_tags,
+        )
+        .map_err(CustodyAppendError::from)?;
         Ok(Self {
             case_id: metadata.case_id,
             record_id: metadata.record_id,
@@ -165,9 +165,7 @@ impl CustodyAppendInput {
     /// # Errors
     /// Returns an error when the authored bytes are not valid CBOR.
     pub fn record_json_view(&self) -> Result<serde_json::Value, CustodyAppendError> {
-        let decoded: CborValue = ciborium::from_reader(self.record.as_slice())
-            .map_err(|error| CustodyAppendError::Dcbor(error.to_string()))?;
-        cbor_to_json(&decoded)
+        dcbor_bytes_to_json(&self.record).map_err(CustodyAppendError::from)
     }
 }
 
@@ -226,6 +224,18 @@ pub enum CustodyAppendError {
     /// The record contained an unsupported tagged value on decode.
     #[error("custody record contains unsupported CBOR content: {0}")]
     UnsupportedCbor(String),
+}
+
+impl From<JsonCborError> for CustodyAppendError {
+    fn from(error: JsonCborError) -> Self {
+        match error {
+            JsonCborError::Cbor(message) => Self::Dcbor(message),
+            JsonCborError::Oversized { actual, max } => Self::OversizedRecord { actual, max },
+            JsonCborError::IntegerOutOfRange => Self::IntegerOutOfRange,
+            JsonCborError::NonFiniteFloat => Self::NonFiniteFloat,
+            JsonCborError::UnsupportedCbor(message) => Self::UnsupportedCbor(message),
+        }
+    }
 }
 
 fn validate_required_field(name: &'static str, value: &str) -> Result<(), CustodyAppendError> {
@@ -308,141 +318,8 @@ fn camel_case_record_kind_to_event_tail(kind: &str) -> String {
     event_tail
 }
 
-fn provenance_string_tags() -> HashMap<Vec<String>, u64> {
-    HashMap::from([(vec!["timestamp".to_string()], 0u64)])
-}
-
-fn record_json_to_dcbor(
-    value: &serde_json::Value,
-    max_bytes: usize,
-    string_tags: &HashMap<Vec<String>, u64>,
-) -> Result<Vec<u8>, CustodyAppendError> {
-    let cbor = json_to_cbor(value, &mut Vec::new(), string_tags)?;
-    let mut bytes = Vec::new();
-    ciborium::into_writer(&cbor, &mut bytes)
-        .map_err(|error| CustodyAppendError::Dcbor(error.to_string()))?;
-    if bytes.len() > max_bytes {
-        return Err(CustodyAppendError::OversizedRecord {
-            actual: bytes.len(),
-            max: max_bytes,
-        });
-    }
-    Ok(bytes)
-}
-
-fn json_to_cbor(
-    value: &serde_json::Value,
-    path: &mut Vec<String>,
-    string_tags: &HashMap<Vec<String>, u64>,
-) -> Result<CborValue, CustodyAppendError> {
-    match value {
-        serde_json::Value::Null => Ok(CborValue::Null),
-        serde_json::Value::Bool(value) => Ok(CborValue::Bool(*value)),
-        serde_json::Value::String(value) => {
-            if let Some(tag) = string_tags.get(path) {
-                Ok(CborValue::Tag(
-                    *tag,
-                    Box::new(CborValue::Text(value.clone())),
-                ))
-            } else {
-                Ok(CborValue::Text(value.clone()))
-            }
-        }
-        serde_json::Value::Number(number) => {
-            // Integers outside ±2^63−1 are rejected per Custody Hook Encoding §1.6
-            // encoding table and §1.7 rejection list.
-            if let Some(integer) = number.as_i64() {
-                Ok(CborValue::Integer(integer.into()))
-            } else if let Some(unsigned) = number.as_u64() {
-                let integer =
-                    i64::try_from(unsigned).map_err(|_| CustodyAppendError::IntegerOutOfRange)?;
-                Ok(CborValue::Integer(integer.into()))
-            } else if let Some(float) = number.as_f64() {
-                if !float.is_finite() {
-                    return Err(CustodyAppendError::NonFiniteFloat);
-                }
-                Ok(CborValue::Float(float))
-            } else {
-                Err(CustodyAppendError::IntegerOutOfRange)
-            }
-        }
-        serde_json::Value::Array(items) => {
-            let mut encoded = Vec::with_capacity(items.len());
-            for item in items {
-                encoded.push(json_to_cbor(item, path, string_tags)?);
-            }
-            Ok(CborValue::Array(encoded))
-        }
-        serde_json::Value::Object(object) => {
-            let mut entries = Vec::with_capacity(object.len());
-            for (key, item) in object {
-                path.push(key.clone());
-                let key_value = CborValue::Text(key.clone());
-                let value = json_to_cbor(item, path, string_tags)?;
-                path.pop();
-                let key_bytes = cbor_key_bytes(&key_value)?;
-                entries.push((key_bytes, key_value, value));
-            }
-            entries.sort_by(|left, right| left.0.cmp(&right.0));
-            Ok(CborValue::Map(
-                entries
-                    .into_iter()
-                    .map(|(_, key, value)| (key, value))
-                    .collect(),
-            ))
-        }
-    }
-}
-
-fn cbor_key_bytes(value: &CborValue) -> Result<Vec<u8>, CustodyAppendError> {
-    let mut bytes = Vec::new();
-    ciborium::into_writer(value, &mut bytes)
-        .map_err(|error| CustodyAppendError::Dcbor(error.to_string()))?;
-    Ok(bytes)
-}
-
-fn cbor_to_json(value: &CborValue) -> Result<serde_json::Value, CustodyAppendError> {
-    match value {
-        CborValue::Null => Ok(serde_json::Value::Null),
-        CborValue::Bool(value) => Ok(serde_json::Value::Bool(*value)),
-        CborValue::Integer(value) => {
-            let signed = i64::try_from(*value).map_err(|_| {
-                CustodyAppendError::UnsupportedCbor(
-                    "integer outside signed 64-bit range".to_string(),
-                )
-            })?;
-            Ok(serde_json::json!(signed))
-        }
-        CborValue::Float(value) => Ok(serde_json::json!(value)),
-        CborValue::Text(value) => Ok(serde_json::Value::String(value.clone())),
-        CborValue::Bytes(value) => Ok(serde_json::Value::String(STANDARD.encode(value))),
-        CborValue::Array(items) => {
-            let mut decoded = Vec::with_capacity(items.len());
-            for item in items {
-                decoded.push(cbor_to_json(item)?);
-            }
-            Ok(serde_json::Value::Array(decoded))
-        }
-        CborValue::Map(entries) => {
-            let mut decoded = serde_json::Map::with_capacity(entries.len());
-            for (key, value) in entries {
-                let CborValue::Text(key) = key else {
-                    return Err(CustodyAppendError::UnsupportedCbor(
-                        "non-text map key".to_string(),
-                    ));
-                };
-                decoded.insert(key.clone(), cbor_to_json(value)?);
-            }
-            Ok(serde_json::Value::Object(decoded))
-        }
-        CborValue::Tag(0 | 32, inner) => cbor_to_json(inner),
-        CborValue::Tag(tag, _) => Err(CustodyAppendError::UnsupportedCbor(format!(
-            "unsupported CBOR tag {tag}"
-        ))),
-        other => Err(CustodyAppendError::UnsupportedCbor(format!(
-            "unsupported CBOR value {other:?}"
-        ))),
-    }
+fn provenance_string_tags() -> Vec<(Vec<String>, u64)> {
+    vec![(vec!["timestamp".to_string()], 0u64)]
 }
 
 mod base64_record_bytes {
