@@ -642,7 +642,7 @@ mod tests {
         let instance = WorkflowProcess {
             process_id: process_id.to_string(),
             case_ledger_id: case_ledger_id.to_string(),
-            tenant: wos_core::typeid::DEFAULT_TENANT.to_string(),
+            tenant: stack_common_typeid::DEFAULT_TENANT.to_string(),
             definition_url: "urn:test:case-scoped-store".to_string(),
             definition_version: "1.0.0".to_string(),
             configuration: Vec::new(),

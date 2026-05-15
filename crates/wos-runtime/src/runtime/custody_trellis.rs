@@ -283,7 +283,7 @@ mod tests {
     use stack_common_error::StackError;
     use trellis_service_client::{SubstrateAppendRequest, VerificationReceipt};
     use wos_core::instance::{PendingEvent, WorkflowProcess};
-    use wos_core::typeid;
+    use stack_common_typeid as typeid;
 
     use crate::intake::{IntakeAcceptanceDecision, IntakeAcceptanceRequest};
     use crate::runtime::{

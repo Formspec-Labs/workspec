@@ -65,3 +65,39 @@ pub use wos_events::custody::{
     CustodyAppendContext, CustodyAppendError, CustodyAppendInput, CustodyAppendMetadata,
     CustodyAppendReceipt,
 };
+
+#[cfg(test)]
+mod typeid_stack_common_contract {
+    //! TWREF-004 — `stack-common-typeid` is the single mint/parse surface; regression guard for
+    //! urn prefix handling that previously lived on the retired `wos_core::typeid` shim.
+
+    use stack_common_typeid::{
+        CASE_PREFIX, DEFAULT_TENANT, PROCESS_PREFIX, extract_tenant, is_case_ledger_id,
+        is_process_id, is_valid_record_type_id, is_valid_type_id, mint_case_ledger_id,
+        mint_process_id, mint_provenance_id, parse_case_ledger_id, parse_process_id,
+    };
+
+    #[test]
+    fn given_minted_ids_when_round_tripped_through_urn_helpers_then_matches_shared_typeid_rules() {
+        let case_id = mint_case_ledger_id();
+        assert!(is_case_ledger_id(&case_id));
+        assert_eq!(parse_case_ledger_id(&case_id), Some(case_id.as_str()));
+        assert_eq!(extract_tenant(&case_id), Some(DEFAULT_TENANT));
+
+        let case_urn = format!("urn:wos:{case_id}");
+        assert_eq!(parse_case_ledger_id(&case_urn), Some(case_id.as_str()));
+        assert!(!is_valid_type_id(&case_urn, Some(CASE_PREFIX)));
+        assert!(!is_case_ledger_id(&case_urn));
+        assert_eq!(extract_tenant(&case_urn), None);
+
+        let process_id = mint_process_id();
+        let process_urn = format!("urn:wos:{process_id}");
+        assert_eq!(parse_process_id(&process_urn), Some(process_id.as_str()));
+        assert!(!is_valid_type_id(&process_urn, Some(PROCESS_PREFIX)));
+        assert!(!is_process_id(&process_urn));
+
+        let record_id = mint_provenance_id();
+        assert!(is_valid_record_type_id(&record_id));
+        assert!(!is_valid_record_type_id(&format!("urn:wos:{record_id}")));
+    }
+}

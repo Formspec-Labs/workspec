@@ -232,9 +232,9 @@ pub enum CustodyAppendError {
     #[error("custody record integer is outside the supported signed 64-bit range")]
     IntegerOutOfRange,
 
-    /// The record contained a non-finite JSON number.
-    #[error("custody record numbers must be finite")]
-    NonFiniteFloat,
+    /// The record contained a float outside deterministic dCBOR JSON rules (non-finite or `-0.0`).
+    #[error("custody record floating-point numbers must be finite and use canonical +0")]
+    FloatNotDcborCanonical,
 
     /// The record contained an unsupported tagged value on decode.
     #[error("custody record contains unsupported CBOR content: {0}")]
@@ -247,7 +247,7 @@ impl From<JsonCborError> for CustodyAppendError {
             JsonCborError::Cbor(message) => Self::Dcbor(message),
             JsonCborError::Oversized { actual, max } => Self::OversizedRecord { actual, max },
             JsonCborError::IntegerOutOfRange => Self::IntegerOutOfRange,
-            JsonCborError::NonFiniteFloat => Self::NonFiniteFloat,
+            JsonCborError::FloatNotDcborCanonical => Self::FloatNotDcborCanonical,
             JsonCborError::UnsupportedCbor(message) => Self::UnsupportedCbor(message),
         }
     }

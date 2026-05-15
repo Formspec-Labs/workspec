@@ -19,7 +19,9 @@ mod record;
 mod snapshot;
 
 pub use audit_tier::{ProvenanceAuditTier, audit_layer_for_kind};
-pub use kind::{ProvenanceKind, SUBSTRATE_CANONICAL_EVENT_LITERALS};
+pub use kind::{
+    GOVERNANCE_DETERMINATION_WIRE_EVENT_PREFIX, ProvenanceKind, SUBSTRATE_CANONICAL_EVENT_LITERALS,
+};
 pub use log::ProvenanceLog;
 pub use record::{
     AmendmentAuthorizedInput, AuthorizationAttestationInput, AuthorizationRejectedInput,

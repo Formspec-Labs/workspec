@@ -37,6 +37,7 @@ repository = "https://github.com/formspec/formspec"
 [workspace.dependencies]
 fel-core = { path = "../fel-core" }
 stack-common-http = { path = "../stack-common/crates/stack-common-http" }
+stack-common-typeid = { path = "../stack-common/crates/stack-common-typeid" }
 trellis-service-client = { path = "../trellis/crates/trellis-service-client" }
 
 [profile.dev]

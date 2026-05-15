@@ -456,6 +456,12 @@ macro_rules! define_canonical_substrate_events {
     };
 }
 
+/// Wire prefix shared by `wos.governance.determination_*` substrate events.
+///
+/// Verification rules (for example rescission terminality in `trellis-verify-wos`)
+/// treat any ledger `event_type` beginning with this prefix as determination-shaped.
+pub const GOVERNANCE_DETERMINATION_WIRE_EVENT_PREFIX: &str = "wos.governance.determination";
+
 define_canonical_substrate_events! {
     "wos.ai.capability_invocation" => CapabilityInvocation,
     "wos.assurance.identity_attestation" => IdentityAttestation,
@@ -575,6 +581,35 @@ mod substrate_literal_registry_tests {
             assert!(
                 kind.canonical_event_literal().is_some(),
                 "{kind:?} must expose canonical_event_literal"
+            );
+        }
+    }
+
+    /// Given WOS kinds reachable from `wos-server` `case_events` direct append, when literals are sorted, then each is
+    /// listed in the substrate registry so Trellis `WosEventAdmissionPolicy` and the HTTP façade stay aligned (TWREF-064).
+    #[test]
+    fn given_direct_case_append_kinds_when_sorted_then_literals_are_substrate_registered() {
+        use ProvenanceKind::{
+            CaseCreated, DeterminationRescinded, IdentityAttestation, IntakeAccepted, Reinstated,
+        };
+        let mut literals: Vec<&'static str> = vec![
+            CaseCreated,
+            IntakeAccepted,
+            IdentityAttestation,
+            DeterminationRescinded,
+            Reinstated,
+        ]
+        .into_iter()
+        .map(|kind| {
+            kind.canonical_event_literal()
+                .expect("direct-append kinds must carry substrate literals")
+        })
+        .collect();
+        literals.sort_unstable();
+        for literal in literals {
+            assert!(
+                SUBSTRATE_CANONICAL_EVENT_LITERALS.contains(&literal),
+                "{literal} must remain in SUBSTRATE_CANONICAL_EVENT_LITERALS"
             );
         }
     }

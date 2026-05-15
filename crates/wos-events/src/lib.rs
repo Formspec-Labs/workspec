@@ -23,11 +23,11 @@ pub use provenance::{
     CapabilityInvocationInput, CaseFileSnapshot, ClockResolvedInput, ClockResolvedResolution,
     ClockSkewObservedInput, ClockStartedInput, CommitAttemptFailureInput, CommitFailureKind,
     ConfigurationWarningInput, CorrectionAuthorizedInput, DeterminationAmendedInput,
-    DeterminationRescindedInput, IdentityAttestationInput, InstanceMigratedInput, KeyRebindError,
-    KeyRebindInput, MigrationPinChangedInput, ProvenanceAuditTier, ProvenanceKind, ProvenanceLog,
-    ProvenanceRecord, ReinstatedInput, RescissionAuthorizedInput,
-    SUBSTRATE_CANONICAL_EVENT_LITERALS, SignatureAdmissionFailedInput, SignatureAffirmationInput,
-    audit_layer_for_kind,
+    DeterminationRescindedInput, GOVERNANCE_DETERMINATION_WIRE_EVENT_PREFIX,
+    IdentityAttestationInput, InstanceMigratedInput, KeyRebindError, KeyRebindInput,
+    MigrationPinChangedInput, ProvenanceAuditTier, ProvenanceKind, ProvenanceLog, ProvenanceRecord,
+    ReinstatedInput, RescissionAuthorizedInput, SUBSTRATE_CANONICAL_EVENT_LITERALS,
+    SignatureAdmissionFailedInput, SignatureAffirmationInput, audit_layer_for_kind,
 };
 
 /// Actor type (Kernel S3).

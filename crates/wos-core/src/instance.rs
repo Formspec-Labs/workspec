@@ -9,8 +9,9 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use stack_common_typeid as typeid;
+
 use crate::model::governance::HoldType;
-use crate::typeid;
 
 fn default_tenant() -> String {
     typeid::DEFAULT_TENANT.to_string()
@@ -31,7 +32,7 @@ pub struct WorkflowProcess {
     /// MUST match the TypeID prefix when `process_id` is a WOS process TypeID.
     /// At creation, processors resolve this from `CreateProcessRequest.tenant`
     /// when set (and consistent with the TypeID prefix when both are present),
-    /// else from the `process_id` prefix, else [`crate::typeid::DEFAULT_TENANT`].
+    /// else from the `process_id` prefix, else [`stack_common_typeid::DEFAULT_TENANT`].
     #[serde(default = "default_tenant")]
     pub tenant: String,
 

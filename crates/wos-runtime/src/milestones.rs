@@ -151,7 +151,7 @@ mod tests {
         WorkflowProcess {
             process_id: "test".to_string(),
             case_ledger_id: "test-case".to_string(),
-            tenant: wos_core::typeid::DEFAULT_TENANT.to_string(),
+            tenant: stack_common_typeid::DEFAULT_TENANT.to_string(),
             definition_url: "urn:test".to_string(),
             definition_version: "1.0.0".to_string(),
             configuration: Vec::new(),

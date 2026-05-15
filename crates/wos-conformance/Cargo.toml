@@ -71,6 +71,7 @@ wos-server-ports = { path = "../../../workspec-server/crates/wos-server-ports", 
 wos-server-runtime-restate = { path = "../../../workspec-server/crates/wos-server-runtime-restate", optional = true }
 
 [dev-dependencies]
+stack-common-typeid.workspace = true
 integrity-bundle-fixtures = { path = "../../../integrity-stack/crates/integrity-bundle-fixtures" }
 assert_cmd = "2"
 insta = { version = "1", features = ["json"] }

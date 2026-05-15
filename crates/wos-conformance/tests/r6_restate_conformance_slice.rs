@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 
 use wos_core::ProvenanceRecord;
 use wos_core::instance::PendingEvent;
-use wos_core::typeid;
+use stack_common_typeid as typeid;
 use wos_runtime::restate_signature_fixture_runtime;
 use wos_runtime::runtime::CreateProcessRequest;
 use wos_runtime::{InMemoryStore, SharedInMemoryStore};

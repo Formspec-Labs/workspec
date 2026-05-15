@@ -12,7 +12,7 @@
 
 use wos_core::eval::{Evaluator, validate_migration_configuration};
 use wos_core::instance::{InstanceStatus, PendingEvent, WorkflowProcess};
-use wos_core::typeid;
+use stack_common_typeid as typeid;
 use wos_core::{InstanceMigratedInput, ProvenanceRecord};
 
 use crate::store::{RuntimeRecord, StoreError};

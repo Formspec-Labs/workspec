@@ -15,6 +15,7 @@ serde_json = "1"
 semver = "1"
 sha2 = "0.10"
 stack-common-http.workspace = true
+stack-common-typeid.workspace = true
 thiserror = "2"
 time = { version = "0.3", features = ["formatting", "parsing"] }
 trellis-service-client.workspace = true

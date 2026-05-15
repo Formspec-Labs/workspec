@@ -36,7 +36,6 @@ pub mod proxy;
 pub mod studio_api;
 pub mod timer;
 pub mod traits;
-pub mod typeid;
 
 #[cfg(test)]
 mod provenance_tests;
@@ -64,13 +63,6 @@ pub use model::notification_template::NotificationTemplateDocument;
 pub use project::Project;
 pub use proxy::{AssistGovernanceProxyEvidence, observe_assist_governance_proxy};
 pub use timer::Timers;
-pub use typeid::{
-    AI_PREFIX, ASSURANCE_PREFIX, CASE_PREFIX, DEFAULT_TENANT, GOVERNANCE_PREFIX, PROCESS_PREFIX,
-    PROVENANCE_PREFIX, is_case_ledger_id, is_process_id, is_valid_record_type_id, is_valid_type_id,
-    mint_ai_id, mint_assurance_id, mint_case_ledger_id, mint_governance_id, mint_process_id,
-    mint_provenance_id, mint_type_id, parse_case_ledger_id, parse_process_id, tenant,
-    tenant_from_env_value,
-};
 pub use wos_events::provenance::{
     AmendmentAuthorizedInput, AuthorizationAttestationInput, AuthorizationRejectedInput,
     CapabilityInvocationInput, CaseFileSnapshot, ClockResolvedInput, ClockResolvedResolution,

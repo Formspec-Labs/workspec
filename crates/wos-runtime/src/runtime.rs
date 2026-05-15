@@ -2672,12 +2672,12 @@ mod tests {
             }))
             .expect("kernel json"),
         );
-        let case_ledger_id = wos_core::typeid::mint_case_ledger_id();
+        let case_ledger_id = stack_common_typeid::mint_case_ledger_id();
         let case_ref = format!("urn:wos:{case_ledger_id}");
         let created_a = runtime
             .create_process_bound_to_case(
                 CreateProcessRequest {
-                    process_id: wos_core::typeid::mint_process_id(),
+                    process_id: stack_common_typeid::mint_process_id(),
                     tenant: None,
                     definition_url: "urn:test:intake-ambiguous".to_string(),
                     definition_version: "1.0.0".to_string(),
@@ -2689,7 +2689,7 @@ mod tests {
         let created_b = runtime
             .create_process_bound_to_case(
                 CreateProcessRequest {
-                    process_id: wos_core::typeid::mint_process_id(),
+                    process_id: stack_common_typeid::mint_process_id(),
                     tenant: None,
                     definition_url: "urn:test:intake-ambiguous".to_string(),
                     definition_version: "1.0.0".to_string(),
@@ -3554,7 +3554,7 @@ mod tests {
     fn create_process_rejects_case_typeid_as_process_id() {
         let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
         let mut runtime = runtime_with_kernel(kernel);
-        let pre_minted = wos_core::typeid::mint_case_ledger_id();
+        let pre_minted = stack_common_typeid::mint_case_ledger_id();
         let err = runtime
             .create_process(CreateProcessRequest {
                 process_id: pre_minted.clone(),
@@ -3571,7 +3571,7 @@ mod tests {
     fn create_process_preserves_pre_minted_process_typeid() {
         let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
         let mut runtime = runtime_with_kernel(kernel);
-        let pre_minted = wos_core::typeid::mint_process_id();
+        let pre_minted = stack_common_typeid::mint_process_id();
         let created = runtime
             .create_process(CreateProcessRequest {
                 process_id: pre_minted.clone(),
@@ -3597,9 +3597,9 @@ mod tests {
     fn create_process_can_bind_multiple_processes_to_one_case_ledger() {
         let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
         let mut runtime = runtime_with_kernel(kernel);
-        let case_ledger_id = wos_core::typeid::mint_case_ledger_id();
-        let process_a = wos_core::typeid::mint_process_id();
-        let process_b = wos_core::typeid::mint_process_id();
+        let case_ledger_id = stack_common_typeid::mint_case_ledger_id();
+        let process_a = stack_common_typeid::mint_process_id();
+        let process_b = stack_common_typeid::mint_process_id();
 
         let created_a = runtime
             .create_process_bound_to_case(
@@ -3649,7 +3649,7 @@ mod tests {
         assert_eq!(found, expected);
 
         // Unknown case ledger ids yield an empty vector (not a NotFound error).
-        let unrelated = wos_core::typeid::mint_case_ledger_id();
+        let unrelated = stack_common_typeid::mint_case_ledger_id();
         assert!(
             runtime.processes_for_case(unrelated.as_str()).is_empty(),
             "unbound case ledger should return empty Vec",
@@ -3660,11 +3660,11 @@ mod tests {
     fn process_api_rejects_ambiguous_case_ledger_ref() {
         let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
         let mut runtime = runtime_with_kernel(kernel);
-        let case_ledger_id = wos_core::typeid::mint_case_ledger_id();
+        let case_ledger_id = stack_common_typeid::mint_case_ledger_id();
         let created_a = runtime
             .create_process_bound_to_case(
                 CreateProcessRequest {
-                    process_id: wos_core::typeid::mint_process_id(),
+                    process_id: stack_common_typeid::mint_process_id(),
                     tenant: None,
                     definition_url: "urn:test:populator".to_string(),
                     definition_version: "1.0.0".to_string(),
@@ -3676,7 +3676,7 @@ mod tests {
         let created_b = runtime
             .create_process_bound_to_case(
                 CreateProcessRequest {
-                    process_id: wos_core::typeid::mint_process_id(),
+                    process_id: stack_common_typeid::mint_process_id(),
                     tenant: None,
                     definition_url: "urn:test:populator".to_string(),
                     definition_version: "1.0.0".to_string(),

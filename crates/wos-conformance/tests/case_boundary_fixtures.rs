@@ -177,7 +177,7 @@ fn workflow_process(spec: &ProcessSpec, case_ledger_id: &str) -> WorkflowProcess
     WorkflowProcess {
         process_id: spec.process_id.clone(),
         case_ledger_id: case_ledger_id.to_string(),
-        tenant: wos_core::typeid::DEFAULT_TENANT.to_string(),
+        tenant: stack_common_typeid::DEFAULT_TENANT.to_string(),
         definition_url: spec.definition_url.clone(),
         definition_version: spec.definition_version.clone(),
         configuration: Vec::new(),

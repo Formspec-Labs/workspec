@@ -748,6 +748,63 @@
         }
       }
     },
+    "/cases/{case_id}/events": {
+      "post": {
+        "tags": [
+          "cases"
+        ],
+        "summary": "Directly append an event to a durable case ledger.",
+        "operationId": "submit_case_event",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "description": "Durable case-ledger TypeID or WOS resource URN",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseEventAppendRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Case-ledger event append receipt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseLedgerAppendReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid event contract or idempotency token"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Caller lacks permission for the event branch"
+          },
+          "409": {
+            "description": "Case ledger already exists or append sequence conflicts"
+          },
+          "503": {
+            "description": "Post-ledger append persistence failed after authorization"
+          }
+        }
+      }
+    },
     "/cases/{case_id}/processes/{process_id}/resume": {
       "post": {
         "tags": [
@@ -3551,6 +3608,28 @@
         "type": "string",
         "description": "Optional human-readable cancellation reason recorded with the run.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Optional human-readable cancellation reason recorded with the run.\",\n  \"type\": \"string\",\n  \"minLength\": 1,\n  \"x-wos\": {\n    \"openStringKind\": \"prose\"\n  }\n}\n ```\n </details>"
       },
+      "CaseEventAppendRequest": {
+        "type": "object",
+        "required": [
+          "event",
+          "actorId"
+        ],
+        "properties": {
+          "actorId": {
+            "type": "string"
+          },
+          "data": {},
+          "event": {
+            "type": "string"
+          },
+          "idempotencyToken": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "CaseFileSnapshot": {
         "type": "object",
         "description": "Canonical case-file snapshot captured at determination time (kernel S8.2.1). Mirrors `wos-workflow.schema.json#/$defs/CaseFileSnapshot`.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Canonical case-file snapshot captured at determination time (kernel S8.2.1). Mirrors `wos-workflow.schema.json#/$defs/CaseFileSnapshot`.\",\n  \"type\": \"object\",\n  \"required\": [\n    \"jcsCanonical\",\n    \"sha256\",\n    \"value\"\n  ],\n  \"properties\": {\n    \"jcsCanonical\": {\n      \"description\": \"Canonical JSON string per JCS (RFC 8785).\",\n      \"examples\": [\n        \"{\\\"eligible\\\":true,\\\"income\\\":17500}\"\n      ],\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"identifier\"\n      }\n    },\n    \"sha256\": {\n      \"description\": \"Lowercase SHA-256 hex digest of jcsCanonical.\",\n      \"type\": \"string\",\n      \"pattern\": \"^[a-f0-9]{64}$\"\n    },\n    \"value\": {\n      \"description\": \"Raw case-file JSON value observed immediately before the determination transition fires.\"\n    }\n  },\n  \"additionalProperties\": false,\n  \"x-wos\": {\n    \"mirror\": {\n      \"path\": \"$defs/CaseFileSnapshot\",\n      \"source\": \"wos-workflow.schema.json\"\n    }\n  }\n}\n ```\n </details>",
@@ -3581,6 +3660,36 @@
       "CaseFileSnapshotSha256": {
         "type": "string",
         "description": "Lowercase SHA-256 hex digest of jcsCanonical.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Lowercase SHA-256 hex digest of jcsCanonical.\",\n  \"type\": \"string\",\n  \"pattern\": \"^[a-f0-9]{64}$\"\n}\n ```\n </details>"
+      },
+      "CaseLedgerAppendReceipt": {
+        "type": "object",
+        "required": [
+          "caseLedgerId",
+          "eventId",
+          "eventHash",
+          "sequence"
+        ],
+        "properties": {
+          "caseLedgerId": {
+            "type": "string"
+          },
+          "eventHash": {
+            "type": "string"
+          },
+          "eventId": {
+            "type": "string"
+          },
+          "profileId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Trellis verification profile id (`integrity_verify::WOS_PROFILE_ID` for WOS governance events).",
+            "minimum": 0
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
       },
       "CaseloadSummaryInput": {
         "type": "object",
