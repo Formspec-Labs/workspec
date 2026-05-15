@@ -1392,6 +1392,237 @@
         }
       }
     },
+    "/cases/{case_id}/processes/{process_id}/suspend": {
+      "post": {
+        "operationId": "suspendCaseProcess",
+        "summary": "Suspend a workflow process in a durable case ledger.",
+        "description": "Case/process lifecycle route for ADR 0093 dual identity. The server validates the case/process binding before moving the bound process to the suspended lifecycle state.",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "description": "Durable case-ledger TypeID or WOS resource URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/CaseLedgerPathId"
+            }
+          },
+          {
+            "name": "process_id",
+            "in": "path",
+            "required": true,
+            "description": "Workflow process TypeID or WOS resource URN bound to the case ledger.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ProcessPathId"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "Optional lifecycle rationale.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessLifecycleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Process lifecycle state after suspension.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessLifecycleResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/cases/{case_id}/processes/{process_id}/resume": {
+      "post": {
+        "operationId": "resumeCaseProcess",
+        "summary": "Resume a workflow process in a durable case ledger.",
+        "description": "Case/process lifecycle route for ADR 0093 dual identity. The server validates the case/process binding before moving the bound process back to the active lifecycle state.",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "description": "Durable case-ledger TypeID or WOS resource URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/CaseLedgerPathId"
+            }
+          },
+          {
+            "name": "process_id",
+            "in": "path",
+            "required": true,
+            "description": "Workflow process TypeID or WOS resource URN bound to the case ledger.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ProcessPathId"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "Optional lifecycle rationale.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessLifecycleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Process lifecycle state after resume.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessLifecycleResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/cases/{case_id}/processes/{process_id}/terminate": {
+      "post": {
+        "operationId": "terminateCaseProcess",
+        "summary": "Terminate a workflow process in a durable case ledger.",
+        "description": "Case/process lifecycle route for ADR 0093 dual identity. The server validates the case/process binding before moving the bound process to the terminal lifecycle state.",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "description": "Durable case-ledger TypeID or WOS resource URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/CaseLedgerPathId"
+            }
+          },
+          {
+            "name": "process_id",
+            "in": "path",
+            "required": true,
+            "description": "Workflow process TypeID or WOS resource URN bound to the case ledger.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ProcessPathId"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "Optional lifecycle rationale.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessLifecycleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Process lifecycle state after termination.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessLifecycleResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/tasks": {
       "get": {
         "operationId": "listTasks",
@@ -5281,6 +5512,46 @@
       },
       "TerminateInstanceRequest": {
         "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/TerminateInstanceRequest"
+      },
+      "ProcessLifecycleRequest": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProcessLifecycleResponse": {
+        "type": "object",
+        "required": [
+          "processId",
+          "caseLedgerId",
+          "lifecycleState"
+        ],
+        "properties": {
+          "processId": {
+            "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+          },
+          "caseLedgerId": {
+            "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+          },
+          "lifecycleState": {
+            "$ref": "#/components/schemas/LifecycleState"
+          }
+        },
+        "additionalProperties": false
+      },
+      "LifecycleState": {
+        "type": "string",
+        "enum": [
+          "active",
+          "suspended",
+          "migrating",
+          "completed",
+          "terminated",
+          "stalled"
+        ]
       },
       "MigrateInstanceRequest": {
         "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/MigrateInstanceRequest"

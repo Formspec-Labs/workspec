@@ -3499,6 +3499,7 @@ dependencies = [
  "serde_json",
  "stack-common-error",
  "stack-common-http",
+ "utoipa",
  "wos-events",
 ]
 
