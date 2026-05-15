@@ -18,7 +18,12 @@ use wos_runtime::intake::{
 };
 
 const FORMSPEC_SIGNATURE_METHOD_REGISTRY_VERSION: &str = "1.0.0";
-const WOS_KERNEL_CASE_CREATED_EVENT: &str = "wos.kernel.case_created";
+
+fn case_created_event_literal() -> &'static str {
+    ProvenanceKind::CaseCreated
+        .canonical_event_literal()
+        .expect("CaseCreated has a canonical WOS event literal")
+}
 
 /// Stable reason emitted when the reference Formspec binding has parsed and
 /// pre-checked an authored signature but has not yet run the cryptographic
@@ -651,7 +656,7 @@ pub fn case_created_provenance(
         actor_id: actor_id.map(String::from),
         from_state: None,
         to_state: None,
-        event: Some(WOS_KERNEL_CASE_CREATED_EVENT.to_string()),
+        event: Some(case_created_event_literal().to_string()),
         data: Some(serde_json::Value::Object(data)),
         audit_layer: None,
         actor_type: None,
@@ -1744,7 +1749,7 @@ mod tests {
         let json = serde_json::to_value(&record).expect("serialize");
 
         assert_eq!(json["recordKind"], "caseCreated");
-        assert_eq!(json["event"], WOS_KERNEL_CASE_CREATED_EVENT);
+        assert_eq!(json["event"], case_created_event_literal());
         assert_eq!(json["actorId"], "urn:iam:actor:intake-service");
         assert_eq!(json["data"]["caseRef"], TEST_CASE_LEDGER_ID);
         assert_eq!(json["data"]["caseLedgerId"], TEST_CASE_LEDGER_ID);
