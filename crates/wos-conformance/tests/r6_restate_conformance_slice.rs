@@ -283,14 +283,14 @@ async fn r6_c1_full_drain_result_shape_parity() {
 }
 
 #[test]
-fn r6_seam_access_signer_and_renderer_are_operational_noops() {
+fn r6_seam_access_signer_fails_closed_and_renderer_is_operational() {
     let adapter = RestateRuntimeAdapter::new();
     let signer = <RestateRuntimeAdapter as SeamAccess>::signer(&adapter);
     let renderer = <RestateRuntimeAdapter as SeamAccess>::renderer(&adapter);
 
     let rec = ProvenanceRecord::state_transition("draft", "review", "start", Some("system"));
-    assert!(signer.sign(&rec).expect("noop sign").is_empty());
-    assert!(signer.verify(&rec, &[1, 2, 3]).expect("noop verify"));
+    assert!(signer.sign(&rec).is_err());
+    assert!(signer.verify(&rec, &[1, 2, 3]).is_err());
 
     let out = renderer
         .render_explanation(&serde_json::json!({"ok": true}), "ignored")
