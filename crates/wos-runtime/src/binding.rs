@@ -124,6 +124,14 @@ pub struct SignatureEvidence {
     /// Stable signature id from the source system.
     pub source_signature_id: String,
 
+    /// Opaque signing-act identifier when distinct from [`source_signature_id`].
+    #[allow(clippy::option_option)]
+    pub signing_act_id: Option<String>,
+
+    /// Rendered-presentation digest when distinct from [`document_hash`].
+    #[allow(clippy::option_option)]
+    pub presentation_hash: Option<String>,
+
     /// Optional source response or evidence artifact reference.
     pub source_response_ref: Option<String>,
 
@@ -190,6 +198,24 @@ pub struct SignatureEvidence {
     /// divergence. When present, WOS emits `SignatureAdmissionFailed` and does
     /// not continue toward `SignatureAffirmation`.
     pub admission_failure: Option<SignatureAdmissionFailure>,
+}
+
+impl SignatureEvidence {
+    /// Returns the K-2 signing-act id, preferring an explicit binding value.
+    #[must_use]
+    pub fn effective_signing_act_id(&self) -> &str {
+        self.signing_act_id
+            .as_deref()
+            .unwrap_or(self.source_signature_id.as_str())
+    }
+
+    /// Returns the K-2 presentation digest, preferring an explicit binding value.
+    #[must_use]
+    pub fn effective_presentation_hash(&self) -> &str {
+        self.presentation_hash
+            .as_deref()
+            .unwrap_or(self.document_hash.as_str())
+    }
 }
 
 /// Errors produced by binding adapters.

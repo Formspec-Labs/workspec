@@ -902,6 +902,8 @@ where
             evidence.push(SignatureEvidence {
                 source_system: "formspec".to_string(),
                 source_signature_id: signature.signature_id,
+                signing_act_id: None,
+                presentation_hash: None,
                 source_response_ref: source_response_ref.clone(),
                 document_id: signature.document_id,
                 signer_id: signature
@@ -1157,6 +1159,25 @@ mod tests {
             .get("formspec")
             .expect("formspec adapter should register");
         assert_eq!(adapter.binding(), "formspec");
+    }
+
+    #[test]
+    fn given_case_created_binding_event_when_emitted_then_literal_matches_provenance_kind() {
+        let handoff = parse_intake_handoff(&public_intake_handoff()).unwrap();
+        let record = case_created_provenance(
+            &handoff,
+            TEST_CASE_LEDGER_ID,
+            Some("urn:iam:actor:intake-service"),
+        )
+        .unwrap();
+        assert_eq!(
+            record.event.as_deref(),
+            Some(
+                ProvenanceKind::CaseCreated
+                    .canonical_event_literal()
+                    .expect("case-created canonical literal")
+            )
+        );
     }
 
     #[test]

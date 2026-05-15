@@ -1076,19 +1076,21 @@ impl WosRuntime {
             SignatureProfileSelector::Ref(profile_ref) => (Some(profile_ref.as_str()), None),
         };
 
+        let (signing_act_id, presentation_hash) =
+            signature_affirmation_k2_fields(&signature_evidence);
         let provenance_record =
             ProvenanceRecord::signature_affirmation(SignatureAffirmationInput {
                 signer_id,
                 role_id: &role.id,
                 role: &role.role,
                 document_id: &document.id,
-                signing_act_id: &signature_evidence.source_signature_id,
+                signing_act_id,
                 document_ref: serde_json::json!({
                     "documentId": document.id.as_str(),
                     "locale": "und",
                 }),
                 document_hash: &document.document_hash,
-                presentation_hash: &document.document_hash,
+                presentation_hash,
                 document_hash_algorithm: &document.document_hash_algorithm,
                 source_signature_system: &signature_evidence.source_system,
                 source_signature_id: &signature_evidence.source_signature_id,
@@ -2100,6 +2102,14 @@ fn default_true() -> bool {
 
 fn task_extension_str<'a>(task: &'a ActiveTask, key: &str) -> Option<&'a str> {
     task.extensions.get(key).and_then(serde_json::Value::as_str)
+}
+
+/// K-2 signing-act and presentation digests for `SignatureAffirmation` minting.
+fn signature_affirmation_k2_fields(evidence: &VerifiedSignatureEvidence) -> (&str, &str) {
+    (
+        evidence.effective_signing_act_id(),
+        evidence.effective_presentation_hash(),
+    )
 }
 
 fn signature_document_id_for_task(
@@ -3320,5 +3330,134 @@ mod posture_declaration_tests {
         assert!(!posture_uri_allowed(
             "https://user@example.gov/posture/signature-v1.json"
         ));
+    }
+}
+
+#[cfg(test)]
+mod k2_field_binding_tests {
+    use super::*;
+    use crate::binding::SignatureEvidence;
+    use crate::binding::SignaturePrimitiveStatus;
+    use wos_core::ProvenanceRecord;
+
+    const DOC_HASH: &str =
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const PRESENTATION_HASH: &str =
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+    /// Exercises the same K-2 field wiring as `signature_affirmation_for_submission`.
+    #[test]
+    fn given_distinct_k2_evidence_when_runtime_k2_helper_used_then_effective_fields_apply() {
+        let evidence = SignatureEvidence {
+            source_system: "test-binding".to_string(),
+            source_signature_id: "source-sig-001".to_string(),
+            signing_act_id: Some("signing-act-777".to_string()),
+            presentation_hash: Some(PRESENTATION_HASH.to_string()),
+            source_response_ref: None,
+            document_id: "application".to_string(),
+            signer_id: None,
+            signing_intent: "urn:wos:signing-intent:applicant-signature".to_string(),
+            signature_method: None,
+            signed_payload_digest: DOC_HASH.to_string(),
+            signed_payload_digest_algorithm: "sha-256".to_string(),
+            signed_at: "2026-05-15T12:00:00Z".to_string(),
+            document_hash: DOC_HASH.to_string(),
+            document_hash_algorithm: "sha-256".to_string(),
+            signature_provider: None,
+            ceremony_id: None,
+            identity_binding: None,
+            signer_authority: None,
+            primitive_verification: SignaturePrimitiveStatus::Verified,
+            verification_receipt: None,
+            admission_failure: None,
+        };
+        let (signing_act_id, presentation_hash) =
+            super::signature_affirmation_k2_fields(&evidence);
+        assert_eq!(signing_act_id, "signing-act-777");
+        assert_eq!(presentation_hash, PRESENTATION_HASH);
+    }
+
+    /// Given binding evidence with distinct signing-act and presentation digests,
+    /// when a signature affirmation record is minted, then all four K-2 fields
+    /// remain distinct in the emitted provenance payload.
+    #[test]
+    fn given_distinct_k2_evidence_when_affirmation_minted_then_fields_stay_distinct() {
+        let evidence = SignatureEvidence {
+            source_system: "test-binding".to_string(),
+            source_signature_id: "source-sig-001".to_string(),
+            signing_act_id: Some("signing-act-777".to_string()),
+            presentation_hash: Some(PRESENTATION_HASH.to_string()),
+            source_response_ref: Some("urn:test:response:1".to_string()),
+            document_id: "application".to_string(),
+            signer_id: Some("signer-1".to_string()),
+            signing_intent: "urn:wos:signing-intent:applicant-signature".to_string(),
+            signature_method: None,
+            signed_payload_digest: DOC_HASH.to_string(),
+            signed_payload_digest_algorithm: "sha-256".to_string(),
+            signed_at: "2026-05-15T12:00:00Z".to_string(),
+            document_hash: DOC_HASH.to_string(),
+            document_hash_algorithm: "sha-256".to_string(),
+            signature_provider: None,
+            ceremony_id: None,
+            identity_binding: None,
+            signer_authority: None,
+            primitive_verification: SignaturePrimitiveStatus::Verified,
+            verification_receipt: None,
+            admission_failure: None,
+        };
+
+        let (signing_act_id, presentation_hash) =
+            super::signature_affirmation_k2_fields(&evidence);
+        let record = ProvenanceRecord::signature_affirmation(SignatureAffirmationInput {
+            signer_id: "signer-1",
+            role_id: "role-1",
+            role: "applicant",
+            document_id: "application",
+            signing_act_id,
+            document_ref: serde_json::json!({ "documentId": "application", "locale": "und" }),
+            document_hash: &evidence.document_hash,
+            presentation_hash,
+            document_hash_algorithm: &evidence.document_hash_algorithm,
+            source_signature_system: &evidence.source_system,
+            source_signature_id: &evidence.source_signature_id,
+            signed_payload_digest: &evidence.signed_payload_digest,
+            signed_payload_digest_algorithm: &evidence.signed_payload_digest_algorithm,
+            signing_intent: &evidence.signing_intent,
+            signed_at: &evidence.signed_at,
+            identity_binding: serde_json::json!({}),
+            consent_reference: serde_json::json!({}),
+            signature_provider: "test",
+            ceremony_id: "ceremony-1",
+            profile_ref: None,
+            profile_key: None,
+            source_response_ref: "urn:test:response:1",
+            signer_authority: None,
+            custody_hook_eligible: true,
+            primitive_verification: serde_json::json!({ "status": "verified" }),
+            verification_receipt: None,
+            witnessed_signature_ref: None,
+        });
+
+        let data = record
+            .data
+            .as_ref()
+            .and_then(serde_json::Value::as_object)
+            .expect("affirmation data map");
+        assert_eq!(
+            data.get("signingActId").and_then(|v| v.as_str()),
+            Some("signing-act-777")
+        );
+        assert_eq!(
+            data.get("sourceSignatureId").and_then(|v| v.as_str()),
+            Some("source-sig-001")
+        );
+        assert_eq!(
+            data.get("documentHash").and_then(|v| v.as_str()),
+            Some(DOC_HASH)
+        );
+        assert_eq!(
+            data.get("presentationHash").and_then(|v| v.as_str()),
+            Some(PRESENTATION_HASH)
+        );
     }
 }

@@ -1715,6 +1715,8 @@ mod tests {
             Ok(Some(vec![crate::binding::SignatureEvidence {
                 source_system: "formspec-test-harness".to_string(),
                 source_signature_id: "sig013-harness".to_string(),
+                signing_act_id: None,
+                presentation_hash: None,
                 source_response_ref: Some("urn:test:formspec-response:application".to_string()),
                 document_id: "application".to_string(),
                 signer_id: response
@@ -1866,6 +1868,8 @@ mod tests {
             Ok(Some(vec![crate::binding::SignatureEvidence {
                 source_system: "formspec-test-harness".to_string(),
                 source_signature_id: "sig013-harness".to_string(),
+                signing_act_id: None,
+                presentation_hash: None,
                 source_response_ref: Some("urn:test:formspec-response:application".to_string()),
                 document_id: "application".to_string(),
                 signer_id: response
