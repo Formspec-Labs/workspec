@@ -1,7 +1,7 @@
 # ADR 0093 — A Case Is Its Trellis Ledger; Cases and Workflow Processes Are Distinct Identities
 
-**Status:** Proposed
-**Sequencing note:** Parent-stack ADRs [**0104**](../../../thoughts/adr/0104-scope-model-and-case-ledger-rules.md) and [**0106**](../../../thoughts/adr/0106-wos-server-governance-overlay.md) cite this case/process identity model and the `trellis-service-client` service boundary as load-bearing for implementation. Treat **`Proposed`** here as normative ADR workflow status only — not as permission to ignore those downstream pins when editing wos-server / Trellis integration.
+**Status:** Accepted
+**Sequencing note:** Parent-stack ADRs [**0104**](../../../thoughts/adr/0104-scope-model-and-case-ledger-rules.md) and [**0106**](../../../thoughts/adr/0106-wos-server-governance-overlay.md) cite this case/process identity model and the `trellis-service-client` service boundary as load-bearing for implementation. **`Accepted`** = decision content binds implementers; treat lingering “workflow Proposed” hygiene as non-excuse for contradicting downstream ADRs (`0101`, `0104`, `0106`) or the substrate registry when editing wos-server / Trellis integration.
 **Date:** 2026-05-11
 **Scope:** WOS — case identity, workflow-process identity, durable case state, governed output emission, provenance event family, direct ledger-append surface, multiple concurrent workflows per case.
 **Decision basis:** archived [`../archive/analysis/2026-05-11-case-boundary-decision-report.md`](../archive/analysis/2026-05-11-case-boundary-decision-report.md). This ADR encodes the **Option B** path (dual identity from day one) selected by owner directive after explicit comparison with Option A (defer N:1) and Option C (one workflow per case ever). Acknowledged in §4 as a values-driven structural front-load, not a strictly data-driven optimum.
