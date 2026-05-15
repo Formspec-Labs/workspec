@@ -174,7 +174,10 @@ impl CustodyAppendInput {
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CustodyAppendReceipt {
-    /// Lowercase hex rendering of Trellis's `canonical_event_hash`.
+    /// Trellis `canonical_event_hash` text.
+    ///
+    /// The service contract currently returns `sha256:<lowercase hex>`, while
+    /// older in-process fixtures may still use a bare lowercase hex value.
     pub canonical_event_hash: String,
 }
 

@@ -51,7 +51,8 @@ pub use runtime::{
     PostureResolver, ResolvedPostureDeclaration, RuntimeError, RuntimeEventContext,
     RuntimeEventDecision, SIGNATURE_PROFILE_KEY_EXTENSION, SIGNATURE_PROFILE_REF_EXTENSION,
     SIGNATURE_STEP_ID_EXTENSION, SignatureProfileDocument, StaticPostureResolver, SystemClock,
-    TaskSubmissionResult, WosRuntime, populate_provenance_record_fields, stamp_provenance,
+    TaskSubmissionResult, TrellisCustodyAppendOutcome, TrellisCustodyAppender, WosRuntime,
+    populate_provenance_record_fields, stamp_provenance,
 };
 pub use store::{
     InMemoryStore, IntakeRecord, ReplayKey, ReplayOperation, ReplayValue, RuntimeAuxFields,

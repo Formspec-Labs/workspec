@@ -36,6 +36,8 @@ repository = "https://github.com/formspec/formspec"
 # published packages of fel-core exist.
 [workspace.dependencies]
 fel-core = { path = "../fel-core" }
+stack-common-http = { path = "../stack-common/crates/stack-common-http" }
+trellis-service-client = { path = "../trellis/crates/trellis-service-client" }
 
 [profile.dev]
 # Trim debug metadata and increase codegen parallelism for faster compile-test loops.

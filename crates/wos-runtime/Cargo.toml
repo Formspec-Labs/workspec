@@ -14,11 +14,16 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 semver = "1"
 sha2 = "0.10"
+stack-common-http.workspace = true
 thiserror = "2"
 time = { version = "0.3", features = ["formatting", "parsing"] }
+trellis-service-client.workspace = true
 ureq = { version = "3", features = ["json"] }
 wos-core = { path = "../wos-core" }
 wos-events = { path = "../wos-events" }
 
 [dev-dependencies]
+async-trait = "0.1"
 jsonschema = "0.46"
+stack-common-error = { path = "../../../stack-common/crates/stack-common-error", default-features = false }
+tokio = { version = "1", features = ["macros", "rt"] }

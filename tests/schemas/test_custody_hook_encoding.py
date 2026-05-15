@@ -52,7 +52,7 @@ CUSTODY_APPEND_SCHEMA: dict = {
             "properties": {
                 "canonical_event_hash": {
                     "type": "string",
-                    "pattern": r"^[0-9a-f]{64}$",
+                    "pattern": r"^(?:sha256:)?[0-9a-f]{64}$",
                 },
             },
         },
@@ -220,13 +220,23 @@ class TestReceiptShape:
     def test_receipt_accepts_canonical_event_hash(self, schema, format_checker):
         validator = _validator_for_def(schema, "CustodyAppendReceipt", format_checker)
         receipt = {
-            "canonical_event_hash": "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c"
+            "canonical_event_hash": "sha256:9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c"
         }
         errors = list(validator.iter_errors(receipt))
         assert errors == [], f"valid custody append receipt rejected: {errors}"
+
+    def test_receipt_accepts_legacy_bare_canonical_event_hash(
+        self, schema, format_checker
+    ):
+        validator = _validator_for_def(schema, "CustodyAppendReceipt", format_checker)
+        receipt = {
+            "canonical_event_hash": "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c"
+        }
+        errors = list(validator.iter_errors(receipt))
+        assert errors == [], f"legacy custody append receipt rejected: {errors}"
 
     def test_receipt_rejects_malformed_hash(self, schema, format_checker):
         validator = _validator_for_def(schema, "CustodyAppendReceipt", format_checker)
         receipt = {"canonical_event_hash": "not-a-digest"}
         errors = list(validator.iter_errors(receipt))
-        assert errors, "receipt must reject non-hex canonical_event_hash values"
+        assert errors, "receipt must reject malformed canonical_event_hash values"

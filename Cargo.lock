@@ -3018,6 +3018,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "stack-common-hash"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "integrity-canonical",
+ "integrity-cbor",
+ "serde_json",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "stack-common-http"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "futures-util",
+ "http",
+ "serde",
+ "serde_json",
+ "stack-common-error",
+ "stack-common-idempotency",
+ "thiserror 1.0.69",
+ "tower",
+ "tower-http",
+ "tracing",
+]
+
+[[package]]
+name = "stack-common-idempotency"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "stack-common-error",
+ "stack-common-hash",
+]
+
+[[package]]
 name = "stack-common-typeid"
 version = "0.1.0"
 dependencies = [
@@ -3374,6 +3412,7 @@ dependencies = [
  "tower",
  "tower-layer",
  "tower-service",
+ "uuid",
 ]
 
 [[package]]
@@ -3448,6 +3487,19 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
+]
+
+[[package]]
+name = "trellis-service-client"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "stack-common-error",
+ "stack-common-http",
+ "wos-events",
 ]
 
 [[package]]
@@ -4407,6 +4459,7 @@ dependencies = [
 name = "wos-runtime"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "base64",
  "chrono",
  "fel-core",
@@ -4415,8 +4468,12 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "stack-common-error",
+ "stack-common-http",
  "thiserror 2.0.18",
  "time",
+ "tokio",
+ "trellis-service-client",
  "ureq",
  "wos-core",
  "wos-events",

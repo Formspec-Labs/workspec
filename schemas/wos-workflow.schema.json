@@ -4261,10 +4261,10 @@
         },
         "canonicalEventHash": {
           "type": "string",
-          "pattern": "^[a-f0-9]{64}$",
-          "description": "Lowercase hex rendering of the 32-byte Trellis `canonical_event_hash` stamped after custody admission, when present.",
+          "pattern": "^(?:sha256:)?[a-f0-9]{64}$",
+          "description": "Trellis `canonical_event_hash` text stamped after custody admission, when present. Current Trellis service receipts use `sha256:<lowercase hex>`; older local fixtures may use bare lowercase hex.",
           "examples": [
-            "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c"
+            "sha256:9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c"
           ]
         }
       },

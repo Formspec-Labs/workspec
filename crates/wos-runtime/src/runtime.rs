@@ -3,6 +3,7 @@
 //! Runtime command surface for WOS processors.
 
 mod actions;
+mod custody_trellis;
 mod drain;
 mod durable_impl;
 mod intake;
@@ -38,6 +39,8 @@ use crate::integration::IntegrationProfileDocument;
 use crate::store::{RuntimeStore, StoreError};
 use wos_events::custody::CustodyAppendError;
 
+#[doc(inline)]
+pub use custody_trellis::{TrellisCustodyAppendOutcome, TrellisCustodyAppender};
 pub use provenance::{
     CustodyReceiptStampError, populate_provenance_record_fields, stamp_custody_receipt,
     stamp_provenance, stamp_signature_decision_identity,

@@ -1510,8 +1510,8 @@
         },
         "canonicalEventHash": {
           "type": "string",
-          "pattern": "^[a-f0-9]{64}$",
-          "description": "SHA-256 hex digest of the Trellis-anchored canonical event. This is the cryptographic proof that the case's provenance records were anchored on Trellis \u2014 a verifier recomputes the hash from the provenance byte stream and compares against this value."
+          "pattern": "^(?:sha256:)?[a-f0-9]{64}$",
+          "description": "Trellis canonical-event-hash text for the anchored event. Current Trellis service receipts use `sha256:<lowercase hex>`; older local fixtures may use bare lowercase hex. This is the cryptographic proof that the case's provenance records were anchored on Trellis \u2014 a verifier recomputes the hash from the provenance byte stream and compares against this value."
         },
         "anchoredAt": {
           "type": "string",
