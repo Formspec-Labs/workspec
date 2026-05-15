@@ -12,6 +12,12 @@ from the typed Rust path.
 serialization of some `ProvenanceKind` variant in
 `work-spec/crates/wos-events/src/provenance/kind.rs`. Mismatch fails CI.
 
+**D26 event-literal direction (enforced).** Every `eventLiteral` row in
+`schemas/record-kind-registry.json` MUST equal the matching
+`ProvenanceKind::canonical_event_literal()` match arm, and every match arm
+MUST appear in the registry. This keeps the registry's admission/event-type
+surface as a checked mirror of the Rust source of truth.
+
 **Reverse direction (informational, intentionally not enforced).** The
 script also lists variants that have *no* schema `$def` binding them. Most
 variants are runtime-emitted without a schema-pinned record shape today, so
@@ -46,6 +52,12 @@ from typing import Iterable
 # comments and tier-section markers begin with `///` or `//` and are
 # skipped. Variants are PascalCase identifiers ending in `,`.
 VARIANT_LINE = re.compile(r"^\s*([A-Z][A-Za-z0-9]*)\s*,\s*$")
+
+# Match `Self::Variant => Some("wos.layer.event_literal"),` lines inside
+# `ProvenanceKind::canonical_event_literal`.
+CANONICAL_EVENT_LITERAL_LINE = re.compile(
+    r'^\s*Self::([A-Z][A-Za-z0-9]*)\s*=>\s*Some\("([^"]+)"\),\s*$'
+)
 
 # `pub enum ProvenanceKind {` start line.
 ENUM_START = re.compile(r"^\s*pub\s+enum\s+ProvenanceKind\s*\{")
@@ -86,6 +98,30 @@ def extract_variants(kind_rs: Path) -> list[str]:
             "per line. Fix the parser or restructure the enum."
         )
     return variants
+
+
+def extract_canonical_event_literals(kind_rs: Path) -> dict[str, str]:
+    """Return camelCase recordKind -> event literal from Rust source."""
+    text = kind_rs.read_text(encoding="utf-8")
+    mappings: dict[str, str] = {}
+    for line in text.splitlines():
+        match = CANONICAL_EVENT_LITERAL_LINE.match(line)
+        if match:
+            variant, event_literal = match.groups()
+            mappings[to_camel_case(variant)] = event_literal
+    return mappings
+
+
+def extract_registry_event_literals(registry_path: Path) -> dict[str, str]:
+    """Return recordKind literal -> eventLiteral from the registry JSON."""
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    event_literals: dict[str, str] = {}
+    for entry in registry.get("recordKinds", []):
+        literal = entry.get("literal")
+        event_literal = entry.get("eventLiteral")
+        if isinstance(literal, str) and isinstance(event_literal, str):
+            event_literals[literal] = event_literal
+    return event_literals
 
 
 def iter_def_record_kind_consts(
@@ -203,6 +239,7 @@ def main() -> int:
     root: Path = args.root
     schemas_root = root / "schemas"
     kind_rs = root / "crates" / "wos-events" / "src" / "provenance" / "kind.rs"
+    registry_path = schemas_root / "record-kind-registry.json"
 
     if not schemas_root.is_dir():
         print(f"error: schemas/ not found under {root}", file=sys.stderr)
@@ -210,9 +247,14 @@ def main() -> int:
     if not kind_rs.is_file():
         print(f"error: kind.rs not found at {kind_rs}", file=sys.stderr)
         return 2
+    if not registry_path.is_file():
+        print(f"error: record-kind registry not found at {registry_path}", file=sys.stderr)
+        return 2
 
     variants = extract_variants(kind_rs)
     variant_camel = {to_camel_case(v) for v in variants}
+    canonical_event_literals = extract_canonical_event_literals(kind_rs)
+    registry_event_literals = extract_registry_event_literals(registry_path)
 
     # Collect every (schema_path, def_name, literal) triple.
     bindings: list[tuple[Path, str, str]] = []
@@ -232,6 +274,23 @@ def main() -> int:
     for schema_path, def_name, literal in bindings:
         if literal not in variant_camel:
             forward_violations.append((schema_path, def_name, literal))
+
+    missing_registry_events = sorted(
+        (literal, event_literal)
+        for literal, event_literal in canonical_event_literals.items()
+        if literal not in registry_event_literals
+    )
+    stale_registry_events = sorted(
+        (literal, event_literal)
+        for literal, event_literal in registry_event_literals.items()
+        if literal not in canonical_event_literals
+    )
+    mismatched_registry_events = sorted(
+        (literal, event_literal, canonical_event_literals[literal])
+        for literal, event_literal in registry_event_literals.items()
+        if literal in canonical_event_literals
+        and canonical_event_literals[literal] != event_literal
+    )
 
     # Reverse-direction report (informational by default).
     bound_literals = {literal for (_, _, literal) in bindings}
@@ -253,6 +312,37 @@ def main() -> int:
                 file=sys.stderr,
             )
 
+    if missing_registry_events:
+        print(
+            "FAIL: canonical_event_literal() rows missing from record-kind registry:",
+            file=sys.stderr,
+        )
+        for literal, event_literal in missing_registry_events:
+            actual = registry_event_literals.get(literal)
+            print(
+                f"  {literal}: Rust expects {event_literal!r}, registry has {actual!r}",
+                file=sys.stderr,
+            )
+
+    if stale_registry_events:
+        print(
+            "FAIL: record-kind registry eventLiteral rows not sourced by canonical_event_literal():",
+            file=sys.stderr,
+        )
+        for literal, event_literal in stale_registry_events:
+            print(f"  {literal}: registry eventLiteral {event_literal!r}", file=sys.stderr)
+
+    if mismatched_registry_events:
+        print(
+            "FAIL: record-kind registry eventLiteral rows disagree with canonical_event_literal():",
+            file=sys.stderr,
+        )
+        for literal, actual, expected in mismatched_registry_events:
+            print(
+                f"  {literal}: registry has {actual!r}, Rust expects {expected!r}",
+                file=sys.stderr,
+            )
+
     if unbound_variants:
         msg = (
             f"INFO: {len(unbound_variants)} of {len(variants)} ProvenanceKind "
@@ -270,7 +360,12 @@ def main() -> int:
         )
         print(f"{msg}\n{details}{suffix}")
 
-    if forward_violations:
+    if (
+        forward_violations
+        or missing_registry_events
+        or stale_registry_events
+        or mismatched_registry_events
+    ):
         return 1
     if args.strict and unbound_variants:
         print(
@@ -284,7 +379,9 @@ def main() -> int:
     print(
         f"OK: scanned {len(bindings)} schema recordKind bindings against "
         f"{len(variants)} ProvenanceKind variants under "
-        f"{schemas_root.relative_to(root)}; forward-direction parity holds."
+        f"{schemas_root.relative_to(root)}; forward-direction parity holds. "
+        f"Registry event literals match {len(canonical_event_literals)} "
+        "canonical_event_literal() arms."
     )
     return 0
 

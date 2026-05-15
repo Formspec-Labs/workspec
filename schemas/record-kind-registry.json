@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://wos.standard/schemas/record-kind-registry.json",
   "title": "WOS Record Kind Registry",
-  "description": "Canonical registry of all ProvenanceKind variants. 134 total — 23 carry schema-validated payload shapes (if/then guards or prov-log $def overlays), 111 are flat Facts-tier records. Every literal maps 1:1 to a ProvenanceKind Rust enum variant (crate::provenance::kind) under serde(rename_all=\"camelCase\"). The API FactsRecordKind taxonomy derives from this registry; D26 wire records dispatch by event literal. See specs/provenance-registry.md for governance policy on adding/removing record categories.",
+  "description": "Canonical registry of all ProvenanceKind variants. 134 total — 23 carry schema-validated payload shapes (if/then guards or prov-log $def overlays), 111 are flat Facts-tier records. Every literal maps 1:1 to a ProvenanceKind Rust enum variant (crates/wos-events/src/provenance/kind.rs) under serde(rename_all=\"camelCase\"). The API FactsRecordKind taxonomy derives from this registry; D26 wire records dispatch by event literal. Admission/event-type catalog instances are generated from ProvenanceKind::canonical_event_literal() at build/runtime boundaries and CI-check this registry as a mirror. See specs/provenance-registry.md for governance policy on adding/removing record categories.",
   "type": "object",
   "properties": {
     "registryVersion": {
@@ -20,6 +20,35 @@
     "schemaValidatedCount": {
       "type": "integer",
       "description": "Variants carrying schema-validated payload shapes (if/then or $def overlay)."
+    },
+    "admissionContract": {
+      "type": "object",
+      "description": "Contract for the WOS event-type/admission registry surface. This block defines the source and dispatch shape; the instance event literals themselves remain on recordKinds[].eventLiteral and MUST match ProvenanceKind::canonical_event_literal().",
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "const": "ProvenanceKind::canonical_event_literal()"
+        },
+        "runtimeSurface": {
+          "const": "GET /v1/scopes/{scope}/registries/event-types"
+        },
+        "dispatchField": {
+          "const": "event"
+        },
+        "legacyRecordKindField": {
+          "const": "recordKind"
+        },
+        "instanceGeneration": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "runtimeSurface",
+        "dispatchField",
+        "legacyRecordKindField",
+        "instanceGeneration"
+      ]
     },
     "sources": {
       "type": "object",
@@ -63,26 +92,36 @@
           },
           "eventLiteral": {
             "type": "string",
-            "description": "Optional F-13 custody/export event literal when this record category has a ratified WOS-owned event type. The event literal is the authoritative dispatch key for migrated overlays; `literal` remains the internal ProvenanceKind name."
+            "pattern": "^wos\\.(kernel|governance|ai|assurance)\\.[a-z][a-z0-9]*(?:_[a-z0-9]+)*$",
+            "description": "Optional F-13 custody/export event literal when this record category has a ratified WOS-owned event type. The event literal is the authoritative dispatch key for migrated overlays and MUST equal ProvenanceKind::<rustVariant>::canonical_event_literal(); `literal` remains the internal ProvenanceKind name."
           },
           "specReference": {
             "type": "string"
           }
         },
+        "additionalProperties": false,
         "required": [
           "literal",
           "rustVariant",
-          "category"
+          "category",
+          "schemaValidated"
         ]
       }
     }
   },
-    "registryVersion": "1.2.0",
+  "registryVersion": "1.2.0",
   "lastAudited": "2026-05-13",
   "totalCount": 134,
   "schemaValidatedCount": 23,
+  "admissionContract": {
+    "source": "ProvenanceKind::canonical_event_literal()",
+    "runtimeSurface": "GET /v1/scopes/{scope}/registries/event-types",
+    "dispatchField": "event",
+    "legacyRecordKindField": "recordKind",
+    "instanceGeneration": "Build/runtime code derives event-type catalog instances from ProvenanceKind::canonical_event_literal(); recordKinds[].eventLiteral is a CI-checked registry mirror, not the authoring source."
+  },
   "sources": {
-    "rustEnum": "crates/wos-core/src/provenance/kind.rs",
+    "rustEnum": "crates/wos-events/src/provenance/kind.rs",
     "kernelSchema": "schemas/wos-workflow.schema.json",
     "apiProvenanceSchema": "schemas/api/provenance.schema.json",
     "parityScript": "scripts/check-recordkind-parity.py",

@@ -11,8 +11,14 @@ REGISTRY_PATH = WOS_SPEC_ROOT / "schemas" / "record-kind-registry.json"
 WORKFLOW_PATH = WOS_SPEC_ROOT / "schemas" / "wos-workflow.schema.json"
 API_PROVENANCE_PATH = WOS_SPEC_ROOT / "schemas" / "api" / "provenance.schema.json"
 PROVENANCE_LOG_PATH = WOS_SPEC_ROOT / "schemas" / "wos-provenance-log.schema.json"
+PROVENANCE_KIND_RS = (
+    WOS_SPEC_ROOT / "crates" / "wos-events" / "src" / "provenance" / "kind.rs"
+)
 EVENT_LITERAL_RE = re.compile(
     r"^wos\.(kernel|governance|ai|assurance)\.[a-z][a-z0-9]*(?:_[a-z0-9]+)*$"
+)
+CANONICAL_EVENT_LITERAL_RE = re.compile(
+    r'^\s*Self::([A-Z][A-Za-z0-9]*)\s*=>\s*Some\("([^"]+)"\),\s*$'
 )
 
 
@@ -38,6 +44,20 @@ def _event_literal_to_record_kind() -> dict[str, str]:
 
 def _camel_to_snake(value: str) -> str:
     return re.sub(r"(?<!^)([A-Z])", r"_\1", value).lower()
+
+
+def _pascal_to_camel(value: str) -> str:
+    return value[:1].lower() + value[1:]
+
+
+def _canonical_event_literals_from_rust() -> dict[str, str]:
+    mappings = {}
+    for line in PROVENANCE_KIND_RS.read_text().splitlines():
+        match = CANONICAL_EVENT_LITERAL_RE.match(line)
+        if match:
+            rust_variant, event_literal = match.groups()
+            mappings[_pascal_to_camel(rust_variant)] = event_literal
+    return mappings
 
 
 def _record_kind_const_from_guard(guard: dict) -> str | None:
@@ -142,43 +162,25 @@ def test_record_kind_registry_event_literals_are_f13_shaped():
         )
 
 
-def test_record_kind_registry_current_d26_event_mappings():
+def test_record_kind_registry_event_literals_mirror_canonical_event_literals():
     entries = _by_literal(_registry())
+    expected = _canonical_event_literals_from_rust()
 
-    expected = {
-        "stateTransition": "wos.kernel.state_transition",
-        "caseCreated": "wos.kernel.case_created",
-        "intakeAccepted": "wos.kernel.intake_accepted",
-        "noteAdded": "wos.kernel.note_added",
-        "intakeRejected": "wos.kernel.intake_rejected",
-        "intakeDeferred": "wos.kernel.intake_deferred",
-        "capabilityInvocation": "wos.ai.capability_invocation",
-        "forEachIterationStarted": "wos.kernel.for_each_iteration_started",
-        "forEachIterationCompleted": "wos.kernel.for_each_iteration_completed",
-        "forEachCompleted": "wos.kernel.for_each_completed",
-        "signatureAffirmation": "wos.kernel.signature_affirmation",
-        "signatureAdmissionFailed": "wos.kernel.signature_admission_failed",
-        "correctionAuthorized": "wos.governance.correction_authorized",
-        "amendmentAuthorized": "wos.governance.amendment_authorized",
-        "determinationAmended": "wos.governance.determination_amended",
-        "rescissionAuthorized": "wos.governance.rescission_authorized",
-        "determinationRescinded": "wos.governance.determination_rescinded",
-        "reinstated": "wos.governance.reinstated",
-        "authorizationAttestation": "wos.governance.authorization_attestation",
-        "clockStarted": "wos.governance.clock_started",
-        "clockResolved": "wos.governance.clock_resolved",
-        "identityAttestation": "wos.assurance.identity_attestation",
-        "keyRebind": "wos.assurance.key_rebind",
-        "clockSkewObserved": "wos.governance.clock_skew_observed",
-        "commitAttemptFailure": "wos.kernel.commit_attempt_failure",
-        "authorizationRejected": "wos.governance.authorization_rejected",
-        "instanceMigrated": "wos.kernel.instance_migrated",
-        "migrationPinChanged": "wos.kernel.migration_pin_changed",
-    }
-
+    assert expected, "ProvenanceKind::canonical_event_literal() parser found no rows"
     assert event_literal_mappings() == expected
     for literal, event_literal in expected.items():
         assert entries[literal]["eventLiteral"] == event_literal
+
+
+def test_record_kind_registry_admission_contract_sources_runtime_catalog():
+    registry = _registry()
+    contract = registry["admissionContract"]
+
+    assert contract["source"] == "ProvenanceKind::canonical_event_literal()"
+    assert contract["runtimeSurface"] == "GET /v1/scopes/{scope}/registries/event-types"
+    assert contract["dispatchField"] == "event"
+    assert contract["legacyRecordKindField"] == "recordKind"
+    assert "recordKinds[].eventLiteral" in contract["instanceGeneration"]
 
 
 def test_registry_event_literal_mappings_drive_workflow_api_and_log_guards():
