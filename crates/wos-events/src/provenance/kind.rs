@@ -446,77 +446,64 @@ pub enum ProvenanceKind {
     MigrationPinChanged,
 }
 
+macro_rules! define_canonical_substrate_events {
+    ($($lit:literal => $variant:ident,)*) => {
+        pub const SUBSTRATE_CANONICAL_EVENT_LITERALS: &[&str] = &[$($lit),*];
+
+        const CANONICAL_SUBSTRATE_EVENT_PAIRS: &[(&str, ProvenanceKind)] = &[
+            $(($lit, ProvenanceKind::$variant),)*
+        ];
+    };
+}
+
+define_canonical_substrate_events! {
+    "wos.ai.capability_invocation" => CapabilityInvocation,
+    "wos.assurance.identity_attestation" => IdentityAttestation,
+    "wos.assurance.key_rebind" => KeyRebind,
+    "wos.governance.amendment_authorized" => AmendmentAuthorized,
+    "wos.governance.authorization_attestation" => AuthorizationAttestation,
+    "wos.governance.authorization_rejected" => AuthorizationRejected,
+    "wos.governance.clock_resolved" => ClockResolved,
+    "wos.governance.clock_skew_observed" => ClockSkewObserved,
+    "wos.governance.clock_started" => ClockStarted,
+    "wos.governance.correction_authorized" => CorrectionAuthorized,
+    "wos.governance.determination_amended" => DeterminationAmended,
+    "wos.governance.determination_rescinded" => DeterminationRescinded,
+    "wos.governance.reinstated" => Reinstated,
+    "wos.governance.rescission_authorized" => RescissionAuthorized,
+    "wos.kernel.case_created" => CaseCreated,
+    "wos.kernel.commit_attempt_failure" => CommitAttemptFailure,
+    "wos.kernel.for_each_completed" => ForEachCompleted,
+    "wos.kernel.for_each_iteration_completed" => ForEachIterationCompleted,
+    "wos.kernel.for_each_iteration_started" => ForEachIterationStarted,
+    "wos.kernel.instance_migrated" => InstanceMigrated,
+    "wos.kernel.intake_accepted" => IntakeAccepted,
+    "wos.kernel.intake_deferred" => IntakeDeferred,
+    "wos.kernel.intake_rejected" => IntakeRejected,
+    "wos.kernel.migration_pin_changed" => MigrationPinChanged,
+    "wos.kernel.note_added" => NoteAdded,
+    "wos.kernel.signature_admission_failed" => SignatureAdmissionFailed,
+    "wos.kernel.signature_affirmation" => SignatureAffirmation,
+    "wos.kernel.state_transition" => StateTransition,
+}
+
 impl ProvenanceKind {
     /// Returns the registry-seeded D26 event literal, when one is fixed.
     #[must_use]
     pub fn canonical_event_literal(&self) -> Option<&'static str> {
-        match self {
-            Self::StateTransition => Some("wos.kernel.state_transition"),
-            Self::CaseCreated => Some("wos.kernel.case_created"),
-            Self::IntakeAccepted => Some("wos.kernel.intake_accepted"),
-            Self::NoteAdded => Some("wos.kernel.note_added"),
-            Self::IntakeRejected => Some("wos.kernel.intake_rejected"),
-            Self::IntakeDeferred => Some("wos.kernel.intake_deferred"),
-            Self::CapabilityInvocation => Some("wos.ai.capability_invocation"),
-            Self::ForEachIterationStarted => Some("wos.kernel.for_each_iteration_started"),
-            Self::ForEachIterationCompleted => Some("wos.kernel.for_each_iteration_completed"),
-            Self::ForEachCompleted => Some("wos.kernel.for_each_completed"),
-            Self::SignatureAffirmation => Some("wos.kernel.signature_affirmation"),
-            Self::SignatureAdmissionFailed => Some("wos.kernel.signature_admission_failed"),
-            Self::CorrectionAuthorized => Some("wos.governance.correction_authorized"),
-            Self::AmendmentAuthorized => Some("wos.governance.amendment_authorized"),
-            Self::DeterminationAmended => Some("wos.governance.determination_amended"),
-            Self::RescissionAuthorized => Some("wos.governance.rescission_authorized"),
-            Self::DeterminationRescinded => Some("wos.governance.determination_rescinded"),
-            Self::Reinstated => Some("wos.governance.reinstated"),
-            Self::AuthorizationAttestation => Some("wos.governance.authorization_attestation"),
-            Self::ClockStarted => Some("wos.governance.clock_started"),
-            Self::ClockResolved => Some("wos.governance.clock_resolved"),
-            Self::IdentityAttestation => Some("wos.assurance.identity_attestation"),
-            Self::KeyRebind => Some("wos.assurance.key_rebind"),
-            Self::ClockSkewObserved => Some("wos.governance.clock_skew_observed"),
-            Self::CommitAttemptFailure => Some("wos.kernel.commit_attempt_failure"),
-            Self::AuthorizationRejected => Some("wos.governance.authorization_rejected"),
-            Self::InstanceMigrated => Some("wos.kernel.instance_migrated"),
-            Self::MigrationPinChanged => Some("wos.kernel.migration_pin_changed"),
-            _ => None,
-        }
+        CANONICAL_SUBSTRATE_EVENT_PAIRS
+            .iter()
+            .find(|(_, kind)| kind == self)
+            .map(|(literal, _)| *literal)
     }
 
     /// Returns the D26 record kind selected by a canonical event literal.
     #[must_use]
     pub fn from_canonical_event_literal(event: &str) -> Option<Self> {
-        match event {
-            "wos.kernel.state_transition" => Some(Self::StateTransition),
-            "wos.kernel.case_created" => Some(Self::CaseCreated),
-            "wos.kernel.intake_accepted" => Some(Self::IntakeAccepted),
-            "wos.kernel.note_added" => Some(Self::NoteAdded),
-            "wos.kernel.intake_rejected" => Some(Self::IntakeRejected),
-            "wos.kernel.intake_deferred" => Some(Self::IntakeDeferred),
-            "wos.ai.capability_invocation" => Some(Self::CapabilityInvocation),
-            "wos.kernel.for_each_iteration_started" => Some(Self::ForEachIterationStarted),
-            "wos.kernel.for_each_iteration_completed" => Some(Self::ForEachIterationCompleted),
-            "wos.kernel.for_each_completed" => Some(Self::ForEachCompleted),
-            "wos.kernel.signature_affirmation" => Some(Self::SignatureAffirmation),
-            "wos.kernel.signature_admission_failed" => Some(Self::SignatureAdmissionFailed),
-            "wos.governance.correction_authorized" => Some(Self::CorrectionAuthorized),
-            "wos.governance.amendment_authorized" => Some(Self::AmendmentAuthorized),
-            "wos.governance.determination_amended" => Some(Self::DeterminationAmended),
-            "wos.governance.rescission_authorized" => Some(Self::RescissionAuthorized),
-            "wos.governance.determination_rescinded" => Some(Self::DeterminationRescinded),
-            "wos.governance.reinstated" => Some(Self::Reinstated),
-            "wos.governance.authorization_attestation" => Some(Self::AuthorizationAttestation),
-            "wos.governance.clock_started" => Some(Self::ClockStarted),
-            "wos.governance.clock_resolved" => Some(Self::ClockResolved),
-            "wos.assurance.identity_attestation" => Some(Self::IdentityAttestation),
-            "wos.assurance.key_rebind" => Some(Self::KeyRebind),
-            "wos.governance.clock_skew_observed" => Some(Self::ClockSkewObserved),
-            "wos.kernel.commit_attempt_failure" => Some(Self::CommitAttemptFailure),
-            "wos.governance.authorization_rejected" => Some(Self::AuthorizationRejected),
-            "wos.kernel.instance_migrated" => Some(Self::InstanceMigrated),
-            "wos.kernel.migration_pin_changed" => Some(Self::MigrationPinChanged),
-            _ => None,
-        }
+        CANONICAL_SUBSTRATE_EVENT_PAIRS
+            .iter()
+            .find(|(literal, _)| *literal == event)
+            .map(|(_, kind)| *kind)
     }
 
     /// Whether this kind represents a governance / AI policy or rule that
@@ -550,5 +537,45 @@ impl ProvenanceKind {
                 | ProvenanceKind::PolicyDecision
                 | ProvenanceKind::PipelineRiskProfile
         )
+    }
+}
+
+#[cfg(test)]
+mod substrate_literal_registry_tests {
+    use super::{ProvenanceKind, SUBSTRATE_CANONICAL_EVENT_LITERALS};
+    use std::collections::HashSet;
+
+    #[test]
+    fn given_substrate_literal_table_when_scanned_then_literals_are_unique_and_round_trip() {
+        let mut seen = HashSet::new();
+        for literal in SUBSTRATE_CANONICAL_EVENT_LITERALS {
+            assert!(
+                seen.insert(*literal),
+                "duplicate substrate canonical literal `{literal}`"
+            );
+            let kind = ProvenanceKind::from_canonical_event_literal(literal)
+                .unwrap_or_else(|| panic!("literal `{literal}` must parse"));
+            assert_eq!(
+                kind.canonical_event_literal(),
+                Some(*literal),
+                "literal `{literal}` must round-trip through ProvenanceKind"
+            );
+        }
+        assert_eq!(
+            seen.len(),
+            SUBSTRATE_CANONICAL_EVENT_LITERALS.len(),
+            "substrate literal table must enumerate distinct strings"
+        );
+    }
+
+    #[test]
+    fn given_each_substrate_literal_when_mapped_then_kind_has_some_canonical_literal() {
+        for literal in SUBSTRATE_CANONICAL_EVENT_LITERALS {
+            let kind = ProvenanceKind::from_canonical_event_literal(literal).unwrap();
+            assert!(
+                kind.canonical_event_literal().is_some(),
+                "{kind:?} must expose canonical_event_literal"
+            );
+        }
     }
 }

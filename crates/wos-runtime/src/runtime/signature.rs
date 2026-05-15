@@ -3340,8 +3340,7 @@ mod k2_field_binding_tests {
     use crate::binding::SignaturePrimitiveStatus;
     use wos_core::ProvenanceRecord;
 
-    const DOC_HASH: &str =
-        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const DOC_HASH: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const PRESENTATION_HASH: &str =
         "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
@@ -3371,8 +3370,7 @@ mod k2_field_binding_tests {
             verification_receipt: None,
             admission_failure: None,
         };
-        let (signing_act_id, presentation_hash) =
-            super::signature_affirmation_k2_fields(&evidence);
+        let (signing_act_id, presentation_hash) = super::signature_affirmation_k2_fields(&evidence);
         assert_eq!(signing_act_id, "signing-act-777");
         assert_eq!(presentation_hash, PRESENTATION_HASH);
     }
@@ -3406,8 +3404,7 @@ mod k2_field_binding_tests {
             admission_failure: None,
         };
 
-        let (signing_act_id, presentation_hash) =
-            super::signature_affirmation_k2_fields(&evidence);
+        let (signing_act_id, presentation_hash) = super::signature_affirmation_k2_fields(&evidence);
         let record = ProvenanceRecord::signature_affirmation(SignatureAffirmationInput {
             signer_id: "signer-1",
             role_id: "role-1",

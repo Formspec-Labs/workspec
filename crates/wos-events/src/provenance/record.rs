@@ -11,20 +11,6 @@ use super::snapshot::CaseFileSnapshot;
 // F-13 event literals are consumed by Trellis custody/export verification and
 // WOS D26 schema dispatch; changing them requires a coordinated registry
 // migration and fixture regeneration.
-const WOS_KERNEL_STATE_TRANSITION_EVENT: &str = "wos.kernel.state_transition";
-const WOS_KERNEL_SIGNATURE_AFFIRMATION_EVENT: &str = "wos.kernel.signature_affirmation";
-const WOS_KERNEL_SIGNATURE_ADMISSION_FAILED_EVENT: &str = "wos.kernel.signature_admission_failed";
-const WOS_GOVERNANCE_DETERMINATION_RESCINDED_EVENT: &str = "wos.governance.determination_rescinded";
-const WOS_GOVERNANCE_REINSTATED_EVENT: &str = "wos.governance.reinstated";
-const WOS_GOVERNANCE_CLOCK_STARTED_EVENT: &str = "wos.governance.clock_started";
-const WOS_GOVERNANCE_CLOCK_RESOLVED_EVENT: &str = "wos.governance.clock_resolved";
-const WOS_ASSURANCE_IDENTITY_ATTESTATION_EVENT: &str = "wos.assurance.identity_attestation";
-const WOS_ASSURANCE_KEY_REBIND_EVENT: &str = "wos.assurance.key_rebind";
-const WOS_KERNEL_FOR_EACH_ITERATION_STARTED_EVENT: &str = "wos.kernel.for_each_iteration_started";
-const WOS_KERNEL_FOR_EACH_ITERATION_COMPLETED_EVENT: &str =
-    "wos.kernel.for_each_iteration_completed";
-const WOS_KERNEL_FOR_EACH_COMPLETED_EVENT: &str = "wos.kernel.for_each_completed";
-
 /// Configuration-warning provenance input (cross-cutting; covers AI
 /// `drift-monitor.policyRef`, governance `continuationPolicyRef`, and
 /// notification-template key/render failures).
@@ -812,7 +798,6 @@ impl ProvenanceRecord {
         record.actor_id = actor_id.map(String::from);
         record.from_state = Some(from.to_string());
         record.to_state = Some(to.to_string());
-        record.event = Some(WOS_KERNEL_STATE_TRANSITION_EVENT.to_string());
         record.data = Some(serde_json::json!({ "transitionEvent": event }));
         record
     }
@@ -919,7 +904,6 @@ impl ProvenanceRecord {
         item: &serde_json::Value,
     ) -> Self {
         let mut record = Self::blank(ProvenanceKind::ForEachIterationStarted);
-        record.event = Some(WOS_KERNEL_FOR_EACH_ITERATION_STARTED_EVENT.to_string());
         record.data = Some(serde_json::json!({
             "foreachState": foreach_state,
             "index": index,
@@ -936,7 +920,6 @@ impl ProvenanceRecord {
         break_triggered: bool,
     ) -> Self {
         let mut record = Self::blank(ProvenanceKind::ForEachIterationCompleted);
-        record.event = Some(WOS_KERNEL_FOR_EACH_ITERATION_COMPLETED_EVENT.to_string());
         let mut data = serde_json::json!({
             "foreachState": foreach_state,
             "index": index,
@@ -956,7 +939,6 @@ impl ProvenanceRecord {
     /// loop terminated early via `breakCondition`.
     pub fn foreach_completed(foreach_state: &str, iterations: u32, broke: bool) -> Self {
         let mut record = Self::blank(ProvenanceKind::ForEachCompleted);
-        record.event = Some(WOS_KERNEL_FOR_EACH_COMPLETED_EVENT.to_string());
         record.data = Some(serde_json::json!({
             "foreachState": foreach_state,
             "iterations": iterations,
@@ -1272,7 +1254,6 @@ impl ProvenanceRecord {
 
         let mut record = Self::blank(ProvenanceKind::SignatureAffirmation);
         record.actor_id = Some(input.signer_id.to_string());
-        record.event = Some(WOS_KERNEL_SIGNATURE_AFFIRMATION_EVENT.to_string());
         record.data = Some(serde_json::Value::Object(data));
         record
     }
@@ -1317,7 +1298,6 @@ impl ProvenanceRecord {
 
         let mut record = Self::blank(ProvenanceKind::SignatureAdmissionFailed);
         record.actor_id = input.signer_id.map(String::from);
-        record.event = Some(WOS_KERNEL_SIGNATURE_ADMISSION_FAILED_EVENT.to_string());
         record.data = Some(serde_json::Value::Object(data));
         record
     }
@@ -1484,7 +1464,6 @@ impl ProvenanceRecord {
         );
 
         let mut record = Self::blank(ProvenanceKind::DeterminationRescinded);
-        record.event = Some(WOS_GOVERNANCE_DETERMINATION_RESCINDED_EVENT.to_string());
         record.data = Some(serde_json::Value::Object(data));
         record
     }
@@ -1512,7 +1491,6 @@ impl ProvenanceRecord {
         );
 
         let mut record = Self::blank(ProvenanceKind::Reinstated);
-        record.event = Some(WOS_GOVERNANCE_REINSTATED_EVENT.to_string());
         record.data = Some(serde_json::Value::Object(data));
         record
     }
@@ -1598,7 +1576,6 @@ impl ProvenanceRecord {
         }
 
         let mut record = Self::blank(ProvenanceKind::ClockStarted);
-        record.event = Some(WOS_GOVERNANCE_CLOCK_STARTED_EVENT.to_string());
         record.data = Some(serde_json::Value::Object(data));
         record
     }
@@ -1652,7 +1629,6 @@ impl ProvenanceRecord {
         }
 
         let mut record = Self::blank(ProvenanceKind::ClockResolved);
-        record.event = Some(WOS_GOVERNANCE_CLOCK_RESOLVED_EVENT.to_string());
         record.data = Some(serde_json::Value::Object(data));
         record
     }
@@ -1710,7 +1686,6 @@ impl ProvenanceRecord {
         );
 
         let mut record = Self::blank(ProvenanceKind::IdentityAttestation);
-        record.event = Some(WOS_ASSURANCE_IDENTITY_ATTESTATION_EVENT.to_string());
         record.data = Some(serde_json::Value::Object(data));
         record
     }
@@ -1762,7 +1737,6 @@ impl ProvenanceRecord {
         }
 
         let mut record = Self::blank(ProvenanceKind::KeyRebind);
-        record.event = Some(WOS_ASSURANCE_KEY_REBIND_EVENT.to_string());
         record.data = Some(serde_json::Value::Object(data));
         Ok(record)
     }
@@ -2026,5 +2000,155 @@ impl std::fmt::Display for ProvenanceRecord {
             write!(f, " event={event}")?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod constructor_literal_drift_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn assert_event_matches_kind(record: &ProvenanceRecord) {
+        assert_eq!(
+            record.event.as_deref(),
+            record.record_kind.canonical_event_literal(),
+            "constructor for {:?} must not drift from canonical_event_literal",
+            record.record_kind
+        );
+    }
+
+    #[test]
+    fn given_state_transition_constructor_when_built_then_event_matches_canonical_literal() {
+        let record = ProvenanceRecord::state_transition("a", "b", "trigger", Some("actor"));
+        assert_event_matches_kind(&record);
+    }
+
+    #[test]
+    fn given_foreach_constructors_when_built_then_events_match_canonical_literals() {
+        assert_event_matches_kind(&ProvenanceRecord::foreach_iteration_started(
+            "fe",
+            0,
+            &json!("x"),
+        ));
+        assert_event_matches_kind(&ProvenanceRecord::foreach_iteration_completed(
+            "fe", 0, false,
+        ));
+        assert_event_matches_kind(&ProvenanceRecord::foreach_completed("fe", 2, false));
+    }
+
+    #[test]
+    fn given_signature_constructors_when_built_then_events_match_canonical_literals() {
+        let digest64 = format!("sha256:{}", "a".repeat(64));
+        assert_event_matches_kind(&ProvenanceRecord::signature_admission_failed(
+            SignatureAdmissionFailedInput {
+                reason: "test",
+                response_id: "r1",
+                signed_payload_digest: digest64.as_str(),
+                signature_id: "s1",
+                signing_intent: "intent:test",
+                signer_id: None,
+                signer_authority: None,
+                failure_context: None,
+                emitted_at: "2020-01-01T00:00:00Z",
+            },
+        ));
+        let doc_hash = format!("sha256:{}", "b".repeat(64));
+        let pres_hash = format!("sha256:{}", "c".repeat(64));
+        let signed_digest = format!("sha256:{}", "d".repeat(64));
+        assert_event_matches_kind(&ProvenanceRecord::signature_affirmation(
+            SignatureAffirmationInput {
+                signer_id: "signer",
+                role_id: "role-id",
+                role: "signer",
+                document_id: "doc",
+                signing_act_id: "act",
+                document_ref: json!({"documentId": "doc", "locale": "en"}),
+                document_hash: doc_hash.as_str(),
+                presentation_hash: pres_hash.as_str(),
+                document_hash_algorithm: "sha256",
+                source_signature_system: "sys",
+                source_signature_id: "sid",
+                signed_payload_digest: signed_digest.as_str(),
+                signed_payload_digest_algorithm: "sha256",
+                signing_intent: "intent:test",
+                signed_at: "2020-01-01T00:00:00Z",
+                identity_binding: json!({}),
+                consent_reference: json!({}),
+                signature_provider: "prov",
+                ceremony_id: "cer",
+                source_response_ref: "resp",
+                profile_ref: None,
+                profile_key: None,
+                signer_authority: None,
+                custody_hook_eligible: false,
+                primitive_verification: json!({"status": "verified"}),
+                verification_receipt: None,
+                witnessed_signature_ref: None,
+            },
+        ));
+    }
+
+    #[test]
+    fn given_governance_clock_constructors_when_built_then_events_match_canonical_literals() {
+        assert_event_matches_kind(&ProvenanceRecord::determination_rescinded(
+            DeterminationRescindedInput {
+                prior_determination_hash: "h1",
+                rescission_authorization_event_hash: "h2",
+                context: None,
+            },
+        ));
+        assert_event_matches_kind(&ProvenanceRecord::reinstated(ReinstatedInput {
+            prior_rescission_event_hash: "h1",
+            reactivation_authorization_event_hash: "h2",
+            reason: "r",
+            context: None,
+        }));
+        assert_event_matches_kind(&ProvenanceRecord::clock_started(ClockStartedInput {
+            clock_id: "c1",
+            clock_kind: "AppealClock",
+            origin_event_hash: "oh",
+            duration: "P1D",
+            computed_deadline: "2020-01-02T00:00:00Z",
+            calendar_ref: None,
+            statute_reference: None,
+            context: None,
+        }));
+        assert_event_matches_kind(&ProvenanceRecord::clock_resolved(ClockResolvedInput {
+            clock_id: "c1",
+            origin_clock_hash: "oh",
+            resolution: ClockResolvedResolution::Satisfied {
+                resolving_event_hash: None,
+            },
+            resolved_at: "2020-01-02T00:00:00Z",
+            context: None,
+        }));
+    }
+
+    #[test]
+    fn given_assurance_constructors_when_built_then_events_match_canonical_literals() {
+        assert_event_matches_kind(&ProvenanceRecord::identity_attestation(
+            IdentityAttestationInput {
+                subject_global_id: "subj",
+                assurance_level: "high",
+                attestation_provider: "prov",
+                provider_attestation_id: "pid",
+                attested_at: "2020-01-01T00:00:00Z",
+                valid_until: None,
+                attested_predicates: vec!["pred"],
+                context: None,
+            },
+        ));
+        assert_event_matches_kind(
+            &ProvenanceRecord::key_rebind(KeyRebindInput {
+                prior_kid: "0123456789abcdef0123456789abcdef",
+                new_kid: "fedcba9876543210fedcba9876543210",
+                prior_assurance: "high",
+                new_assurance: "high",
+                rebind_attestation_ref: "https://example.invalid/ref",
+                reason: None,
+                context: None,
+            })
+            .expect("valid key-rebind fixture"),
+        );
     }
 }
