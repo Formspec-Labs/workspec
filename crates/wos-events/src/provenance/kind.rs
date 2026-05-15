@@ -14,8 +14,8 @@ pub enum ProvenanceKind {
     CaseStateMutation,
     /// Governed case identity was created.
     ///
-    /// `wos-core` owns the shared provenance kind, but binding crates or host
-    /// runtime code own payload assembly until WOS specifies a canonical
+    /// `wos-events` owns this discriminant (`ProvenanceKind`); binding crates or
+    /// host runtime code own payload assembly until WOS specifies a canonical
     /// binding-agnostic `caseCreated` data shape in spec and schema.
     CaseCreated,
     /// Intake handoff was accepted by host runtime policy.
