@@ -360,11 +360,20 @@ pub fn parse_authored_signatures(
                     .to_string(),
             ));
         }
-        let computed_digest = compute_formspec_signed_payload_digest(
-            response,
-            &signature.signed_payload.digest_algorithm,
-        )?;
-        if computed_digest != signature.signed_payload.digest {
+        let digest_algorithm = DigestAlgorithm::from_str(&signature.signed_payload.digest_algorithm)
+            .map_err(|_| {
+                BindingError::InvalidInput(format!(
+                    "unsupported Formspec signedPayload.digestAlgorithm '{}'",
+                    signature.signed_payload.digest_algorithm
+                ))
+            })?;
+        let signed_payload =
+            build_signed_payload(response, digest_algorithm).map_err(|error| {
+                BindingError::InvalidInput(format!(
+                    "canonicalize Formspec signed payload: {error}"
+                ))
+            })?;
+        if signed_payload.digest != signature.signed_payload.digest {
             return Err(BindingError::InvalidInput(
                 "authoredSignatures signedPayload.digest does not match signed Response payload"
                     .to_string(),
@@ -437,14 +446,23 @@ fn parse_authored_signatures_for_evidence(
                 &signature.signed_payload.definition_version,
             ));
         }
-        let computed_digest = compute_formspec_signed_payload_digest(
-            response,
-            &signature.signed_payload.digest_algorithm,
-        )?;
-        if admission_failure.is_none() && computed_digest != signature.signed_payload.digest {
+        let digest_algorithm = DigestAlgorithm::from_str(&signature.signed_payload.digest_algorithm)
+            .map_err(|_| {
+                BindingError::InvalidInput(format!(
+                    "unsupported Formspec signedPayload.digestAlgorithm '{}'",
+                    signature.signed_payload.digest_algorithm
+                ))
+            })?;
+        let signed_payload =
+            build_signed_payload(response, digest_algorithm).map_err(|error| {
+                BindingError::InvalidInput(format!(
+                    "canonicalize Formspec signed payload: {error}"
+                ))
+            })?;
+        if admission_failure.is_none() && signed_payload.digest != signature.signed_payload.digest {
             admission_failure = Some(evidence_divergence_failure(
                 "signedPayload.digest",
-                &computed_digest,
+                &signed_payload.digest,
                 &signature.signed_payload.digest,
             ));
         }
@@ -503,21 +521,6 @@ fn evidence_divergence_failure(
             ),
         ])),
     }
-}
-
-fn compute_formspec_signed_payload_digest(
-    response: &serde_json::Value,
-    algorithm: &str,
-) -> Result<String, BindingError> {
-    let digest_algorithm = DigestAlgorithm::from_str(algorithm).map_err(|_| {
-        BindingError::InvalidInput(format!(
-            "unsupported Formspec signedPayload.digestAlgorithm '{algorithm}'"
-        ))
-    })?;
-    let signed_payload = build_signed_payload(response, digest_algorithm).map_err(|error| {
-        BindingError::InvalidInput(format!("canonicalize Formspec signed payload: {error}"))
-    })?;
-    Ok(signed_payload.digest)
 }
 
 fn signature_method_admission_failure(
@@ -1293,7 +1296,9 @@ mod tests {
                 }
             ]
         });
-        let digest = compute_formspec_signed_payload_digest(&response, "sha-256").unwrap();
+        let digest = build_signed_payload(&response, DigestAlgorithm::Sha256)
+            .expect("canonicalize signed-response fixture")
+            .digest;
         response["authoredSignatures"][0]["signedPayload"]["digest"] =
             serde_json::Value::String(digest);
         response
