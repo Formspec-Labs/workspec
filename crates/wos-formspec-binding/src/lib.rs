@@ -2,7 +2,10 @@
 
 //! Formspec binding adapter for `wos-runtime`.
 
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use integrity_canonical::{CANONICALIZATION_PROFILE, DigestAlgorithm, build_signed_payload};
+use integrity_cose::{decode_cose_sign1, decode_protected_header};
 use wos_core::{
     ProvenanceKind, ProvenanceRecord,
     instance::{ActiveTask, ValidationOutcome, WorkflowProcess},
@@ -158,6 +161,13 @@ pub struct FormspecSignedPayloadRef {
 }
 
 /// Minimal authored-signature shape WOS needs to bind Formspec evidence.
+///
+/// Per ADR 0109, the cryptographic method identifier lives in the COSE
+/// protected-header `method_uri` label inside [`Self::signature_value`] (and,
+/// when present, [`Self::verification_receipt`]). The JSON `signatureMethod`
+/// projection is deleted from `formspec/schemas/response.schema.json`; the
+/// binding extracts `method_uri` via `integrity-cose::decode_protected_header`
+/// when constructing `SignatureEvidence`.
 #[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FormspecAuthoredSignatureRef {
@@ -170,9 +180,15 @@ pub struct FormspecAuthoredSignatureRef {
     /// Legal-effect class authored into the Formspec response.
     pub signing_intent: String,
 
-    /// Cryptographic signature method URI.
+    /// Base64-encoded COSE_Sign1 envelope carrying the authored signature.
+    ///
+    /// The cryptographic method URI lives in the protected-header `method_uri`
+    /// label (COSE label -65540, per ADR 0109). The binding decodes this
+    /// envelope to extract the method URI for validator routing and posture
+    /// admission. Partial decode (protected header only) does not run the
+    /// cryptographic primitive.
     #[serde(default)]
-    pub signature_method: Option<String>,
+    pub signature_value: Option<String>,
 
     /// Signer display name required by Formspec schema.
     pub signer_name: String,
@@ -524,13 +540,17 @@ fn evidence_divergence_failure(
 }
 
 fn signature_method_admission_failure(
-    signature_method: Option<&str>,
+    method_uri: Option<&str>,
 ) -> Option<SignatureAdmissionFailure> {
-    let method = signature_method?;
+    let method = method_uri?;
     if !method.starts_with("urn:formspec:sig-method:") || registered_signature_method(method) {
         return None;
     }
 
+    // Provenance records still surface the method URI under the `signatureMethod`
+    // failureContext key (stable downstream contract; see SIG-030 fixture) even
+    // though the source has moved from JSON `signatureMethod` to the COSE
+    // protected-header `method_uri` per ADR 0109.
     Some(SignatureAdmissionFailure {
         reason: SignatureAdmissionFailureReason::MethodUnregistered,
         failure_context: Some(serde_json::Map::from_iter([
@@ -541,6 +561,56 @@ fn signature_method_admission_failure(
             (
                 "registryVersion".to_string(),
                 serde_json::Value::String(FORMSPEC_SIGNATURE_METHOD_REGISTRY_VERSION.to_string()),
+            ),
+        ])),
+    })
+}
+
+/// Reads the COSE protected-header `method_uri` from a base64-encoded
+/// COSE_Sign1 envelope (ADR 0109).
+///
+/// Returns `None` when the input is absent, not valid base64, not a tagged
+/// COSE_Sign1 envelope, or the protected header carries no `method_uri` label.
+/// Partial decode only — does not run the signature primitive. The
+/// [`SignaturePrimitiveStatus::DeferredPendingHelper`] discipline still
+/// applies to the cryptographic verification.
+fn method_uri_from_cose_sign1_b64(value: Option<&str>) -> Option<String> {
+    let bytes = BASE64_STANDARD.decode(value?.trim()).ok()?;
+    let envelope = decode_cose_sign1(&bytes).ok()?;
+    let header = decode_protected_header(envelope.protected_header()).ok()?;
+    header.method_uri
+}
+
+/// Returns an admission failure when the inner-COSE `method_uri` and the
+/// verification-receipt-COSE `method_uri` disagree.
+///
+/// Per ADR 0109 P3-T9: when both envelopes are present and both carry a
+/// `method_uri`, equality is required. Equality failure is an
+/// [`SignatureAdmissionFailureReason::EvidenceDivergence`] (the verification
+/// receipt asserts a method that disagrees with the authored signature).
+fn verification_receipt_method_mismatch_failure(
+    signature_method_uri: Option<&str>,
+    receipt_method_uri: Option<&str>,
+) -> Option<SignatureAdmissionFailure> {
+    let signature_method = signature_method_uri?;
+    let receipt_method = receipt_method_uri?;
+    if signature_method == receipt_method {
+        return None;
+    }
+    Some(SignatureAdmissionFailure {
+        reason: SignatureAdmissionFailureReason::EvidenceDivergence,
+        failure_context: Some(serde_json::Map::from_iter([
+            (
+                "field".to_string(),
+                serde_json::Value::String("methodUri".to_string()),
+            ),
+            (
+                "expected".to_string(),
+                serde_json::Value::String(signature_method.to_string()),
+            ),
+            (
+                "actual".to_string(),
+                serde_json::Value::String(receipt_method.to_string()),
             ),
         ])),
     })
@@ -891,9 +961,23 @@ where
         let mut evidence = Vec::with_capacity(signatures.len());
         for signature_evidence in signatures {
             let signature = signature_evidence.signature;
-            let admission_failure = signature_evidence.admission_failure.or_else(|| {
-                signature_method_admission_failure(signature.signature_method.as_deref())
-            });
+            // ADR 0109: method URI lives in the COSE protected-header
+            // `method_uri` label (-65540). Partial decode of `signatureValue`
+            // is the inspection path; partial decode of `verificationReceipt`
+            // is the equality cross-check.
+            let signature_method_uri =
+                method_uri_from_cose_sign1_b64(signature.signature_value.as_deref());
+            let receipt_method_uri =
+                method_uri_from_cose_sign1_b64(signature.verification_receipt.as_deref());
+            let admission_failure = signature_evidence
+                .admission_failure
+                .or_else(|| {
+                    verification_receipt_method_mismatch_failure(
+                        signature_method_uri.as_deref(),
+                        receipt_method_uri.as_deref(),
+                    )
+                })
+                .or_else(|| signature_method_admission_failure(signature_method_uri.as_deref()));
             if let (Some(response_signer_id), Some(signature_signer_id)) =
                 (response_signer_id, signature.signer_id.as_deref())
                 && response_signer_id != signature_signer_id
@@ -913,7 +997,7 @@ where
                     .signer_id
                     .or_else(|| response_signer_id.map(str::to_string)),
                 signing_intent: signature.signing_intent,
-                signature_method: signature.signature_method,
+                signature_method: signature_method_uri,
                 signed_payload_digest: signature.signed_payload.digest,
                 signed_payload_digest_algorithm: signature.signed_payload.digest_algorithm,
                 signed_at: signature.signed_at,
@@ -925,8 +1009,8 @@ where
                 signer_authority: signer_authority.clone(),
                 // The reference Formspec binding parses pins, consent, signing
                 // intent, and the signed-payload digest, but it does not yet
-                // execute the cryptographic primitive over `signatureValue` /
-                // `signatureMethod`. That work ships with
+                // execute the cryptographic primitive over the COSE_Sign1
+                // `signatureValue` envelope. That work ships with
                 // `FORMSPEC-SIGN-HELPER-001`. Until then, the binding reports
                 // `DeferredPendingHelper` so downstream WOS provenance honestly
                 // records that the primitive has not run.
@@ -1260,6 +1344,29 @@ mod tests {
         assert_eq!(first.field_updates, second.field_updates);
     }
 
+    /// Returns base64-encoded COSE_Sign1 bytes carrying the given `method_uri`
+    /// in the protected header (ADR 0109 consumer detached-signature envelope).
+    ///
+    /// Construction routes through `integrity_cose::encode_cose_sign1` so the
+    /// fixture exercises the same builder + decoder path as production. The
+    /// signature payload is a 64-byte zero-filled stub — the binding only does
+    /// partial decode; cryptographic verification is deferred until
+    /// `FORMSPEC-SIGN-HELPER-001` ships.
+    /// COSE algorithm identifier for EdDSA (RFC 9053; matches Trellis Phase-1
+    /// envelope discipline and Formspec sig-method registry entry
+    /// `urn:formspec:sig-method:ed25519-cose-sign1@1`).
+    const COSE_ALG_EDDSA: i32 = -8;
+
+    fn cose_sign1_b64_with_method_uri(method_uri: &str) -> String {
+        let protected = integrity_cose::detached_signature_protected_header(
+            COSE_ALG_EDDSA,
+            &[0u8; 16],
+            method_uri,
+        );
+        let envelope = integrity_cose::encode_cose_sign1(&protected, None, &[0u8; 64]);
+        BASE64_STANDARD.encode(envelope)
+    }
+
     fn signed_response() -> serde_json::Value {
         let mut response = serde_json::json!({
             "id": "resp-2026-0001",
@@ -1272,8 +1379,7 @@ mod tests {
                     "signatureId": "sig-2026-0001",
                     "documentId": "benefitsApplication",
                     "signingIntent": "urn:wos:signing-intent:applicant-signature",
-                    "signatureValue": "urn:test:signature:1",
-                    "signatureMethod": "provider-managed",
+                    "signatureValue": cose_sign1_b64_with_method_uri("urn:formspec:sig-method:ed25519-cose-sign1@1"),
                     "signerId": "applicant",
                     "signerName": "Ada Lovelace",
                     "signedAt": "2026-04-22T12:00:00Z",
@@ -1323,13 +1429,18 @@ mod tests {
                 .as_str()
                 .expect("signed-payload digest is present")
                 .to_string();
+        let expected_signature_value =
+            response["authoredSignatures"][0]["signatureValue"]
+                .as_str()
+                .expect("signatureValue is present")
+                .to_string();
         let signatures = parse_authored_signatures(&response).unwrap();
 
         assert_eq!(signatures.len(), 1);
         assert_eq!(signatures[0].signature_id, "sig-2026-0001");
         assert_eq!(
-            signatures[0].signature_method.as_deref(),
-            Some("provider-managed")
+            signatures[0].signature_value.as_deref(),
+            Some(expected_signature_value.as_str())
         );
         assert_eq!(
             signatures[0].signed_payload.digest,
@@ -1360,11 +1471,14 @@ mod tests {
     #[test]
     fn signature_evidence_emits_deferred_pending_helper_status() {
         // The reference Formspec binding does not yet run the cryptographic
-        // primitive over signatureValue / signatureMethod (FORMSPEC-SIGN-
-        // HELPER-001 pending). It MUST therefore emit
+        // primitive over the COSE_Sign1 `signatureValue` envelope (FORMSPEC-
+        // SIGN-HELPER-001 pending). It MUST therefore emit
         // SignaturePrimitiveStatus::DeferredPendingHelper so downstream WOS
         // provenance records the verification gap honestly instead of
         // implying a verified signature.
+        //
+        // Per ADR 0109 the binding extracts `signature_method` from the COSE
+        // protected-header `method_uri` label (-65540), not from JSON.
         let adapter = FormspecBinding::new(StubProcessor);
         let response = signed_response();
         let evidence = adapter
@@ -1375,7 +1489,8 @@ mod tests {
         assert_eq!(evidence.len(), 1);
         assert_eq!(
             evidence[0].signature_method.as_deref(),
-            Some("provider-managed")
+            Some("urn:formspec:sig-method:ed25519-cose-sign1@1"),
+            "signature_method must come from the COSE protected-header method_uri"
         );
         assert_eq!(
             evidence[0].primitive_verification,
@@ -1387,7 +1502,7 @@ mod tests {
         );
         assert!(
             evidence[0].admission_failure.is_none(),
-            "legacy provider-managed method remains deferred until fixture recast"
+            "registered method_uri must not produce an admission failure"
         );
         assert!(evidence[0].verification_receipt.is_none());
     }
@@ -1414,8 +1529,9 @@ mod tests {
     fn signature_evidence_reports_unregistered_registry_method() {
         let adapter = FormspecBinding::new(StubProcessor);
         let mut response = signed_response();
-        response["authoredSignatures"][0]["signatureMethod"] =
-            serde_json::json!("urn:formspec:sig-method:unknown@1");
+        response["authoredSignatures"][0]["signatureValue"] = serde_json::Value::String(
+            cose_sign1_b64_with_method_uri("urn:formspec:sig-method:unknown@1"),
+        );
 
         let evidence = adapter
             .signature_evidence(&formspec_task(), &response)
@@ -1449,6 +1565,49 @@ mod tests {
                 .get("registryVersion")
                 .and_then(serde_json::Value::as_str),
             Some(FORMSPEC_SIGNATURE_METHOD_REGISTRY_VERSION)
+        );
+    }
+
+    #[test]
+    fn signature_evidence_rejects_verification_receipt_method_uri_mismatch() {
+        // Per ADR 0109 P3-T9: when both the inner-COSE signatureValue and the
+        // verification receipt are present, their `method_uri` values must
+        // agree. Disagreement is an EvidenceDivergence admission failure —
+        // the verifier asserted a method the signer did not declare.
+        let adapter = FormspecBinding::new(StubProcessor);
+        let mut response = signed_response();
+        response["authoredSignatures"][0]["verificationReceipt"] = serde_json::Value::String(
+            cose_sign1_b64_with_method_uri("urn:formspec:receipt-method:ed25519-cose-sign1@1"),
+        );
+
+        let evidence = adapter
+            .signature_evidence(&formspec_task(), &response)
+            .expect("signature evidence parses")
+            .expect("signature evidence is present");
+
+        let admission_failure = evidence[0]
+            .admission_failure
+            .as_ref()
+            .expect("method_uri mismatch must produce admission failure");
+        assert_eq!(
+            admission_failure.reason,
+            SignatureAdmissionFailureReason::EvidenceDivergence
+        );
+        let context = admission_failure
+            .failure_context
+            .as_ref()
+            .expect("evidence divergence carries failure context");
+        assert_eq!(
+            context.get("field").and_then(serde_json::Value::as_str),
+            Some("methodUri")
+        );
+        assert_eq!(
+            context.get("expected").and_then(serde_json::Value::as_str),
+            Some("urn:formspec:sig-method:ed25519-cose-sign1@1")
+        );
+        assert_eq!(
+            context.get("actual").and_then(serde_json::Value::as_str),
+            Some("urn:formspec:receipt-method:ed25519-cose-sign1@1")
         );
     }
 
