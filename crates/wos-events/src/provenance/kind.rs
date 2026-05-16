@@ -448,24 +448,14 @@ pub enum ProvenanceKind {
 
 macro_rules! define_canonical_substrate_events {
     ($($lit:literal => $variant:ident,)*) => {
-        /// Canonical WOS-owned substrate event literals.
+        /// Canonical WOS-owned event literals.
         ///
-        /// Honest alias [`WOS_CANONICAL_EVENT_LITERALS`] is the recommended
-        /// import going forward: Trellis substrate is producer-neutral, so the
-        /// `SUBSTRATE_*` prefix on a WOS-only literal table is misleading.
-        /// Closes the WOS-side half of Trellis DI topology Review Gate 14
-        /// (`TRELLIS-DI-TOPOLOGY-TODO.md`); the original symbol is preserved
-        /// because external consumers (`trellis-admission-wos`, `wos-runtime`,
-        /// matrix fixtures) still reference it.
-        pub const SUBSTRATE_CANONICAL_EVENT_LITERALS: &[&str] = &[$($lit),*];
-
-        /// Honest alias for [`SUBSTRATE_CANONICAL_EVENT_LITERALS`].
-        ///
-        /// Same slice; the name says WOS so new code does not perpetuate the
-        /// misleading substrate-prefixed name when Trellis substrate is
-        /// vocabulary-neutral.
-        #[allow(dead_code)]
-        pub const WOS_CANONICAL_EVENT_LITERALS: &[&str] = SUBSTRATE_CANONICAL_EVENT_LITERALS;
+        /// The name says WOS because the table is WOS-specific. The original
+        /// `WOS_CANONICAL_EVENT_LITERALS` symbol was retired in the
+        /// Trellis DI-topology pass — Trellis substrate is producer-neutral,
+        /// so a substrate-prefixed name on a WOS-only literal table was
+        /// misleading. Phase-1 system (no released consumers); no alias kept.
+        pub const WOS_CANONICAL_EVENT_LITERALS: &[&str] = &[$($lit),*];
 
         const CANONICAL_SUBSTRATE_EVENT_PAIRS: &[(&str, ProvenanceKind)] = &[
             $(($lit, ProvenanceKind::$variant),)*
@@ -565,13 +555,13 @@ impl ProvenanceKind {
 
 #[cfg(test)]
 mod substrate_literal_registry_tests {
-    use super::{ProvenanceKind, SUBSTRATE_CANONICAL_EVENT_LITERALS};
+    use super::{ProvenanceKind, WOS_CANONICAL_EVENT_LITERALS};
     use std::collections::HashSet;
 
     #[test]
     fn given_substrate_literal_table_when_scanned_then_literals_are_unique_and_round_trip() {
         let mut seen = HashSet::new();
-        for literal in SUBSTRATE_CANONICAL_EVENT_LITERALS {
+        for literal in WOS_CANONICAL_EVENT_LITERALS {
             assert!(
                 seen.insert(*literal),
                 "duplicate substrate canonical literal `{literal}`"
@@ -586,14 +576,14 @@ mod substrate_literal_registry_tests {
         }
         assert_eq!(
             seen.len(),
-            SUBSTRATE_CANONICAL_EVENT_LITERALS.len(),
+            WOS_CANONICAL_EVENT_LITERALS.len(),
             "substrate literal table must enumerate distinct strings"
         );
     }
 
     #[test]
     fn given_each_substrate_literal_when_mapped_then_kind_has_some_canonical_literal() {
-        for literal in SUBSTRATE_CANONICAL_EVENT_LITERALS {
+        for literal in WOS_CANONICAL_EVENT_LITERALS {
             let kind = ProvenanceKind::from_canonical_event_literal(literal).unwrap();
             assert!(
                 kind.canonical_event_literal().is_some(),
@@ -625,8 +615,8 @@ mod substrate_literal_registry_tests {
         literals.sort_unstable();
         for literal in literals {
             assert!(
-                SUBSTRATE_CANONICAL_EVENT_LITERALS.contains(&literal),
-                "{literal} must remain in SUBSTRATE_CANONICAL_EVENT_LITERALS"
+                WOS_CANONICAL_EVENT_LITERALS.contains(&literal),
+                "{literal} must remain in WOS_CANONICAL_EVENT_LITERALS"
             );
         }
     }

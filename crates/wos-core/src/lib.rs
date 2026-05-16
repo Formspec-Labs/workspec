@@ -71,6 +71,6 @@ pub use wos_events::provenance::{
     DeterminationRescindedInput, IdentityAttestationInput, InstanceMigratedInput, KeyRebindError,
     KeyRebindInput, MigrationPinChangedInput, ProvenanceAuditTier, ProvenanceKind, ProvenanceLog,
     ProvenanceRecord, ReinstatedInput, RescissionAuthorizedInput,
-    SUBSTRATE_CANONICAL_EVENT_LITERALS, SignatureAdmissionFailedInput, SignatureAffirmationInput,
+    WOS_CANONICAL_EVENT_LITERALS, SignatureAdmissionFailedInput, SignatureAffirmationInput,
     audit_layer_for_kind,
 };

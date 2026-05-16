@@ -20,7 +20,7 @@ mod snapshot;
 
 pub use audit_tier::{ProvenanceAuditTier, audit_layer_for_kind};
 pub use kind::{
-    GOVERNANCE_DETERMINATION_WIRE_EVENT_PREFIX, ProvenanceKind, SUBSTRATE_CANONICAL_EVENT_LITERALS,
+    GOVERNANCE_DETERMINATION_WIRE_EVENT_PREFIX, ProvenanceKind, WOS_CANONICAL_EVENT_LITERALS,
 };
 pub use log::ProvenanceLog;
 pub use record::{
