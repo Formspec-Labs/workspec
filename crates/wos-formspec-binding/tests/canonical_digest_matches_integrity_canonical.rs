@@ -13,18 +13,28 @@ use std::path::PathBuf;
 
 use integrity_canonical::{DigestAlgorithm, build_signed_payload};
 
-/// Resolve bundle 001's `formspec-response.json` from this crate's manifest
-/// dir. Bundle 001 lives in the formspec sibling repo:
-/// `formspec/tests/fixtures/cross-stack/001-standalone-formspec-verified/`.
+/// Resolve bundle 001's `formspec-response.json`. Default topology is the
+/// sibling-checkout layout: `formspec-stack/work-spec/` next to
+/// `formspec-stack/formspec/`, so we walk three parents from `CARGO_MANIFEST_DIR`
+/// and dive into `formspec/tests/fixtures/cross-stack/...`. The
+/// `FORMSPEC_ROOT_DIR` env-var overrides the formspec checkout location for
+/// callers running this crate outside the standard topology (e.g. hosted
+/// publication, vendored dependency consumers). Mirrors the convention in
+/// `formspec-cross-stack-fixture-harness/tests/bundle_manifest_tests.rs`.
 fn bundle_001_response_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("crate dir has a parent (crates/)")
-        .parent()
-        .expect("crates dir has a parent (work-spec/)")
-        .parent()
-        .expect("work-spec dir has a parent (stack root)")
-        .join("formspec")
+    let formspec_root = std::env::var_os("FORMSPEC_ROOT_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .expect("crate dir has a parent (crates/)")
+                .parent()
+                .expect("crates dir has a parent (work-spec/)")
+                .parent()
+                .expect("work-spec dir has a parent (stack root)")
+                .join("formspec")
+        });
+    formspec_root
         .join("tests")
         .join("fixtures")
         .join("cross-stack")
