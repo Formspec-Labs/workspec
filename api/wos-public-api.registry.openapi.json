@@ -3667,11 +3667,16 @@
           "caseLedgerId",
           "eventId",
           "eventHash",
-          "sequence"
+          "sequence",
+          "artifactType"
         ],
         "properties": {
           "actorId": {
             "type": "string"
+          },
+          "artifactType": {
+            "type": "string",
+            "description": "Trellis substrate envelope `artifact_type` projection (per ADR 0109 / 0098).\n\nThis endpoint emits Trellis substrate events; the service writes `artifact_type =\n\"event\"` into the protected header per the endpoint contract (clients cannot supply it).\nThe receipt projects this value outward for verification and audit. Closed-enum value\n(`trellis-types::ArtifactType`); for case-event appends always `\"event\"`."
           },
           "caseLedgerId": {
             "type": "string"
@@ -3688,12 +3693,6 @@
           },
           "eventId": {
             "type": "string"
-          },
-          "profileId": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Trellis verification profile id (`integrity_verify::WOS_PROFILE_ID` for WOS governance events).",
-            "minimum": 0
           },
           "sequence": {
             "type": "integer",
