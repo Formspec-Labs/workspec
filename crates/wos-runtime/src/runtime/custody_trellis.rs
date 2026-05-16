@@ -21,7 +21,6 @@ use crate::DurableRuntime;
 use crate::runtime::RuntimeError;
 
 const IDEMPOTENCY_KEY_PREFIX: &str = "wos-runtime:provenance";
-const WOS_PROFILE_ID: u64 = 1;
 
 /// Appends WOS custody windows through Trellis.
 ///
@@ -145,8 +144,6 @@ pub struct TrellisCustodyAppendOutcome {
     pub checkpoint_ref: String,
     /// Trellis proof bundle reference.
     pub bundle_ref: String,
-    /// Verified profile identifier returned by Trellis.
-    pub verification_profile_id: u64,
 }
 
 impl TrellisCustodyAppendOutcome {
@@ -160,7 +157,6 @@ impl TrellisCustodyAppendOutcome {
             canonical_event_hash: result.canonical_event_hash,
             checkpoint_ref: result.checkpoint_ref,
             bundle_ref: result.bundle_ref,
-            verification_profile_id: result.verification_receipt.profile_id,
         }
     }
 }
@@ -256,12 +252,12 @@ fn validate_trellis_result(
             result.verification_receipt.event_type, input.event_type, input.record_id
         )));
     }
-    if result.verification_receipt.profile_id != WOS_PROFILE_ID {
-        return Err(RuntimeError::Service(format!(
-            "trellis custody append receipt profile_id {} does not match WOS profile {} for record {}",
-            result.verification_receipt.profile_id, WOS_PROFILE_ID, input.record_id
-        )));
-    }
+    // Per ADR 0109: the `profile_id` cross-surface bridge was structurally
+    // redundant with this event_type echo-check (Trellis-substrate verifiers
+    // already enforce `artifact_type = "event"` per ADR 0109 §"Substrate
+    // envelope"; the WOS-owned `event_type` vocabulary is finer-grained).
+    // The deleted guard was: `result.verification_receipt.profile_id !=
+    // WOS_PROFILE_ID`.
     Ok(())
 }
 
@@ -330,7 +326,6 @@ mod tests {
         assert_eq!(outcomes[0].record_id, record_id);
         assert_eq!(outcomes[0].event_type, "wos.kernel.state_transition");
         assert_eq!(outcomes[0].canonical_event_hash, TEST_HASH);
-        assert_eq!(outcomes[0].verification_profile_id, WOS_PROFILE_ID);
         let requests = client.requests.lock().expect("requests");
         assert_eq!(requests.len(), 1);
         assert_eq!(requests[0].scope, outcomes[0].case_id);
@@ -434,20 +429,48 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn append_window_rejects_wrong_trellis_profile_without_stamping() {
+    async fn append_window_accepts_any_profile_id_now_that_guard_is_retired() {
+        // Per ADR 0109: the cross-surface profile_id bridge is deleted. The
+        // event_type echo-check (line ~252 of this file) carries the dispatch
+        // invariant alone, with finer-grained WOS-owned vocabulary. A receipt
+        // whose profile_id differs from the legacy `WOS_PROFILE_ID` constant
+        // MUST succeed as long as `event_type` round-trips.
         let context = test_context(typeid::mint_case_ledger_id());
         let input = test_input(&context);
         let client = RecordingSubstrateClient::with_profile_id(2);
         let mut runtime = RecordingDurableRuntime::new(input);
         let appender = test_appender(&client);
 
+        let outcomes = appender
+            .append_window(&mut runtime, "process-1", 0, 25, context)
+            .await
+            .expect("retired profile_id guard MUST NOT reject");
+
+        assert_eq!(outcomes.len(), 1);
+        assert_eq!(outcomes[0].event_type, "wos.kernel.state_transition");
+        assert_eq!(client.requests.lock().expect("requests").len(), 1);
+        assert_eq!(runtime.applied.lock().expect("applied").len(), 1);
+    }
+
+    #[tokio::test]
+    async fn append_window_rejects_event_type_echo_mismatch_without_stamping() {
+        // Counterpart to the retired profile_id guard: the event_type echo
+        // check now carries the dispatch invariant. A receipt whose event_type
+        // disagrees with the requested input MUST reject before the runtime
+        // stamps the record.
+        let context = test_context(typeid::mint_case_ledger_id());
+        let input = test_input(&context);
+        let client = RecordingSubstrateClient::with_event_type("wos.kernel.case_created");
+        let mut runtime = RecordingDurableRuntime::new(input);
+        let appender = test_appender(&client);
+
         let err = appender
             .append_window(&mut runtime, "process-1", 0, 25, context)
             .await
-            .expect_err("profile mismatch must fail");
+            .expect_err("event_type echo mismatch must fail");
 
         assert!(
-            matches!(err, RuntimeError::Service(message) if message.contains("does not match WOS profile"))
+            matches!(err, RuntimeError::Service(message) if message.contains("receipt event type") && message.contains("does not match requested"))
         );
         assert_eq!(client.requests.lock().expect("requests").len(), 1);
         assert!(runtime.applied.lock().expect("applied").is_empty());
@@ -491,14 +514,19 @@ mod tests {
 
     struct RecordingSubstrateClient {
         requests: std::sync::Mutex<Vec<SubstrateAppendRequest>>,
+        // Upstream `trellis-service-client::VerificationReceipt` still carries
+        // `profile_id` until P2-T6 lands in trellis/. We honor the field
+        // shape here but no longer gate on its value — see ADR 0109.
         profile_id: u64,
+        event_type_override: Option<String>,
     }
 
     impl Default for RecordingSubstrateClient {
         fn default() -> Self {
             Self {
                 requests: std::sync::Mutex::new(Vec::new()),
-                profile_id: WOS_PROFILE_ID,
+                profile_id: 1,
+                event_type_override: None,
             }
         }
     }
@@ -507,6 +535,13 @@ mod tests {
         fn with_profile_id(profile_id: u64) -> Self {
             Self {
                 profile_id,
+                ..Self::default()
+            }
+        }
+
+        fn with_event_type(event_type: impl Into<String>) -> Self {
+            Self {
+                event_type_override: Some(event_type.into()),
                 ..Self::default()
             }
         }
@@ -522,6 +557,10 @@ mod tests {
                 .lock()
                 .expect("requests")
                 .push(request.clone());
+            let receipt_event_type = self
+                .event_type_override
+                .clone()
+                .unwrap_or_else(|| request.event_type.clone());
             Ok(SubstrateAppendResult {
                 event_id: "evt_test".to_string(),
                 sequence: 0,
@@ -531,7 +570,7 @@ mod tests {
                 verification_receipt: VerificationReceipt {
                     verified: true,
                     profile_id: self.profile_id,
-                    event_type: request.event_type,
+                    event_type: receipt_event_type,
                 },
             })
         }
