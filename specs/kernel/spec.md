@@ -1823,6 +1823,8 @@ The kernel does NOT define the concrete Trust Profile object. Trellis (the distr
 
 The WOS-owned authored-record wire surface that crosses this seam is defined separately in [WOS Custody Hook Encoding](custody-hook-encoding.md). That companion pins the four-field append input, TypeID rules, JSON→dCBOR conversion discipline, WOS-owned idempotency input, and minimum receipt contract.
 
+Per ADR 0109, the Trellis substrate envelope wrapping each admitted authored WOS record carries `artifact_type = "event"` in its protected header (closed enum at COSE label `-65538`; the Trellis case-event-append endpoint owns this value by definition — clients neither supply nor override it). The WOS-owned dispatch axis crossing this seam is `eventType`, the payload-resident `wos.<layer>.<record_kind>` URI defined in the companion's §1.5. The two axes are disjoint: `artifact_type` is the Trellis-owned structural-role selector ("which substrate decoder runs?"), and `eventType` is the WOS-owned semantic-dispatch selector ("which WOS record family is this?").
+
 ### 10.6 `extensions` and `x-` Keys
 
 **Purpose:** Standard escape hatch for vendor and implementation-specific data.

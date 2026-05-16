@@ -140,6 +140,8 @@ Where `<layer>` is one of:
 
 The WOS Extension Registry is the owning registry for `wos.*` event-type registrations and their associated family prefixes. Trellis-bound registries reference those WOS-owned identifiers at the declared WOS spec version.
 
+Per ADR 0109, `eventType` is the **semantic-dispatch axis** for Trellis substrate events. The Trellis substrate envelope carries a separate, structural axis — `artifact_type ∈ {"event", "checkpoint", "manifest"}` in the protected header at COSE label `-65538`. The `custodyHook` endpoint emits substrate events, so the Trellis service writes `artifact_type = "event"` per its endpoint contract; WOS authors and binding implementations MUST NOT supply or override `artifact_type` at the seam. The `wos.<layer>.<record_kind>` prefix on `eventType` is the only WOS-owned dispatch axis crossing the seam.
+
 ### 1.6 JSON→dCBOR Conversion
 
 The authored record crossing `custodyHook` MUST be authored as schema-valid JSON and converted mechanically to dCBOR at the seam.
@@ -228,6 +230,8 @@ The `custodyHook` binding MUST return, at minimum:
 This is the first pinned WOS consumer field. WOS runtimes stamping a durable hash-of-record into downstream provenance MUST use this returned `canonical_event_hash`.
 
 This return surface is narrow on purpose. WOS MUST NOT require `sequence`, `ledger_scope`, `anchor_refs`, or similar fields unless a later normative revision adds them.
+
+Per ADR 0109, the Trellis substrate envelope wrapping the admitting canonical event carries `artifact_type = "event"` in its protected header (closed enum at COSE label `-65538`; the case-event-append endpoint owns this value by definition — clients neither supply nor override it). The receipt projection MAY expose this value for verification and audit, but consumers MUST NOT read `artifact_type` from the request body and MUST NOT treat it as a WOS-owned dispatch axis. The WOS-owned dispatch identifier is `eventType` (§1.5), the payload-resident `wos.<layer>.<record_kind>` URI.
 
 ### 1.11 Posture-Transition Pairing
 
