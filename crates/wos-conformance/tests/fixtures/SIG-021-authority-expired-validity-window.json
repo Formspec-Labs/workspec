@@ -2,7 +2,7 @@
   "binding": "formspec",
   "id": "SIG-021-authority-expired-validity-window",
   "rule": "SIG-RT",
-  "description": "Notary signerAuthority validUntil precedes signedAt (§2.12.4 step 6) emits SignatureAdmissionFailed(posture_floor_unmet).",
+  "description": "Notary signerAuthority validUntil precedes signedAt (\u00a72.12.4 step 6) emits SignatureAdmissionFailed(posture_floor_unmet).",
   "documents": {
     "kernel": "../../../../fixtures/kernel/signature-runtime.json",
     "signatureProfile": "../../../../fixtures/profiles/signature-runtime-notary.json"
@@ -48,7 +48,6 @@
               "documentId": "application",
               "signingIntent": "urn:wos:signing-intent:notarial-attestation",
               "signatureValue": "urn:test:signature:SIG-021-authority-expired-validity-window:notaryTask",
-              "signatureMethod": "provider-managed",
               "signerId": "notary",
               "signerName": "Notary",
               "signedAt": "2026-04-22T12:09:00Z",

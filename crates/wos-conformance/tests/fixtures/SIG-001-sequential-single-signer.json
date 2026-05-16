@@ -37,7 +37,6 @@
               "documentId": "application",
               "signingIntent": "urn:wos:signing-intent:applicant-signature",
               "signatureValue": "urn:test:signature:SIG-001-sequential-single-signer:applicantTask",
-              "signatureMethod": "provider-managed",
               "signerId": "applicant",
               "signerName": "Applicant",
               "signedAt": "2026-04-22T12:00:00Z",

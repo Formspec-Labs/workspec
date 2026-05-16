@@ -2,7 +2,7 @@
   "binding": "formspec",
   "id": "SIG-020-authority-missing-evidence-binding",
   "rule": "SIG-RT",
-  "description": "Notary signerAuthority claim missing evidenceBinding (§2.12.4 step 5) emits SignatureAdmissionFailed(posture_floor_unmet).",
+  "description": "Notary signerAuthority claim missing evidenceBinding (\u00a72.12.4 step 5) emits SignatureAdmissionFailed(posture_floor_unmet).",
   "documents": {
     "kernel": "../../../../fixtures/kernel/signature-runtime.json",
     "signatureProfile": "../../../../fixtures/profiles/signature-runtime-notary.json"
@@ -42,7 +42,6 @@
               "documentId": "application",
               "signingIntent": "urn:wos:signing-intent:notarial-attestation",
               "signatureValue": "urn:test:signature:SIG-020-authority-missing-evidence-binding:notaryTask",
-              "signatureMethod": "provider-managed",
               "signerId": "notary",
               "signerName": "Notary",
               "signedAt": "2026-04-22T12:09:00Z",

@@ -8,7 +8,10 @@
     "signatureProfile": "../../../../fixtures/profiles/signature-runtime-sequential.json"
   },
   "event_sequence": [
-    { "event": "start", "actor": "applicant" },
+    {
+      "event": "start",
+      "actor": "applicant"
+    },
     {
       "event": "submit",
       "task_submission": {
@@ -26,5 +29,7 @@
       }
     }
   ],
-  "expected_errors": ["missing signature evidence field"]
+  "expected_errors": [
+    "missing signature evidence field"
+  ]
 }

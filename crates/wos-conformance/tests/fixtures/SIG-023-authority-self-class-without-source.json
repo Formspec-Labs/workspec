@@ -2,7 +2,7 @@
   "binding": "formspec",
   "id": "SIG-023-authority-self-class-without-source",
   "rule": "SIG-RT",
-  "description": "self-class signerAuthority claim admits without authoritySource / principal / evidenceBinding (§2.12.2 self row).",
+  "description": "self-class signerAuthority claim admits without authoritySource / principal / evidenceBinding (\u00a72.12.2 self row).",
   "documents": {
     "kernel": "../../../../fixtures/kernel/signature-runtime.json",
     "signatureProfile": "../../../../fixtures/profiles/signature-runtime-sequential.json"
@@ -40,7 +40,6 @@
               "documentId": "application",
               "signingIntent": "urn:wos:signing-intent:applicant-signature",
               "signatureValue": "urn:test:signature:SIG-023-authority-self-class-without-source:applicantTask",
-              "signatureMethod": "provider-managed",
               "signerId": "applicant",
               "signerName": "Applicant",
               "signedAt": "2026-04-22T12:00:00Z",

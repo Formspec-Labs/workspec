@@ -2,7 +2,7 @@
   "binding": "formspec",
   "id": "SIG-022-authority-malformed-evidence-hash",
   "rule": "SIG-RT",
-  "description": "Notary signerAuthority.evidenceBinding.evidenceHash that is not a valid hex digest (§2.12.3) emits SignatureAdmissionFailed(posture_floor_unmet).",
+  "description": "Notary signerAuthority.evidenceBinding.evidenceHash that is not a valid hex digest (\u00a72.12.3) emits SignatureAdmissionFailed(posture_floor_unmet).",
   "documents": {
     "kernel": "../../../../fixtures/kernel/signature-runtime.json",
     "signatureProfile": "../../../../fixtures/profiles/signature-runtime-notary.json"
@@ -46,7 +46,6 @@
               "documentId": "application",
               "signingIntent": "urn:wos:signing-intent:notarial-attestation",
               "signatureValue": "urn:test:signature:SIG-022-authority-malformed-evidence-hash:notaryTask",
-              "signatureMethod": "provider-managed",
               "signerId": "notary",
               "signerName": "Notary",
               "signedAt": "2026-04-22T12:09:00Z",

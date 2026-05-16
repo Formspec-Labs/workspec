@@ -38,8 +38,10 @@ pub struct CaseMutationBundle {
 /// each authored signature.
 ///
 /// `Verified` requires that the signature primitive (canonical-digest +
-/// signature-suite check over the binding's signature value/method, e.g.
-/// Formspec `signatureValue`/`signatureMethod`) actually executed and passed.
+/// signature-suite check over the binding's signature envelope, e.g.
+/// Formspec `signatureValue` — a COSE_Sign1 envelope whose protected-header
+/// `method_uri` label selects the cryptographic adapter per ADR 0109)
+/// actually executed and passed.
 /// Until the Formspec signing helper (`FORMSPEC-SIGN-HELPER-001`) ships, the
 /// reference Formspec binding emits
 /// [`SignaturePrimitiveStatus::DeferredPendingHelper`] because pin/consent/
@@ -146,8 +148,11 @@ pub struct SignatureEvidence {
 
     /// Cryptographic signature method URI from the source evidence.
     ///
-    /// Formspec authored signatures carry this as `signatureMethod`. WOS posture
-    /// admission uses the value to compare against `allowedMethods`.
+    /// Per ADR 0109, Formspec authored signatures carry this as the
+    /// COSE protected-header `method_uri` label (-65540) inside the
+    /// `signatureValue` COSE_Sign1 envelope. The binding partial-decodes the
+    /// envelope to extract the URI. WOS posture admission uses the value to
+    /// compare against `allowedMethods`.
     pub signature_method: Option<String>,
 
     /// Digest of the signed payload verified by the binding.

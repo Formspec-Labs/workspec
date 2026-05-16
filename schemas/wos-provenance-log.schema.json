@@ -1230,7 +1230,7 @@
         },
         "primitiveVerification": {
           "type": "object",
-          "description": "Cryptographic primitive-verification status from the binding's authored-signature parser. `verified` requires that the cryptographic signature primitive (canonical-digest + signature-suite check over the binding's signature value/method, e.g. Formspec `signatureValue`/`signatureMethod`) executed and passed; `deferredPendingHelper` indicates the parser ran pin/consent/digest pre-checks but did not run the cryptographic primitive (e.g. Formspec signing helper not yet shipped). Failed outcomes are now recorded as separate `signatureAdmissionFailed` records per ADR-0089. A future deployment posture MAY require `verified`; until then both `verified` and `deferredPendingHelper` are admissible.",
+          "description": "Cryptographic primitive-verification status from the binding's authored-signature parser. `verified` requires that the cryptographic signature primitive (canonical-digest + signature-suite check over the binding's signature envelope, e.g. Formspec `signatureValue` — a COSE_Sign1 envelope whose protected-header `method_uri` selects the cryptographic adapter per ADR 0109) executed and passed; `deferredPendingHelper` indicates the parser ran pin/consent/digest pre-checks but did not run the cryptographic primitive (e.g. Formspec signing helper not yet shipped). Failed outcomes are now recorded as separate `signatureAdmissionFailed` records per ADR-0089. A future deployment posture MAY require `verified`; until then both `verified` and `deferredPendingHelper` are admissible.",
           "additionalProperties": false,
           "required": [
             "status"

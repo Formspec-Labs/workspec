@@ -2,7 +2,7 @@
   "binding": "formspec",
   "id": "SIG-024-allowlisted-deployment-local-intent",
   "rule": "SIG-RT",
-  "description": "Workflow declares deploymentLocalSigningIntents allowlist; signature task uses an allowlisted deployment-local intent URI; runtime admits per Signature Profile §2.11.2.",
+  "description": "Workflow declares deploymentLocalSigningIntents allowlist; signature task uses an allowlisted deployment-local intent URI; runtime admits per Signature Profile \u00a72.11.2.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/signature-runtime.json",
     "signatureProfile": "../../../../fixtures/profiles/signature-runtime-deployment-local.json"
@@ -37,7 +37,6 @@
               "documentId": "application",
               "signingIntent": "urn:acme:signing-intent:supervisor-approval",
               "signatureValue": "urn:test:signature:SIG-024-allowlisted-deployment-local-intent:applicantTask",
-              "signatureMethod": "provider-managed",
               "signerId": "applicant",
               "signerName": "Applicant",
               "signedAt": "2026-05-08T12:00:00Z",

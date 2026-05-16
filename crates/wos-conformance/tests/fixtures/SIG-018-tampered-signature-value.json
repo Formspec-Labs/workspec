@@ -2,7 +2,7 @@
   "binding": "formspec",
   "id": "SIG-018-tampered-signature-value",
   "rule": "SIG-RT",
-  "description": "Authored signature whose signatureValue has been byte-modified is currently admitted with primitiveVerification.status = deferredPendingHelper because the Formspec signing primitive is not yet executed at the binding (FORMSPEC-SIGN-HELPER-001 unshipped). When the signing helper lands and the binding actually verifies signatureValue/signatureMethod, this fixture flips into a Failed rejection vector and admission MUST block.",
+  "description": "Authored signature whose signatureValue has been byte-modified is currently admitted with primitiveVerification.status = deferredPendingHelper because the Formspec signing primitive is not yet executed at the binding (FORMSPEC-SIGN-HELPER-001 unshipped). When the signing helper lands and the binding actually verifies the COSE_Sign1 envelope (the method is read from the signed COSE protected-header `method_uri` label per ADR 0109), this fixture flips into a Failed rejection vector and admission MUST block.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/signature-runtime.json",
     "signatureProfile": "../../../../fixtures/profiles/signature-runtime-sequential.json"
@@ -37,7 +37,6 @@
               "documentId": "application",
               "signingIntent": "urn:wos:signing-intent:applicant-signature",
               "signatureValue": "urn:test:signature:TAMPERED:applicantTask",
-              "signatureMethod": "provider-managed",
               "signerId": "applicant",
               "signerName": "Applicant",
               "signedAt": "2026-04-22T12:00:00Z",

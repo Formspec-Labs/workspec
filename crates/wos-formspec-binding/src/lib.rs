@@ -1367,6 +1367,33 @@ mod tests {
         BASE64_STANDARD.encode(envelope)
     }
 
+    #[test]
+    fn cose_b64_matches_python_generator() {
+        // Sanity: byte values used by the WOS conformance signature fixtures
+        // (regenerated for ADR 0109) must match the Python generator at
+        // `scripts/gen-cose-sign1-method-uri.py`. Rust is the byte authority
+        // (Trellis ADR 0004); this test pins both sides.
+        let cases = [
+            (
+                "urn:formspec:sig-method:ed25519-cose-sign1@1",
+                "0oRYSKMBJwRQAAAAAAAAAAAAAAAAAAAAADoAAQADeCx1cm46Zm9ybXNwZWM6c2lnLW1ldGhvZDplZDI1NTE5LWNvc2Utc2lnbjFAMaD2WEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            ),
+            (
+                "urn:formspec:sig-method:unknown@1",
+                "0oRYPaMBJwRQAAAAAAAAAAAAAAAAAAAAADoAAQADeCF1cm46Zm9ybXNwZWM6c2lnLW1ldGhvZDp1bmtub3duQDGg9lhAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+            ),
+        ];
+        for (method_uri, expected_b64) in cases {
+            let rust_b64 = cose_sign1_b64_with_method_uri(method_uri);
+            assert_eq!(rust_b64, expected_b64, "method_uri = {method_uri}");
+            let bytes = BASE64_STANDARD.decode(expected_b64).expect("base64 decode");
+            let envelope = decode_cose_sign1(&bytes).expect("decode COSE_Sign1");
+            let header =
+                decode_protected_header(envelope.protected_header()).expect("decode header");
+            assert_eq!(header.method_uri.as_deref(), Some(method_uri));
+        }
+    }
+
     fn signed_response() -> serde_json::Value {
         let mut response = serde_json::json!({
             "id": "resp-2026-0001",

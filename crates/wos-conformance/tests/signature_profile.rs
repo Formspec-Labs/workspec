@@ -146,8 +146,11 @@ fn sig018_tampered_signature_value_admits_with_deferred_status() {
 
 #[test]
 fn sig019_tampered_signature_method_admits_with_deferred_status() {
-    // Mirror of SIG-018 for `signatureMethod`. Same admission posture and
-    // same forward path: flips to `failed` when the signing helper ships.
+    // Mirror of SIG-018 for the COSE protected-header bytes that carry
+    // `method_uri` (ADR 0109; JSON `signatureMethod` is deleted). Same
+    // admission posture and same forward path: flips to `failed` when the
+    // signing helper ships and the binding actually verifies the COSE_Sign1
+    // envelope.
     assert_signature_fixture_passes("SIG-019-tampered-signature-method.json");
 }
 

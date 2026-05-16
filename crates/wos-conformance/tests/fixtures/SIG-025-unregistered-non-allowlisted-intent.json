@@ -2,7 +2,7 @@
   "binding": "formspec",
   "id": "SIG-025-unregistered-non-allowlisted-intent",
   "rule": "SIG-RT",
-  "description": "Workflow's deploymentLocalSigningIntents allowlist does NOT contain the submitted intent and the intent is not in the §2.11.1 registered WOS set; runtime emits SignatureAdmissionFailed(method_unsupported) and leaves the signing task active per Signature Profile §2.11.2.",
+  "description": "Workflow's deploymentLocalSigningIntents allowlist does NOT contain the submitted intent and the intent is not in the \u00a72.11.1 registered WOS set; runtime emits SignatureAdmissionFailed(method_unsupported) and leaves the signing task active per Signature Profile \u00a72.11.2.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/signature-runtime.json",
     "signatureProfile": "../../../../fixtures/profiles/signature-runtime-unregistered-intent.json"
@@ -37,7 +37,6 @@
               "documentId": "application",
               "signingIntent": "urn:acme:signing-intent:unknown",
               "signatureValue": "urn:test:signature:SIG-025-unregistered-non-allowlisted-intent:applicantTask",
-              "signatureMethod": "provider-managed",
               "signerId": "applicant",
               "signerName": "Applicant",
               "signedAt": "2026-05-08T12:00:00Z",

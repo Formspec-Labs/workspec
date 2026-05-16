@@ -46,7 +46,6 @@
               "documentId": "application",
               "signingIntent": "urn:wos:signing-intent:notarial-attestation",
               "signatureValue": "urn:test:signature:SIG-008-notary-in-person-auth:notaryTask",
-              "signatureMethod": "provider-managed",
               "signerId": "notary",
               "signerName": "Notary",
               "signedAt": "2026-04-22T12:09:00Z",
