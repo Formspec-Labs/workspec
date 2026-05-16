@@ -102,6 +102,8 @@ POST  /api/v1/cases/{case_id}/processes/{process_id}/terminate        -> Workflo
 POST  /api/v1/cases/{case_id}/processes/{process_id}/migrate          -> MigrationResult             (Idempotency-Key REQUIRED)
 ```
 
+ADR 0093 dual-identity case/process bindings: the public OpenAPI snapshot documents `ProcessLifecycleRequest` (optional `reason` only; binding validation is authoritative before the lifecycle mutation) and `ProcessLifecycleResponse` `{ processId, caseLedgerId, lifecycleState }` for the suspend, resume, and terminate routes on that surface. Canonical full actor-bearing bodies remain `SuspendInstanceRequest`, `ResumeInstanceRequest`, and `TerminateInstanceRequest` as exported below.
+
 `GET /api/v1/cases/{case_id}/processes` returns `WorkflowProcessList`, an unpaginated array of `WorkflowProcess` projections bound to the supplied durable case ledger. Case-scoped process listing is intentionally scoped by `{case_id}` rather than exposed as a directory-scale process browser; cursor pagination remains on unbounded subresources such as tasks, provenance, correspondence, and compensation.
 
 `WorkflowProcessListOptions` and `WorkflowProcessPage` remain reserved directory-style models for a future process-directory route; the reference case-scoped list route does not consume them.

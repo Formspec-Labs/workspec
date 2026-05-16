@@ -5514,44 +5514,13 @@
         "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/TerminateInstanceRequest"
       },
       "ProcessLifecycleRequest": {
-        "type": "object",
-        "properties": {
-          "reason": {
-            "type": "string"
-          }
-        },
-        "additionalProperties": false
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/ProcessLifecycleRequest"
       },
       "ProcessLifecycleResponse": {
-        "type": "object",
-        "required": [
-          "processId",
-          "caseLedgerId",
-          "lifecycleState"
-        ],
-        "properties": {
-          "processId": {
-            "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
-          },
-          "caseLedgerId": {
-            "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
-          },
-          "lifecycleState": {
-            "$ref": "#/components/schemas/LifecycleState"
-          }
-        },
-        "additionalProperties": false
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/ProcessLifecycleResponse"
       },
       "LifecycleState": {
-        "type": "string",
-        "enum": [
-          "active",
-          "suspended",
-          "migrating",
-          "completed",
-          "terminated",
-          "stalled"
-        ]
+        "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/LifecycleState"
       },
       "MigrateInstanceRequest": {
         "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/MigrateInstanceRequest"

@@ -800,7 +800,7 @@
             "description": "Case ledger already exists or append sequence conflicts"
           },
           "503": {
-            "description": "Post-ledger append persistence failed after authorization"
+            "description": "Substrate append, durable projection, governance outbox enqueue, or idempotency store failed (HTTP retries may replay a committed append)"
           }
         }
       }
@@ -3670,8 +3670,18 @@
           "sequence"
         ],
         "properties": {
+          "actorId": {
+            "type": "string"
+          },
           "caseLedgerId": {
             "type": "string"
+          },
+          "data": {
+            "description": "Request `data` object when present (mirrors idempotency body; included on outbox payloads)."
+          },
+          "event": {
+            "type": "string",
+            "description": "Canonical WOS event literal from the append request (stored on idempotent replay so the case-commit outbox can re-fire)."
           },
           "eventHash": {
             "type": "string"
@@ -6233,7 +6243,7 @@
       },
       "LifecycleState": {
         "type": "string",
-        "description": "Closed instance lifecycle posture (ADR 0082 D-12). Byte-aligned mirror of the kernel `InstanceStatus` enum at `wos-workflow.schema.json#/$defs/InstanceStatus` — itself the name-promoted alias of the inline `status` field on `wos-process.schema.json` (ADR 0082 D-13 gate 6 enforces this byte-parity). Closed-no-extension by design: `active` accepts events normally; `suspended` is paused; `migrating` is mid-definition-version-change; `completed` reached a top-level final state; `terminated` was explicitly terminated; `stalled` exhausted the commit retry budget (ADR 0070 D-5). The kernel taxonomy is closed; if a deployment needs new lifecycle postures, the kernel grows them and the API mirror tracks.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Closed instance lifecycle posture (ADR 0082 D-12). Byte-aligned mirror of the kernel `InstanceStatus` enum at `wos-workflow.schema.json#/$defs/InstanceStatus` — itself the name-promoted alias of the inline `status` field on `wos-process.schema.json` (ADR 0082 D-13 gate 6 enforces this byte-parity). Closed-no-extension by design: `active` accepts events normally; `suspended` is paused; `migrating` is mid-definition-version-change; `completed` reached a top-level final state; `terminated` was explicitly terminated; `stalled` exhausted the commit retry budget (ADR 0070 D-5). The kernel taxonomy is closed; if a deployment needs new lifecycle postures, the kernel grows them and the API mirror tracks.\",\n  \"examples\": [\n    \"active\",\n    \"completed\",\n    \"stalled\"\n  ],\n  \"enum\": [\n    \"active\",\n    \"suspended\",\n    \"migrating\",\n    \"completed\",\n    \"terminated\",\n    \"stalled\"\n  ],\n  \"x-wos\": {\n    \"mirror\": \"wos-workflow.schema.json#/$defs/InstanceStatus\"\n  }\n}\n ```\n </details>",
+        "description": "Closed instance lifecycle posture (ADR 0082 D-12). Byte-aligned mirror of the kernel `InstanceStatus` enum at `wos-workflow.schema.json#/$defs/InstanceStatus` — itself the name-promoted alias of the inline `status` field on `wos-process.schema.json` (ADR 0082 D-13 gate 6 enforces this byte-parity). Closed-no-extension by design: `active` accepts events normally; `suspended` is paused; `migrating` is mid-definition-version-change; `completed` reached a top-level final state; `terminated` was explicitly terminated; `stalled` exhausted the commit retry budget (ADR 0070 D-5). The kernel taxonomy is closed; if a deployment needs new lifecycle postures, the kernel grows them and the API mirror tracks.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Closed instance lifecycle posture (ADR 0082 D-12). Byte-aligned mirror of the kernel `InstanceStatus` enum at `wos-workflow.schema.json#/$defs/InstanceStatus` — itself the name-promoted alias of the inline `status` field on `wos-process.schema.json` (ADR 0082 D-13 gate 6 enforces this byte-parity). Closed-no-extension by design: `active` accepts events normally; `suspended` is paused; `migrating` is mid-definition-version-change; `completed` reached a top-level final state; `terminated` was explicitly terminated; `stalled` exhausted the commit retry budget (ADR 0070 D-5). The kernel taxonomy is closed; if a deployment needs new lifecycle postures, the kernel grows them and the API mirror tracks.\",\n  \"examples\": [\n    \"active\",\n    \"completed\",\n    \"stalled\"\n  ],\n  \"type\": \"string\",\n  \"enum\": [\n    \"active\",\n    \"suspended\",\n    \"migrating\",\n    \"completed\",\n    \"terminated\",\n    \"stalled\"\n  ],\n  \"x-wos\": {\n    \"mirror\": \"wos-workflow.schema.json#/$defs/InstanceStatus\"\n  }\n}\n ```\n </details>",
         "enum": [
           "active",
           "suspended",

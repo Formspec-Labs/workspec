@@ -84,6 +84,15 @@
     },
     {
       "$ref": "#/$defs/MigrationResult"
+    },
+    {
+      "$ref": "#/$defs/ProcessLifecycleRequest"
+    },
+    {
+      "$ref": "#/$defs/ProcessLifecycleResponse"
+    },
+    {
+      "$ref": "#/$defs/LifecycleState"
     }
   ],
   "$defs": {
@@ -238,6 +247,7 @@
       }
     },
     "LifecycleState": {
+      "type": "string",
       "description": "Closed instance lifecycle posture (ADR 0082 D-12). Byte-aligned mirror of the kernel `InstanceStatus` enum at `wos-workflow.schema.json#/$defs/InstanceStatus` \u2014 itself the name-promoted alias of the inline `status` field on `wos-process.schema.json` (ADR 0082 D-13 gate 6 enforces this byte-parity). Closed-no-extension by design: `active` accepts events normally; `suspended` is paused; `migrating` is mid-definition-version-change; `completed` reached a top-level final state; `terminated` was explicitly terminated; `stalled` exhausted the commit retry budget (ADR 0070 D-5). The kernel taxonomy is closed; if a deployment needs new lifecycle postures, the kernel grows them and the API mirror tracks.",
       "enum": [
         "active",
@@ -1728,6 +1738,46 @@
         "actorRef": {
           "$ref": "#/$defs/ActorRef",
           "description": "Actor URN authorizing the termination (ADR 0082 D-9). REQUIRED."
+        }
+      }
+    },
+    "ProcessLifecycleRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional request envelope for ADR 0093 dual-identity case/process lifecycle routes (`POST /api/v1/cases/{case_id}/processes/{process_id}/suspend|resume|terminate`). These routes validate the case/process binding before applying the lifecycle mutation; the wire body carries only an optional operator rationale. The canonical process-scoped lifecycle contracts with full actor and idempotency requirements remain `SuspendInstanceRequest`, `ResumeInstanceRequest`, and `TerminateInstanceRequest` on the primary instance routes per Kernel S11.3.",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Optional operator-supplied prose rationale for the lifecycle transition. Length-bounded when present; surfaced on the corresponding Facts-tier provenance record when the deployment records one.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        }
+      }
+    },
+    "ProcessLifecycleResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Response envelope for ADR 0093 dual-identity case/process lifecycle routes after a successful suspend, resume, or terminate. Returns the stable process and case-ledger identifiers together with the resulting `lifecycleState`.",
+      "required": [
+        "processId",
+        "caseLedgerId",
+        "lifecycleState"
+      ],
+      "properties": {
+        "processId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Workflow process resource URN for the bound process."
+        },
+        "caseLedgerId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Durable case-ledger resource URN the process is bound to."
+        },
+        "lifecycleState": {
+          "$ref": "#/$defs/LifecycleState",
+          "description": "Instance lifecycle posture after the mutation commits."
         }
       }
     },
