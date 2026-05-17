@@ -1607,11 +1607,11 @@ mod tests {
 
     fn test_signature_method(signature: &serde_json::Value) -> Option<String> {
         // Runtime-unit adapters intentionally bypass Formspec COSE parsing and
-        // accept a synthetic JSON `signatureMethod`. Production and
+        // accept a synthetic JSON `methodUri`. Production and
         // conformance paths use `wos-formspec-binding`, which decodes
         // `signatureValue` and fails closed on unusable method_uri headers.
         signature
-            .get("signatureMethod")
+            .get("methodUri")
             .and_then(serde_json::Value::as_str)
             .map(str::to_string)
     }
@@ -3840,7 +3840,7 @@ mod tests {
                         "signature": {
                             "acceptedAt": "2026-04-22T12:00:00Z",
                             "affirmed": true,
-                            "signatureMethod": "urn:formspec:sig-method:ed25519-cose-sign1@1",
+                            "methodUri": "urn:formspec:sig-method:ed25519-cose-sign1@1",
                             "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
                         }
                     }
@@ -5078,7 +5078,7 @@ mod tests {
                         "signature": {
                             "acceptedAt": "2026-04-22T12:00:00Z",
                             "affirmed": true,
-                            "signatureMethod": "urn:formspec:sig-method:ed25519-cose-sign1@1",
+                            "methodUri": "urn:formspec:sig-method:ed25519-cose-sign1@1",
                             "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
                         }
                     }
@@ -5283,7 +5283,7 @@ mod tests {
                         "signature": {
                             "acceptedAt": "2026-04-22T12:00:00Z",
                             "affirmed": true,
-                            "signatureMethod": "urn:formspec:sig-method:ed25519-cose-sign1@1",
+                            "methodUri": "urn:formspec:sig-method:ed25519-cose-sign1@1",
                             "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
                         }
                     }
@@ -5405,7 +5405,7 @@ mod tests {
                         "signature": {
                             "acceptedAt": "2026-04-22T12:00:00Z",
                             "affirmed": true,
-                            "signatureMethod": "urn:formspec:sig-method:ed25519-cose-sign1@1",
+                            "methodUri": "urn:formspec:sig-method:ed25519-cose-sign1@1",
                             "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
                         }
                     }

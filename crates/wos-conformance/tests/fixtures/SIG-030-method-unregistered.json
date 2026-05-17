@@ -2,7 +2,7 @@
   "binding": "formspec",
   "id": "SIG-030-method-unregistered",
   "rule": "SIG-RT",
-  "description": "A registry-shaped but unknown Formspec `method_uri` (decoded from the COSE protected header inside `signatureValue` per ADR 0109) emits SignatureAdmissionFailed(method_unregistered) with registry context. The failure_context `signatureMethod` key surfaces the decoded URI value for downstream-recorded provenance.",
+  "description": "A registry-shaped but unknown Formspec `method_uri` (decoded from the COSE protected header inside `signatureValue` per ADR 0109) emits SignatureAdmissionFailed(method_unregistered) with registry context. The failure_context `methodUri` key surfaces the decoded URI value for downstream-recorded provenance.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/signature-runtime.json",
     "signatureProfile": "../../../../fixtures/profiles/signature-runtime-sequential.json"
@@ -75,7 +75,7 @@
       "data": {
         "reason": "method_unregistered",
         "failureContext": {
-          "signatureMethod": "urn:formspec:sig-method:unknown@1",
+          "methodUri": "urn:formspec:sig-method:unknown@1",
           "registryVersion": "1.0.0"
         }
       }

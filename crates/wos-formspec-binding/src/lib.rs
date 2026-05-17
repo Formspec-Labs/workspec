@@ -164,7 +164,7 @@ pub struct FormspecSignedPayloadRef {
 ///
 /// Per ADR 0109, the cryptographic method identifier lives in the COSE
 /// protected-header `method_uri` label inside [`Self::signature_value`] (and,
-/// when present, [`Self::verification_receipt`]). The JSON `signatureMethod`
+/// when present, [`Self::verification_receipt`]). The legacy JSON method
 /// projection is deleted from `formspec/schemas/response.schema.json`; the
 /// binding extracts `method_uri` via `integrity-cose::decode_protected_header`
 /// when constructing `SignatureEvidence`.
@@ -545,15 +545,13 @@ fn signature_method_admission_failure(
         return None;
     }
 
-    // Provenance records still surface the method URI under the `signatureMethod`
-    // failureContext key (stable downstream contract; see SIG-030 fixture) even
-    // though the source has moved from JSON `signatureMethod` to the COSE
-    // protected-header `method_uri` per ADR 0109.
+    // Provenance records surface the method URI under the `methodUri`
+    // failureContext key, matching the ADR 0109 COSE protected-header carrier.
     Some(SignatureAdmissionFailure {
         reason: SignatureAdmissionFailureReason::MethodUnregistered,
         failure_context: Some(serde_json::Map::from_iter([
             (
-                "signatureMethod".to_string(),
+                "methodUri".to_string(),
                 serde_json::Value::String(method.to_string()),
             ),
             (
@@ -1691,7 +1689,7 @@ mod tests {
             .expect("method_unregistered should carry failure context");
         assert_eq!(
             context
-                .get("signatureMethod")
+                .get("methodUri")
                 .and_then(serde_json::Value::as_str),
             Some("urn:formspec:sig-method:unknown@1")
         );
