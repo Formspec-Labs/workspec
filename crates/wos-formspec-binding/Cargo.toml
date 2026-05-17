@@ -10,6 +10,7 @@ repository.workspace = true
 base64 = "0.22"
 integrity-canonical = { path = "../../../integrity-stack/crates/integrity-canonical" }
 integrity-cose = { path = "../../../integrity-stack/crates/integrity-cose" }
+integrity-signature = { path = "../../../integrity-stack/crates/integrity-signature" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"

@@ -4703,6 +4703,7 @@ dependencies = [
  "base64",
  "integrity-canonical",
  "integrity-cose",
+ "integrity-signature",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
