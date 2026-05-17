@@ -10,9 +10,9 @@
 //! input on `process_id` while the storage row binds the durable case-ledger
 //! foreign key — see case-boundary report §4.3 and ADR-0093 §5.
 
+use stack_common_typeid as typeid;
 use wos_core::eval::{Evaluator, validate_migration_configuration};
 use wos_core::instance::{InstanceStatus, PendingEvent, WorkflowProcess};
-use stack_common_typeid as typeid;
 use wos_core::{InstanceMigratedInput, ProvenanceRecord};
 
 use crate::store::{RuntimeRecord, StoreError};
