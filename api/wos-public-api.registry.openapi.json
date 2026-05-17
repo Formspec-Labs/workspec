@@ -3676,7 +3676,12 @@
           },
           "artifactType": {
             "type": "string",
-            "description": "Trellis substrate envelope `artifact_type` projection (per ADR 0109 / 0098).\n\nThis endpoint emits Trellis substrate events; the service writes `artifact_type =\n\"event\"` into the protected header per the endpoint contract (clients cannot supply it).\nThe receipt projects this value outward for verification and audit. Closed-enum value\n(`trellis-types::ArtifactType`); for case-event appends always `\"event\"`."
+            "description": "Trellis substrate artifact type: event, checkpoint, or manifest.",
+            "enum": [
+              "event",
+              "checkpoint",
+              "manifest"
+            ]
           },
           "caseLedgerId": {
             "type": "string"
