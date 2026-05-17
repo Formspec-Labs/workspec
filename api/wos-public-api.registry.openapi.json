@@ -3703,7 +3703,8 @@
             "type": "integer",
             "format": "int64"
           }
-        }
+        },
+        "additionalProperties": false
       },
       "CaseloadSummaryInput": {
         "type": "object",
