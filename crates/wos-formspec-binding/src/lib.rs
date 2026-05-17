@@ -541,12 +541,14 @@ fn signature_method_admission_failure(
     method_uri: Option<&str>,
 ) -> Option<SignatureAdmissionFailure> {
     let method = method_uri?;
-    if !method.starts_with("urn:formspec:sig-method:") || registered_signature_method(method) {
+    if registered_signature_method(method) {
         return None;
     }
 
     // Provenance records surface the method URI under the `methodUri`
     // failureContext key, matching the ADR 0109 COSE protected-header carrier.
+    // Any unregistered prefix fails here before posture policy can make
+    // `allowedMethods` optional and accidentally admit a foreign method URI.
     Some(SignatureAdmissionFailure {
         reason: SignatureAdmissionFailureReason::MethodUnregistered,
         failure_context: Some(serde_json::Map::from_iter([
@@ -1450,6 +1452,10 @@ mod tests {
                 "urn:formspec:sig-method:unknown@1",
                 "0oRYPaMBJwRQAAAAAAAAAAAAAAAAAAAAADoAAQADeCF1cm46Zm9ybXNwZWM6c2lnLW1ldGhvZDp1bmtub3duQDGg9lhAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
             ),
+            (
+                "urn:wos:attestation-method:unknown@1",
+                "0oRYQKMBJwRQAAAAAAAAAAAAAAAAAAAAADoAAQADeCR1cm46d29zOmF0dGVzdGF0aW9uLW1ldGhvZDp1bmtub3duQDGg9lhAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+            ),
         ];
         for (method_uri, expected_b64) in cases {
             let rust_b64 = cose_sign1_b64_with_method_uri(method_uri);
@@ -1688,10 +1694,49 @@ mod tests {
             .as_ref()
             .expect("method_unregistered should carry failure context");
         assert_eq!(
-            context
-                .get("methodUri")
-                .and_then(serde_json::Value::as_str),
+            context.get("methodUri").and_then(serde_json::Value::as_str),
             Some("urn:formspec:sig-method:unknown@1")
+        );
+        assert_eq!(
+            context
+                .get("registryVersion")
+                .and_then(serde_json::Value::as_str),
+            Some(FORMSPEC_SIGNATURE_METHOD_REGISTRY_VERSION)
+        );
+    }
+
+    #[test]
+    fn signature_evidence_reports_unknown_method_uri_prefix() {
+        let adapter = FormspecBinding::new(StubProcessor);
+        let mut response = signed_response();
+        response["authoredSignatures"][0]["signatureValue"] = serde_json::Value::String(
+            cose_sign1_b64_with_method_uri("urn:wos:attestation-method:unknown@1"),
+        );
+
+        let evidence = adapter
+            .signature_evidence(&formspec_task(), &response)
+            .expect("signature evidence parses")
+            .expect("signature evidence is present");
+        assert_eq!(
+            evidence[0].signature_method.as_deref(),
+            Some("urn:wos:attestation-method:unknown@1")
+        );
+        let admission_failure = evidence[0]
+            .admission_failure
+            .as_ref()
+            .expect("foreign method_uri prefix must produce admission failure");
+
+        assert_eq!(
+            admission_failure.reason,
+            SignatureAdmissionFailureReason::MethodUnregistered
+        );
+        let context = admission_failure
+            .failure_context
+            .as_ref()
+            .expect("method_unregistered should carry failure context");
+        assert_eq!(
+            context.get("methodUri").and_then(serde_json::Value::as_str),
+            Some("urn:wos:attestation-method:unknown@1")
         );
         assert_eq!(
             context

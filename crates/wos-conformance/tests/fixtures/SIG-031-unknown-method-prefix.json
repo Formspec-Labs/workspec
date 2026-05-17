@@ -1,0 +1,84 @@
+{
+  "binding": "formspec",
+  "id": "SIG-031-unknown-method-prefix",
+  "rule": "SIG-RT",
+  "description": "A decoded but foreign `method_uri` prefix emits SignatureAdmissionFailed(method_unregistered) before optional posture allowedMethods can admit the evidence. ADR 0109 dispatch uses exact registered method URI values; unregistered prefixes are not extension points.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/signature-runtime.json",
+    "signatureProfile": "../../../../fixtures/profiles/signature-runtime-sequential.json"
+  },
+  "event_sequence": [
+    {
+      "event": "start",
+      "actor": "applicant"
+    },
+    {
+      "event": "submit",
+      "task_submission": {
+        "task_ref": "applicantTask",
+        "response": {
+          "status": "completed",
+          "definitionUrl": "urn:test:formspec:signature",
+          "definitionVersion": "1.0.0",
+          "data": {
+            "signerId": "applicant",
+            "signatureProvider": "formspec",
+            "ceremonyId": "ceremony-sig-030",
+            "signature": {
+              "acceptedAt": "2026-05-08T12:00:00Z",
+              "affirmed": true,
+              "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            }
+          },
+          "id": "resp-sig-030-method-unregistered-applicantTask",
+          "authoredSignatures": [
+            {
+              "signatureId": "sig-sig-030-method-unregistered-applicantTask",
+              "documentId": "application",
+              "signingIntent": "urn:wos:signing-intent:applicant-signature",
+              "signatureValue": "0oRYQKMBJwRQAAAAAAAAAAAAAAAAAAAAADoAAQADeCR1cm46d29zOmF0dGVzdGF0aW9uLW1ldGhvZDp1bmtub3duQDGg9lhAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "signerId": "applicant",
+              "signerName": "Applicant",
+              "signedAt": "2026-05-08T12:00:00Z",
+              "consentAccepted": true,
+              "consentTextRef": "urn:test:consent:esign",
+              "consentVersion": "1.0.0",
+              "affirmationText": "I certify this signing act.",
+              "signedPayload": {
+                "canonicalization": "formspec-response-signing-v1",
+                "digestAlgorithm": "sha-256",
+                "digest": "c6e95e7f7f3d85801c7585e56d792d217396e4f247609eaddc59321316e95750",
+                "responseId": "resp-sig-030-method-unregistered-applicantTask",
+                "definitionUrl": "urn:test:formspec:signature",
+                "definitionVersion": "1.0.0"
+              },
+              "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+              "documentHashAlgorithm": "sha-256",
+              "signatureProvider": "formspec",
+              "ceremonyId": "ceremony-sig-030"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "expected_transitions": [
+    {
+      "from": "draft",
+      "target": "signing",
+      "event": "start"
+    }
+  ],
+  "expected_provenance": [
+    {
+      "recordKind": "signatureAdmissionFailed",
+      "data": {
+        "reason": "method_unregistered",
+        "failureContext": {
+          "methodUri": "urn:wos:attestation-method:unknown@1",
+          "registryVersion": "1.0.0"
+        }
+      }
+    }
+  ]
+}

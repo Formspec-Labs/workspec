@@ -202,6 +202,11 @@ fn sig030_method_unregistered_blocks_affirmation() {
 }
 
 #[test]
+fn sig031_unknown_method_prefix_blocks_affirmation() {
+    assert_signature_fixture_passes("SIG-031-unknown-method-prefix.json");
+}
+
+#[test]
 fn sig017_stale_response_pin_blocks_affirmation() {
     assert_signature_fixture_passes("SIG-017-stale-response-pin.json");
 }
