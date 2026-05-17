@@ -805,6 +805,53 @@
         }
       }
     },
+    "/cases/{case_id}/export-fence": {
+      "get": {
+        "tags": [
+          "cases"
+        ],
+        "summary": "Capture WOS high-water marks and policy/config source digests for a case export.",
+        "operationId": "get_case_export_fence",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "description": "Durable case-ledger TypeID or WOS resource URN",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Case export fence with provenance and policy high-water marks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseExportFence"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid case ledger identifier"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Supervisor role required"
+          },
+          "404": {
+            "description": "Case ledger not found (no bound processes and no direct-append events)"
+          },
+          "503": {
+            "description": "Policy source hashing or bundle lookup failed"
+          }
+        }
+      }
+    },
     "/cases/{case_id}/processes/{process_id}/resume": {
       "post": {
         "tags": [
@@ -1220,7 +1267,7 @@
         "tags": [
           "correspondence"
         ],
-        "summary": "`POST /api/v1/correspondence/renderings` — render a delivery template.\nSubsumes the legacy `POST /notifications/{workflowUrl}/render` (PLN-0402).\nIdempotency-Key REQUIRED.",
+        "summary": "`POST /api/v1/correspondence/renderings` — render a delivery template.\nSubsumes `POST /notifications/{workflowUrl}/render` (PLN-0402).\nIdempotency-Key REQUIRED.",
         "operationId": "correspondence_render",
         "requestBody": {
           "content": {
@@ -3627,6 +3674,104 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "CaseExportFence": {
+        "type": "object",
+        "description": "WOS-side source fence for a case export. Captures the current case-ledger\nand policy/config high-water marks before downstream bundle assembly.",
+        "required": [
+          "caseLedgerId",
+          "trellisScope",
+          "eventCount",
+          "processHighWater",
+          "policySnapshotDigest",
+          "policySources",
+          "capturedAt"
+        ],
+        "properties": {
+          "capturedAt": {
+            "type": "string"
+          },
+          "caseLedgerId": {
+            "type": "string"
+          },
+          "directHighWater": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CaseFenceEvent"
+              }
+            ]
+          },
+          "eventCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "eventHighWater": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CaseFenceEvent"
+              }
+            ]
+          },
+          "policySnapshotDigest": {
+            "type": "string"
+          },
+          "policySources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PolicySnapshotSource"
+            }
+          },
+          "processHighWater": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProcessFenceHighWater"
+            }
+          },
+          "trellisScope": {
+            "type": "string"
+          }
+        }
+      },
+      "CaseFenceEvent": {
+        "type": "object",
+        "description": "High-water event marker used by the case export fence.",
+        "required": [
+          "eventId",
+          "sequence",
+          "eventHash",
+          "previousHash",
+          "timestamp"
+        ],
+        "properties": {
+          "eventHash": {
+            "type": "string"
+          },
+          "eventId": {
+            "type": "string"
+          },
+          "previousHash": {
+            "type": "string"
+          },
+          "processId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "timestamp": {
+            "type": "string"
           }
         }
       },
@@ -7131,6 +7276,30 @@
         "type": "string",
         "description": "One-line human-readable explanation of why the override was issued. Surfaced in audit reports and adverse-decision notices.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"One-line human-readable explanation of why the override was issued. Surfaced in audit reports and adverse-decision notices.\",\n  \"type\": \"string\",\n  \"minLength\": 1,\n  \"x-wos\": {\n    \"openStringKind\": \"prose\"\n  }\n}\n ```\n </details>"
       },
+      "PolicySnapshotSource": {
+        "type": "object",
+        "description": "Canonically hashed policy/config source included in the case export fence.",
+        "required": [
+          "sourceKind",
+          "sourceRef",
+          "versionBinding",
+          "digest"
+        ],
+        "properties": {
+          "digest": {
+            "type": "string"
+          },
+          "sourceKind": {
+            "type": "string"
+          },
+          "sourceRef": {
+            "type": "string"
+          },
+          "versionBinding": {
+            "type": "string"
+          }
+        }
+      },
       "Problem": {
         "type": "object",
         "description": "RFC 7807 problem details response with stack-generic machine code and optional context.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"RFC 7807 problem details response with stack-generic machine code and optional context.\",\n  \"type\": \"object\",\n  \"required\": [\n    \"error_code\",\n    \"status\",\n    \"title\",\n    \"type\"\n  ],\n  \"properties\": {\n    \"context\": {\n      \"description\": \"Problem-specific diagnostic fields.\",\n      \"type\": \"object\",\n      \"additionalProperties\": true\n    },\n    \"detail\": {\n      \"description\": \"Human-readable detail specific to this occurrence.\",\n      \"examples\": [\n        \"No workflow process exists for the requested identifier.\"\n      ],\n      \"type\": \"string\",\n      \"x-wos\": {\n        \"openStringKind\": \"prose\"\n      }\n    },\n    \"error_code\": {\n      \"description\": \"Stable machine-readable stack error code.\",\n      \"examples\": [\n        \"WOS-1404\"\n      ],\n      \"$ref\": \"#/$defs/ErrorCode\"\n    },\n    \"instance\": {\n      \"description\": \"URI reference for the affected resource when a single resource caused the problem.\",\n      \"type\": \"string\",\n      \"format\": \"uri-reference\"\n    },\n    \"status\": {\n      \"description\": \"HTTP status code generated by the server for this problem.\",\n      \"examples\": [\n        404\n      ],\n      \"type\": \"integer\",\n      \"maximum\": 599.0,\n      \"minimum\": 400.0\n    },\n    \"title\": {\n      \"description\": \"Short human-readable summary of this problem type.\",\n      \"examples\": [\n        \"Resource not found\"\n      ],\n      \"type\": \"string\",\n      \"x-wos\": {\n        \"openStringKind\": \"prose\"\n      }\n    },\n    \"type\": {\n      \"description\": \"Dereferenceable URI for the documented error type.\",\n      \"examples\": [\n        \"https://schemas.formspec.io/wos-api/errors/WOS-1404\"\n      ],\n      \"type\": \"string\",\n      \"format\": \"uri-reference\"\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
@@ -7182,6 +7351,45 @@
           }
         },
         "additionalProperties": false
+      },
+      "ProcessFenceHighWater": {
+        "type": "object",
+        "description": "Per-process high-water marker for the case export fence.",
+        "required": [
+          "processId",
+          "definitionUrl",
+          "definitionVersion",
+          "status",
+          "eventCount"
+        ],
+        "properties": {
+          "definitionUrl": {
+            "type": "string"
+          },
+          "definitionVersion": {
+            "type": "string"
+          },
+          "eventCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "latestEvent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CaseFenceEvent"
+              }
+            ]
+          },
+          "processId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
       },
       "ProcessLifecycleRequest": {
         "type": "object",
@@ -8799,7 +9007,7 @@
     },
     {
       "name": "correspondence",
-      "description": "Outbound + inbound case communications and rendering (ADR 0082 D-15 step 2). Subsumes the legacy notification-render route per PLN-0402."
+      "description": "Outbound + inbound case communications and rendering (ADR 0082 D-15 step 2). Owns notification-template rendering per PLN-0402."
     },
     {
       "name": "reports",
