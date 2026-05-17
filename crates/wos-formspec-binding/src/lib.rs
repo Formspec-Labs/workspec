@@ -5,8 +5,12 @@
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use integrity_canonical::{CANONICALIZATION_PROFILE, DigestAlgorithm, build_signed_payload};
-use integrity_cose::{decode_cose_sign1, decode_protected_header};
-use integrity_signature::VerificationReceipt;
+use integrity_cose::{
+    decode_cose_sign1, decode_cose_sign1_with_method_uri, decode_protected_header,
+    sig_structure_bytes,
+};
+use integrity_signature::{VerificationReceipt, VerificationResult};
+use ring::signature;
 use wos_core::{
     ProvenanceKind, ProvenanceRecord,
     instance::{ActiveTask, ValidationOutcome, WorkflowProcess},
@@ -22,6 +26,9 @@ use wos_runtime::intake::{
 };
 
 const FORMSPEC_SIGNATURE_METHOD_REGISTRY_VERSION: &str = "1.0.0";
+const FORMSPEC_RECEIPT_METHOD_URI_PREFIX: &str = "urn:formspec:receipt-method:";
+const VERIFICATION_RECEIPT_RESULT_FAILED: &str = "verification-receipt-result-failed";
+const VERIFICATION_RECEIPT_RESULT_UNSUPPORTED: &str = "verification-receipt-result-unsupported";
 
 fn case_created_event_literal() -> &'static str {
     ProvenanceKind::CaseCreated
@@ -238,6 +245,62 @@ pub struct FormspecAuthoredSignatureRef {
 struct FormspecAuthoredSignatureEvidence {
     signature: FormspecAuthoredSignatureRef,
     admission_failure: Option<SignatureAdmissionFailure>,
+}
+
+/// Trusted Formspec verification-receipt signer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TrustedReceiptSigner {
+    kid: Vec<u8>,
+    public_key: [u8; 32],
+    method_uri: String,
+}
+
+impl TrustedReceiptSigner {
+    /// Creates a trusted Ed25519 receipt signer.
+    ///
+    /// # Errors
+    /// Returns [`BindingError::InvalidInput`] when `kid` or `method_uri` is empty.
+    pub fn ed25519(
+        kid: impl Into<Vec<u8>>,
+        public_key: [u8; 32],
+        method_uri: impl Into<String>,
+    ) -> Result<Self, BindingError> {
+        let kid = kid.into();
+        if kid.is_empty() {
+            return Err(BindingError::InvalidInput(
+                "trusted receipt signer kid must not be empty".to_string(),
+            ));
+        }
+        let method_uri = method_uri.into();
+        if method_uri.trim().is_empty() {
+            return Err(BindingError::InvalidInput(
+                "trusted receipt signer method_uri must not be empty".to_string(),
+            ));
+        }
+        Ok(Self {
+            kid,
+            public_key,
+            method_uri,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct ReceiptTrust {
+    signers: Vec<TrustedReceiptSigner>,
+}
+
+impl ReceiptTrust {
+    fn new(signers: Vec<TrustedReceiptSigner>) -> Self {
+        Self { signers }
+    }
+
+    fn public_key(&self, kid: &[u8], method_uri: &str) -> Option<[u8; 32]> {
+        self.signers
+            .iter()
+            .find(|signer| signer.kid == kid && signer.method_uri == method_uri)
+            .map(|signer| signer.public_key)
+    }
 }
 
 impl IntakeHandoff {
@@ -618,30 +681,163 @@ fn method_uri_from_cose_sign1_b64(value: Option<&str>) -> CoseMethodUri {
     }
 }
 
-/// Reads the signature method certified by a base64-encoded VerificationReceipt
+#[derive(Debug, Clone)]
+enum VerificationReceiptEvidence {
+    Absent,
+    Unusable(SignatureAdmissionFailure),
+    Present {
+        method_uri: String,
+        primitive_verification: SignaturePrimitiveStatus,
+        admission_failure: Option<SignatureAdmissionFailure>,
+    },
+}
+
+impl VerificationReceiptEvidence {
+    fn method_uri(&self) -> CoseMethodUri {
+        match self {
+            Self::Absent => CoseMethodUri::Absent,
+            Self::Unusable(_) => CoseMethodUri::Unusable,
+            Self::Present { method_uri, .. } => CoseMethodUri::Present(method_uri.clone()),
+        }
+    }
+
+    fn primitive_verification(&self) -> Option<SignaturePrimitiveStatus> {
+        match self {
+            Self::Present {
+                primitive_verification,
+                ..
+            } => Some(primitive_verification.clone()),
+            Self::Absent | Self::Unusable(_) => None,
+        }
+    }
+
+    fn admission_failure(&self) -> Option<SignatureAdmissionFailure> {
+        match self {
+            Self::Unusable(failure) => Some(failure.clone()),
+            Self::Present {
+                admission_failure, ..
+            } => admission_failure.clone(),
+            Self::Absent => None,
+        }
+    }
+}
+
+/// Reads, authenticates, and interprets a base64-encoded VerificationReceipt
 /// COSE_Sign1 envelope.
 ///
 /// The receipt envelope's own `method_uri` identifies the receipt-signing
 /// method. The signature method WOS needs for source-evidence consistency is
 /// the typed [`VerificationReceipt::method`] payload field owned by
-/// `integrity-signature`.
-fn signature_method_from_verification_receipt_b64(value: Option<&str>) -> CoseMethodUri {
+/// `integrity-signature`. Present-but-unauthenticated receipts are unusable:
+/// WOS never trusts an unsigned or untrusted receipt payload.
+fn verification_receipt_evidence_from_b64(
+    value: Option<&str>,
+    trust: &ReceiptTrust,
+) -> VerificationReceiptEvidence {
     let Some(value) = value else {
-        return CoseMethodUri::Absent;
+        return VerificationReceiptEvidence::Absent;
     };
     let Ok(bytes) = BASE64_STANDARD.decode(value.trim()) else {
-        return CoseMethodUri::Unusable;
+        return VerificationReceiptEvidence::Unusable(verification_receipt_failure(
+            "COSE_Sign1 VerificationReceipt",
+            "undecodable",
+        ));
     };
-    let Ok(envelope) = decode_cose_sign1(&bytes) else {
-        return CoseMethodUri::Unusable;
+    let Ok((envelope, receipt_method_uri)) =
+        decode_cose_sign1_with_method_uri(&bytes, FORMSPEC_RECEIPT_METHOD_URI_PREFIX)
+    else {
+        return VerificationReceiptEvidence::Unusable(verification_receipt_failure(
+            "COSE_Sign1 envelope with receipt-method URI",
+            "undecodable",
+        ));
     };
     let Some(payload) = envelope.payload() else {
-        return CoseMethodUri::Unusable;
+        return VerificationReceiptEvidence::Unusable(verification_receipt_failure(
+            "embedded VerificationReceipt payload",
+            "detached",
+        ));
     };
     let Ok(receipt) = serde_json::from_slice::<VerificationReceipt>(payload) else {
-        return CoseMethodUri::Unusable;
+        return VerificationReceiptEvidence::Unusable(verification_receipt_failure(
+            "integrity-signature VerificationReceipt payload",
+            "invalid_json",
+        ));
     };
-    CoseMethodUri::Present(receipt.method.to_string())
+    if envelope.alg() != Some(-8) {
+        return VerificationReceiptEvidence::Unusable(verification_receipt_failure(
+            "Ed25519 receipt COSE algorithm",
+            "unsupported_alg",
+        ));
+    }
+    let Some(kid) = envelope.kid() else {
+        return VerificationReceiptEvidence::Unusable(verification_receipt_failure(
+            "trusted receipt signer kid",
+            "missing_kid",
+        ));
+    };
+    let Some(public_key) = trust.public_key(kid, &receipt_method_uri) else {
+        return VerificationReceiptEvidence::Unusable(verification_receipt_failure(
+            "trusted receipt signer",
+            "untrusted",
+        ));
+    };
+    let sig_structure = sig_structure_bytes(envelope.protected_header(), payload);
+    let public_key = signature::UnparsedPublicKey::new(&signature::ED25519, public_key);
+    if public_key
+        .verify(&sig_structure, envelope.signature())
+        .is_err()
+    {
+        return VerificationReceiptEvidence::Unusable(verification_receipt_failure(
+            "valid receipt signature",
+            "signature_invalid",
+        ));
+    }
+
+    match receipt.result {
+        VerificationResult::Verified => VerificationReceiptEvidence::Present {
+            method_uri: receipt.method.to_string(),
+            primitive_verification: SignaturePrimitiveStatus::Verified,
+            admission_failure: None,
+        },
+        VerificationResult::Failed => VerificationReceiptEvidence::Present {
+            method_uri: receipt.method.to_string(),
+            primitive_verification: SignaturePrimitiveStatus::Failed {
+                reason: VERIFICATION_RECEIPT_RESULT_FAILED.to_string(),
+            },
+            admission_failure: Some(SignatureAdmissionFailure {
+                reason: SignatureAdmissionFailureReason::PrimitiveVerificationFailed,
+                failure_context: Some(serde_json::Map::from_iter([
+                    (
+                        "field".to_string(),
+                        serde_json::Value::String("verificationReceipt.result".to_string()),
+                    ),
+                    (
+                        "actual".to_string(),
+                        serde_json::Value::String("failed".to_string()),
+                    ),
+                ])),
+            }),
+        },
+        VerificationResult::Unsupported => VerificationReceiptEvidence::Present {
+            method_uri: receipt.method.to_string(),
+            primitive_verification: SignaturePrimitiveStatus::DeferredPendingHelper {
+                reason: VERIFICATION_RECEIPT_RESULT_UNSUPPORTED.to_string(),
+            },
+            admission_failure: Some(SignatureAdmissionFailure {
+                reason: SignatureAdmissionFailureReason::MethodUnsupported,
+                failure_context: Some(serde_json::Map::from_iter([
+                    (
+                        "field".to_string(),
+                        serde_json::Value::String("verificationReceipt.result".to_string()),
+                    ),
+                    (
+                        "actual".to_string(),
+                        serde_json::Value::String("unsupported".to_string()),
+                    ),
+                ])),
+            }),
+        },
+    }
 }
 
 fn undecodable_method_uri_failure() -> SignatureAdmissionFailure {
@@ -677,31 +873,23 @@ fn signature_method_decode_failure(
     }
 }
 
-fn verification_receipt_decode_failure(
-    receipt_method: &CoseMethodUri,
-) -> Option<SignatureAdmissionFailure> {
-    match receipt_method {
-        CoseMethodUri::Absent | CoseMethodUri::Present(_) => None,
-        CoseMethodUri::Unusable => Some(SignatureAdmissionFailure {
-            reason: SignatureAdmissionFailureReason::EvidenceDivergence,
-            failure_context: Some(serde_json::Map::from_iter([
-                (
-                    "field".to_string(),
-                    serde_json::Value::String("verificationReceipt".to_string()),
-                ),
-                (
-                    "expected".to_string(),
-                    serde_json::Value::String(
-                        "COSE_Sign1 payload carrying integrity-signature VerificationReceipt"
-                            .to_string(),
-                    ),
-                ),
-                (
-                    "actual".to_string(),
-                    serde_json::Value::String("undecodable".to_string()),
-                ),
-            ])),
-        }),
+fn verification_receipt_failure(expected: &str, actual: &str) -> SignatureAdmissionFailure {
+    SignatureAdmissionFailure {
+        reason: SignatureAdmissionFailureReason::EvidenceDivergence,
+        failure_context: Some(serde_json::Map::from_iter([
+            (
+                "field".to_string(),
+                serde_json::Value::String("verificationReceipt".to_string()),
+            ),
+            (
+                "expected".to_string(),
+                serde_json::Value::String(expected.to_string()),
+            ),
+            (
+                "actual".to_string(),
+                serde_json::Value::String(actual.to_string()),
+            ),
+        ])),
     }
 }
 
@@ -930,12 +1118,27 @@ pub trait FormspecProcessor {
 #[derive(Debug, Clone)]
 pub struct FormspecBinding<P> {
     processor: P,
+    receipt_trust: ReceiptTrust,
 }
 
 impl<P> FormspecBinding<P> {
     /// Create a binding adapter from a Formspec processor.
     pub fn new(processor: P) -> Self {
-        Self { processor }
+        Self {
+            processor,
+            receipt_trust: ReceiptTrust::default(),
+        }
+    }
+
+    /// Create a binding adapter with trusted verification-receipt signers.
+    pub fn new_with_trusted_receipt_signers(
+        processor: P,
+        trusted_receipt_signers: Vec<TrustedReceiptSigner>,
+    ) -> Self {
+        Self {
+            processor,
+            receipt_trust: ReceiptTrust::new(trusted_receipt_signers),
+        }
     }
 }
 
@@ -1087,17 +1290,19 @@ where
             let signature = signature_evidence.signature;
             // ADR 0109: method URI lives in the COSE protected-header
             // `method_uri` label (-65540). Partial decode of `signatureValue`
-            // is the inspection path; partial decode of `verificationReceipt`
-            // is the equality cross-check.
+            // is the inspection path. Present verification receipts must be
+            // authenticated before their verdict or method payload is trusted.
             let signature_method_decode =
                 method_uri_from_cose_sign1_b64(signature.signature_value.as_deref());
-            let receipt_method_decode = signature_method_from_verification_receipt_b64(
+            let receipt_evidence = verification_receipt_evidence_from_b64(
                 signature.verification_receipt.as_deref(),
+                &self.receipt_trust,
             );
+            let receipt_method_decode = receipt_evidence.method_uri();
             let admission_failure = signature_evidence
                 .admission_failure
                 .or_else(|| signature_method_decode_failure(&signature_method_decode))
-                .or_else(|| verification_receipt_decode_failure(&receipt_method_decode))
+                .or_else(|| receipt_evidence.admission_failure())
                 .or_else(|| {
                     verification_receipt_method_mismatch_failure(
                         signature_method_decode.as_deref(),
@@ -1134,16 +1339,11 @@ where
                 ceremony_id: Some(signature.ceremony_id),
                 identity_binding: signature.identity_binding,
                 signer_authority: signer_authority.clone(),
-                // The reference Formspec binding parses pins, consent, signing
-                // intent, and the signed-payload digest, but it does not yet
-                // execute the cryptographic primitive over the COSE_Sign1
-                // `signatureValue` envelope. That work ships with
-                // `FORMSPEC-SIGN-HELPER-001`. Until then, the binding reports
-                // `DeferredPendingHelper` so downstream WOS provenance honestly
-                // records that the primitive has not run.
-                primitive_verification: SignaturePrimitiveStatus::DeferredPendingHelper {
-                    reason: FORMSPEC_SIGNING_HELPER_PENDING_REASON.to_string(),
-                },
+                primitive_verification: receipt_evidence.primitive_verification().unwrap_or(
+                    SignaturePrimitiveStatus::DeferredPendingHelper {
+                        reason: FORMSPEC_SIGNING_HELPER_PENDING_REASON.to_string(),
+                    },
+                ),
                 verification_receipt: signature.verification_receipt,
                 admission_failure,
             });
@@ -1494,14 +1694,38 @@ mod tests {
         BASE64_STANDARD.encode(envelope)
     }
 
-    fn verification_receipt_b64_with_signature_method(method_uri: &str) -> String {
+    fn verification_receipt_b64_with_signature_method(
+        method_uri: &str,
+    ) -> (String, TrustedReceiptSigner) {
+        verification_receipt_b64_with_signature_method_and_result(method_uri, "verified")
+    }
+
+    fn verification_receipt_b64_with_signature_method_and_result(
+        method_uri: &str,
+        result: &str,
+    ) -> (String, TrustedReceiptSigner) {
+        use ring::rand::SystemRandom;
+        use ring::signature::KeyPair;
+
+        let rng = SystemRandom::new();
+        let pkcs8 =
+            ring::signature::Ed25519KeyPair::generate_pkcs8(&rng).expect("generate receipt key");
+        let key_pair =
+            ring::signature::Ed25519KeyPair::from_pkcs8(pkcs8.as_ref()).expect("parse key");
+        let public_key: [u8; 32] = key_pair
+            .public_key()
+            .as_ref()
+            .try_into()
+            .expect("ed25519 public key length");
+        let receipt_kid = b"receipt-kid";
+        let receipt_method_uri = "urn:formspec:receipt-method:ed25519-cose-sign1@1";
         let protected = integrity_cose::detached_signature_protected_header(
             COSE_ALG_EDDSA,
-            b"receipt-kid",
-            "urn:formspec:receipt-method:ed25519-cose-sign1@1",
+            receipt_kid,
+            receipt_method_uri,
         );
         let payload = serde_json::to_vec(&serde_json::json!({
-            "result": "verified",
+            "result": result,
             "method": method_uri,
             "methodRegistryVersion": FORMSPEC_SIGNATURE_METHOD_REGISTRY_VERSION,
             "adapter": {
@@ -1514,8 +1738,14 @@ mod tests {
             "verifiedAt": "2026-05-17T00:00:00Z"
         }))
         .expect("receipt payload json");
-        let envelope = integrity_cose::encode_cose_sign1(&protected, Some(&payload), &[0u8; 64]);
-        BASE64_STANDARD.encode(envelope)
+        let sig_structure = integrity_cose::sig_structure_bytes(&protected, &payload);
+        let signature = key_pair.sign(&sig_structure);
+        let envelope =
+            integrity_cose::encode_cose_sign1(&protected, Some(&payload), signature.as_ref());
+        let trusted =
+            TrustedReceiptSigner::ed25519(receipt_kid.to_vec(), public_key, receipt_method_uri)
+                .expect("trusted receipt signer");
+        (BASE64_STANDARD.encode(envelope), trusted)
     }
 
     #[test]
@@ -1690,11 +1920,12 @@ mod tests {
 
     #[test]
     fn signature_evidence_carries_verification_receipt_bytes() {
-        let adapter = FormspecBinding::new(StubProcessor);
         let mut response = signed_response();
-        let receipt = verification_receipt_b64_with_signature_method(
+        let (receipt, trusted_signer) = verification_receipt_b64_with_signature_method(
             "urn:formspec:sig-method:ed25519-cose-sign1@1",
         );
+        let adapter =
+            FormspecBinding::new_with_trusted_receipt_signers(StubProcessor, vec![trusted_signer]);
         response["authoredSignatures"][0]["verificationReceipt"] =
             serde_json::Value::String(receipt.clone());
 
@@ -1706,6 +1937,47 @@ mod tests {
         assert_eq!(
             evidence[0].verification_receipt.as_deref(),
             Some(receipt.as_str())
+        );
+        assert_eq!(
+            evidence[0].primitive_verification,
+            SignaturePrimitiveStatus::Verified
+        );
+        assert!(
+            evidence[0].admission_failure.is_none(),
+            "trusted verified receipt must not fail admission"
+        );
+    }
+
+    #[test]
+    fn signature_evidence_rejects_verification_receipt_without_trusted_signer() {
+        let adapter = FormspecBinding::new(StubProcessor);
+        let mut response = signed_response();
+        let (receipt, _) = verification_receipt_b64_with_signature_method(
+            "urn:formspec:sig-method:ed25519-cose-sign1@1",
+        );
+        response["authoredSignatures"][0]["verificationReceipt"] =
+            serde_json::Value::String(receipt);
+
+        let evidence = adapter
+            .signature_evidence(&formspec_task(), &response)
+            .expect("signature evidence parses")
+            .expect("signature evidence is present");
+
+        let admission_failure = evidence[0]
+            .admission_failure
+            .as_ref()
+            .expect("untrusted verificationReceipt must fail admission");
+        assert_eq!(
+            admission_failure.reason,
+            SignatureAdmissionFailureReason::EvidenceDivergence
+        );
+        let context = admission_failure
+            .failure_context
+            .as_ref()
+            .expect("evidence divergence carries failure context");
+        assert_eq!(
+            context.get("actual").and_then(serde_json::Value::as_str),
+            Some("untrusted")
         );
     }
 
@@ -1836,12 +2108,14 @@ mod tests {
         // verification receipt are present, their `method_uri` values must
         // agree. Disagreement is an EvidenceDivergence admission failure —
         // the verifier asserted a method the signer did not declare.
-        let adapter = FormspecBinding::new(StubProcessor);
         let mut response = signed_response();
+        let (receipt, trusted_signer) = verification_receipt_b64_with_signature_method(
+            "urn:formspec:sig-method:other-ed25519@1",
+        );
+        let adapter =
+            FormspecBinding::new_with_trusted_receipt_signers(StubProcessor, vec![trusted_signer]);
         response["authoredSignatures"][0]["verificationReceipt"] =
-            serde_json::Value::String(verification_receipt_b64_with_signature_method(
-                "urn:formspec:sig-method:other-ed25519@1",
-            ));
+            serde_json::Value::String(receipt);
 
         let evidence = adapter
             .signature_evidence(&formspec_task(), &response)
@@ -1871,6 +2145,72 @@ mod tests {
         assert_eq!(
             context.get("actual").and_then(serde_json::Value::as_str),
             Some("urn:formspec:sig-method:other-ed25519@1")
+        );
+    }
+
+    #[test]
+    fn signature_evidence_rejects_failed_verification_receipt_result() {
+        let mut response = signed_response();
+        let (receipt, trusted_signer) = verification_receipt_b64_with_signature_method_and_result(
+            "urn:formspec:sig-method:ed25519-cose-sign1@1",
+            "failed",
+        );
+        let adapter =
+            FormspecBinding::new_with_trusted_receipt_signers(StubProcessor, vec![trusted_signer]);
+        response["authoredSignatures"][0]["verificationReceipt"] =
+            serde_json::Value::String(receipt);
+
+        let evidence = adapter
+            .signature_evidence(&formspec_task(), &response)
+            .expect("signature evidence parses")
+            .expect("signature evidence is present");
+
+        assert_eq!(
+            evidence[0].primitive_verification,
+            SignaturePrimitiveStatus::Failed {
+                reason: VERIFICATION_RECEIPT_RESULT_FAILED.to_string()
+            }
+        );
+        let admission_failure = evidence[0]
+            .admission_failure
+            .as_ref()
+            .expect("failed receipt verdict must fail admission");
+        assert_eq!(
+            admission_failure.reason,
+            SignatureAdmissionFailureReason::PrimitiveVerificationFailed
+        );
+    }
+
+    #[test]
+    fn signature_evidence_rejects_unsupported_verification_receipt_result() {
+        let mut response = signed_response();
+        let (receipt, trusted_signer) = verification_receipt_b64_with_signature_method_and_result(
+            "urn:formspec:sig-method:ed25519-cose-sign1@1",
+            "unsupported",
+        );
+        let adapter =
+            FormspecBinding::new_with_trusted_receipt_signers(StubProcessor, vec![trusted_signer]);
+        response["authoredSignatures"][0]["verificationReceipt"] =
+            serde_json::Value::String(receipt);
+
+        let evidence = adapter
+            .signature_evidence(&formspec_task(), &response)
+            .expect("signature evidence parses")
+            .expect("signature evidence is present");
+
+        let admission_failure = evidence[0]
+            .admission_failure
+            .as_ref()
+            .expect("unsupported receipt verdict must fail admission");
+        assert_eq!(
+            admission_failure.reason,
+            SignatureAdmissionFailureReason::MethodUnsupported
+        );
+        assert_eq!(
+            evidence[0].primitive_verification,
+            SignaturePrimitiveStatus::DeferredPendingHelper {
+                reason: VERIFICATION_RECEIPT_RESULT_UNSUPPORTED.to_string()
+            }
         );
     }
 

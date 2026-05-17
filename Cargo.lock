@@ -4704,6 +4704,7 @@ dependencies = [
  "integrity-canonical",
  "integrity-cose",
  "integrity-signature",
+ "ring",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
