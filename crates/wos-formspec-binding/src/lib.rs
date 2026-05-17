@@ -9,7 +9,9 @@ use integrity_cose::{
     decode_cose_sign1, decode_cose_sign1_with_method_uri, decode_protected_header,
     sig_structure_bytes,
 };
-use integrity_signature::{VerificationReceipt, VerificationResult};
+use integrity_signature::{
+    VerificationReceipt, VerificationResult, canonical_receipt_payload_bytes_with_domain,
+};
 use ring::signature;
 use wos_core::{
     ProvenanceKind, ProvenanceRecord,
@@ -27,6 +29,7 @@ use wos_runtime::intake::{
 
 const FORMSPEC_SIGNATURE_METHOD_REGISTRY_VERSION: &str = "1.0.0";
 const FORMSPEC_RECEIPT_METHOD_URI_PREFIX: &str = "urn:formspec:receipt-method:";
+const FORMSPEC_RECEIPT_SIGNED_PAYLOAD_DOMAIN: &str = "formspec.verification.receipt.v1";
 const VERIFICATION_RECEIPT_RESULT_FAILED: &str = "verification-receipt-result-failed";
 const VERIFICATION_RECEIPT_RESULT_UNSUPPORTED: &str = "verification-receipt-result-unsupported";
 
@@ -236,9 +239,39 @@ pub struct FormspecAuthoredSignatureRef {
     #[serde(default)]
     pub identity_binding: Option<serde_json::Value>,
 
-    /// Base64-encoded COSE_Sign1 VerificationReceipt bytes.
+    /// Verification receipt evidence for the signature.
+    ///
+    /// Legacy responses can carry only base64-encoded embedded COSE bytes.
+    /// Production detached receipt signing carries the structured
+    /// VerificationReceipt body plus signed `receiptBytes`.
     #[serde(default)]
-    pub verification_receipt: Option<String>,
+    pub verification_receipt: Option<FormspecVerificationReceiptRef>,
+}
+
+/// Formspec verification receipt reference accepted by WOS.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(untagged)]
+pub enum FormspecVerificationReceiptRef {
+    /// Legacy base64-encoded COSE_Sign1 bytes with an embedded payload.
+    SignedBytes(String),
+    /// Structured receipt body with detached COSE bytes in `receiptBytes`.
+    Receipt(VerificationReceipt),
+}
+
+impl FormspecVerificationReceiptRef {
+    fn signed_bytes(&self) -> Option<&str> {
+        match self {
+            Self::SignedBytes(value) => Some(value.as_str()),
+            Self::Receipt(receipt) => receipt.receipt_bytes.as_deref(),
+        }
+    }
+
+    fn structured_receipt(&self) -> Option<&VerificationReceipt> {
+        match self {
+            Self::SignedBytes(_) => None,
+            Self::Receipt(receipt) => Some(receipt),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -722,22 +755,27 @@ impl VerificationReceiptEvidence {
     }
 }
 
-/// Reads, authenticates, and interprets a base64-encoded VerificationReceipt
-/// COSE_Sign1 envelope.
+/// Reads, authenticates, and interprets verification receipt evidence.
 ///
 /// The receipt envelope's own `method_uri` identifies the receipt-signing
 /// method. The signature method WOS needs for source-evidence consistency is
 /// the typed [`VerificationReceipt::method`] payload field owned by
 /// `integrity-signature`. Present-but-unauthenticated receipts are unusable:
 /// WOS never trusts an unsigned or untrusted receipt payload.
-fn verification_receipt_evidence_from_b64(
-    value: Option<&str>,
+fn verification_receipt_evidence_from_ref(
+    value: Option<&FormspecVerificationReceiptRef>,
     trust: &ReceiptTrust,
 ) -> VerificationReceiptEvidence {
     let Some(value) = value else {
         return VerificationReceiptEvidence::Absent;
     };
-    let Ok(bytes) = BASE64_STANDARD.decode(value.trim()) else {
+    let Some(signed_bytes) = value.signed_bytes() else {
+        return VerificationReceiptEvidence::Unusable(verification_receipt_failure(
+            "VerificationReceipt.receiptBytes",
+            "missing",
+        ));
+    };
+    let Ok(bytes) = BASE64_STANDARD.decode(signed_bytes.trim()) else {
         return VerificationReceiptEvidence::Unusable(verification_receipt_failure(
             "COSE_Sign1 VerificationReceipt",
             "undecodable",
@@ -749,18 +787,6 @@ fn verification_receipt_evidence_from_b64(
         return VerificationReceiptEvidence::Unusable(verification_receipt_failure(
             "COSE_Sign1 envelope with receipt-method URI",
             "undecodable",
-        ));
-    };
-    let Some(payload) = envelope.payload() else {
-        return VerificationReceiptEvidence::Unusable(verification_receipt_failure(
-            "embedded VerificationReceipt payload",
-            "detached",
-        ));
-    };
-    let Ok(receipt) = serde_json::from_slice::<VerificationReceipt>(payload) else {
-        return VerificationReceiptEvidence::Unusable(verification_receipt_failure(
-            "integrity-signature VerificationReceipt payload",
-            "invalid_json",
         ));
     };
     if envelope.alg() != Some(-8) {
@@ -781,7 +807,13 @@ fn verification_receipt_evidence_from_b64(
             "untrusted",
         ));
     };
-    let sig_structure = sig_structure_bytes(envelope.protected_header(), payload);
+    let Some((receipt, payload)) = verification_receipt_payload(value, envelope.payload()) else {
+        return VerificationReceiptEvidence::Unusable(verification_receipt_failure(
+            "structured VerificationReceipt body for detached receiptBytes",
+            "missing",
+        ));
+    };
+    let sig_structure = sig_structure_bytes(envelope.protected_header(), &payload);
     let public_key = signature::UnparsedPublicKey::new(&signature::ED25519, public_key);
     if public_key
         .verify(&sig_structure, envelope.signature())
@@ -793,7 +825,7 @@ fn verification_receipt_evidence_from_b64(
         ));
     }
 
-    match receipt.result {
+    match &receipt.result {
         VerificationResult::Verified => VerificationReceiptEvidence::Present {
             method_uri: receipt.method.to_string(),
             primitive_verification: SignaturePrimitiveStatus::Verified,
@@ -838,6 +870,35 @@ fn verification_receipt_evidence_from_b64(
             }),
         },
     }
+}
+
+fn verification_receipt_payload(
+    value: &FormspecVerificationReceiptRef,
+    embedded_payload: Option<&[u8]>,
+) -> Option<(VerificationReceipt, Vec<u8>)> {
+    if let Some(payload) = embedded_payload {
+        let receipt = verification_receipt_from_payload(payload)?;
+        return Some((receipt, payload.to_vec()));
+    }
+
+    let receipt = value.structured_receipt()?.clone();
+    let payload = canonical_receipt_payload_bytes_with_domain(
+        &receipt,
+        FORMSPEC_RECEIPT_SIGNED_PAYLOAD_DOMAIN,
+    )
+    .ok()?;
+    Some((receipt, payload))
+}
+
+fn verification_receipt_from_payload(payload: &[u8]) -> Option<VerificationReceipt> {
+    serde_json::from_slice::<VerificationReceipt>(payload)
+        .ok()
+        .or_else(|| {
+            let json_payload =
+                payload.strip_prefix(FORMSPEC_RECEIPT_SIGNED_PAYLOAD_DOMAIN.as_bytes())?;
+            let json_payload = json_payload.strip_prefix(&[0])?;
+            serde_json::from_slice::<VerificationReceipt>(json_payload).ok()
+        })
 }
 
 fn undecodable_method_uri_failure() -> SignatureAdmissionFailure {
@@ -1294,11 +1355,16 @@ where
             // authenticated before their verdict or method payload is trusted.
             let signature_method_decode =
                 method_uri_from_cose_sign1_b64(signature.signature_value.as_deref());
-            let receipt_evidence = verification_receipt_evidence_from_b64(
-                signature.verification_receipt.as_deref(),
+            let receipt_evidence = verification_receipt_evidence_from_ref(
+                signature.verification_receipt.as_ref(),
                 &self.receipt_trust,
             );
             let receipt_method_decode = receipt_evidence.method_uri();
+            let verification_receipt = signature
+                .verification_receipt
+                .as_ref()
+                .and_then(FormspecVerificationReceiptRef::signed_bytes)
+                .map(str::to_string);
             let admission_failure = signature_evidence
                 .admission_failure
                 .or_else(|| signature_method_decode_failure(&signature_method_decode))
@@ -1344,7 +1410,7 @@ where
                         reason: FORMSPEC_SIGNING_HELPER_PENDING_REASON.to_string(),
                     },
                 ),
-                verification_receipt: signature.verification_receipt,
+                verification_receipt,
                 admission_failure,
             });
         }
@@ -1694,15 +1760,76 @@ mod tests {
         BASE64_STANDARD.encode(envelope)
     }
 
-    fn verification_receipt_b64_with_signature_method(
+    fn verification_receipt_value_with_signature_method(
         method_uri: &str,
-    ) -> (String, TrustedReceiptSigner) {
-        verification_receipt_b64_with_signature_method_and_result(method_uri, "verified")
+    ) -> (serde_json::Value, String, TrustedReceiptSigner) {
+        verification_receipt_value_with_signature_method_and_result(method_uri, "verified")
     }
 
-    fn verification_receipt_b64_with_signature_method_and_result(
+    fn verification_receipt_value_with_signature_method_and_result(
         method_uri: &str,
         result: &str,
+    ) -> (serde_json::Value, String, TrustedReceiptSigner) {
+        use integrity_signature::{
+            AdapterInfo, KeyInfo, ReceiptSigner, VerificationReceipt, VerificationResult,
+        };
+
+        let receipt_kid = b"receipt-kid";
+        let receipt_method_uri = "urn:formspec:receipt-method:ed25519-cose-sign1@1";
+        let (signer, public_key) =
+            integrity_signature_ring::InProcessReceiptSigner::generate_with_identity(
+                Some(receipt_kid),
+                "urn:formspec:receipt-signer:ring-in-process@1",
+                receipt_method_uri,
+            )
+            .expect("generate receipt signer");
+        let public_key: [u8; 32] = public_key
+            .as_slice()
+            .try_into()
+            .expect("ed25519 public key length");
+        let result = match result {
+            "verified" => VerificationResult::Verified,
+            "failed" => VerificationResult::Failed,
+            "unsupported" => VerificationResult::Unsupported,
+            other => panic!("unsupported test receipt result: {other}"),
+        };
+        let mut receipt = VerificationReceipt {
+            result,
+            method: method_uri.into(),
+            method_registry_version: FORMSPEC_SIGNATURE_METHOD_REGISTRY_VERSION.into(),
+            adapter: AdapterInfo {
+                id: "urn:formspec:adapter:ring@1".into(),
+                version: "0.1.0".into(),
+            },
+            key: KeyInfo {
+                r#ref: "receipt-kid".into(),
+                version: None,
+                snapshot: None,
+            },
+            verified_at: "2026-05-17T00:00:00Z".to_string(),
+            context: None,
+            receipt_bytes: None,
+        };
+        let payload = canonical_receipt_payload_bytes_with_domain(
+            &receipt,
+            FORMSPEC_RECEIPT_SIGNED_PAYLOAD_DOMAIN,
+        )
+        .expect("canonical receipt payload");
+        let envelope = signer.sign_receipt(&payload).expect("sign receipt");
+        let receipt_bytes = BASE64_STANDARD.encode(envelope);
+        receipt.receipt_bytes = Some(receipt_bytes.clone());
+        let trusted =
+            TrustedReceiptSigner::ed25519(receipt_kid.to_vec(), public_key, receipt_method_uri)
+                .expect("trusted receipt signer");
+        (
+            serde_json::to_value(receipt).expect("receipt json"),
+            receipt_bytes,
+            trusted,
+        )
+    }
+
+    fn embedded_verification_receipt_b64_with_signature_method(
+        method_uri: &str,
     ) -> (String, TrustedReceiptSigner) {
         use ring::rand::SystemRandom;
         use ring::signature::KeyPair;
@@ -1725,7 +1852,7 @@ mod tests {
             receipt_method_uri,
         );
         let payload = serde_json::to_vec(&serde_json::json!({
-            "result": result,
+            "result": "verified",
             "method": method_uri,
             "methodRegistryVersion": FORMSPEC_SIGNATURE_METHOD_REGISTRY_VERSION,
             "adapter": {
@@ -1921,7 +2048,139 @@ mod tests {
     #[test]
     fn signature_evidence_carries_verification_receipt_bytes() {
         let mut response = signed_response();
-        let (receipt, trusted_signer) = verification_receipt_b64_with_signature_method(
+        let (receipt, receipt_bytes, trusted_signer) =
+            verification_receipt_value_with_signature_method(
+                "urn:formspec:sig-method:ed25519-cose-sign1@1",
+            );
+        let adapter =
+            FormspecBinding::new_with_trusted_receipt_signers(StubProcessor, vec![trusted_signer]);
+        response["authoredSignatures"][0]["verificationReceipt"] = receipt;
+
+        let evidence = adapter
+            .signature_evidence(&formspec_task(), &response)
+            .expect("signature evidence parses")
+            .expect("signature evidence is present");
+
+        assert_eq!(
+            evidence[0].verification_receipt.as_deref(),
+            Some(receipt_bytes.as_str())
+        );
+        assert_eq!(
+            evidence[0].primitive_verification,
+            SignaturePrimitiveStatus::Verified
+        );
+        assert!(
+            evidence[0].admission_failure.is_none(),
+            "trusted verified receipt must not fail admission"
+        );
+    }
+
+    #[test]
+    fn signature_evidence_accepts_detached_receipt_from_ring_verifier() {
+        use integrity_signature::{
+            KeyRef, RegistryEntry, SignatureMethodRegistry, Verifier, VerifyRequest,
+        };
+        use ring::rand::SystemRandom;
+        use ring::signature::KeyPair;
+
+        let receipt_kid = b"receipt-kid";
+        let receipt_method_uri = "urn:formspec:receipt-method:ed25519-cose-sign1@1";
+        let (receipt_signer, receipt_public_key) =
+            integrity_signature_ring::InProcessReceiptSigner::generate_with_identity(
+                Some(receipt_kid),
+                "urn:formspec:receipt-signer:ring-in-process@1",
+                receipt_method_uri,
+            )
+            .expect("generate receipt signer");
+        let trusted_signer = TrustedReceiptSigner::ed25519(
+            receipt_kid.to_vec(),
+            receipt_public_key
+                .as_slice()
+                .try_into()
+                .expect("ed25519 public key length"),
+            receipt_method_uri,
+        )
+        .expect("trusted receipt signer");
+
+        let verifier_config =
+            integrity_signature_ring::RingVerifierConfig::new("urn:formspec:sig-method:")
+                .with_adapter_id("urn:formspec:adapter:ring@1")
+                .with_adapter_version("0.1.0")
+                .with_receipt_payload_domain(FORMSPEC_RECEIPT_SIGNED_PAYLOAD_DOMAIN);
+        let verifier = integrity_signature_ring::RingVerifier::new_with_config_and_receipt_signer(
+            verifier_config,
+            std::sync::Arc::new(receipt_signer),
+        );
+
+        let rng = SystemRandom::new();
+        let pkcs8 = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)
+            .expect("generate response signature key");
+        let key_pair =
+            ring::signature::Ed25519KeyPair::from_pkcs8(pkcs8.as_ref()).expect("parse key");
+        let signed_bytes = b"formspec signed payload".to_vec();
+        let protected = integrity_cose::detached_signature_protected_header(
+            COSE_ALG_EDDSA,
+            b"response-kid",
+            "urn:formspec:sig-method:ed25519-cose-sign1@1",
+        );
+        let sig_structure = integrity_cose::sig_structure_bytes(&protected, &signed_bytes);
+        let primitive_signature = key_pair.sign(&sig_structure);
+        let signature_bytes =
+            integrity_cose::encode_cose_sign1(&protected, None, primitive_signature.as_ref());
+        let receipt = verifier
+            .verify(
+                &VerifyRequest {
+                    signed_bytes,
+                    signature_bytes,
+                    method_uri: "urn:formspec:sig-method:ed25519-cose-sign1@1".into(),
+                    key_ref: KeyRef::RawPublicKey(key_pair.public_key().as_ref().to_vec()),
+                },
+                &SignatureMethodRegistry {
+                    version: FORMSPEC_SIGNATURE_METHOD_REGISTRY_VERSION.into(),
+                    entries: vec![RegistryEntry {
+                        id: "urn:formspec:sig-method:ed25519-cose-sign1@1".into(),
+                        suite: "ed25519".to_string(),
+                        wire: "cose-sign1".to_string(),
+                        alg: Some(COSE_ALG_EDDSA),
+                        status: "registered".to_string(),
+                        deprecation_notice: None,
+                    }],
+                },
+            )
+            .expect("ring verifier receipt");
+        let receipt_bytes = receipt
+            .receipt_bytes
+            .clone()
+            .expect("ring verifier must attach receipt bytes");
+        let mut response = signed_response();
+        response["authoredSignatures"][0]["verificationReceipt"] =
+            serde_json::to_value(receipt).expect("receipt json");
+        let adapter =
+            FormspecBinding::new_with_trusted_receipt_signers(StubProcessor, vec![trusted_signer]);
+
+        let evidence = adapter
+            .signature_evidence(&formspec_task(), &response)
+            .expect("signature evidence parses")
+            .expect("signature evidence is present");
+
+        assert_eq!(
+            evidence[0].verification_receipt.as_deref(),
+            Some(receipt_bytes.as_str())
+        );
+        assert_eq!(
+            evidence[0].primitive_verification,
+            SignaturePrimitiveStatus::Verified
+        );
+        assert!(
+            evidence[0].admission_failure.is_none(),
+            "production detached receipt must not fail admission"
+        );
+    }
+
+    #[test]
+    fn signature_evidence_accepts_legacy_embedded_verification_receipt_bytes() {
+        let mut response = signed_response();
+        let (receipt, trusted_signer) = embedded_verification_receipt_b64_with_signature_method(
             "urn:formspec:sig-method:ed25519-cose-sign1@1",
         );
         let adapter =
@@ -1942,21 +2201,16 @@ mod tests {
             evidence[0].primitive_verification,
             SignaturePrimitiveStatus::Verified
         );
-        assert!(
-            evidence[0].admission_failure.is_none(),
-            "trusted verified receipt must not fail admission"
-        );
     }
 
     #[test]
     fn signature_evidence_rejects_verification_receipt_without_trusted_signer() {
         let adapter = FormspecBinding::new(StubProcessor);
         let mut response = signed_response();
-        let (receipt, _) = verification_receipt_b64_with_signature_method(
+        let (receipt, _, _) = verification_receipt_value_with_signature_method(
             "urn:formspec:sig-method:ed25519-cose-sign1@1",
         );
-        response["authoredSignatures"][0]["verificationReceipt"] =
-            serde_json::Value::String(receipt);
+        response["authoredSignatures"][0]["verificationReceipt"] = receipt;
 
         let evidence = adapter
             .signature_evidence(&formspec_task(), &response)
@@ -2109,13 +2363,12 @@ mod tests {
         // agree. Disagreement is an EvidenceDivergence admission failure —
         // the verifier asserted a method the signer did not declare.
         let mut response = signed_response();
-        let (receipt, trusted_signer) = verification_receipt_b64_with_signature_method(
+        let (receipt, _, trusted_signer) = verification_receipt_value_with_signature_method(
             "urn:formspec:sig-method:other-ed25519@1",
         );
         let adapter =
             FormspecBinding::new_with_trusted_receipt_signers(StubProcessor, vec![trusted_signer]);
-        response["authoredSignatures"][0]["verificationReceipt"] =
-            serde_json::Value::String(receipt);
+        response["authoredSignatures"][0]["verificationReceipt"] = receipt;
 
         let evidence = adapter
             .signature_evidence(&formspec_task(), &response)
@@ -2151,14 +2404,14 @@ mod tests {
     #[test]
     fn signature_evidence_rejects_failed_verification_receipt_result() {
         let mut response = signed_response();
-        let (receipt, trusted_signer) = verification_receipt_b64_with_signature_method_and_result(
-            "urn:formspec:sig-method:ed25519-cose-sign1@1",
-            "failed",
-        );
+        let (receipt, _, trusted_signer) =
+            verification_receipt_value_with_signature_method_and_result(
+                "urn:formspec:sig-method:ed25519-cose-sign1@1",
+                "failed",
+            );
         let adapter =
             FormspecBinding::new_with_trusted_receipt_signers(StubProcessor, vec![trusted_signer]);
-        response["authoredSignatures"][0]["verificationReceipt"] =
-            serde_json::Value::String(receipt);
+        response["authoredSignatures"][0]["verificationReceipt"] = receipt;
 
         let evidence = adapter
             .signature_evidence(&formspec_task(), &response)
@@ -2184,14 +2437,14 @@ mod tests {
     #[test]
     fn signature_evidence_rejects_unsupported_verification_receipt_result() {
         let mut response = signed_response();
-        let (receipt, trusted_signer) = verification_receipt_b64_with_signature_method_and_result(
-            "urn:formspec:sig-method:ed25519-cose-sign1@1",
-            "unsupported",
-        );
+        let (receipt, _, trusted_signer) =
+            verification_receipt_value_with_signature_method_and_result(
+                "urn:formspec:sig-method:ed25519-cose-sign1@1",
+                "unsupported",
+            );
         let adapter =
             FormspecBinding::new_with_trusted_receipt_signers(StubProcessor, vec![trusted_signer]);
-        response["authoredSignatures"][0]["verificationReceipt"] =
-            serde_json::Value::String(receipt);
+        response["authoredSignatures"][0]["verificationReceipt"] = receipt;
 
         let evidence = adapter
             .signature_evidence(&formspec_task(), &response)

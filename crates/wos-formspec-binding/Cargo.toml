@@ -17,3 +17,6 @@ serde_json = "1"
 thiserror = "2"
 wos-core = { path = "../wos-core" }
 wos-runtime = { path = "../wos-runtime" }
+
+[dev-dependencies]
+integrity-signature-ring = { path = "../../../integrity-stack/crates/integrity-signature-ring" }

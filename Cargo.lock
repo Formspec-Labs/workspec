@@ -1578,10 +1578,22 @@ name = "integrity-signature"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "integrity-canonical",
  "serde",
  "serde_bytes",
  "serde_json",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "integrity-signature-ring"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "integrity-cose",
+ "integrity-signature",
+ "ring",
+ "serde_json",
 ]
 
 [[package]]
@@ -4704,6 +4716,7 @@ dependencies = [
  "integrity-canonical",
  "integrity-cose",
  "integrity-signature",
+ "integrity-signature-ring",
  "ring",
  "serde",
  "serde_json",
