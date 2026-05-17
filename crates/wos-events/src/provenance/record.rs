@@ -2005,8 +2005,8 @@ impl std::fmt::Display for ProvenanceRecord {
 
 #[cfg(test)]
 mod constructor_literal_drift_tests {
-    use crate::provenance::kind::WOS_CANONICAL_EVENT_LITERALS;
     use super::*;
+    use crate::provenance::kind::WOS_CANONICAL_EVENT_LITERALS;
     use serde_json::json;
 
     fn assert_event_matches_kind(record: &ProvenanceRecord) {
@@ -2022,8 +2022,7 @@ mod constructor_literal_drift_tests {
     /// [`ProvenanceRecord::blank`] stamping matches Trellis admission tables
     /// (`WOS_CANONICAL_EVENT_LITERALS` / `canonical_event_literal`).
     #[test]
-    fn given_each_substrate_canonical_literal_when_blank_record_minted_then_event_matches_table(
-    ) {
+    fn given_each_substrate_canonical_literal_when_blank_record_minted_then_event_matches_table() {
         for literal in WOS_CANONICAL_EVENT_LITERALS {
             let kind = ProvenanceKind::from_canonical_event_literal(literal)
                 .unwrap_or_else(|| panic!("substrate literal `{literal}` must parse to a kind"));
