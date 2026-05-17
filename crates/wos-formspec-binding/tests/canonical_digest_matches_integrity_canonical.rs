@@ -64,7 +64,9 @@ fn canonical_digest_matches_integrity_canonical_recomputation_for_bundle_001() {
         .and_then(|s| s.get("signedPayload"))
         .and_then(|sp| sp.get("digestAlgorithm"))
         .and_then(|a| a.as_str())
-        .expect("bundle 001 response.authoredSignatures[0].signedPayload.digestAlgorithm is present");
+        .expect(
+            "bundle 001 response.authoredSignatures[0].signedPayload.digestAlgorithm is present",
+        );
     assert_eq!(
         in_file_algorithm, "sha-256",
         "bundle 001 fixture pins sha-256; regenerating with a different algorithm requires \

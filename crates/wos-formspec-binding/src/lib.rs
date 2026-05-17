@@ -876,7 +876,8 @@ fn verification_receipt_payload(
     value: &FormspecVerificationReceiptRef,
     embedded_payload: Option<&[u8]>,
 ) -> Option<(VerificationReceipt, Vec<u8>)> {
-    if let Some(payload) = embedded_payload {
+    if let FormspecVerificationReceiptRef::SignedBytes(_) = value {
+        let payload = embedded_payload?;
         let receipt = verification_receipt_from_payload(payload)?;
         return Some((receipt, payload.to_vec()));
     }
@@ -2200,6 +2201,50 @@ mod tests {
         assert_eq!(
             evidence[0].primitive_verification,
             SignaturePrimitiveStatus::Verified
+        );
+    }
+
+    #[test]
+    fn signature_evidence_rejects_structured_receipt_signed_as_legacy_embedded_payload() {
+        let mut response = signed_response();
+        let method_uri = "urn:formspec:sig-method:ed25519-cose-sign1@1";
+        let (receipt_bytes, trusted_signer) =
+            embedded_verification_receipt_b64_with_signature_method(method_uri);
+        let adapter =
+            FormspecBinding::new_with_trusted_receipt_signers(StubProcessor, vec![trusted_signer]);
+        response["authoredSignatures"][0]["verificationReceipt"] = serde_json::json!({
+            "result": "verified",
+            "method": method_uri,
+            "methodRegistryVersion": FORMSPEC_SIGNATURE_METHOD_REGISTRY_VERSION,
+            "adapter": {
+                "id": "urn:formspec:adapter:ring@1",
+                "version": "0.1.0"
+            },
+            "key": {
+                "ref": "receipt-kid"
+            },
+            "verifiedAt": "2026-05-17T00:00:00Z",
+            "receiptBytes": receipt_bytes
+        });
+
+        let evidence = adapter
+            .signature_evidence(&formspec_task(), &response)
+            .expect("signature evidence parses")
+            .expect("signature evidence is present");
+
+        let admission_failure = evidence[0]
+            .admission_failure
+            .as_ref()
+            .expect("structured receipt must authenticate the detached canonical body");
+        assert_eq!(
+            admission_failure.reason,
+            SignatureAdmissionFailureReason::EvidenceDivergence
+        );
+        assert_eq!(
+            evidence[0].primitive_verification,
+            SignaturePrimitiveStatus::DeferredPendingHelper {
+                reason: "formspec-signing-helper-pending".to_string()
+            }
         );
     }
 
