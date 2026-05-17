@@ -3756,8 +3756,17 @@ dependencies = [
  "serde_json",
  "stack-common-error",
  "stack-common-http",
+ "trellis-types",
  "utoipa",
  "wos-events",
+]
+
+[[package]]
+name = "trellis-types"
+version = "0.1.0"
+dependencies = [
+ "integrity-cbor",
+ "serde",
 ]
 
 [[package]]
@@ -4746,6 +4755,7 @@ dependencies = [
  "time",
  "tokio",
  "trellis-service-client",
+ "trellis-types",
  "ureq",
  "wos-core",
  "wos-events",

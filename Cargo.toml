@@ -39,6 +39,7 @@ fel-core = { path = "../fel-core" }
 stack-common-http = { path = "../stack-common/crates/stack-common-http" }
 stack-common-typeid = { path = "../stack-common/crates/stack-common-typeid" }
 trellis-service-client = { path = "../trellis/crates/trellis-service-client" }
+trellis-types = { path = "../trellis/crates/trellis-types" }
 
 [profile.dev]
 # Trim debug metadata and increase codegen parallelism for faster compile-test loops.

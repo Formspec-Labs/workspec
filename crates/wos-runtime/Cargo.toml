@@ -19,6 +19,7 @@ stack-common-typeid.workspace = true
 thiserror = "2"
 time = { version = "0.3", features = ["formatting", "parsing"] }
 trellis-service-client.workspace = true
+trellis-types.workspace = true
 ureq = { version = "3", features = ["json"] }
 wos-core = { path = "../wos-core" }
 wos-events = { path = "../wos-events" }

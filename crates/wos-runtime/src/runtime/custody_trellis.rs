@@ -12,6 +12,7 @@ use trellis_service_client::{
     AppendActor, ComputeContext, SubstrateAppendResult, SubstrateClient, SubstrateClientExt,
     WosProvenanceAppend,
 };
+use trellis_types::ArtifactType;
 use wos_events::ProvenanceRecord;
 use wos_events::custody::{
     CustodyAppendContext, CustodyAppendError, CustodyAppendInput, CustodyAppendReceipt,
@@ -246,18 +247,18 @@ fn validate_trellis_result(
             input.record_id
         )));
     }
+    if result.verification_receipt.artifact_type != ArtifactType::Event {
+        return Err(RuntimeError::Service(format!(
+            "trellis custody append receipt artifact type {} is not event for record {}",
+            result.verification_receipt.artifact_type, input.record_id
+        )));
+    }
     if result.verification_receipt.event_type != input.event_type {
         return Err(RuntimeError::Service(format!(
             "trellis custody append receipt event type {} does not match requested {} for record {}",
             result.verification_receipt.event_type, input.event_type, input.record_id
         )));
     }
-    // Per ADR 0109: the `profile_id` cross-surface bridge was structurally
-    // redundant with this event_type echo-check (Trellis-substrate verifiers
-    // already enforce `artifact_type = "event"` per ADR 0109 §"Substrate
-    // envelope"; the WOS-owned `event_type` vocabulary is finer-grained).
-    // The deleted guard was: `result.verification_receipt.profile_id !=
-    // WOS_PROFILE_ID`.
     Ok(())
 }
 
@@ -277,9 +278,9 @@ mod tests {
 
     use async_trait::async_trait;
     use stack_common_error::StackError;
+    use stack_common_typeid as typeid;
     use trellis_service_client::{SubstrateAppendRequest, VerificationReceipt};
     use wos_core::instance::{PendingEvent, WorkflowProcess};
-    use stack_common_typeid as typeid;
 
     use crate::intake::{IntakeAcceptanceDecision, IntakeAcceptanceRequest};
     use crate::runtime::{
@@ -429,22 +430,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn append_window_accepts_any_profile_id_now_that_guard_is_retired() {
-        // Per ADR 0109: the cross-surface profile_id bridge is deleted. The
-        // event_type echo-check (line ~252 of this file) carries the dispatch
-        // invariant alone, with finer-grained WOS-owned vocabulary. A receipt
-        // whose profile_id differs from the legacy `WOS_PROFILE_ID` constant
-        // MUST succeed as long as `event_type` round-trips.
+    async fn append_window_accepts_event_artifact_type() {
         let context = test_context(typeid::mint_case_ledger_id());
         let input = test_input(&context);
-        let client = RecordingSubstrateClient::with_profile_id(2);
+        let client = RecordingSubstrateClient::default();
         let mut runtime = RecordingDurableRuntime::new(input);
         let appender = test_appender(&client);
 
         let outcomes = appender
             .append_window(&mut runtime, "process-1", 0, 25, context)
             .await
-            .expect("retired profile_id guard MUST NOT reject");
+            .expect("event artifact_type must pass");
 
         assert_eq!(outcomes.len(), 1);
         assert_eq!(outcomes[0].event_type, "wos.kernel.state_transition");
@@ -454,10 +450,6 @@ mod tests {
 
     #[tokio::test]
     async fn append_window_rejects_event_type_echo_mismatch_without_stamping() {
-        // Counterpart to the retired profile_id guard: the event_type echo
-        // check now carries the dispatch invariant. A receipt whose event_type
-        // disagrees with the requested input MUST reject before the runtime
-        // stamps the record.
         let context = test_context(typeid::mint_case_ledger_id());
         let input = test_input(&context);
         let client = RecordingSubstrateClient::with_event_type("wos.kernel.case_created");
@@ -471,6 +463,26 @@ mod tests {
 
         assert!(
             matches!(err, RuntimeError::Service(message) if message.contains("receipt event type") && message.contains("does not match requested"))
+        );
+        assert_eq!(client.requests.lock().expect("requests").len(), 1);
+        assert!(runtime.applied.lock().expect("applied").is_empty());
+    }
+
+    #[tokio::test]
+    async fn append_window_rejects_non_event_artifact_type_without_stamping() {
+        let context = test_context(typeid::mint_case_ledger_id());
+        let input = test_input(&context);
+        let client = RecordingSubstrateClient::with_artifact_type(ArtifactType::Checkpoint);
+        let mut runtime = RecordingDurableRuntime::new(input);
+        let appender = test_appender(&client);
+
+        let err = appender
+            .append_window(&mut runtime, "process-1", 0, 25, context)
+            .await
+            .expect_err("non-event artifact_type must fail");
+
+        assert!(
+            matches!(err, RuntimeError::Service(message) if message.contains("receipt artifact type") && message.contains("is not event"))
         );
         assert_eq!(client.requests.lock().expect("requests").len(), 1);
         assert!(runtime.applied.lock().expect("applied").is_empty());
@@ -514,10 +526,7 @@ mod tests {
 
     struct RecordingSubstrateClient {
         requests: std::sync::Mutex<Vec<SubstrateAppendRequest>>,
-        // Upstream `trellis-service-client::VerificationReceipt` still carries
-        // `profile_id` until P2-T6 lands in trellis/. We honor the field
-        // shape here but no longer gate on its value — see ADR 0109.
-        profile_id: u64,
+        artifact_type: ArtifactType,
         event_type_override: Option<String>,
     }
 
@@ -525,16 +534,16 @@ mod tests {
         fn default() -> Self {
             Self {
                 requests: std::sync::Mutex::new(Vec::new()),
-                profile_id: 1,
+                artifact_type: ArtifactType::Event,
                 event_type_override: None,
             }
         }
     }
 
     impl RecordingSubstrateClient {
-        fn with_profile_id(profile_id: u64) -> Self {
+        fn with_artifact_type(artifact_type: ArtifactType) -> Self {
             Self {
-                profile_id,
+                artifact_type,
                 ..Self::default()
             }
         }
@@ -569,7 +578,7 @@ mod tests {
                 bundle_ref: "s3://test-bucket/bundle.zip".to_string(),
                 verification_receipt: VerificationReceipt {
                     verified: true,
-                    profile_id: self.profile_id,
+                    artifact_type: self.artifact_type,
                     event_type: receipt_event_type,
                 },
             })

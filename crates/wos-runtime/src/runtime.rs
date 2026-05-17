@@ -6590,7 +6590,7 @@ mod tests {
     }
 
     #[test]
-    fn drain_once_rejects_invalid_integration_profile_idempotency_expression() {
+    fn drain_once_rejects_invalid_integration_idempotency_expression() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
             "$wosWorkflow": "1.0",
             "url": "urn:test:invalid-idempotency-expression",
