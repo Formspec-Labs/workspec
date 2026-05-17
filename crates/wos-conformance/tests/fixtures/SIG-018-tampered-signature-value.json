@@ -2,7 +2,7 @@
   "binding": "formspec",
   "id": "SIG-018-tampered-signature-value",
   "rule": "SIG-RT",
-  "description": "Authored signature whose signatureValue has been byte-modified is currently admitted with primitiveVerification.status = deferredPendingHelper because the Formspec signing primitive is not yet executed at the binding (FORMSPEC-SIGN-HELPER-001 unshipped). When the signing helper lands and the binding actually verifies the COSE_Sign1 envelope (the method is read from the signed COSE protected-header `method_uri` label per ADR 0109), this fixture flips into a Failed rejection vector and admission MUST block.",
+  "description": "Authored signature whose signatureValue is present but cannot be decoded as a COSE_Sign1 method_uri envelope fails closed before runtime can fall back to identityBinding.method.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/signature-runtime.json",
     "signatureProfile": "../../../../fixtures/profiles/signature-runtime-sequential.json"
@@ -67,23 +67,16 @@
       "from": "draft",
       "target": "signing",
       "event": "start"
-    },
-    {
-      "from": "signing",
-      "target": "complete",
-      "event": "signature.completed"
     }
   ],
   "expected_provenance": [
     {
-      "recordKind": "signatureAffirmation",
+      "recordKind": "signatureAdmissionFailed",
       "data": {
-        "roleId": "applicantSigner",
-        "documentId": "application",
-        "custodyHookEligible": true,
-        "primitiveVerification": {
-          "status": "deferredPendingHelper",
-          "reason": "formspec-signing-helper-pending"
+        "reason": "evidence_divergence",
+        "failureContext": {
+          "field": "methodUri",
+          "reason": "undecodable"
         }
       }
     }

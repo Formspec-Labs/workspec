@@ -1606,6 +1606,10 @@ mod tests {
     }
 
     fn test_signature_method(signature: &serde_json::Value) -> Option<String> {
+        // Runtime-unit adapters intentionally bypass Formspec COSE parsing and
+        // accept a synthetic JSON `signatureMethod`. Production and
+        // conformance paths use `wos-formspec-binding`, which decodes
+        // `signatureValue` and fails closed on unusable method_uri headers.
         signature
             .get("signatureMethod")
             .and_then(serde_json::Value::as_str)

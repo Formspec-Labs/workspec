@@ -376,19 +376,18 @@ pub fn parse_authored_signatures(
                     .to_string(),
             ));
         }
-        let digest_algorithm = DigestAlgorithm::from_str(&signature.signed_payload.digest_algorithm)
-            .map_err(|_| {
-                BindingError::InvalidInput(format!(
-                    "unsupported Formspec signedPayload.digestAlgorithm '{}'",
-                    signature.signed_payload.digest_algorithm
-                ))
-            })?;
-        let signed_payload =
-            build_signed_payload(response, digest_algorithm).map_err(|error| {
-                BindingError::InvalidInput(format!(
-                    "canonicalize Formspec signed payload: {error}"
-                ))
-            })?;
+        let digest_algorithm = DigestAlgorithm::from_str(
+            &signature.signed_payload.digest_algorithm,
+        )
+        .map_err(|_| {
+            BindingError::InvalidInput(format!(
+                "unsupported Formspec signedPayload.digestAlgorithm '{}'",
+                signature.signed_payload.digest_algorithm
+            ))
+        })?;
+        let signed_payload = build_signed_payload(response, digest_algorithm).map_err(|error| {
+            BindingError::InvalidInput(format!("canonicalize Formspec signed payload: {error}"))
+        })?;
         if signed_payload.digest != signature.signed_payload.digest {
             return Err(BindingError::InvalidInput(
                 "authoredSignatures signedPayload.digest does not match signed Response payload"
@@ -462,19 +461,18 @@ fn parse_authored_signatures_for_evidence(
                 &signature.signed_payload.definition_version,
             ));
         }
-        let digest_algorithm = DigestAlgorithm::from_str(&signature.signed_payload.digest_algorithm)
-            .map_err(|_| {
-                BindingError::InvalidInput(format!(
-                    "unsupported Formspec signedPayload.digestAlgorithm '{}'",
-                    signature.signed_payload.digest_algorithm
-                ))
-            })?;
-        let signed_payload =
-            build_signed_payload(response, digest_algorithm).map_err(|error| {
-                BindingError::InvalidInput(format!(
-                    "canonicalize Formspec signed payload: {error}"
-                ))
-            })?;
+        let digest_algorithm = DigestAlgorithm::from_str(
+            &signature.signed_payload.digest_algorithm,
+        )
+        .map_err(|_| {
+            BindingError::InvalidInput(format!(
+                "unsupported Formspec signedPayload.digestAlgorithm '{}'",
+                signature.signed_payload.digest_algorithm
+            ))
+        })?;
+        let signed_payload = build_signed_payload(response, digest_algorithm).map_err(|error| {
+            BindingError::InvalidInput(format!("canonicalize Formspec signed payload: {error}"))
+        })?;
         if admission_failure.is_none() && signed_payload.digest != signature.signed_payload.digest {
             admission_failure = Some(evidence_divergence_failure(
                 "signedPayload.digest",
@@ -566,19 +564,90 @@ fn signature_method_admission_failure(
     })
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum CoseMethodUri {
+    Absent,
+    Present(String),
+    Unusable,
+}
+
+impl CoseMethodUri {
+    fn as_deref(&self) -> Option<&str> {
+        match self {
+            Self::Absent | Self::Unusable => None,
+            Self::Present(method_uri) => Some(method_uri.as_str()),
+        }
+    }
+
+    fn into_option(self) -> Option<String> {
+        match self {
+            Self::Present(method_uri) => Some(method_uri),
+            Self::Absent | Self::Unusable => None,
+        }
+    }
+}
+
 /// Reads the COSE protected-header `method_uri` from a base64-encoded
 /// COSE_Sign1 envelope (ADR 0109).
 ///
-/// Returns `None` when the input is absent, not valid base64, not a tagged
-/// COSE_Sign1 envelope, or the protected header carries no `method_uri` label.
+/// Distinguishes an absent envelope from a present-but-unusable envelope so
+/// production admission can fail closed before falling back to identity
+/// binding. A present envelope is unusable when it is not valid base64, not a
+/// tagged COSE_Sign1 envelope, or lacks the protected-header `method_uri`
+/// label.
 /// Partial decode only — does not run the signature primitive. The
 /// [`SignaturePrimitiveStatus::DeferredPendingHelper`] discipline still
 /// applies to the cryptographic verification.
-fn method_uri_from_cose_sign1_b64(value: Option<&str>) -> Option<String> {
-    let bytes = BASE64_STANDARD.decode(value?.trim()).ok()?;
-    let envelope = decode_cose_sign1(&bytes).ok()?;
-    let header = decode_protected_header(envelope.protected_header()).ok()?;
-    header.method_uri
+fn method_uri_from_cose_sign1_b64(value: Option<&str>) -> CoseMethodUri {
+    let Some(value) = value else {
+        return CoseMethodUri::Absent;
+    };
+    let Ok(bytes) = BASE64_STANDARD.decode(value.trim()) else {
+        return CoseMethodUri::Unusable;
+    };
+    let Ok(envelope) = decode_cose_sign1(&bytes) else {
+        return CoseMethodUri::Unusable;
+    };
+    let Ok(header) = decode_protected_header(envelope.protected_header()) else {
+        return CoseMethodUri::Unusable;
+    };
+    match header.method_uri {
+        Some(method_uri) => CoseMethodUri::Present(method_uri),
+        None => CoseMethodUri::Unusable,
+    }
+}
+
+fn undecodable_method_uri_failure() -> SignatureAdmissionFailure {
+    SignatureAdmissionFailure {
+        reason: SignatureAdmissionFailureReason::EvidenceDivergence,
+        failure_context: Some(serde_json::Map::from_iter([
+            (
+                "field".to_string(),
+                serde_json::Value::String("methodUri".to_string()),
+            ),
+            (
+                "expected".to_string(),
+                serde_json::Value::String("COSE protected-header method_uri".to_string()),
+            ),
+            (
+                "actual".to_string(),
+                serde_json::Value::String("undecodable".to_string()),
+            ),
+            (
+                "reason".to_string(),
+                serde_json::Value::String("undecodable".to_string()),
+            ),
+        ])),
+    }
+}
+
+fn signature_method_decode_failure(
+    method_uri: &CoseMethodUri,
+) -> Option<SignatureAdmissionFailure> {
+    match method_uri {
+        CoseMethodUri::Absent | CoseMethodUri::Present(_) => None,
+        CoseMethodUri::Unusable => Some(undecodable_method_uri_failure()),
+    }
 }
 
 /// Returns an admission failure when the inner-COSE `method_uri` and the
@@ -965,19 +1034,20 @@ where
             // `method_uri` label (-65540). Partial decode of `signatureValue`
             // is the inspection path; partial decode of `verificationReceipt`
             // is the equality cross-check.
-            let signature_method_uri =
+            let signature_method_decode =
                 method_uri_from_cose_sign1_b64(signature.signature_value.as_deref());
-            let receipt_method_uri =
+            let receipt_method_decode =
                 method_uri_from_cose_sign1_b64(signature.verification_receipt.as_deref());
             let admission_failure = signature_evidence
                 .admission_failure
+                .or_else(|| signature_method_decode_failure(&signature_method_decode))
                 .or_else(|| {
                     verification_receipt_method_mismatch_failure(
-                        signature_method_uri.as_deref(),
-                        receipt_method_uri.as_deref(),
+                        signature_method_decode.as_deref(),
+                        receipt_method_decode.as_deref(),
                     )
                 })
-                .or_else(|| signature_method_admission_failure(signature_method_uri.as_deref()));
+                .or_else(|| signature_method_admission_failure(signature_method_decode.as_deref()));
             if let (Some(response_signer_id), Some(signature_signer_id)) =
                 (response_signer_id, signature.signer_id.as_deref())
                 && response_signer_id != signature_signer_id
@@ -997,7 +1067,7 @@ where
                     .signer_id
                     .or_else(|| response_signer_id.map(str::to_string)),
                 signing_intent: signature.signing_intent,
-                signature_method: signature_method_uri,
+                signature_method: signature_method_decode.into_option(),
                 signed_payload_digest: signature.signed_payload.digest,
                 signed_payload_digest_algorithm: signature.signed_payload.digest_algorithm,
                 signed_at: signature.signed_at,
@@ -1456,11 +1526,10 @@ mod tests {
                 .as_str()
                 .expect("signed-payload digest is present")
                 .to_string();
-        let expected_signature_value =
-            response["authoredSignatures"][0]["signatureValue"]
-                .as_str()
-                .expect("signatureValue is present")
-                .to_string();
+        let expected_signature_value = response["authoredSignatures"][0]["signatureValue"]
+            .as_str()
+            .expect("signatureValue is present")
+            .to_string();
         let signatures = parse_authored_signatures(&response).unwrap();
 
         assert_eq!(signatures.len(), 1);
@@ -1549,6 +1618,45 @@ mod tests {
         assert_eq!(
             evidence[0].verification_receipt.as_deref(),
             Some("0oRWoQExiQEFQnNpZ25lZA==")
+        );
+    }
+
+    #[test]
+    fn signature_evidence_rejects_undecodable_signature_value_method_uri() {
+        let adapter = FormspecBinding::new(StubProcessor);
+        let mut response = signed_response();
+        response["authoredSignatures"][0]["signatureValue"] =
+            serde_json::json!("urn:test:signature:not-cose");
+
+        let evidence = adapter
+            .signature_evidence(&formspec_task(), &response)
+            .expect("signature evidence parses")
+            .expect("signature evidence is present");
+
+        assert_eq!(evidence[0].signature_method, None);
+        let admission_failure = evidence[0]
+            .admission_failure
+            .as_ref()
+            .expect("undecodable signatureValue must fail admission");
+        assert_eq!(
+            admission_failure.reason,
+            SignatureAdmissionFailureReason::EvidenceDivergence
+        );
+        let context = admission_failure
+            .failure_context
+            .as_ref()
+            .expect("evidence divergence carries failure context");
+        assert_eq!(
+            context.get("field").and_then(serde_json::Value::as_str),
+            Some("methodUri")
+        );
+        assert_eq!(
+            context.get("reason").and_then(serde_json::Value::as_str),
+            Some("undecodable")
+        );
+        assert_eq!(
+            context.get("actual").and_then(serde_json::Value::as_str),
+            Some("undecodable")
         );
     }
 
