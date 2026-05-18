@@ -799,6 +799,9 @@
           "409": {
             "description": "Case ledger already exists or append sequence conflicts"
           },
+          "423": {
+            "description": "Case-source lock contention (`WOS-1423`); idempotently retriable after brief backoff."
+          },
           "503": {
             "description": "Substrate append, durable projection, governance outbox enqueue, or idempotency store failed (HTTP retries may replay a committed append)"
           }
@@ -845,6 +848,9 @@
           },
           "404": {
             "description": "Case ledger not found (no bound processes and no direct-append events)"
+          },
+          "423": {
+            "description": "Case-source lock contention (`WOS-1423`); idempotently retriable after brief backoff."
           },
           "503": {
             "description": "Policy source hashing or bundle lookup failed"
@@ -904,6 +910,9 @@
           },
           "409": {
             "description": "Process is terminated"
+          },
+          "423": {
+            "description": "Case-source lock contention (`WOS-1423`); idempotently retriable after brief backoff."
           }
         }
       }
@@ -960,6 +969,9 @@
           },
           "409": {
             "description": "Process is terminated"
+          },
+          "423": {
+            "description": "Case-source lock contention (`WOS-1423`); idempotently retriable after brief backoff."
           }
         }
       }
@@ -1013,6 +1025,9 @@
           },
           "404": {
             "description": "Case/process binding not found"
+          },
+          "423": {
+            "description": "Case-source lock contention (`WOS-1423`); idempotently retriable after brief backoff."
           }
         }
       }

@@ -444,6 +444,9 @@
           "422": {
             "$ref": "#/components/responses/Problem"
           },
+          "423": {
+            "$ref": "#/components/responses/Problem"
+          },
           "default": {
             "$ref": "#/components/responses/Problem"
           }
@@ -577,6 +580,9 @@
             "$ref": "#/components/responses/Problem"
           },
           "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "423": {
             "$ref": "#/components/responses/Problem"
           },
           "default": {
@@ -734,6 +740,9 @@
           "422": {
             "$ref": "#/components/responses/Problem"
           },
+          "423": {
+            "$ref": "#/components/responses/Problem"
+          },
           "default": {
             "$ref": "#/components/responses/Problem"
           }
@@ -804,6 +813,9 @@
             "$ref": "#/components/responses/Problem"
           },
           "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "423": {
             "$ref": "#/components/responses/Problem"
           },
           "default": {
@@ -1386,6 +1398,9 @@
           "422": {
             "$ref": "#/components/responses/Problem"
           },
+          "423": {
+            "$ref": "#/components/responses/Problem"
+          },
           "default": {
             "$ref": "#/components/responses/Problem"
           }
@@ -1461,6 +1476,9 @@
             "$ref": "#/components/responses/Problem"
           },
           "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "423": {
             "$ref": "#/components/responses/Problem"
           },
           "default": {
@@ -1540,6 +1558,9 @@
           "409": {
             "$ref": "#/components/responses/Problem"
           },
+          "423": {
+            "$ref": "#/components/responses/Problem"
+          },
           "default": {
             "$ref": "#/components/responses/Problem"
           }
@@ -1615,6 +1636,9 @@
             "$ref": "#/components/responses/Problem"
           },
           "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "423": {
             "$ref": "#/components/responses/Problem"
           },
           "default": {
