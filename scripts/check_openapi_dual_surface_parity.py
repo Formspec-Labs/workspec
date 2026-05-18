@@ -49,6 +49,17 @@ Assertion: registry response-code set ⊆ broader response-code set per overlapp
 Tolerated divergence: description prose (utoipa emits short prose, broader
 file emits `$ref: #/components/responses/Problem`); broader-only codes; broader-only ops.
 
+# Known limitation — path-version drift
+
+If the broader file's (METHOD, PATH) evolves (e.g., versioned `/v2/cases/...`)
+while the registry retains the prior path, the overlap set drops the operation
+entirely and this gate silently loses response-code coverage for that op. Migrate
+the registry path in lockstep when bumping the broader file, OR add an
+`operationId`-bridge assertion class to this script (currently the assertion is
+(METHOD, PATH)-keyed only). When `operationId` conventions converge across the
+two surfaces (broader is camelCase, registry is snake_case as of HEAD), the
+path-drift bridge becomes a one-liner.
+
 Usage:
     python3 scripts/check_openapi_dual_surface_parity.py [--root WORK_SPEC_DIR]
 
