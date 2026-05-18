@@ -34,7 +34,7 @@ Fence acquisition MUST be serialized against case-source mutation. The handler M
 
 The lease is load-bearing for correctness: without it, the fence could observe a torn append-in-flight and bind a `policySnapshotDigest` + `eventCount` pair that does not match any consistent post-fence read of the ledger. Concurrent case-event append, process submit/drain/migrate/lifecycle/holds, timer fire, and integration sync are all WOS operations that mutate case source and therefore contend on the same lease.
 
-Lease-busy timeouts MUST surface as `409 Conflict` via `StackError::conflict_with_code("WOS-1409", ...)`. Clients retry under standard idempotency semantics.
+Lease-busy timeouts MUST surface as `423 Locked` with the closed code `WOS-1423` (resource lock contention; idempotently retriable after a brief backoff). Distinct from `WOS-1409` (duplicate-ledger / state-transition conflicts; not retriable). Clients dispatch on the closed code per the public error registry.
 
 ## Verifier obligations
 
@@ -55,7 +55,7 @@ The fence is verdict-bound: there is no partial-credit admission path past a mis
 |---|---|---|---|
 | `GET` | (per OpenAPI `get_case_export_fence` operation) | → `CaseExportFence` | n/a |
 
-`GET` is idempotent by construction; no `Idempotency-Key` header. Errors use `application/problem+json` per ADR-0082 D-8, with `WOS-1409` for lease-busy and the standard `WOS-1400` / `WOS-1404` shapes for malformed or missing case identifiers.
+`GET` is idempotent by construction; no `Idempotency-Key` header. Errors use `application/problem+json` per ADR-0082 D-8, with `WOS-1423` (HTTP 423 Locked) for lease-busy and the standard `WOS-1400` / `WOS-1404` shapes for malformed or missing case identifiers.
 
 ## Closed taxonomies
 
