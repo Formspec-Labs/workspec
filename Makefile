@@ -8,6 +8,7 @@ PYTEST = python3 -m pytest
 .PHONY: all build test test-core lint clean help \
 	rust-build rust-test rust-check \
 	python-test \
+	check-openapi-parity \
 	postgres-up postgres-down \
 	restate-ingress-smoke
 
@@ -24,7 +25,8 @@ help:
 	@echo "  build                Build the Rust workspace"
 	@echo "  test                 Run all tests (Rust, Python schema regression)"
 	@echo "  test-core            Same as test (alias)"
-	@echo "  lint                 Run all linters and checks"
+	@echo "  lint                 Run all linters and checks (rust-check + check-openapi-parity)"
+	@echo "  check-openapi-parity Wave 7 Finding A1 — assert registry OpenAPI response codes are mirrored in broader OpenAPI"
 	@echo "  clean                Remove build artifacts"
 	@echo ""
 	@echo "Parent Rust Targets (wos-spec workspace):"
@@ -88,10 +90,19 @@ python-test:
 # Their build/test/lint/clean live in those repos' own Makefiles.
 
 # Lint & Check
-lint: rust-check
+lint: rust-check check-openapi-parity
 
 rust-check:
 	$(CARGO) check --workspace
+
+# Wave 7 Finding A1 — OpenAPI dual-surface parity gate.
+# Asserts every response code in the utoipa-emitted registry OpenAPI is
+# mirrored in the hand-maintained broader OpenAPI for overlapping
+# (METHOD, PATH) pairs, and that every registry-wired operation is
+# declared in the broader contract. See script header for prior-art notes
+# (oasdiff alternative) and assertion shape.
+check-openapi-parity:
+	python3 scripts/check_openapi_dual_surface_parity.py
 
 # Clean
 clean: rust-clean
