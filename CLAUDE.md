@@ -6,10 +6,9 @@ Governance layer between Formspec (intake) and Trellis (integrity). Parent [`../
 
 | For | Read |
 |---|---|
-| Behavioral interrupts before any task | [`../.claude/operating-mode.md`](../.claude/operating-mode.md) |
-| Owner operating preferences | [`../.claude/user_profile.md`](../.claude/user_profile.md) |
-| Stack vision + WOS section | [`../VISION.md`](../VISION.md) |
-| Platform decision register | [`../thoughts/specs/2026-04-22-platform-decisioning-forks-and-options.md`](../thoughts/specs/2026-04-22-platform-decisioning-forks-and-options.md) |
+| Behavioral interrupts + economic model | [`../CLAUDE.md`](../CLAUDE.md) — read first; interrupts are inline |
+| Methods + methodology spine | [`../DEVELOPMENT-PHILOSOPHY.md`](../DEVELOPMENT-PHILOSOPHY.md) |
+| Cross-stack ADRs (settled commitments, open forks) | [`../thoughts/adr/`](../thoughts/adr/) |
 | **End-state wos-server architecture** (zero-trust posture, governance/runtime overlay over Trellis, adapter cluster, build sequence) | [`../workspec-server/crates/wos-server/VISION.md`](../workspec-server/crates/wos-server/VISION.md) |
 | **Studio (Authoring) layer** — extracted to sibling `policy-studio/` repo (2026-05-04) | [`../policy-studio/CLAUDE.md`](../policy-studio/CLAUDE.md) |
 | Case Portal — extracted to sibling `case-portal/` repo (2026-05-04) | [`../case-portal/README.md`](../case-portal/README.md) |
@@ -26,7 +25,7 @@ Governance layer between Formspec (intake) and Trellis (integrity). Parent [`../
 
 For public-facing stack framing, see [`../STACK.md`](../STACK.md) — lookup-only.
 
-**Conflict resolution:** see [`../.claude/operating-mode.md`](../.claude/operating-mode.md).
+**Conflict resolution:** Owner signals in the current conversation override everything else. See [`../CLAUDE.md`](../CLAUDE.md) §Behavioral interrupts.
 
 ## WOS settled commitments
 
@@ -78,7 +77,7 @@ Six canonical kernel seams remain the only extension surface (Kernel §10; canon
 
 ## Decision heuristics
 
-Apply after stack-wide heuristics (in [`../VISION.md`](../VISION.md)):
+Apply after stack-wide heuristics (in [`../DEVELOPMENT-PHILOSOPHY.md`](../DEVELOPMENT-PHILOSOPHY.md)):
 
 1. **Trellis-boundary check.** Cryptographic integrity / content-addressing / signed envelopes / checkpoint seals / export bundles / federation → Trellis. Do not invent WOS-side primitives. WOS emits `SignatureAffirmation` and other provenance records; Trellis anchors them through `custodyHook`.
 2. **Scope to SBA + SaaS (Q1).** Before adding 1.0 work, ask: does this directly serve SBA PoC or public SaaS within its first year? If no, defer (trigger-gate or out-of-scope).
