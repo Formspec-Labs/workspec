@@ -1616,6 +1616,18 @@ mod tests {
             .map(str::to_string)
     }
 
+    // TEST-ONLY ADAPTER — BYPASSES COSE DECODING.
+    //
+    // `TestAdapter` reads `methodUri` directly from a synthetic JSON field on
+    // the response signature (via `test_signature_method`) instead of decoding
+    // a real COSE_Sign1 envelope and reading the protected-header `method_uri`
+    // (label `-65540`) per ADR 0109. This bypass is ONLY safe under
+    // `#[cfg(test)]` because the surrounding test scope fully controls the
+    // injected JSON. The production adapter is `wos-formspec-binding`, which
+    // decodes COSE `signatureValue` and fails closed on missing or undecodable
+    // `method_uri`. If this adapter is ever lifted out of `#[cfg(test)]`, the
+    // ADR 0109 fail-closed admission contract collapses: attacker-supplied
+    // JSON `methodUri` strings would be silently admitted as if signed.
     #[derive(Debug, Default)]
     struct TestAdapter;
 
@@ -1762,6 +1774,17 @@ mod tests {
     /// reaches signature affirmation (SIG-013 policy floor). The stock
     /// `TestAdapter` only gates on `data.approved`, which would surface as
     /// generic `validationFailed` before policy checks run.
+    ///
+    /// TEST-ONLY ADAPTER — BYPASSES COSE DECODING. Like `TestAdapter`, this
+    /// reads `methodUri` from a synthetic JSON field via
+    /// `test_signature_method` instead of decoding the COSE protected-header
+    /// `method_uri` (label `-65540`) per ADR 0109. Safe ONLY because
+    /// `#[cfg(test)]` constrains the input. Production routing belongs to
+    /// `wos-formspec-binding`, which decodes COSE `signatureValue` and fails
+    /// closed on missing or undecodable `method_uri`. Lifting this adapter
+    /// out of `#[cfg(test)]` would silently admit attacker-supplied JSON
+    /// `methodUri` strings, defeating the ADR 0109 fail-closed admission
+    /// contract.
     #[derive(Debug, Default)]
     struct Sig013HarnessFormspecAdapter;
 
