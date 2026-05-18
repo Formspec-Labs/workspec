@@ -28,6 +28,18 @@ For public-facing stack framing, see [`../STACK.md`](../STACK.md) — lookup-onl
 
 **Conflict resolution:** see [`../.claude/operating-mode.md`](../.claude/operating-mode.md).
 
+## WOS settled commitments
+
+These are probed and accepted; they override speculative alternatives.
+
+- **Signature Profile = workflow semantics only.** WOS emits `SignatureAffirmation` provenance; Trellis anchors it through `custodyHook`. Certificate-of-completion artifact is Trellis (per Trellis ADR 0007). DocuSign parity scope: ESIGN / UETA / eIDAS compatibility, full workflow primitive set, AND administrative surface (templates, bulk-send, dashboards).
+- **One meaning of signing.** Product shortcuts exist only as workflow-lite paths over the same `SignatureAffirmation` + custody + export pipeline. See ADRs 0083, 0102, 0110, 0111.
+- **WOS owns case identity.** `wos.kernel.case_created` is the governing event; Formspec hands off via `IntakeHandoff` (ADR 0073).
+- **`DurableRuntime` is the stable seam.** Restate is the initial default adapter. Temporal, Camunda, Step Functions remain eligible behind the same trait; Camunda and Step Functions are trigger-gated on commercial request.
+- **Center vs. adapter.** `wos-core` + `wos-runtime` (in-memory + conformance oracle) is the center. Production adapters plug in below `DurableRuntime`. See ADRs 0101, 0106.
+- **One expression language.** FEL via `fel-core`. FEEL, DMN, SHACL, FEL-conformance-profiles, JSON-LD authoring, BPMN parity, DAG processing are on the rejection list (ADR 0075).
+- **Admin portal is product scope, not WOS spec scope.** Two exceptions that pulled spec work: Bulk Operations; signer-authentication policies inside Signature Profile.
+
 ## Identity
 
 WOS is a JSON-native specification for sensitive workflows — benefits adjudication, permit reviews, fraud investigations, any process where a decision affects someone's rights. Two separable claims:
