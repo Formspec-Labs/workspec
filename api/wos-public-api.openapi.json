@@ -453,6 +453,66 @@
         }
       }
     },
+    "/cases/{case_id}/export-fence": {
+      "get": {
+        "operationId": "get_case_export_fence",
+        "summary": "Capture WOS high-water marks and policy/config source digests for a case export.",
+        "description": "WOS-side source fence for a case-export attempt (ADR 0093 D-1, sibling of `case-view`). Captures the current case-ledger and policy/config high-water marks at fence-acquisition time under the per-case mutation lease (`LeaseScope::WosCaseSource`); downstream Trellis publication binds its seal fence (`trellis-export-seal-fence-v1`, Trellis Core §18.3e) to these values. Lease-busy timeouts surface as `423 Locked` with closed code `WOS-1423` (idempotently retriable). See `specs/api/case-export-fence.md` for verifier obligations.",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "description": "Durable case-ledger TypeID or WOS resource URN.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/CaseLedgerPathId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Case export fence with append-vector high-water marks and policy-snapshot source provenance, captured under a per-case mutation lease.",
+            "headers": {
+              "X-WOS-API-Version": {
+                "description": "Current public API major.minor version.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/case-view/v1#/$defs/CaseExportFence"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "423": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/cases/{case_id}/processes": {
       "get": {
         "operationId": "listCaseProcesses",
@@ -2945,6 +3005,9 @@
           "422": {
             "$ref": "#/components/responses/Problem"
           },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
           "default": {
             "$ref": "#/components/responses/Problem"
           }
@@ -3079,6 +3142,9 @@
             "$ref": "#/components/responses/Problem"
           },
           "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
             "$ref": "#/components/responses/Problem"
           },
           "default": {
@@ -3412,6 +3478,9 @@
             "$ref": "#/components/responses/Problem"
           },
           "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
             "$ref": "#/components/responses/Problem"
           },
           "default": {
@@ -3802,6 +3871,9 @@
             "$ref": "#/components/responses/Problem"
           },
           "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
             "$ref": "#/components/responses/Problem"
           },
           "default": {
@@ -5133,6 +5205,9 @@
             "$ref": "#/components/responses/Problem"
           },
           "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
             "$ref": "#/components/responses/Problem"
           },
           "default": {
