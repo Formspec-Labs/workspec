@@ -1,6 +1,6 @@
 # WOS TODO
 
-Active backlog. Completed work → [COMPLETED.md](COMPLETED.md). Stack architecture → [`VISION.md`](../VISION.md). Ordering = **`Imp × Debt`** per [`user_profile.md`](../.claude/user_profile.md) economic model (dev/time free, architectural drift expensive); Cx is scheduling-only. Score notation in ticket headers: `[Imp / Cx / Debt]`. Last audited 2026-05-15.
+Active backlog. Completed work → [COMPLETED.md](COMPLETED.md). Stack architecture → [`thoughts/adr/`](../thoughts/adr/). Ordering = **`Imp × Debt`** per economic model in [`../CLAUDE.md`](../CLAUDE.md) §Behavioral interrupts (dev/time free, architectural drift expensive); Cx is scheduling-only. Score notation in ticket headers: `[Imp / Cx / Debt]`. Last audited 2026-05-15.
 
 ## Snapshot
 
@@ -13,7 +13,7 @@ Active backlog. Completed work → [COMPLETED.md](COMPLETED.md). Stack architect
 | E2E/API coverage | Server tests mostly Rust integration / in-process HTTP. Playwright API + browser E2E plan against real `wos-server`, manifest-driven from [`WOS-FEATURE-MATRIX.md`](WOS-FEATURE-MATRIX.md) 130 rows: [`../thoughts/plans/2026-05-09-wos-feature-matrix-e2e-test-plan.md`](../thoughts/plans/2026-05-09-wos-feature-matrix-e2e-test-plan.md). |
 | Agent adapter state | `wos-agent-stub` ships; 5 skeleton crates (`-anthropic/-mcp/-a2a/-http/-claude-sdk`) have `unimplemented!()` invoke bodies pending orchestrator seam (ADR 0064 residual epic). |
 
-**Navigation:** [**User profile** (read first)](../.claude/user_profile.md) · [**Stack vision**](../VISION.md) (canonical; WOS §X) · [`work-spec/CLAUDE.md`](CLAUDE.md) · [LINT-MATRIX](LINT-MATRIX.md) · [Feature Matrix](WOS-FEATURE-MATRIX.md) · [Implementation Status](WOS-IMPLEMENTATION-STATUS.md) · [IDEA_SCRATCH](IDEA_SCRATCH.md) · [POSITIONING](POSITIONING.md) · [CONVENTIONS](CONVENTIONS.md) · [Runtime Companion](specs/companions/runtime.md) · [ADRs](../thoughts/adr/) · [Plans](thoughts/plans/) · [Parallel-agent dispatch discipline](thoughts/practices/2026-04-17-parallel-agent-dispatch.md)
+**Navigation:** [**Interrupts + model** (read first)](../CLAUDE.md) · [**Stack ADRs**](../thoughts/adr/) · [`work-spec/CLAUDE.md`](CLAUDE.md) · [LINT-MATRIX](LINT-MATRIX.md) · [Feature Matrix](WOS-FEATURE-MATRIX.md) · [Implementation Status](WOS-IMPLEMENTATION-STATUS.md) · [IDEA_SCRATCH](IDEA_SCRATCH.md) · [POSITIONING](POSITIONING.md) · [CONVENTIONS](CONVENTIONS.md) · [Runtime Companion](specs/companions/runtime.md) · [Plans](thoughts/plans/) · [Parallel-agent dispatch discipline](thoughts/practices/2026-04-17-parallel-agent-dispatch.md)
 
 ---
 
