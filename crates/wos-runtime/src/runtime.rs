@@ -1628,6 +1628,16 @@ mod tests {
     // `method_uri`. If this adapter is ever lifted out of `#[cfg(test)]`, the
     // ADR 0109 fail-closed admission contract collapses: attacker-supplied
     // JSON `methodUri` strings would be silently admitted as if signed.
+    //
+    // Shadow mechanism: `BindingRegistry::register` (binding.rs:303-305) uses
+    // `HashMap::insert` and SILENTLY OVERWRITES any prior `"formspec"`
+    // registration with no warning, log, panic, or test failure. The only
+    // structural barrier between this test adapter and a production binary is
+    // `#[cfg(test)]`. A future author migrating this adapter out of
+    // `#[cfg(test)]` will collapse the ADR 0109 fail-closed contract with no
+    // compile-time or runtime signal. (As of the P2.1 finding,
+    // `BindingRegistry::register` now panics on duplicate registration, making
+    // this shadow path visible at composition-root time.)
     #[derive(Debug, Default)]
     struct TestAdapter;
 
@@ -1785,6 +1795,16 @@ mod tests {
     /// out of `#[cfg(test)]` would silently admit attacker-supplied JSON
     /// `methodUri` strings, defeating the ADR 0109 fail-closed admission
     /// contract.
+    ///
+    /// Shadow mechanism: `BindingRegistry::register` (binding.rs:303-305) uses
+    /// `HashMap::insert` and SILENTLY OVERWRITES any prior `"formspec"`
+    /// registration with no warning, log, panic, or test failure. The only
+    /// structural barrier between this test adapter and a production binary is
+    /// `#[cfg(test)]`. A future author migrating this adapter out of
+    /// `#[cfg(test)]` will collapse the ADR 0109 fail-closed contract with no
+    /// compile-time or runtime signal. (As of the P2.1 finding,
+    /// `BindingRegistry::register` now panics on duplicate registration, making
+    /// this shadow path visible at composition-root time.)
     #[derive(Debug, Default)]
     struct Sig013HarnessFormspecAdapter;
 

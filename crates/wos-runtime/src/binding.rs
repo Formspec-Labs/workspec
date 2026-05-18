@@ -296,12 +296,29 @@ impl BindingRegistry {
     }
 
     /// Register an adapter by its binding discriminator.
+    ///
+    /// # Panics
+    ///
+    /// Panics if an adapter with the same binding discriminator is already
+    /// registered. Duplicate registration silently overwrites the prior entry
+    /// when using `HashMap::insert`; that silent-shadow collapses the ADR 0109
+    /// fail-closed contract when a test adapter shares a discriminator with the
+    /// production adapter. This panic converts the composition-root mistake into
+    /// an immediate, named failure rather than a latent security regression.
     pub fn register<A>(&mut self, adapter: A)
     where
         A: ContractBindingAdapter + 'static,
     {
-        self.adapters
-            .insert(adapter.binding().to_string(), Arc::new(adapter));
+        let name = adapter.binding().to_string();
+        if self.adapters.contains_key(&name) {
+            panic!(
+                "BindingRegistry: duplicate binding registration for '{name}'. \
+                Adapter shadowing collapses the ADR 0109 fail-closed contract. \
+                Composition-root registration order is wrong, or a #[cfg(test)] \
+                adapter has been migrated to production."
+            );
+        }
+        self.adapters.insert(name, Arc::new(adapter));
     }
 
     /// Resolve an adapter for the requested binding.
