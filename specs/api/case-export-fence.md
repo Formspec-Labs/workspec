@@ -1,8 +1,10 @@
 # WOS Public API Case Export Fence
 
 **Status:** Stable — shipped behavior pinned to live struct.
+**Schema:** [`api/case-export-fence.schema.json`](../../schemas/api/case-export-fence.schema.json)
+**Schema ID:** `https://schemas.formspec.io/wos-api/case-export-fence/v1`
 **Rust authority:** [`CaseExportFence` in `workspec-server/crates/wos-server/src/http/cases.rs:146-162`](../../../workspec-server/crates/wos-server/src/http/cases.rs).
-**OpenAPI:** [`wos-public-api.registry.openapi.json`](../../api/wos-public-api.registry.openapi.json) — schema component `CaseExportFence` at `:3680`; operation `get_case_export_fence` at `:814` returning the schema via `:832`.
+**OpenAPI:** [`wos-public-api.openapi.json`](../../api/wos-public-api.openapi.json) (`GET /cases/{case_id}/export-fence`); registry component `CaseExportFence` in [`wos-public-api.registry.openapi.json`](../../api/wos-public-api.registry.openapi.json).
 **ADR anchors:** [ADR 0082](../../../thoughts/adr/0082-stack-public-api-contract-and-schema-discipline.md) D-4 (URN), D-12 (closed taxonomies). [ADR 0093](../../thoughts/adr/0093-case-is-its-trellis-ledger.md) D-1 (case-is-its-ledger), §5 (route surface). Trellis-side counterpart: [`trellis/specs/trellis-core.md`](../../../trellis/specs/trellis-core.md) §18.3e (`trellis-export-seal-fence-v1`).
 **Sibling spec:** [`case-view.md`](./case-view.md) — staff read-side projection over the same case ledger.
 

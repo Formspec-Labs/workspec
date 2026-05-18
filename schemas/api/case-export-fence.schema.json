@@ -1,0 +1,293 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.formspec.io/wos-api/case-export-fence/v1",
+  "title": "WOS API Case Export Fence",
+  "description": "Public API resource schema for the WOS-side source fence returned by `GET /api/v1/cases/{case_id}/export-fence` (ADR-0093 D-1; `specs/api/case-export-fence.md`). Captures case-ledger append-vector high-water marks and the active policy-snapshot digest at fence-acquisition time under `LeaseScope::WosCaseSource`. Downstream Trellis publication binds `trellis-export-seal-fence-v1` to these values. Sibling of `case-view.schema.json` — same ledger authority, export-time snapshot semantics rather than staff read projection.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/CaseExportFence"
+    }
+  ],
+  "$defs": {
+    "WosResourceUrn": {
+      "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+      "description": "Public WOS API resource URN (ADR 0082 D-4)."
+    },
+    "Sha256PrefixedDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "Lowercase SHA-256 digest with `sha256:` prefix per `stack-common-hash` canonical JSON hashing.",
+      "examples": [
+        "sha256:3b78e275d4c8f9a2b1c0d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6"
+      ]
+    },
+    "PolicySnapshotSourceKind": {
+      "enum": [
+        "processPolicyState",
+        "workflowKernel",
+        "workflowGovernance",
+        "workflowPolicyParameters",
+        "workflowBusinessCalendar",
+        "workflowSemanticProfile"
+      ],
+      "description": "Closed policy-material family emitted by the reference server's fence builder. New kinds require a schema minor bump — vendor extensions belong on bundle manifests, not the source fence.",
+      "examples": [
+        "workflowKernel",
+        "processPolicyState"
+      ]
+    },
+    "PolicySnapshotVersionBinding": {
+      "enum": [
+        "caseSnapshot",
+        "definitionVersion",
+        "deploymentCurrent"
+      ],
+      "description": "Closed version-binding literal describing how `sourceRef` is interpreted when recomputing digests.",
+      "examples": [
+        "definitionVersion",
+        "deploymentCurrent"
+      ]
+    },
+    "PolicySnapshotSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Canonically hashed policy/config source included in the case export fence.",
+      "required": [
+        "sourceKind",
+        "sourceRef",
+        "versionBinding",
+        "digest"
+      ],
+      "properties": {
+        "sourceKind": {
+          "$ref": "#/$defs/PolicySnapshotSourceKind",
+          "description": "Policy-material family."
+        },
+        "sourceRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable reference to the hashed material (process URN, workflow URL@version, or deployment-scoped fragment ref).",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "versionBinding": {
+          "$ref": "#/$defs/PolicySnapshotVersionBinding",
+          "description": "How `sourceRef` is bound when recomputing the per-source digest."
+        },
+        "digest": {
+          "$ref": "#/$defs/Sha256PrefixedDigest",
+          "description": "Canonical JSON hash of the source material at fence acquisition."
+        }
+      }
+    },
+    "CaseFenceEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "High-water event marker used by the case export fence.",
+      "required": [
+        "eventId",
+        "sequence",
+        "eventHash",
+        "previousHash",
+        "timestamp"
+      ],
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Storage-local provenance row identifier for the high-water event.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "processId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Emitting workflow process URN when the high-water event is process-scoped. Absent for direct-append high-water markers."
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Monotonic sequence number within the emitting partition at fence acquisition."
+        },
+        "eventHash": {
+          "$ref": "#/$defs/Sha256PrefixedDigest",
+          "description": "Hash-chain digest for this event."
+        },
+        "previousHash": {
+          "$ref": "#/$defs/Sha256PrefixedDigest",
+          "description": "Hash-chain predecessor digest."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the row was appended."
+        }
+      }
+    },
+    "ProcessFenceHighWater": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-process high-water marker for the case export fence.",
+      "required": [
+        "processId",
+        "definitionUrl",
+        "definitionVersion",
+        "status",
+        "eventCount"
+      ],
+      "properties": {
+        "processId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Workflow process URN bound to the case ledger."
+        },
+        "definitionUrl": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Workflow definition URL the process instance was started from.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "definitionVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Pinned workflow definition version at fence acquisition.",
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Workflow process lifecycle status at fence acquisition.",
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
+        },
+        "eventCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Count of provenance events emitted by this process at fence acquisition."
+        },
+        "latestEvent": {
+          "$ref": "#/$defs/CaseFenceEvent",
+          "description": "Last process-emitted event observed at fence acquisition. Absent when the process has no events."
+        }
+      }
+    },
+    "CaseExportFence": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "WOS-side source fence for a case-export attempt. Captures the current case-ledger and policy/config high-water marks before downstream bundle assembly.",
+      "required": [
+        "caseLedgerId",
+        "trellisScope",
+        "eventCount",
+        "processHighWater",
+        "policySnapshotDigest",
+        "policySources",
+        "capturedAt"
+      ],
+      "properties": {
+        "caseLedgerId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Durable governed case-ledger URN whose append vector this fence captures."
+        },
+        "trellisScope": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Trellis scope identifier for the case ledger's bundle scope (string-encoded scope bytes).",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "eventCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total merged event count at fence acquisition. Verifiers MUST observe the same count in the bundle event stream."
+        },
+        "eventHighWater": {
+          "$ref": "#/$defs/CaseFenceEvent",
+          "description": "Last event in the merged case stream at fence acquisition. Absent when the case has no events."
+        },
+        "directHighWater": {
+          "$ref": "#/$defs/CaseFenceEvent",
+          "description": "Last direct-append event at fence acquisition. Absent when the case has no direct-append rows."
+        },
+        "processHighWater": {
+          "type": "array",
+          "description": "Per-process high-water cursor for every workflow process bound to the case. Empty when no processes exist.",
+          "items": {
+            "$ref": "#/$defs/ProcessFenceHighWater"
+          }
+        },
+        "policySnapshotDigest": {
+          "$ref": "#/$defs/Sha256PrefixedDigest",
+          "description": "Canonical digest of `{ caseLedgerId, policySources }` at fence acquisition."
+        },
+        "policySources": {
+          "type": "array",
+          "description": "Provenance for policy materials that contributed to `policySnapshotDigest`.",
+          "items": {
+            "$ref": "#/$defs/PolicySnapshotSource"
+          }
+        },
+        "capturedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server clock at fence acquisition (RFC 3339 UTC)."
+        }
+      },
+      "examples": [
+        {
+          "caseLedgerId": "urn:wos:sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+          "trellisScope": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+          "eventCount": 2,
+          "eventHighWater": {
+            "eventId": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
+            "processId": "urn:wos:sba-poc_process_01jqrpd32jf8xtx9qxkkv3rqse",
+            "sequence": 2,
+            "eventHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "previousHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "timestamp": "2026-05-18T12:00:00Z"
+          },
+          "directHighWater": {
+            "eventId": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsf",
+            "sequence": 1,
+            "eventHash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "previousHash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "timestamp": "2026-05-18T11:59:00Z"
+          },
+          "processHighWater": [
+            {
+              "processId": "urn:wos:sba-poc_process_01jqrpd32jf8xtx9qxkkv3rqse",
+              "definitionUrl": "https://example.gov/workflows/sba-disaster-loan",
+              "definitionVersion": "1.0.0",
+              "status": "active",
+              "eventCount": 1,
+              "latestEvent": {
+                "eventId": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
+                "processId": "urn:wos:sba-poc_process_01jqrpd32jf8xtx9qxkkv3rqse",
+                "sequence": 1,
+                "eventHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "previousHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "timestamp": "2026-05-18T12:00:00Z"
+              }
+            }
+          ],
+          "policySnapshotDigest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "policySources": [
+            {
+              "sourceKind": "workflowKernel",
+              "sourceRef": "https://example.gov/workflows/sba-disaster-loan@1.0.0",
+              "versionBinding": "definitionVersion",
+              "digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+            }
+          ],
+          "capturedAt": "2026-05-18T12:00:01Z"
+        }
+      ]
+    }
+  }
+}

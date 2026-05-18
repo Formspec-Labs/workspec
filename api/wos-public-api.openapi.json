@@ -484,7 +484,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "https://schemas.formspec.io/wos-api/case-view/v1#/$defs/CaseExportFence"
+                  "$ref": "https://schemas.formspec.io/wos-api/case-export-fence/v1#/$defs/CaseExportFence"
                 }
               }
             }
