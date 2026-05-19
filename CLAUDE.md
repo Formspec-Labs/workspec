@@ -80,7 +80,7 @@ Six canonical kernel seams remain the only extension surface (Kernel §10; canon
 Apply after stack-wide heuristics (in [`../DEVELOPMENT-PHILOSOPHY.md`](../DEVELOPMENT-PHILOSOPHY.md)):
 
 1. **Trellis-boundary check.** Cryptographic integrity / content-addressing / signed envelopes / checkpoint seals / export bundles / federation → Trellis. Do not invent WOS-side primitives. WOS emits `SignatureAffirmation` and other provenance records; Trellis anchors them through `custodyHook`.
-2. **Scope to SBA + SaaS (Q1).** Before adding 1.0 work, ask: does this directly serve SBA PoC or public SaaS within its first year? If no, defer (trigger-gate or out-of-scope).
+2. **Scope to first-engagement + managed-hosting (Q1).** Before adding 1.0 work, ask: does this directly serve a DSC contractor's self-hosted engagement or the managed-hosting path within its first year? If no, defer (trigger-gate or out-of-scope).
 3. **Named-seams invariant.** New extension points live at one of the six kernel seams or use `x-` patternProperties. Inventing new seams is a Q3 violation.
 4. **Module-bottleneck sequencing.** Before piling work onto a bottleneck file (e.g., `provenance.rs` pre-tier-split), sequence the structural refactor first.
 
