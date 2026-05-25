@@ -8,9 +8,7 @@ use integrity_bundle_fixtures::{
     FixtureBundle, all_manifest_schema_paths, discover_bundles, validate_manifest_schema,
 };
 
-const EXPECTED_BUNDLE_IDS: [&str; 8] = [
-    "001", "002", "003", "004", "005", "006", "007", "008",
-];
+const EXPECTED_BUNDLE_IDS: [&str; 8] = ["001", "002", "003", "004", "005", "006", "007", "008"];
 
 fn cross_stack_root() -> PathBuf {
     let root =
