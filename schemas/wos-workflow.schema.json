@@ -2370,6 +2370,400 @@
             "critical": true,
             "intent": "Closed five-mode amendment taxonomy per ADR-0066 D-1 / Q26 maximalist; lint target for taxonomy-mode ↔ record-kind pairing"
           }
+        },
+        "recordLifecycle": {
+          "$ref": "#/$defs/RecordLifecyclePolicy",
+          "description": "Respondent-facing record-lifecycle affordance configuration per ADR-0066 D-6.2 (absorbs ADR-0158): the labeled projection of the kernel five-mode taxonomy onto the respondent-facing surface. Sibling to `amendmentTaxonomy` -- the taxonomy declares which kernel modes are PERMITTED; `recordLifecycle` declares which respondent-facing affordances (`correctable` / `withdrawable` / `disputable`) are offered + their per-act configuration. Three affordances; `rectification` has no respondent affordance (issuer-authored per D-6.2 last column), `reinstatement` has no respondent affordance (issuer-authored recovery per D-1.5). FW-0034 / FW-0038 own the formspec-web rendering surface; this block is the WOS-side form-policy declaration.",
+          "examples": [
+            {
+              "correctable": {
+                "enabled": true,
+                "correctableFieldSet": [
+                  "/applicant/email",
+                  "/applicant/phone"
+                ],
+                "kernelMode": "correction"
+              }
+            },
+            {
+              "withdrawable": {
+                "enabled": true,
+                "preDeterminationKernelMode": "applicant-withdrawn",
+                "postDeterminationIntent": "rescission-requested",
+                "requiresIssuerAcceptance": true
+              },
+              "disputable": {
+                "enabled": true,
+                "signerOnly": true
+              }
+            }
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Respondent-facing record-lifecycle affordance config per ADR-0066 D-6.2; pairs with `amendmentTaxonomy` (correctable.kernelMode -> taxonomy literal; withdrawable.postDeterminationIntent -> 'rescission'); FW-0034 design dependency, FW-0038 build dependency"
+          }
+        }
+      }
+    },
+    "RecordLifecyclePolicy": {
+      "type": "object",
+      "description": "Container for the three respondent-facing record-lifecycle affordances per ADR-0066 D-6.2. Each affordance is optional; absence means the affordance is not offered to the respondent. The three blocks are independent -- a workflow MAY enable any subset. Composition rules with `amendmentTaxonomy` are documented per-property; conformance lint pairs taxonomy-mode declarations with respondent-affordance opt-ins.",
+      "additionalProperties": false,
+      "properties": {
+        "correctable": {
+          "$ref": "#/$defs/CorrectableAffordance",
+          "description": "Respondent-facing correction affordance per ADR-0066 D-6.2 `correct` row. Projects onto kernel mode `correction` (narrow declared-subset) or `amendment` (substantive overflow) per FW-0034 design §3.2. When `enabled: true`, `amendmentTaxonomy` MUST contain `\"correction\"` (or `\"amendment\"` for substantive overflow); enforced by spec, lint candidate."
+        },
+        "withdrawable": {
+          "$ref": "#/$defs/WithdrawableAffordance",
+          "description": "Respondent-facing withdrawal affordance per ADR-0066 D-6.2 `withdraw` row. Resolves to two axis cells per case-lifecycle-state at emission time (D-6.1.1): pre-determination emits `TerminateInstanceRequest { terminationKind: applicant-withdrawn }` (applicant authority); post-determination emits intent + ISSUER decides whether to emit kernel `rescission` (issuer authority, not respondent). When `postDeterminationIntent` is configured, `amendmentTaxonomy` MUST contain `\"rescission\"` and `requiresIssuerAcceptance` MUST be true; enforced by spec, lint candidate."
+        },
+        "disputable": {
+          "$ref": "#/$defs/DisputableAffordance",
+          "description": "Respondent-facing dispute affordance per ADR-0066 D-6.2 `dispute` row. NEW PRIMITIVE -- counter-attestation, NOT lifecycle state transition. The original record and signature remain valid and verifiable; the dispute adds a `response.dispute-attached` Respondent Ledger event. No `kernelMode` binding because dispute consumes no kernel mode (D-6.2 last column 'none -- Respondent Ledger counter-attestation')."
+        }
+      }
+    },
+    "CorrectableAffordance": {
+      "type": "object",
+      "description": "Per-act configuration for the respondent `correct` affordance per ADR-0066 D-6.2 + FW-0034 design §6.3. Pairs with `amendmentTaxonomy` containing `\"correction\"` (or `\"amendment\"` for substantive overflow). When `enabled: true`, `correctableFieldSet` MUST be authored to bound which fields the respondent may correct -- author-time policy, not respondent-side inference (per FW-0034 design §3.2 rejection of field-graph-analysis-driven scope).",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "kernelMode"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether the `correct` affordance is offered to the respondent on this workflow. When false, the affordance MUST NOT render in the respondent surface; the runtime MAY still accept correction-shaped substrate emissions from authorized non-respondent actors (e.g., `rectification` per D-6.2 issuer authorship row).",
+          "examples": [
+            true
+          ]
+        },
+        "correctableFieldSet": {
+          "type": "array",
+          "description": "RFC 6901 JSON Pointers naming the strict subset of response fields the respondent MAY correct via this affordance. MUST be non-empty when `enabled` is true (enforced by allOf branch). Bounds the correction surface so corrections cannot become a backdoor amendment per ADR-0066 Open Question 2 (Correction field-set scope).",
+          "items": {
+            "type": "string",
+            "description": "RFC 6901 JSON Pointer (e.g., `/applicant/email`, `/household/members/0/income`).",
+            "examples": [
+              "/applicant/email"
+            ],
+            "x-wos": {
+              "openStringKind": "pathExpression"
+            }
+          },
+          "uniqueItems": true,
+          "examples": [
+            [
+              "/applicant/email",
+              "/applicant/phone"
+            ]
+          ]
+        },
+        "window": {
+          "$ref": "#/$defs/RecordLifecycleWindow",
+          "description": "Optional window declaration bounding when the affordance is available. Mirrors the kernel/governance temporal-parameter convention; runtime resolves `closesAt` against the case timeline."
+        },
+        "requiresEvidence": {
+          "type": "boolean",
+          "description": "When true, the respondent MUST attach evidence (uploaded document, structured assertion, or other governance-defined artifact) to the correction submission. The runtime rejects correction events lacking the evidence binding.",
+          "examples": [
+            false
+          ]
+        },
+        "requiresReason": {
+          "type": "boolean",
+          "description": "When true, the respondent MUST supply a free-text reason for the correction. Default true (FW-0034 design §6.3 default). The reason text rides on the `ResponseCorrection` event payload and inherits the `reasonField.accessControl.class` declaration.",
+          "default": true,
+          "examples": [
+            true
+          ]
+        },
+        "kernelMode": {
+          "type": "string",
+          "const": "correction",
+          "description": "Routes the affordance to the `correction` kernel-mode literal in `amendmentTaxonomy` per ADR-0066 D-1. Substantive-overflow routing to `amendment` is form-domain policy at the runtime layer (not declared here -- the affordance always ROUTES to `correction` at substrate emission; substantive escalation is a downstream governance decision per FW-0034 design §3.2).",
+          "examples": [
+            "correction"
+          ]
+        },
+        "reasonField": {
+          "type": "object",
+          "description": "Optional metadata governing how the correction `reason` text is treated. Carries an `accessControl.class` declaration per ADR-0074 §1 so safe-* and other audience-policy classes can compose with the lifecycle event payload (per FW-0049 composition). When absent, the reason text inherits the default audience policy of the workflow.",
+          "additionalProperties": false,
+          "properties": {
+            "accessControl": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "class"
+              ],
+              "properties": {
+                "class": {
+                  "type": "string",
+                  "description": "Audience-policy class token per ADR-0074 §1. Treated as an opaque string by WOS; resolves through the Formspec Access-Class Registry (e.g., `safe-address`, `safe-contact`, `protected`).",
+                  "examples": [
+                    "safe-address"
+                  ],
+                  "x-wos": {
+                    "openStringKind": "identifier"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "$comment": "Spec MUST: when enabled, correctableFieldSet MUST be authored and non-empty -- bounds the correction surface so corrections cannot become backdoor amendments (ADR-0066 Open Question 2).",
+          "if": {
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            },
+            "required": [
+              "enabled"
+            ]
+          },
+          "then": {
+            "required": [
+              "correctableFieldSet"
+            ],
+            "properties": {
+              "correctableFieldSet": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ],
+      "examples": [
+        {
+          "enabled": true,
+          "correctableFieldSet": [
+            "/applicant/email",
+            "/applicant/phone"
+          ],
+          "window": {
+            "closesAt": "determination"
+          },
+          "requiresReason": true,
+          "kernelMode": "correction"
+        },
+        {
+          "enabled": true,
+          "correctableFieldSet": [
+            "/applicant/safeAddress"
+          ],
+          "requiresReason": true,
+          "kernelMode": "correction",
+          "reasonField": {
+            "accessControl": {
+              "class": "safe-address"
+            }
+          }
+        }
+      ]
+    },
+    "WithdrawableAffordance": {
+      "type": "object",
+      "description": "Per-act configuration for the respondent `withdraw` affordance per ADR-0066 D-6.2 + FW-0034 design §6.3. The affordance has TWO emission shapes resolved at runtime per case-lifecycle-state (D-6.1.1 meta-dimension): pre-determination is a direct `TerminateInstanceRequest { terminationKind: applicant-withdrawn }` (applicant authority; no kernel mode consumed); post-determination emits `response.withdrawn` with `rescissionRequested: true` and the ISSUER decides whether to emit the kernel `rescission` event (issuer authority -- authority-ladder integrity per ADR-0066 D-6.7). The respondent runtime carries intent; the kernel-mode emission belongs to issuer governance.",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "preDeterminationKernelMode"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether the `withdraw` affordance is offered to the respondent on this workflow. When false, the affordance MUST NOT render in the respondent surface.",
+          "examples": [
+            true
+          ]
+        },
+        "window": {
+          "$ref": "#/$defs/RecordLifecycleWindow",
+          "description": "Optional window declaration bounding when the affordance is available. Pre-determination withdrawals are unconditional in slice 1; post-determination intent emissions honor this window."
+        },
+        "requiresReason": {
+          "type": "boolean",
+          "description": "When true, the respondent MUST supply a free-text reason for the withdrawal. Default true (FW-0034 design §6.3 default).",
+          "default": true,
+          "examples": [
+            true
+          ]
+        },
+        "preDeterminationKernelMode": {
+          "type": "string",
+          "const": "applicant-withdrawn",
+          "description": "Routes the pre-determination withdraw to a `TerminateInstanceRequest { terminationKind: applicant-withdrawn }` per `work-spec/specs/api/instance.md:131` -- the `TerminationKind` reserved literal. No kernel amendment-taxonomy mode is consumed at the pre-determination boundary; termination is its own first-class instance-API verb.",
+          "examples": [
+            "applicant-withdrawn"
+          ]
+        },
+        "postDeterminationIntent": {
+          "type": "string",
+          "const": "rescission-requested",
+          "description": "When configured, declares that respondents MAY signal a post-determination rescission intent. formspec-web emits `response.withdrawn` with `rescissionRequested: true`; the ISSUER decides whether the kernel `rescission` event fires (issuer authority per D-6.7). Absence means post-determination withdrawals are not offered through this affordance (respondents see the affordance disabled once the case reaches determination).",
+          "examples": [
+            "rescission-requested"
+          ]
+        },
+        "requiresIssuerAcceptance": {
+          "type": "boolean",
+          "description": "MUST be true when `postDeterminationIntent` is configured. Encodes the authority-ladder discipline of D-6.7: the post-determination respondent emission is a REQUEST projected through issuer governance, never a respondent-authored kernel mode. Enforced by spec (allOf branch).",
+          "examples": [
+            true
+          ]
+        },
+        "partyScope": {
+          "type": "string",
+          "enum": [
+            "any-party",
+            "all-parties-must-agree"
+          ],
+          "description": "Case-level multi-party withdraw composition per FW-0034 design §7.4. DISTINCT from FW-0050 §5.2 per-signature withdraw which is per-party always (substrate rule, no `partyScope` axis). Single-party workflows MAY omit; multi-party workflows SHOULD declare. Default `all-parties-must-agree`.",
+          "default": "all-parties-must-agree",
+          "examples": [
+            "all-parties-must-agree"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "$comment": "Spec MUST: when postDeterminationIntent is configured, requiresIssuerAcceptance MUST be true -- ADR-0066 D-6.7 authority-ladder integrity (respondents do not directly author kernel rescission events).",
+          "if": {
+            "required": [
+              "postDeterminationIntent"
+            ]
+          },
+          "then": {
+            "required": [
+              "requiresIssuerAcceptance"
+            ],
+            "properties": {
+              "requiresIssuerAcceptance": {
+                "const": true
+              }
+            }
+          }
+        }
+      ],
+      "examples": [
+        {
+          "enabled": true,
+          "preDeterminationKernelMode": "applicant-withdrawn",
+          "requiresReason": true
+        },
+        {
+          "enabled": true,
+          "preDeterminationKernelMode": "applicant-withdrawn",
+          "postDeterminationIntent": "rescission-requested",
+          "requiresIssuerAcceptance": true,
+          "window": {
+            "closesAt": "issuance+30d"
+          },
+          "partyScope": "all-parties-must-agree"
+        }
+      ]
+    },
+    "DisputableAffordance": {
+      "type": "object",
+      "description": "Per-act configuration for the respondent `dispute` affordance per ADR-0066 D-6.2 + FW-0034 design §6.3. NEW PRIMITIVE -- counter-attestation, NOT lifecycle state transition. The original record and signature remain valid and verifiable; the dispute adds an EXT-5 `response.dispute-attached` Respondent Ledger event. NO `kernelMode` binding because dispute consumes no kernel mode -- treating dispute as withdrawal, invalidation, or amendment is rejected on the same grounds as the D-1 alternative-considered.",
+      "additionalProperties": false,
+      "required": [
+        "enabled"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether the `dispute` affordance is offered on this workflow. When false, the affordance MUST NOT render in the respondent surface.",
+          "examples": [
+            true
+          ]
+        },
+        "signerOnly": {
+          "type": "boolean",
+          "description": "When true (default), only the actor who signed the response MAY emit a dispute; non-signer respondents (e.g., a filer per EXT-36) cannot. When false, any party in scope MAY dispute. Default true per FW-0034 design §6.3.",
+          "default": true,
+          "examples": [
+            true
+          ]
+        },
+        "requiresReason": {
+          "type": "boolean",
+          "description": "When true (default), the respondent MUST supply a free-text dispute statement. The statement text rides on the `response.dispute-attached` event payload and inherits the `statementField.accessControl.class` declaration.",
+          "default": true,
+          "examples": [
+            true
+          ]
+        },
+        "statementField": {
+          "type": "object",
+          "description": "Optional metadata governing how the dispute `statement` text is treated. Carries an `accessControl.class` declaration per ADR-0074 §1 so safe-* and other audience-policy classes can compose with the lifecycle event payload (per FW-0049 composition).",
+          "additionalProperties": false,
+          "properties": {
+            "accessControl": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "class"
+              ],
+              "properties": {
+                "class": {
+                  "type": "string",
+                  "description": "Audience-policy class token per ADR-0074 §1. Treated as an opaque string by WOS; resolves through the Formspec Access-Class Registry.",
+                  "examples": [
+                    "protected"
+                  ],
+                  "x-wos": {
+                    "openStringKind": "identifier"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "examples": [
+        {
+          "enabled": true
+        },
+        {
+          "enabled": true,
+          "signerOnly": true,
+          "requiresReason": true,
+          "statementField": {
+            "accessControl": {
+              "class": "protected"
+            }
+          }
+        }
+      ]
+    },
+    "RecordLifecycleWindow": {
+      "type": "object",
+      "description": "Window declaration bounding when a respondent-facing record-lifecycle affordance is available. The `closesAt` value is an open prose token: anchor literals (`determination`, `submission`, `issuance`, `never`) or anchor+duration tokens (`issuance+30d`, `submission+P14D`) are common shapes per FW-0034 design §6.3. Vocabulary is intentionally open in slice 1; the runtime resolves the token against the case timeline. Closing the vocabulary belongs to a follow-up row once deployment usage stabilizes.",
+      "additionalProperties": false,
+      "required": [
+        "closesAt"
+      ],
+      "properties": {
+        "closesAt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Open prose token naming the case-timeline anchor (and optional offset) at which this affordance closes. Conventional shapes: `determination`, `submission`, `issuance`, `never`, `issuance+30d`, `submission+P14D`. Runtime resolution is deployment-defined in slice 1.",
+          "examples": [
+            "determination",
+            "issuance+30d",
+            "never"
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         }
       }
     },

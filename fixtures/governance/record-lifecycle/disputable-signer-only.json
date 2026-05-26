@@ -1,0 +1,43 @@
+{
+  "$wosWorkflow": "1.0",
+  "version": "1.0.0",
+  "title": "Record-Lifecycle Disputable Signer-Only",
+  "description": "EXT-35 fixture: only the `dispute` affordance enabled, scoped to signer per the FW-0034 default. Exercises the new-primitive shape (no kernelMode binding -- dispute is counter-attestation, NOT lifecycle state transition per ADR-0066 D-6.2). Note: amendmentTaxonomy is intentionally absent because dispute consumes no kernel mode; this is the valid 'dispute only, no kernel taxonomy needed' shape.",
+  "url": "https://example.test/ext-35/record-lifecycle/disputable-signer-only",
+  "impactLevel": "operational",
+  "actors": [
+    {
+      "id": "applicant",
+      "type": "human"
+    },
+    {
+      "id": "issuer",
+      "type": "human"
+    }
+  ],
+  "lifecycle": {
+    "initialState": "intake",
+    "states": {
+      "intake": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "target": "determined"
+          }
+        ]
+      },
+      "determined": {
+        "type": "final"
+      }
+    }
+  },
+  "governance": {
+    "recordLifecycle": {
+      "disputable": {
+        "enabled": true,
+        "signerOnly": true,
+        "requiresReason": true
+      }
+    }
+  }
+}

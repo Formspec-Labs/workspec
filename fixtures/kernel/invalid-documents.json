@@ -232,6 +232,220 @@
           }
         }
       }
+    },
+    {
+      "id": "record-lifecycle-correctable-missing-field-set",
+      "description": "EXT-35 record-lifecycle: `correctable.enabled` is true but `correctableFieldSet` is omitted, violating the allOf branch on `CorrectableAffordance`. Bounds the correction surface so corrections cannot become backdoor amendments (ADR-0066 Open Question 2).",
+      "expectedError": "'correctableFieldSet' is a required property",
+      "document": {
+        "$wosWorkflow": "1.0",
+        "url": "https://wos-spec.example/fixtures/governance/invalid/record-lifecycle-correctable-missing-field-set",
+        "version": "1.0.0",
+        "title": "Correctable missing field set",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "a1",
+            "type": "human"
+          }
+        ],
+        "lifecycle": {
+          "initialState": "start",
+          "states": {
+            "start": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "target": "end"
+                }
+              ]
+            },
+            "end": {
+              "type": "final"
+            }
+          }
+        },
+        "governance": {
+          "recordLifecycle": {
+            "correctable": {
+              "enabled": true,
+              "kernelMode": "correction"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "record-lifecycle-correctable-empty-field-set",
+      "description": "EXT-35 record-lifecycle: `correctable.enabled` is true and `correctableFieldSet` is an empty array; the allOf branch on `CorrectableAffordance` requires `minItems: 1`.",
+      "expectedError": "[] is too short",
+      "document": {
+        "$wosWorkflow": "1.0",
+        "url": "https://wos-spec.example/fixtures/governance/invalid/record-lifecycle-correctable-empty-field-set",
+        "version": "1.0.0",
+        "title": "Correctable empty field set",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "a1",
+            "type": "human"
+          }
+        ],
+        "lifecycle": {
+          "initialState": "start",
+          "states": {
+            "start": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "target": "end"
+                }
+              ]
+            },
+            "end": {
+              "type": "final"
+            }
+          }
+        },
+        "governance": {
+          "recordLifecycle": {
+            "correctable": {
+              "enabled": true,
+              "correctableFieldSet": [],
+              "kernelMode": "correction"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "record-lifecycle-withdrawable-authority-ladder-violation",
+      "description": "EXT-35 record-lifecycle: `withdrawable.postDeterminationIntent` is configured without `requiresIssuerAcceptance: true`, violating ADR-0066 D-6.7 authority-ladder integrity (respondents do not directly author kernel rescission events).",
+      "expectedError": "'requiresIssuerAcceptance' is a required property",
+      "document": {
+        "$wosWorkflow": "1.0",
+        "url": "https://wos-spec.example/fixtures/governance/invalid/record-lifecycle-withdrawable-authority-ladder-violation",
+        "version": "1.0.0",
+        "title": "Withdrawable authority-ladder violation",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "a1",
+            "type": "human"
+          }
+        ],
+        "lifecycle": {
+          "initialState": "start",
+          "states": {
+            "start": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "target": "end"
+                }
+              ]
+            },
+            "end": {
+              "type": "final"
+            }
+          }
+        },
+        "governance": {
+          "recordLifecycle": {
+            "withdrawable": {
+              "enabled": true,
+              "preDeterminationKernelMode": "applicant-withdrawn",
+              "postDeterminationIntent": "rescission-requested"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "record-lifecycle-unknown-affordance",
+      "description": "EXT-35 record-lifecycle: `recordLifecycle` carries an undeclared affordance key (additionalProperties: false on RecordLifecyclePolicy). The three affordances are closed in slice 1; new affordances require a spec amendment.",
+      "expectedError": "Additional properties are not allowed ('reinstatable' was unexpected)",
+      "document": {
+        "$wosWorkflow": "1.0",
+        "url": "https://wos-spec.example/fixtures/governance/invalid/record-lifecycle-unknown-affordance",
+        "version": "1.0.0",
+        "title": "Unknown affordance",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "a1",
+            "type": "human"
+          }
+        ],
+        "lifecycle": {
+          "initialState": "start",
+          "states": {
+            "start": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "target": "end"
+                }
+              ]
+            },
+            "end": {
+              "type": "final"
+            }
+          }
+        },
+        "governance": {
+          "recordLifecycle": {
+            "reinstatable": {
+              "enabled": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "record-lifecycle-correctable-wrong-kernel-mode",
+      "description": "EXT-35 record-lifecycle: `correctable.kernelMode` is constrained to the literal `correction` per the `CorrectableAffordance` schema; any other value (e.g., `amendment`) is rejected. Substantive-overflow routing to `amendment` is a runtime governance decision, not an authoring-time literal.",
+      "expectedError": "'amendment' was expected",
+      "document": {
+        "$wosWorkflow": "1.0",
+        "url": "https://wos-spec.example/fixtures/governance/invalid/record-lifecycle-correctable-wrong-kernel-mode",
+        "version": "1.0.0",
+        "title": "Correctable wrong kernel mode",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "a1",
+            "type": "human"
+          }
+        ],
+        "lifecycle": {
+          "initialState": "start",
+          "states": {
+            "start": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "target": "end"
+                }
+              ]
+            },
+            "end": {
+              "type": "final"
+            }
+          }
+        },
+        "governance": {
+          "recordLifecycle": {
+            "correctable": {
+              "enabled": true,
+              "correctableFieldSet": [
+                "/applicant/email"
+              ],
+              "kernelMode": "amendment"
+            }
+          }
+        }
+      }
     }
   ]
 }

@@ -1,0 +1,52 @@
+{
+  "$wosWorkflow": "1.0",
+  "version": "1.0.0",
+  "title": "Record-Lifecycle Multi-Party Withdraw",
+  "description": "EXT-35 fixture: multi-party workflow with `withdrawable.partyScope: all-parties-must-agree` per FW-0034 design §7.4. Exercises the case-level multi-party withdraw composition axis -- DISTINCT from FW-0050 §5.2 per-signature withdraw which is per-party always (substrate rule). The fixture stays minimal at the kernel layer (no `parties` block here -- that lives at EXT-28); this fixture pins the `partyScope` axis itself.",
+  "url": "https://example.test/ext-35/record-lifecycle/multi-party-withdraw",
+  "impactLevel": "operational",
+  "actors": [
+    {
+      "id": "primaryApplicant",
+      "type": "human"
+    },
+    {
+      "id": "secondaryApplicant",
+      "type": "human"
+    },
+    {
+      "id": "issuer",
+      "type": "human"
+    }
+  ],
+  "lifecycle": {
+    "initialState": "intake",
+    "states": {
+      "intake": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "target": "determined"
+          }
+        ]
+      },
+      "determined": {
+        "type": "final"
+      }
+    }
+  },
+  "governance": {
+    "amendmentTaxonomy": [
+      "rescission"
+    ],
+    "recordLifecycle": {
+      "withdrawable": {
+        "enabled": true,
+        "preDeterminationKernelMode": "applicant-withdrawn",
+        "postDeterminationIntent": "rescission-requested",
+        "requiresIssuerAcceptance": true,
+        "partyScope": "all-parties-must-agree"
+      }
+    }
+  }
+}

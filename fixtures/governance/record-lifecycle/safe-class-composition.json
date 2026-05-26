@@ -1,0 +1,64 @@
+{
+  "$wosWorkflow": "1.0",
+  "version": "1.0.0",
+  "title": "Record-Lifecycle Safe-Class Composition",
+  "description": "EXT-35 fixture: correctable + disputable affordances carry `accessControl.class` declarations on their reason / statement fields. Exercises the FW-0049 safe-* composition path (per ADR-0066 D-6.6 substrate-side: lifecycle event reason text and corrected values inherit the audience policy of the field they describe). Class tokens are opaque to WOS; resolution belongs to the Formspec Access-Class Registry.",
+  "url": "https://example.test/ext-35/record-lifecycle/safe-class-composition",
+  "impactLevel": "operational",
+  "actors": [
+    {
+      "id": "applicant",
+      "type": "human"
+    },
+    {
+      "id": "issuer",
+      "type": "human"
+    }
+  ],
+  "lifecycle": {
+    "initialState": "intake",
+    "states": {
+      "intake": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "target": "determined"
+          }
+        ]
+      },
+      "determined": {
+        "type": "final"
+      }
+    }
+  },
+  "governance": {
+    "amendmentTaxonomy": [
+      "correction"
+    ],
+    "recordLifecycle": {
+      "correctable": {
+        "enabled": true,
+        "correctableFieldSet": [
+          "/applicant/safeAddress"
+        ],
+        "requiresReason": true,
+        "kernelMode": "correction",
+        "reasonField": {
+          "accessControl": {
+            "class": "safe-address"
+          }
+        }
+      },
+      "disputable": {
+        "enabled": true,
+        "signerOnly": true,
+        "requiresReason": true,
+        "statementField": {
+          "accessControl": {
+            "class": "protected"
+          }
+        }
+      }
+    }
+  }
+}

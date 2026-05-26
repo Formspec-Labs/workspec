@@ -1,0 +1,52 @@
+{
+  "$wosWorkflow": "1.0",
+  "version": "1.0.0",
+  "title": "Record-Lifecycle Withdrawable Authority Ladder",
+  "description": "EXT-35 fixture: `withdraw` affordance configured with both pre-determination kernel-mode AND post-determination intent. Exercises the authority-ladder MUST (ADR-0066 D-6.7 + WithdrawableAffordance allOf branch): `postDeterminationIntent` configured implies `requiresIssuerAcceptance: true`. amendmentTaxonomy declares `rescission` per the spec MUST 'withdrawable.enabled implies amendmentTaxonomy contains rescission'.",
+  "url": "https://example.test/ext-35/record-lifecycle/withdrawable-authority-ladder",
+  "impactLevel": "operational",
+  "actors": [
+    {
+      "id": "applicant",
+      "type": "human"
+    },
+    {
+      "id": "issuer",
+      "type": "human"
+    }
+  ],
+  "lifecycle": {
+    "initialState": "intake",
+    "states": {
+      "intake": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "target": "determined"
+          }
+        ]
+      },
+      "determined": {
+        "type": "final"
+      }
+    }
+  },
+  "governance": {
+    "amendmentTaxonomy": [
+      "rescission",
+      "reinstatement"
+    ],
+    "recordLifecycle": {
+      "withdrawable": {
+        "enabled": true,
+        "preDeterminationKernelMode": "applicant-withdrawn",
+        "postDeterminationIntent": "rescission-requested",
+        "requiresIssuerAcceptance": true,
+        "requiresReason": true,
+        "window": {
+          "closesAt": "issuance+30d"
+        }
+      }
+    }
+  }
+}

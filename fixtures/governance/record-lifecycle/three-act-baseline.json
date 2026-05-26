@@ -1,0 +1,70 @@
+{
+  "$wosWorkflow": "1.0",
+  "version": "1.0.0",
+  "title": "Record-Lifecycle Three-Act Baseline",
+  "description": "EXT-35 baseline fixture: all three D-6.2 respondent-facing affordances (correct / withdraw / dispute) enabled with their canonical shapes. amendmentTaxonomy declares the matching kernel-mode permissions so the taxonomy <-> affordance pairing is coherent (lint candidate enforces this).",
+  "url": "https://example.test/ext-35/record-lifecycle/three-act-baseline",
+  "impactLevel": "operational",
+  "actors": [
+    {
+      "id": "applicant",
+      "type": "human"
+    },
+    {
+      "id": "issuer",
+      "type": "human"
+    }
+  ],
+  "lifecycle": {
+    "initialState": "intake",
+    "states": {
+      "intake": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "target": "determined"
+          }
+        ]
+      },
+      "determined": {
+        "type": "final"
+      }
+    }
+  },
+  "governance": {
+    "amendmentTaxonomy": [
+      "correction",
+      "amendment",
+      "rescission"
+    ],
+    "recordLifecycle": {
+      "correctable": {
+        "enabled": true,
+        "correctableFieldSet": [
+          "/applicant/email",
+          "/applicant/phone"
+        ],
+        "window": {
+          "closesAt": "determination"
+        },
+        "requiresReason": true,
+        "kernelMode": "correction"
+      },
+      "withdrawable": {
+        "enabled": true,
+        "preDeterminationKernelMode": "applicant-withdrawn",
+        "postDeterminationIntent": "rescission-requested",
+        "requiresIssuerAcceptance": true,
+        "requiresReason": true,
+        "window": {
+          "closesAt": "issuance+30d"
+        }
+      },
+      "disputable": {
+        "enabled": true,
+        "signerOnly": true,
+        "requiresReason": true
+      }
+    }
+  }
+}

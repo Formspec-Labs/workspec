@@ -1,0 +1,39 @@
+{
+  "$wosWorkflow": "1.0",
+  "version": "1.0.0",
+  "title": "Record-Lifecycle Withdrawable Pre-Determination Only",
+  "description": "EXT-35 fixture: `withdraw` enabled with ONLY the pre-determination kernel mode (no postDeterminationIntent). Exercises the case where the withdrawable allOf branch is NOT triggered (postDeterminationIntent absent), so requiresIssuerAcceptance is not required. This is the slice-1 lowest-config withdraw shape: applicant terminates pre-determination via TerminateInstanceRequest; no kernel rescission path.",
+  "url": "https://example.test/ext-35/record-lifecycle/withdrawable-pre-determination-only",
+  "impactLevel": "operational",
+  "actors": [
+    {
+      "id": "applicant",
+      "type": "human"
+    }
+  ],
+  "lifecycle": {
+    "initialState": "intake",
+    "states": {
+      "intake": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "target": "done"
+          }
+        ]
+      },
+      "done": {
+        "type": "final"
+      }
+    }
+  },
+  "governance": {
+    "recordLifecycle": {
+      "withdrawable": {
+        "enabled": true,
+        "preDeterminationKernelMode": "applicant-withdrawn",
+        "requiresReason": true
+      }
+    }
+  }
+}

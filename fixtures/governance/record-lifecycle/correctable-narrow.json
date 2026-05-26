@@ -1,0 +1,44 @@
+{
+  "$wosWorkflow": "1.0",
+  "version": "1.0.0",
+  "title": "Record-Lifecycle Correctable Narrow",
+  "description": "EXT-35 fixture: only the `correct` affordance is enabled with a narrow declared field set. Exercises the spec MUST 'correctableFieldSet required and non-empty when enabled=true' (CorrectableAffordance allOf branch) and the kernelMode=correction routing.",
+  "url": "https://example.test/ext-35/record-lifecycle/correctable-narrow",
+  "impactLevel": "operational",
+  "actors": [
+    {
+      "id": "applicant",
+      "type": "human"
+    }
+  ],
+  "lifecycle": {
+    "initialState": "start",
+    "states": {
+      "start": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "target": "done"
+          }
+        ]
+      },
+      "done": {
+        "type": "final"
+      }
+    }
+  },
+  "governance": {
+    "amendmentTaxonomy": [
+      "correction"
+    ],
+    "recordLifecycle": {
+      "correctable": {
+        "enabled": true,
+        "correctableFieldSet": [
+          "/applicant/email"
+        ],
+        "kernelMode": "correction"
+      }
+    }
+  }
+}
