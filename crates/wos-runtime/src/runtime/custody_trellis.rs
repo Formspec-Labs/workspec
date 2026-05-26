@@ -573,6 +573,7 @@ mod tests {
             Ok(SubstrateAppendResult {
                 event_id: "evt_test".to_string(),
                 sequence: 0,
+                prior_event_hash: None,
                 canonical_event_hash: TEST_HASH.to_string(),
                 checkpoint_ref: format!("trellis://{}/checkpoints/cp_test", request.scope),
                 bundle_ref: "s3://test-bucket/bundle.zip".to_string(),
