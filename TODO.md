@@ -110,7 +110,7 @@ Cross-repo Do-next #1 (WOS-T4) — workflow-tier signature slice; cross-stack ro
      - GATE: AI-runtime invocation seam design (orchestrator missing).
 
 - **#14 — WOS-SIGNATURE-ADMISSION-REVOCATION-001 — revocation_policy enforcement** `[7/3/2]=14` · `fs-yciq` · P3
-   links WOS-T4 cross-stack proof + signature-attestation /… `fs-w0li`
+   links WOS-T4 cross-stack proof + signature-attestation /… `fs-w0li`, K-DET-001 — Determination-snapshot conformance + fixture… `fs-91cr`, SNAP-SPINE-001 — UWU-5 extracted: revocation-operations… `fs-q1ut`
 
    wos-runtime/src/runtime/signature.rs:1182 carries TODO(Phase 3.3): enforce revocation_policy when present. SignaturePolicy.revocation_policy field declared (line 686) but never inspected after admission gate at line 1182 — admission succeeds even when revocation would block. No prior TODO.md entry tracked this gap.
 
@@ -592,6 +592,7 @@ Stream: C. Determination snapshots, LoadBearing promotion, simulation trace.
 **P2 — standard:**
 
 - **K-DET-001 — Determination-snapshot conformance + fixture migration** `[6/3/5]=30` · `fs-91cr` · P2
+   links SNAP-SPINE-001 — UWU-5 extracted: revocation-operations… `fs-q1ut`, WOS-SIGNATURE-ADMISSION-REVOCATION-001 — revocation_policy… `fs-yciq`
 
    Conformance gate for Facts-tier snapshots on determination transitions.
 
