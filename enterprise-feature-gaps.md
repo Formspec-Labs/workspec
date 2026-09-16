@@ -158,7 +158,7 @@ The Formspec spec suite provides strong integration *primitives* — Mapping DSL
 | Embedded form hosting infrastructure | Medium | ✅ **[IMPL]** `<formspec-render>` web component is a single JS import. Works on any static host. But no hosted embed service with analytics, versioning, or CDN. |
 | Webhook infrastructure | High | Outbound event delivery; in product roadmap Phase 1 but not implemented |
 
-**Spec-level integration surface:** Assist spec defines 4 transport bindings: WebMCP (browser-native via `navigator.modelContext`), MCP (server-mediated), Browser Messaging (`postMessage`), HTTP REST (`GET /formspec/tools`, `POST /formspec/tools/{name}`). Extension Registry (584 lines) provides machine-readable catalog with well-known URL discovery (`/.well-known/formspec-extensions.json`), 7 entry categories, and 4-state lifecycle. Ontology spec adds JSON-LD context fragments for linked data export and cross-system alignments with bidirectional mapping. These are integration *protocols*, not pre-built integrations.
+**Spec-level integration surface:** Assist spec defines 4 transport bindings: WebMCP (browser-native via `document.modelContext`), MCP (server-mediated), Browser Messaging (`postMessage`), HTTP REST (`GET /formspec/tools`, `POST /formspec/tools/{name}`). Extension Registry (584 lines) provides machine-readable catalog with well-known URL discovery (`/.well-known/formspec-extensions.json`), 7 entry categories, and 4-state lifecycle. Ontology spec adds JSON-LD context fragments for linked data export and cross-system alignments with bidirectional mapping. These are integration *protocols*, not pre-built integrations.
 
 ---
 
