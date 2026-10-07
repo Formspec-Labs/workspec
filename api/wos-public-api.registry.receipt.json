@@ -1,0 +1,75 @@
+{
+  "kind": "wos-public-api-registry-import",
+  "schemaAuthorityCommit": "7fc9d5696cf54e4f65dcb96e6ca106bf1f52240b",
+  "publicErrorDocumentationCommit": "a5ce24ac603fcab7413c0d6d7ddd9e33a07d8c41",
+  "artifactSha256": "277f048e002e3facbe283cca00f07451f9bcacfa7f3c84530d619da9754e0df2",
+  "previousSnapshotSha256": "cb5f69c178984d7ccc11e5885624f67d2c1203a3e79e06f6143d1780563f9958",
+  "emitterBaseCommit": "b8ec92d0470f1a3cf703f3c7d1407aeb727d3934",
+  "builtSourceSha256": {
+    "crates/wos-server/src/http/intake.rs": "f3ecddc5cd28fd566fc3b0170e6638496c822a7dd5a7f8a328c0edc012a97d11",
+    "crates/wos-server/src/api/openapi_registry.rs": "bcc9d050fbf9c1efa04c2d1c41603298729856cb9e84fbe26b6eeacf7d0fa60f"
+  },
+  "emitterSourceState": "Qualified scoped annotations committed; preserved unrelated server Cargo.lock drift excluded.",
+  "qualifiedGeneration": {
+    "command": "cargo run --offline --locked -j1 -p wos-server --bin emit-openapi -- --stdout",
+    "exitCode": 0,
+    "evidence": "thoughts/plans/benefits-scenarios/execution/reports/workspec-server/first-case-openapi-corrected-qualification.json"
+  },
+  "scope": {
+    "addedPaths": [
+      "/intake-handoffs",
+      "/cases/{case_id}/case-file",
+      "/cases/{case_id}/case-file/attachments/{attachment_id}"
+    ],
+    "addedSchemaComponents": 30,
+    "addedSecurityScheme": "bearerAuth",
+    "existingPathsAndSchemasUnchanged": true,
+    "globalSecurityUnchanged": true
+  },
+  "qualification": {
+    "requiredIdempotencyHeader": true,
+    "perOperationBearerSecurity": true,
+    "originalAttachmentBinarySchema": {
+      "type": "string",
+      "format": "binary"
+    },
+    "retainedMediaTypeHeader": true,
+    "sourceTracedProblemStatuses": [
+      400,
+      401,
+      403,
+      404,
+      409,
+      503
+    ],
+    "attachmentSizeRefusal": 413,
+    "allEmittedReferencesResolve": true
+  },
+  "limits": [
+    "No runtime change, service activation or live case journey claimed.",
+    "Existing routes retain their prior metadata; no broad registry refresh.",
+    "Initial emitted artifact retained as historical import-HOLD evidence."
+  ],
+  "independentReview": "thoughts/plans/benefits-scenarios/execution/reports/work-spec/d1-registry-import-final-review.md",
+  "postImportChecks": {
+    "dualSurfaceParity": {
+      "exitCode": 0,
+      "registryOperations": 38,
+      "overlappingOperations": 38,
+      "registryOnlyDrift": 0
+    },
+    "publicReferenceGate": {
+      "exitCode": 0,
+      "registeredApiSchemas": 21,
+      "emittedStalenessComparison": "skipped; optional emitted snapshot absent"
+    },
+    "apiSchemaDisciplinePytest": {
+      "exitCode": 0,
+      "passed": 16
+    },
+    "diffWhitespaceCheck": 0,
+    "snapshotSha256": "277f048e002e3facbe283cca00f07451f9bcacfa7f3c84530d619da9754e0df2"
+  },
+  "emitterSourceCommit": "a9ab889a3cb480ca6282adb804cb7f768d3a0b5c",
+  "caseFileSchemaSha256": "04d0d53b9cadbdceff8e61f3aa1ae6811dba3a43c179b7316cb49efc46e39653"
+}

@@ -748,6 +748,239 @@
         }
       }
     },
+    "/cases/{case_id}/case-file": {
+      "get": {
+        "tags": [
+          "case-file"
+        ],
+        "operationId": "case_file_read",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "description": "Actual case TypeID or URN.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized immutable original filing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseFileRead"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Case TypeID or URN is invalid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bearer authentication is missing, invalid or expired.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Configured principal, role, workspace or case association refused.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Case association, process or attachment is missing.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Accepted evidence, runtime receipt or original bytes conflict.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Qualified intake is unconfigured, pending or temporarily unavailable.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/cases/{case_id}/case-file/attachments/{attachment_id}": {
+      "get": {
+        "tags": [
+          "case-file"
+        ],
+        "operationId": "case_file_attachment_read",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "description": "Actual case TypeID or URN.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "attachment_id",
+            "in": "path",
+            "description": "Original opaque accepted attachment identifier.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Original binary attachment; Content-Type is its checked accepted mediaType.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "private, no-store"
+              },
+              "Content-Type": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Checked mediaType from the accepted attachment descriptor."
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "nosniff"
+              }
+            },
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary",
+                  "description": "Documents raw attachment bytes as a binary string, never a JSON array."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Case TypeID or URN is invalid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bearer authentication is missing, invalid or expired.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Configured principal, role, workspace or case association refused.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Case association, process or attachment is missing.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Accepted evidence, runtime receipt or original bytes conflict.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Accepted attachment exceeds the twenty-MiB size limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Qualified intake is unconfigured, pending or temporarily unavailable.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/cases/{case_id}/events": {
       "post": {
         "tags": [
@@ -1682,6 +1915,110 @@
         }
       }
     },
+    "/intake-handoffs": {
+      "post": {
+        "tags": [
+          "case-file"
+        ],
+        "operationId": "intake_handoff_accept",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Required; must equal the original handoffId.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {}
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Accepted, pending or rejected original handoff.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntakeHandoffReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Canonical handoff or Idempotency-Key is invalid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bearer authentication is missing, invalid or expired.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Configured principal, role, workspace or case association refused.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Completed case association or its process is missing.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Accepted evidence, runtime receipt or original bytes conflict.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Qualified intake is unconfigured, pending or temporarily unavailable.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/reports/runs": {
       "get": {
         "tags": [
@@ -2073,6 +2410,260 @@
   },
   "components": {
     "schemas": {
+      "AcceptedAttachmentDescriptor": {
+        "type": "object",
+        "description": "Immutable accepted photo/file association; contains no storage locator, source URL or applicant credential.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Immutable accepted photo/file association; contains no storage locator, source URL or applicant credential.\",\n  \"type\": \"object\",\n  \"required\": [\n    \"attachmentId\",\n    \"fieldPath\",\n    \"fileName\",\n    \"hash\",\n    \"mediaType\",\n    \"sizeBytes\"\n  ],\n  \"properties\": {\n    \"attachmentId\": {\n      \"description\": \"Opaque identifier allocated by the source and bound to this handoff.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"identifier\"\n      }\n    },\n    \"fieldPath\": {\n      \"description\": \"RFC 6901 JSON Pointer relative to the accepted Response.data value, not the Response root. D1 photo is /photo; a repeated nested photo is /household/0/photo. Preserve the actual traversal pointer with ~0/~1 escaping; no dot-path conversion or /data prefix. Source must resolve Response.data.pointer(fieldPath) to the exact accepted attachment descriptor.\",\n      \"type\": \"string\",\n      \"pattern\": \"^/.*$\"\n    },\n    \"fileName\": {\n      \"description\": \"Filename from the exact accepted Response attachment descriptor, frozen at acceptance. This is the name as filed; it does not assert the upload-time filename.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"prose\"\n      }\n    },\n    \"hash\": {\n      \"description\": \"SHA-256 of original attachment bytes, checked on each source read.\",\n      \"type\": \"string\",\n      \"pattern\": \"^sha256:[0-9a-f]{64}$\"\n    },\n    \"mediaType\": {\n      \"description\": \"Retained MIME media type, independently checked before serving bytes.\",\n      \"type\": \"string\",\n      \"pattern\": \"^[a-zA-Z0-9!#$&^_.+-]+/[a-zA-Z0-9!#$&^_.+-]+$\"\n    },\n    \"sizeBytes\": {\n      \"description\": \"Exact original byte length.\",\n      \"type\": \"integer\",\n      \"minimum\": 0.0\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
+        "required": [
+          "attachmentId",
+          "fieldPath",
+          "fileName",
+          "hash",
+          "mediaType",
+          "sizeBytes"
+        ],
+        "properties": {
+          "attachmentId": {
+            "$ref": "#/components/schemas/AcceptedAttachmentDescriptorAttachmentId",
+            "description": "Opaque identifier allocated by the source and bound to this handoff."
+          },
+          "fieldPath": {
+            "$ref": "#/components/schemas/AcceptedAttachmentDescriptorFieldPath",
+            "description": "RFC 6901 JSON Pointer relative to the accepted Response.data value, not the Response root. D1 photo is /photo; a repeated nested photo is /household/0/photo. Preserve the actual traversal pointer with ~0/~1 escaping; no dot-path conversion or /data prefix. Source must resolve Response.data.pointer(fieldPath) to the exact accepted attachment descriptor."
+          },
+          "fileName": {
+            "$ref": "#/components/schemas/AcceptedAttachmentDescriptorFileName",
+            "description": "Filename from the exact accepted Response attachment descriptor, frozen at acceptance. This is the name as filed; it does not assert the upload-time filename."
+          },
+          "hash": {
+            "$ref": "#/components/schemas/AcceptedAttachmentDescriptorHash",
+            "description": "SHA-256 of original attachment bytes, checked on each source read."
+          },
+          "mediaType": {
+            "$ref": "#/components/schemas/AcceptedAttachmentDescriptorMediaType",
+            "description": "Retained MIME media type, independently checked before serving bytes."
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Exact original byte length.",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "AcceptedAttachmentDescriptorAttachmentId": {
+        "type": "string",
+        "description": "Opaque identifier allocated by the source and bound to this handoff.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Opaque identifier allocated by the source and bound to this handoff.\",\n  \"type\": \"string\",\n  \"minLength\": 1,\n  \"x-wos\": {\n    \"openStringKind\": \"identifier\"\n  }\n}\n ```\n </details>"
+      },
+      "AcceptedAttachmentDescriptorFieldPath": {
+        "type": "string",
+        "description": "RFC 6901 JSON Pointer relative to the accepted Response.data value, not the Response root. D1 photo is /photo; a repeated nested photo is /household/0/photo. Preserve the actual traversal pointer with ~0/~1 escaping; no dot-path conversion or /data prefix. Source must resolve Response.data.pointer(fieldPath) to the exact accepted attachment descriptor.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"RFC 6901 JSON Pointer relative to the accepted Response.data value, not the Response root. D1 photo is /photo; a repeated nested photo is /household/0/photo. Preserve the actual traversal pointer with ~0/~1 escaping; no dot-path conversion or /data prefix. Source must resolve Response.data.pointer(fieldPath) to the exact accepted attachment descriptor.\",\n  \"type\": \"string\",\n  \"pattern\": \"^/.*$\"\n}\n ```\n </details>"
+      },
+      "AcceptedAttachmentDescriptorFileName": {
+        "type": "string",
+        "description": "Filename from the exact accepted Response attachment descriptor, frozen at acceptance. This is the name as filed; it does not assert the upload-time filename.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Filename from the exact accepted Response attachment descriptor, frozen at acceptance. This is the name as filed; it does not assert the upload-time filename.\",\n  \"type\": \"string\",\n  \"minLength\": 1,\n  \"x-wos\": {\n    \"openStringKind\": \"prose\"\n  }\n}\n ```\n </details>"
+      },
+      "AcceptedAttachmentDescriptorHash": {
+        "type": "string",
+        "description": "SHA-256 of original attachment bytes, checked on each source read.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"SHA-256 of original attachment bytes, checked on each source read.\",\n  \"type\": \"string\",\n  \"pattern\": \"^sha256:[0-9a-f]{64}$\"\n}\n ```\n </details>"
+      },
+      "AcceptedAttachmentDescriptorMediaType": {
+        "type": "string",
+        "description": "Retained MIME media type, independently checked before serving bytes.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Retained MIME media type, independently checked before serving bytes.\",\n  \"type\": \"string\",\n  \"pattern\": \"^[a-zA-Z0-9!#$&^_.+-]+/[a-zA-Z0-9!#$&^_.+-]+$\"\n}\n ```\n </details>"
+      },
+      "AcceptedAuthoredArtifact": {
+        "type": "object",
+        "description": "Immutable authored artifact actually used by the accepted filing; never the current active artifact.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Immutable authored artifact actually used by the accepted filing; never the current active artifact.\",\n  \"type\": \"object\",\n  \"required\": [\n    \"document\",\n    \"hash\",\n    \"kind\",\n    \"url\",\n    \"version\"\n  ],\n  \"properties\": {\n    \"document\": {\n      \"description\": \"Exact parsed retained owner-native document. Source validates the kind-specific canonical Formspec schema; no rewritten fields.\",\n      \"tsType\": \"unknown\"\n    },\n    \"hash\": {\n      \"description\": \"SHA-256 of the exact retained raw UTF-8 artifact bytes.\",\n      \"type\": \"string\",\n      \"pattern\": \"^sha256:[0-9a-f]{64}$\"\n    },\n    \"kind\": {\n      \"description\": \"Formspec authored artifact family.\",\n      \"enum\": [\n        \"definition\",\n        \"locale\",\n        \"component\",\n        \"theme\"\n      ]\n    },\n    \"url\": {\n      \"description\": \"Original artifact identity.\",\n      \"type\": \"string\",\n      \"format\": \"uri\"\n    },\n    \"version\": {\n      \"description\": \"Exact authored artifact version.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"identifier\"\n      }\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
+        "required": [
+          "document",
+          "hash",
+          "kind",
+          "url",
+          "version"
+        ],
+        "properties": {
+          "document": {
+            "description": "Exact parsed retained owner-native document. Source validates the kind-specific canonical Formspec schema; no rewritten fields."
+          },
+          "hash": {
+            "$ref": "#/components/schemas/AcceptedAuthoredArtifactHash",
+            "description": "SHA-256 of the exact retained raw UTF-8 artifact bytes."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/AcceptedAuthoredArtifactKind",
+            "description": "Formspec authored artifact family."
+          },
+          "url": {
+            "type": "string",
+            "description": "Original artifact identity."
+          },
+          "version": {
+            "$ref": "#/components/schemas/AcceptedAuthoredArtifactVersion",
+            "description": "Exact authored artifact version."
+          }
+        },
+        "additionalProperties": false
+      },
+      "AcceptedAuthoredArtifactHash": {
+        "type": "string",
+        "description": "SHA-256 of the exact retained raw UTF-8 artifact bytes.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"SHA-256 of the exact retained raw UTF-8 artifact bytes.\",\n  \"type\": \"string\",\n  \"pattern\": \"^sha256:[0-9a-f]{64}$\"\n}\n ```\n </details>"
+      },
+      "AcceptedAuthoredArtifactKind": {
+        "type": "string",
+        "description": "Formspec authored artifact family.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Formspec authored artifact family.\",\n  \"enum\": [\n    \"definition\",\n    \"locale\",\n    \"component\",\n    \"theme\"\n  ]\n}\n ```\n </details>",
+        "enum": [
+          "definition",
+          "locale",
+          "component",
+          "theme"
+        ]
+      },
+      "AcceptedAuthoredArtifactVersion": {
+        "type": "string",
+        "description": "Exact authored artifact version.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Exact authored artifact version.\",\n  \"type\": \"string\",\n  \"minLength\": 1,\n  \"x-wos\": {\n    \"openStringKind\": \"identifier\"\n  }\n}\n ```\n </details>"
+      },
+      "AcceptedIntakeEvidence": {
+        "type": "object",
+        "description": "Source-owned immutable accepted evidence returned by the protected service resolver. Native JSON is opaque to WOS code generation, but must pass canonical Formspec validation and cross-field qualification before acceptance.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Source-owned immutable accepted evidence returned by the protected service resolver. Native JSON is opaque to WOS code generation, but must pass canonical Formspec validation and cross-field qualification before acceptance.\",\n  \"type\": \"object\",\n  \"required\": [\n    \"artifacts\",\n    \"attachments\",\n    \"definition\",\n    \"definitionHash\",\n    \"handoff\",\n    \"materialHistory\",\n    \"originalEvaluation\",\n    \"response\",\n    \"signatureVerification\",\n    \"validationReport\"\n  ],\n  \"properties\": {\n    \"artifacts\": {\n      \"description\": \"Additional authored artifacts actually used for this accepted rendering; no speculative inventory.\",\n      \"type\": \"array\",\n      \"items\": {\n        \"description\": \"Retained artifact.\",\n        \"$ref\": \"#/$defs/AcceptedAuthoredArtifact\"\n      }\n    },\n    \"attachments\": {\n      \"description\": \"Accepted field-bound immutable attachments.\",\n      \"type\": \"array\",\n      \"items\": {\n        \"description\": \"Original attachment metadata.\",\n        \"$ref\": \"#/$defs/AcceptedAttachmentDescriptor\"\n      }\n    },\n    \"definition\": {\n      \"description\": \"Exact Definition artifact; kind must be definition and URL/version match Response and handoff.\",\n      \"$ref\": \"#/$defs/AcceptedAuthoredArtifact\"\n    },\n    \"definitionHash\": {\n      \"description\": \"Maintained canonical semantic Definition hash, distinct from raw artifact hash.\",\n      \"type\": \"string\",\n      \"pattern\": \"^sha256:[0-9a-f]{64}$\"\n    },\n    \"displayedLocale\": {\n      \"description\": \"Exact recorded Locale; kind locale and URL/version/language agree with accepted Response.displayedLocale. Omit only when inline Definition wording was actually displayed.\",\n      \"$ref\": \"#/$defs/AcceptedAuthoredArtifact\"\n    },\n    \"handoff\": {\n      \"description\": \"Exact canonical IntakeHandoff1.0, unchanged, including original session and genuine material-history head. Optional actorRef/subjectRef may be omitted; no invented nulls or new members.\",\n      \"tsType\": \"unknown\",\n      \"x-wos\": {\n        \"ownerSchema\": \"https://formspec.org/schemas/intake-handoff/1.0\",\n        \"validationOwner\": \"Formspec trusted accepted-evidence resolver; WOS must refuse unqualified source values\"\n      }\n    },\n    \"materialHistory\": {\n      \"description\": \"Actual retained RespondentLedger material history selected by ledgerHeadRef, with genuine event/session/Response/report association. Does not assert anchoring.\",\n      \"tsType\": \"unknown\",\n      \"x-wos\": {\n        \"ownerSchema\": \"https://formspec.org/schemas/respondent-ledger.schema.json\",\n        \"validationOwner\": \"Formspec trusted accepted-evidence resolver; WOS must refuse unqualified source values\"\n      }\n    },\n    \"originalEvaluation\": {\n      \"description\": \"Exact original source evaluation receipt (values/validations/etc), retained unchanged. This is not the canonical ValidationReport; canonical report is derived once from that same actual result, clock and pinned Definition through the maintained Formspec builder.\",\n      \"tsType\": \"unknown\"\n    },\n    \"response\": {\n      \"description\": \"Exact full accepted Response, including original signatures, pins and answers; validate maintained full responseHash.\",\n      \"tsType\": \"unknown\",\n      \"x-wos\": {\n        \"ownerSchema\": \"https://formspec.org/schemas/response/1.0\",\n        \"validationOwner\": \"Formspec trusted accepted-evidence resolver; WOS must refuse unqualified source values\"\n      }\n    },\n    \"signatureVerification\": {\n      \"description\": \"Retained original source signature verification.\",\n      \"$ref\": \"#/$defs/AcceptedSignatureVerification\"\n    },\n    \"validationReport\": {\n      \"description\": \"Original retained report selected by handoff validationReportRef; never reevaluated at read time.\",\n      \"tsType\": \"unknown\",\n      \"x-wos\": {\n        \"ownerSchema\": \"https://formspec.org/schemas/validationReport/1.0\",\n        \"validationOwner\": \"Formspec trusted accepted-evidence resolver; WOS must refuse unqualified source values\"\n      }\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
+        "required": [
+          "artifacts",
+          "attachments",
+          "definition",
+          "definitionHash",
+          "handoff",
+          "materialHistory",
+          "originalEvaluation",
+          "response",
+          "signatureVerification",
+          "validationReport"
+        ],
+        "properties": {
+          "artifacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AcceptedAuthoredArtifact"
+            },
+            "description": "Additional authored artifacts actually used for this accepted rendering; no speculative inventory."
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AcceptedAttachmentDescriptor"
+            },
+            "description": "Accepted field-bound immutable attachments."
+          },
+          "definition": {
+            "$ref": "#/components/schemas/AcceptedAuthoredArtifact",
+            "description": "Exact Definition artifact; kind must be definition and URL/version match Response and handoff."
+          },
+          "definitionHash": {
+            "$ref": "#/components/schemas/AcceptedIntakeEvidenceDefinitionHash",
+            "description": "Maintained canonical semantic Definition hash, distinct from raw artifact hash."
+          },
+          "displayedLocale": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AcceptedAuthoredArtifact",
+                "description": "Exact recorded Locale; kind locale and URL/version/language agree with accepted Response.displayedLocale. Omit only when inline Definition wording was actually displayed."
+              }
+            ]
+          },
+          "handoff": {
+            "description": "Exact canonical IntakeHandoff1.0, unchanged, including original session and genuine material-history head. Optional actorRef/subjectRef may be omitted; no invented nulls or new members."
+          },
+          "materialHistory": {
+            "description": "Actual retained RespondentLedger material history selected by ledgerHeadRef, with genuine event/session/Response/report association. Does not assert anchoring."
+          },
+          "originalEvaluation": {
+            "description": "Exact original source evaluation receipt (values/validations/etc), retained unchanged. This is not the canonical ValidationReport; canonical report is derived once from that same actual result, clock and pinned Definition through the maintained Formspec builder."
+          },
+          "response": {
+            "description": "Exact full accepted Response, including original signatures, pins and answers; validate maintained full responseHash."
+          },
+          "signatureVerification": {
+            "$ref": "#/components/schemas/AcceptedSignatureVerification",
+            "description": "Retained original source signature verification."
+          },
+          "validationReport": {
+            "description": "Original retained report selected by handoff validationReportRef; never reevaluated at read time."
+          }
+        },
+        "additionalProperties": false
+      },
+      "AcceptedIntakeEvidenceDefinitionHash": {
+        "type": "string",
+        "description": "Maintained canonical semantic Definition hash, distinct from raw artifact hash.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Maintained canonical semantic Definition hash, distinct from raw artifact hash.\",\n  \"type\": \"string\",\n  \"pattern\": \"^sha256:[0-9a-f]{64}$\"\n}\n ```\n </details>"
+      },
+      "AcceptedSignatureVerification": {
+        "type": "object",
+        "description": "Original source verification facts. Acceptance, pseudonymous session custody and full Response hash do not prove civil identity.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Original source verification facts. Acceptance, pseudonymous session custody and full Response hash do not prove civil identity.\",\n  \"type\": \"object\",\n  \"required\": [\n    \"details\",\n    \"profile\",\n    \"status\"\n  ],\n  \"properties\": {\n    \"details\": {\n      \"description\": \"Exact retained source verifier details; not a newly generated legal or identity assertion.\",\n      \"tsType\": \"unknown\"\n    },\n    \"keyId\": {\n      \"description\": \"Actual verification key pin when a key was used.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"identifier\"\n      }\n    },\n    \"profile\": {\n      \"description\": \"Configured verification profile actually used.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"identifier\"\n      }\n    },\n    \"signedPayloadDigest\": {\n      \"description\": \"Original signed-payload digest, distinct from the full accepted Response hash.\",\n      \"type\": \"string\",\n      \"pattern\": \"^sha256:[0-9a-f]{64}$\"\n    },\n    \"status\": {\n      \"description\": \"Actual source verifier result; verified requires successful configured verification of the original authored signature.\",\n      \"enum\": [\n        \"verified\",\n        \"unsigned\",\n        \"unverified\",\n        \"invalid\"\n      ]\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
+        "required": [
+          "details",
+          "profile",
+          "status"
+        ],
+        "properties": {
+          "details": {
+            "description": "Exact retained source verifier details; not a newly generated legal or identity assertion."
+          },
+          "keyId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AcceptedSignatureVerificationKeyId",
+                "description": "Actual verification key pin when a key was used."
+              }
+            ]
+          },
+          "profile": {
+            "$ref": "#/components/schemas/AcceptedSignatureVerificationProfile",
+            "description": "Configured verification profile actually used."
+          },
+          "signedPayloadDigest": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AcceptedSignatureVerificationSignedPayloadDigest",
+                "description": "Original signed-payload digest, distinct from the full accepted Response hash."
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/AcceptedSignatureVerificationStatus",
+            "description": "Actual source verifier result; verified requires successful configured verification of the original authored signature."
+          }
+        },
+        "additionalProperties": false
+      },
+      "AcceptedSignatureVerificationKeyId": {
+        "type": "string",
+        "description": "Actual verification key pin when a key was used.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Actual verification key pin when a key was used.\",\n  \"type\": \"string\",\n  \"minLength\": 1,\n  \"x-wos\": {\n    \"openStringKind\": \"identifier\"\n  }\n}\n ```\n </details>"
+      },
+      "AcceptedSignatureVerificationProfile": {
+        "type": "string",
+        "description": "Configured verification profile actually used.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Configured verification profile actually used.\",\n  \"type\": \"string\",\n  \"minLength\": 1,\n  \"x-wos\": {\n    \"openStringKind\": \"identifier\"\n  }\n}\n ```\n </details>"
+      },
+      "AcceptedSignatureVerificationSignedPayloadDigest": {
+        "type": "string",
+        "description": "Original signed-payload digest, distinct from the full accepted Response hash.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Original signed-payload digest, distinct from the full accepted Response hash.\",\n  \"type\": \"string\",\n  \"pattern\": \"^sha256:[0-9a-f]{64}$\"\n}\n ```\n </details>"
+      },
+      "AcceptedSignatureVerificationStatus": {
+        "type": "string",
+        "description": "Actual source verifier result; verified requires successful configured verification of the original authored signature.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Actual source verifier result; verified requires successful configured verification of the original authored signature.\",\n  \"enum\": [\n    \"verified\",\n    \"unsigned\",\n    \"unverified\",\n    \"invalid\"\n  ]\n}\n ```\n </details>",
+        "enum": [
+          "verified",
+          "unsigned",
+          "unverified",
+          "invalid"
+        ]
+      },
       "ActorRef": {
         "type": "string",
         "description": "Stable actor reference from the identity/governance subsystem (ADR 0082 D-9). The principal-class segment is the closed VISION §V taxonomy `human | service-account | workload | support`. Identity details live once in the identity/governance subsystem; every record references actors by URN. Replaces the legacy nested `actor: {id,type,name}` shape from prior portal art.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Stable actor reference from the identity/governance subsystem (ADR 0082 D-9). The principal-class segment is the closed VISION §V taxonomy `human | service-account | workload | support`. Identity details live once in the identity/governance subsystem; every record references actors by URN. Replaces the legacy nested `actor: {id,type,name}` shape from prior portal art.\",\n  \"examples\": [\n    \"actor:human:caseworker-17\",\n    \"actor:service-account:notice-mailer\",\n    \"actor:workload:wos-runtime\",\n    \"actor:support:agency-admin-42\"\n  ],\n  \"type\": \"string\",\n  \"pattern\": \"^actor:(human|service-account|workload|support):[A-Za-z0-9._-]+$\"\n}\n ```\n </details>"
@@ -3789,6 +4380,47 @@
             "type": "string"
           }
         }
+      },
+      "CaseFileRead": {
+        "type": "object",
+        "description": "Authorized staff read of the immutable initial filing and actual WOS identities. This is separate from mutable runtime case state.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Authorized staff read of the immutable initial filing and actual WOS identities. This is separate from mutable runtime case state.\",\n  \"type\": \"object\",\n  \"required\": [\n    \"caseLedgerId\",\n    \"caseReference\",\n    \"intake\",\n    \"processId\",\n    \"tasks\"\n  ],\n  \"properties\": {\n    \"caseLedgerId\": {\n      \"description\": \"Actual accepted durable case ledger URN.\",\n      \"$ref\": \"#/$defs/WosResourceUrn\"\n    },\n    \"caseReference\": {\n      \"description\": \"Actual separate human-readable case reference.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"prose\"\n      }\n    },\n    \"intake\": {\n      \"description\": \"Immutable initial accepted source snapshot, qualified and durably associated with this case.\",\n      \"$ref\": \"#/$defs/AcceptedIntakeEvidence\"\n    },\n    \"processId\": {\n      \"description\": \"Actual process created for this intake.\",\n      \"$ref\": \"#/$defs/WosResourceUrn\"\n    },\n    \"tasks\": {\n      \"description\": \"Actual tasks created by the maintained runtime, never pre-reserved or synthesized.\",\n      \"type\": \"array\",\n      \"items\": {\n        \"description\": \"Maintained task read shape.\",\n        \"$ref\": \"#/$defs/TaskListItem\"\n      },\n      \"minItems\": 1\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
+        "required": [
+          "caseLedgerId",
+          "caseReference",
+          "intake",
+          "processId",
+          "tasks"
+        ],
+        "properties": {
+          "caseLedgerId": {
+            "$ref": "#/components/schemas/WosResourceUrn",
+            "description": "Actual accepted durable case ledger URN."
+          },
+          "caseReference": {
+            "$ref": "#/components/schemas/CaseFileReadCaseReference",
+            "description": "Actual separate human-readable case reference."
+          },
+          "intake": {
+            "$ref": "#/components/schemas/AcceptedIntakeEvidence",
+            "description": "Immutable initial accepted source snapshot, qualified and durably associated with this case."
+          },
+          "processId": {
+            "$ref": "#/components/schemas/WosResourceUrn",
+            "description": "Actual process created for this intake."
+          },
+          "tasks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaskListItem"
+            },
+            "description": "Actual tasks created by the maintained runtime, never pre-reserved or synthesized."
+          }
+        },
+        "additionalProperties": false
+      },
+      "CaseFileReadCaseReference": {
+        "type": "string",
+        "description": "Actual separate human-readable case reference.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Actual separate human-readable case reference.\",\n  \"type\": \"string\",\n  \"minLength\": 1,\n  \"x-wos\": {\n    \"openStringKind\": \"prose\"\n  }\n}\n ```\n </details>"
       },
       "CaseFileSnapshot": {
         "type": "object",
@@ -6176,6 +6808,126 @@
       "FactsTierRecordTransitionTagsItem": {
         "type": "string",
         "description": "`FactsTierRecordTransitionTagsItem`\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"type\": \"string\",\n  \"minLength\": 1,\n  \"x-wos\": {\n    \"openStringKind\": \"tagLabel\"\n  }\n}\n ```\n </details>"
+      },
+      "ImpactLevel": {
+        "type": "string",
+        "description": "Closed kernel impact level (Kernel §6 proportionality index). Byte-aligned mirror of `wos-workflow.schema.json#/$defs/ImpactLevel` (ADR 0082 D-13 gate 6). Defaults to the workflow's declared `impactLevel` when not overridden on the task pattern. Closed-no-extension by design: the four-literal taxonomy is normative across kernel, governance, AI-oversight, and review-protocol gating.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Closed kernel impact level (Kernel §6 proportionality index). Byte-aligned mirror of `wos-workflow.schema.json#/$defs/ImpactLevel` (ADR 0082 D-13 gate 6). Defaults to the workflow's declared `impactLevel` when not overridden on the task pattern. Closed-no-extension by design: the four-literal taxonomy is normative across kernel, governance, AI-oversight, and review-protocol gating.\",\n  \"examples\": [\n    \"rights-impacting\"\n  ],\n  \"enum\": [\n    \"informational\",\n    \"operational\",\n    \"rights-impacting\",\n    \"safety-impacting\"\n  ],\n  \"x-wos\": {\n    \"mirror\": \"wos-workflow.schema.json#/$defs/ImpactLevel\"\n  }\n}\n ```\n </details>",
+        "enum": [
+          "informational",
+          "operational",
+          "rights-impacting",
+          "safety-impacting"
+        ]
+      },
+      "IntakeHandoffReceipt": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Return only after actual case/process and human task creation commits.",
+            "required": [
+              "caseLedgerId",
+              "caseReference",
+              "handoffId",
+              "processId",
+              "tasks",
+              "status"
+            ],
+            "properties": {
+              "caseLedgerId": {
+                "$ref": "#/components/schemas/WosResourceUrn",
+                "description": "Committed case."
+              },
+              "caseReference": {
+                "$ref": "#/components/schemas/IntakeHandoffReceiptCaseReference",
+                "description": "Assigned human reference."
+              },
+              "handoffId": {
+                "$ref": "#/components/schemas/IntakeHandoffReceiptHandoffId",
+                "description": "Original stable source handoff identifier; never regenerated on retry."
+              },
+              "processId": {
+                "$ref": "#/components/schemas/WosResourceUrn",
+                "description": "Created process."
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "accepted"
+                ]
+              },
+              "tasks": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/TaskListItem"
+                },
+                "description": "Actually created reviewer tasks."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "No case identity is asserted for this outcome.",
+            "required": [
+              "code",
+              "handoffId",
+              "status"
+            ],
+            "properties": {
+              "code": {
+                "$ref": "#/components/schemas/IntakeHandoffReceiptCode",
+                "description": "Stable machine-readable reason."
+              },
+              "handoffId": {
+                "$ref": "#/components/schemas/IntakeHandoffReceiptHandoffId",
+                "description": "Original stable source handoff identifier; never regenerated on retry."
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "pending"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "No case identity is asserted for this outcome.",
+            "required": [
+              "code",
+              "handoffId",
+              "status"
+            ],
+            "properties": {
+              "code": {
+                "$ref": "#/components/schemas/IntakeHandoffReceiptCode",
+                "description": "Stable machine-readable reason."
+              },
+              "handoffId": {
+                "$ref": "#/components/schemas/IntakeHandoffReceiptHandoffId",
+                "description": "Original stable source handoff identifier; never regenerated on retry."
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "rejected"
+                ]
+              }
+            }
+          }
+        ],
+        "description": "Closed transport outcome. Pending is retriable qualification/delivery before runtime acceptance, not a finalized deferred runtime receipt. Identical accepted replay returns the same identities.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Closed transport outcome. Pending is retriable qualification/delivery before runtime acceptance, not a finalized deferred runtime receipt. Identical accepted replay returns the same identities.\",\n  \"oneOf\": [\n    {\n      \"description\": \"Return only after actual case/process and human task creation commits.\",\n      \"type\": \"object\",\n      \"required\": [\n        \"caseLedgerId\",\n        \"caseReference\",\n        \"handoffId\",\n        \"processId\",\n        \"status\",\n        \"tasks\"\n      ],\n      \"properties\": {\n        \"caseLedgerId\": {\n          \"description\": \"Committed case.\",\n          \"$ref\": \"#/$defs/WosResourceUrn\"\n        },\n        \"caseReference\": {\n          \"description\": \"Assigned human reference.\",\n          \"type\": \"string\",\n          \"minLength\": 1,\n          \"x-wos\": {\n            \"openStringKind\": \"prose\"\n          }\n        },\n        \"handoffId\": {\n          \"description\": \"Original stable source handoff identifier; never regenerated on retry.\",\n          \"type\": \"string\",\n          \"minLength\": 1,\n          \"x-wos\": {\n            \"openStringKind\": \"identifier\"\n          }\n        },\n        \"processId\": {\n          \"description\": \"Created process.\",\n          \"$ref\": \"#/$defs/WosResourceUrn\"\n        },\n        \"status\": {\n          \"description\": \"Committed WOS acceptance.\",\n          \"const\": \"accepted\"\n        },\n        \"tasks\": {\n          \"description\": \"Actually created reviewer tasks.\",\n          \"type\": \"array\",\n          \"items\": {\n            \"description\": \"Maintained task read shape.\",\n            \"$ref\": \"#/$defs/TaskListItem\"\n          },\n          \"minItems\": 1\n        }\n      },\n      \"additionalProperties\": false\n    },\n    {\n      \"description\": \"No case identity is asserted for this outcome.\",\n      \"type\": \"object\",\n      \"required\": [\n        \"code\",\n        \"handoffId\",\n        \"status\"\n      ],\n      \"properties\": {\n        \"code\": {\n          \"description\": \"Stable machine-readable reason.\",\n          \"type\": \"string\",\n          \"minLength\": 1,\n          \"x-wos\": {\n            \"openStringKind\": \"identifier\"\n          }\n        },\n        \"handoffId\": {\n          \"description\": \"Original stable source handoff identifier; never regenerated on retry.\",\n          \"type\": \"string\",\n          \"minLength\": 1,\n          \"x-wos\": {\n            \"openStringKind\": \"identifier\"\n          }\n        },\n        \"status\": {\n          \"description\": \"Transport outcome.\",\n          \"const\": \"pending\"\n        }\n      },\n      \"additionalProperties\": false\n    },\n    {\n      \"description\": \"No case identity is asserted for this outcome.\",\n      \"type\": \"object\",\n      \"required\": [\n        \"code\",\n        \"handoffId\",\n        \"status\"\n      ],\n      \"properties\": {\n        \"code\": {\n          \"description\": \"Stable machine-readable reason.\",\n          \"type\": \"string\",\n          \"minLength\": 1,\n          \"x-wos\": {\n            \"openStringKind\": \"identifier\"\n          }\n        },\n        \"handoffId\": {\n          \"description\": \"Original stable source handoff identifier; never regenerated on retry.\",\n          \"type\": \"string\",\n          \"minLength\": 1,\n          \"x-wos\": {\n            \"openStringKind\": \"identifier\"\n          }\n        },\n        \"status\": {\n          \"description\": \"Transport outcome.\",\n          \"const\": \"rejected\"\n        }\n      },\n      \"additionalProperties\": false\n    }\n  ]\n}\n ```\n </details>"
+      },
+      "IntakeHandoffReceiptCaseReference": {
+        "type": "string",
+        "description": "Assigned human reference.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Assigned human reference.\",\n  \"type\": \"string\",\n  \"minLength\": 1,\n  \"x-wos\": {\n    \"openStringKind\": \"prose\"\n  }\n}\n ```\n </details>"
+      },
+      "IntakeHandoffReceiptCode": {
+        "type": "string",
+        "description": "Stable machine-readable reason.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Stable machine-readable reason.\",\n  \"type\": \"string\",\n  \"minLength\": 1,\n  \"x-wos\": {\n    \"openStringKind\": \"identifier\"\n  }\n}\n ```\n </details>"
+      },
+      "IntakeHandoffReceiptHandoffId": {
+        "type": "string",
+        "description": "Original stable source handoff identifier; never regenerated on retry.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Original stable source handoff identifier; never regenerated on retry.\",\n  \"type\": \"string\",\n  \"minLength\": 1,\n  \"x-wos\": {\n    \"openStringKind\": \"identifier\"\n  }\n}\n ```\n </details>"
       },
       "IntegrityDigest": {
         "type": "object",
@@ -8766,6 +9518,139 @@
           "guideline"
         ]
       },
+      "TaskKind": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/TaskKindVariant0"
+          },
+          {
+            "$ref": "#/components/schemas/TaskKindVariant1"
+          }
+        ],
+        "description": "Closed-with-vendor-extension task family (ADR 0082 D-12). Reserved literals: `intake` (initial application capture); `review` (governance review-protocol step); `determination` (rights-impacting decision per Kernel S9.2 / governance S6); `signature` (signature-profile signer step); `correspondence-response` (reply to inbound correspondence); `hold-resolution` (action that resumes a typed hold per governance S12); `escalation` (manual escalation step); `verification` (independent confirmation of a prior mutation, see `verificationLevel` in `instance.schema.json`). Vendor extensions MUST use an `x-` prefix.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Closed-with-vendor-extension task family (ADR 0082 D-12). Reserved literals: `intake` (initial application capture); `review` (governance review-protocol step); `determination` (rights-impacting decision per Kernel S9.2 / governance S6); `signature` (signature-profile signer step); `correspondence-response` (reply to inbound correspondence); `hold-resolution` (action that resumes a typed hold per governance S12); `escalation` (manual escalation step); `verification` (independent confirmation of a prior mutation, see `verificationLevel` in `instance.schema.json`). Vendor extensions MUST use an `x-` prefix.\",\n  \"examples\": [\n    \"review\",\n    \"determination\"\n  ],\n  \"oneOf\": [\n    {\n      \"enum\": [\n        \"intake\",\n        \"review\",\n        \"determination\",\n        \"signature\",\n        \"correspondence-response\",\n        \"hold-resolution\",\n        \"escalation\",\n        \"verification\"\n      ]\n    },\n    {\n      \"type\": \"string\",\n      \"pattern\": \"^x-[a-z][a-z0-9-]*$\"\n    }\n  ]\n}\n ```\n </details>"
+      },
+      "TaskKindVariant0": {
+        "type": "string",
+        "description": "`TaskKindVariant0`\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"enum\": [\n    \"intake\",\n    \"review\",\n    \"determination\",\n    \"signature\",\n    \"correspondence-response\",\n    \"hold-resolution\",\n    \"escalation\",\n    \"verification\"\n  ]\n}\n ```\n </details>",
+        "enum": [
+          "intake",
+          "review",
+          "determination",
+          "signature",
+          "correspondence-response",
+          "hold-resolution",
+          "escalation",
+          "verification"
+        ]
+      },
+      "TaskKindVariant1": {
+        "type": "string",
+        "description": "`TaskKindVariant1`\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"type\": \"string\",\n  \"pattern\": \"^x-[a-z][a-z0-9-]*$\"\n}\n ```\n </details>"
+      },
+      "TaskListItem": {
+        "type": "object",
+        "description": "Lightweight task projection for list views (ADR 0082 D-3). Carries identity, classification, status, deadline, and binding metadata — enough to drive an inbox-style list without forcing the heavier `Task` body. The full `Task` shape is fetched per row on detail navigation.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Lightweight task projection for list views (ADR 0082 D-3). Carries identity, classification, status, deadline, and binding metadata — enough to drive an inbox-style list without forcing the heavier `Task` body. The full `Task` shape is fetched per row on detail navigation.\",\n  \"type\": \"object\",\n  \"required\": [\n    \"createdAt\",\n    \"id\",\n    \"kind\",\n    \"processId\",\n    \"status\",\n    \"title\"\n  ],\n  \"properties\": {\n    \"assignedActor\": {\n      \"description\": \"Actor URN currently responsible for this task. Updated on delegation or escalation.\",\n      \"$ref\": \"#/$defs/ActorRef\"\n    },\n    \"createdAt\": {\n      \"description\": \"UTC RFC 3339 timestamp when the task was created.\",\n      \"type\": \"string\",\n      \"format\": \"date-time\"\n    },\n    \"deadline\": {\n      \"description\": \"UTC RFC 3339 deadline by which the actor SHOULD submit the response before SLA breach (governance S10.3).\",\n      \"type\": \"string\",\n      \"format\": \"date-time\"\n    },\n    \"id\": {\n      \"description\": \"Stable public URN for this task.\",\n      \"$ref\": \"#/$defs/WosResourceUrn\"\n    },\n    \"impactLevel\": {\n      \"description\": \"Closed-with-vendor-extension impact level.\",\n      \"$ref\": \"#/$defs/ImpactLevel\"\n    },\n    \"kind\": {\n      \"description\": \"Closed-with-vendor-extension task family classification.\",\n      \"$ref\": \"#/$defs/TaskKind\"\n    },\n    \"processId\": {\n      \"description\": \"Workflow process URN this task belongs to.\",\n      \"$ref\": \"#/$defs/WosResourceUrn\"\n    },\n    \"status\": {\n      \"description\": \"Closed user-facing task lifecycle posture.\",\n      \"$ref\": \"#/$defs/TaskStatus\"\n    },\n    \"title\": {\n      \"description\": \"Short human-readable task headline.\",\n      \"examples\": [\n        \"Complete eligibility intake\"\n      ],\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"prose\"\n      }\n    },\n    \"updatedAt\": {\n      \"description\": \"UTC RFC 3339 timestamp when the task projection was last refreshed.\",\n      \"type\": \"string\",\n      \"format\": \"date-time\"\n    },\n    \"workflowUrl\": {\n      \"description\": \"Absolute URI of the governing Workflow Document.\",\n      \"$ref\": \"#/$defs/WorkflowUrl\"\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
+        "required": [
+          "createdAt",
+          "id",
+          "kind",
+          "processId",
+          "status",
+          "title"
+        ],
+        "properties": {
+          "assignedActor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActorRef",
+                "description": "Actor URN currently responsible for this task. Updated on delegation or escalation."
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC RFC 3339 timestamp when the task was created."
+          },
+          "deadline": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "UTC RFC 3339 deadline by which the actor SHOULD submit the response before SLA breach (governance S10.3)."
+          },
+          "id": {
+            "$ref": "#/components/schemas/WosResourceUrn",
+            "description": "Stable public URN for this task."
+          },
+          "impactLevel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ImpactLevel",
+                "description": "Closed-with-vendor-extension impact level."
+              }
+            ]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TaskKind",
+            "description": "Closed-with-vendor-extension task family classification."
+          },
+          "processId": {
+            "$ref": "#/components/schemas/WosResourceUrn",
+            "description": "Workflow process URN this task belongs to."
+          },
+          "status": {
+            "$ref": "#/components/schemas/TaskStatus",
+            "description": "Closed user-facing task lifecycle posture."
+          },
+          "title": {
+            "$ref": "#/components/schemas/TaskListItemTitle",
+            "description": "Short human-readable task headline."
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "UTC RFC 3339 timestamp when the task projection was last refreshed."
+          },
+          "workflowUrl": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkflowUrl",
+                "description": "Absolute URI of the governing Workflow Document."
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "TaskListItemTitle": {
+        "type": "string",
+        "description": "Short human-readable task headline.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Short human-readable task headline.\",\n  \"examples\": [\n    \"Complete eligibility intake\"\n  ],\n  \"type\": \"string\",\n  \"minLength\": 1,\n  \"x-wos\": {\n    \"openStringKind\": \"prose\"\n  }\n}\n ```\n </details>"
+      },
+      "TaskStatus": {
+        "type": "string",
+        "description": "Closed user-facing task lifecycle for the public API (ADR 0082 D-12). The kernel runtime carries a richer `created|assigned|claimed|delegated|escalated` set on `wos-process.schema.json#/$defs/ActiveTask.status` for processor-side bookkeeping; the public API collapses those into the user-visible posture: `pending` (the actor has work to do); `drafted` (a partial response is saved); `submitted` (the actor's final response is committed and the task is no longer actionable); `dismissed` (the actor declined the task per delegation or escalation policy); `expired` (the SLA `targetDuration` elapsed without submission and the breach policy fired). No vendor-extension seam: the user-facing taxonomy is closed by design; richer kernel-side states surface in provenance and on `TaskOutcomeEvent.outcome`.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Closed user-facing task lifecycle for the public API (ADR 0082 D-12). The kernel runtime carries a richer `created|assigned|claimed|delegated|escalated` set on `wos-process.schema.json#/$defs/ActiveTask.status` for processor-side bookkeeping; the public API collapses those into the user-visible posture: `pending` (the actor has work to do); `drafted` (a partial response is saved); `submitted` (the actor's final response is committed and the task is no longer actionable); `dismissed` (the actor declined the task per delegation or escalation policy); `expired` (the SLA `targetDuration` elapsed without submission and the breach policy fired). No vendor-extension seam: the user-facing taxonomy is closed by design; richer kernel-side states surface in provenance and on `TaskOutcomeEvent.outcome`.\",\n  \"examples\": [\n    \"pending\",\n    \"drafted\"\n  ],\n  \"enum\": [\n    \"pending\",\n    \"drafted\",\n    \"submitted\",\n    \"dismissed\",\n    \"expired\"\n  ]\n}\n ```\n </details>",
+        "enum": [
+          "pending",
+          "drafted",
+          "submitted",
+          "dismissed",
+          "expired"
+        ]
+      },
       "TemplateRef": {
         "type": "string",
         "description": "Identifier of a delivery-sidecar template (entry template id for inbound logging, notification template key for outbound rendering). Resolution happens against the workflow's delivery sidecar at the server.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Identifier of a delivery-sidecar template (entry template id for inbound logging, notification template key for outbound rendering). Resolution happens against the workflow's delivery sidecar at the server.\",\n  \"examples\": [\n    \"inboundMail\",\n    \"adverseBenefitsDecision\"\n  ],\n  \"type\": \"string\",\n  \"minLength\": 1,\n  \"x-wos\": {\n    \"openStringKind\": \"identifier\"\n  }\n}\n ```\n </details>"
@@ -9000,6 +9885,13 @@
       "WosResourceUrn": {
         "type": "string",
         "description": "Public WOS API resource URN (ADR 0092 D-1). Shape `urn:wos:<typeid>` — 3-segment URN whose namespace-specific string IS the TypeID. Strip `urn:wos:` to extract the canonical TypeID. The TypeID prefix carries the record family (`case | process | prov | gov | ai | assurance`); `case` identifies the durable case ledger, while `process` identifies a workflow runtime process bound to that ledger. Sub-resources (tasks, delegations, holds) are identified by URL path context, not independent TypeIDs. Task sub-resources append `/tasks/{taskId}` to the parent process URN.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Public WOS API resource URN (ADR 0092 D-1). Shape `urn:wos:<typeid>` — 3-segment URN whose namespace-specific string IS the TypeID. Strip `urn:wos:` to extract the canonical TypeID. The TypeID prefix carries the record family (`case | process | prov | gov | ai | assurance`); `case` identifies the durable case ledger, while `process` identifies a workflow runtime process bound to that ledger. Sub-resources (tasks, delegations, holds) are identified by URL path context, not independent TypeIDs. Task sub-resources append `/tasks/{taskId}` to the parent process URN.\",\n  \"examples\": [\n    \"urn:wos:sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc\",\n    \"urn:wos:default_case_01hw7rm71vfay8vvw14d2pf2db\",\n    \"urn:wos:default_process_01hw7rm71vfay8vvw14d2pf2db/tasks/complete-intake\",\n    \"urn:wos:agency-gov_prov_01jqrxabcd3f8xtx9qxkkv3raa\",\n    \"urn:wos:acme-corp_ai_01jqrpd32jf8xtx9qxkkv3rqsc\"\n  ],\n  \"type\": \"string\",\n  \"pattern\": \"^urn:wos:[a-z][a-z0-9-]*_(case|process|prov|gov|ai|assurance|x-[a-z]+-[a-z]+)_[0-9a-hjkmnp-tv-z]{26}(?:/tasks/[a-zA-Z0-9._-]+)?$\"\n}\n ```\n </details>"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
       }
     }
   },
