@@ -4413,7 +4413,8 @@
             "items": {
               "$ref": "#/components/schemas/TaskListItem"
             },
-            "description": "Actual tasks created by the maintained runtime, never pre-reserved or synthesized."
+            "description": "Actual tasks created by the maintained runtime, never pre-reserved or synthesized.",
+            "minItems": 1
           }
         },
         "additionalProperties": false
@@ -6860,9 +6861,11 @@
                 "items": {
                   "$ref": "#/components/schemas/TaskListItem"
                 },
-                "description": "Actually created reviewer tasks."
+                "description": "Actually created reviewer tasks.",
+                "minItems": 1
               }
-            }
+            },
+            "additionalProperties": false
           },
           {
             "type": "object",
@@ -6887,7 +6890,8 @@
                   "pending"
                 ]
               }
-            }
+            },
+            "additionalProperties": false
           },
           {
             "type": "object",
@@ -6912,7 +6916,8 @@
                   "rejected"
                 ]
               }
-            }
+            },
+            "additionalProperties": false
           }
         ],
         "description": "Closed transport outcome. Pending is retriable qualification/delivery before runtime acceptance, not a finalized deferred runtime receipt. Identical accepted replay returns the same identities.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Closed transport outcome. Pending is retriable qualification/delivery before runtime acceptance, not a finalized deferred runtime receipt. Identical accepted replay returns the same identities.\",\n  \"oneOf\": [\n    {\n      \"description\": \"Return only after actual case/process and human task creation commits.\",\n      \"type\": \"object\",\n      \"required\": [\n        \"caseLedgerId\",\n        \"caseReference\",\n        \"handoffId\",\n        \"processId\",\n        \"status\",\n        \"tasks\"\n      ],\n      \"properties\": {\n        \"caseLedgerId\": {\n          \"description\": \"Committed case.\",\n          \"$ref\": \"#/$defs/WosResourceUrn\"\n        },\n        \"caseReference\": {\n          \"description\": \"Assigned human reference.\",\n          \"type\": \"string\",\n          \"minLength\": 1,\n          \"x-wos\": {\n            \"openStringKind\": \"prose\"\n          }\n        },\n        \"handoffId\": {\n          \"description\": \"Original stable source handoff identifier; never regenerated on retry.\",\n          \"type\": \"string\",\n          \"minLength\": 1,\n          \"x-wos\": {\n            \"openStringKind\": \"identifier\"\n          }\n        },\n        \"processId\": {\n          \"description\": \"Created process.\",\n          \"$ref\": \"#/$defs/WosResourceUrn\"\n        },\n        \"status\": {\n          \"description\": \"Committed WOS acceptance.\",\n          \"const\": \"accepted\"\n        },\n        \"tasks\": {\n          \"description\": \"Actually created reviewer tasks.\",\n          \"type\": \"array\",\n          \"items\": {\n            \"description\": \"Maintained task read shape.\",\n            \"$ref\": \"#/$defs/TaskListItem\"\n          },\n          \"minItems\": 1\n        }\n      },\n      \"additionalProperties\": false\n    },\n    {\n      \"description\": \"No case identity is asserted for this outcome.\",\n      \"type\": \"object\",\n      \"required\": [\n        \"code\",\n        \"handoffId\",\n        \"status\"\n      ],\n      \"properties\": {\n        \"code\": {\n          \"description\": \"Stable machine-readable reason.\",\n          \"type\": \"string\",\n          \"minLength\": 1,\n          \"x-wos\": {\n            \"openStringKind\": \"identifier\"\n          }\n        },\n        \"handoffId\": {\n          \"description\": \"Original stable source handoff identifier; never regenerated on retry.\",\n          \"type\": \"string\",\n          \"minLength\": 1,\n          \"x-wos\": {\n            \"openStringKind\": \"identifier\"\n          }\n        },\n        \"status\": {\n          \"description\": \"Transport outcome.\",\n          \"const\": \"pending\"\n        }\n      },\n      \"additionalProperties\": false\n    },\n    {\n      \"description\": \"No case identity is asserted for this outcome.\",\n      \"type\": \"object\",\n      \"required\": [\n        \"code\",\n        \"handoffId\",\n        \"status\"\n      ],\n      \"properties\": {\n        \"code\": {\n          \"description\": \"Stable machine-readable reason.\",\n          \"type\": \"string\",\n          \"minLength\": 1,\n          \"x-wos\": {\n            \"openStringKind\": \"identifier\"\n          }\n        },\n        \"handoffId\": {\n          \"description\": \"Original stable source handoff identifier; never regenerated on retry.\",\n          \"type\": \"string\",\n          \"minLength\": 1,\n          \"x-wos\": {\n            \"openStringKind\": \"identifier\"\n          }\n        },\n        \"status\": {\n          \"description\": \"Transport outcome.\",\n          \"const\": \"rejected\"\n        }\n      },\n      \"additionalProperties\": false\n    }\n  ]\n}\n ```\n </details>"
@@ -9545,7 +9550,8 @@
       },
       "TaskKindVariant1": {
         "type": "string",
-        "description": "`TaskKindVariant1`\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"type\": \"string\",\n  \"pattern\": \"^x-[a-z][a-z0-9-]*$\"\n}\n ```\n </details>"
+        "description": "`TaskKindVariant1`\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"type\": \"string\",\n  \"pattern\": \"^x-[a-z][a-z0-9-]*$\"\n}\n ```\n </details>",
+        "pattern": "^x-[a-z][a-z0-9-]*$"
       },
       "TaskListItem": {
         "type": "object",
