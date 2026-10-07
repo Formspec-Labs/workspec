@@ -15,8 +15,8 @@ use crate::intake::{IntakeAcceptanceDecision, IntakeAcceptanceRequest};
 use wos_events::custody::{CustodyAppendContext, CustodyAppendInput, CustodyAppendReceipt};
 
 use super::{
-    CreateProcessRequest, DrainOnceResult, PersistDraftResult, RuntimeError, TaskSubmissionResult,
-    WosRuntime,
+    CreateProcessRequest, DismissTaskResult, DrainOnceResult, PersistDraftResult, RuntimeError,
+    TaskSubmissionResult, WosRuntime,
 };
 
 impl DurableRuntime for WosRuntime {
@@ -53,8 +53,13 @@ impl DurableRuntime for WosRuntime {
         WosRuntime::persist_task_draft(self, task_id, response, actor_id, idempotency_token)
     }
 
-    fn dismiss_task(&mut self, task_id: &str, reason: &str) -> Result<(), RuntimeError> {
-        WosRuntime::dismiss_task(self, task_id, reason)
+    fn dismiss_task(
+        &mut self,
+        task_id: &str,
+        reason: &str,
+        actor_id: &str,
+    ) -> Result<DismissTaskResult, RuntimeError> {
+        WosRuntime::dismiss_task(self, task_id, reason, actor_id)
     }
 
     fn submit_task_response(

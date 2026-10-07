@@ -284,7 +284,8 @@ mod tests {
 
     use crate::intake::{IntakeAcceptanceDecision, IntakeAcceptanceRequest};
     use crate::runtime::{
-        CreateProcessRequest, DrainOnceResult, PersistDraftResult, TaskSubmissionResult,
+        CreateProcessRequest, DismissTaskResult, DrainOnceResult, PersistDraftResult,
+        TaskSubmissionResult,
     };
 
     #[tokio::test]
@@ -674,7 +675,12 @@ mod tests {
             unreachable!("not used by custody append test")
         }
 
-        fn dismiss_task(&mut self, _task_id: &str, _reason: &str) -> Result<(), RuntimeError> {
+        fn dismiss_task(
+            &mut self,
+            _task_id: &str,
+            _reason: &str,
+            _actor_id: &str,
+        ) -> Result<DismissTaskResult, RuntimeError> {
             unreachable!("not used by custody append test")
         }
 

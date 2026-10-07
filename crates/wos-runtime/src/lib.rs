@@ -45,13 +45,15 @@ pub use restate_fixture_support::{
     restate_signature_fixture_runtime, signature_runtime_fixture_kernel,
     signature_runtime_fixture_profile,
 };
+#[doc(inline)]
 pub use runtime::{
-    Clock, CompanionPolicy, CompletionRequirementKind, CreateProcessRequest, DrainOnceResult,
-    HttpPostureResolver, MigrationMap, MigrationOutcome, PersistDraftResult, PostureDeclaration,
-    PostureResolver, ResolvedPostureDeclaration, RuntimeError, RuntimeEventContext,
-    RuntimeEventDecision, SIGNATURE_PROFILE_KEY_EXTENSION, SIGNATURE_PROFILE_REF_EXTENSION,
-    SIGNATURE_STEP_ID_EXTENSION, SignatureProfileDocument, StaticPostureResolver, SystemClock,
-    TaskSubmissionResult, TrellisCustodyAppendOutcome, TrellisCustodyAppender, WosRuntime,
+    Clock, CompanionPolicy, CompletionRequirementKind, CreateProcessRequest,
+    DismissTaskPresentation, DismissTaskResult, DrainOnceResult, HttpPostureResolver, MigrationMap,
+    MigrationOutcome, PersistDraftResult, PostureDeclaration, PostureResolver,
+    ResolvedPostureDeclaration, RuntimeError, RuntimeEventContext, RuntimeEventDecision,
+    SIGNATURE_PROFILE_KEY_EXTENSION, SIGNATURE_PROFILE_REF_EXTENSION, SIGNATURE_STEP_ID_EXTENSION,
+    SignatureProfileDocument, StaticPostureResolver, SystemClock, TaskSubmissionResult,
+    TrellisCustodyAppendOutcome, TrellisCustodyAppender, WosRuntime,
     populate_provenance_record_fields, stamp_provenance,
 };
 pub use store::{

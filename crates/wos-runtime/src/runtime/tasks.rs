@@ -20,10 +20,10 @@ use wos_core::traits::AccessControl;
 use wos_core::{ProvenanceKind, ProvenanceRecord, SignatureAdmissionFailedInput};
 
 use super::{
-    AdmissionOutcome, COMPLETION_EVENT_EXTENSION_KEY, FAILURE_EVENT_EXTENSION_KEY,
-    PersistDraftResult, RuntimeError, TaskSubmissionResult, WosRuntime, contract_validation_record,
-    format_timestamp, impact_level_label, merge_case_state, populate_provenance_record_fields,
-    stamp_provenance, stamp_signature_decision_identity,
+    AdmissionOutcome, COMPLETION_EVENT_EXTENSION_KEY, DismissTaskPresentation, DismissTaskResult,
+    FAILURE_EVENT_EXTENSION_KEY, PersistDraftResult, RuntimeError, TaskSubmissionResult,
+    WosRuntime, contract_validation_record, format_timestamp, impact_level_label, merge_case_state,
+    populate_provenance_record_fields, stamp_provenance, stamp_signature_decision_identity,
 };
 
 impl WosRuntime {
@@ -120,26 +120,33 @@ impl WosRuntime {
         Ok(result)
     }
 
-    /// Records a task dismissal.
+    /// Records an authorized UI dismissal while keeping the task resumable.
+    ///
+    /// Persists provenance for `actor_id` before calling the presentation sink.
+    /// Presentation failure is a committed result, never a failed mutation.
     ///
     /// # Errors
-    /// Returns an error when the task cannot be found, presenter delivery
-    /// fails, or persistence fails.
-    pub fn dismiss_task(&mut self, task_id: &str, reason: &str) -> Result<(), RuntimeError> {
+    /// Returns an error when authorization, task lookup, kernel resolution,
+    /// timestamp formatting, or persistence fails before commit.
+    pub fn dismiss_task(
+        &mut self,
+        task_id: &str,
+        reason: &str,
+        actor_id: &str,
+    ) -> Result<DismissTaskResult, RuntimeError> {
         let now_iso = format_timestamp(self.clock.now_ms())?;
         let mut record = self.load_record_for_task_id(task_id)?;
         let task_index = find_task_index(&record, task_id)
             .ok_or_else(|| RuntimeError::TaskNotFound(task_id.to_string()))?;
         let task = &record.process.active_tasks[task_index];
-        if task.context.is_some() {
-            self.presenter.dismiss_task(task_id, reason)?;
-        }
+        authorize_actor(&*self.access_control, task, actor_id)?;
+        let has_context = task.context.is_some();
 
         record.process.provenance_position += 1;
         let mut dismissal = ProvenanceRecord::task_lifecycle(
             ProvenanceKind::TaskDismissed,
             task_id,
-            task.assigned_actor.as_deref(),
+            Some(actor_id),
             Some(serde_json::json!({ "reason": reason })),
         );
         dismissal.timestamp = now_iso.clone();
@@ -152,10 +159,21 @@ impl WosRuntime {
             &kernel,
             &record.process.definition_version,
         );
+        let provenance_id = dismissal.id.clone();
         record.provenance_log.push(dismissal);
         record.process.updated_at = now_iso;
         self.store.save_record(record)?;
-        Ok(())
+        let presentation = if !has_context {
+            DismissTaskPresentation::NotRequested
+        } else if self.presenter.dismiss_task(task_id, reason).is_ok() {
+            DismissTaskPresentation::Attempted
+        } else {
+            DismissTaskPresentation::Failed
+        };
+        Ok(DismissTaskResult {
+            provenance_id,
+            presentation,
+        })
     }
 
     /// Submits a completed task response.

@@ -138,6 +138,26 @@ pub struct PersistDraftResult {
     pub artifact_id: String,
 }
 
+/// Presentation status after a committed task dismissal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DismissTaskPresentation {
+    /// The task has no presentation context, so no sink call was requested.
+    NotRequested,
+    /// The sink returned success; recipient delivery remains unproven.
+    Attempted,
+    /// The sink failed after dismissal provenance committed.
+    Failed,
+}
+
+/// Committed UI dismissal with its presentation status.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DismissTaskResult {
+    /// Identifier of the actual persisted dismissal provenance record.
+    pub provenance_id: String,
+    /// Status of the presentation attempt after persistence.
+    pub presentation: DismissTaskPresentation,
+}
+
 /// Task submission outcome.
 #[derive(Debug, Clone)]
 pub enum TaskSubmissionResult {
@@ -637,7 +657,7 @@ mod tests {
     use std::collections::{HashMap, VecDeque};
     use std::fs;
     use std::path::PathBuf;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
 
     use crate::DurableRuntime;
@@ -2132,6 +2152,7 @@ mod tests {
         inner: InMemoryStore,
         fail_on_save_call: usize,
         save_calls: usize,
+        observed_save_calls: Arc<AtomicUsize>,
     }
 
     impl FailingStore {
@@ -2140,6 +2161,7 @@ mod tests {
                 inner: InMemoryStore::new(),
                 fail_on_save_call,
                 save_calls: 0,
+                observed_save_calls: Arc::new(AtomicUsize::new(0)),
             }
         }
     }
@@ -2250,6 +2272,7 @@ mod tests {
 
         fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
             self.save_calls += 1;
+            self.observed_save_calls.fetch_add(1, Ordering::SeqCst);
             if self.save_calls == self.fail_on_save_call {
                 return Err(StoreError::Failed("injected save failure".to_string()));
             }
@@ -2564,9 +2587,19 @@ mod tests {
                 )
                 .expect("trait persist_task_draft");
 
-            runtime
-                .dismiss_task(&task_id, "trait exercise cleanup")
+            let dismissal = runtime
+                .dismiss_task(&task_id, "trait exercise cleanup", "reviewer")
                 .expect("trait dismiss_task");
+            let dismissal_window = runtime
+                .load_provenance_window(test_process_id("case-trait"), 0, 100)
+                .unwrap();
+            assert!(
+                dismissal_window
+                    .iter()
+                    .any(|entry| entry.id == dismissal.provenance_id
+                        && entry.actor_id.as_deref() == Some("reviewer"))
+            );
+            assert_eq!(dismissal.presentation, DismissTaskPresentation::Attempted);
 
             let submission = runtime
                 .submit_task_response(
@@ -5638,6 +5671,246 @@ mod tests {
         );
     }
 
+    #[derive(Debug, Clone, Default)]
+    struct TaskDelegationProbe {
+        allowed: Arc<AtomicBool>,
+        checks: Arc<AtomicUsize>,
+    }
+
+    impl AccessControl for TaskDelegationProbe {
+        fn can_transition(&self, _actor_id: &str, _event: &str) -> bool {
+            false
+        }
+
+        fn can_read(&self, _actor_id: &str, _field_path: &str) -> bool {
+            false
+        }
+
+        fn can_delegate(
+            &self,
+            delegator_id: &str,
+            delegate_id: &str,
+            _scope: &wos_core::model::governance::DelegationScope,
+        ) -> bool {
+            self.checks.fetch_add(1, Ordering::SeqCst);
+            self.allowed.load(Ordering::SeqCst)
+                && delegator_id == "reviewer"
+                && delegate_id == "delegate"
+        }
+    }
+
+    fn dismissal_fixture() -> (WosRuntime, String, String) {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosWorkflow": "1.0", "url": "urn:test:dismiss-fixture", "version": "1.0.0",
+            "lifecycle": { "initialState": "open", "states": { "open": { "type": "atomic" } } }
+        }))
+        .unwrap();
+        let mut runtime = runtime_with_kernel(kernel);
+        let process_id = test_process_id("dismiss-fixture").to_string();
+        runtime
+            .create_process(CreateProcessRequest {
+                process_id: process_id.clone(),
+                tenant: None,
+                definition_url: "urn:test:dismiss-fixture".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: Some(serde_json::json!({ "approved": false })),
+            })
+            .unwrap();
+        let mut record = runtime.store.load_record(&process_id).unwrap();
+        let task = manual_formspec_task(&process_id, 1, Some("urn:mapping:response"));
+        let task_id = task.task_id.clone();
+        record.process.active_tasks.push(task);
+        runtime.store.save_record(record).unwrap();
+        (runtime, process_id, task_id)
+    }
+
+    #[derive(Debug)]
+    struct CommittedDismissalPresenter {
+        store: SharedStore,
+        process_id: String,
+        calls: Arc<AtomicUsize>,
+        fail: bool,
+    }
+
+    impl TaskPresenter for CommittedDismissalPresenter {
+        type Error = PresenterError;
+
+        fn present_task(&mut self, _context: &FormspecTaskContext) -> Result<(), Self::Error> {
+            Ok(())
+        }
+
+        fn dismiss_task(&mut self, task_id: &str, _reason: &str) -> Result<(), Self::Error> {
+            let record = self.store.load_record(&self.process_id).unwrap();
+            assert!(
+                record
+                    .provenance_log
+                    .iter()
+                    .any(|entry| entry.record_kind == ProvenanceKind::TaskDismissed
+                        && entry.actor_id.as_deref() == Some("reviewer"))
+            );
+            assert!(
+                record
+                    .process
+                    .active_tasks
+                    .iter()
+                    .any(|task| task.task_id == task_id)
+            );
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            if self.fail {
+                Err(PresenterError("injected postcommit failure".to_string()))
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    #[test]
+    fn dismiss_task_refuses_unqualified_actor_without_write_or_presentation() {
+        let (mut runtime, process_id, task_id) = dismissal_fixture();
+        runtime.access_control = Box::new(TaskDelegationProbe::default());
+        let presenter = RecordingPresenter::default();
+        let calls = presenter.dismissed.clone();
+        runtime.presenter = Box::new(presenter);
+        let before = runtime.store.load_record(&process_id).unwrap();
+        let mut store = FailingStore::new(1);
+        store.inner.create_record(before.clone()).unwrap();
+        let save_calls = store.observed_save_calls.clone();
+        runtime.store = Box::new(store);
+        assert!(matches!(
+            runtime.dismiss_task(&task_id, "snoozed", "unrelated"),
+            Err(RuntimeError::Unauthorized(_))
+        ));
+        assert_eq!(save_calls.load(Ordering::SeqCst), 0);
+        let after = runtime.store.load_record(&process_id).unwrap();
+        assert_eq!(
+            serde_json::to_value(&before.process).unwrap(),
+            serde_json::to_value(&after.process).unwrap()
+        );
+        assert_eq!(before.provenance_log.len(), after.provenance_log.len());
+        assert!(calls.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn dismiss_task_records_actual_delegate_and_preserves_runtime_state() {
+        let (mut runtime, process_id, task_id) = dismissal_fixture();
+        let access = TaskDelegationProbe::default();
+        access.allowed.store(true, Ordering::SeqCst);
+        let checks = access.checks.clone();
+        runtime.access_control = Box::new(access);
+        let before = runtime.store.load_record(&process_id).unwrap();
+        let result = runtime
+            .dismiss_task(&task_id, "snoozed", "delegate")
+            .unwrap();
+        let after = runtime.store.load_record(&process_id).unwrap();
+        let entry = after
+            .provenance_log
+            .iter()
+            .find(|entry| entry.id == result.provenance_id)
+            .unwrap();
+        assert_eq!(entry.actor_id.as_deref(), Some("delegate"));
+        assert_eq!(entry.record_kind, ProvenanceKind::TaskDismissed);
+        assert_eq!(checks.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            serde_json::to_value(&before.process.active_tasks).unwrap(),
+            serde_json::to_value(&after.process.active_tasks).unwrap()
+        );
+        assert_eq!(before.process.case_state, after.process.case_state);
+        assert_eq!(
+            serde_json::to_value(&before.process.pending_events).unwrap(),
+            serde_json::to_value(&after.process.pending_events).unwrap()
+        );
+        assert_eq!(
+            before.process.provenance_position + 1,
+            after.process.provenance_position
+        );
+    }
+
+    #[test]
+    fn dismiss_task_save_failure_emits_nothing() {
+        let (mut runtime, process_id, task_id) = dismissal_fixture();
+        let before = runtime.store.load_record(&process_id).unwrap();
+        let mut store = FailingStore::new(1);
+        store.inner.create_record(before.clone()).unwrap();
+        runtime.store = Box::new(store);
+        let presenter = RecordingPresenter::default();
+        let calls = presenter.dismissed.clone();
+        runtime.presenter = Box::new(presenter);
+        assert!(matches!(
+            runtime.dismiss_task(&task_id, "snoozed", "reviewer"),
+            Err(RuntimeError::Store(StoreError::Failed(_)))
+        ));
+        let after = runtime.store.load_record(&process_id).unwrap();
+        assert_eq!(before.provenance_log.len(), after.provenance_log.len());
+        assert_eq!(
+            serde_json::to_value(&before.process).unwrap(),
+            serde_json::to_value(&after.process).unwrap()
+        );
+        assert!(calls.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn dismiss_task_presentation_observes_commit_and_reports_postcommit_failure() {
+        for (fail, expected) in [
+            (false, DismissTaskPresentation::Attempted),
+            (true, DismissTaskPresentation::Failed),
+        ] {
+            let (mut runtime, process_id, task_id) = dismissal_fixture();
+            let store = SharedStore::default();
+            store
+                .0
+                .lock()
+                .unwrap()
+                .create_record(runtime.store.load_record(&process_id).unwrap())
+                .unwrap();
+            runtime.store = Box::new(store.clone());
+            let calls = Arc::new(AtomicUsize::new(0));
+            runtime.presenter = Box::new(CommittedDismissalPresenter {
+                store,
+                process_id: process_id.clone(),
+                calls: calls.clone(),
+                fail,
+            });
+            let result = runtime
+                .dismiss_task(&task_id, "snoozed", "reviewer")
+                .unwrap();
+            assert_eq!(result.presentation, expected);
+            assert_eq!(calls.load(Ordering::SeqCst), 1);
+            let after = runtime.store.load_record(&process_id).unwrap();
+            assert!(
+                after
+                    .provenance_log
+                    .iter()
+                    .any(|entry| entry.id == result.provenance_id)
+            );
+            assert_eq!(after.process.active_tasks.len(), 1);
+        }
+    }
+
+    #[test]
+    fn dismiss_task_without_context_records_provenance_without_presentation() {
+        let (mut runtime, process_id, task_id) = dismissal_fixture();
+        let mut record = runtime.store.load_record(&process_id).unwrap();
+        record.process.active_tasks[0].context = None;
+        runtime.store.save_record(record).unwrap();
+        let presenter = RecordingPresenter::default();
+        let calls = presenter.dismissed.clone();
+        runtime.presenter = Box::new(presenter);
+        let result = runtime
+            .dismiss_task(&task_id, "snoozed", "reviewer")
+            .unwrap();
+        assert_eq!(result.presentation, DismissTaskPresentation::NotRequested);
+        assert!(calls.lock().unwrap().is_empty());
+        assert!(
+            runtime
+                .store
+                .load_record(&process_id)
+                .unwrap()
+                .provenance_log
+                .iter()
+                .any(|entry| entry.id == result.provenance_id)
+        );
+    }
+
     #[test]
     fn dismiss_task_records_provenance_and_leaves_task_resumable() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
@@ -5673,7 +5946,10 @@ mod tests {
         record.process.active_tasks.push(task);
         runtime.store.save_record(record).unwrap();
 
-        runtime.dismiss_task(&task_id, "snoozed").unwrap();
+        let result = runtime
+            .dismiss_task(&task_id, "snoozed", "reviewer")
+            .unwrap();
+        assert_eq!(result.presentation, DismissTaskPresentation::Attempted);
 
         let record = runtime
             .store
@@ -5684,7 +5960,9 @@ mod tests {
             record
                 .provenance_log
                 .iter()
-                .any(|entry| entry.record_kind == ProvenanceKind::TaskDismissed)
+                .any(|entry| entry.record_kind == ProvenanceKind::TaskDismissed
+                    && entry.id == result.provenance_id
+                    && entry.actor_id.as_deref() == Some("reviewer"))
         );
     }
 
@@ -5704,6 +5982,11 @@ mod tests {
         .unwrap();
 
         let mut runtime = runtime_with_kernel(kernel);
+        let access = TaskDelegationProbe::default();
+        access.allowed.store(true, Ordering::SeqCst);
+        let authorization_checks = access.checks.clone();
+        let delegation_allowed = access.allowed.clone();
+        runtime.access_control = Box::new(access);
         runtime
             .create_process(CreateProcessRequest {
                 process_id: test_process_id("case-5").to_string(),
@@ -5735,11 +6018,28 @@ mod tests {
             "data": { "approved": true }
         });
         let first = runtime
-            .submit_task_response(&task_id, response.clone(), "reviewer", Some("replay-1"))
+            .submit_task_response(&task_id, response.clone(), "delegate", Some("replay-1"))
             .unwrap();
+        assert_eq!(authorization_checks.load(Ordering::SeqCst), 1);
+        delegation_allowed.store(false, Ordering::SeqCst);
+        assert!(
+            runtime
+                .store
+                .load_record(test_process_id("case-5"))
+                .unwrap()
+                .process
+                .active_tasks
+                .is_empty()
+        );
         let second = runtime
-            .submit_task_response(&task_id, response, "reviewer", Some("replay-1"))
+            .submit_task_response(&task_id, response, "delegate", Some("replay-1"))
             .unwrap();
+
+        assert_eq!(
+            authorization_checks.load(Ordering::SeqCst),
+            1,
+            "immutable replay must not repeat engine authorization"
+        );
 
         match (&first, &second) {
             (

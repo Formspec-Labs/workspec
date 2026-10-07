@@ -11,7 +11,8 @@ use wos_core::instance::{PendingEvent, WorkflowProcess};
 
 use crate::intake::{IntakeAcceptanceDecision, IntakeAcceptanceRequest};
 use crate::runtime::{
-    CreateProcessRequest, DrainOnceResult, PersistDraftResult, RuntimeError, TaskSubmissionResult,
+    CreateProcessRequest, DismissTaskResult, DrainOnceResult, PersistDraftResult, RuntimeError,
+    TaskSubmissionResult,
 };
 use wos_events::custody::{CustodyAppendContext, CustodyAppendInput, CustodyAppendReceipt};
 
@@ -70,12 +71,20 @@ pub trait DurableRuntime {
         idempotency_token: Option<&str>,
     ) -> Result<PersistDraftResult, RuntimeError>;
 
-    /// Records a task dismissal.
+    /// Records an authorized UI dismissal while keeping the task resumable.
+    ///
+    /// Persists provenance for `actor_id` before presentation. A presentation
+    /// failure returns a committed result with failed presentation status.
     ///
     /// # Errors
-    /// Returns an error when the task cannot be found, presenter delivery
-    /// fails, or persistence fails.
-    fn dismiss_task(&mut self, task_id: &str, reason: &str) -> Result<(), RuntimeError>;
+    /// Returns an error when authorization, task lookup, resolution, timestamp
+    /// formatting, or persistence fails before commit.
+    fn dismiss_task(
+        &mut self,
+        task_id: &str,
+        reason: &str,
+        actor_id: &str,
+    ) -> Result<DismissTaskResult, RuntimeError>;
 
     /// Submits a completed task response.
     ///
