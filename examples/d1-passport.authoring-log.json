@@ -1,0 +1,683 @@
+{
+  "binary": "/Users/mikewolfd/Work/formspec-stack/.cargo-target/debug/wos-mcp",
+  "binarySha256": "342a64a2655b949fb960887ddcdeb38e2688c795a91aff950bd4d7a5485a7ccc",
+  "artifactSha256": "2f403f2724ec0eae6379b85cbe96dc3637bc7603d633f97468c0294e273ca8ea",
+  "deterministicReplay": true,
+  "definitionReceipt": {
+    "status": "read-only-maintained-publication-hash-verified",
+    "definition_path": "/Users/mikewolfd/Work/formspec-stack/formspec-studio/demo-authoring/outputs/d1/v0.1.6/passport-renewal/passport-renewal.definition.json",
+    "definition_url": "urn:formspec:demo:d1:passport-renewal",
+    "definition_version": "0.1.6",
+    "raw_sha256": "39e4086f46c1c2479f8f3bd87f20a9ad3054973088f1165c0a081a51df5d3b39",
+    "definition_hash": "sha256:7dd5277eae83e2e96ede564c09901607916a1edcfa6364e21f13fb813ed39005",
+    "helper": "stack_common_hash::canonical_json_hash -> integrity_canonical::canonical_json_bytes -> SHA256 prefixed",
+    "publication_path": "canonical_publish_definition preserves present URL/version and hashes entire Definition",
+    "source": [
+      "formspec-server/crates/formspec-server/src/services/forms.rs:985",
+      "stack-common/crates/stack-common-hash/src/lib.rs:27"
+    ],
+    "prebuilt_libraries": [
+      {
+        "path": "/Users/mikewolfd/Work/formspec-stack/.cargo-target/debug/deps/libstack_common_hash-43791c50f482f4ea.rlib",
+        "sha256": "3a059ec39dcca62038d98cc3a6e4d19cbe8e2f05b5215a54c80612aacea789a7"
+      },
+      {
+        "path": "/Users/mikewolfd/Work/formspec-stack/.cargo-target/debug/deps/libserde_json-1baa46ab55aa30e1.rlib",
+        "sha256": "1c1b9880b9d765d0cf22ba0000a49b0139a80134786f0251188d743711aad7b8"
+      }
+    ],
+    "independent_crosscheck": "canonicalize npm RFC8785 output hash equals maintained Rust helper result",
+    "previous_definition_version": "0.1.5",
+    "only_definition_version_changed": true,
+    "artifact_unchanged": true,
+    "publication_attempted": false,
+    "cargo_invocation": false,
+    "configuration_changed": false,
+    "runtime_changed": false,
+    "time_utc": "2026-10-07T06:44:41.410135+00:00"
+  },
+  "replays": [
+    [
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "wos_create_kernel",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"project_id\":\"01a1153e-b6e4-78d0-860d-b1564b4c73a5\"}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "method": "tools/call",
+          "params": {
+            "name": "wos_add_actor",
+            "arguments": {
+              "project_id": "01a1153e-b6e4-78d0-860d-b1564b4c73a5",
+              "actor_id": "adjudicator",
+              "kind": "human"
+            }
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"actor_id\":\"adjudicator\"}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "method": "tools/call",
+          "params": {
+            "name": "wos_add_actor",
+            "arguments": {
+              "project_id": "01a1153e-b6e4-78d0-860d-b1564b4c73a5",
+              "actor_id": "intakeService",
+              "kind": "system"
+            }
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"actor_id\":\"intakeService\"}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "method": "tools/call",
+          "params": {
+            "name": "wos_add_state",
+            "arguments": {
+              "project_id": "01a1153e-b6e4-78d0-860d-b1564b4c73a5",
+              "state_id": "awaitingReview",
+              "kind": "atomic"
+            }
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"state_id\":\"awaitingReview\"}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 5,
+          "method": "tools/call",
+          "params": {
+            "name": "wos_set_initial_state",
+            "arguments": {
+              "project_id": "01a1153e-b6e4-78d0-860d-b1564b4c73a5",
+              "state_id": "awaitingReview"
+            }
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 5,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"state_id\":\"awaitingReview\"}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 6,
+          "method": "tools/call",
+          "params": {
+            "name": "wos_set_impact_level",
+            "arguments": {
+              "project_id": "01a1153e-b6e4-78d0-860d-b1564b4c73a5",
+              "level": "rights-impacting"
+            }
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 6,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"level\":\"rights-impacting\"}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 7,
+          "method": "tools/call",
+          "params": {
+            "name": "wos_export_document",
+            "arguments": {
+              "project_id": "01a1153e-b6e4-78d0-860d-b1564b4c73a5"
+            }
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 7,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"document\":\"{\\\"$wosWorkflow\\\":\\\"1.0\\\",\\\"$schema\\\":null,\\\"url\\\":null,\\\"version\\\":null,\\\"title\\\":\\\"New WOS Workflow\\\",\\\"description\\\":null,\\\"status\\\":null,\\\"impactLevel\\\":\\\"rights-impacting\\\",\\\"actors\\\":[{\\\"id\\\":\\\"adjudicator\\\",\\\"type\\\":\\\"human\\\",\\\"description\\\":null,\\\"extensions\\\":{}},{\\\"id\\\":\\\"intakeService\\\",\\\"type\\\":\\\"system\\\",\\\"description\\\":null,\\\"extensions\\\":{}}],\\\"lifecycle\\\":{\\\"initialState\\\":\\\"awaitingReview\\\",\\\"states\\\":{\\\"awaitingReview\\\":{\\\"type\\\":\\\"atomic\\\",\\\"description\\\":null,\\\"transitions\\\":[],\\\"tags\\\":[],\\\"onEntry\\\":[],\\\"onExit\\\":[],\\\"initialState\\\":null,\\\"states\\\":{},\\\"regions\\\":{},\\\"cancellationPolicy\\\":null,\\\"historyState\\\":null,\\\"outcomeCode\\\":null,\\\"extensions\\\":{}}},\\\"milestones\\\":{}},\\\"caseFile\\\":null,\\\"contracts\\\":{},\\\"provenance\\\":null,\\\"execution\\\":null,\\\"evaluationMode\\\":null,\\\"maxRelationshipEventDepth\\\":null,\\\"decisionTables\\\":[],\\\"extensions\\\":{}}\"}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "authoringSupplement": {
+          "url": "urn:wos:demo:d1:passport-renewal",
+          "version": "0.1.0",
+          "title": "Passport renewal: intake review",
+          "status": "draft",
+          "description": "Bounded D1 public intake and initial human review. Actor identifiers are deployment configuration slots.",
+          "intake": {
+            "mode": "publicIntake",
+            "contractRef": "urn:formspec:demo:d1:passport-renewal",
+            "contractVersion": "0.1.6"
+          },
+          "governance": {
+            "dueProcess": {
+              "explanationLevel": "individualized"
+            },
+            "taskCatalog": [
+              {
+                "id": "reviewApplication",
+                "pattern": "reviewApplication",
+                "verifiable": "partially",
+                "verificationMethod": "Compare recorded observations with the retained application and evidence.",
+                "title": "Review passport renewal application",
+                "description": "Review the accepted application and its retained evidence. Record individualized observations. This task does not issue a decision."
+              }
+            ]
+          },
+          "provenance": {
+            "tier": "facts"
+          },
+          "custody": {
+            "anchorRequirements": []
+          },
+          "extensions": {
+            "x-d1-custody-posture": {
+              "ordinaryReaders": "Formspec source service and scope-bound WOS evidence service; authenticated reviewers only after specific-case authorization",
+              "recoveryWithoutUser": true,
+              "delegatedComputeVisibility": "Ordinary configured Formspec/WOS server components process plaintext evidence; no external delegated compute is authorized by this workflow"
+            },
+            "x-d1-definition-pin": {
+              "definitionHash": "sha256:7dd5277eae83e2e96ede564c09901607916a1edcfa6364e21f13fb813ed39005",
+              "rawDefinitionHash": "sha256:39e4086f46c1c2479f8f3bd87f20a9ad3054973088f1165c0a081a51df5d3b39",
+              "receipt": "formspec-studio/demo-authoring/outputs/d1/v0.1.6/receipts/server-definition-hash-v0.1.6.json"
+            }
+          }
+        },
+        "onEntrySupplement": {
+          "awaitingReview": [
+            {
+              "action": "createTask",
+              "taskRef": "reviewApplication",
+              "assignTo": "adjudicator",
+              "description": "Review the accepted passport renewal application."
+            }
+          ]
+        },
+        "seedNullDefaultsOmitted": [
+          "/$schema",
+          "/caseFile",
+          "/description",
+          "/evaluationMode",
+          "/execution",
+          "/lifecycle/states/awaitingReview/initialState",
+          "/lifecycle/states/awaitingReview/outcomeCode",
+          "/lifecycle/states/awaitingReview/regions",
+          "/lifecycle/states/awaitingReview/states",
+          "/maxRelationshipEventDepth",
+          "/provenance",
+          "/status"
+        ]
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 9,
+          "method": "tools/call",
+          "params": {
+            "name": "wos_load_document",
+            "arguments": {
+              "json": "{\"$wosWorkflow\": \"1.0\", \"url\": \"urn:wos:demo:d1:passport-renewal\", \"version\": \"0.1.0\", \"title\": \"Passport renewal: intake review\", \"impactLevel\": \"rights-impacting\", \"actors\": [{\"id\": \"adjudicator\", \"type\": \"human\", \"description\": null, \"extensions\": {}}, {\"id\": \"intakeService\", \"type\": \"system\", \"description\": null, \"extensions\": {}}], \"lifecycle\": {\"initialState\": \"awaitingReview\", \"states\": {\"awaitingReview\": {\"type\": \"atomic\", \"description\": null, \"transitions\": [], \"tags\": [], \"onEntry\": [{\"action\": \"createTask\", \"taskRef\": \"reviewApplication\", \"assignTo\": \"adjudicator\", \"description\": \"Review the accepted passport renewal application.\"}], \"onExit\": [], \"cancellationPolicy\": null, \"historyState\": null, \"extensions\": {}}}, \"milestones\": {}}, \"contracts\": {}, \"decisionTables\": [], \"extensions\": {\"x-d1-custody-posture\": {\"ordinaryReaders\": \"Formspec source service and scope-bound WOS evidence service; authenticated reviewers only after specific-case authorization\", \"recoveryWithoutUser\": true, \"delegatedComputeVisibility\": \"Ordinary configured Formspec/WOS server components process plaintext evidence; no external delegated compute is authorized by this workflow\"}, \"x-d1-definition-pin\": {\"definitionHash\": \"sha256:7dd5277eae83e2e96ede564c09901607916a1edcfa6364e21f13fb813ed39005\", \"rawDefinitionHash\": \"sha256:39e4086f46c1c2479f8f3bd87f20a9ad3054973088f1165c0a081a51df5d3b39\", \"receipt\": \"formspec-studio/demo-authoring/outputs/d1/v0.1.6/receipts/server-definition-hash-v0.1.6.json\"}}, \"status\": \"draft\", \"description\": \"Bounded D1 public intake and initial human review. Actor identifiers are deployment configuration slots.\", \"intake\": {\"mode\": \"publicIntake\", \"contractRef\": \"urn:formspec:demo:d1:passport-renewal\", \"contractVersion\": \"0.1.6\"}, \"governance\": {\"dueProcess\": {\"explanationLevel\": \"individualized\"}, \"taskCatalog\": [{\"id\": \"reviewApplication\", \"pattern\": \"reviewApplication\", \"verifiable\": \"partially\", \"verificationMethod\": \"Compare recorded observations with the retained application and evidence.\", \"title\": \"Review passport renewal application\", \"description\": \"Review the accepted application and its retained evidence. Record individualized observations. This task does not issue a decision.\"}]}, \"provenance\": {\"tier\": \"facts\"}, \"custody\": {\"anchorRequirements\": []}}"
+            }
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 9,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"project_id\":\"01a1153e-b6ed-7c40-a934-6cb304c8942c\"}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 10,
+          "method": "tools/call",
+          "params": {
+            "name": "wos_export_document",
+            "arguments": {
+              "project_id": "01a1153e-b6ed-7c40-a934-6cb304c8942c"
+            }
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 10,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"document\":\"{\\\"$wosWorkflow\\\":\\\"1.0\\\",\\\"$schema\\\":null,\\\"url\\\":\\\"urn:wos:demo:d1:passport-renewal\\\",\\\"version\\\":\\\"0.1.0\\\",\\\"title\\\":\\\"Passport renewal: intake review\\\",\\\"description\\\":\\\"Bounded D1 public intake and initial human review. Actor identifiers are deployment configuration slots.\\\",\\\"status\\\":\\\"draft\\\",\\\"impactLevel\\\":\\\"rights-impacting\\\",\\\"actors\\\":[{\\\"id\\\":\\\"adjudicator\\\",\\\"type\\\":\\\"human\\\",\\\"description\\\":null,\\\"extensions\\\":{}},{\\\"id\\\":\\\"intakeService\\\",\\\"type\\\":\\\"system\\\",\\\"description\\\":null,\\\"extensions\\\":{}}],\\\"lifecycle\\\":{\\\"initialState\\\":\\\"awaitingReview\\\",\\\"states\\\":{\\\"awaitingReview\\\":{\\\"type\\\":\\\"atomic\\\",\\\"description\\\":null,\\\"transitions\\\":[],\\\"tags\\\":[],\\\"onEntry\\\":[{\\\"action\\\":\\\"createTask\\\",\\\"taskRef\\\":\\\"reviewApplication\\\",\\\"assignTo\\\":\\\"adjudicator\\\",\\\"serviceRef\\\":null,\\\"idempotencyKey\\\":null,\\\"correlationKey\\\":null,\\\"path\\\":null,\\\"value\\\":null,\\\"eventType\\\":null,\\\"data\\\":null,\\\"timerId\\\":null,\\\"duration\\\":null,\\\"deadline\\\":null,\\\"message\\\":null,\\\"description\\\":\\\"Review the accepted passport renewal application.\\\",\\\"contractRef\\\":null,\\\"prefillMappingRef\\\":null,\\\"responseMappingRef\\\":null,\\\"completionEvent\\\":null,\\\"failureEvent\\\":null,\\\"compensatingAction\\\":null,\\\"extensions\\\":{}}],\\\"onExit\\\":[],\\\"initialState\\\":null,\\\"states\\\":{},\\\"regions\\\":{},\\\"cancellationPolicy\\\":null,\\\"historyState\\\":null,\\\"outcomeCode\\\":null,\\\"extensions\\\":{}}},\\\"milestones\\\":{}},\\\"caseFile\\\":null,\\\"contracts\\\":{},\\\"provenance\\\":{\\\"tier\\\":\\\"facts\\\"},\\\"execution\\\":null,\\\"evaluationMode\\\":null,\\\"maxRelationshipEventDepth\\\":null,\\\"governance\\\":{\\\"dueProcess\\\":{\\\"explanationLevel\\\":\\\"individualized\\\"},\\\"taskCatalog\\\":[{\\\"id\\\":\\\"reviewApplication\\\",\\\"pattern\\\":\\\"reviewApplication\\\",\\\"verifiable\\\":\\\"partially\\\",\\\"verificationMethod\\\":\\\"Compare recorded observations with the retained application and evidence.\\\",\\\"title\\\":\\\"Review passport renewal application\\\",\\\"description\\\":\\\"Review the accepted application and its retained evidence. Record individualized observations. This task does not issue a decision.\\\"}]},\\\"custody\\\":{\\\"anchorRequirements\\\":[]},\\\"intake\\\":{\\\"mode\\\":\\\"publicIntake\\\",\\\"contractRef\\\":\\\"urn:formspec:demo:d1:passport-renewal\\\",\\\"contractVersion\\\":\\\"0.1.6\\\"},\\\"decisionTables\\\":[],\\\"extensions\\\":{\\\"x-d1-custody-posture\\\":{\\\"ordinaryReaders\\\":\\\"Formspec source service and scope-bound WOS evidence service; authenticated reviewers only after specific-case authorization\\\",\\\"recoveryWithoutUser\\\":true,\\\"delegatedComputeVisibility\\\":\\\"Ordinary configured Formspec/WOS server components process plaintext evidence; no external delegated compute is authorized by this workflow\\\"},\\\"x-d1-definition-pin\\\":{\\\"definitionHash\\\":\\\"sha256:7dd5277eae83e2e96ede564c09901607916a1edcfa6364e21f13fb813ed39005\\\",\\\"rawDefinitionHash\\\":\\\"sha256:39e4086f46c1c2479f8f3bd87f20a9ad3054973088f1165c0a081a51df5d3b39\\\",\\\"receipt\\\":\\\"formspec-studio/demo-authoring/outputs/d1/v0.1.6/receipts/server-definition-hash-v0.1.6.json\\\"}}}\"}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "exportNullDefaultsOmitted": [
+          "/$schema",
+          "/caseFile",
+          "/evaluationMode",
+          "/execution",
+          "/lifecycle/states/awaitingReview/initialState",
+          "/lifecycle/states/awaitingReview/outcomeCode",
+          "/lifecycle/states/awaitingReview/regions",
+          "/lifecycle/states/awaitingReview/states",
+          "/maxRelationshipEventDepth"
+        ]
+      },
+      {
+        "stdioStderr": "",
+        "exitCode": 0
+      }
+    ],
+    [
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "wos_create_kernel",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"project_id\":\"01a1153e-b6f4-78a0-ae59-11c090350e38\"}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "method": "tools/call",
+          "params": {
+            "name": "wos_add_actor",
+            "arguments": {
+              "project_id": "01a1153e-b6f4-78a0-ae59-11c090350e38",
+              "actor_id": "adjudicator",
+              "kind": "human"
+            }
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"actor_id\":\"adjudicator\"}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "method": "tools/call",
+          "params": {
+            "name": "wos_add_actor",
+            "arguments": {
+              "project_id": "01a1153e-b6f4-78a0-ae59-11c090350e38",
+              "actor_id": "intakeService",
+              "kind": "system"
+            }
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"actor_id\":\"intakeService\"}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "method": "tools/call",
+          "params": {
+            "name": "wos_add_state",
+            "arguments": {
+              "project_id": "01a1153e-b6f4-78a0-ae59-11c090350e38",
+              "state_id": "awaitingReview",
+              "kind": "atomic"
+            }
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"state_id\":\"awaitingReview\"}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 5,
+          "method": "tools/call",
+          "params": {
+            "name": "wos_set_initial_state",
+            "arguments": {
+              "project_id": "01a1153e-b6f4-78a0-ae59-11c090350e38",
+              "state_id": "awaitingReview"
+            }
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 5,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"state_id\":\"awaitingReview\"}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 6,
+          "method": "tools/call",
+          "params": {
+            "name": "wos_set_impact_level",
+            "arguments": {
+              "project_id": "01a1153e-b6f4-78a0-ae59-11c090350e38",
+              "level": "rights-impacting"
+            }
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 6,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"level\":\"rights-impacting\"}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 7,
+          "method": "tools/call",
+          "params": {
+            "name": "wos_export_document",
+            "arguments": {
+              "project_id": "01a1153e-b6f4-78a0-ae59-11c090350e38"
+            }
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 7,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"document\":\"{\\\"$wosWorkflow\\\":\\\"1.0\\\",\\\"$schema\\\":null,\\\"url\\\":null,\\\"version\\\":null,\\\"title\\\":\\\"New WOS Workflow\\\",\\\"description\\\":null,\\\"status\\\":null,\\\"impactLevel\\\":\\\"rights-impacting\\\",\\\"actors\\\":[{\\\"id\\\":\\\"adjudicator\\\",\\\"type\\\":\\\"human\\\",\\\"description\\\":null,\\\"extensions\\\":{}},{\\\"id\\\":\\\"intakeService\\\",\\\"type\\\":\\\"system\\\",\\\"description\\\":null,\\\"extensions\\\":{}}],\\\"lifecycle\\\":{\\\"initialState\\\":\\\"awaitingReview\\\",\\\"states\\\":{\\\"awaitingReview\\\":{\\\"type\\\":\\\"atomic\\\",\\\"description\\\":null,\\\"transitions\\\":[],\\\"tags\\\":[],\\\"onEntry\\\":[],\\\"onExit\\\":[],\\\"initialState\\\":null,\\\"states\\\":{},\\\"regions\\\":{},\\\"cancellationPolicy\\\":null,\\\"historyState\\\":null,\\\"outcomeCode\\\":null,\\\"extensions\\\":{}}},\\\"milestones\\\":{}},\\\"caseFile\\\":null,\\\"contracts\\\":{},\\\"provenance\\\":null,\\\"execution\\\":null,\\\"evaluationMode\\\":null,\\\"maxRelationshipEventDepth\\\":null,\\\"decisionTables\\\":[],\\\"extensions\\\":{}}\"}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "authoringSupplement": {
+          "url": "urn:wos:demo:d1:passport-renewal",
+          "version": "0.1.0",
+          "title": "Passport renewal: intake review",
+          "status": "draft",
+          "description": "Bounded D1 public intake and initial human review. Actor identifiers are deployment configuration slots.",
+          "intake": {
+            "mode": "publicIntake",
+            "contractRef": "urn:formspec:demo:d1:passport-renewal",
+            "contractVersion": "0.1.6"
+          },
+          "governance": {
+            "dueProcess": {
+              "explanationLevel": "individualized"
+            },
+            "taskCatalog": [
+              {
+                "id": "reviewApplication",
+                "pattern": "reviewApplication",
+                "verifiable": "partially",
+                "verificationMethod": "Compare recorded observations with the retained application and evidence.",
+                "title": "Review passport renewal application",
+                "description": "Review the accepted application and its retained evidence. Record individualized observations. This task does not issue a decision."
+              }
+            ]
+          },
+          "provenance": {
+            "tier": "facts"
+          },
+          "custody": {
+            "anchorRequirements": []
+          },
+          "extensions": {
+            "x-d1-custody-posture": {
+              "ordinaryReaders": "Formspec source service and scope-bound WOS evidence service; authenticated reviewers only after specific-case authorization",
+              "recoveryWithoutUser": true,
+              "delegatedComputeVisibility": "Ordinary configured Formspec/WOS server components process plaintext evidence; no external delegated compute is authorized by this workflow"
+            },
+            "x-d1-definition-pin": {
+              "definitionHash": "sha256:7dd5277eae83e2e96ede564c09901607916a1edcfa6364e21f13fb813ed39005",
+              "rawDefinitionHash": "sha256:39e4086f46c1c2479f8f3bd87f20a9ad3054973088f1165c0a081a51df5d3b39",
+              "receipt": "formspec-studio/demo-authoring/outputs/d1/v0.1.6/receipts/server-definition-hash-v0.1.6.json"
+            }
+          }
+        },
+        "onEntrySupplement": {
+          "awaitingReview": [
+            {
+              "action": "createTask",
+              "taskRef": "reviewApplication",
+              "assignTo": "adjudicator",
+              "description": "Review the accepted passport renewal application."
+            }
+          ]
+        },
+        "seedNullDefaultsOmitted": [
+          "/$schema",
+          "/caseFile",
+          "/description",
+          "/evaluationMode",
+          "/execution",
+          "/lifecycle/states/awaitingReview/initialState",
+          "/lifecycle/states/awaitingReview/outcomeCode",
+          "/lifecycle/states/awaitingReview/regions",
+          "/lifecycle/states/awaitingReview/states",
+          "/maxRelationshipEventDepth",
+          "/provenance",
+          "/status"
+        ]
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 9,
+          "method": "tools/call",
+          "params": {
+            "name": "wos_load_document",
+            "arguments": {
+              "json": "{\"$wosWorkflow\": \"1.0\", \"url\": \"urn:wos:demo:d1:passport-renewal\", \"version\": \"0.1.0\", \"title\": \"Passport renewal: intake review\", \"impactLevel\": \"rights-impacting\", \"actors\": [{\"id\": \"adjudicator\", \"type\": \"human\", \"description\": null, \"extensions\": {}}, {\"id\": \"intakeService\", \"type\": \"system\", \"description\": null, \"extensions\": {}}], \"lifecycle\": {\"initialState\": \"awaitingReview\", \"states\": {\"awaitingReview\": {\"type\": \"atomic\", \"description\": null, \"transitions\": [], \"tags\": [], \"onEntry\": [{\"action\": \"createTask\", \"taskRef\": \"reviewApplication\", \"assignTo\": \"adjudicator\", \"description\": \"Review the accepted passport renewal application.\"}], \"onExit\": [], \"cancellationPolicy\": null, \"historyState\": null, \"extensions\": {}}}, \"milestones\": {}}, \"contracts\": {}, \"decisionTables\": [], \"extensions\": {\"x-d1-custody-posture\": {\"ordinaryReaders\": \"Formspec source service and scope-bound WOS evidence service; authenticated reviewers only after specific-case authorization\", \"recoveryWithoutUser\": true, \"delegatedComputeVisibility\": \"Ordinary configured Formspec/WOS server components process plaintext evidence; no external delegated compute is authorized by this workflow\"}, \"x-d1-definition-pin\": {\"definitionHash\": \"sha256:7dd5277eae83e2e96ede564c09901607916a1edcfa6364e21f13fb813ed39005\", \"rawDefinitionHash\": \"sha256:39e4086f46c1c2479f8f3bd87f20a9ad3054973088f1165c0a081a51df5d3b39\", \"receipt\": \"formspec-studio/demo-authoring/outputs/d1/v0.1.6/receipts/server-definition-hash-v0.1.6.json\"}}, \"status\": \"draft\", \"description\": \"Bounded D1 public intake and initial human review. Actor identifiers are deployment configuration slots.\", \"intake\": {\"mode\": \"publicIntake\", \"contractRef\": \"urn:formspec:demo:d1:passport-renewal\", \"contractVersion\": \"0.1.6\"}, \"governance\": {\"dueProcess\": {\"explanationLevel\": \"individualized\"}, \"taskCatalog\": [{\"id\": \"reviewApplication\", \"pattern\": \"reviewApplication\", \"verifiable\": \"partially\", \"verificationMethod\": \"Compare recorded observations with the retained application and evidence.\", \"title\": \"Review passport renewal application\", \"description\": \"Review the accepted application and its retained evidence. Record individualized observations. This task does not issue a decision.\"}]}, \"provenance\": {\"tier\": \"facts\"}, \"custody\": {\"anchorRequirements\": []}}"
+            }
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 9,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"project_id\":\"01a1153e-b6f5-7903-a85c-94e257c02540\"}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 10,
+          "method": "tools/call",
+          "params": {
+            "name": "wos_export_document",
+            "arguments": {
+              "project_id": "01a1153e-b6f5-7903-a85c-94e257c02540"
+            }
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 10,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"document\":\"{\\\"$wosWorkflow\\\":\\\"1.0\\\",\\\"$schema\\\":null,\\\"url\\\":\\\"urn:wos:demo:d1:passport-renewal\\\",\\\"version\\\":\\\"0.1.0\\\",\\\"title\\\":\\\"Passport renewal: intake review\\\",\\\"description\\\":\\\"Bounded D1 public intake and initial human review. Actor identifiers are deployment configuration slots.\\\",\\\"status\\\":\\\"draft\\\",\\\"impactLevel\\\":\\\"rights-impacting\\\",\\\"actors\\\":[{\\\"id\\\":\\\"adjudicator\\\",\\\"type\\\":\\\"human\\\",\\\"description\\\":null,\\\"extensions\\\":{}},{\\\"id\\\":\\\"intakeService\\\",\\\"type\\\":\\\"system\\\",\\\"description\\\":null,\\\"extensions\\\":{}}],\\\"lifecycle\\\":{\\\"initialState\\\":\\\"awaitingReview\\\",\\\"states\\\":{\\\"awaitingReview\\\":{\\\"type\\\":\\\"atomic\\\",\\\"description\\\":null,\\\"transitions\\\":[],\\\"tags\\\":[],\\\"onEntry\\\":[{\\\"action\\\":\\\"createTask\\\",\\\"taskRef\\\":\\\"reviewApplication\\\",\\\"assignTo\\\":\\\"adjudicator\\\",\\\"serviceRef\\\":null,\\\"idempotencyKey\\\":null,\\\"correlationKey\\\":null,\\\"path\\\":null,\\\"value\\\":null,\\\"eventType\\\":null,\\\"data\\\":null,\\\"timerId\\\":null,\\\"duration\\\":null,\\\"deadline\\\":null,\\\"message\\\":null,\\\"description\\\":\\\"Review the accepted passport renewal application.\\\",\\\"contractRef\\\":null,\\\"prefillMappingRef\\\":null,\\\"responseMappingRef\\\":null,\\\"completionEvent\\\":null,\\\"failureEvent\\\":null,\\\"compensatingAction\\\":null,\\\"extensions\\\":{}}],\\\"onExit\\\":[],\\\"initialState\\\":null,\\\"states\\\":{},\\\"regions\\\":{},\\\"cancellationPolicy\\\":null,\\\"historyState\\\":null,\\\"outcomeCode\\\":null,\\\"extensions\\\":{}}},\\\"milestones\\\":{}},\\\"caseFile\\\":null,\\\"contracts\\\":{},\\\"provenance\\\":{\\\"tier\\\":\\\"facts\\\"},\\\"execution\\\":null,\\\"evaluationMode\\\":null,\\\"maxRelationshipEventDepth\\\":null,\\\"governance\\\":{\\\"dueProcess\\\":{\\\"explanationLevel\\\":\\\"individualized\\\"},\\\"taskCatalog\\\":[{\\\"id\\\":\\\"reviewApplication\\\",\\\"pattern\\\":\\\"reviewApplication\\\",\\\"verifiable\\\":\\\"partially\\\",\\\"verificationMethod\\\":\\\"Compare recorded observations with the retained application and evidence.\\\",\\\"title\\\":\\\"Review passport renewal application\\\",\\\"description\\\":\\\"Review the accepted application and its retained evidence. Record individualized observations. This task does not issue a decision.\\\"}]},\\\"custody\\\":{\\\"anchorRequirements\\\":[]},\\\"intake\\\":{\\\"mode\\\":\\\"publicIntake\\\",\\\"contractRef\\\":\\\"urn:formspec:demo:d1:passport-renewal\\\",\\\"contractVersion\\\":\\\"0.1.6\\\"},\\\"decisionTables\\\":[],\\\"extensions\\\":{\\\"x-d1-definition-pin\\\":{\\\"definitionHash\\\":\\\"sha256:7dd5277eae83e2e96ede564c09901607916a1edcfa6364e21f13fb813ed39005\\\",\\\"rawDefinitionHash\\\":\\\"sha256:39e4086f46c1c2479f8f3bd87f20a9ad3054973088f1165c0a081a51df5d3b39\\\",\\\"receipt\\\":\\\"formspec-studio/demo-authoring/outputs/d1/v0.1.6/receipts/server-definition-hash-v0.1.6.json\\\"},\\\"x-d1-custody-posture\\\":{\\\"ordinaryReaders\\\":\\\"Formspec source service and scope-bound WOS evidence service; authenticated reviewers only after specific-case authorization\\\",\\\"recoveryWithoutUser\\\":true,\\\"delegatedComputeVisibility\\\":\\\"Ordinary configured Formspec/WOS server components process plaintext evidence; no external delegated compute is authorized by this workflow\\\"}}}\"}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "exportNullDefaultsOmitted": [
+          "/$schema",
+          "/caseFile",
+          "/evaluationMode",
+          "/execution",
+          "/lifecycle/states/awaitingReview/initialState",
+          "/lifecycle/states/awaitingReview/outcomeCode",
+          "/lifecycle/states/awaitingReview/regions",
+          "/lifecycle/states/awaitingReview/states",
+          "/maxRelationshipEventDepth"
+        ]
+      },
+      {
+        "stdioStderr": "",
+        "exitCode": 0
+      }
+    ]
+  ]
+}

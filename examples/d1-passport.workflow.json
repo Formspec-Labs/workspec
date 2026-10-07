@@ -1,0 +1,105 @@
+{
+  "$wosWorkflow": "1.0",
+  "actors": [
+    {
+      "description": null,
+      "extensions": {},
+      "id": "adjudicator",
+      "type": "human"
+    },
+    {
+      "description": null,
+      "extensions": {},
+      "id": "intakeService",
+      "type": "system"
+    }
+  ],
+  "contracts": {},
+  "custody": {
+    "anchorRequirements": []
+  },
+  "decisionTables": [],
+  "description": "Bounded D1 public intake and initial human review. Actor identifiers are deployment configuration slots.",
+  "extensions": {
+    "x-d1-custody-posture": {
+      "delegatedComputeVisibility": "Ordinary configured Formspec/WOS server components process plaintext evidence; no external delegated compute is authorized by this workflow",
+      "ordinaryReaders": "Formspec source service and scope-bound WOS evidence service; authenticated reviewers only after specific-case authorization",
+      "recoveryWithoutUser": true
+    },
+    "x-d1-definition-pin": {
+      "definitionHash": "sha256:7dd5277eae83e2e96ede564c09901607916a1edcfa6364e21f13fb813ed39005",
+      "rawDefinitionHash": "sha256:39e4086f46c1c2479f8f3bd87f20a9ad3054973088f1165c0a081a51df5d3b39",
+      "receipt": "formspec-studio/demo-authoring/outputs/d1/v0.1.6/receipts/server-definition-hash-v0.1.6.json"
+    }
+  },
+  "governance": {
+    "dueProcess": {
+      "explanationLevel": "individualized"
+    },
+    "taskCatalog": [
+      {
+        "description": "Review the accepted application and its retained evidence. Record individualized observations. This task does not issue a decision.",
+        "id": "reviewApplication",
+        "pattern": "reviewApplication",
+        "title": "Review passport renewal application",
+        "verifiable": "partially",
+        "verificationMethod": "Compare recorded observations with the retained application and evidence."
+      }
+    ]
+  },
+  "impactLevel": "rights-impacting",
+  "intake": {
+    "contractRef": "urn:formspec:demo:d1:passport-renewal",
+    "contractVersion": "0.1.6",
+    "mode": "publicIntake"
+  },
+  "lifecycle": {
+    "initialState": "awaitingReview",
+    "milestones": {},
+    "states": {
+      "awaitingReview": {
+        "cancellationPolicy": null,
+        "description": null,
+        "extensions": {},
+        "historyState": null,
+        "onEntry": [
+          {
+            "action": "createTask",
+            "assignTo": "adjudicator",
+            "compensatingAction": null,
+            "completionEvent": null,
+            "contractRef": null,
+            "correlationKey": null,
+            "data": null,
+            "deadline": null,
+            "description": "Review the accepted passport renewal application.",
+            "duration": null,
+            "eventType": null,
+            "extensions": {},
+            "failureEvent": null,
+            "idempotencyKey": null,
+            "message": null,
+            "path": null,
+            "prefillMappingRef": null,
+            "responseMappingRef": null,
+            "serviceRef": null,
+            "taskRef": "reviewApplication",
+            "timerId": null,
+            "value": null
+          }
+        ],
+        "onExit": [],
+        "tags": [],
+        "transitions": [],
+        "type": "atomic"
+      }
+    }
+  },
+  "provenance": {
+    "tier": "facts"
+  },
+  "status": "draft",
+  "title": "Passport renewal: intake review",
+  "url": "urn:wos:demo:d1:passport-renewal",
+  "version": "0.1.0"
+}

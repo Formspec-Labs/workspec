@@ -5545,6 +5545,171 @@
           }
         }
       }
+    },
+    "/intake-handoffs": {
+      "post": {
+        "operationId": "acceptIntakeHandoff",
+        "summary": "Accept a qualified canonical Formspec intake through a configured exact binding.",
+        "description": "Authenticated scoped integration principal. Body is the unchanged owner-native IntakeHandoff1.0; Formspec source validation is required before maintained runtime acceptance. Pending is retriable before runtime acceptance.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Exact original handoffId.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "description": "Unchanged canonical Formspec IntakeHandoff1.0; resolver validates https://formspec.org/schemas/intake-handoff/1.0 before acceptance."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Qualified immutable evidence or committed receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntakeHandoffReceipt"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Qualified immutable evidence or committed receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntakeHandoffReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/cases/{case_id}/case-file": {
+      "get": {
+        "operationId": "getInitialCaseFile",
+        "summary": "Read the immutable initial accepted filing with independent case evidence authorization.",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "description": "Actual durable case ledger identity.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/CaseLedgerPathId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Qualified immutable evidence or committed receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseFileRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/cases/{case_id}/case-file/attachments/{attachment_id}": {
+      "get": {
+        "operationId": "getInitialCaseFileAttachment",
+        "summary": "Read original attachment bytes after case authorization and source integrity verification.",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "description": "Actual durable case ledger identity.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/CaseLedgerPathId"
+            }
+          },
+          {
+            "name": "attachment_id",
+            "in": "path",
+            "required": true,
+            "description": "Opaque identifier from this case initial evidence.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Original verified bytes; retained MIME, size and digest are in the case-bound descriptor.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5788,6 +5953,24 @@
       },
       "WorkflowProcessList": {
         "$ref": "https://schemas.formspec.io/wos-api/instance/v1#/$defs/WorkflowProcessList"
+      },
+      "AcceptedAuthoredArtifact": {
+        "$ref": "https://schemas.formspec.io/wos-api/case-file/v1#/$defs/AcceptedAuthoredArtifact"
+      },
+      "AcceptedSignatureVerification": {
+        "$ref": "https://schemas.formspec.io/wos-api/case-file/v1#/$defs/AcceptedSignatureVerification"
+      },
+      "AcceptedAttachmentDescriptor": {
+        "$ref": "https://schemas.formspec.io/wos-api/case-file/v1#/$defs/AcceptedAttachmentDescriptor"
+      },
+      "AcceptedIntakeEvidence": {
+        "$ref": "https://schemas.formspec.io/wos-api/case-file/v1#/$defs/AcceptedIntakeEvidence"
+      },
+      "CaseFileRead": {
+        "$ref": "https://schemas.formspec.io/wos-api/case-file/v1#/$defs/CaseFileRead"
+      },
+      "IntakeHandoffReceipt": {
+        "$ref": "https://schemas.formspec.io/wos-api/case-file/v1#/$defs/IntakeHandoffReceipt"
       }
     },
     "responses": {

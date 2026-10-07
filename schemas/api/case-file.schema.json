@@ -1,0 +1,415 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.formspec.io/wos-api/case-file/v1",
+  "title": "WOS API Initial Case File",
+  "description": "Immutable source evidence and authorized first-case read. Native Formspec documents retain their owner schema authority.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/AcceptedAuthoredArtifact"
+    },
+    {
+      "$ref": "#/$defs/AcceptedSignatureVerification"
+    },
+    {
+      "$ref": "#/$defs/AcceptedAttachmentDescriptor"
+    },
+    {
+      "$ref": "#/$defs/AcceptedIntakeEvidence"
+    },
+    {
+      "$ref": "#/$defs/CaseFileRead"
+    },
+    {
+      "$ref": "#/$defs/IntakeHandoffReceipt"
+    }
+  ],
+  "$defs": {
+    "AcceptedAuthoredArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Immutable authored artifact actually used by the accepted filing; never the current active artifact.",
+      "required": [
+        "kind",
+        "url",
+        "version",
+        "hash",
+        "document"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "definition",
+            "locale",
+            "component",
+            "theme"
+          ],
+          "description": "Formspec authored artifact family."
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Original artifact identity."
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Exact authored artifact version.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "hash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "SHA-256 of the exact retained raw UTF-8 artifact bytes."
+        },
+        "document": {
+          "description": "Exact parsed retained owner-native document. Source validates the kind-specific canonical Formspec schema; no rewritten fields."
+        }
+      }
+    },
+    "AcceptedSignatureVerification": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Original source verification facts. Acceptance, pseudonymous session custody and full Response hash do not prove civil identity.",
+      "required": [
+        "status",
+        "profile",
+        "details"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "verified",
+            "unsigned",
+            "unverified",
+            "invalid"
+          ],
+          "description": "Actual source verifier result; verified requires successful configured verification of the original authored signature."
+        },
+        "profile": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Configured verification profile actually used.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "keyId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Actual verification key pin when a key was used.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "signedPayloadDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Original signed-payload digest, distinct from the full accepted Response hash."
+        },
+        "details": {
+          "description": "Exact retained source verifier details; not a newly generated legal or identity assertion."
+        }
+      }
+    },
+    "AcceptedAttachmentDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Immutable accepted photo/file association; contains no storage locator, source URL or applicant credential.",
+      "required": [
+        "attachmentId",
+        "fieldPath",
+        "fileName",
+        "mediaType",
+        "sizeBytes",
+        "hash"
+      ],
+      "properties": {
+        "attachmentId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque identifier allocated by the source and bound to this handoff.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "fieldPath": {
+          "type": "string",
+          "pattern": "^/.*$",
+          "description": "JSON Pointer to the attachment in the accepted Response data."
+        },
+        "fileName": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Original filename retained by the source.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "mediaType": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9!#$&^_.+-]+/[a-zA-Z0-9!#$&^_.+-]+$",
+          "description": "Retained MIME media type, independently checked before serving bytes."
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Exact original byte length."
+        },
+        "hash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "SHA-256 of original attachment bytes, checked on each source read."
+        }
+      }
+    },
+    "AcceptedIntakeEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Source-owned immutable accepted evidence returned by the protected service resolver. Native JSON is opaque to WOS code generation, but must pass canonical Formspec validation and cross-field qualification before acceptance.",
+      "required": [
+        "handoff",
+        "response",
+        "validationReport",
+        "definition",
+        "definitionHash",
+        "artifacts",
+        "materialHistory",
+        "signatureVerification",
+        "attachments",
+        "originalEvaluation"
+      ],
+      "properties": {
+        "handoff": {
+          "description": "Exact canonical IntakeHandoff1.0, unchanged, including original session and genuine material-history head. Optional actorRef/subjectRef may be omitted; no invented nulls or new members.",
+          "x-wos": {
+            "ownerSchema": "https://formspec.org/schemas/intake-handoff/1.0",
+            "validationOwner": "Formspec trusted accepted-evidence resolver; WOS must refuse unqualified source values"
+          }
+        },
+        "response": {
+          "description": "Exact full accepted Response, including original signatures, pins and answers; validate maintained full responseHash.",
+          "x-wos": {
+            "ownerSchema": "https://formspec.org/schemas/response/1.0",
+            "validationOwner": "Formspec trusted accepted-evidence resolver; WOS must refuse unqualified source values"
+          }
+        },
+        "validationReport": {
+          "description": "Original retained report selected by handoff validationReportRef; never reevaluated at read time.",
+          "x-wos": {
+            "ownerSchema": "https://formspec.org/schemas/validationReport/1.0",
+            "validationOwner": "Formspec trusted accepted-evidence resolver; WOS must refuse unqualified source values"
+          }
+        },
+        "definition": {
+          "$ref": "#/$defs/AcceptedAuthoredArtifact",
+          "description": "Exact Definition artifact; kind must be definition and URL/version match Response and handoff."
+        },
+        "definitionHash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Maintained canonical semantic Definition hash, distinct from raw artifact hash."
+        },
+        "displayedLocale": {
+          "$ref": "#/$defs/AcceptedAuthoredArtifact",
+          "description": "Exact recorded Locale; kind locale and URL/version/language agree with accepted Response.displayedLocale. Omit only when inline Definition wording was actually displayed."
+        },
+        "artifacts": {
+          "type": "array",
+          "description": "Additional authored artifacts actually used for this accepted rendering; no speculative inventory.",
+          "items": {
+            "$ref": "#/$defs/AcceptedAuthoredArtifact",
+            "description": "Retained artifact."
+          }
+        },
+        "materialHistory": {
+          "description": "Actual retained RespondentLedger material history selected by ledgerHeadRef, with genuine event/session/Response/report association. Does not assert anchoring.",
+          "x-wos": {
+            "ownerSchema": "https://formspec.org/schemas/respondent-ledger.schema.json",
+            "validationOwner": "Formspec trusted accepted-evidence resolver; WOS must refuse unqualified source values"
+          }
+        },
+        "signatureVerification": {
+          "$ref": "#/$defs/AcceptedSignatureVerification",
+          "description": "Retained original source signature verification."
+        },
+        "attachments": {
+          "type": "array",
+          "description": "Accepted field-bound immutable attachments.",
+          "items": {
+            "$ref": "#/$defs/AcceptedAttachmentDescriptor",
+            "description": "Original attachment metadata."
+          }
+        },
+        "originalEvaluation": {
+          "description": "Exact original source evaluation receipt (values/validations/etc), retained unchanged. This is not the canonical ValidationReport; canonical report is derived once from that same actual result, clock and pinned Definition through the maintained Formspec builder."
+        }
+      }
+    },
+    "CaseFileRead": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Authorized staff read of the immutable initial filing and actual WOS identities. This is separate from mutable runtime case state.",
+      "required": [
+        "caseLedgerId",
+        "caseReference",
+        "processId",
+        "tasks",
+        "intake"
+      ],
+      "properties": {
+        "caseLedgerId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Actual accepted durable case ledger URN."
+        },
+        "caseReference": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Actual separate human-readable case reference.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "processId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Actual process created for this intake."
+        },
+        "tasks": {
+          "type": "array",
+          "description": "Actual tasks created by the maintained runtime, never pre-reserved or synthesized.",
+          "items": {
+            "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskListItem",
+            "description": "Maintained task read shape."
+          },
+          "minItems": 1
+        },
+        "intake": {
+          "$ref": "#/$defs/AcceptedIntakeEvidence",
+          "description": "Immutable initial accepted source snapshot, qualified and durably associated with this case."
+        }
+      }
+    },
+    "IntakeHandoffReceipt": {
+      "description": "Closed transport outcome. Pending is retriable qualification/delivery before runtime acceptance, not a finalized deferred runtime receipt. Identical accepted replay returns the same identities.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Return only after actual case/process and human task creation commits.",
+          "required": [
+            "handoffId",
+            "status",
+            "caseLedgerId",
+            "caseReference",
+            "processId",
+            "tasks"
+          ],
+          "properties": {
+            "handoffId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Original stable source handoff identifier; never regenerated on retry.",
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
+            },
+            "status": {
+              "const": "accepted",
+              "description": "Committed WOS acceptance."
+            },
+            "caseLedgerId": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+              "description": "Committed case."
+            },
+            "caseReference": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Assigned human reference.",
+              "x-wos": {
+                "openStringKind": "prose"
+              }
+            },
+            "processId": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+              "description": "Created process."
+            },
+            "tasks": {
+              "type": "array",
+              "description": "Actually created reviewer tasks.",
+              "items": {
+                "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskListItem",
+                "description": "Maintained task read shape."
+              },
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "No case identity is asserted for this outcome.",
+          "required": [
+            "handoffId",
+            "status",
+            "code"
+          ],
+          "properties": {
+            "handoffId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Original stable source handoff identifier; never regenerated on retry.",
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
+            },
+            "status": {
+              "const": "pending",
+              "description": "Transport outcome."
+            },
+            "code": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Stable machine-readable reason.",
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "No case identity is asserted for this outcome.",
+          "required": [
+            "handoffId",
+            "status",
+            "code"
+          ],
+          "properties": {
+            "handoffId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Original stable source handoff identifier; never regenerated on retry.",
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
+            },
+            "status": {
+              "const": "rejected",
+              "description": "Transport outcome."
+            },
+            "code": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Stable machine-readable reason.",
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
