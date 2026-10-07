@@ -63,7 +63,7 @@
         "dismissed",
         "expired"
       ],
-      "description": "Closed user-facing task lifecycle for the public API (ADR 0082 D-12). The kernel runtime carries a richer `created|assigned|claimed|delegated|escalated` set on `wos-process.schema.json#/$defs/ActiveTask.status` for processor-side bookkeeping; the public API collapses those into the user-visible posture: `pending` (the actor has work to do); `drafted` (a partial response is saved); `submitted` (the actor's final response is committed and the task is no longer actionable); `dismissed` (the actor declined the task per delegation or escalation policy); `expired` (the SLA `targetDuration` elapsed without submission and the breach policy fired). No vendor-extension seam: the user-facing taxonomy is closed by design; richer kernel-side states surface in provenance and on `TaskOutcomeEvent.outcome`.",
+      "description": "Closed user-facing task lifecycle for the public API (ADR 0082 D-12). The kernel runtime carries a richer `created|assigned|claimed|delegated|escalated` set on `wos-process.schema.json#/$defs/ActiveTask.status` for processor-side bookkeeping; the public API collapses those into the user-visible posture: `pending` (the actor has work to do); `drafted` (a partial response is saved); `submitted` (the actor's final response is committed and the task is no longer actionable); `dismissed` (the actor dismissed the UI; Kernel §13.4 leaves the governed task resumable in its current state); `expired` (the SLA `targetDuration` elapsed without submission and the breach policy fired). No vendor-extension seam: the user-facing taxonomy is closed by design; richer kernel-side states surface in provenance and on `TaskOutcomeEvent.outcome`.",
       "examples": [
         "pending",
         "drafted"
@@ -738,7 +738,7 @@
     "TaskDismissal": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Request body for `POST /api/v1/tasks/{id}/dismiss`. The endpoint declines the task without submitting a response; the server transitions the task to `dismissed` and fires the kernel `taskSkipped` event with the supplied rationale. Dismissal against a non-`pending`/`drafted` task is rejected with `WOS-1409`. Idempotent on `(taskId, reason)`.",
+      "description": "Request body for `POST /api/v1/tasks/{id}/dismiss`. UI dismissal records taskDismissed provenance for the actual authenticated acting actor and leaves the runtime task resumable in its current state (Kernel §13.4); it does not emit taskSkipped or advance lifecycle. A dismissed public outcome is UI posture, not abandonment. Notification follows durable commit; storage failure emits none. The host checks current access and command admission before a cached HTTP response or runtime invocation while preserving immutable kernel replay semantics. Idempotent on (taskId, reason) within the authenticated scoped host replay boundary.",
       "required": [
         "reason"
       ],
@@ -789,7 +789,7 @@
         "escalated",
         "drafted"
       ],
-      "description": "Closed wire taxonomy for `TaskOutcomeEvent.outcome` (ADR 0082 D-12). Reserved literals: `submitted` (final response committed); `completed` (task response committed and case mutated); `dismissed` (actor declined); `expired` (SLA breach without submission); `delegated` (assignment changed via delegation); `escalated` (assignment escalated to a higher authority); `drafted` (a draft save event for downstream observers). No vendor-extension seam: these are the outcomes the public API surfaces to clients; richer kernel-side events live in provenance.",
+      "description": "Closed wire taxonomy for `TaskOutcomeEvent.outcome` (ADR 0082 D-12). Reserved literals: `submitted` (final response committed); `completed` (task response committed and case mutated); `dismissed` (resumable UI dismissal, not a kernel terminal transition); `expired` (SLA breach without submission); `delegated` (assignment changed via delegation); `escalated` (assignment escalated to a higher authority); `drafted` (a draft save event for downstream observers). No vendor-extension seam: these are the outcomes the public API surfaces to clients; richer kernel-side events live in provenance.",
       "examples": [
         "submitted"
       ]
