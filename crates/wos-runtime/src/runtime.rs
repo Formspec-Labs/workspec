@@ -63,6 +63,46 @@ use support::{
 const COMPLETION_EVENT_EXTENSION_KEY: &str = "x-wos-runtime-completion-event";
 const FAILURE_EVENT_EXTENSION_KEY: &str = "x-wos-runtime-failure-event";
 
+/// Checks exact runtime outcome metadata against a selected task-creation action.
+///
+/// This consistency check grants no task read, action, or disclosure authority.
+/// The host must separately qualify one unambiguous action from the actual
+/// governing workflow and validate task association, assignment, scope, grants,
+/// exclusions, and current policy. Unsupported selection must refuse.
+///
+/// Only ordinary task creation with no authored action extensions is supported.
+/// The actual persisted map must contain exactly the declared completion and
+/// failure event strings, without unknown keys or blank values. No metadata is
+/// changed, removed, or inferred from current access authority.
+pub fn task_outcome_metadata_matches(
+    action: &wos_core::model::kernel::Action,
+    extensions: &std::collections::HashMap<String, serde_json::Value>,
+) -> bool {
+    if action.action != wos_core::model::kernel::ActionKind::CreateTask
+        || !action.extensions.is_empty()
+        || extensions
+            .keys()
+            .any(|key| key != COMPLETION_EVENT_EXTENSION_KEY && key != FAILURE_EVENT_EXTENSION_KEY)
+    {
+        return false;
+    }
+    [
+        (
+            COMPLETION_EVENT_EXTENSION_KEY,
+            action.completion_event.as_deref(),
+        ),
+        (FAILURE_EVENT_EXTENSION_KEY, action.failure_event.as_deref()),
+    ]
+    .into_iter()
+    .all(|(key, expected)| match (expected, extensions.get(key)) {
+        (None, None) => true,
+        (Some(expected), Some(serde_json::Value::String(actual))) => {
+            !expected.trim().is_empty() && actual == expected
+        }
+        _ => false,
+    })
+}
+
 /// Request for instance creation.
 #[derive(Debug, Clone)]
 pub struct CreateProcessRequest {
@@ -2866,6 +2906,127 @@ mod tests {
                 .any(|record| record.record_kind == ProvenanceKind::IntakeAccepted),
             "runtime outcome provenance must still be present"
         );
+    }
+
+    fn outcome_metadata_fixture(
+        completion: Option<&str>,
+        failure: Option<&str>,
+    ) -> (wos_core::model::kernel::Action, ActiveTask) {
+        let mut action = serde_json::json!({
+            "action": "createTask", "taskRef": "review", "assignTo": "reviewer"
+        });
+        if let Some(event) = completion {
+            action["completionEvent"] = serde_json::json!(event);
+        }
+        if let Some(event) = failure {
+            action["failureEvent"] = serde_json::json!(event);
+        }
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosWorkflow": "1.0", "url": "urn:test:outcome-metadata", "version": "1.0.0",
+            "lifecycle": { "initialState": "open", "states": { "open": {
+                "type": "atomic", "onEntry": [action]
+            } } }
+        }))
+        .unwrap();
+        let selected = kernel.lifecycle.states["open"].on_entry[0].clone();
+        let mut runtime = runtime_with_kernel(kernel);
+        let id = test_process_id("outcome-metadata").to_string();
+        runtime
+            .create_process(CreateProcessRequest {
+                process_id: id.clone(),
+                tenant: None,
+                definition_url: "urn:test:outcome-metadata".into(),
+                definition_version: "1.0.0".into(),
+                initial_case_state: None,
+            })
+            .unwrap();
+        let task = runtime.load_process(&id).unwrap().active_tasks.remove(0);
+        (selected, task)
+    }
+
+    #[test]
+    fn task_outcome_metadata_matches_actual_runtime_and_retained_codec_values() {
+        for (completion, failure) in [
+            (None, None),
+            (Some("review.completed"), None),
+            (None, Some("review.failed")),
+            (Some("review.completed"), Some("review.failed")),
+        ] {
+            let (action, task) = outcome_metadata_fixture(completion, failure);
+            let before = serde_json::to_value(&task).unwrap();
+            assert!(crate::task_outcome_metadata_matches(
+                &action,
+                &task.extensions
+            ));
+            let retained: std::collections::HashMap<String, serde_json::Value> =
+                serde_json::from_value(serde_json::to_value(&task.extensions).unwrap()).unwrap();
+            assert!(crate::task_outcome_metadata_matches(&action, &retained));
+            assert_eq!(retained, task.extensions);
+            assert_eq!(serde_json::to_value(&task).unwrap(), before);
+        }
+    }
+
+    #[test]
+    fn task_outcome_metadata_refuses_mismatched_missing_unknown_and_unsupported_facts() {
+        let (action, task) =
+            outcome_metadata_fixture(Some("review.completed"), Some("review.failed"));
+        let action_before = serde_json::to_value(&action).unwrap();
+        let task_before = serde_json::to_value(&task).unwrap();
+        for key in [COMPLETION_EVENT_EXTENSION_KEY, FAILURE_EVENT_EXTENSION_KEY] {
+            for value in [
+                serde_json::json!("different"),
+                serde_json::json!(""),
+                serde_json::json!(" "),
+                serde_json::json!(42),
+                serde_json::Value::Null,
+                serde_json::json!([]),
+            ] {
+                let mut changed = task.extensions.clone();
+                changed.insert(key.into(), value);
+                assert!(!crate::task_outcome_metadata_matches(&action, &changed));
+            }
+            let mut missing = task.extensions.clone();
+            missing.remove(key);
+            assert!(!crate::task_outcome_metadata_matches(&action, &missing));
+        }
+        assert!(!crate::task_outcome_metadata_matches(
+            &action,
+            &Default::default()
+        ));
+        let mut unknown = task.extensions.clone();
+        unknown.insert("x-unknown-access".into(), serde_json::json!(true));
+        assert!(!crate::task_outcome_metadata_matches(&action, &unknown));
+        let (no_event, _) = outcome_metadata_fixture(None, None);
+        assert!(!crate::task_outcome_metadata_matches(
+            &no_event,
+            &task.extensions
+        ));
+        let mut unsupported = action.clone();
+        unsupported
+            .extensions
+            .insert("x-wos-signature-step".into(), serde_json::json!("review"));
+        assert!(!crate::task_outcome_metadata_matches(
+            &unsupported,
+            &task.extensions
+        ));
+        unsupported = action.clone();
+        unsupported.action = wos_core::model::kernel::ActionKind::SetData;
+        assert!(!crate::task_outcome_metadata_matches(
+            &unsupported,
+            &task.extensions
+        ));
+        for blank in ["", " "] {
+            let mut declared = action.clone();
+            declared.completion_event = Some(blank.into());
+            let mut actual = task.extensions.clone();
+            actual.insert(
+                COMPLETION_EVENT_EXTENSION_KEY.into(),
+                serde_json::json!(blank),
+            );
+            assert!(!crate::task_outcome_metadata_matches(&declared, &actual));
+        }
+        assert_eq!(serde_json::to_value(&action).unwrap(), action_before);
+        assert_eq!(serde_json::to_value(&task).unwrap(), task_before);
     }
 
     fn creation_snapshot_retry(fail_on_save: usize) {
