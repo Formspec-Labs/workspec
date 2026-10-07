@@ -144,7 +144,7 @@
         "fileName": {
           "type": "string",
           "minLength": 1,
-          "description": "Original filename retained by the source.",
+          "description": "Filename from the exact accepted Response attachment descriptor, frozen at acceptance. This is the name as filed; it does not assert the upload-time filename.",
           "x-wos": {
             "openStringKind": "prose"
           }
