@@ -139,7 +139,7 @@
         "fieldPath": {
           "type": "string",
           "pattern": "^/.*$",
-          "description": "JSON Pointer to the attachment in the accepted Response data."
+          "description": "RFC 6901 JSON Pointer relative to the accepted Response.data value, not the Response root. D1 photo is /photo; a repeated nested photo is /household/0/photo. Preserve the actual traversal pointer with ~0/~1 escaping; no dot-path conversion or /data prefix. Source must resolve Response.data.pointer(fieldPath) to the exact accepted attachment descriptor."
         },
         "fileName": {
           "type": "string",
