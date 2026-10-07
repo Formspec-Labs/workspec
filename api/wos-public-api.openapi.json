@@ -5608,6 +5608,9 @@
           },
           "503": {
             "$ref": "#/components/responses/Problem"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -5651,6 +5654,9 @@
             "$ref": "#/components/responses/Problem"
           },
           "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "400": {
             "$ref": "#/components/responses/Problem"
           }
         }
@@ -5706,6 +5712,12 @@
             "$ref": "#/components/responses/Problem"
           },
           "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
             "$ref": "#/components/responses/Problem"
           }
         }
