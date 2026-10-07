@@ -365,11 +365,27 @@ impl InMemoryStore {
     pub fn new() -> Self {
         Self::default()
     }
-}
 
-impl RuntimeStore for InMemoryStore {
-    fn create_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
-        record.validate_initial_creation()?;
+    /// Restore a persisted current record into this store.
+    ///
+    /// Use this only for records loaded from trusted persistence after validating
+    /// the actual storage key and scope. This method grants no access authority
+    /// and must not replace initial creation or intake admission.
+    ///
+    /// Retained creation evidence is checked against current process identity;
+    /// current task progress and definition-version migration are permitted.
+    /// Legacy absence stays absent. Existing records are never replaced.
+    ///
+    /// # Errors
+    /// Returns [`StoreError::InvalidCreationEvidence`] for invalid retained evidence
+    /// or an inconsistent process association, and [`StoreError::AlreadyExists`]
+    /// when the process is already present. Refusal leaves records and indexes unchanged.
+    pub fn restore_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
+        record.validate_creation()?;
+        self.insert_record(record)
+    }
+
+    fn insert_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
         let process_id = record.process.process_id.clone();
         if self.records.contains_key(&process_id) {
             return Err(StoreError::AlreadyExists(process_id));
@@ -382,6 +398,13 @@ impl RuntimeStore for InMemoryStore {
             .or_default()
             .push(process_id);
         Ok(())
+    }
+}
+
+impl RuntimeStore for InMemoryStore {
+    fn create_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
+        record.validate_initial_creation()?;
+        self.insert_record(record)
     }
 
     fn load_record(&self, process_id: &str) -> Result<RuntimeRecord, StoreError> {
@@ -887,6 +910,174 @@ mod tests {
             record.validate_creation(),
             Err(StoreError::InvalidCreationEvidence(_))
         ));
+    }
+
+    fn restore_original_record() -> RuntimeRecord {
+        use base64::Engine as _;
+        let mut record = creation_record();
+        // Match the maintained runtime task encoding without changing its visibility.
+        let parent =
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&record.process.process_id);
+        let task = serde_json::from_value(serde_json::json!({
+            "taskId": format!("wos-task:{parent}:1:review"), "taskRef": "review",
+            "status": "assigned", "assignedActor": "original-reviewer",
+            "createdAt": record.process.created_at, "updatedAt": record.process.created_at
+        }))
+        .unwrap();
+        record.process.active_tasks.push(task);
+        let kernel = serde_json::from_value(serde_json::json!({
+            "$wosWorkflow": "1.0", "url": record.process.definition_url, "version": "1.0.0",
+            "governance": { "taskCatalog": [{ "id": "review", "title": "Original Review", "pattern": "review" }] },
+            "lifecycle": { "initialState": "open", "states": { "open": { "type": "atomic" } } }
+        })).unwrap();
+        record.creation = Some(ProcessCreationSnapshot::capture(&record.process, &kernel).unwrap());
+        record
+    }
+
+    #[test]
+    fn restore_record_preserves_creation_after_task_progress_and_version_migration() {
+        let original = restore_original_record();
+        let id = original.process.process_id.clone();
+        let case = original.process.case_ledger_id.clone();
+        let mut persisted = InMemoryStore::new();
+        persisted.create_record(original.clone()).unwrap();
+        let mut progressed = persisted.load_record(&id).unwrap();
+        progressed.process.active_tasks.clear();
+        progressed.process.definition_version = "2.0.0".into();
+        progressed.process.case_state = serde_json::json!({ "approved": true });
+        progressed
+            .provenance_log
+            .push(stamped_event("2026-01-01T00:00:00Z", "reviewed"));
+        progressed.replay_entries.insert(
+            ReplayKey {
+                operation: ReplayOperation::PersistDraft,
+                task_id: original.creation.as_ref().unwrap().tasks[0].task_id.clone(),
+                actor_id: "original-reviewer".into(),
+                token: "original-token".into(),
+            },
+            ReplayValue::Draft(PersistDraftResult {
+                artifact_id: "original-artifact".into(),
+            }),
+        );
+        persisted.save_record(progressed.clone()).unwrap();
+        let aux = runtime_aux_from_json(&runtime_aux_to_json(&progressed)).unwrap();
+        let restored = RuntimeRecord {
+            process: serde_json::from_value(serde_json::to_value(&progressed.process).unwrap())
+                .unwrap(),
+            creation: aux.creation,
+            provenance_log: progressed.provenance_log.clone(),
+            step_results: aux.step_results,
+            artifacts: aux.artifacts,
+            replay_entries: aux.replay_entries,
+        };
+        let mut strict = InMemoryStore::new();
+        assert!(matches!(
+            strict.create_record(restored.clone()),
+            Err(StoreError::InvalidCreationEvidence(_))
+        ));
+        assert!(strict.processes_for_case(&case).is_empty());
+        let mut loaded = crate::InMemoryStore::new();
+        loaded.restore_record(restored).unwrap();
+        let current = loaded.load_record(&id).unwrap();
+        assert_eq!(current.creation, original.creation);
+        assert_eq!(
+            serde_json::to_value(&current.process).unwrap(),
+            serde_json::to_value(&progressed.process).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_value(&current.provenance_log).unwrap(),
+            serde_json::to_value(&progressed.provenance_log).unwrap()
+        );
+        assert_eq!(
+            runtime_aux_to_json(&current),
+            runtime_aux_to_json(&progressed)
+        );
+        assert_eq!(loaded.processes_for_case(&case), vec![id]);
+        let mut changed = current.clone();
+        changed.creation.as_mut().unwrap().tasks[0].catalog_title = Some("Replaced".into());
+        assert!(matches!(
+            loaded.save_record(changed),
+            Err(StoreError::InvalidCreationEvidence(_))
+        ));
+        let mut erased = current;
+        erased.creation = None;
+        assert!(matches!(
+            loaded.save_record(erased),
+            Err(StoreError::InvalidCreationEvidence(_))
+        ));
+    }
+
+    #[test]
+    fn restore_record_refuses_corrupt_or_mismatched_evidence_without_index_changes() {
+        let original = restore_original_record();
+        let mut corrupt = original.clone();
+        corrupt.creation.as_mut().unwrap().created_at = "invalid".into();
+        let mut wrong_process = original.clone();
+        wrong_process.creation.as_mut().unwrap().process_id =
+            stack_common_typeid::mint_process_id();
+        let mut wrong_case = original.clone();
+        wrong_case.creation.as_mut().unwrap().case_ledger_id =
+            stack_common_typeid::mint_case_ledger_id();
+        wrong_case.creation.as_ref().unwrap().validate().unwrap();
+        for invalid in [corrupt, wrong_process, wrong_case] {
+            let id = invalid.process.process_id.clone();
+            let case = invalid.process.case_ledger_id.clone();
+            let mut store = InMemoryStore::new();
+            assert!(matches!(
+                store.restore_record(invalid),
+                Err(StoreError::InvalidCreationEvidence(_))
+            ));
+            assert!(matches!(
+                store.load_record(&id),
+                Err(StoreError::NotFound(_))
+            ));
+            assert!(store.processes_for_case(&case).is_empty());
+        }
+    }
+
+    #[test]
+    fn restore_record_duplicate_preserves_record_and_case_index() {
+        let original = restore_original_record();
+        let id = original.process.process_id.clone();
+        let case = original.process.case_ledger_id.clone();
+        let mut store = InMemoryStore::new();
+        store.restore_record(original.clone()).unwrap();
+        let mut duplicate = original.clone();
+        let other_case = stack_common_typeid::mint_case_ledger_id();
+        duplicate.process.case_ledger_id = other_case.clone();
+        duplicate.creation.as_mut().unwrap().case_ledger_id = other_case.clone();
+        duplicate.process.case_state = serde_json::json!({ "replaced": true });
+        assert!(
+            matches!(store.restore_record(duplicate), Err(StoreError::AlreadyExists(found)) if found == id)
+        );
+        assert_eq!(store.processes_for_case(&case), vec![id.clone()]);
+        assert!(store.processes_for_case(&other_case).is_empty());
+        let current = store.load_record(&id).unwrap();
+        assert_eq!(current.creation, original.creation);
+        assert_eq!(current.process.case_state, original.process.case_state);
+        let mut sibling = restore_original_record();
+        sibling.process.case_ledger_id = case.clone();
+        sibling.creation.as_mut().unwrap().case_ledger_id = case.clone();
+        let sibling_id = sibling.process.process_id.clone();
+        store.restore_record(sibling).unwrap();
+        assert_eq!(store.processes_for_case(&case), vec![id, sibling_id]);
+    }
+
+    #[test]
+    fn restore_record_preserves_legacy_absence_and_refuses_update_backfill() {
+        let mut legacy = restore_original_record();
+        let evidence = legacy.creation.take();
+        legacy.process.active_tasks.clear();
+        let id = legacy.process.process_id.clone();
+        let mut store = InMemoryStore::new();
+        store.restore_record(legacy.clone()).unwrap();
+        assert!(store.load_record(&id).unwrap().creation.is_none());
+        legacy.creation = evidence;
+        assert!(matches!(
+            store.save_record(legacy),
+            Err(StoreError::InvalidCreationEvidence(_))
+        ));
+        assert!(store.load_record(&id).unwrap().creation.is_none());
     }
 
     fn record_with(process_id: &str, case_ledger_id: &str) -> RuntimeRecord {
