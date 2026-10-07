@@ -59,3 +59,21 @@ def test_artifact_raw_digest_and_definition_semantic_digest_are_distinct_fields(
     artifact = SCHEMA['$defs']['AcceptedAuthoredArtifact']['properties']
     assert 'raw' in artifact['hash']['description']
     assert 'semantic' in evidence['definitionHash']['description']
+
+
+def test_native_codegen_annotation_preserves_json_without_shape_assertions():
+    fields = [('AcceptedAuthoredArtifact', 'document'),
+              ('AcceptedSignatureVerification', 'details')]
+    fields += [('AcceptedIntakeEvidence', field) for field in
+               ('handoff', 'response', 'validationReport', 'materialHistory', 'originalEvaluation')]
+    for model, field in fields:
+        boundary = SCHEMA['$defs'][model]['properties'][field]
+        assert boundary['tsType'] == 'unknown'
+        check = Draft202012Validator(boundary)
+        for value in ({'native': {'answer': None}}, ['native', None], 'opaque', None):
+            check.validate(value)
+    # Canonical owner validation still supplies each real native document's shape.
+    response_schema = json.loads((ROOT.parent / 'formspec/schemas/response.schema.json').read_text())
+    owner = Draft202012Validator(response_schema)
+    for invalid_native_response in ([], 'opaque', None):
+        assert not owner.is_valid(invalid_native_response)

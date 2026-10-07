@@ -64,7 +64,8 @@
           "description": "SHA-256 of the exact retained raw UTF-8 artifact bytes."
         },
         "document": {
-          "description": "Exact parsed retained owner-native document. Source validates the kind-specific canonical Formspec schema; no rewritten fields."
+          "description": "Exact parsed retained owner-native document. Source validates the kind-specific canonical Formspec schema; no rewritten fields.",
+          "tsType": "unknown"
         }
       }
     },
@@ -109,7 +110,8 @@
           "description": "Original signed-payload digest, distinct from the full accepted Response hash."
         },
         "details": {
-          "description": "Exact retained source verifier details; not a newly generated legal or identity assertion."
+          "description": "Exact retained source verifier details; not a newly generated legal or identity assertion.",
+          "tsType": "unknown"
         }
       }
     },
@@ -186,21 +188,24 @@
           "x-wos": {
             "ownerSchema": "https://formspec.org/schemas/intake-handoff/1.0",
             "validationOwner": "Formspec trusted accepted-evidence resolver; WOS must refuse unqualified source values"
-          }
+          },
+          "tsType": "unknown"
         },
         "response": {
           "description": "Exact full accepted Response, including original signatures, pins and answers; validate maintained full responseHash.",
           "x-wos": {
             "ownerSchema": "https://formspec.org/schemas/response/1.0",
             "validationOwner": "Formspec trusted accepted-evidence resolver; WOS must refuse unqualified source values"
-          }
+          },
+          "tsType": "unknown"
         },
         "validationReport": {
           "description": "Original retained report selected by handoff validationReportRef; never reevaluated at read time.",
           "x-wos": {
             "ownerSchema": "https://formspec.org/schemas/validationReport/1.0",
             "validationOwner": "Formspec trusted accepted-evidence resolver; WOS must refuse unqualified source values"
-          }
+          },
+          "tsType": "unknown"
         },
         "definition": {
           "$ref": "#/$defs/AcceptedAuthoredArtifact",
@@ -228,7 +233,8 @@
           "x-wos": {
             "ownerSchema": "https://formspec.org/schemas/respondent-ledger.schema.json",
             "validationOwner": "Formspec trusted accepted-evidence resolver; WOS must refuse unqualified source values"
-          }
+          },
+          "tsType": "unknown"
         },
         "signatureVerification": {
           "$ref": "#/$defs/AcceptedSignatureVerification",
@@ -243,7 +249,8 @@
           }
         },
         "originalEvaluation": {
-          "description": "Exact original source evaluation receipt (values/validations/etc), retained unchanged. This is not the canonical ValidationReport; canonical report is derived once from that same actual result, clock and pinned Definition through the maintained Formspec builder."
+          "description": "Exact original source evaluation receipt (values/validations/etc), retained unchanged. This is not the canonical ValidationReport; canonical report is derived once from that same actual result, clock and pinned Definition through the maintained Formspec builder.",
+          "tsType": "unknown"
         }
       }
     },
