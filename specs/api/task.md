@@ -76,6 +76,26 @@ GET   /api/v1/cases/{case_id}/processes/{process_id}/tasks -> TaskPage     (case
 
 `GET /api/v1/cases/{case_id}/processes/{process_id}/tasks` is the ADR 0093 dual-identity route for workflow-process tasks. The server first validates that `{process_id}` is bound to `{case_id}`, then applies the same path-implied `processId` scoping and `TaskListOptions` filters as the process subresource.
 
+## Authenticated task access
+
+Task reads and notifications MUST use an injected resource-read decision shared by task list/detail and task notification delivery. Its inputs are the current authenticated internal principal and canonical ActorRef, current deployment grants, exact configured scope, and the actual case/process/task association. Caller filters, OAuth scopes, provider roles, task identifiers and event-append permissions MUST NOT create task-read authority. Missing identity, resource association, policy facts or authorization availability refuses disclosure. Default composition denies authenticated task delivery until a read policy is explicitly selected and qualified.
+
+The initial bounded `direct-assignee-read` deployment policy explicitly grants task reads to the task's current direct assignee only when all of these facts hold:
+
+- The verified identity maps through maintained principal/actor authority to one real canonical actor with current authorized deployment membership.
+- Maintained scoped storage establishes that the actual task belongs to the requested process and that process belongs to the case, within the configured deployment selected from the principal's current grants.
+- The current persisted direct assignment names that same canonical actor. A role label, configured reviewer string or client filter cannot substitute for this assignment.
+- The selected task policy resolves applicable assignment and separation-of-duties exclusions from maintained facts, including a qualified explicit absence where none applies. Unknown exclusion state refuses. An excluded actor is ineligible for this direct-assignee task-read policy even when another assignment role also names that actor. This does not redefine independent case-evidence or administrative read permissions.
+- The current assignment, lifecycle and resource-read policy permit this read operation and every field in its payload. Reassignment or grant revocation removes the former recipient's permission on subsequent requests and notifications.
+
+This is an explicit read rule, distinct from Governance §10.2's authority to act on a task and Kernel §16.5's case-field access control. It uses current assignment and policy facts as read authority rather than creating a second grant store. A processor implementing only direct assignment MUST refuse pooled, delegated, excluded or other unsupported assignment policy states whose eligibility it cannot establish. Wider admin, pool or delegated reads require their own explicit maintained read policy; a broad role, canDelegate result or `wos.case.any_event` wildcard never enables them. An event-append wildcard MUST NOT satisfy a read-specific relationship check.
+
+List queries default to the calling actor's actual inbox. An `assignedActor` selection that widens it requires the separate explicit read policy and relationship decision described above. Apply authorization before exposing task items, identifiers, counts or cursors; pagination and limit operate on the authorized result set. Detail and case/process list routes apply the same decision and validate resource associations. Task data whose field policy is narrower than the recipient's task permission MUST be omitted through a declared output policy or refused; task permission alone never widens case-data access.
+
+Notifications recheck the current principal, token validity, deployment grants and exact resource-read decision for each recipient immediately before emission. Deny and unavailable send no payload. Dismissal uses retained authoritative task/case/process association and assignment facts where the task has left the active list, together with current read-policy eligibility; it cannot reuse stale socket membership or a former recipient list as permission. A successful held presenter result is not proof of task delivery.
+
+Draft, response and dismissal actions MUST derive the actor from authenticated maintained principal/actor mapping; `actor:human:unknown` and caller-supplied identity MUST NOT substitute. Read permission does not grant action permission. Apply the action's actual runtime assignment/delegation, lifecycle, governance and separation-of-duties checks before a mutation or idempotent replay, and bind replay to the authenticated principal, exact scope and operation. Role middleware alone is insufficient. A returned task or outcome event still requires the read decision.
+
 ## Identifiers
 
 - `Task.id`: `urn:wos:<typeid>` URN per ADR 0092 D-1. Tasks are sub-resources identified by URL path context; their wire identity uses the parent case TypeID.
