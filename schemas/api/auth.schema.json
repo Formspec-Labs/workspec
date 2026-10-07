@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.formspec.io/wos-api/auth/v1",
   "title": "WOS API Auth",
-  "description": "Public API resource schema for token + session lifecycle (ADR 0082 D-15 step 6). Covers login, logout, refresh, scope-swap, introspection, and current-scope read. Authorization-as-mechanism (the JWT bearer + scope headers per ADR 0082 D-9) is settled; this domain authors the lifecycle endpoints around it. The scope shape (`ScopeContext`) gates on ADR 0068 D-2 (Proposed) — Tenant -> Organization -> Workspace -> Environment per VISION §V; this schema authors against the proposed shape and tolerates server-side absence of fields the deployment has not yet adopted, per ADR 0082 D-15 greenfield discipline. Vendor extensions on closed-with-vendor-extension enums use the `^x-[a-z][a-z0-9-]*$` prefix per ADR 0082 D-12.",
+  "description": "Public API resource schema for token + session lifecycle (ADR 0082 D-15 step 6). Covers login, logout, refresh, scope-swap, introspection, and current-scope read. Authorization-as-mechanism (the JWT bearer + scope headers per ADR 0082 D-9) is settled; this domain authors the lifecycle endpoints around it. The public membership hierarchy follows ADR 0082 D-9 and its archived VISION §V source. ScopeContext.scope is required; unresolved required membership refuses the read. ADR 0068 D-2 describes a separate immutable case identity. Vendor extensions on closed-with-vendor-extension enums use the `^x-[a-z][a-z0-9-]*$` prefix per ADR 0082 D-12.",
   "oneOf": [
     {
       "$ref": "#/$defs/LoginRequest"
@@ -36,7 +36,7 @@
     },
     "ActorScope": {
       "$ref": "https://schemas.formspec.io/wos-api/actor/v1#/$defs/ActorScope",
-      "description": "Closed scope-membership tuple (Tenant -> Organization -> Workspace -> Environment) per VISION §V and ADR 0068 D-2 (Proposed). Reused from `actor.schema.json#/$defs/ActorScope` so the wire shape stays canonical across actor identity, scope-context reads, and scope-swap requests (ADR 0082 D-14 — never redefine)."
+      "description": "Closed scope-membership tuple (Tenant -> Organization -> Workspace -> Environment) per VISION §V and ADR 0082 D-9. Reused from `actor.schema.json#/$defs/ActorScope` so the wire shape stays canonical across actor identity, scope-context reads, and scope-swap requests (ADR 0082 D-14 — never redefine)."
     },
     "LoginKind": {
       "oneOf": [
@@ -104,7 +104,7 @@
           "pattern": "^x-[a-z][a-z0-9-]*$"
         }
       ],
-      "description": "Closed-with-vendor-extension authentication-assurance level (ADR 0082 D-12), aligned with the IdentityAttestation `assuranceLevel` taxonomy from ADR 0068 D-3.1 (Proposed). Reserved literals: `low` (single-factor, low-assurance); `standard` (single-factor with proven possession, e.g. password + verified email); `high` (multi-factor with at least one phishing-resistant factor, e.g. WebAuthn); `very-high` (hardware-bound, identity-proofed). Vendor extensions MUST use an `^x-[a-z][a-z0-9-]*$` prefix.",
+      "description": "Closed-with-vendor-extension authentication-assurance level (ADR 0082 D-12), aligned with the IdentityAttestation `assuranceLevel` taxonomy from ADR 0068 D-3.1 (Accepted). Reserved literals: `low` (single-factor, low-assurance); `standard` (single-factor with proven possession, e.g. password + verified email); `high` (multi-factor with at least one phishing-resistant factor, e.g. WebAuthn); `very-high` (hardware-bound, identity-proofed). Vendor extensions MUST use an `^x-[a-z][a-z0-9-]*$` prefix.",
       "examples": [
         "high"
       ]
@@ -112,7 +112,7 @@
     "ScopeContext": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Current scope context for the bearer token, returned by `GET /api/v1/auth/scope`. Carries the scope tuple per VISION §V and ADR 0068 D-2 (Proposed): Tenant -> Organization -> Workspace -> Environment. The shape reuses `ActorScope` from `actor.schema.json` so the wire form is canonical; per ADR 0082 D-14 inline redefinition would be a contract bug. The `actorRef` field identifies the principal the token authenticates; consumers that need the principal class can read it from the URN's principal-class segment without a second round-trip.",
+      "description": "Current scope context for the bearer token, returned by `GET /api/v1/auth/scope`. Carries the scope tuple per VISION §V and ADR 0082 D-9: Tenant -> Organization -> Workspace -> Environment. The shape reuses `ActorScope` from `actor.schema.json` so the wire form is canonical; per ADR 0082 D-14 inline redefinition would be a contract bug. The `actorRef` field identifies the principal the token authenticates; consumers that need the principal class can read it from the URN's principal-class segment without a second round-trip.",
       "required": [
         "actorRef",
         "scope"
@@ -124,7 +124,7 @@
         },
         "scope": {
           "$ref": "#/$defs/ActorScope",
-          "description": "Scope-membership tuple — Tenant / Organization / Workspace? / Environment per VISION §V and ADR 0068 D-2 (Proposed). When ADR 0068 promotes to Accepted this is the wire form scope is reported in; until then, server implementations MAY return only the fields they have settled."
+          "description": "Actual granted public ActorScope membership resolved for the authenticated internal principal and selected deployment. Never synthesize demo/default membership or echo token/request claims as permissions. The public membership view is explicitly mapped to, and distinct from, the internal deployment/storage scope."
         },
         "assuranceLevel": {
           "$ref": "#/$defs/AuthAssuranceLevel",
@@ -218,7 +218,7 @@
         "oidcCode": {
           "type": "string",
           "minLength": 1,
-          "description": "OpenID Connect authorization code (RFC 6749 §1.3.1) for `kind == oidc-sso` logins. REQUIRED when `kind == oidc-sso`. The server exchanges the code with the configured IdP at receipt.",
+          "description": "Reserved credential for a separately implemented server-brokered OIDC authorization flow. The current reference server rejects kind=oidc-sso on this login route. The supported browser integration direction uses maintained direct Authorization Code+PKCE and presents the resulting access token to the API; it does not post a bare code here. A broker would require its own reviewed expiring transaction, state/nonce/replay, PKCE and redirect checks.",
           "x-wos": {
             "openStringKind": "opaque-token"
           }
@@ -241,7 +241,7 @@
         },
         "requestedScope": {
           "$ref": "#/$defs/ActorScope",
-          "description": "Optional scope the client is requesting at login (Tenant / Organization / Workspace? / Environment per ADR 0068 D-2 — Proposed). When omitted the server resolves a default scope from the principal's primary membership."
+          "description": "Optional scope the client is requesting at login (Tenant / Organization / Workspace? / Environment per ADR 0082 D-9). When omitted the server resolves a default scope from the principal's primary membership. This is a requested selection, not a grant. Resolve it against the authenticated internal principal, authoritative membership grants and configured deployment; refuse unauthorized or unresolved selections."
         }
       }
     },
@@ -280,7 +280,7 @@
         },
         "scope": {
           "$ref": "#/$defs/ActorScope",
-          "description": "Active scope tuple at the time of token issuance (ADR 0068 D-2 — Proposed). Echoes `LoginRequest.requestedScope` when supplied; otherwise the server's resolved default."
+          "description": "Active scope tuple at the time of token issuance (ADR 0082 D-9). Echoes `LoginRequest.requestedScope` when supplied; otherwise the server's resolved default."
         },
         "actorRef": {
           "$ref": "#/$defs/ActorRef",
@@ -288,7 +288,7 @@
         },
         "assuranceLevel": {
           "$ref": "#/$defs/AuthAssuranceLevel",
-          "description": "Authentication-assurance level attested by this session, derived from `LoginKind` and any satisfied MFA factor (ADR 0068 D-3.1 — Proposed)."
+          "description": "Authentication-assurance level attested by this session, derived from `LoginKind` and any satisfied MFA factor (ADR 0068 D-3.1 — Accepted)."
         },
         "mfaChallenge": {
           "$ref": "#/$defs/MfaChallenge",
@@ -372,21 +372,21 @@
         },
         "scope": {
           "$ref": "#/$defs/ActorScope",
-          "description": "Active scope tuple for the refreshed session (ADR 0068 D-2 — Proposed). MUST equal the redeemed token's prior scope; refresh does NOT swap scope."
+          "description": "Active scope tuple for the refreshed session (ADR 0082 D-9). MUST equal the redeemed token's prior scope; refresh does NOT swap scope."
         }
       }
     },
     "ScopeSwapRequest": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Request body for `POST /api/v1/auth/scope-swap`. The `Idempotency-Key` HTTP header is REQUIRED per ADR 0082 D-16: scope-swap is externally side-effecting (it emits a governance audit event and issues a fresh token bound to the new scope). Per ADR 0068 D-2 (Proposed) the case scope bundle `(Tenant, DefinitionId, KernelId, LedgerId)` is immutable for the case lifetime; this endpoint swaps the *session's* scope for actors who hold authority across multiple Organization / Workspace / Environment scopes within a tenant. Cross-tenant swaps are rejected per ADR 0068 D-1 (cross-tenant reads are impossible by construction).",
+      "description": "Request body for `POST /api/v1/auth/scope-swap`. The `Idempotency-Key` HTTP header is REQUIRED per ADR 0082 D-16: scope-swap is externally side-effecting (it emits a governance audit event and issues a fresh token bound to the new scope). Per ADR 0068 D-2 (Accepted) the case scope bundle `(Tenant, DefinitionId, KernelId, LedgerId)` is immutable for the case lifetime; this endpoint swaps the *session's* scope for actors who hold authority across multiple Organization / Workspace / Environment scopes within a tenant. Cross-tenant swaps are rejected per ADR 0068 D-1 (cross-tenant reads are impossible by construction).",
       "required": [
         "targetScope"
       ],
       "properties": {
         "targetScope": {
           "$ref": "#/$defs/ActorScope",
-          "description": "Target scope tuple the session swaps to (Tenant -> Organization -> Workspace? -> Environment per ADR 0068 D-2 — Proposed). The server validates per-tenant authorization (ADR 0068 D-3 — authority is per-tenant; cross-tenant swaps are rejected with `WOS-1403`). The `tenant` field MUST equal the bearer token's current tenant; mismatches are rejected with `WOS-1403`."
+          "description": "Target scope tuple the session swaps to (Tenant -> Organization -> Workspace? -> Environment per ADR 0082 D-9). The server validates per-tenant authorization (ADR 0068 D-3 — authority is per-tenant; cross-tenant swaps are rejected with `WOS-1403`). The `tenant` field MUST equal the bearer token's current tenant; mismatches are rejected with `WOS-1403`. This is a requested selection, not a grant. Resolve it against the authenticated internal principal, authoritative membership grants and configured deployment; refuse unauthorized or unresolved selections."
         }
       }
     },
@@ -412,7 +412,7 @@
         },
         "scope": {
           "$ref": "#/$defs/ActorScope",
-          "description": "Active scope tuple bound to the token (ADR 0068 D-2 — Proposed). Omitted when `active == false`."
+          "description": "Active scope tuple bound to the token (ADR 0082 D-9). Omitted when `active == false`."
         },
         "issuedAt": {
           "type": "string",
@@ -426,7 +426,7 @@
         },
         "assuranceLevel": {
           "$ref": "#/$defs/AuthAssuranceLevel",
-          "description": "Authentication-assurance level attested by this session (ADR 0068 D-3.1 — Proposed). Omitted when `active == false`."
+          "description": "Authentication-assurance level attested by this session (ADR 0068 D-3.1 — Accepted). Omitted when `active == false`."
         },
         "loginKind": {
           "$ref": "#/$defs/LoginKind",

@@ -45,7 +45,7 @@
     "ActorScope": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Closed scope-membership tuple for the actor (VISION §V scope hierarchy: `Tenant -> Organization -> Workspace -> Environment`). The shape is authored here so consumers have a stable contract; the load-bearing semantics are settled by ADR 0068 D-2 / D-3 (tenant and scope composition) which is currently *Proposed* — when ADR 0068 promotes to Accepted, this object becomes the wire form scope is reported in. Until then, server implementations MAY return only the fields they have settled.",
+      "description": "Public scope-membership view resolved from the authenticated internal principal and authoritative membership grants. Tenant/organization/workspace/environment describe membership, not permission supplied by a caller or identity-provider claim. This is distinct from the internal tenant/workspace/environment/cell deployment binding and case chain identity; servers must resolve their explicit mapping before authorizing storage or case access.",
       "required": [
         "tenant",
         "organization",
@@ -55,7 +55,7 @@
         "tenant": {
           "type": "string",
           "minLength": 1,
-          "description": "Tenant identifier — outermost hosting/commercial boundary (VISION §V; ADR 0068 D-1 (Proposed)). Hosting-tier identity, not user-visible.",
+          "description": "Tenant identifier — outermost hosting/commercial boundary (VISION §V; ADR 0068 D-1 (Accepted)). Hosting-tier identity, not user-visible.",
           "x-wos": {
             "openStringKind": "identifier"
           },
@@ -67,7 +67,7 @@
         "organization": {
           "type": "string",
           "minLength": 1,
-          "description": "Organization identifier — product-ownership boundary where forms, cases, and members live (VISION §V; ADR 0068 D-1 (Proposed)). Object-ownership and deletion-follows-org invariants tie retention to this id, not to billing state.",
+          "description": "Organization identifier — product-ownership boundary where forms, cases, and members live (VISION §V; ADR 0068 D-1 (Accepted)). Object-ownership and deletion-follows-org invariants tie retention to this id, not to billing state.",
           "x-wos": {
             "openStringKind": "identifier"
           },
@@ -92,7 +92,7 @@
             "staging",
             "prod"
           ],
-          "description": "Closed deployment environment (VISION §V). `sandbox` = dev/test; `staging` = pre-prod; `prod` = live. New environments require a major schema bump."
+          "description": "Closed deployment stage: sandbox (dev/test), staging (pre-prod), prod (live). This stage is not an opaque internal EnvironmentId. A configured explicit mapping relates the internal environment identifier to its stage; no string equality or fallback grants are implied."
         }
       }
     },
@@ -136,7 +136,7 @@
         },
         "scope": {
           "$ref": "#/$defs/ActorScope",
-          "description": "Scope-membership tuple — Tenant / Organization / Workspace / Environment per VISION §V. Shape gates on ADR 0068 D-2 (Proposed); consumers tolerate the field's absence on early-deployment servers. When present the server MUST report tenant, organization, and environment; workspace is optional."
+          "description": "Scope-membership tuple — Tenant / Organization / Workspace / Environment per VISION §V. This resource permits scope omission; when supplied, its required membership fields must resolve from actual grants and configured deployment. When present the server MUST report tenant, organization, and environment; workspace is optional."
         },
         "actorRef": {
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
