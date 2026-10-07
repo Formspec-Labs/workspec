@@ -5,7 +5,6 @@ edition.workspace = true
 description = "Dynamic conformance test runner for WOS workflows"
 license.workspace = true
 repository.workspace = true
-autotests = false
 
 [features]
 default = []

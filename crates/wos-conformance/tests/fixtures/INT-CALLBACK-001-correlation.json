@@ -138,7 +138,7 @@
         "source": "https://external.example.com/callback",
         "specversion": "1.0",
         "type": "com.example.callback.response",
-        "subject": "conformance-instance:callbackService:callbackService-cb-0",
+        "subject": "default_process_01hw7rm71vfay8vvw14d2pf2db:callbackService:callbackService-cb-0",
         "data": {
           "result": "success"
         }
@@ -161,13 +161,13 @@
     {
       "recordKind": "callbackPending",
       "data": {
-        "subject": "conformance-instance:callbackService:callbackService-cb-0"
+        "subject": "default_process_01hw7rm71vfay8vvw14d2pf2db:callbackService:callbackService-cb-0"
       }
     },
     {
       "recordKind": "callbackReceived",
       "data": {
-        "correlationSubject": "conformance-instance:callbackService:callbackService-cb-0"
+        "correlationSubject": "default_process_01hw7rm71vfay8vvw14d2pf2db:callbackService:callbackService-cb-0"
       }
     }
   ]

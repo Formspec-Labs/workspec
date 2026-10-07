@@ -97,7 +97,10 @@
       "recordKind": "stateTransition",
       "fromState": "eligibilityReview",
       "toState": "determination",
-      "event": "$join"
+      "event": "wos.kernel.state_transition",
+      "data": {
+        "transitionEvent": "$join"
+      }
     }
   ],
   "expected_errors": []

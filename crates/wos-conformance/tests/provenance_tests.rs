@@ -754,7 +754,9 @@ fn every_state_transition_produces_provenance() {
             p.record_kind == wos_conformance::ProvenanceKind::StateTransition
                 && p.from_state.as_deref() == Some(&t.from)
                 && p.to_state.as_deref() == Some(&t.to)
-                && p.event.as_deref() == Some(&t.event)
+                && p.event.as_deref() == Some("wos.kernel.state_transition")
+                && p.data.as_ref().and_then(|data| data.get("transitionEvent"))
+                    == Some(&json!(t.event))
         });
         assert!(
             matching_provenance,
