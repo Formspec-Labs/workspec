@@ -457,7 +457,7 @@
       "get": {
         "operationId": "get_case_export_fence",
         "summary": "Capture WOS high-water marks and policy/config source digests for a case export.",
-        "description": "WOS-side source fence for a case-export attempt (ADR 0093 D-1, sibling of `case-view`). Captures the current case-ledger and policy/config high-water marks at fence-acquisition time under the per-case mutation lease (`LeaseScope::WosCaseSource`); downstream Trellis publication binds its seal fence (`trellis-export-seal-fence-v1`, Trellis Core §18.3e) to these values. Lease-busy timeouts surface as `423 Locked` with closed code `WOS-1423` (idempotently retriable). See `specs/api/case-export-fence.md` for verifier obligations.",
+        "description": "WOS-side source fence for a case-export attempt (ADR 0093 D-1, sibling of `case-view`). Captures the current case-ledger and policy/config high-water marks at fence-acquisition time under the per-case mutation lease (`LeaseScope::WosCaseSource`); downstream Trellis publication binds its seal fence (`trellis-export-seal-fence-v1`, Trellis Core \u00a718.3e) to these values. Lease-busy timeouts surface as `423 Locked` with closed code `WOS-1423` (idempotently retriable). See `specs/api/case-export-fence.md` for verifier obligations.",
         "parameters": [
           {
             "name": "case_id",
@@ -910,7 +910,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Server-assembled explanation per workflow-governance §3.8.1 deterministic algorithm.",
+            "description": "Server-assembled explanation per workflow-governance \u00a73.8.1 deterministic algorithm.",
             "headers": {
               "X-WOS-API-Version": {
                 "description": "Current public API major.minor version.",
@@ -2439,7 +2439,7 @@
         ],
         "requestBody": {
           "required": true,
-          "description": "Delegation creation request — server assigns URN and `createdAt`.",
+          "description": "Delegation creation request \u2014 server assigns URN and `createdAt`.",
           "content": {
             "application/json": {
               "schema": {
@@ -2649,7 +2649,7 @@
             "name": "policyUrl",
             "in": "path",
             "required": true,
-            "description": "URL-encoded workflow URL (governance §S13).",
+            "description": "URL-encoded workflow URL (governance \u00a7S13).",
             "schema": {
               "type": "string",
               "format": "uri"
@@ -2955,7 +2955,7 @@
         ],
         "requestBody": {
           "required": true,
-          "description": "Correspondence message recording payload — server assigns URN and `recordedAt`.",
+          "description": "Correspondence message recording payload \u2014 server assigns URN and `recordedAt`.",
           "content": {
             "application/json": {
               "schema": {
@@ -4958,7 +4958,7 @@
         ],
         "requestBody": {
           "required": true,
-          "description": "Bundle build request — server emits Trellis events as the build progresses.",
+          "description": "Bundle build request \u2014 server emits Trellis events as the build progresses.",
           "content": {
             "application/json": {
               "schema": {
@@ -5721,6 +5721,124 @@
             "$ref": "#/components/responses/Problem"
           }
         }
+      }
+    },
+    "/cases/{case_id}/case-file/artifacts/{kind}": {
+      "get": {
+        "operationId": "getInitialCaseFileArtifact",
+        "summary": "Read original authored artifact bytes through current case authorization.",
+        "description": "Requires exact kind/url/version/hash admitted in one authorized reservation. Reject missing, duplicate and unknown query fields before source acquisition. Recheck actual caller authority across asynchronous reads; fixed source origin only, no caller URL fetch. Preserve original bytes and verify raw hash and admitted parsed document.",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "description": "Actual durable case ledger identity.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/CaseLedgerPathId"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "description": "Artifact family from this case admitted descriptor.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/case-file/v1#/$defs/AcceptedAuthoredArtifact/properties/kind"
+            }
+          },
+          {
+            "name": "url",
+            "in": "query",
+            "required": true,
+            "description": "Exact authored URL from the admitted descriptor; never a network destination.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": true,
+            "description": "Exact authored version from the admitted descriptor.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "hash",
+            "in": "query",
+            "required": true,
+            "description": "Exact original raw UTF-8 artifact SHA-256, distinct from semantic Definition hash.",
+            "schema": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Exact original retained UTF-8 JSON bytes after current case authorization and source/raw identity qualification; no reserialization or new public DTO.",
+            "headers": {
+              "Content-Type": {
+                "description": "Original retained UTF-8 JSON representation.",
+                "schema": {
+                  "type": "string",
+                  "const": "application/json; charset=utf-8"
+                }
+              },
+              "Cache-Control": {
+                "description": "Refuse browser/shared-cache retention.",
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              },
+              "X-Content-Type-Options": {
+                "description": "Use the declared JSON media type.",
+                "schema": {
+                  "type": "string",
+                  "const": "nosniff"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Source-owned original JSON document; its exact raw bytes and native qualification are authoritative."
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     }
   },
