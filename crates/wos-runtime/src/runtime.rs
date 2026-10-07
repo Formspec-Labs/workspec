@@ -2868,6 +2868,333 @@ mod tests {
         );
     }
 
+    fn creation_snapshot_retry(fail_on_save: usize) {
+        let kernel = serde_json::from_value(serde_json::json!({
+            "$wosWorkflow": "1.0", "url": "urn:test:creation-snapshot", "version": "1.0.0",
+            "governance": { "taskCatalog": [{ "id": "review", "pattern": "review", "title": "Original Review" }] },
+            "lifecycle": { "initialState": "open", "states": {
+                "open": { "type": "atomic", "onEntry": [{
+                    "action": "createTask", "taskRef": "review", "assignTo": "reviewer"
+                }] }
+            } }
+        }))
+        .expect("kernel");
+        let mut runtime = runtime_with_store(IntakeSaveFailingStore::new(fail_on_save), kernel)
+            .with_intake_policy(AutoCreatePublicIntakePolicy);
+        let request = public_intake_request(
+            "ih-creation-snapshot",
+            test_case_ledger_urn("snapshot-case"),
+            "urn:test:creation-snapshot",
+            "1.0.0",
+        );
+        assert!(matches!(
+            runtime.accept_intake_handoff("formspec", request.clone()),
+            Err(RuntimeError::Store(StoreError::Failed(_)))
+        ));
+        let mut record = runtime
+            .store
+            .load_record_by_case_ledger_id(
+                WorkflowProcess::extract_urn_type_id(request.governed_case_ref.as_deref().unwrap())
+                    .unwrap(),
+            )
+            .expect("original process persisted before receipt failure");
+        let original = record.creation.clone().expect("atomic creation evidence");
+        assert_eq!(original.tasks.len(), 1);
+        assert_eq!(
+            original.tasks[0].assigned_actor.as_deref(),
+            Some("reviewer")
+        );
+        assert_eq!(original.tasks[0].task_ref, "review");
+        assert_eq!(
+            original.tasks[0].catalog_title.as_deref(),
+            Some("Original Review")
+        );
+        assert_eq!(original.tasks[0].catalog_pattern.as_deref(), Some("review"));
+        assert_eq!(
+            original.tasks[0].task_id,
+            record.process.active_tasks[0].task_id
+        );
+        assert_eq!(
+            original.tasks[0].created_at,
+            record.process.active_tasks[0].created_at
+        );
+        let mut wrong_parent = original.clone();
+        wrong_parent.process_id = stack_common_typeid::mint_process_id();
+        assert!(matches!(
+            wrong_parent.validate(),
+            Err(StoreError::InvalidCreationEvidence(_))
+        ));
+        let mut wrong_time = original.clone();
+        wrong_time.tasks[0].created_at = "invalid-time".into();
+        assert!(matches!(
+            wrong_time.validate(),
+            Err(StoreError::InvalidCreationEvidence(_))
+        ));
+        let mut duplicate = original.clone();
+        duplicate.tasks.push(original.tasks[0].clone());
+        assert!(matches!(
+            duplicate.validate(),
+            Err(StoreError::InvalidCreationEvidence(_))
+        ));
+        let mut initial_forgery = runtime.store.load_record(&original.process_id).unwrap();
+        initial_forgery.creation.as_mut().unwrap().tasks[0].assigned_actor =
+            Some("forged-original".into());
+        assert!(matches!(
+            initial_forgery.validate_initial_creation(),
+            Err(StoreError::InvalidCreationEvidence(_))
+        ));
+        let mut changed_display = runtime.store.load_record(&original.process_id).unwrap();
+        changed_display.creation.as_mut().unwrap().tasks[0].catalog_title =
+            Some("Later Title".into());
+        assert!(matches!(
+            runtime.store.save_record(changed_display),
+            Err(StoreError::InvalidCreationEvidence(_))
+        ));
+        // Round-trip the exact maintained storage codec, then mutate current state.
+        let aux = crate::runtime_aux_from_json(&crate::runtime_aux_to_json(&record)).unwrap();
+        record.creation = aux.creation;
+        record.process.active_tasks[0].assigned_actor = Some("later-reviewer".into());
+        record.process.active_tasks[0].task_ref = "later-title".into();
+        runtime
+            .store
+            .save_record(record.clone())
+            .expect("intervening reassignment");
+        record.process.active_tasks.clear();
+        runtime
+            .store
+            .save_record(record)
+            .expect("simulate intervening task completion");
+        let accepted = runtime
+            .accept_intake_handoff("formspec", request.clone())
+            .expect("durable retry");
+        let snapshot = accepted.creation.expect("retained initial tasks");
+        assert_eq!(
+            serde_json::to_value(&snapshot).unwrap(),
+            serde_json::to_value(&original).unwrap()
+        );
+        assert!(
+            runtime
+                .load_process(&snapshot.process_id)
+                .unwrap()
+                .active_tasks
+                .is_empty()
+        );
+        let replay = runtime
+            .accept_intake_handoff("formspec", request)
+            .expect("applied replay");
+        assert_eq!(
+            serde_json::to_value(replay.creation).unwrap(),
+            serde_json::to_value(Some(original)).unwrap()
+        );
+        let provenance = runtime
+            .load_provenance_window(&snapshot.process_id, 0, 100)
+            .unwrap();
+        assert_eq!(
+            provenance
+                .iter()
+                .filter(|row| row.record_kind == ProvenanceKind::IntakeAccepted)
+                .count(),
+            1
+        );
+        assert_eq!(
+            provenance
+                .iter()
+                .filter(|row| row.record_kind == ProvenanceKind::CaseCreated)
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn intake_creation_snapshot_survives_prepared_write_failure_and_task_removal() {
+        creation_snapshot_retry(1);
+    }
+
+    #[test]
+    fn intake_creation_snapshot_survives_applied_write_failure_and_task_removal() {
+        creation_snapshot_retry(2);
+    }
+
+    #[test]
+    fn intake_creation_snapshot_missing_applied_legacy_evidence_stays_accepted() {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosWorkflow": "1.0", "url": "urn:test:legacy-snapshot", "version": "1.0.0",
+            "lifecycle": { "initialState": "open", "states": { "open": { "type": "atomic" } } }
+        }))
+        .unwrap();
+        let mut runtime =
+            runtime_with_kernel(kernel.clone()).with_intake_policy(AutoCreatePublicIntakePolicy);
+        let request = public_intake_request(
+            "ih-legacy-snapshot",
+            test_case_ledger_urn("legacy-snapshot"),
+            "urn:test:legacy-snapshot",
+            "1.0.0",
+        );
+        runtime
+            .accept_intake_handoff("formspec", request.clone())
+            .unwrap();
+        let mut legacy = runtime
+            .store
+            .load_intake_record("formspec", "ih-legacy-snapshot")
+            .unwrap();
+        legacy.creation = None;
+        // Import a genuinely absent legacy Applied receipt into a fresh store.
+        let mut restored =
+            runtime_with_kernel(kernel).with_intake_policy(AutoCreatePublicIntakePolicy);
+        restored.store.create_intake_record(legacy).unwrap();
+        let replay = restored.accept_intake_handoff("formspec", request).unwrap();
+        assert!(matches!(
+            replay.outcome,
+            IntakeAcceptanceOutcome::Accepted { .. }
+        ));
+        assert!(
+            replay.creation.is_none(),
+            "missing legacy evidence is explicit, never fabricated"
+        );
+        let mut legacy = restored
+            .store
+            .load_intake_record("formspec", "ih-legacy-snapshot")
+            .unwrap();
+        legacy.status = crate::IntakeRecordStatus::Pending;
+        assert!(matches!(
+            restored.store.save_intake_record(legacy),
+            Err(StoreError::InvalidCreationEvidence(_))
+        ));
+    }
+
+    #[test]
+    fn intake_creation_snapshot_policy_supplied_evidence_is_ignored() {
+        struct SpoofPolicy;
+        impl IntakeAcceptancePolicy for SpoofPolicy {
+            fn evaluate_intake_acceptance(
+                &self,
+                context: &IntakePolicyContext,
+            ) -> Result<IntakeAcceptanceDecision, RuntimeError> {
+                let mut decision =
+                    AutoCreatePublicIntakePolicy.evaluate_intake_acceptance(context)?;
+                decision.creation = Some(crate::ProcessCreationSnapshot {
+                    process_id: "forged".into(),
+                    case_ledger_id: "forged".into(),
+                    tenant: "forged".into(),
+                    definition_url: "forged".into(),
+                    definition_version: "forged".into(),
+                    created_at: "forged".into(),
+                    tasks: Vec::new(),
+                });
+                Ok(decision)
+            }
+        }
+        let kernel = serde_json::from_value(serde_json::json!({
+            "$wosWorkflow": "1.0", "url": "urn:test:policy-snapshot", "version": "1.0.0",
+            "lifecycle": { "initialState": "open", "states": { "open": { "type": "atomic" } } }
+        }))
+        .unwrap();
+        let mut runtime = runtime_with_kernel(kernel).with_intake_policy(SpoofPolicy);
+        let result = runtime
+            .accept_intake_handoff(
+                "formspec",
+                public_intake_request(
+                    "ih-policy-snapshot",
+                    test_case_ledger_urn("policy-snapshot"),
+                    "urn:test:policy-snapshot",
+                    "1.0.0",
+                ),
+            )
+            .unwrap();
+        let evidence = result.creation.unwrap();
+        evidence.validate().unwrap();
+        assert_eq!(evidence.definition_url, "urn:test:policy-snapshot");
+        assert_ne!(evidence.process_id, "forged");
+    }
+
+    #[test]
+    fn intake_creation_snapshot_receipt_store_refuses_replacement_and_erasure() {
+        let kernel = serde_json::from_value(serde_json::json!({
+            "$wosWorkflow": "1.0", "url": "urn:test:receipt-immutable", "version": "1.0.0",
+            "lifecycle": { "initialState": "open", "states": { "open": { "type": "atomic" } } }
+        }))
+        .unwrap();
+        let mut runtime =
+            runtime_with_kernel(kernel).with_intake_policy(AutoCreatePublicIntakePolicy);
+        runtime
+            .accept_intake_handoff(
+                "formspec",
+                public_intake_request(
+                    "ih-immutable",
+                    test_case_ledger_urn("immutable"),
+                    "urn:test:receipt-immutable",
+                    "1.0.0",
+                ),
+            )
+            .unwrap();
+        let original = runtime
+            .store
+            .load_intake_record("formspec", "ih-immutable")
+            .unwrap();
+        let mut changed = original.clone();
+        changed.creation.as_mut().unwrap().created_at = "2026-01-01T00:00:00Z".into();
+        assert!(matches!(
+            runtime.store.save_intake_record(changed),
+            Err(StoreError::InvalidCreationEvidence(_))
+        ));
+        let mut erased = original.clone();
+        erased.creation = None;
+        assert!(matches!(
+            runtime.store.save_intake_record(erased),
+            Err(StoreError::InvalidCreationEvidence(_))
+        ));
+        assert_eq!(
+            runtime
+                .store
+                .load_intake_record("formspec", "ih-immutable")
+                .unwrap()
+                .creation,
+            original.creation
+        );
+        let mut forged = original.clone();
+        forged.creation.as_mut().unwrap().case_ledger_id =
+            stack_common_typeid::mint_case_ledger_id();
+        assert!(matches!(
+            forged.validate_creation(),
+            Err(StoreError::InvalidCreationEvidence(_))
+        ));
+    }
+
+    #[test]
+    fn intake_creation_snapshot_capture_refuses_duplicate_or_malformed_catalog() {
+        for catalog in [
+            serde_json::json!([{ "id": "review", "title": "One" }, { "id": "review", "title": "Two" }]),
+            serde_json::json!([{ "id": "review", "title": 42 }]),
+        ] {
+            let kernel = serde_json::from_value(serde_json::json!({
+                "$wosWorkflow": "1.0", "url": "urn:test:bad-catalog", "version": "1.0.0",
+                "governance": { "taskCatalog": catalog },
+                "lifecycle": { "initialState": "open", "states": { "open": { "type": "atomic", "onEntry": [{ "action": "createTask", "taskRef": "review", "assignTo": "reviewer" }] } } }
+            })).unwrap();
+            let mut runtime =
+                runtime_with_kernel(kernel).with_intake_policy(AutoCreatePublicIntakePolicy);
+            let case = test_case_ledger_urn("bad-catalog");
+            assert!(matches!(
+                runtime.accept_intake_handoff(
+                    "formspec",
+                    public_intake_request(
+                        "ih-bad-catalog",
+                        case.clone(),
+                        "urn:test:bad-catalog",
+                        "1.0.0"
+                    )
+                ),
+                Err(RuntimeError::Store(StoreError::InvalidCreationEvidence(_)))
+            ));
+            assert!(matches!(
+                runtime.store.load_record_by_case_ledger_id(
+                    WorkflowProcess::extract_urn_type_id(&case).unwrap()
+                ),
+                Err(StoreError::NotFound(_))
+            ));
+        }
+    }
+
     #[test]
     fn accept_intake_handoff_creates_case_for_public_intake() {
         let mut runtime = runtime_with_kernel(
@@ -5702,7 +6029,7 @@ mod tests {
         }
     }
 
-    fn dismissal_fixture() -> (WosRuntime, String, String) {
+    fn dismissal_fixture() -> (WosRuntime, String, String, RuntimeRecord) {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
             "$wosWorkflow": "1.0", "url": "urn:test:dismiss-fixture", "version": "1.0.0",
             "lifecycle": { "initialState": "open", "states": { "open": { "type": "atomic" } } }
@@ -5719,12 +6046,13 @@ mod tests {
                 initial_case_state: Some(serde_json::json!({ "approved": false })),
             })
             .unwrap();
-        let mut record = runtime.store.load_record(&process_id).unwrap();
+        let initial_record = runtime.store.load_record(&process_id).unwrap();
+        let mut record = initial_record.clone();
         let task = manual_formspec_task(&process_id, 1, Some("urn:mapping:response"));
         let task_id = task.task_id.clone();
         record.process.active_tasks.push(task);
         runtime.store.save_record(record).unwrap();
-        (runtime, process_id, task_id)
+        (runtime, process_id, task_id, initial_record)
     }
 
     #[derive(Debug)]
@@ -5769,14 +6097,15 @@ mod tests {
 
     #[test]
     fn dismiss_task_refuses_unqualified_actor_without_write_or_presentation() {
-        let (mut runtime, process_id, task_id) = dismissal_fixture();
+        let (mut runtime, process_id, task_id, initial_record) = dismissal_fixture();
         runtime.access_control = Box::new(TaskDelegationProbe::default());
         let presenter = RecordingPresenter::default();
         let calls = presenter.dismissed.clone();
         runtime.presenter = Box::new(presenter);
         let before = runtime.store.load_record(&process_id).unwrap();
         let mut store = FailingStore::new(1);
-        store.inner.create_record(before.clone()).unwrap();
+        store.inner.create_record(initial_record).unwrap();
+        store.inner.save_record(before.clone()).unwrap();
         let save_calls = store.observed_save_calls.clone();
         runtime.store = Box::new(store);
         assert!(matches!(
@@ -5795,7 +6124,7 @@ mod tests {
 
     #[test]
     fn dismiss_task_records_actual_delegate_and_preserves_runtime_state() {
-        let (mut runtime, process_id, task_id) = dismissal_fixture();
+        let (mut runtime, process_id, task_id, _initial_record) = dismissal_fixture();
         let access = TaskDelegationProbe::default();
         access.allowed.store(true, Ordering::SeqCst);
         let checks = access.checks.clone();
@@ -5830,10 +6159,11 @@ mod tests {
 
     #[test]
     fn dismiss_task_save_failure_emits_nothing() {
-        let (mut runtime, process_id, task_id) = dismissal_fixture();
+        let (mut runtime, process_id, task_id, initial_record) = dismissal_fixture();
         let before = runtime.store.load_record(&process_id).unwrap();
         let mut store = FailingStore::new(1);
-        store.inner.create_record(before.clone()).unwrap();
+        store.inner.create_record(initial_record).unwrap();
+        store.inner.save_record(before.clone()).unwrap();
         runtime.store = Box::new(store);
         let presenter = RecordingPresenter::default();
         let calls = presenter.dismissed.clone();
@@ -5857,14 +6187,15 @@ mod tests {
             (false, DismissTaskPresentation::Attempted),
             (true, DismissTaskPresentation::Failed),
         ] {
-            let (mut runtime, process_id, task_id) = dismissal_fixture();
+            let (mut runtime, process_id, task_id, initial_record) = dismissal_fixture();
             let store = SharedStore::default();
-            store
-                .0
-                .lock()
-                .unwrap()
-                .create_record(runtime.store.load_record(&process_id).unwrap())
-                .unwrap();
+            {
+                let mut seeded = store.0.lock().unwrap();
+                seeded.create_record(initial_record).unwrap();
+                seeded
+                    .save_record(runtime.store.load_record(&process_id).unwrap())
+                    .unwrap();
+            }
             runtime.store = Box::new(store.clone());
             let calls = Arc::new(AtomicUsize::new(0));
             runtime.presenter = Box::new(CommittedDismissalPresenter {
@@ -5891,7 +6222,7 @@ mod tests {
 
     #[test]
     fn dismiss_task_without_context_records_provenance_without_presentation() {
-        let (mut runtime, process_id, task_id) = dismissal_fixture();
+        let (mut runtime, process_id, task_id, _initial_record) = dismissal_fixture();
         let mut record = runtime.store.load_record(&process_id).unwrap();
         record.process.active_tasks[0].context = None;
         runtime.store.save_record(record).unwrap();

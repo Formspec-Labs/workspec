@@ -71,9 +71,13 @@ impl WosRuntime {
             persisted,
         )?;
         let applied = self.apply_prepared_intake_record(prepared)?;
+        if let Some(creation) = &applied.creation {
+            creation.validate_intake(&applied.outcome, &applied.request)?;
+        }
         Ok(IntakeAcceptanceDecision {
             outcome: applied.outcome,
             provenance: applied.provenance_log,
+            creation: applied.creation,
         })
     }
 
@@ -112,12 +116,14 @@ impl WosRuntime {
         let IntakeAcceptanceDecision {
             outcome,
             provenance,
+            creation: _, // Policy output is not authoritative creation evidence.
         } = decision;
         let record = IntakeRecord {
             binding: binding.to_string(),
             intake_id: interpretation.intake_id.clone(),
             request: request.clone(),
             outcome,
+            creation: None,
             provenance_log: provenance,
             status: IntakeRecordStatus::Pending,
             recorded_at: now_iso.clone(),
@@ -141,6 +147,7 @@ impl WosRuntime {
         adapter: &dyn IntakeAcceptanceAdapter,
         mut record: IntakeRecord,
     ) -> Result<IntakeRecord, RuntimeError> {
+        record.validate_creation()?;
         if matches!(
             record.status,
             IntakeRecordStatus::Prepared | IntakeRecordStatus::Applied
@@ -149,7 +156,7 @@ impl WosRuntime {
         }
 
         let policy_outcome = record.outcome.clone();
-        let final_outcome = self.canonicalize_intake_outcome(&policy_outcome)?;
+        let (final_outcome, creation) = self.canonicalize_intake_outcome(&policy_outcome)?;
         let finalize_outcome = outcome_for_binding_finalize(&policy_outcome, &final_outcome);
         let mut provenance = record.provenance_log.clone();
         provenance.push(intake_outcome_provenance(
@@ -161,7 +168,11 @@ impl WosRuntime {
         provenance.extend(adapter.finalize_intake_acceptance(request, &finalize_outcome)?);
 
         record.outcome = final_outcome;
+        record.creation = creation;
         record.provenance_log = provenance;
+        if let Some(creation) = &record.creation {
+            creation.validate_intake(&record.outcome, &record.request)?;
+        }
         record.status = IntakeRecordStatus::Prepared;
         record.updated_at = format_timestamp(self.clock.now_ms())?;
         self.store.save_intake_record(record.clone())?;
@@ -171,16 +182,25 @@ impl WosRuntime {
     fn canonicalize_intake_outcome(
         &mut self,
         outcome: &IntakeAcceptanceOutcome,
-    ) -> Result<IntakeAcceptanceOutcome, RuntimeError> {
+    ) -> Result<
+        (
+            IntakeAcceptanceOutcome,
+            Option<crate::intake::ProcessCreationSnapshot>,
+        ),
+        RuntimeError,
+    > {
         match outcome {
             IntakeAcceptanceOutcome::Accepted { case_disposition } => match case_disposition {
                 IntakeCaseDisposition::AttachToExistingCase { case_ref } => {
                     let case = self.load_record_for_case_ref(case_ref)?.process;
-                    Ok(IntakeAcceptanceOutcome::Accepted {
-                        case_disposition: IntakeCaseDisposition::AttachToExistingCase {
-                            case_ref: case.case_ledger_id,
+                    Ok((
+                        IntakeAcceptanceOutcome::Accepted {
+                            case_disposition: IntakeCaseDisposition::AttachToExistingCase {
+                                case_ref: case.case_ledger_id,
+                            },
                         },
-                    })
+                        None,
+                    ))
                 }
                 IntakeCaseDisposition::CreateGovernedCase {
                     case_ref,
@@ -209,21 +229,31 @@ impl WosRuntime {
                             )?,
                         Err(error) => return Err(error),
                     };
-                    Ok(IntakeAcceptanceOutcome::Accepted {
-                        case_disposition: IntakeCaseDisposition::CreateGovernedCase {
-                            case_ref: case.case_ledger_id,
-                            definition: definition.clone(),
-                            initial_case_state: initial_case_state.clone(),
+                    let original = self.store.load_record(&case.process_id)?;
+                    if let Some(creation) = &original.creation {
+                        creation.validate_process(&original.process)?;
+                    }
+                    let creation = original.creation;
+                    Ok((
+                        IntakeAcceptanceOutcome::Accepted {
+                            case_disposition: IntakeCaseDisposition::CreateGovernedCase {
+                                case_ref: case.case_ledger_id,
+                                definition: definition.clone(),
+                                initial_case_state: initial_case_state.clone(),
+                            },
                         },
-                    })
+                        creation,
+                    ))
                 }
             },
-            IntakeAcceptanceOutcome::Rejected { code } => {
-                Ok(IntakeAcceptanceOutcome::Rejected { code: code.clone() })
-            }
-            IntakeAcceptanceOutcome::Deferred { code } => {
-                Ok(IntakeAcceptanceOutcome::Deferred { code: code.clone() })
-            }
+            IntakeAcceptanceOutcome::Rejected { code } => Ok((
+                IntakeAcceptanceOutcome::Rejected { code: code.clone() },
+                None,
+            )),
+            IntakeAcceptanceOutcome::Deferred { code } => Ok((
+                IntakeAcceptanceOutcome::Deferred { code: code.clone() },
+                None,
+            )),
         }
     }
 

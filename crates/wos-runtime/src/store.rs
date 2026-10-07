@@ -9,6 +9,7 @@ use wos_core::instance::WorkflowProcess;
 
 use crate::intake::{
     IntakeAcceptanceDecision, IntakeAcceptanceOutcome, IntakeAcceptanceRequest, IntakeRecordStatus,
+    ProcessCreationSnapshot,
 };
 use crate::runtime::{PersistDraftResult, TaskSubmissionResult};
 
@@ -17,6 +18,8 @@ use crate::runtime::{PersistDraftResult, TaskSubmissionResult};
 pub struct RuntimeRecord {
     /// Canonical WOS workflow process state.
     pub process: WorkflowProcess,
+    /// Immutable metadata captured in the original atomic creation write.
+    pub creation: Option<ProcessCreationSnapshot>,
     /// Append-only provenance for the process.
     pub provenance_log: Vec<ProvenanceRecord>,
     /// Persisted results from `invokeService` actions.
@@ -32,11 +35,52 @@ impl RuntimeRecord {
     pub fn new(instance: WorkflowProcess) -> Self {
         Self {
             process: instance,
+            creation: None,
             provenance_log: Vec::new(),
             step_results: Vec::new(),
             artifacts: HashMap::new(),
             replay_entries: HashMap::new(),
         }
+    }
+}
+
+impl RuntimeRecord {
+    /// Checks creation evidence against the exact original staged process.
+    ///
+    /// Call this at initial persistence, before the process can change.
+    /// Missing evidence permits explicit legacy import; it does not fabricate a snapshot.
+    ///
+    /// # Errors
+    /// Returns invalid-creation evidence for mismatched original definition or task metadata.
+    pub fn validate_initial_creation(&self) -> Result<(), StoreError> {
+        if let Some(creation) = &self.creation {
+            creation.validate_created_process(&self.process)?;
+        }
+        Ok(())
+    }
+
+    /// Checks retained creation identity against the actual loaded process.
+    ///
+    /// # Errors
+    /// Returns invalid-creation evidence for corrupt identity or metadata.
+    pub fn validate_creation(&self) -> Result<(), StoreError> {
+        if let Some(creation) = &self.creation {
+            creation.validate_process(&self.process)?;
+        }
+        Ok(())
+    }
+
+    /// Validates original creation evidence before replacing a stored process.
+    ///
+    /// # Errors
+    /// Returns invalid-creation evidence when original metadata changes or conflicts with the process.
+    pub fn validate_creation_update(&self, previous: &Self) -> Result<(), StoreError> {
+        if self.creation != previous.creation {
+            return Err(StoreError::InvalidCreationEvidence(
+                "original process creation is immutable".into(),
+            ));
+        }
+        self.validate_creation()
     }
 }
 
@@ -126,6 +170,9 @@ pub struct IntakeRecord {
     pub request: IntakeAcceptanceRequest,
     /// Final host-visible outcome.
     pub outcome: IntakeAcceptanceOutcome,
+    /// Original creation evidence frozen before intake finalization.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub creation: Option<ProcessCreationSnapshot>,
     /// Provenance emitted for this intake decision.
     pub provenance_log: Vec<ProvenanceRecord>,
     /// Persistence state of this intake record.
@@ -134,6 +181,46 @@ pub struct IntakeRecord {
     pub recorded_at: String,
     /// Timestamp of the latest intake-record update.
     pub updated_at: String,
+}
+
+impl IntakeRecord {
+    /// Checks retained creation evidence against the actual intake request and outcome.
+    ///
+    /// # Errors
+    /// Returns invalid-creation evidence for corrupt identity, metadata, or pending policy evidence.
+    pub fn validate_creation(&self) -> Result<(), StoreError> {
+        if self.status == IntakeRecordStatus::Pending && self.creation.is_some() {
+            return Err(StoreError::InvalidCreationEvidence(
+                "pending policy cannot supply creation evidence".into(),
+            ));
+        }
+        if let Some(creation) = &self.creation {
+            creation.validate_intake(&self.outcome, &self.request)?;
+        }
+        Ok(())
+    }
+
+    /// Validates creation evidence before replacing a durable intake receipt.
+    ///
+    /// # Errors
+    /// Returns invalid-creation evidence for replacement or conflicting original association.
+    pub fn validate_creation_update(&self, previous: &Self) -> Result<(), StoreError> {
+        if (previous.status == IntakeRecordStatus::Applied
+            && self.status != IntakeRecordStatus::Applied)
+            || (previous.status == IntakeRecordStatus::Prepared
+                && self.status == IntakeRecordStatus::Pending)
+        {
+            return Err(StoreError::InvalidCreationEvidence(
+                "intake evidence state cannot move backward".into(),
+            ));
+        }
+        if previous.status != IntakeRecordStatus::Pending && self.creation != previous.creation {
+            return Err(StoreError::InvalidCreationEvidence(
+                "prepared intake creation is immutable".into(),
+            ));
+        }
+        self.validate_creation()
+    }
 }
 
 /// Errors from runtime persistence.
@@ -147,6 +234,10 @@ pub enum StoreError {
     #[error("runtime record already exists: {0}")]
     AlreadyExists(String),
 
+    /// Original creation evidence is corrupt or an update attempted to replace it.
+    #[error("invalid creation evidence: {0}")]
+    InvalidCreationEvidence(String),
+
     /// Store-specific failure.
     #[error("runtime store failure: {0}")]
     Failed(String),
@@ -155,6 +246,7 @@ pub enum StoreError {
 /// Atomic runtime record store.
 pub trait RuntimeStore {
     /// Create a brand-new workflow-process record.
+    /// Implementations must call [`RuntimeRecord::validate_initial_creation`] inside the initial atomic write.
     fn create_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError>;
 
     /// Load the current record for a workflow process.
@@ -219,6 +311,8 @@ pub trait RuntimeStore {
     ) -> Result<(), StoreError>;
 
     /// Atomically replace a workflow-process record.
+    /// Implementations must preserve the original creation snapshot exactly, including legacy absence.
+    /// Use [`RuntimeRecord::validate_creation_update`] before replacing persisted state.
     fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError>;
 
     /// Create a brand-new intake record.
@@ -232,6 +326,7 @@ pub trait RuntimeStore {
     ) -> Result<IntakeRecord, StoreError>;
 
     /// Atomically replace an intake record.
+    /// Use [`IntakeRecord::validate_creation_update`] to preserve Prepared/Applied creation evidence.
     fn save_intake_record(&mut self, record: IntakeRecord) -> Result<(), StoreError>;
 }
 
@@ -274,6 +369,7 @@ impl InMemoryStore {
 
 impl RuntimeStore for InMemoryStore {
     fn create_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
+        record.validate_initial_creation()?;
         let process_id = record.process.process_id.clone();
         if self.records.contains_key(&process_id) {
             return Err(StoreError::AlreadyExists(process_id));
@@ -361,11 +457,13 @@ impl RuntimeStore for InMemoryStore {
             )));
         }
 
+        record.validate_creation_update(existing)?;
         self.records.insert(process_id, record);
         Ok(())
     }
 
     fn create_intake_record(&mut self, record: IntakeRecord) -> Result<(), StoreError> {
+        record.validate_creation()?;
         let key = (record.binding.clone(), record.intake_id.clone());
         if self.intake_records.contains_key(&key) {
             return Err(StoreError::AlreadyExists(format!(
@@ -390,9 +488,11 @@ impl RuntimeStore for InMemoryStore {
 
     fn save_intake_record(&mut self, record: IntakeRecord) -> Result<(), StoreError> {
         let key = (record.binding.clone(), record.intake_id.clone());
-        if !self.intake_records.contains_key(&key) {
-            return Err(StoreError::NotFound(format!("intake:{}:{}", key.0, key.1)));
-        }
+        let previous = self
+            .intake_records
+            .get(&key)
+            .ok_or_else(|| StoreError::NotFound(format!("intake:{}:{}", key.0, key.1)))?;
+        record.validate_creation_update(previous)?;
         self.intake_records.insert(key, record);
         Ok(())
     }
@@ -401,6 +501,8 @@ impl RuntimeStore for InMemoryStore {
 /// Step results, artifacts, and replay map split out of [`RuntimeRecord`] for auxiliary storage.
 #[derive(Debug, Clone, Default)]
 pub struct RuntimeAuxFields {
+    /// Original creation evidence; stores must preserve it on every reload/save.
+    pub creation: Option<ProcessCreationSnapshot>,
     /// Persisted `invokeService` outputs.
     pub step_results: Vec<StepResultRecord>,
     /// Task response artifacts.
@@ -502,6 +604,7 @@ pub fn runtime_aux_to_json(record: &RuntimeRecord) -> serde_json::Value {
         })
         .collect();
     serde_json::json!({
+        "creation": record.creation,
         "stepResults": step_results,
         "artifacts": artifacts,
         "replayEntries": replay_entries,
@@ -509,7 +612,21 @@ pub fn runtime_aux_to_json(record: &RuntimeRecord) -> serde_json::Value {
 }
 
 /// Deserializes auxiliary JSON produced by [`runtime_aux_to_json`].
-pub fn runtime_aux_from_json(v: &serde_json::Value) -> RuntimeAuxFields {
+///
+/// Legacy absent or null creation evidence stays absent; malformed present evidence is refused.
+///
+/// # Errors
+/// Returns invalid-creation evidence for malformed or inconsistent original metadata.
+pub fn runtime_aux_from_json(v: &serde_json::Value) -> Result<RuntimeAuxFields, StoreError> {
+    let creation: Option<ProcessCreationSnapshot> = match v.get("creation") {
+        None | Some(serde_json::Value::Null) => None,
+        Some(value) => Some(serde_json::from_value(value.clone()).map_err(|error| {
+            StoreError::InvalidCreationEvidence(format!("creation snapshot decode: {error}"))
+        })?),
+    };
+    if let Some(snapshot) = &creation {
+        snapshot.validate()?;
+    }
     let step_results = v
         .get("stepResults")
         .and_then(|x| x.as_array())
@@ -625,11 +742,12 @@ pub fn runtime_aux_from_json(v: &serde_json::Value) -> RuntimeAuxFields {
                 .collect()
         })
         .unwrap_or_default();
-    RuntimeAuxFields {
+    Ok(RuntimeAuxFields {
+        creation,
         step_results,
         artifacts,
         replay_entries,
-    }
+    })
 }
 
 #[cfg(test)]
@@ -637,6 +755,139 @@ mod tests {
     use super::*;
     use wos_core::ProvenanceRecord;
     use wos_core::instance::InstanceStatus;
+
+    fn creation_record() -> RuntimeRecord {
+        let process = stack_common_typeid::mint_process_id();
+        let case = stack_common_typeid::mint_case_ledger_id();
+        let mut record = record_with(&process, &case);
+        let kernel = serde_json::from_value(serde_json::json!({
+            "$wosWorkflow": "1.0", "url": record.process.definition_url, "version": "1.0.0",
+            "lifecycle": { "initialState": "open", "states": { "open": { "type": "atomic" } } }
+        }))
+        .unwrap();
+        record.creation = Some(
+            crate::intake::ProcessCreationSnapshot::capture(&record.process, &kernel).unwrap(),
+        );
+        record
+    }
+
+    #[test]
+    fn creation_snapshot_aux_refuses_corrupt_present_and_preserves_legacy_absence() {
+        assert!(
+            runtime_aux_from_json(&serde_json::json!({}))
+                .unwrap()
+                .creation
+                .is_none()
+        );
+        assert!(matches!(
+            runtime_aux_from_json(&serde_json::json!({ "creation": { "tasks": [] } })),
+            Err(StoreError::InvalidCreationEvidence(_))
+        ));
+        let record = creation_record();
+        let mut aux = runtime_aux_to_json(&record);
+        assert_eq!(
+            runtime_aux_from_json(&aux).unwrap().creation,
+            record.creation
+        );
+        aux["creation"]["processId"] = serde_json::json!(record.process.case_ledger_id);
+        assert!(matches!(
+            runtime_aux_from_json(&aux),
+            Err(StoreError::InvalidCreationEvidence(_))
+        ));
+    }
+
+    #[test]
+    fn creation_snapshot_process_store_refuses_replacement_erasure_and_legacy_backfill() {
+        let mut store = InMemoryStore::new();
+        let original = creation_record();
+        let id = original.process.process_id.clone();
+        store.create_record(original.clone()).unwrap();
+        let mut changed = original.clone();
+        changed.creation.as_mut().unwrap().definition_version = "2.0.0".into();
+        assert!(matches!(
+            store.save_record(changed),
+            Err(StoreError::InvalidCreationEvidence(_))
+        ));
+        let mut erased = original.clone();
+        erased.creation = None;
+        assert!(matches!(
+            store.save_record(erased),
+            Err(StoreError::InvalidCreationEvidence(_))
+        ));
+        assert_eq!(store.load_record(&id).unwrap().creation, original.creation);
+        let mut legacy = creation_record();
+        let evidence = legacy.creation.take();
+        let legacy_id = legacy.process.process_id.clone();
+        store.create_record(legacy.clone()).unwrap();
+        legacy.creation = evidence;
+        assert!(matches!(
+            store.save_record(legacy),
+            Err(StoreError::InvalidCreationEvidence(_))
+        ));
+        assert!(store.load_record(&legacy_id).unwrap().creation.is_none());
+    }
+
+    #[test]
+    fn creation_snapshot_initial_store_refuses_wrong_original_version_and_tasks() {
+        let mut store = InMemoryStore::new();
+        let mut wrong_version = creation_record();
+        wrong_version.creation.as_mut().unwrap().definition_version = "2.0.0".into();
+        assert!(matches!(
+            store.create_record(wrong_version),
+            Err(StoreError::InvalidCreationEvidence(_))
+        ));
+        let mut wrong_set = creation_record();
+        wrong_set
+            .process
+            .active_tasks
+            .push(wos_core::instance::ActiveTask {
+                task_id: "not-the-captured-task".into(),
+                task_ref: "review".into(),
+                status: wos_core::instance::ActiveTaskStatus::Assigned,
+                assigned_actor: Some("reviewer".into()),
+                contract_ref: None,
+                binding: None,
+                definition_url: None,
+                definition_version: None,
+                prefill_mapping_ref: None,
+                response_mapping_ref: None,
+                deadline: None,
+                impact_level: None,
+                context: None,
+                last_validation_outcome: None,
+                created_at: wrong_set.process.created_at.clone(),
+                updated_at: wrong_set.process.created_at.clone(),
+                extensions: Default::default(),
+            });
+        assert!(matches!(
+            store.create_record(wrong_set),
+            Err(StoreError::InvalidCreationEvidence(_))
+        ));
+    }
+
+    #[test]
+    fn creation_snapshot_update_preserves_original_pin_during_version_migration() {
+        let mut store = InMemoryStore::new();
+        let original = creation_record();
+        store.create_record(original.clone()).unwrap();
+        let mut migrated = original.clone();
+        migrated.process.definition_version = "2.0.0".into();
+        store.save_record(migrated).unwrap();
+        let reloaded = store.load_record(&original.process.process_id).unwrap();
+        assert_eq!(reloaded.process.definition_version, "2.0.0");
+        assert_eq!(reloaded.creation, original.creation);
+    }
+
+    #[test]
+    fn creation_snapshot_shape_valid_wrong_process_is_refused() {
+        let mut record = creation_record();
+        record.creation.as_mut().unwrap().process_id = stack_common_typeid::mint_process_id();
+        record.creation.as_ref().unwrap().validate().unwrap();
+        assert!(matches!(
+            record.validate_creation(),
+            Err(StoreError::InvalidCreationEvidence(_))
+        ));
+    }
 
     fn record_with(process_id: &str, case_ledger_id: &str) -> RuntimeRecord {
         let instance = WorkflowProcess {

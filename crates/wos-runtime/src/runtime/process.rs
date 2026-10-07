@@ -311,6 +311,11 @@ impl WosRuntime {
         stamp_provenance(&mut appended_provenance, &now_iso);
         record.process.provenance_position = appended_provenance.len() as u64;
         record.provenance_log.extend(appended_provenance);
+        // Capture once in the same atomic write as the created process and tasks.
+        record.creation = Some(crate::intake::ProcessCreationSnapshot::capture(
+            &record.process,
+            &kernel,
+        )?);
         self.store.create_record(record.clone())?;
 
         self.deliver_pending_presentations(&pending_presentations)?;
