@@ -599,7 +599,16 @@ impl WosRuntime {
     }
 }
 
-fn task_process_id(task_id: &str) -> Result<String, RuntimeError> {
+/// Decodes a task's internal parent process identifier.
+///
+/// Uses the same decoder as runtime task commands. Compare the result exactly
+/// with the actual scoped stored process identifier before invoking a command.
+/// This checks the encoded association only; it grants no read/action authority
+/// and does not validate the whole task identifier or normalize public URNs.
+///
+/// # Errors
+/// Returns `TaskNotFound` when the prefix, encoded parent, or UTF-8 is invalid.
+pub fn task_process_id(task_id: &str) -> Result<String, RuntimeError> {
     let Some(encoded_process_id) = task_id
         .strip_prefix("wos-task:")
         .and_then(|rest| rest.split_once(':'))
@@ -704,4 +713,42 @@ fn remove_task_with_event(
         });
     }
     emitted_event
+}
+
+#[cfg(test)]
+mod internal_parent_tests {
+    use super::{RuntimeError, URL_SAFE_NO_PAD};
+    use crate::task_process_id;
+    use base64::Engine as _;
+
+    #[test]
+    fn task_parent_decoder_preserves_the_exact_internal_parent() {
+        let parent = "org_process_01hw7rm71vfay8vvw14d2pf2db";
+        let task_id = format!("wos-task:{}:1", URL_SAFE_NO_PAD.encode(parent));
+        assert_eq!(task_process_id(&task_id).unwrap(), parent);
+        assert_ne!(
+            task_process_id(&task_id).unwrap(),
+            format!("urn:wos:{parent}")
+        );
+        assert_ne!(
+            task_process_id(&task_id).unwrap(),
+            "other_process_01hw7rm71vfay8vvw14d2pf2db"
+        );
+    }
+
+    #[test]
+    fn task_parent_decoder_refuses_malformed_or_non_utf8_parents() {
+        let non_utf8 = format!("wos-task:{}:1", URL_SAFE_NO_PAD.encode([0xff]));
+        for task_id in [
+            "not-a-task",
+            "wos-task:missing-separator",
+            "wos-task:!:1",
+            &non_utf8,
+        ] {
+            assert!(matches!(
+                task_process_id(task_id),
+                Err(RuntimeError::TaskNotFound(_))
+            ));
+        }
+    }
 }

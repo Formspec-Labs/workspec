@@ -14,6 +14,9 @@ mod support;
 mod tasks;
 mod timers;
 
+#[doc(inline)]
+pub use tasks::task_process_id;
+
 use std::any::Any;
 use std::cell::RefCell;
 use std::collections::HashMap;
