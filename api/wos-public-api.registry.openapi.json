@@ -262,6 +262,67 @@
         }
       }
     },
+    "/application-cases/start": {
+      "post": {
+        "tags": [
+          "case-file"
+        ],
+        "operationId": "application_case_start",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Required; equals the source-owned draftRef.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartApplicationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Durable owned application case; no accepted filing is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationCaseReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid source draft or singular idempotency key."
+          },
+          "401": {
+            "description": "Producer authentication refused."
+          },
+          "403": {
+            "description": "Disabled feature, changed owner, source scope or selected pins."
+          },
+          "409": {
+            "description": "Retained application association conflicts."
+          },
+          "503": {
+            "description": "Qualified source or durable storage unavailable."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/audit/queries": {
       "post": {
         "tags": [
@@ -3745,6 +3806,39 @@
       "ApplicantTaskSummaryTitle": {
         "type": "string",
         "description": "Short human-readable task headline (open prose; rendering concern, not contract).\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Short human-readable task headline (open prose; rendering concern, not contract).\",\n  \"examples\": [\n    \"Submit eligibility application\"\n  ],\n  \"type\": \"string\",\n  \"minLength\": 1,\n  \"x-wos\": {\n    \"openStringKind\": \"prose\"\n  }\n}\n ```\n </details>"
+      },
+      "ApplicationCaseReceipt": {
+        "type": "object",
+        "description": "Reports the durable application case without claiming intake acceptance.",
+        "required": [
+          "caseLedgerId",
+          "caseReference",
+          "draftRef",
+          "status"
+        ],
+        "properties": {
+          "caseLedgerId": {
+            "type": "string"
+          },
+          "caseReference": {
+            "type": "string"
+          },
+          "draftRef": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ApplicationCaseStatus"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ApplicationCaseStatus": {
+        "type": "string",
+        "description": "Separates application progress from completed governed intake acceptance.",
+        "enum": [
+          "in-progress",
+          "submitted"
+        ]
       },
       "AssertionGateKind": {
         "oneOf": [
@@ -9707,6 +9801,18 @@
           "policy",
           "guideline"
         ]
+      },
+      "StartApplicationRequest": {
+        "type": "object",
+        "required": [
+          "draftRef"
+        ],
+        "properties": {
+          "draftRef": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
       },
       "TaskKind": {
         "oneOf": [
