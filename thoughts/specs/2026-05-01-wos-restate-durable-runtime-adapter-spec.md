@@ -1,7 +1,8 @@
 # WOS Restate durable runtime adapter — working specification
 
 **Status:** Draft (thoughts lane; ratified by [ADR 0084](../adr/0084-wos-restate-durable-runtime-adapter.md)).  
-**Date:** 2026-05-01  
+**Date:** 2026-05-01
+**Production state authority refined:** 2026-10-08; implementation qualification remains separate.
 **Normative companions (reference only):** [`specs/companions/runtime.md`](../../specs/companions/runtime.md), kernel §9 / §11 as cited in ADR 0083 and WS-094.
 
 This document states **processor-observable obligations** for the `wos-server-runtime-restate` adapter. Each requirement cites an **ADR 0084 decision id** (`D1`–`D5`).
@@ -14,7 +15,7 @@ This document states **processor-observable obligations** for the `wos-server-ru
 
 **R-1.2 [D1]** At most one exclusive (`ObjectContext`) handler for a given `process_id` MUST run at a time; concurrent reads that do not mutate durable WOS state MUST use `#[shared]` handlers and `SharedObjectContext` as defined by `restate-sdk`.
 
-**R-1.3 [D1]** Handlers that mutate WOS operational projection or enqueue drain work MUST NOT be marked `#[shared]`.
+**R-1.3 [D1]** Handlers that mutate WOS committed operational process state or enqueue drain work MUST NOT be marked `#[shared]`.
 
 ---
 
@@ -32,7 +33,13 @@ This document states **processor-observable obligations** for the `wos-server-ru
 
 **R-3.2 [D3]** WOS provenance records emitted during drain MUST still flow through the existing WOS provenance pipeline (`wos-runtime` + `AuditSink` / storage as today) unchanged in semantic meaning from `runtime-local`.
 
-**R-3.3 [D3]** SQL `InstanceRow.instance_json` MAY lag authoritative execution state during migration phases; any such lag MUST be documented in the execution plan and bounded by explicit recovery or resync steps.
+**R-3.3 [D3]** PostgreSQL, through the maintained WOS storage/runtime ports, MUST be the sole writable authority for committed operational process state, native task/event/callback state, operational provenance and retained command outcomes. Command admission and execution MUST use this current committed record; it MUST NOT be treated as a lagging query view. Restate MUST NOT retain an independently writable production process snapshot. Its journal and K/V MAY retain execution results or references without becoming a second domain-state authority. SQL commit and journal completion MUST NOT be represented as Trellis canonical custody commitment.
+
+**R-3.4 [D3]** Every retryable mutating command MUST bind a closed operation, stable identity, selected deployment/scope and process/case/task targets, immutable request digest and authored artifact identity. The owner transaction MUST commit the native operational mutation, required provenance/custody-state updates, every immutable rendered per-recipient delivery intent and the lossless typed command outcome together, or none. Recipient resolution and rendering MUST finish under qualified selected artifact and recipient authority before this commit. Provider transport MUST occur after commit, outside that transaction.
+
+**R-3.5 [D3]** A matching replay MUST return the retained typed outcome without repeating committed effects. Changed immutable input MUST conflict. Unknown completion MUST be settled by exact retained outcome lookup and qualified ownership/fencing before another effective execution; absence alone MUST NOT prove an unresolved attempt failed. Native outcome and error variants MUST remain lossless through the durable adapter. Operational custody state MUST distinguish accepted, pending and refused custody without changing the original operational record or inventing a canonical seal.
+
+**R-3.6 [D3]** Production mutations MUST use one maintained admitted native executor. Current authority MUST be checked at every actual effect attempt after waits or recovery. Protected output MUST be admitted again before disclosure, including journal-cached results. Credentials MUST NOT be serialized into execution journals. Worker-local ownership, private credential-reference resolution and separately qualified timer/callback/recovery service authority MUST be explicit and fail closed; a gateway permit or actor string alone MUST NOT grant a later effect.
 
 ---
 
@@ -42,7 +49,11 @@ This document states **processor-observable obligations** for the `wos-server-ru
 
 **R-4.2 [D4]** External I/O (integration bindings, remote validators, signer calls) invoked from a durable handler MUST use `restate-sdk` journaled side-effect APIs so replay does not duplicate side effects.
 
-**R-4.3 [D4]** Wall-clock timestamps and random identifiers needed for WOS records MUST come from Restate/SDK replay-stable sources inside journaled code paths, not from non-deterministic OS calls that bypass journaling.
+Journaled I/O alone MUST NOT be treated as exactly-once external effects. SQL mutation/result-loss recovery MUST satisfy R-3.4/R-3.5. Delivery attempts and unknown send-before-outcome results MUST follow ADR 0144; queueing, rendering, capture and unknown outcomes MUST NOT become qualifying notice-sent evidence or start a ResponseClock.
+
+**R-4.3 [D4]** Wall-clock timestamps and random identifiers needed for WOS records MUST come from Restate/SDK replay-stable sources inside journaled code paths, not from non-deterministic OS calls that bypass journaling. Actual delivery transport timestamps remain real provider/transport observations; an accelerated logical case clock MUST NOT replace them.
+
+**R-4.4 [D1, D4]** The adapter MUST recover committed timer, callback and delivery work after a crash between domain commit and durable wakeup registration. Recovery MUST use retained native work identity and current service authority, reconcile scheduling without duplicating an effective command or recipient intent, and preserve original callback/clock lineage. It MUST NOT create another writable operational process authority or revive consumed work. Unqualified historical fixture state MUST NOT be converted implicitly.
 
 ---
 

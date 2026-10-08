@@ -5,6 +5,12 @@
 
 Phases **0–2** below keep **ADR §** / **spec req** on each line. **Phases 3–4** checklist lives here; cross-links to parity/vocab work stay in [`2026-05-01-wos-runtime-parity-and-vocab-closure.md`](./2026-05-01-wos-runtime-parity-and-vocab-closure.md). Normative obligations for 3–4 stay in ADR 0084 and the working spec (R-3–R-6.2).
 
+## Selected production state authority (2026-10-08)
+
+ADR 0084 D3 and working-spec R-3.3–R-3.6 now select PostgreSQL as the sole committed operational process and typed command-outcome authority. Restate provides execution journals, per-process ordering and durable scheduling; Trellis provides separately accepted canonical custody and export. Production commands MUST reuse the admitted native executor and commit operational effects, required provenance/custody state, all immutable rendered recipient intents and the typed outcome in one owning transaction. Current effect/output admission, exact replay identity, fenced uncertainty resolution and recovery of committed timer/callback/delivery work are qualification gates.
+
+The checked items below describe the historical fixture slice. Its split K/V state and old test counts do not qualify this refined production authority or authorize conversion of existing objects. Native/local conformance remains the oracle; the accepted full target additionally requires actual configured Restate/PostgreSQL parity and recovery evidence under the amended working specification. Provider transport remains outside the domain transaction, with ADR 0144 outcome/receipt rules.
+
 ---
 
 ## Version matrix (pin before production)

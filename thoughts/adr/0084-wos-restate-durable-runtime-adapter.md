@@ -3,6 +3,7 @@
 **Status:** Accepted — authoring stack (ADR → spec → plan) complete 2026-05-01; implementation proceeds under WS-094 in phases.
 
 **Date:** 2026-05-01
+**Production state authority refined:** 2026-10-08. This decision does not qualify the implementation or convert historical fixture state.
 
 ## Context
 
@@ -18,7 +19,7 @@
 
 **Decision:** Model each **governed workflow instance** as a **Restate Virtual Object** keyed by a stable **`process_id`** string (the same identifier used in `RuntimeOps` and `Storage`).
 
-**Rationale:** Exclusive handler semantics per key match WOS single-writer drain expectations; built-in K/V state matches projection of `WorkflowProcess` / queue metadata without inventing a second keyspace. [`#[restate_sdk::object]`](https://docs.rs/restate-sdk/latest/restate_sdk/#virtual-objects) with optional `#[shared]` handlers covers read/query vs write paths (see spec).
+**Rationale:** Exclusive handler semantics per key match WOS single-writer drain expectations. Restate journals and schedules execution; PostgreSQL owns the committed operational process record under D3. Restate K/V MAY retain execution references but MUST NOT become a second writable production process snapshot. [`#[restate_sdk::object]`](https://docs.rs/restate-sdk/latest/restate_sdk/#virtual-objects) with optional `#[shared]` handlers covers read/query vs write paths (see spec).
 
 **Rejected for v1 default:** A single global **Service** without keyed serialization — would require external locking to match WOS ordering. **Workflow** as the *sole* representation of an instance remains a **future ADR slot** if a product line needs `run`-once lifecycle with different fault domains; the spike noted workflows as an alternative mapping.
 
@@ -28,21 +29,19 @@
 
 **Rationale:** Matches Restate’s documented serving model ([*Serving*](https://docs.rs/restate-sdk/latest/restate_sdk/#restate-rust-sdk)) and avoids merging two HTTP stacks into one listener without a ratified reverse-proxy story.
 
-### D3 — Three stores: Restate journal, WOS provenance, operational `Storage`
+### D3 — One committed operational authority and separate execution/custody stores
 
-**Decision:** Preserve the **three-audience** separation already argued in WS-094 prose:
+**Decision:** For the selected production Restate adapter, PostgreSQL through the maintained WOS storage/runtime ports is the sole writable authority for committed operational process state, including task state, pending native events/callbacks, operational provenance and retained command outcomes. Restate owns execution journals, invocation ordering and durable scheduling; it MUST NOT maintain an independently writable production process snapshot. Trellis owns accepted canonical custody records and export; SQL commit and Restate journal completion do not constitute Trellis custody commitment.
 
-| Store | Owner | Purpose |
-|-------|--------|---------|
-| Restate journal | Restate | Durable **execution** replay, retries, timers |
-| WOS provenance | WOS processors / `AuditSink` | **Governance** facts for auditors |
-| `InstanceRow` / SQL | `Storage` port | Operational **query projection** (may become CDC-fed when WS-094 matures) |
+Each retryable mutating command MUST bind a closed operation, stable command identity, selected deployment/scope and process/case/task targets, immutable request digest and authored artifact identity. The owning transaction MUST commit the command's native operational mutation, required provenance/custody-state updates, every immutable per-recipient delivery intent and its lossless typed outcome together, or commit none of them. Matching replay returns the retained outcome; changed immutable input conflicts. Unknown transaction completion MUST be settled by exact retained outcome lookup and ownership/fencing before another effective execution. Absence alone is not proof that an unresolved attempt failed.
 
-**Rationale:** No single store is authoritative for all three concerns; adapters MUST NOT conflate Restate replay bytes with Trellis-ready provenance (see VISION §IV and Trellis cross-links there).
+All production mutations MUST use one maintained admitted native executor. Current authority MUST be checked at each actual effect attempt and protected output MUST be admitted again before disclosure, including journal-cached results. Credentials MUST NOT be serialized into journals; worker-local ownership, credential-reference resolution and service authority MUST be explicit and fail closed. Delivery transport MUST occur after domain commit, outside its transaction; transport attempts and qualifying producer-admitted receipt/case-clock events remain governed by [ADR 0144](../../../thoughts/adr/0144-delivery-channel-adapter-and-notification-semantics.md) and ADR 0067.
+
+**Rationale:** One operational record supports atomic task/case changes, delivery intents and command recovery. Execution journals provide replay and scheduling; canonical custody remains a separately admitted Trellis boundary. The former SQL query-view decision is superseded for this selected production adapter. Historical K/V fixtures remain test evidence, not an alternative production authority or an authorization to convert existing objects.
 
 ### D4 — `RuntimeOps` ↔ `DurableRuntime` / `WosRuntime` bridge
 
-**Decision:** Production path **embeds** [`WosRuntime`](../../crates/wos-runtime/src/runtime.rs) (or calls through **`DurableRuntime`** where the type bound is already satisfied) **inside** exclusive Virtual Object handlers that perform **journal-safe** steps only; **non-deterministic** I/O uses the SDK’s journaled APIs ([*Journaling Results*](https://docs.rs/restate-sdk/latest/restate_sdk/#restate-rust-sdk), state APIs). The existing **`RestateRuntimeAdapter`** may remain the **`RuntimeOps`** façade that forwards to ingress **until** in-process embedding is proven stable.
+**Decision:** Production path **embeds** [`WosRuntime`](../../crates/wos-runtime/src/runtime.rs) (or calls through **`DurableRuntime`** where the type bound is already satisfied) **inside** exclusive Virtual Object handlers that perform **journal-safe** steps only. The admitted executor reads and commits the D3 PostgreSQL operational record; **non-deterministic** I/O uses the SDK’s journaled APIs ([*Journaling Results*](https://docs.rs/restate-sdk/latest/restate_sdk/#restate-rust-sdk), state APIs). The existing **`RestateRuntimeAdapter`** may remain the **`RuntimeOps`** façade that forwards to ingress **until** in-process embedding is proven stable.
 
 **Rationale:** Reuses kernel evaluation, bindings, and provenance stamping already centralized in `wos-runtime`; duplicating semantics in raw handlers would rot.
 
