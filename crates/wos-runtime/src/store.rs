@@ -30,6 +30,19 @@ pub struct RuntimeRecord {
     pub replay_entries: HashMap<ReplayKey, ReplayValue>,
 }
 
+/// A permitted new custody stamp on an existing provenance record.
+///
+/// This value describes a validated change, not receipt authenticity or access
+/// authority. Storage adapters must persist it atomically and map it on reload
+/// without changing the original operational payload or chain digests.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProvenanceCustodyUpdate {
+    /// Exact identifier of the retained provenance record.
+    pub record_id: String,
+    /// Receipt value accepted by the maintained custody stamper.
+    pub receipt: wos_events::custody::CustodyAppendReceipt,
+}
+
 impl RuntimeRecord {
     /// Create a new record around a freshly-created process.
     pub fn new(instance: WorkflowProcess) -> Self {
@@ -91,6 +104,68 @@ impl RuntimeRecord {
         }
         self.validate_creation()?;
         self.validate_dismissal_replay_update(previous)
+    }
+
+    /// Validates retained provenance and returns permitted new custody stamps.
+    ///
+    /// The caller supplies the actual previous scoped record within its atomic
+    /// write. This pure check neither authenticates receipts nor persists them.
+    /// It preserves the complete ordered prefix and permits only updates made by
+    /// the maintained receipt stamper. Newly appended records are not updates.
+    /// Existing creation and dismissal evidence checks remain required.
+    ///
+    /// # Errors
+    /// Returns creation or replay evidence errors from the existing validators,
+    /// or [`StoreError::InvalidProvenanceEvidence`] for shortened, ambiguous,
+    /// changed or unencodable prior evidence, or conflicting/erased custody hashes.
+    pub fn validate_provenance_update(
+        &self,
+        previous: &Self,
+    ) -> Result<Vec<ProvenanceCustodyUpdate>, StoreError> {
+        previous.validate_creation()?;
+        self.validate_creation_update(previous)?;
+        if self.provenance_log.len() < previous.provenance_log.len() {
+            return Err(StoreError::InvalidProvenanceEvidence(
+                "retained provenance prefix was truncated".into(),
+            ));
+        }
+        let mut identities = HashSet::new();
+        for record in &self.provenance_log {
+            if record.id.trim().is_empty() || !identities.insert(&record.id) {
+                return Err(StoreError::InvalidProvenanceEvidence(
+                    "provenance identity is missing or duplicated".into(),
+                ));
+            }
+        }
+        let mut changes = Vec::new();
+        for (old, incoming) in previous.provenance_log.iter().zip(&self.provenance_log) {
+            let mut expected = old.clone();
+            if let Some(hash) = &incoming.canonical_event_hash {
+                let receipt = wos_events::custody::CustodyAppendReceipt::new(hash.clone());
+                crate::runtime::stamp_custody_receipt(&mut expected, &receipt)
+                    .map_err(|error| StoreError::InvalidProvenanceEvidence(error.to_string()))?;
+                if old.canonical_event_hash.is_none() {
+                    changes.push(ProvenanceCustodyUpdate {
+                        record_id: old.id.clone(),
+                        receipt,
+                    });
+                }
+            } else if old.canonical_event_hash.is_some() {
+                return Err(StoreError::InvalidProvenanceEvidence(
+                    "retained custody receipt was erased".into(),
+                ));
+            }
+            let expected_json = serde_json::to_value(&expected)
+                .map_err(|error| StoreError::InvalidProvenanceEvidence(error.to_string()))?;
+            let incoming_json = serde_json::to_value(incoming)
+                .map_err(|error| StoreError::InvalidProvenanceEvidence(error.to_string()))?;
+            if expected_json != incoming_json {
+                return Err(StoreError::InvalidProvenanceEvidence(
+                    "retained provenance differs beyond its permitted custody stamp".into(),
+                ));
+            }
+        }
+        Ok(changes)
     }
 
     /// Validates both directions of retained dismissal operation evidence.
@@ -431,6 +506,9 @@ pub enum StoreError {
     /// Retained dismissal request, result or provenance evidence is inconsistent.
     #[error("invalid replay evidence: {0}")]
     InvalidReplayEvidence(String),
+    /// A retained provenance prefix or custody update is inconsistent.
+    #[error("invalid provenance evidence: {0}")]
+    InvalidProvenanceEvidence(String),
 
     /// Store-specific failure.
     #[error("runtime store failure: {0}")]

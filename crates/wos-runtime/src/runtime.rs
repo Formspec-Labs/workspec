@@ -6770,6 +6770,200 @@ mod tests {
     }
 
     #[test]
+    fn provenance_update_returns_actual_custody_delta_and_preserves_dismissal_replay() {
+        let (mut runtime, process_id, task_id, _) = dismissal_fixture();
+        let outcome = runtime
+            .dismiss_task(&task_id, "snoozed", "reviewer", "custody-key")
+            .unwrap();
+        let previous = runtime.store.load_record(&process_id).unwrap();
+        assert!(
+            previous
+                .validate_provenance_update(&previous)
+                .unwrap()
+                .is_empty()
+        );
+        let receipt = crate::CustodyAppendReceipt::new(format!("sha256:{}", "a".repeat(64)));
+        runtime
+            .apply_custody_receipt(&process_id, &outcome.provenance_id, receipt.clone())
+            .unwrap();
+        let stamped = runtime.store.load_record(&process_id).unwrap();
+        let changes = stamped.validate_provenance_update(&previous).unwrap();
+        assert_eq!(
+            changes,
+            vec![crate::store::ProvenanceCustodyUpdate {
+                record_id: outcome.provenance_id.clone(),
+                receipt: receipt.clone()
+            }]
+        );
+        assert_eq!(stamped.creation, previous.creation);
+        assert_eq!(
+            crate::store::runtime_aux_to_json(&stamped),
+            crate::store::runtime_aux_to_json(&previous)
+        );
+        assert_eq!(
+            runtime
+                .dismiss_task(&task_id, "snoozed", "reviewer", "custody-key")
+                .unwrap(),
+            outcome
+        );
+        runtime
+            .apply_custody_receipt(&process_id, &outcome.provenance_id, receipt)
+            .unwrap();
+        let retried = runtime.store.load_record(&process_id).unwrap();
+        assert!(
+            retried
+                .validate_provenance_update(&stamped)
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(
+            serde_json::to_value(&retried.provenance_log).unwrap(),
+            serde_json::to_value(&stamped.provenance_log).unwrap()
+        );
+        runtime
+            .dismiss_task(&task_id, "different", "reviewer", "fresh-custody-key")
+            .unwrap();
+        let appended = runtime.store.load_record(&process_id).unwrap();
+        assert!(
+            appended
+                .validate_provenance_update(&retried)
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(
+            appended.provenance_log.len(),
+            retried.provenance_log.len() + 1
+        );
+    }
+
+    #[test]
+    fn provenance_update_refuses_conflicting_erased_or_simultaneously_changed_custody() {
+        let (mut runtime, process_id, task_id, _) = dismissal_fixture();
+        let outcome = runtime
+            .dismiss_task(&task_id, "snoozed", "reviewer", "custody-conflict")
+            .unwrap();
+        let unstamped = runtime.store.load_record(&process_id).unwrap();
+        runtime
+            .apply_custody_receipt(
+                &process_id,
+                &outcome.provenance_id,
+                crate::CustodyAppendReceipt::new(format!("sha256:{}", "a".repeat(64))),
+            )
+            .unwrap();
+        let previous = runtime.store.load_record(&process_id).unwrap();
+        let pos = previous
+            .provenance_log
+            .iter()
+            .position(|p| p.id == outcome.provenance_id)
+            .unwrap();
+        let mut erased = previous.clone();
+        erased.provenance_log[pos].canonical_event_hash = None;
+        assert!(matches!(
+            erased.validate_provenance_update(&previous),
+            Err(StoreError::InvalidProvenanceEvidence(_))
+        ));
+        let mut changed = previous.clone();
+        changed.provenance_log[pos].canonical_event_hash =
+            Some(format!("sha256:{}", "b".repeat(64)));
+        assert!(matches!(
+            changed.validate_provenance_update(&previous),
+            Err(StoreError::InvalidProvenanceEvidence(_))
+        ));
+        let mut simultaneous = previous.clone();
+        simultaneous.provenance_log[pos].definition_version = Some("tampered".into());
+        assert!(matches!(
+            simultaneous.validate_provenance_update(&unstamped),
+            Err(StoreError::InvalidProvenanceEvidence(_))
+        ));
+        let mut witness = previous.clone();
+        witness.provenance_log[pos].data.as_mut().unwrap()["details"]["reason"] =
+            serde_json::json!("changed");
+        assert!(matches!(
+            witness.validate_provenance_update(&unstamped),
+            Err(StoreError::InvalidReplayEvidence(_))
+        ));
+        assert!(
+            runtime
+                .apply_custody_receipt(
+                    &process_id,
+                    &outcome.provenance_id,
+                    crate::CustodyAppendReceipt::new(format!("sha256:{}", "b".repeat(64)))
+                )
+                .is_err()
+        );
+        assert_eq!(
+            serde_json::to_value(
+                &runtime
+                    .store
+                    .load_record(&process_id)
+                    .unwrap()
+                    .provenance_log
+            )
+            .unwrap(),
+            serde_json::to_value(&previous.provenance_log).unwrap()
+        );
+        assert_eq!(
+            runtime
+                .dismiss_task(&task_id, "snoozed", "reviewer", "custody-conflict")
+                .unwrap(),
+            outcome
+        );
+    }
+
+    #[test]
+    fn provenance_update_refuses_truncated_reordered_replaced_or_duplicate_prefix() {
+        let (mut runtime, process_id, task_id, _) = dismissal_fixture();
+        runtime
+            .dismiss_task(&task_id, "snoozed", "reviewer", "prefix-key")
+            .unwrap();
+        let previous = runtime.store.load_record(&process_id).unwrap();
+        assert!(previous.provenance_log.len() >= 2);
+        let mut truncated = previous.clone();
+        truncated.provenance_log.remove(0);
+        assert!(matches!(
+            truncated.validate_provenance_update(&previous),
+            Err(StoreError::InvalidProvenanceEvidence(_))
+        ));
+        let mut reordered = previous.clone();
+        reordered.provenance_log.swap(0, 1);
+        assert!(matches!(
+            reordered.validate_provenance_update(&previous),
+            Err(StoreError::InvalidProvenanceEvidence(_))
+        ));
+        let mut replaced = previous.clone();
+        replaced.provenance_log[0].id = stack_common_typeid::mint_provenance_id();
+        assert!(matches!(
+            replaced.validate_provenance_update(&previous),
+            Err(StoreError::InvalidProvenanceEvidence(_))
+        ));
+        let mut duplicated = previous.clone();
+        duplicated
+            .provenance_log
+            .push(previous.provenance_log[0].clone());
+        assert!(matches!(
+            duplicated.validate_provenance_update(&previous),
+            Err(StoreError::InvalidProvenanceEvidence(_))
+        ));
+        let mut missing_id = previous.clone();
+        missing_id.provenance_log[0].id = "  ".into();
+        assert!(matches!(
+            missing_id.validate_provenance_update(&previous),
+            Err(StoreError::InvalidProvenanceEvidence(_))
+        ));
+        assert_eq!(
+            serde_json::to_value(
+                &runtime
+                    .store
+                    .load_record(&process_id)
+                    .unwrap()
+                    .provenance_log
+            )
+            .unwrap(),
+            serde_json::to_value(&previous.provenance_log).unwrap()
+        );
+    }
+
+    #[test]
     fn dismissal_auxiliary_codec_refuses_raw_duplicates_and_malformed_entries() {
         let (mut runtime, process_id, task_id, _) = dismissal_fixture();
         runtime

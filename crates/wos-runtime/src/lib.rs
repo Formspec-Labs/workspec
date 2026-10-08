@@ -57,10 +57,11 @@ pub use runtime::{
     TrellisCustodyAppender, WosRuntime, populate_provenance_record_fields, stamp_provenance,
     task_outcome_metadata_matches, task_process_id,
 };
+#[doc(inline)]
 pub use store::{
-    DismissalReplay, InMemoryStore, IntakeRecord, ReplayKey, ReplayOperation, ReplayValue,
-    RuntimeAuxFields, RuntimeRecord, RuntimeStore, StoreError, TaskArtifact, TaskArtifactKind,
-    runtime_aux_from_json, runtime_aux_to_json,
+    DismissalReplay, InMemoryStore, IntakeRecord, ProvenanceCustodyUpdate, ReplayKey,
+    ReplayOperation, ReplayValue, RuntimeAuxFields, RuntimeRecord, RuntimeStore, StoreError,
+    TaskArtifact, TaskArtifactKind, runtime_aux_from_json, runtime_aux_to_json,
 };
 pub use wos_core::business_calendar::BusinessCalendarDocument;
 #[doc(inline)]
