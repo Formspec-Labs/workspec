@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use wos_core::instance::{InstanceStatus, WorkflowProcess};
 use wos_core::{ProvenanceKind, ProvenanceRecord};
-use wos_runtime::{InMemoryStore, RuntimeRecord, RuntimeStore};
+use wos_runtime::{InMemoryStore, ProcessCreationSnapshot, RuntimeRecord, RuntimeStore};
 
 /// Case-boundary fixture format. Distinct from `ConformanceFixture` because
 /// these tests drive the case-ledger store directly rather than the workflow
@@ -255,14 +255,26 @@ fn execute_fixture(fixture: &CaseBoundaryFixture) -> FixtureExecution {
     // Create one runtime record per process spec, all bound to the same case ledger.
     for spec in &fixture.processes {
         let process = workflow_process(spec, &fixture.case_ledger_id);
-        store
-            .create_record(RuntimeRecord::new(process))
-            .unwrap_or_else(|e| {
-                panic!(
-                    "fixture {}: create_record for process {} failed: {e:?}",
-                    fixture.id, spec.process_id
-                )
-            });
+        let creation = ProcessCreationSnapshot {
+            process_id: process.process_id.clone(),
+            case_ledger_id: process.case_ledger_id.clone(),
+            tenant: process.tenant.clone(),
+            definition_url: process.definition_url.clone(),
+            definition_version: process.definition_version.clone(),
+            created_at: process.created_at.clone(),
+            tasks: Vec::new(),
+        };
+        creation
+            .validate()
+            .expect("authored initial fixture evidence is valid");
+        let mut record = RuntimeRecord::new(process);
+        record.creation = Some(creation);
+        store.create_record(record).unwrap_or_else(|e| {
+            panic!(
+                "fixture {}: create_record for process {} failed: {e:?}",
+                fixture.id, spec.process_id
+            )
+        });
     }
 
     // Replay the action sequence against the store.

@@ -3177,50 +3177,65 @@ mod tests {
     }
 
     #[test]
-    fn intake_creation_snapshot_missing_applied_legacy_evidence_stays_accepted() {
+    fn intake_creation_snapshot_refuses_missing_prepared_and_applied_evidence() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosWorkflow": "1.0", "url": "urn:test:legacy-snapshot", "version": "1.0.0",
+            "$wosWorkflow": "1.0", "url": "urn:test:required-snapshot", "version": "1.0.0",
             "lifecycle": { "initialState": "open", "states": { "open": { "type": "atomic" } } }
         }))
         .unwrap();
         let mut runtime =
             runtime_with_kernel(kernel.clone()).with_intake_policy(AutoCreatePublicIntakePolicy);
         let request = public_intake_request(
-            "ih-legacy-snapshot",
-            test_case_ledger_urn("legacy-snapshot"),
-            "urn:test:legacy-snapshot",
+            "ih-required-snapshot",
+            test_case_ledger_urn("required-snapshot"),
+            "urn:test:required-snapshot",
             "1.0.0",
         );
-        runtime
+        let accepted = runtime
             .accept_intake_handoff("formspec", request.clone())
             .unwrap();
-        let mut legacy = runtime
+        let original = runtime
             .store
-            .load_intake_record("formspec", "ih-legacy-snapshot")
+            .load_intake_record("formspec", "ih-required-snapshot")
             .unwrap();
-        legacy.creation = None;
-        // Import a genuinely absent legacy Applied receipt into a fresh store.
-        let mut restored =
-            runtime_with_kernel(kernel).with_intake_policy(AutoCreatePublicIntakePolicy);
-        restored.store.create_intake_record(legacy).unwrap();
-        let replay = restored.accept_intake_handoff("formspec", request).unwrap();
+        for status in [
+            crate::IntakeRecordStatus::Prepared,
+            crate::IntakeRecordStatus::Applied,
+        ] {
+            let mut missing = original.clone();
+            missing.status = status;
+            missing.creation = None;
+            assert!(matches!(
+                missing.validate_creation(),
+                Err(StoreError::InvalidCreationEvidence(_))
+            ));
+            let mut restored = runtime_with_kernel(kernel.clone())
+                .with_intake_policy(AutoCreatePublicIntakePolicy);
+            assert!(matches!(
+                restored.store.create_intake_record(missing),
+                Err(StoreError::InvalidCreationEvidence(_))
+            ));
+            assert!(matches!(
+                restored
+                    .store
+                    .load_intake_record("formspec", "ih-required-snapshot"),
+                Err(StoreError::NotFound(_))
+            ));
+        }
+        let replay = runtime.accept_intake_handoff("formspec", request).unwrap();
+        assert_eq!(replay.creation, accepted.creation);
+        let mut backward = original.clone();
+        backward.status = crate::IntakeRecordStatus::Pending;
         assert!(matches!(
-            replay.outcome,
-            IntakeAcceptanceOutcome::Accepted { .. }
-        ));
-        assert!(
-            replay.creation.is_none(),
-            "missing legacy evidence is explicit, never fabricated"
-        );
-        let mut legacy = restored
-            .store
-            .load_intake_record("formspec", "ih-legacy-snapshot")
-            .unwrap();
-        legacy.status = crate::IntakeRecordStatus::Pending;
-        assert!(matches!(
-            restored.store.save_intake_record(legacy),
+            runtime.store.save_intake_record(backward),
             Err(StoreError::InvalidCreationEvidence(_))
         ));
+        let retained = runtime
+            .store
+            .load_intake_record("formspec", "ih-required-snapshot")
+            .unwrap();
+        assert_eq!(retained.creation, original.creation);
+        assert_eq!(retained.status, original.status);
     }
 
     #[test]

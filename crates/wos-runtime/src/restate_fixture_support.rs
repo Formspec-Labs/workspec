@@ -151,7 +151,17 @@ mod tests {
             updated_at: "1970-01-01T00:00:00Z".to_string(),
             extensions: Default::default(),
         };
-        RuntimeRecord::new(instance)
+        let mut record = RuntimeRecord::new(instance);
+        let kernel = serde_json::from_value(serde_json::json!({
+            "$wosWorkflow": "1.0", "url": record.process.definition_url,
+            "version": record.process.definition_version,
+            "lifecycle": { "initialState": "open", "states": { "open": { "type": "atomic" } } }
+        }))
+        .unwrap();
+        record.creation = Some(
+            crate::intake::ProcessCreationSnapshot::capture(&record.process, &kernel).unwrap(),
+        );
+        record
     }
 
     fn stamped(timestamp: &str) -> ProvenanceRecord {
@@ -164,9 +174,9 @@ mod tests {
     #[test]
     fn shared_in_memory_store_forwards_case_scoped_traversals() {
         let mut store = SharedInMemoryStore::default();
-        let case_ledger_id = "case_01h_shared";
-        let process_a = "process_01h_shared_a";
-        let process_b = "process_01h_shared_b";
+        let case_ledger_id = "default_case_01hw7rm71vfay8vvw14d2pf201";
+        let process_a = "default_process_01hw7rm71vfay8vvw14d2pf202";
+        let process_b = "default_process_01hw7rm71vfay8vvw14d2pf203";
 
         store
             .create_record(record_with(process_a, case_ledger_id))

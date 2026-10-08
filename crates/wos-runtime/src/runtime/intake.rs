@@ -230,9 +230,7 @@ impl WosRuntime {
                         Err(error) => return Err(error),
                     };
                     let original = self.store.load_record(&case.process_id)?;
-                    if let Some(creation) = &original.creation {
-                        creation.validate_process(&original.process)?;
-                    }
+                    original.validate_creation()?;
                     let creation = original.creation;
                     Ok((
                         IntakeAcceptanceOutcome::Accepted {

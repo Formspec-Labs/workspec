@@ -2,10 +2,10 @@
   "id": "CBR-4C-2-direct-append-note-added",
   "rule": "CBR-§4.6",
   "description": "Direct-append case-boundary fixture (CBR §4.6). Exercises POST /cases/{case_id}/events for a non-workflow-driven post-ledger note append. Uses ProvenanceKind::NoteAdded (eventLiteral wos.kernel.note_added) — a flat Facts-tier foundation-category kind with schemaValidated: false in the record-kind registry. The genesis event creates the ledger; the direct-append note event appears in the case view without going through any workflow process drain.",
-  "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2dc_direct_append",
+  "case_ledger_id": "default_case_01hw7rm71vfay8vvw14d2pf201",
   "processes": [
     {
-      "process_id": "process_01hw7rm71vfay8vvw14d2pf2dc_anchor",
+      "process_id": "default_process_01hw7rm71vfay8vvw14d2pf202",
       "definition_url": "urn:test:case-boundary:direct-append:anchor",
       "definition_version": "1.0.0"
     }
@@ -13,8 +13,8 @@
   "actions": [
     {
       "kind": "directAppend",
-      "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2dc_direct_append",
-      "process_id": "process_01hw7rm71vfay8vvw14d2pf2dc_anchor",
+      "case_ledger_id": "default_case_01hw7rm71vfay8vvw14d2pf201",
+      "process_id": "default_process_01hw7rm71vfay8vvw14d2pf202",
       "event_type": "wos.kernel.case_created",
       "actor_id": "system:case-genesis",
       "timestamp": "2026-05-12T11:00:00Z",
@@ -22,8 +22,8 @@
     },
     {
       "kind": "directAppend",
-      "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2dc_direct_append",
-      "process_id": "process_01hw7rm71vfay8vvw14d2pf2dc_anchor",
+      "case_ledger_id": "default_case_01hw7rm71vfay8vvw14d2pf201",
+      "process_id": "default_process_01hw7rm71vfay8vvw14d2pf202",
       "event_type": "wos.kernel.note_added",
       "actor_id": "system:direct-append-caller",
       "timestamp": "2026-05-12T11:00:01Z",
@@ -31,15 +31,15 @@
     }
   ],
   "expected_processes_for_case": [
-    "process_01hw7rm71vfay8vvw14d2pf2dc_anchor"
+    "default_process_01hw7rm71vfay8vvw14d2pf202"
   ],
   "expected_case_view_timestamps": [
     "2026-05-12T11:00:00Z",
     "2026-05-12T11:00:01Z"
   ],
   "expected_case_view_events": [
-    { "event": "wos.kernel.case_created", "process_id": "process_01hw7rm71vfay8vvw14d2pf2dc_anchor" },
-    { "event": "wos.kernel.note_added", "process_id": "process_01hw7rm71vfay8vvw14d2pf2dc_anchor" }
+    { "event": "wos.kernel.case_created", "process_id": "default_process_01hw7rm71vfay8vvw14d2pf202" },
+    { "event": "wos.kernel.note_added", "process_id": "default_process_01hw7rm71vfay8vvw14d2pf202" }
   ],
   "expected_no_workflow_drain": true
 }

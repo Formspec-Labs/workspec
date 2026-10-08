@@ -2,10 +2,10 @@
   "id": "CBR-4C-7-registry-gate-unregistered-note",
   "rule": "CBR-§4.7",
   "description": "Trellis registry gate fixture (archived refactor tracker 4C.7). `wos.kernel.note_updated` is an intentionally unregistered WOS event literal (a forward-looking kind not yet ratified) and must be rejected by registry-aware lint/runtime surfaces. The rejected action stays in the fixture stream as negative input and is intentionally absent from the expected case view.",
-  "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2dh_registry_gate",
+  "case_ledger_id": "default_case_01hw7rm71vfay8vvw14d2pf201",
   "processes": [
     {
-      "process_id": "process_01hw7rm71vfay8vvw14d2pf2dh_anchor",
+      "process_id": "default_process_01hw7rm71vfay8vvw14d2pf202",
       "definition_url": "urn:test:case-boundary:registry-gate:anchor",
       "definition_version": "1.0.0"
     }
@@ -13,8 +13,8 @@
   "actions": [
     {
       "kind": "directAppend",
-      "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2dh_registry_gate",
-      "process_id": "process_01hw7rm71vfay8vvw14d2pf2dh_anchor",
+      "case_ledger_id": "default_case_01hw7rm71vfay8vvw14d2pf201",
+      "process_id": "default_process_01hw7rm71vfay8vvw14d2pf202",
       "event_type": "wos.kernel.case_created",
       "actor_id": "system:case-genesis",
       "timestamp": "2026-05-12T12:40:00Z",
@@ -22,8 +22,8 @@
     },
     {
       "kind": "directAppend",
-      "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2dh_registry_gate",
-      "process_id": "process_01hw7rm71vfay8vvw14d2pf2dh_anchor",
+      "case_ledger_id": "default_case_01hw7rm71vfay8vvw14d2pf201",
+      "process_id": "default_process_01hw7rm71vfay8vvw14d2pf202",
       "event_type": "wos.kernel.note_updated",
       "actor_id": "system:registry-gate",
       "timestamp": "2026-05-12T12:40:01Z",
@@ -31,13 +31,13 @@
     }
   ],
   "expected_processes_for_case": [
-    "process_01hw7rm71vfay8vvw14d2pf2dh_anchor"
+    "default_process_01hw7rm71vfay8vvw14d2pf202"
   ],
   "expected_case_view_timestamps": [
     "2026-05-12T12:40:00Z"
   ],
   "expected_case_view_events": [
-    { "event": "wos.kernel.case_created", "process_id": "process_01hw7rm71vfay8vvw14d2pf2dh_anchor" }
+    { "event": "wos.kernel.case_created", "process_id": "default_process_01hw7rm71vfay8vvw14d2pf202" }
   ],
   "expected_registry_rejection_event": "wos.kernel.note_updated"
 }

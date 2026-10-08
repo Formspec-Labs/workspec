@@ -48,26 +48,30 @@ impl RuntimeRecord {
     /// Checks creation evidence against the exact original staged process.
     ///
     /// Call this at initial persistence, before the process can change.
-    /// Missing evidence permits explicit legacy import; it does not fabricate a snapshot.
+    /// Original creation evidence is required before initial persistence.
     ///
     /// # Errors
-    /// Returns invalid-creation evidence for mismatched original definition or task metadata.
+    /// Returns invalid-creation evidence for missing evidence or mismatched original definition or task metadata.
     pub fn validate_initial_creation(&self) -> Result<(), StoreError> {
-        if let Some(creation) = &self.creation {
-            creation.validate_created_process(&self.process)?;
-        }
-        Ok(())
+        self.creation
+            .as_ref()
+            .ok_or_else(|| {
+                StoreError::InvalidCreationEvidence("original process creation is missing".into())
+            })?
+            .validate_created_process(&self.process)
     }
 
     /// Checks retained creation identity against the actual loaded process.
     ///
     /// # Errors
-    /// Returns invalid-creation evidence for corrupt identity or metadata.
+    /// Returns invalid-creation evidence for missing evidence or corrupt identity or metadata.
     pub fn validate_creation(&self) -> Result<(), StoreError> {
-        if let Some(creation) = &self.creation {
-            creation.validate_process(&self.process)?;
-        }
-        Ok(())
+        self.creation
+            .as_ref()
+            .ok_or_else(|| {
+                StoreError::InvalidCreationEvidence("original process creation is missing".into())
+            })?
+            .validate_process(&self.process)
     }
 
     /// Validates original creation evidence before replacing a stored process.
@@ -187,11 +191,24 @@ impl IntakeRecord {
     /// Checks retained creation evidence against the actual intake request and outcome.
     ///
     /// # Errors
-    /// Returns invalid-creation evidence for corrupt identity, metadata, or pending policy evidence.
+    /// Returns invalid-creation evidence for missing accepted creation, corrupt metadata, or pending policy evidence.
     pub fn validate_creation(&self) -> Result<(), StoreError> {
         if self.status == IntakeRecordStatus::Pending && self.creation.is_some() {
             return Err(StoreError::InvalidCreationEvidence(
                 "pending policy cannot supply creation evidence".into(),
+            ));
+        }
+        if self.status != IntakeRecordStatus::Pending
+            && matches!(
+                &self.outcome,
+                IntakeAcceptanceOutcome::Accepted {
+                    case_disposition: crate::intake::IntakeCaseDisposition::CreateGovernedCase { .. }
+                }
+            )
+            && self.creation.is_none()
+        {
+            return Err(StoreError::InvalidCreationEvidence(
+                "accepted case creation evidence is missing".into(),
             ));
         }
         if let Some(creation) = &self.creation {
@@ -311,7 +328,7 @@ pub trait RuntimeStore {
     ) -> Result<(), StoreError>;
 
     /// Atomically replace a workflow-process record.
-    /// Implementations must preserve the original creation snapshot exactly, including legacy absence.
+    /// Implementations must preserve the original creation snapshot exactly, without replacement or erasure.
     /// Use [`RuntimeRecord::validate_creation_update`] before replacing persisted state.
     fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError>;
 
@@ -374,7 +391,7 @@ impl InMemoryStore {
     ///
     /// Retained creation evidence is checked against current process identity;
     /// current task progress and definition-version migration are permitted.
-    /// Legacy absence stays absent. Existing records are never replaced.
+    /// Original creation evidence is required. Existing records are never replaced.
     ///
     /// # Errors
     /// Returns [`StoreError::InvalidCreationEvidence`] for invalid retained evidence
@@ -636,20 +653,19 @@ pub fn runtime_aux_to_json(record: &RuntimeRecord) -> serde_json::Value {
 
 /// Deserializes auxiliary JSON produced by [`runtime_aux_to_json`].
 ///
-/// Legacy absent or null creation evidence stays absent; malformed present evidence is refused.
+/// Original process creation evidence is required; missing, null, or malformed evidence is refused.
 ///
 /// # Errors
-/// Returns invalid-creation evidence for malformed or inconsistent original metadata.
+/// Returns invalid-creation evidence for missing, null, malformed, or inconsistent original metadata.
 pub fn runtime_aux_from_json(v: &serde_json::Value) -> Result<RuntimeAuxFields, StoreError> {
-    let creation: Option<ProcessCreationSnapshot> = match v.get("creation") {
-        None | Some(serde_json::Value::Null) => None,
-        Some(value) => Some(serde_json::from_value(value.clone()).map_err(|error| {
+    let creation: ProcessCreationSnapshot =
+        serde_json::from_value(v.get("creation").cloned().ok_or_else(|| {
+            StoreError::InvalidCreationEvidence("original process creation is missing".into())
+        })?)
+        .map_err(|error| {
             StoreError::InvalidCreationEvidence(format!("creation snapshot decode: {error}"))
-        })?),
-    };
-    if let Some(snapshot) = &creation {
-        snapshot.validate()?;
-    }
+        })?;
+    creation.validate()?;
     let step_results = v
         .get("stepResults")
         .and_then(|x| x.as_array())
@@ -766,7 +782,7 @@ pub fn runtime_aux_from_json(v: &serde_json::Value) -> Result<RuntimeAuxFields, 
         })
         .unwrap_or_default();
     Ok(RuntimeAuxFields {
-        creation,
+        creation: Some(creation),
         step_results,
         artifacts,
         replay_entries,
@@ -795,13 +811,13 @@ mod tests {
     }
 
     #[test]
-    fn creation_snapshot_aux_refuses_corrupt_present_and_preserves_legacy_absence() {
-        assert!(
-            runtime_aux_from_json(&serde_json::json!({}))
-                .unwrap()
-                .creation
-                .is_none()
-        );
+    fn creation_snapshot_aux_refuses_missing_null_and_corrupt_evidence() {
+        for aux in [serde_json::json!({}), serde_json::json!({"creation": null})] {
+            assert!(matches!(
+                runtime_aux_from_json(&aux),
+                Err(StoreError::InvalidCreationEvidence(_))
+            ));
+        }
         assert!(matches!(
             runtime_aux_from_json(&serde_json::json!({ "creation": { "tasks": [] } })),
             Err(StoreError::InvalidCreationEvidence(_))
@@ -820,7 +836,7 @@ mod tests {
     }
 
     #[test]
-    fn creation_snapshot_process_store_refuses_replacement_erasure_and_legacy_backfill() {
+    fn creation_snapshot_process_store_refuses_replacement_and_erasure() {
         let mut store = InMemoryStore::new();
         let original = creation_record();
         let id = original.process.process_id.clone();
@@ -838,16 +854,6 @@ mod tests {
             Err(StoreError::InvalidCreationEvidence(_))
         ));
         assert_eq!(store.load_record(&id).unwrap().creation, original.creation);
-        let mut legacy = creation_record();
-        let evidence = legacy.creation.take();
-        let legacy_id = legacy.process.process_id.clone();
-        store.create_record(legacy.clone()).unwrap();
-        legacy.creation = evidence;
-        assert!(matches!(
-            store.save_record(legacy),
-            Err(StoreError::InvalidCreationEvidence(_))
-        ));
-        assert!(store.load_record(&legacy_id).unwrap().creation.is_none());
     }
 
     #[test]
@@ -1064,20 +1070,29 @@ mod tests {
     }
 
     #[test]
-    fn restore_record_preserves_legacy_absence_and_refuses_update_backfill() {
-        let mut legacy = restore_original_record();
-        let evidence = legacy.creation.take();
-        legacy.process.active_tasks.clear();
-        let id = legacy.process.process_id.clone();
+    fn process_store_refuses_missing_creation_without_records_or_index_changes() {
+        let original = restore_original_record();
+        let id = original.process.process_id.clone();
+        let case = original.process.case_ledger_id.clone();
+        let mut missing = original.clone();
+        missing.creation = None;
         let mut store = InMemoryStore::new();
-        store.restore_record(legacy.clone()).unwrap();
-        assert!(store.load_record(&id).unwrap().creation.is_none());
-        legacy.creation = evidence;
         assert!(matches!(
-            store.save_record(legacy),
+            store.create_record(missing.clone()),
             Err(StoreError::InvalidCreationEvidence(_))
         ));
-        assert!(store.load_record(&id).unwrap().creation.is_none());
+        missing.process.active_tasks.clear();
+        assert!(matches!(
+            store.restore_record(missing),
+            Err(StoreError::InvalidCreationEvidence(_))
+        ));
+        assert!(matches!(
+            store.load_record(&id),
+            Err(StoreError::NotFound(_))
+        ));
+        assert!(store.processes_for_case(&case).is_empty());
+        store.restore_record(original.clone()).unwrap();
+        assert_eq!(store.load_record(&id).unwrap().creation, original.creation);
     }
 
     fn record_with(process_id: &str, case_ledger_id: &str) -> RuntimeRecord {
@@ -1110,7 +1125,17 @@ mod tests {
             updated_at: "1970-01-01T00:00:00Z".to_string(),
             extensions: Default::default(),
         };
-        RuntimeRecord::new(instance)
+        let mut record = RuntimeRecord::new(instance);
+        let kernel = serde_json::from_value(serde_json::json!({
+            "$wosWorkflow": "1.0", "url": record.process.definition_url,
+            "version": record.process.definition_version,
+            "lifecycle": { "initialState": "open", "states": { "open": { "type": "atomic" } } }
+        }))
+        .unwrap();
+        record.creation = Some(
+            crate::intake::ProcessCreationSnapshot::capture(&record.process, &kernel).unwrap(),
+        );
+        record
     }
 
     fn stamped_event(timestamp: &str, event: &str) -> ProvenanceRecord {
@@ -1127,9 +1152,9 @@ mod tests {
     #[test]
     fn provenance_for_case_merges_records_from_multiple_processes_in_time_order() {
         let mut store = InMemoryStore::new();
-        let case_ledger_id = "case_01h_ledger";
-        let process_a = "process_01h_a";
-        let process_b = "process_01h_b";
+        let case_ledger_id = "default_case_01hw7rm71vfay8vvw14d2pf206";
+        let process_a = "default_process_01hw7rm71vfay8vvw14d2pf20b";
+        let process_b = "default_process_01hw7rm71vfay8vvw14d2pf20c";
 
         store
             .create_record(record_with(process_a, case_ledger_id))
@@ -1181,9 +1206,9 @@ mod tests {
     #[test]
     fn provenance_for_case_preserves_encounter_order_for_identical_timestamps() {
         let mut store = InMemoryStore::new();
-        let case_ledger_id = "case_01h_same_timestamp";
-        let process_a = "process_01h_a";
-        let process_b = "process_01h_b";
+        let case_ledger_id = "default_case_01hw7rm71vfay8vvw14d2pf209";
+        let process_a = "default_process_01hw7rm71vfay8vvw14d2pf20b";
+        let process_b = "default_process_01hw7rm71vfay8vvw14d2pf20c";
         let timestamp = "2026-05-12T10:00:00Z";
 
         // Create B before A to prove the tie-break is encounter order, not
@@ -1224,18 +1249,21 @@ mod tests {
     fn provenance_for_case_returns_empty_for_unknown_case_ledger() {
         let mut store = InMemoryStore::new();
         store
-            .create_record(record_with("process_01h_a", "case_01h_known"))
+            .create_record(record_with(
+                "default_process_01hw7rm71vfay8vvw14d2pf20b",
+                "default_case_01hw7rm71vfay8vvw14d2pf205",
+            ))
             .unwrap();
 
         assert!(
             store
-                .provenance_for_case("case_01h_does_not_exist")
+                .provenance_for_case("default_case_01hw7rm71vfay8vvw14d2pf204")
                 .is_empty(),
             "unknown case ledger MUST yield an empty Vec, not panic or NotFound",
         );
         assert!(
             store
-                .processes_for_case("case_01h_does_not_exist")
+                .processes_for_case("default_case_01hw7rm71vfay8vvw14d2pf204")
                 .is_empty()
         );
     }
@@ -1243,13 +1271,19 @@ mod tests {
     #[test]
     fn legacy_case_ledger_lookup_rejects_multiple_bound_processes() {
         let mut store = InMemoryStore::new();
-        let case_ledger_id = "case_01h_ambiguous";
+        let case_ledger_id = "default_case_01hw7rm71vfay8vvw14d2pf201";
 
         store
-            .create_record(record_with("process_01h_a", case_ledger_id))
+            .create_record(record_with(
+                "default_process_01hw7rm71vfay8vvw14d2pf20b",
+                case_ledger_id,
+            ))
             .unwrap();
         store
-            .create_record(record_with("process_01h_b", case_ledger_id))
+            .create_record(record_with(
+                "default_process_01hw7rm71vfay8vvw14d2pf20c",
+                case_ledger_id,
+            ))
             .unwrap();
 
         let err = store
@@ -1269,9 +1303,9 @@ mod tests {
     #[test]
     fn save_record_rejects_case_ledger_id_mutation_without_reindexing() {
         let mut store = InMemoryStore::new();
-        let process_id = "process_01h_reindex";
-        let original_case = "case_01h_original";
-        let mutated_case = "case_01h_mutated";
+        let process_id = "default_process_01hw7rm71vfay8vvw14d2pf20d";
+        let original_case = "default_case_01hw7rm71vfay8vvw14d2pf208";
+        let mutated_case = "default_case_01hw7rm71vfay8vvw14d2pf207";
         store
             .create_record(record_with(process_id, original_case))
             .unwrap();
@@ -1308,8 +1342,8 @@ mod tests {
     #[test]
     fn append_provenance_for_case_writes_to_bound_process() {
         let mut store = InMemoryStore::new();
-        let case_ledger_id = "case_01h_append";
-        let process_id = "process_01h_writer";
+        let case_ledger_id = "default_case_01hw7rm71vfay8vvw14d2pf202";
+        let process_id = "default_process_01hw7rm71vfay8vvw14d2pf20f";
         store
             .create_record(record_with(process_id, case_ledger_id))
             .unwrap();
@@ -1333,13 +1367,16 @@ mod tests {
     fn append_provenance_for_case_rejects_mismatched_binding() {
         let mut store = InMemoryStore::new();
         store
-            .create_record(record_with("process_01h_w", "case_01h_correct"))
+            .create_record(record_with(
+                "default_process_01hw7rm71vfay8vvw14d2pf20e",
+                "default_case_01hw7rm71vfay8vvw14d2pf203",
+            ))
             .unwrap();
 
         let err = store
             .append_provenance_for_case(
-                "case_01h_wrong",
-                "process_01h_w",
+                "default_case_01hw7rm71vfay8vvw14d2pf20a",
+                "default_process_01hw7rm71vfay8vvw14d2pf20e",
                 stamped("2026-05-12T11:00:00Z"),
             )
             .expect_err("mismatched case ledger MUST be refused");

@@ -126,7 +126,7 @@ pub enum IntakeAcceptanceOutcome {
 ///
 /// This internal runtime evidence never grants task access. Hosts must validate
 /// the actual scoped process association and current creation-disclosure policy.
-/// Missing legacy evidence must never be reconstructed from mutable task state.
+/// Persisted creation evidence is required and never reconstructed from mutable task state.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProcessCreationSnapshot {

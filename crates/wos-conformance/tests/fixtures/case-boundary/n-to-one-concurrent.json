@@ -2,15 +2,15 @@
   "id": "CBR-4C-1-n-to-one-concurrent",
   "rule": "CBR-§4.3",
   "description": "N:1 case-boundary fixture (CBR §4.3, archived refactor tracker 4C.1). Two workflow processes started on one case ledger; each emits provenance events with interleaved timestamps. The case view (provenance_for_case) MUST return all events in (timestamp, encounter-order) order, and processes_for_case MUST list both process_ids.",
-  "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2db_n_to_one",
+  "case_ledger_id": "default_case_01hw7rm71vfay8vvw14d2pf201",
   "processes": [
     {
-      "process_id": "process_01hw7rm71vfay8vvw14d2pf2da_a",
+      "process_id": "default_process_01hw7rm71vfay8vvw14d2pf202",
       "definition_url": "urn:test:case-boundary:n-to-one:definition-a",
       "definition_version": "1.0.0"
     },
     {
-      "process_id": "process_01hw7rm71vfay8vvw14d2pf2db_b",
+      "process_id": "default_process_01hw7rm71vfay8vvw14d2pf203",
       "definition_url": "urn:test:case-boundary:n-to-one:definition-b",
       "definition_version": "1.0.0"
     }
@@ -18,8 +18,8 @@
   "actions": [
     {
       "kind": "directAppend",
-      "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2db_n_to_one",
-      "process_id": "process_01hw7rm71vfay8vvw14d2pf2da_a",
+      "case_ledger_id": "default_case_01hw7rm71vfay8vvw14d2pf201",
+      "process_id": "default_process_01hw7rm71vfay8vvw14d2pf202",
       "event_type": "wos.kernel.case_created",
       "actor_id": "system:case-genesis",
       "timestamp": "2026-05-12T10:00:00Z",
@@ -27,7 +27,7 @@
     },
     {
       "kind": "appendProvenance",
-      "process_id": "process_01hw7rm71vfay8vvw14d2pf2da_a",
+      "process_id": "default_process_01hw7rm71vfay8vvw14d2pf202",
       "event": "alpha",
       "from_state": "Draft",
       "to_state": "Submitted",
@@ -37,7 +37,7 @@
     },
     {
       "kind": "appendProvenance",
-      "process_id": "process_01hw7rm71vfay8vvw14d2pf2db_b",
+      "process_id": "default_process_01hw7rm71vfay8vvw14d2pf203",
       "event": "beta",
       "from_state": "Draft",
       "to_state": "Routed",
@@ -47,7 +47,7 @@
     },
     {
       "kind": "appendProvenance",
-      "process_id": "process_01hw7rm71vfay8vvw14d2pf2da_a",
+      "process_id": "default_process_01hw7rm71vfay8vvw14d2pf202",
       "event": "gamma",
       "from_state": "Submitted",
       "to_state": "Approved",
@@ -57,8 +57,8 @@
     }
   ],
   "expected_processes_for_case": [
-    "process_01hw7rm71vfay8vvw14d2pf2da_a",
-    "process_01hw7rm71vfay8vvw14d2pf2db_b"
+    "default_process_01hw7rm71vfay8vvw14d2pf202",
+    "default_process_01hw7rm71vfay8vvw14d2pf203"
   ],
   "expected_case_view_timestamps": [
     "2026-05-12T10:00:00Z",
@@ -67,9 +67,9 @@
     "2026-05-12T10:00:03Z"
   ],
   "expected_case_view_events": [
-    { "event": "wos.kernel.case_created", "process_id": "process_01hw7rm71vfay8vvw14d2pf2da_a" },
-    { "event": "alpha", "process_id": "process_01hw7rm71vfay8vvw14d2pf2da_a" },
-    { "event": "beta", "process_id": "process_01hw7rm71vfay8vvw14d2pf2db_b" },
-    { "event": "gamma", "process_id": "process_01hw7rm71vfay8vvw14d2pf2da_a" }
+    { "event": "wos.kernel.case_created", "process_id": "default_process_01hw7rm71vfay8vvw14d2pf202" },
+    { "event": "alpha", "process_id": "default_process_01hw7rm71vfay8vvw14d2pf202" },
+    { "event": "beta", "process_id": "default_process_01hw7rm71vfay8vvw14d2pf203" },
+    { "event": "gamma", "process_id": "default_process_01hw7rm71vfay8vvw14d2pf202" }
   ]
 }

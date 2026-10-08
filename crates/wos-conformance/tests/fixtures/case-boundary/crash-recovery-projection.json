@@ -2,15 +2,15 @@
   "id": "CBR-4C-6-crash-recovery-projection",
   "rule": "CBR-§4.7",
   "description": "Crash-recovery fixture (archived refactor tracker 4C.6). A materialized case projection that crashes after two actions must converge to the same bytes as uninterrupted replay after restart.",
-  "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2dg_crash_recovery",
+  "case_ledger_id": "default_case_01hw7rm71vfay8vvw14d2pf201",
   "processes": [
     {
-      "process_id": "process_01hw7rm71vfay8vvw14d2pf2dg_a",
+      "process_id": "default_process_01hw7rm71vfay8vvw14d2pf202",
       "definition_url": "urn:test:case-boundary:crash-recovery:a",
       "definition_version": "1.0.0"
     },
     {
-      "process_id": "process_01hw7rm71vfay8vvw14d2pf2dg_b",
+      "process_id": "default_process_01hw7rm71vfay8vvw14d2pf203",
       "definition_url": "urn:test:case-boundary:crash-recovery:b",
       "definition_version": "1.0.0"
     }
@@ -18,8 +18,8 @@
   "actions": [
     {
       "kind": "directAppend",
-      "case_ledger_id": "case_01hw7rm71vfay8vvw14d2pf2dg_crash_recovery",
-      "process_id": "process_01hw7rm71vfay8vvw14d2pf2dg_a",
+      "case_ledger_id": "default_case_01hw7rm71vfay8vvw14d2pf201",
+      "process_id": "default_process_01hw7rm71vfay8vvw14d2pf202",
       "event_type": "wos.kernel.case_created",
       "actor_id": "system:case-genesis",
       "timestamp": "2026-05-12T12:30:00Z",
@@ -27,7 +27,7 @@
     },
     {
       "kind": "appendProvenance",
-      "process_id": "process_01hw7rm71vfay8vvw14d2pf2dg_a",
+      "process_id": "default_process_01hw7rm71vfay8vvw14d2pf202",
       "event": "recovery.alpha",
       "from_state": "Draft",
       "to_state": "Submitted",
@@ -37,7 +37,7 @@
     },
     {
       "kind": "appendProvenance",
-      "process_id": "process_01hw7rm71vfay8vvw14d2pf2dg_b",
+      "process_id": "default_process_01hw7rm71vfay8vvw14d2pf203",
       "event": "recovery.beta",
       "from_state": "Draft",
       "to_state": "Submitted",
@@ -47,7 +47,7 @@
     },
     {
       "kind": "appendProvenance",
-      "process_id": "process_01hw7rm71vfay8vvw14d2pf2dg_a",
+      "process_id": "default_process_01hw7rm71vfay8vvw14d2pf202",
       "event": "recovery.gamma",
       "from_state": "Submitted",
       "to_state": "Closed",
@@ -57,8 +57,8 @@
     }
   ],
   "expected_processes_for_case": [
-    "process_01hw7rm71vfay8vvw14d2pf2dg_a",
-    "process_01hw7rm71vfay8vvw14d2pf2dg_b"
+    "default_process_01hw7rm71vfay8vvw14d2pf202",
+    "default_process_01hw7rm71vfay8vvw14d2pf203"
   ],
   "expected_case_view_timestamps": [
     "2026-05-12T12:30:00Z",
@@ -67,10 +67,10 @@
     "2026-05-12T12:30:03Z"
   ],
   "expected_case_view_events": [
-    { "event": "wos.kernel.case_created", "process_id": "process_01hw7rm71vfay8vvw14d2pf2dg_a" },
-    { "event": "recovery.alpha", "process_id": "process_01hw7rm71vfay8vvw14d2pf2dg_a" },
-    { "event": "recovery.beta", "process_id": "process_01hw7rm71vfay8vvw14d2pf2dg_b" },
-    { "event": "recovery.gamma", "process_id": "process_01hw7rm71vfay8vvw14d2pf2dg_a" }
+    { "event": "wos.kernel.case_created", "process_id": "default_process_01hw7rm71vfay8vvw14d2pf202" },
+    { "event": "recovery.alpha", "process_id": "default_process_01hw7rm71vfay8vvw14d2pf202" },
+    { "event": "recovery.beta", "process_id": "default_process_01hw7rm71vfay8vvw14d2pf203" },
+    { "event": "recovery.gamma", "process_id": "default_process_01hw7rm71vfay8vvw14d2pf202" }
   ],
   "crash_after_actions": 2
 }
