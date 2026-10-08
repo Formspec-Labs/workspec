@@ -81,7 +81,7 @@
         },
         "processId": {
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
-          "description": "Workflow process URN this bundle exports. The entity-type segment MUST be `instance`. One bundle exports exactly one case; multi-case exports are a separate `audit`-domain concern."
+          "description": "Workflow process URN this bundle exports. Its TypeID prefix MUST be `process`, as defined by the common resource URN schema. One bundle exports exactly one case; multi-case exports are a separate `audit`-domain concern."
         },
         "status": {
           "$ref": "#/$defs/BundleStatus",
@@ -276,7 +276,7 @@
       "properties": {
         "processId": {
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
-          "description": "Workflow process URN to export. The entity-type segment MUST be `instance`. The caller MUST have visibility into the instance under the current scope (ADR 0068 D-2)."
+          "description": "Workflow process URN to export. Its TypeID prefix MUST be `process`, as defined by the common resource URN schema. The caller MUST have visibility into the process under the current scope (ADR 0068 D-2)."
         },
         "tierFilter": {
           "$ref": "#/$defs/BundleTierInclusion",
