@@ -1508,16 +1508,6 @@ mod tests {
             self.0.lock().unwrap().load_record(process_id)
         }
 
-        fn load_record_by_case_ledger_id(
-            &self,
-            case_ledger_id: &str,
-        ) -> Result<RuntimeRecord, StoreError> {
-            self.0
-                .lock()
-                .unwrap()
-                .load_record_by_case_ledger_id(case_ledger_id)
-        }
-
         fn processes_for_case(&self, case_ledger_id: &str) -> Vec<String> {
             self.0.lock().unwrap().processes_for_case(case_ledger_id)
         }
@@ -2235,13 +2225,6 @@ mod tests {
             self.inner.load_record(process_id)
         }
 
-        fn load_record_by_case_ledger_id(
-            &self,
-            case_ledger_id: &str,
-        ) -> Result<RuntimeRecord, StoreError> {
-            self.inner.load_record_by_case_ledger_id(case_ledger_id)
-        }
-
         fn processes_for_case(&self, case_ledger_id: &str) -> Vec<String> {
             self.inner.processes_for_case(case_ledger_id)
         }
@@ -2290,13 +2273,6 @@ mod tests {
 
         fn load_record(&self, process_id: &str) -> Result<RuntimeRecord, StoreError> {
             self.inner.load_record(process_id)
-        }
-
-        fn load_record_by_case_ledger_id(
-            &self,
-            case_ledger_id: &str,
-        ) -> Result<RuntimeRecord, StoreError> {
-            self.inner.load_record_by_case_ledger_id(case_ledger_id)
         }
 
         fn processes_for_case(&self, case_ledger_id: &str) -> Vec<String> {
@@ -2351,13 +2327,6 @@ mod tests {
 
         fn load_record(&self, process_id: &str) -> Result<RuntimeRecord, StoreError> {
             self.inner.load_record(process_id)
-        }
-
-        fn load_record_by_case_ledger_id(
-            &self,
-            case_ledger_id: &str,
-        ) -> Result<RuntimeRecord, StoreError> {
-            self.inner.load_record_by_case_ledger_id(case_ledger_id)
         }
 
         fn processes_for_case(&self, case_ledger_id: &str) -> Vec<String> {
@@ -3053,8 +3022,7 @@ mod tests {
             Err(RuntimeError::Store(StoreError::Failed(_)))
         ));
         let mut record = runtime
-            .store
-            .load_record_by_case_ledger_id(
+            .load_single_record_by_case_ledger_id(
                 WorkflowProcess::extract_urn_type_id(request.governed_case_ref.as_deref().unwrap())
                     .unwrap(),
             )
@@ -3362,12 +3330,12 @@ mod tests {
                 ),
                 Err(RuntimeError::Store(StoreError::InvalidCreationEvidence(_)))
             ));
-            assert!(matches!(
-                runtime.store.load_record_by_case_ledger_id(
-                    WorkflowProcess::extract_urn_type_id(&case).unwrap()
-                ),
-                Err(StoreError::NotFound(_))
-            ));
+            assert!(
+                runtime
+                    .store
+                    .processes_for_case(WorkflowProcess::extract_urn_type_id(&case).unwrap())
+                    .is_empty()
+            );
         }
     }
 
@@ -3430,8 +3398,7 @@ mod tests {
             other => panic!("unexpected intake outcome: {other:?}"),
         };
         let created = runtime
-            .store
-            .load_record_by_case_ledger_id(&created_case_ref)
+            .load_single_record_by_case_ledger_id(&created_case_ref)
             .expect("created intake case by case ledger")
             .process;
         assert_eq!(created.case_ledger_id, created_case_ref);
@@ -3732,8 +3699,7 @@ mod tests {
         };
 
         let created = runtime
-            .store
-            .load_record_by_case_ledger_id(&created_case_ref)
+            .load_single_record_by_case_ledger_id(&created_case_ref)
             .expect("created case record")
             .process;
         let provenance = runtime
@@ -3799,8 +3765,7 @@ mod tests {
         assert_eq!(case_ref, test_case_ledger_id("case-canonical-ref"));
 
         let loaded_by_case = runtime
-            .store
-            .load_record_by_case_ledger_id(&case_ref)
+            .load_single_record_by_case_ledger_id(&case_ref)
             .expect("load created case by case ledger")
             .process;
         assert_eq!(loaded_by_case.case_ledger_id, case_ref);

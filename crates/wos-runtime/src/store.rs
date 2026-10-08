@@ -269,18 +269,6 @@ pub trait RuntimeStore {
     /// Load the current record for a workflow process.
     fn load_record(&self, process_id: &str) -> Result<RuntimeRecord, StoreError>;
 
-    /// Legacy last-resort lookup for one record bound to a case ledger.
-    ///
-    /// This accessor is unsafe for normal case-ledger routing because one case
-    /// ledger may bind multiple workflow processes. New callers should use
-    /// [`Self::processes_for_case`] and disambiguate explicitly.
-    fn load_record_by_case_ledger_id(
-        &self,
-        case_ledger_id: &str,
-    ) -> Result<RuntimeRecord, StoreError> {
-        Err(StoreError::NotFound(case_ledger_id.to_string()))
-    }
-
     /// Return the `process_id`s of every record bound to `case_ledger_id`.
     ///
     /// Empty vector when no records match.
@@ -429,23 +417,6 @@ impl RuntimeStore for InMemoryStore {
             .get(process_id)
             .cloned()
             .ok_or_else(|| StoreError::NotFound(process_id.to_string()))
-    }
-
-    fn load_record_by_case_ledger_id(
-        &self,
-        case_ledger_id: &str,
-    ) -> Result<RuntimeRecord, StoreError> {
-        let Some(process_ids) = self.case_index.get(case_ledger_id) else {
-            return Err(StoreError::NotFound(case_ledger_id.to_string()));
-        };
-
-        match process_ids.as_slice() {
-            [] => Err(StoreError::NotFound(case_ledger_id.to_string())),
-            [process_id] => self.load_record(process_id),
-            _ => Err(StoreError::Failed(format!(
-                "case ledger `{case_ledger_id}` is bound to multiple processes; use processes_for_case"
-            ))),
-        }
     }
 
     fn processes_for_case(&self, case_ledger_id: &str) -> Vec<String> {
@@ -1265,38 +1236,6 @@ mod tests {
             store
                 .processes_for_case("default_case_01hw7rm71vfay8vvw14d2pf204")
                 .is_empty()
-        );
-    }
-
-    #[test]
-    fn legacy_case_ledger_lookup_rejects_multiple_bound_processes() {
-        let mut store = InMemoryStore::new();
-        let case_ledger_id = "default_case_01hw7rm71vfay8vvw14d2pf201";
-
-        store
-            .create_record(record_with(
-                "default_process_01hw7rm71vfay8vvw14d2pf20b",
-                case_ledger_id,
-            ))
-            .unwrap();
-        store
-            .create_record(record_with(
-                "default_process_01hw7rm71vfay8vvw14d2pf20c",
-                case_ledger_id,
-            ))
-            .unwrap();
-
-        let err = store
-            .load_record_by_case_ledger_id(case_ledger_id)
-            .expect_err("legacy single-record lookup must not choose an arbitrary process");
-
-        assert!(
-            matches!(err, StoreError::Failed(_)),
-            "ambiguous case ledger should fail closed, got {err:?}",
-        );
-        assert!(
-            err.to_string().contains("multiple processes"),
-            "unexpected error: {err}",
         );
     }
 

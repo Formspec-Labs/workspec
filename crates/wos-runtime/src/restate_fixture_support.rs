@@ -44,16 +44,6 @@ impl RuntimeStore for SharedInMemoryStore {
             .load_record(process_id)
     }
 
-    fn load_record_by_case_ledger_id(
-        &self,
-        case_ledger_id: &str,
-    ) -> Result<RuntimeRecord, StoreError> {
-        self.0
-            .lock()
-            .expect("store mutex poisoned")
-            .load_record_by_case_ledger_id(case_ledger_id)
-    }
-
     fn processes_for_case(&self, case_ledger_id: &str) -> Vec<String> {
         self.0
             .lock()
