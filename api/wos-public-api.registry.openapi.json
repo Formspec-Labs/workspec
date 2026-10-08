@@ -262,6 +262,64 @@
         }
       }
     },
+    "/application-cases/by-draft/{draft_uuid}": {
+      "get": {
+        "tags": [
+          "case-file"
+        ],
+        "operationId": "application_case_lookup",
+        "parameters": [
+          {
+            "name": "draft_uuid",
+            "in": "path",
+            "description": "Canonical source-owned draft UUID.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Existing application case, or JSON null for qualified absence; never creates a case.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApplicationCaseReceipt"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Noncanonical draft or unsupported query."
+          },
+          "401": {
+            "description": "Current producer authentication refused."
+          },
+          "403": {
+            "description": "Current source ownership, scope or selected pins refused."
+          },
+          "409": {
+            "description": "Source or retained association conflicts."
+          },
+          "503": {
+            "description": "Qualified source reads or storage unavailable."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/application-cases/start": {
       "post": {
         "tags": [
