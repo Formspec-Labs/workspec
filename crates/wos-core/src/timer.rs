@@ -13,8 +13,11 @@ pub struct Timer {
     /// Timer identifier.
     pub id: String,
 
-    /// Simulated time in milliseconds when this timer was created.
+    /// Immutable duration origin in Unix milliseconds.
     ///
+    /// Defaults to creation's logical time; `startAtExpression` supplies an
+    /// explicit historical or current origin. This is distinct from the
+    /// timer-created record's actual processing timestamp.
     /// Authoritative start time for business-calendar deadline recomputation.
     /// Must never be mutated after creation — `business_deadline_ms` uses this
     /// as the fixed origin so repeated recomputations across drains yield the

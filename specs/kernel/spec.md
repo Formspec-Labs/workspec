@@ -1753,9 +1753,17 @@ A `startTimer` action creates a durable timer with:
 | `timerId` | string | REQUIRED | Unique timer identifier within the workflow instance. |
 | `duration` | string (ISO 8601) | CONDITIONAL | Relative duration. One of `duration` or `deadline` MUST be specified. |
 | `deadline` | string (ISO 8601) | CONDITIONAL | Absolute deadline. |
+| `startAtExpression` | string (FEL) | OPTIONAL | Historical or current RFC 3339 timestamp from an admitted event or case witness; starts `duration` at that timestamp. Requires `duration`; excludes `deadline`. |
 | `event` | string | REQUIRED | Event to emit when the timer fires. |
 
 When the timer fires, it emits the declared event as a kernel-generated event with the `$timeout.` prefix (Kernel S4.10). The event is processed by the lifecycle like any other event.
+
+**Anchored duration — normative contract.** When `startAtExpression` is absent, a relative timer starts at the current logical time. When present, the processor MUST evaluate it in the normal FEL `caseFile`/`event` context and require an RFC 3339 timestamp string no later than the current logical time. This historical-anchor mode MUST reject missing, nonstring, malformed, pre-Unix-epoch, future, or out-of-range timestamps, invalid durations, and deadline arithmetic overflow. Validation MUST finish before cancelling or replacing a timer. The immutable duration origin is the evaluated timestamp; the deadline is that origin plus the declared duration. If processing occurs after the deadline, the timer MUST retain that deadline and become due at the next normal timer-processing opportunity.
+
+**Composition.** The host remains responsible for admitting the timestamp witness and its association with the current case and qualifying event. A case field or FEL expression alone does not establish notice delivery. For example, an admitted sent-notice receipt can supply `caseFile.photoRequestNotice.sentAt`, while the lifecycle separately gates entry on the qualifying receipt. Neither queue intent nor a client timestamp substitutes for that receipt. Existing calendar adjustment uses the immutable duration origin. Timer-created provenance records the actual processing time separately from the configured expression and evaluated origin.
+
+**Conformance.** An anchored-duration test MUST process a receipt after its sent time and observe the original sent-time deadline, preserve it across persistence and draining, and fire a timer already overdue through normal timer processing. Negative tests MUST reject malformed, missing, nonstring, pre-epoch, future and overflowing origins without cancelling an existing timer. Unanchored timers retain their current-time behavior. This capability does not establish notice authentication, processing-clock pause/resume, or delivery availability.
+
 
 ### 9.7.3 Timer Cancellation
 

@@ -292,11 +292,13 @@ pub struct TimerState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub duration_ms: Option<u64>,
 
-    /// Simulated time in milliseconds when this timer was created.
+    /// Immutable duration origin in Unix milliseconds.
     ///
     /// Preserved across serialization so `business_deadline_ms` can always
-    /// compute the calendar-adjusted deadline from the original creation time,
+    /// compute the calendar-adjusted deadline from the original duration origin,
     /// regardless of how many times the instance has been drained and persisted.
+    /// Defaults to creation's logical time; an authored `startAtExpression`
+    /// supplies an explicit historical or current origin.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub created_at_ms: Option<u64>,
 }

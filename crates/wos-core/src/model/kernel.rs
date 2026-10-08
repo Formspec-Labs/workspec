@@ -983,6 +983,13 @@ pub struct Action {
     #[serde(default)]
     pub duration: Option<String>,
 
+    /// FEL expression providing a historical or current timer origin.
+    ///
+    /// Must resolve to an RFC 3339 timestamp no later than logical time.
+    /// Requires `duration` and excludes `deadline`; the host admits the witness.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_at_expression: Option<String>,
+
     /// Deadline (startTimer).
     #[serde(default)]
     pub deadline: Option<String>,

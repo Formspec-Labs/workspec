@@ -1323,6 +1323,9 @@
         },
         "onEntry": {
           "type": "array",
+          "items": {
+            "$ref": "#/$defs/LifecycleAction"
+          },
           "description": "Ordered list of actions the processor MUST execute on state entry, before any transitions are evaluated. Action shape follows Kernel §9.2 action execution model (invokeService, startTimer, emitEvent, etc.). Actions execute in declaration order; the state is considered entered only after all onEntry actions succeed.",
           "examples": [
             [
@@ -1342,6 +1345,9 @@
         },
         "onExit": {
           "type": "array",
+          "items": {
+            "$ref": "#/$defs/LifecycleAction"
+          },
           "description": "Ordered list of actions the processor MUST execute on state exit, after the outgoing transition has been selected but before the next state is entered. Same action shape as onEntry. Exit actions cannot abort the transition; they execute as side effects.",
           "examples": [
             [
@@ -2025,6 +2031,9 @@
         },
         "actions": {
           "type": "array",
+          "items": {
+            "$ref": "#/$defs/LifecycleAction"
+          },
           "description": "Ordered list of actions the processor MUST execute as part of this transition, after guard evaluation and before destination state entry. Action shape per Kernel §9.2. Actions execute atomically with the state change — failure rolls back per Kernel §9.5 compensation.",
           "examples": [
             [
@@ -10870,6 +10879,70 @@
             "signature",
             "custody"
           ]
+        }
+      ]
+    },
+    "LifecycleAction": {
+      "type": "object",
+      "description": "Lifecycle action data. Existing action fields retain their Kernel §9.2 semantics; startAtExpression adds an explicit historical origin for a duration timer.",
+      "properties": {
+        "startAtExpression": {
+          "type": "string",
+          "minLength": 1,
+          "description": "FEL expression producing a current or past RFC 3339 timestamp string in the normal caseFile/event context. Starts the declared duration at that timestamp, preserving the original deadline when the receipt is processed later. Hosts must admit the source witness before exposing it to the workflow. Requires startTimer with duration and excludes deadline. Missing, nonstring, malformed, pre-epoch, future, or overflowing results fail without replacing a timer.",
+          "examples": [
+            "caseFile.photoRequestNotice.sentAt"
+          ],
+          "x-wos": {
+            "openStringKind": "fel"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "startAtExpression"
+            ]
+          },
+          "then": {
+            "required": [
+              "action",
+              "timerId",
+              "duration",
+              "event"
+            ],
+            "properties": {
+              "action": {
+                "const": "startTimer"
+              },
+              "timerId": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Identifier of the duration timer receiving the historical origin.",
+                "examples": [
+                  "photoResponse"
+                ],
+                "x-wos": {
+                  "openStringKind": "identifier"
+                }
+              },
+              "duration": {
+                "type": "string",
+                "minLength": 1,
+                "description": "ISO 8601 duration measured from the evaluated historical origin; bounded native parsing validates its value.",
+                "format": "duration",
+                "examples": [
+                  "P90D"
+                ]
+              }
+            },
+            "not": {
+              "required": [
+                "deadline"
+              ]
+            }
+          }
         }
       ]
     }

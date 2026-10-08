@@ -206,12 +206,24 @@ pub enum EvalError {
     #[error("internal error: {0}")]
     Internal(String),
 
+    /// Anchored timer expression, duration, or timestamp validation failed.
+    #[error("timer '{timer_id}': {message}")]
+    Timer { timer_id: String, message: String },
+
     /// `ForEach` state evaluation failure (Kernel §4.3.1) — `collection` did
     /// not parse, did not evaluate to a bounded array, or another iteration
     /// invariant was violated. Sub-PR D-2 introduced this variant alongside
     /// the runtime iteration semantics.
     #[error("foreach error in state '{state}': {message}")]
     ForEach { state: String, message: String },
+}
+
+/// Validated timer timing, including optional authored-origin provenance.
+struct TimerTiming {
+    origin_ms: u64,
+    duration_ms: u64,
+    deadline_ms: u64,
+    origin_at: Option<String>,
 }
 
 fn transition_matches_dispatch(
@@ -233,16 +245,25 @@ impl Evaluator {
     /// Create an evaluator for a kernel document.
     ///
     /// Enters the initial state and executes its onEntry actions.
+    ///
+    /// # Errors
+    /// Returns evaluation errors, including invalid anchored timer input.
     pub fn new(kernel: KernelDocument) -> Result<Self, EvalError> {
         Self::with_time(kernel, 0)
     }
 
     /// Create an evaluator using the provided millisecond clock.
+    ///
+    /// # Errors
+    /// Returns evaluation errors, including invalid anchored timer input.
     pub fn with_time(kernel: KernelDocument, current_time_ms: u64) -> Result<Self, EvalError> {
         Self::with_time_and_case_state(kernel, current_time_ms, None)
     }
 
     /// Create an evaluator using the provided millisecond clock and seeded case state.
+    ///
+    /// # Errors
+    /// Returns evaluation errors, including invalid anchored timer input.
     pub fn with_time_and_case_state(
         kernel: KernelDocument,
         current_time_ms: u64,
@@ -421,6 +442,9 @@ impl Evaluator {
     /// states, evaluate guards in document order, fire first match.
     /// Events matching no transition are recorded in provenance but do
     /// not change state (Kernel S4.9).
+    ///
+    /// # Errors
+    /// Returns transition evaluation errors, including invalid anchored timer input.
     pub fn process_event(
         &mut self,
         event: &str,
@@ -438,6 +462,9 @@ impl Evaluator {
     }
 
     /// Advance simulated time and fire expired timers.
+    ///
+    /// # Errors
+    /// Returns errors evaluating transitions triggered by expired timers.
     pub fn advance_time(&mut self, duration_ms: u64, actor: Option<&str>) -> Result<(), EvalError> {
         self.simulated_time_ms += duration_ms;
         self.fire_expired_timers(actor)
@@ -1090,6 +1117,12 @@ impl Evaluator {
         lifecycle_state: &str,
         event_data: Option<&serde_json::Value>,
     ) -> Result<(), EvalError> {
+        if action.start_at_expression.is_some() && action.action != ActionKind::StartTimer {
+            return Err(EvalError::Timer {
+                timer_id: action.timer_id.clone().unwrap_or_default(),
+                message: "startAtExpression is valid only for startTimer".into(),
+            });
+        }
         match action.action {
             ActionKind::SetData => {
                 let path = action.path.as_deref().unwrap_or("");
@@ -1114,12 +1147,23 @@ impl Evaluator {
                     .map(TransitionEvent::start_timer_fires_string)
                     .unwrap_or_default();
 
-                let duration_ms = parse_iso_duration_to_ms(duration).unwrap_or_else(|raw| {
-                    self.provenance
-                        .push(ProvenanceRecord::invalid_duration(raw, timer_id));
-                    0
-                });
-                let deadline_ms = self.simulated_time_ms + duration_ms;
+                // Resolve and validate anchored input before replacing an existing timer.
+                let timing = if let Some(expression) = action.start_at_expression.as_deref() {
+                    self.anchored_timer_timing(action, expression, event_data)?
+                } else {
+                    // Preserve unanchored duration parsing and current-time behavior.
+                    let duration_ms = parse_iso_duration_to_ms(duration).unwrap_or_else(|raw| {
+                        self.provenance
+                            .push(ProvenanceRecord::invalid_duration(raw, timer_id));
+                        0
+                    });
+                    TimerTiming {
+                        origin_ms: self.simulated_time_ms,
+                        duration_ms,
+                        deadline_ms: self.simulated_time_ms + duration_ms,
+                        origin_at: None,
+                    }
+                };
 
                 // Cancel existing timer with same ID (reentry, Lifecycle Detail S6.4).
                 if self.timers.cancel(timer_id).is_some() {
@@ -1131,19 +1175,29 @@ impl Evaluator {
 
                 self.timers.create(crate::timer::Timer {
                     id: timer_id.to_string(),
-                    created_at_ms: self.simulated_time_ms,
-                    deadline_ms,
+                    created_at_ms: timing.origin_ms,
+                    deadline_ms: timing.deadline_ms,
                     fires_event: fires_event.to_string(),
                     created_in_state: lifecycle_state.to_string(),
                     duration_iso: duration.to_string(),
-                    duration_ms,
+                    duration_ms: timing.duration_ms,
                 });
 
-                self.provenance.push(ProvenanceRecord::timer_created(
-                    timer_id,
-                    duration,
-                    fires_event.as_str(),
-                ));
+                let mut created =
+                    ProvenanceRecord::timer_created(timer_id, duration, fires_event.as_str());
+                if let Some(origin_at) = timing.origin_at {
+                    if let Some(data) = created.data.as_mut().and_then(|data| data.as_object_mut())
+                    {
+                        data.insert("originAt".into(), serde_json::Value::String(origin_at));
+                        data.insert(
+                            "startAtExpression".into(),
+                            serde_json::Value::String(
+                                action.start_at_expression.clone().unwrap_or_default(),
+                            ),
+                        );
+                    }
+                }
+                self.provenance.push(created);
             }
             ActionKind::CancelTimer => {
                 let timer_id = action.timer_id.as_deref().unwrap_or("");
@@ -1274,6 +1328,101 @@ impl Evaluator {
                     event,
                 ),
         }
+    }
+
+    /// Validate an anchored duration without mutating timers or provenance.
+    fn anchored_timer_timing(
+        &self,
+        action: &Action,
+        expression: &str,
+        event_data: Option<&serde_json::Value>,
+    ) -> Result<TimerTiming, EvalError> {
+        let fail = |message: String| EvalError::Timer {
+            timer_id: action.timer_id.clone().unwrap_or_default(),
+            message,
+        };
+        if action
+            .timer_id
+            .as_deref()
+            .is_none_or(|id| id.trim().is_empty())
+        {
+            return Err(fail("anchored timer requires a nonblank timerId".into()));
+        }
+        if action
+            .event
+            .as_ref()
+            .is_none_or(|event| event.start_timer_fires_string().trim().is_empty())
+        {
+            return Err(fail(
+                "anchored timer requires a nonblank firing event".into(),
+            ));
+        }
+        if action.deadline.is_some() {
+            return Err(fail("startAtExpression excludes deadline".into()));
+        }
+        let duration = action
+            .duration
+            .as_deref()
+            .ok_or_else(|| fail("startAtExpression requires duration".into()))?;
+        // FEL accepts signed durations and an empty trailing time part; timer origins
+        // require a nonnegative duration with a complete ISO duration spelling.
+        if duration.trim().starts_with('-') || duration.trim().ends_with('T') {
+            return Err(fail("invalid anchored timer duration".into()));
+        }
+        let duration_ms = match fel_core::parse_iso8601_duration(duration) {
+            fel_core::IsoDurationParse::Milliseconds(ms) => {
+                u64::try_from(ms).map_err(|_| fail("negative anchored timer duration".into()))?
+            }
+            fel_core::IsoDurationParse::Invalid => {
+                return Err(fail("invalid anchored timer duration".into()));
+            }
+            fel_core::IsoDurationParse::OutOfRange => {
+                return Err(fail("anchored timer duration is out of range".into()));
+            }
+        };
+        let parsed = parse(expression)
+            .map_err(|error| fail(format!("anchor expression parse error: {error}")))?;
+        let environment =
+            EvalContext::from_case_state(&self.case_state, event_data).to_fel_environment();
+        let result = evaluate(&parsed, &environment);
+        if !result.diagnostics.is_empty() {
+            return Err(fail(
+                "anchor expression evaluation reported diagnostics".into(),
+            ));
+        }
+        let Value::String(value) = result.value else {
+            return Err(fail(
+                "anchor must evaluate to an RFC 3339 timestamp string".into(),
+            ));
+        };
+        let timestamp = OffsetDateTime::parse(&value, &Rfc3339)
+            .map_err(|error| fail(format!("invalid anchor timestamp: {error}")))?;
+        let nanos = timestamp.unix_timestamp_nanos();
+        if nanos < 0 {
+            return Err(fail("anchor predates Unix epoch".into()));
+        }
+        if nanos > i128::from(self.simulated_time_ms) * 1_000_000 {
+            return Err(fail("anchor is later than current logical time".into()));
+        }
+        let origin_ms = u64::try_from(nanos / 1_000_000)
+            .map_err(|_| fail("anchor timestamp is out of range".into()))?;
+        let deadline_ms = origin_ms
+            .checked_add(duration_ms)
+            .ok_or_else(|| fail("anchored timer deadline overflow".into()))?;
+        // Validate the runtime's timestamp representation before timer replacement.
+        OffsetDateTime::from_unix_timestamp_nanos(i128::from(deadline_ms) * 1_000_000)
+            .map_err(|_| fail("anchored timer deadline timestamp is out of range".into()))?;
+        let origin_at =
+            OffsetDateTime::from_unix_timestamp_nanos(i128::from(origin_ms) * 1_000_000)
+                .map_err(|_| fail("anchor timestamp is out of range".into()))?
+                .format(&Rfc3339)
+                .map_err(|error| fail(format!("anchor formatting failed: {error}")))?;
+        Ok(TimerTiming {
+            origin_ms,
+            duration_ms,
+            deadline_ms,
+            origin_at: Some(origin_at),
+        })
     }
 
     /// Evaluate a FEL guard expression. Missing guard = always true.
@@ -2671,6 +2820,265 @@ fn insert_nested(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod anchored_timers {
+        use super::*;
+
+        fn evaluator(now: u64) -> Evaluator {
+            let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+                "$wosWorkflow": "1.0",
+                "lifecycle": {
+                    "initialState": "waiting",
+                    "states": {
+                        "waiting": { "type": "atomic", "transitions": [
+                            { "event": { "kind": "message", "name": "elapsed" }, "target": "done" }
+                        ] },
+                        "done": { "type": "final" }
+                    }
+                }
+            }))
+            .unwrap();
+            Evaluator::with_time(kernel, now).unwrap()
+        }
+
+        fn action(expression: Option<&str>, duration: &str) -> Action {
+            let mut value = serde_json::json!({
+                "action": "startTimer", "timerId": "anchored", "duration": duration,
+                "event": { "kind": "timer", "timerId": "anchored", "source": "custom", "firesAs": "elapsed" }
+            });
+            if let Some(expression) = expression {
+                value["startAtExpression"] = expression.into();
+            }
+            serde_json::from_value(value).unwrap()
+        }
+
+        fn timer(eval: &Evaluator) -> &crate::timer::Timer {
+            eval.timers.iter().find(|t| t.id == "anchored").unwrap()
+        }
+
+        #[test]
+        fn anchored_timer_uses_past_event_origin_and_normalizes_offset() {
+            let origin = parse_rfc3339_to_ms("2026-01-01T00:00:00Z").unwrap();
+            let mut eval = evaluator(origin + 2 * 86_400_000);
+            let event = serde_json::json!({"sentAt": "2025-12-31T19:00:00-05:00"});
+            let action = action(Some("event.sentAt"), "P90D");
+            eval.execute_action_in_state(&action, None, "waiting", Some(&event))
+                .unwrap();
+            assert_eq!(timer(&eval).created_at_ms, origin);
+            assert_eq!(timer(&eval).deadline_ms, origin + 90 * 86_400_000);
+            let created = eval
+                .provenance
+                .records()
+                .last()
+                .unwrap()
+                .data
+                .as_ref()
+                .unwrap();
+            assert_eq!(created["originAt"], "2026-01-01T00:00:00Z");
+            assert_eq!(created["startAtExpression"], "event.sentAt");
+        }
+
+        #[test]
+        fn anchored_timer_reads_case_context_and_allows_current_origin() {
+            let mut eval = evaluator(10_000);
+            eval.case_state.insert(
+                "receipt".into(),
+                serde_json::json!({"sentAt": "1970-01-01T00:00:10Z"}),
+            );
+            eval.execute_action_in_state(
+                &action(Some("caseFile.receipt.sentAt"), "PT1.5S"),
+                None,
+                "waiting",
+                None,
+            )
+            .unwrap();
+            assert_eq!(timer(&eval).created_at_ms, 10_000);
+            assert_eq!(timer(&eval).deadline_ms, 11_500);
+        }
+
+        #[test]
+        fn already_expired_anchor_keeps_deadline_and_fires_normal_timer_path() {
+            let mut eval = evaluator(100_000);
+            eval.execute_action_in_state(
+                &action(Some("'1970-01-01T00:00:01Z'"), "PT2S"),
+                None,
+                "waiting",
+                None,
+            )
+            .unwrap();
+            assert_eq!(timer(&eval).deadline_ms, 3_000);
+            eval.advance_time(0, None).unwrap();
+            assert!(eval.timers.is_empty());
+            assert!(eval.config.contains("done"));
+            assert!(
+                eval.provenance
+                    .records()
+                    .iter()
+                    .any(|r| r.record_kind == crate::ProvenanceKind::TimerFired)
+            );
+        }
+
+        #[test]
+        fn default_timer_retains_current_time_and_omits_anchor_metadata() {
+            let mut eval = evaluator(20_000);
+            let action = action(None, "PT2S");
+            assert!(
+                serde_json::to_value(&action)
+                    .unwrap()
+                    .get("startAtExpression")
+                    .is_none()
+            );
+            eval.execute_action_in_state(&action, None, "waiting", None)
+                .unwrap();
+            assert_eq!(timer(&eval).created_at_ms, 20_000);
+            assert_eq!(timer(&eval).deadline_ms, 22_000);
+            let data = eval
+                .provenance
+                .records()
+                .last()
+                .unwrap()
+                .data
+                .as_ref()
+                .unwrap();
+            assert!(data.get("originAt").is_none());
+            assert!(data.get("startAtExpression").is_none());
+        }
+
+        #[test]
+        fn malformed_anchors_refuse_before_same_id_timer_or_provenance_changes() {
+            let mut eval = evaluator(20_000);
+            eval.execute_action_in_state(&action(None, "PT2S"), None, "waiting", None)
+                .unwrap();
+            let old_timer = format!("{:?}", timer(&eval));
+            let old_provenance = serde_json::to_value(eval.provenance.records()).unwrap();
+            let old_actions = eval.executed_actions.len();
+            let expressions = [
+                "event.missing",
+                "42",
+                "'not-a-timestamp'",
+                "'1969-12-31T23:59:59.999999999Z'",
+                "'1970-01-01T00:00:21Z'",
+                "'1970-01-01T00:00:20.000000001Z'",
+                "'10000-01-01T00:00:00Z'",
+                "(",
+            ];
+            for expression in expressions {
+                let result = eval.execute_action_in_state(
+                    &action(Some(expression), "PT1S"),
+                    None,
+                    "waiting",
+                    None,
+                );
+                assert!(
+                    matches!(result, Err(EvalError::Timer { .. })),
+                    "{expression}"
+                );
+                assert_eq!(format!("{:?}", timer(&eval)), old_timer);
+                assert_eq!(
+                    serde_json::to_value(eval.provenance.records()).unwrap(),
+                    old_provenance
+                );
+                assert_eq!(eval.executed_actions.len(), old_actions);
+            }
+        }
+
+        #[test]
+        fn invalid_duration_and_deadline_range_preserve_existing_timer() {
+            let mut eval = evaluator(20_000);
+            eval.execute_action_in_state(&action(None, "PT2S"), None, "waiting", None)
+                .unwrap();
+            let old_timer = format!("{:?}", timer(&eval));
+            let old_provenance = eval.provenance.len();
+            for duration in [
+                "bad",
+                "-PT1S",
+                "-PT0S",
+                "P1DT",
+                "PT",
+                "PT9223372036854775807S",
+                "P999999999999999999999999999999999999999999999D",
+                "PT9223372036854775S",
+            ] {
+                let result = eval.execute_action_in_state(
+                    &action(Some("'1970-01-01T00:00:01Z'"), duration),
+                    None,
+                    "waiting",
+                    None,
+                );
+                assert!(matches!(result, Err(EvalError::Timer { .. })), "{duration}");
+                assert_eq!(format!("{:?}", timer(&eval)), old_timer);
+                assert_eq!(eval.provenance.len(), old_provenance);
+            }
+            let mut missing = action(Some("'1970-01-01T00:00:01Z'"), "PT1S");
+            missing.duration = None;
+            assert!(matches!(
+                eval.execute_action_in_state(&missing, None, "waiting", None),
+                Err(EvalError::Timer { .. })
+            ));
+            let mut conflicting = action(Some("'1970-01-01T00:00:01Z'"), "PT1S");
+            conflicting.deadline = Some("1970-01-01T00:00:02Z".into());
+            assert!(matches!(
+                eval.execute_action_in_state(&conflicting, None, "waiting", None),
+                Err(EvalError::Timer { .. })
+            ));
+            assert_eq!(format!("{:?}", timer(&eval)), old_timer);
+            assert_eq!(eval.provenance.len(), old_provenance);
+        }
+
+        #[test]
+        fn typed_anchor_fields_cannot_be_ignored_or_omit_timer_identity_and_event() {
+            let mut eval = evaluator(20_000);
+            eval.execute_action_in_state(&action(None, "PT2S"), None, "waiting", None)
+                .unwrap();
+            let old_timer = format!("{:?}", timer(&eval));
+            let old_provenance = serde_json::to_value(eval.provenance.records()).unwrap();
+            let original = action(Some("'1970-01-01T00:00:01Z'"), "PT1S");
+            let mut invalid_actions = Vec::new();
+            for kind in [
+                ActionKind::SetData,
+                ActionKind::CancelTimer,
+                ActionKind::EmitEvent,
+                ActionKind::CreateTask,
+                ActionKind::InvokeService,
+                ActionKind::Log,
+            ] {
+                let mut invalid = original.clone();
+                invalid.action = kind;
+                invalid.path = Some("caseFile.unwanted".into());
+                invalid.value = Some(true.into());
+                invalid_actions.push(invalid);
+            }
+            for id in [None, Some(""), Some("  ")] {
+                let mut invalid = original.clone();
+                invalid.timer_id = id.map(str::to_owned);
+                invalid_actions.push(invalid);
+            }
+            let mut missing_event = original.clone();
+            missing_event.event = None;
+            invalid_actions.push(missing_event);
+            for name in ["", "   "] {
+                let mut invalid = original.clone();
+                invalid.event = Some(TransitionEvent::Message {
+                    name: name.into(),
+                    correlation_key: None,
+                    data: None,
+                });
+                invalid_actions.push(invalid);
+            }
+            for invalid in invalid_actions {
+                assert!(matches!(
+                    eval.execute_action_in_state(&invalid, None, "waiting", None),
+                    Err(EvalError::Timer { .. })
+                ));
+                assert_eq!(format!("{:?}", timer(&eval)), old_timer);
+                assert_eq!(
+                    serde_json::to_value(eval.provenance.records()).unwrap(),
+                    old_provenance
+                );
+                assert!(!eval.case_state.contains_key("unwanted"));
+            }
+        }
+    }
 
     #[test]
     fn parse_iso_duration_seconds() {
