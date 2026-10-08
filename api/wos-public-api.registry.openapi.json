@@ -844,6 +844,191 @@
         ]
       }
     },
+    "/cases/{case_id}/case-file/artifacts/{kind}": {
+      "get": {
+        "tags": [
+          "case-file"
+        ],
+        "operationId": "case_file_artifact_read",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "description": "Actual case TypeID or URN.",
+            "required": true,
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^urn:wos:[a-z][a-z0-9-]*_case_[0-9a-hjkmnp-tv-z]{26}$"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*_case_[0-9a-hjkmnp-tv-z]{26}$"
+                }
+              ]
+            }
+          },
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Original definition, locale, component or theme artifact.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "definition",
+                "locale",
+                "component",
+                "theme"
+              ]
+            }
+          },
+          {
+            "name": "url",
+            "in": "query",
+            "description": "Exact authored identity; never fetched.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "description": "Exact retained authored version.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "hash",
+            "in": "query",
+            "description": "Original raw sha256 digest; separate from semantic Definition hash.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Exact original retained UTF-8 JSON bytes; source qualification defines the native document.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                },
+                "description": "private, no-store"
+              },
+              "Content-Type": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "application/json; charset=utf-8"
+                  ]
+                },
+                "description": "application/json; charset=utf-8"
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "nosniff"
+                  ]
+                },
+                "description": "nosniff"
+              }
+            },
+            "content": {
+              "application/json": {}
+            }
+          },
+          "400": {
+            "description": "Case, kind or required selector is invalid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Caller token is invalid, expired or revoked.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Current caller, resource or descriptor is refused.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Case or process is missing.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Retained associations or original bytes conflict.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Original bytes exceed the maintained twenty-MiB bound.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Source or current authority is unavailable.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/cases/{case_id}/case-file/attachments/{attachment_id}": {
       "get": {
         "tags": [
@@ -2670,7 +2855,7 @@
       },
       "ActorScope": {
         "type": "object",
-        "description": "Closed scope-membership tuple (Tenant -> Organization -> Workspace -> Environment) per VISION §V and ADR 0068 D-2 (Proposed). Reused from `actor.schema.json#/$defs/ActorScope` so the wire shape stays canonical across actor identity, scope-context reads, and scope-swap requests (ADR 0082 D-14 — never redefine).\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Closed scope-membership tuple (Tenant -> Organization -> Workspace -> Environment) per VISION §V and ADR 0068 D-2 (Proposed). Reused from `actor.schema.json#/$defs/ActorScope` so the wire shape stays canonical across actor identity, scope-context reads, and scope-swap requests (ADR 0082 D-14 — never redefine).\",\n  \"type\": \"object\",\n  \"required\": [\n    \"environment\",\n    \"organization\",\n    \"tenant\"\n  ],\n  \"properties\": {\n    \"environment\": {\n      \"description\": \"Closed deployment environment (VISION §V). `sandbox` = dev/test; `staging` = pre-prod; `prod` = live. New environments require a major schema bump.\",\n      \"enum\": [\n        \"sandbox\",\n        \"staging\",\n        \"prod\"\n      ]\n    },\n    \"organization\": {\n      \"description\": \"Organization identifier — product-ownership boundary where forms, cases, and members live (VISION §V; ADR 0068 D-1 (Proposed)). Object-ownership and deletion-follows-org invariants tie retention to this id, not to billing state.\",\n      \"examples\": [\n        \"org-state-of-x-dhss\"\n      ],\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"identifier\"\n      }\n    },\n    \"tenant\": {\n      \"description\": \"Tenant identifier — outermost hosting/commercial boundary (VISION §V; ADR 0068 D-1 (Proposed)). Hosting-tier identity, not user-visible.\",\n      \"examples\": [\n        \"tenant-acme\",\n        \"tenant-formspec-public\"\n      ],\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"identifier\"\n      }\n    },\n    \"workspace\": {\n      \"description\": \"Optional workspace identifier — sub-scope inside an organization (VISION §V). Omitted when the actor is bound at the organization level.\",\n      \"examples\": [\n        \"workspace-snap-eligibility\"\n      ],\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"identifier\"\n      }\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
+        "description": "Closed scope-membership tuple (Tenant -> Organization -> Workspace -> Environment) per VISION §V and ADR 0082 D-9. Reused from `actor.schema.json#/$defs/ActorScope` so the wire shape stays canonical across actor identity, scope-context reads, and scope-swap requests (ADR 0082 D-14 — never redefine).\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Closed scope-membership tuple (Tenant -> Organization -> Workspace -> Environment) per VISION §V and ADR 0082 D-9. Reused from `actor.schema.json#/$defs/ActorScope` so the wire shape stays canonical across actor identity, scope-context reads, and scope-swap requests (ADR 0082 D-14 — never redefine).\",\n  \"type\": \"object\",\n  \"required\": [\n    \"environment\",\n    \"organization\",\n    \"tenant\"\n  ],\n  \"properties\": {\n    \"environment\": {\n      \"description\": \"Closed deployment stage: sandbox (dev/test), staging (pre-prod), prod (live). This stage is not an opaque internal EnvironmentId. A configured explicit mapping relates the internal environment identifier to its stage; no string equality or fallback grants are implied.\",\n      \"enum\": [\n        \"sandbox\",\n        \"staging\",\n        \"prod\"\n      ]\n    },\n    \"organization\": {\n      \"description\": \"Organization identifier — product-ownership boundary where forms, cases, and members live (VISION §V; ADR 0068 D-1 (Accepted)). Object-ownership and deletion-follows-org invariants tie retention to this id, not to billing state.\",\n      \"examples\": [\n        \"org-state-of-x-dhss\"\n      ],\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"identifier\"\n      }\n    },\n    \"tenant\": {\n      \"description\": \"Tenant identifier — outermost hosting/commercial boundary (VISION §V; ADR 0068 D-1 (Accepted)). Hosting-tier identity, not user-visible.\",\n      \"examples\": [\n        \"tenant-acme\",\n        \"tenant-formspec-public\"\n      ],\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"identifier\"\n      }\n    },\n    \"workspace\": {\n      \"description\": \"Optional workspace identifier — sub-scope inside an organization (VISION §V). Omitted when the actor is bound at the organization level.\",\n      \"examples\": [\n        \"workspace-snap-eligibility\"\n      ],\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"identifier\"\n      }\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
         "required": [
           "environment",
           "organization",
@@ -2679,15 +2864,15 @@
         "properties": {
           "environment": {
             "$ref": "#/components/schemas/ActorScopeEnvironment",
-            "description": "Closed deployment environment (VISION §V). `sandbox` = dev/test; `staging` = pre-prod; `prod` = live. New environments require a major schema bump."
+            "description": "Closed deployment stage: sandbox (dev/test), staging (pre-prod), prod (live). This stage is not an opaque internal EnvironmentId. A configured explicit mapping relates the internal environment identifier to its stage; no string equality or fallback grants are implied."
           },
           "organization": {
             "$ref": "#/components/schemas/ActorScopeOrganization",
-            "description": "Organization identifier — product-ownership boundary where forms, cases, and members live (VISION §V; ADR 0068 D-1 (Proposed)). Object-ownership and deletion-follows-org invariants tie retention to this id, not to billing state."
+            "description": "Organization identifier — product-ownership boundary where forms, cases, and members live (VISION §V; ADR 0068 D-1 (Accepted)). Object-ownership and deletion-follows-org invariants tie retention to this id, not to billing state."
           },
           "tenant": {
             "$ref": "#/components/schemas/ActorScopeTenant",
-            "description": "Tenant identifier — outermost hosting/commercial boundary (VISION §V; ADR 0068 D-1 (Proposed)). Hosting-tier identity, not user-visible."
+            "description": "Tenant identifier — outermost hosting/commercial boundary (VISION §V; ADR 0068 D-1 (Accepted)). Hosting-tier identity, not user-visible."
           },
           "workspace": {
             "oneOf": [
@@ -2705,7 +2890,7 @@
       },
       "ActorScopeEnvironment": {
         "type": "string",
-        "description": "Closed deployment environment (VISION §V). `sandbox` = dev/test; `staging` = pre-prod; `prod` = live. New environments require a major schema bump.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Closed deployment environment (VISION §V). `sandbox` = dev/test; `staging` = pre-prod; `prod` = live. New environments require a major schema bump.\",\n  \"enum\": [\n    \"sandbox\",\n    \"staging\",\n    \"prod\"\n  ]\n}\n ```\n </details>",
+        "description": "Closed deployment stage: sandbox (dev/test), staging (pre-prod), prod (live). This stage is not an opaque internal EnvironmentId. A configured explicit mapping relates the internal environment identifier to its stage; no string equality or fallback grants are implied.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Closed deployment stage: sandbox (dev/test), staging (pre-prod), prod (live). This stage is not an opaque internal EnvironmentId. A configured explicit mapping relates the internal environment identifier to its stage; no string equality or fallback grants are implied.\",\n  \"enum\": [\n    \"sandbox\",\n    \"staging\",\n    \"prod\"\n  ]\n}\n ```\n </details>",
         "enum": [
           "sandbox",
           "staging",
@@ -2714,11 +2899,11 @@
       },
       "ActorScopeOrganization": {
         "type": "string",
-        "description": "Organization identifier — product-ownership boundary where forms, cases, and members live (VISION §V; ADR 0068 D-1 (Proposed)). Object-ownership and deletion-follows-org invariants tie retention to this id, not to billing state.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Organization identifier — product-ownership boundary where forms, cases, and members live (VISION §V; ADR 0068 D-1 (Proposed)). Object-ownership and deletion-follows-org invariants tie retention to this id, not to billing state.\",\n  \"examples\": [\n    \"org-state-of-x-dhss\"\n  ],\n  \"type\": \"string\",\n  \"minLength\": 1,\n  \"x-wos\": {\n    \"openStringKind\": \"identifier\"\n  }\n}\n ```\n </details>"
+        "description": "Organization identifier — product-ownership boundary where forms, cases, and members live (VISION §V; ADR 0068 D-1 (Accepted)). Object-ownership and deletion-follows-org invariants tie retention to this id, not to billing state.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Organization identifier — product-ownership boundary where forms, cases, and members live (VISION §V; ADR 0068 D-1 (Accepted)). Object-ownership and deletion-follows-org invariants tie retention to this id, not to billing state.\",\n  \"examples\": [\n    \"org-state-of-x-dhss\"\n  ],\n  \"type\": \"string\",\n  \"minLength\": 1,\n  \"x-wos\": {\n    \"openStringKind\": \"identifier\"\n  }\n}\n ```\n </details>"
       },
       "ActorScopeTenant": {
         "type": "string",
-        "description": "Tenant identifier — outermost hosting/commercial boundary (VISION §V; ADR 0068 D-1 (Proposed)). Hosting-tier identity, not user-visible.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Tenant identifier — outermost hosting/commercial boundary (VISION §V; ADR 0068 D-1 (Proposed)). Hosting-tier identity, not user-visible.\",\n  \"examples\": [\n    \"tenant-acme\",\n    \"tenant-formspec-public\"\n  ],\n  \"type\": \"string\",\n  \"minLength\": 1,\n  \"x-wos\": {\n    \"openStringKind\": \"identifier\"\n  }\n}\n ```\n </details>"
+        "description": "Tenant identifier — outermost hosting/commercial boundary (VISION §V; ADR 0068 D-1 (Accepted)). Hosting-tier identity, not user-visible.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Tenant identifier — outermost hosting/commercial boundary (VISION §V; ADR 0068 D-1 (Accepted)). Hosting-tier identity, not user-visible.\",\n  \"examples\": [\n    \"tenant-acme\",\n    \"tenant-formspec-public\"\n  ],\n  \"type\": \"string\",\n  \"minLength\": 1,\n  \"x-wos\": {\n    \"openStringKind\": \"identifier\"\n  }\n}\n ```\n </details>"
       },
       "ActorScopeWorkspace": {
         "type": "string",
@@ -4057,7 +4242,7 @@
             "$ref": "#/components/schemas/AuthAssuranceLevelVariant1"
           }
         ],
-        "description": "Closed-with-vendor-extension authentication-assurance level (ADR 0082 D-12), aligned with the IdentityAttestation `assuranceLevel` taxonomy from ADR 0068 D-3.1 (Proposed). Reserved literals: `low` (single-factor, low-assurance); `standard` (single-factor with proven possession, e.g. password + verified email); `high` (multi-factor with at least one phishing-resistant factor, e.g. WebAuthn); `very-high` (hardware-bound, identity-proofed). Vendor extensions MUST use an `^x-[a-z][a-z0-9-]*$` prefix.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Closed-with-vendor-extension authentication-assurance level (ADR 0082 D-12), aligned with the IdentityAttestation `assuranceLevel` taxonomy from ADR 0068 D-3.1 (Proposed). Reserved literals: `low` (single-factor, low-assurance); `standard` (single-factor with proven possession, e.g. password + verified email); `high` (multi-factor with at least one phishing-resistant factor, e.g. WebAuthn); `very-high` (hardware-bound, identity-proofed). Vendor extensions MUST use an `^x-[a-z][a-z0-9-]*$` prefix.\",\n  \"examples\": [\n    \"high\"\n  ],\n  \"oneOf\": [\n    {\n      \"enum\": [\n        \"low\",\n        \"standard\",\n        \"high\",\n        \"very-high\"\n      ]\n    },\n    {\n      \"type\": \"string\",\n      \"pattern\": \"^x-[a-z][a-z0-9-]*$\"\n    }\n  ]\n}\n ```\n </details>"
+        "description": "Closed-with-vendor-extension authentication-assurance level (ADR 0082 D-12), aligned with the IdentityAttestation `assuranceLevel` taxonomy from ADR 0068 D-3.1 (Accepted). Reserved literals: `low` (single-factor, low-assurance); `standard` (single-factor with proven possession, e.g. password + verified email); `high` (multi-factor with at least one phishing-resistant factor, e.g. WebAuthn); `very-high` (hardware-bound, identity-proofed). Vendor extensions MUST use an `^x-[a-z][a-z0-9-]*$` prefix.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Closed-with-vendor-extension authentication-assurance level (ADR 0082 D-12), aligned with the IdentityAttestation `assuranceLevel` taxonomy from ADR 0068 D-3.1 (Accepted). Reserved literals: `low` (single-factor, low-assurance); `standard` (single-factor with proven possession, e.g. password + verified email); `high` (multi-factor with at least one phishing-resistant factor, e.g. WebAuthn); `very-high` (hardware-bound, identity-proofed). Vendor extensions MUST use an `^x-[a-z][a-z0-9-]*$` prefix.\",\n  \"examples\": [\n    \"high\"\n  ],\n  \"oneOf\": [\n    {\n      \"enum\": [\n        \"low\",\n        \"standard\",\n        \"high\",\n        \"very-high\"\n      ]\n    },\n    {\n      \"type\": \"string\",\n      \"pattern\": \"^x-[a-z][a-z0-9-]*$\"\n    }\n  ]\n}\n ```\n </details>"
       },
       "AuthAssuranceLevelVariant0": {
         "type": "string",
@@ -7384,7 +7569,7 @@
       },
       "LoginRequest": {
         "type": "object",
-        "description": "Request body for `POST /api/v1/auth/login`. The `Idempotency-Key` HTTP header is REQUIRED per ADR 0082 D-16: login is externally side-effecting (it issues a token, opens a session, may emit an authentication-record event) and a network retry without idempotency would create duplicate sessions. The `kind` field is the discriminator for the credential payload's interpretation; per ADR 0082 D-12 it is closed-with-vendor-extension. Per ADR 0082 D-11 the credential fields are optional on the wire (presence depends on `kind`) but the server validates the kind/payload combination at receipt and rejects mismatches with `WOS-1422`. Note: the contract intentionally carries the credential payload as named-seam fields (`password`, `webauthnAssertion`, `oidcCode`) rather than a discriminated union body so the schema reads as a single closed object — adding a kind requires extending this object plus the `LoginKind` enum.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Request body for `POST /api/v1/auth/login`. The `Idempotency-Key` HTTP header is REQUIRED per ADR 0082 D-16: login is externally side-effecting (it issues a token, opens a session, may emit an authentication-record event) and a network retry without idempotency would create duplicate sessions. The `kind` field is the discriminator for the credential payload's interpretation; per ADR 0082 D-12 it is closed-with-vendor-extension. Per ADR 0082 D-11 the credential fields are optional on the wire (presence depends on `kind`) but the server validates the kind/payload combination at receipt and rejects mismatches with `WOS-1422`. Note: the contract intentionally carries the credential payload as named-seam fields (`password`, `webauthnAssertion`, `oidcCode`) rather than a discriminated union body so the schema reads as a single closed object — adding a kind requires extending this object plus the `LoginKind` enum.\",\n  \"type\": \"object\",\n  \"required\": [\n    \"kind\"\n  ],\n  \"properties\": {\n    \"kind\": {\n      \"description\": \"Closed-with-vendor-extension credential family. The accompanying credential field MUST match: `password` -> `username` + `password`; `webauthn` -> `webauthnAssertion`; `oidc-sso` -> `oidcCode`.\",\n      \"$ref\": \"#/$defs/LoginKind\"\n    },\n    \"mfaChallengeId\": {\n      \"description\": \"Opaque token from a prior `LoginResponse.mfaChallenge` when this request continues an MFA flow. Omitted on the first request of a flow; required on the redemption request.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"opaque-token\"\n      }\n    },\n    \"mfaResponse\": {\n      \"description\": \"Factor-specific response payload (TOTP code, SMS/email OTP, WebAuthn assertion, push approval token). Format depends on `MfaChallenge.kind`. Required when `mfaChallengeId` is present.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"opaque-token\"\n      }\n    },\n    \"oidcCode\": {\n      \"description\": \"OpenID Connect authorization code (RFC 6749 §1.3.1) for `kind == oidc-sso` logins. REQUIRED when `kind == oidc-sso`. The server exchanges the code with the configured IdP at receipt.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"opaque-token\"\n      }\n    },\n    \"password\": {\n      \"description\": \"Password for `kind == password` logins. Open string — never logged, never echoed back; the server hashes and discards. REQUIRED when `kind == password`.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"secret\"\n      }\n    },\n    \"requestedScope\": {\n      \"description\": \"Optional scope the client is requesting at login (Tenant / Organization / Workspace? / Environment per ADR 0068 D-2 — Proposed). When omitted the server resolves a default scope from the principal's primary membership.\",\n      \"$ref\": \"#/$defs/ActorScope\"\n    },\n    \"username\": {\n      \"description\": \"Username for `kind == password` logins. Open string — opaque to the contract; the back-end resolves it to a principal. REQUIRED when `kind == password`.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"identifier\"\n      }\n    },\n    \"webauthnAssertion\": {\n      \"description\": \"Base64URL-encoded WebAuthn / FIDO2 authenticator assertion (`AuthenticatorAssertionResponse`). REQUIRED when `kind == webauthn`. Open string with named seam — the server validates per the registered authenticator's public key.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"opaque-token\"\n      }\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
+        "description": "Request body for `POST /api/v1/auth/login`. The `Idempotency-Key` HTTP header is REQUIRED per ADR 0082 D-16: login is externally side-effecting (it issues a token, opens a session, may emit an authentication-record event) and a network retry without idempotency would create duplicate sessions. The `kind` field is the discriminator for the credential payload's interpretation; per ADR 0082 D-12 it is closed-with-vendor-extension. Per ADR 0082 D-11 the credential fields are optional on the wire (presence depends on `kind`) but the server validates the kind/payload combination at receipt and rejects mismatches with `WOS-1422`. Note: the contract intentionally carries the credential payload as named-seam fields (`password`, `webauthnAssertion`, `oidcCode`) rather than a discriminated union body so the schema reads as a single closed object — adding a kind requires extending this object plus the `LoginKind` enum.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Request body for `POST /api/v1/auth/login`. The `Idempotency-Key` HTTP header is REQUIRED per ADR 0082 D-16: login is externally side-effecting (it issues a token, opens a session, may emit an authentication-record event) and a network retry without idempotency would create duplicate sessions. The `kind` field is the discriminator for the credential payload's interpretation; per ADR 0082 D-12 it is closed-with-vendor-extension. Per ADR 0082 D-11 the credential fields are optional on the wire (presence depends on `kind`) but the server validates the kind/payload combination at receipt and rejects mismatches with `WOS-1422`. Note: the contract intentionally carries the credential payload as named-seam fields (`password`, `webauthnAssertion`, `oidcCode`) rather than a discriminated union body so the schema reads as a single closed object — adding a kind requires extending this object plus the `LoginKind` enum.\",\n  \"type\": \"object\",\n  \"required\": [\n    \"kind\"\n  ],\n  \"properties\": {\n    \"kind\": {\n      \"description\": \"Closed-with-vendor-extension credential family. The accompanying credential field MUST match: `password` -> `username` + `password`; `webauthn` -> `webauthnAssertion`; `oidc-sso` -> `oidcCode`.\",\n      \"$ref\": \"#/$defs/LoginKind\"\n    },\n    \"mfaChallengeId\": {\n      \"description\": \"Opaque token from a prior `LoginResponse.mfaChallenge` when this request continues an MFA flow. Omitted on the first request of a flow; required on the redemption request.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"opaque-token\"\n      }\n    },\n    \"mfaResponse\": {\n      \"description\": \"Factor-specific response payload (TOTP code, SMS/email OTP, WebAuthn assertion, push approval token). Format depends on `MfaChallenge.kind`. Required when `mfaChallengeId` is present.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"opaque-token\"\n      }\n    },\n    \"oidcCode\": {\n      \"description\": \"Reserved credential for a separately implemented server-brokered OIDC authorization flow. The current reference server rejects kind=oidc-sso on this login route. The supported browser integration direction uses maintained direct Authorization Code+PKCE and presents the resulting access token to the API; it does not post a bare code here. A broker would require its own reviewed expiring transaction, state/nonce/replay, PKCE and redirect checks.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"opaque-token\"\n      }\n    },\n    \"password\": {\n      \"description\": \"Password for `kind == password` logins. Open string — never logged, never echoed back; the server hashes and discards. REQUIRED when `kind == password`.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"secret\"\n      }\n    },\n    \"requestedScope\": {\n      \"description\": \"Optional scope the client is requesting at login (Tenant / Organization / Workspace? / Environment per ADR 0082 D-9). When omitted the server resolves a default scope from the principal's primary membership. This is a requested selection, not a grant. Resolve it against the authenticated internal principal, authoritative membership grants and configured deployment; refuse unauthorized or unresolved selections.\",\n      \"$ref\": \"#/$defs/ActorScope\"\n    },\n    \"username\": {\n      \"description\": \"Username for `kind == password` logins. Open string — opaque to the contract; the back-end resolves it to a principal. REQUIRED when `kind == password`.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"identifier\"\n      }\n    },\n    \"webauthnAssertion\": {\n      \"description\": \"Base64URL-encoded WebAuthn / FIDO2 authenticator assertion (`AuthenticatorAssertionResponse`). REQUIRED when `kind == webauthn`. Open string with named seam — the server validates per the registered authenticator's public key.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"opaque-token\"\n      }\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
         "required": [
           "kind"
         ],
@@ -7422,7 +7607,7 @@
               },
               {
                 "$ref": "#/components/schemas/LoginRequestOidcCode",
-                "description": "OpenID Connect authorization code (RFC 6749 §1.3.1) for `kind == oidc-sso` logins. REQUIRED when `kind == oidc-sso`. The server exchanges the code with the configured IdP at receipt."
+                "description": "Reserved credential for a separately implemented server-brokered OIDC authorization flow. The current reference server rejects kind=oidc-sso on this login route. The supported browser integration direction uses maintained direct Authorization Code+PKCE and presents the resulting access token to the API; it does not post a bare code here. A broker would require its own reviewed expiring transaction, state/nonce/replay, PKCE and redirect checks."
               }
             ]
           },
@@ -7444,7 +7629,7 @@
               },
               {
                 "$ref": "#/components/schemas/ActorScope",
-                "description": "Optional scope the client is requesting at login (Tenant / Organization / Workspace? / Environment per ADR 0068 D-2 — Proposed). When omitted the server resolves a default scope from the principal's primary membership."
+                "description": "Optional scope the client is requesting at login (Tenant / Organization / Workspace? / Environment per ADR 0082 D-9). When omitted the server resolves a default scope from the principal's primary membership. This is a requested selection, not a grant. Resolve it against the authenticated internal principal, authoritative membership grants and configured deployment; refuse unauthorized or unresolved selections."
               }
             ]
           },
@@ -7483,7 +7668,7 @@
       },
       "LoginRequestOidcCode": {
         "type": "string",
-        "description": "OpenID Connect authorization code (RFC 6749 §1.3.1) for `kind == oidc-sso` logins. REQUIRED when `kind == oidc-sso`. The server exchanges the code with the configured IdP at receipt.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"OpenID Connect authorization code (RFC 6749 §1.3.1) for `kind == oidc-sso` logins. REQUIRED when `kind == oidc-sso`. The server exchanges the code with the configured IdP at receipt.\",\n  \"type\": \"string\",\n  \"minLength\": 1,\n  \"x-wos\": {\n    \"openStringKind\": \"opaque-token\"\n  }\n}\n ```\n </details>"
+        "description": "Reserved credential for a separately implemented server-brokered OIDC authorization flow. The current reference server rejects kind=oidc-sso on this login route. The supported browser integration direction uses maintained direct Authorization Code+PKCE and presents the resulting access token to the API; it does not post a bare code here. A broker would require its own reviewed expiring transaction, state/nonce/replay, PKCE and redirect checks.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Reserved credential for a separately implemented server-brokered OIDC authorization flow. The current reference server rejects kind=oidc-sso on this login route. The supported browser integration direction uses maintained direct Authorization Code+PKCE and presents the resulting access token to the API; it does not post a bare code here. A broker would require its own reviewed expiring transaction, state/nonce/replay, PKCE and redirect checks.\",\n  \"type\": \"string\",\n  \"minLength\": 1,\n  \"x-wos\": {\n    \"openStringKind\": \"opaque-token\"\n  }\n}\n ```\n </details>"
       },
       "LoginRequestPassword": {
         "type": "string",
@@ -7499,7 +7684,7 @@
       },
       "LoginResponse": {
         "type": "object",
-        "description": "Response body for `POST /api/v1/auth/login`. Carries the issued bearer token (when authentication succeeded), the active scope, expiry, and an optional `mfaChallenge` that the client must redeem before the response carries a token. When `mfaChallenge` is present, `accessToken` is omitted and the client redeems the challenge via a follow-up `POST /api/v1/auth/login`. When `mfaChallenge` is absent, the token is immediately usable.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Response body for `POST /api/v1/auth/login`. Carries the issued bearer token (when authentication succeeded), the active scope, expiry, and an optional `mfaChallenge` that the client must redeem before the response carries a token. When `mfaChallenge` is present, `accessToken` is omitted and the client redeems the challenge via a follow-up `POST /api/v1/auth/login`. When `mfaChallenge` is absent, the token is immediately usable.\",\n  \"type\": \"object\",\n  \"required\": [\n    \"tokenKind\"\n  ],\n  \"properties\": {\n    \"accessToken\": {\n      \"description\": \"Opaque JWT bearer token used as the `Authorization: Bearer <jwt>` header value (ADR 0082 D-9). Omitted when `mfaChallenge` is present — the client MUST satisfy the challenge before receiving a token.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"opaque-token\"\n      }\n    },\n    \"actorRef\": {\n      \"description\": \"URN of the principal the token authenticates. Present iff `accessToken` is present.\",\n      \"$ref\": \"#/$defs/ActorRef\"\n    },\n    \"assuranceLevel\": {\n      \"description\": \"Authentication-assurance level attested by this session, derived from `LoginKind` and any satisfied MFA factor (ADR 0068 D-3.1 — Proposed).\",\n      \"$ref\": \"#/$defs/AuthAssuranceLevel\"\n    },\n    \"expiresAt\": {\n      \"description\": \"UTC RFC 3339 expiry timestamp for `accessToken`. Present iff `accessToken` is present.\",\n      \"type\": \"string\",\n      \"format\": \"date-time\"\n    },\n    \"mfaChallenge\": {\n      \"description\": \"Pending second-factor challenge. Present iff the deployment requires MFA and the first-factor credential succeeded but a second factor remains.\",\n      \"$ref\": \"#/$defs/MfaChallenge\"\n    },\n    \"refreshToken\": {\n      \"description\": \"Opaque refresh token redeemable at `POST /api/v1/auth/refresh`. Omitted when the deployment does not issue refresh tokens (sandbox profiles) or when `mfaChallenge` is present.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"opaque-token\"\n      }\n    },\n    \"scope\": {\n      \"description\": \"Active scope tuple at the time of token issuance (ADR 0068 D-2 — Proposed). Echoes `LoginRequest.requestedScope` when supplied; otherwise the server's resolved default.\",\n      \"$ref\": \"#/$defs/ActorScope\"\n    },\n    \"tokenKind\": {\n      \"description\": \"Closed token-kind taxonomy. Always `bearer` at v1.\",\n      \"$ref\": \"#/$defs/TokenKind\"\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
+        "description": "Response body for `POST /api/v1/auth/login`. Carries the issued bearer token (when authentication succeeded), the active scope, expiry, and an optional `mfaChallenge` that the client must redeem before the response carries a token. When `mfaChallenge` is present, `accessToken` is omitted and the client redeems the challenge via a follow-up `POST /api/v1/auth/login`. When `mfaChallenge` is absent, the token is immediately usable.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Response body for `POST /api/v1/auth/login`. Carries the issued bearer token (when authentication succeeded), the active scope, expiry, and an optional `mfaChallenge` that the client must redeem before the response carries a token. When `mfaChallenge` is present, `accessToken` is omitted and the client redeems the challenge via a follow-up `POST /api/v1/auth/login`. When `mfaChallenge` is absent, the token is immediately usable.\",\n  \"type\": \"object\",\n  \"required\": [\n    \"tokenKind\"\n  ],\n  \"properties\": {\n    \"accessToken\": {\n      \"description\": \"Opaque JWT bearer token used as the `Authorization: Bearer <jwt>` header value (ADR 0082 D-9). Omitted when `mfaChallenge` is present — the client MUST satisfy the challenge before receiving a token.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"opaque-token\"\n      }\n    },\n    \"actorRef\": {\n      \"description\": \"URN of the principal the token authenticates. Present iff `accessToken` is present.\",\n      \"$ref\": \"#/$defs/ActorRef\"\n    },\n    \"assuranceLevel\": {\n      \"description\": \"Authentication-assurance level attested by this session, derived from `LoginKind` and any satisfied MFA factor (ADR 0068 D-3.1 — Accepted).\",\n      \"$ref\": \"#/$defs/AuthAssuranceLevel\"\n    },\n    \"expiresAt\": {\n      \"description\": \"UTC RFC 3339 expiry timestamp for `accessToken`. Present iff `accessToken` is present.\",\n      \"type\": \"string\",\n      \"format\": \"date-time\"\n    },\n    \"mfaChallenge\": {\n      \"description\": \"Pending second-factor challenge. Present iff the deployment requires MFA and the first-factor credential succeeded but a second factor remains.\",\n      \"$ref\": \"#/$defs/MfaChallenge\"\n    },\n    \"refreshToken\": {\n      \"description\": \"Opaque refresh token redeemable at `POST /api/v1/auth/refresh`. Omitted when the deployment does not issue refresh tokens (sandbox profiles) or when `mfaChallenge` is present.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"opaque-token\"\n      }\n    },\n    \"scope\": {\n      \"description\": \"Active scope tuple at the time of token issuance (ADR 0082 D-9). Echoes `LoginRequest.requestedScope` when supplied; otherwise the server's resolved default.\",\n      \"$ref\": \"#/$defs/ActorScope\"\n    },\n    \"tokenKind\": {\n      \"description\": \"Closed token-kind taxonomy. Always `bearer` at v1.\",\n      \"$ref\": \"#/$defs/TokenKind\"\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
         "required": [
           "tokenKind"
         ],
@@ -7533,7 +7718,7 @@
               },
               {
                 "$ref": "#/components/schemas/AuthAssuranceLevel",
-                "description": "Authentication-assurance level attested by this session, derived from `LoginKind` and any satisfied MFA factor (ADR 0068 D-3.1 — Proposed)."
+                "description": "Authentication-assurance level attested by this session, derived from `LoginKind` and any satisfied MFA factor (ADR 0068 D-3.1 — Accepted)."
               }
             ]
           },
@@ -7574,7 +7759,7 @@
               },
               {
                 "$ref": "#/components/schemas/ActorScope",
-                "description": "Active scope tuple at the time of token issuance (ADR 0068 D-2 — Proposed). Echoes `LoginRequest.requestedScope` when supplied; otherwise the server's resolved default."
+                "description": "Active scope tuple at the time of token issuance (ADR 0082 D-9). Echoes `LoginRequest.requestedScope` when supplied; otherwise the server's resolved default."
               }
             ]
           },
@@ -8489,7 +8674,7 @@
       },
       "RefreshResponse": {
         "type": "object",
-        "description": "Response body for `POST /api/v1/auth/refresh`. Issues a fresh access token and (typically) a rotated refresh token. The active scope is echoed so clients can confirm the session continues at the expected scope.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Response body for `POST /api/v1/auth/refresh`. Issues a fresh access token and (typically) a rotated refresh token. The active scope is echoed so clients can confirm the session continues at the expected scope.\",\n  \"type\": \"object\",\n  \"required\": [\n    \"accessToken\",\n    \"expiresAt\",\n    \"scope\",\n    \"tokenKind\"\n  ],\n  \"properties\": {\n    \"accessToken\": {\n      \"description\": \"Fresh JWT bearer token replacing the prior `accessToken`.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"opaque-token\"\n      }\n    },\n    \"expiresAt\": {\n      \"description\": \"UTC RFC 3339 expiry timestamp for the new `accessToken`.\",\n      \"type\": \"string\",\n      \"format\": \"date-time\"\n    },\n    \"refreshToken\": {\n      \"description\": \"Rotated refresh token replacing the one redeemed by this request. Omitted when the deployment configuration uses non-rotating refresh tokens.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"opaque-token\"\n      }\n    },\n    \"scope\": {\n      \"description\": \"Active scope tuple for the refreshed session (ADR 0068 D-2 — Proposed). MUST equal the redeemed token's prior scope; refresh does NOT swap scope.\",\n      \"$ref\": \"#/$defs/ActorScope\"\n    },\n    \"tokenKind\": {\n      \"description\": \"Closed token-kind taxonomy. Always `bearer` at v1.\",\n      \"$ref\": \"#/$defs/TokenKind\"\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
+        "description": "Response body for `POST /api/v1/auth/refresh`. Issues a fresh access token and (typically) a rotated refresh token. The active scope is echoed so clients can confirm the session continues at the expected scope.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Response body for `POST /api/v1/auth/refresh`. Issues a fresh access token and (typically) a rotated refresh token. The active scope is echoed so clients can confirm the session continues at the expected scope.\",\n  \"type\": \"object\",\n  \"required\": [\n    \"accessToken\",\n    \"expiresAt\",\n    \"scope\",\n    \"tokenKind\"\n  ],\n  \"properties\": {\n    \"accessToken\": {\n      \"description\": \"Fresh JWT bearer token replacing the prior `accessToken`.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"opaque-token\"\n      }\n    },\n    \"expiresAt\": {\n      \"description\": \"UTC RFC 3339 expiry timestamp for the new `accessToken`.\",\n      \"type\": \"string\",\n      \"format\": \"date-time\"\n    },\n    \"refreshToken\": {\n      \"description\": \"Rotated refresh token replacing the one redeemed by this request. Omitted when the deployment configuration uses non-rotating refresh tokens.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"opaque-token\"\n      }\n    },\n    \"scope\": {\n      \"description\": \"Active scope tuple for the refreshed session (ADR 0082 D-9). MUST equal the redeemed token's prior scope; refresh does NOT swap scope.\",\n      \"$ref\": \"#/$defs/ActorScope\"\n    },\n    \"tokenKind\": {\n      \"description\": \"Closed token-kind taxonomy. Always `bearer` at v1.\",\n      \"$ref\": \"#/$defs/TokenKind\"\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
         "required": [
           "accessToken",
           "expiresAt",
@@ -8519,7 +8704,7 @@
           },
           "scope": {
             "$ref": "#/components/schemas/ActorScope",
-            "description": "Active scope tuple for the refreshed session (ADR 0068 D-2 — Proposed). MUST equal the redeemed token's prior scope; refresh does NOT swap scope."
+            "description": "Active scope tuple for the refreshed session (ADR 0082 D-9). MUST equal the redeemed token's prior scope; refresh does NOT swap scope."
           },
           "tokenKind": {
             "$ref": "#/components/schemas/TokenKind",
@@ -9237,7 +9422,7 @@
       },
       "ScopeContext": {
         "type": "object",
-        "description": "Current scope context for the bearer token, returned by `GET /api/v1/auth/scope`. Carries the scope tuple per VISION §V and ADR 0068 D-2 (Proposed): Tenant -> Organization -> Workspace -> Environment. The shape reuses `ActorScope` from `actor.schema.json` so the wire form is canonical; per ADR 0082 D-14 inline redefinition would be a contract bug. The `actorRef` field identifies the principal the token authenticates; consumers that need the principal class can read it from the URN's principal-class segment without a second round-trip.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Current scope context for the bearer token, returned by `GET /api/v1/auth/scope`. Carries the scope tuple per VISION §V and ADR 0068 D-2 (Proposed): Tenant -> Organization -> Workspace -> Environment. The shape reuses `ActorScope` from `actor.schema.json` so the wire form is canonical; per ADR 0082 D-14 inline redefinition would be a contract bug. The `actorRef` field identifies the principal the token authenticates; consumers that need the principal class can read it from the URN's principal-class segment without a second round-trip.\",\n  \"type\": \"object\",\n  \"required\": [\n    \"actorRef\",\n    \"scope\"\n  ],\n  \"properties\": {\n    \"actorRef\": {\n      \"description\": \"URN of the principal authenticated by the bearer token.\",\n      \"$ref\": \"#/$defs/ActorRef\"\n    },\n    \"assuranceLevel\": {\n      \"description\": \"Authentication-assurance level the bearer token attests.\",\n      \"$ref\": \"#/$defs/AuthAssuranceLevel\"\n    },\n    \"loginKind\": {\n      \"description\": \"Credential family used to obtain the original session. Useful for downstream policy that gates rights-impacting actions on `webauthn`-authenticated sessions.\",\n      \"$ref\": \"#/$defs/LoginKind\"\n    },\n    \"mfaSatisfied\": {\n      \"description\": \"True when the bearer token's session has satisfied a second-factor challenge. Single-factor sessions (legacy / sandbox deployments) MAY return false.\",\n      \"type\": \"boolean\"\n    },\n    \"scope\": {\n      \"description\": \"Scope-membership tuple — Tenant / Organization / Workspace? / Environment per VISION §V and ADR 0068 D-2 (Proposed). When ADR 0068 promotes to Accepted this is the wire form scope is reported in; until then, server implementations MAY return only the fields they have settled.\",\n      \"$ref\": \"#/$defs/ActorScope\"\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
+        "description": "Current scope context for the bearer token, returned by `GET /api/v1/auth/scope`. Carries the scope tuple per VISION §V and ADR 0082 D-9: Tenant -> Organization -> Workspace -> Environment. The shape reuses `ActorScope` from `actor.schema.json` so the wire form is canonical; per ADR 0082 D-14 inline redefinition would be a contract bug. The `actorRef` field identifies the principal the token authenticates; consumers that need the principal class can read it from the URN's principal-class segment without a second round-trip.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Current scope context for the bearer token, returned by `GET /api/v1/auth/scope`. Carries the scope tuple per VISION §V and ADR 0082 D-9: Tenant -> Organization -> Workspace -> Environment. The shape reuses `ActorScope` from `actor.schema.json` so the wire form is canonical; per ADR 0082 D-14 inline redefinition would be a contract bug. The `actorRef` field identifies the principal the token authenticates; consumers that need the principal class can read it from the URN's principal-class segment without a second round-trip.\",\n  \"type\": \"object\",\n  \"required\": [\n    \"actorRef\",\n    \"scope\"\n  ],\n  \"properties\": {\n    \"actorRef\": {\n      \"description\": \"URN of the principal authenticated by the bearer token.\",\n      \"$ref\": \"#/$defs/ActorRef\"\n    },\n    \"assuranceLevel\": {\n      \"description\": \"Authentication-assurance level the bearer token attests.\",\n      \"$ref\": \"#/$defs/AuthAssuranceLevel\"\n    },\n    \"loginKind\": {\n      \"description\": \"Credential family used to obtain the original session. Useful for downstream policy that gates rights-impacting actions on `webauthn`-authenticated sessions.\",\n      \"$ref\": \"#/$defs/LoginKind\"\n    },\n    \"mfaSatisfied\": {\n      \"description\": \"True when the bearer token's session has satisfied a second-factor challenge. Single-factor sessions (legacy / sandbox deployments) MAY return false.\",\n      \"type\": \"boolean\"\n    },\n    \"scope\": {\n      \"description\": \"Actual granted public ActorScope membership resolved for the authenticated internal principal and selected deployment. Never synthesize demo/default membership or echo token/request claims as permissions. The public membership view is explicitly mapped to, and distinct from, the internal deployment/storage scope.\",\n      \"$ref\": \"#/$defs/ActorScope\"\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
         "required": [
           "actorRef",
           "scope"
@@ -9278,21 +9463,21 @@
           },
           "scope": {
             "$ref": "#/components/schemas/ActorScope",
-            "description": "Scope-membership tuple — Tenant / Organization / Workspace? / Environment per VISION §V and ADR 0068 D-2 (Proposed). When ADR 0068 promotes to Accepted this is the wire form scope is reported in; until then, server implementations MAY return only the fields they have settled."
+            "description": "Actual granted public ActorScope membership resolved for the authenticated internal principal and selected deployment. Never synthesize demo/default membership or echo token/request claims as permissions. The public membership view is explicitly mapped to, and distinct from, the internal deployment/storage scope."
           }
         },
         "additionalProperties": false
       },
       "ScopeSwapRequest": {
         "type": "object",
-        "description": "Request body for `POST /api/v1/auth/scope-swap`. The `Idempotency-Key` HTTP header is REQUIRED per ADR 0082 D-16: scope-swap is externally side-effecting (it emits a governance audit event and issues a fresh token bound to the new scope). Per ADR 0068 D-2 (Proposed) the case scope bundle `(Tenant, DefinitionId, KernelId, LedgerId)` is immutable for the case lifetime; this endpoint swaps the *session's* scope for actors who hold authority across multiple Organization / Workspace / Environment scopes within a tenant. Cross-tenant swaps are rejected per ADR 0068 D-1 (cross-tenant reads are impossible by construction).\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Request body for `POST /api/v1/auth/scope-swap`. The `Idempotency-Key` HTTP header is REQUIRED per ADR 0082 D-16: scope-swap is externally side-effecting (it emits a governance audit event and issues a fresh token bound to the new scope). Per ADR 0068 D-2 (Proposed) the case scope bundle `(Tenant, DefinitionId, KernelId, LedgerId)` is immutable for the case lifetime; this endpoint swaps the *session's* scope for actors who hold authority across multiple Organization / Workspace / Environment scopes within a tenant. Cross-tenant swaps are rejected per ADR 0068 D-1 (cross-tenant reads are impossible by construction).\",\n  \"type\": \"object\",\n  \"required\": [\n    \"targetScope\"\n  ],\n  \"properties\": {\n    \"targetScope\": {\n      \"description\": \"Target scope tuple the session swaps to (Tenant -> Organization -> Workspace? -> Environment per ADR 0068 D-2 — Proposed). The server validates per-tenant authorization (ADR 0068 D-3 — authority is per-tenant; cross-tenant swaps are rejected with `WOS-1403`). The `tenant` field MUST equal the bearer token's current tenant; mismatches are rejected with `WOS-1403`.\",\n      \"$ref\": \"#/$defs/ActorScope\"\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
+        "description": "Request body for `POST /api/v1/auth/scope-swap`. The `Idempotency-Key` HTTP header is REQUIRED per ADR 0082 D-16: scope-swap is externally side-effecting (it emits a governance audit event and issues a fresh token bound to the new scope). Per ADR 0068 D-2 (Accepted) the case scope bundle `(Tenant, DefinitionId, KernelId, LedgerId)` is immutable for the case lifetime; this endpoint swaps the *session's* scope for actors who hold authority across multiple Organization / Workspace / Environment scopes within a tenant. Cross-tenant swaps are rejected per ADR 0068 D-1 (cross-tenant reads are impossible by construction).\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Request body for `POST /api/v1/auth/scope-swap`. The `Idempotency-Key` HTTP header is REQUIRED per ADR 0082 D-16: scope-swap is externally side-effecting (it emits a governance audit event and issues a fresh token bound to the new scope). Per ADR 0068 D-2 (Accepted) the case scope bundle `(Tenant, DefinitionId, KernelId, LedgerId)` is immutable for the case lifetime; this endpoint swaps the *session's* scope for actors who hold authority across multiple Organization / Workspace / Environment scopes within a tenant. Cross-tenant swaps are rejected per ADR 0068 D-1 (cross-tenant reads are impossible by construction).\",\n  \"type\": \"object\",\n  \"required\": [\n    \"targetScope\"\n  ],\n  \"properties\": {\n    \"targetScope\": {\n      \"description\": \"Target scope tuple the session swaps to (Tenant -> Organization -> Workspace? -> Environment per ADR 0082 D-9). The server validates per-tenant authorization (ADR 0068 D-3 — authority is per-tenant; cross-tenant swaps are rejected with `WOS-1403`). The `tenant` field MUST equal the bearer token's current tenant; mismatches are rejected with `WOS-1403`. This is a requested selection, not a grant. Resolve it against the authenticated internal principal, authoritative membership grants and configured deployment; refuse unauthorized or unresolved selections.\",\n      \"$ref\": \"#/$defs/ActorScope\"\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
         "required": [
           "targetScope"
         ],
         "properties": {
           "targetScope": {
             "$ref": "#/components/schemas/ActorScope",
-            "description": "Target scope tuple the session swaps to (Tenant -> Organization -> Workspace? -> Environment per ADR 0068 D-2 — Proposed). The server validates per-tenant authorization (ADR 0068 D-3 — authority is per-tenant; cross-tenant swaps are rejected with `WOS-1403`). The `tenant` field MUST equal the bearer token's current tenant; mismatches are rejected with `WOS-1403`."
+            "description": "Target scope tuple the session swaps to (Tenant -> Organization -> Workspace? -> Environment per ADR 0082 D-9). The server validates per-tenant authorization (ADR 0068 D-3 — authority is per-tenant; cross-tenant swaps are rejected with `WOS-1403`). The `tenant` field MUST equal the bearer token's current tenant; mismatches are rejected with `WOS-1403`. This is a requested selection, not a grant. Resolve it against the authenticated internal principal, authoritative membership grants and configured deployment; refuse unauthorized or unresolved selections."
           }
         },
         "additionalProperties": false
@@ -9648,7 +9833,7 @@
       },
       "TaskStatus": {
         "type": "string",
-        "description": "Closed user-facing task lifecycle for the public API (ADR 0082 D-12). The kernel runtime carries a richer `created|assigned|claimed|delegated|escalated` set on `wos-process.schema.json#/$defs/ActiveTask.status` for processor-side bookkeeping; the public API collapses those into the user-visible posture: `pending` (the actor has work to do); `drafted` (a partial response is saved); `submitted` (the actor's final response is committed and the task is no longer actionable); `dismissed` (the actor declined the task per delegation or escalation policy); `expired` (the SLA `targetDuration` elapsed without submission and the breach policy fired). No vendor-extension seam: the user-facing taxonomy is closed by design; richer kernel-side states surface in provenance and on `TaskOutcomeEvent.outcome`.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Closed user-facing task lifecycle for the public API (ADR 0082 D-12). The kernel runtime carries a richer `created|assigned|claimed|delegated|escalated` set on `wos-process.schema.json#/$defs/ActiveTask.status` for processor-side bookkeeping; the public API collapses those into the user-visible posture: `pending` (the actor has work to do); `drafted` (a partial response is saved); `submitted` (the actor's final response is committed and the task is no longer actionable); `dismissed` (the actor declined the task per delegation or escalation policy); `expired` (the SLA `targetDuration` elapsed without submission and the breach policy fired). No vendor-extension seam: the user-facing taxonomy is closed by design; richer kernel-side states surface in provenance and on `TaskOutcomeEvent.outcome`.\",\n  \"examples\": [\n    \"pending\",\n    \"drafted\"\n  ],\n  \"enum\": [\n    \"pending\",\n    \"drafted\",\n    \"submitted\",\n    \"dismissed\",\n    \"expired\"\n  ]\n}\n ```\n </details>",
+        "description": "Closed user-facing task lifecycle for the public API (ADR 0082 D-12). The kernel runtime carries a richer `created|assigned|claimed|delegated|escalated` set on `wos-process.schema.json#/$defs/ActiveTask.status` for processor-side bookkeeping; the public API collapses those into the user-visible posture: `pending` (the actor has work to do); `drafted` (a partial response is saved); `submitted` (the actor's final response is committed and the task is no longer actionable); `dismissed` (the actor dismissed the UI; Kernel §13.4 leaves the governed task resumable in its current state); `expired` (the SLA `targetDuration` elapsed without submission and the breach policy fired). No vendor-extension seam: the user-facing taxonomy is closed by design; richer kernel-side states surface in provenance and on `TaskOutcomeEvent.outcome`.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Closed user-facing task lifecycle for the public API (ADR 0082 D-12). The kernel runtime carries a richer `created|assigned|claimed|delegated|escalated` set on `wos-process.schema.json#/$defs/ActiveTask.status` for processor-side bookkeeping; the public API collapses those into the user-visible posture: `pending` (the actor has work to do); `drafted` (a partial response is saved); `submitted` (the actor's final response is committed and the task is no longer actionable); `dismissed` (the actor dismissed the UI; Kernel §13.4 leaves the governed task resumable in its current state); `expired` (the SLA `targetDuration` elapsed without submission and the breach policy fired). No vendor-extension seam: the user-facing taxonomy is closed by design; richer kernel-side states surface in provenance and on `TaskOutcomeEvent.outcome`.\",\n  \"examples\": [\n    \"pending\",\n    \"drafted\"\n  ],\n  \"enum\": [\n    \"pending\",\n    \"drafted\",\n    \"submitted\",\n    \"dismissed\",\n    \"expired\"\n  ]\n}\n ```\n </details>",
         "enum": [
           "pending",
           "drafted",
@@ -9783,7 +9968,7 @@
       },
       "TokenIntrospection": {
         "type": "object",
-        "description": "Token introspection response returned by `GET /api/v1/auth/introspect` for the bearer token presented on the request. Modeled after RFC 7662 (OAuth 2.0 Token Introspection) with WOS-specific scope and assurance fields. The `active` flag is the load-bearing field: when false, all other fields except possibly `expiresAt` MAY be omitted (the server is asserting the token does not authenticate). Service-account and workload calls (per VISION §V) use this endpoint to verify their token's continuing validity without round-tripping a real read.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Token introspection response returned by `GET /api/v1/auth/introspect` for the bearer token presented on the request. Modeled after RFC 7662 (OAuth 2.0 Token Introspection) with WOS-specific scope and assurance fields. The `active` flag is the load-bearing field: when false, all other fields except possibly `expiresAt` MAY be omitted (the server is asserting the token does not authenticate). Service-account and workload calls (per VISION §V) use this endpoint to verify their token's continuing validity without round-tripping a real read.\",\n  \"type\": \"object\",\n  \"required\": [\n    \"active\"\n  ],\n  \"properties\": {\n    \"active\": {\n      \"description\": \"True when the bearer token is currently valid (signature verified, not expired, not revoked, not bumped by a global-logout `auth_epoch` rotation). False otherwise.\",\n      \"type\": \"boolean\"\n    },\n    \"actorRef\": {\n      \"description\": \"URN of the principal the token authenticates. Omitted when `active == false`.\",\n      \"$ref\": \"#/$defs/ActorRef\"\n    },\n    \"assuranceLevel\": {\n      \"description\": \"Authentication-assurance level attested by this session (ADR 0068 D-3.1 — Proposed). Omitted when `active == false`.\",\n      \"$ref\": \"#/$defs/AuthAssuranceLevel\"\n    },\n    \"expiresAt\": {\n      \"description\": \"UTC RFC 3339 expiry timestamp. Present when `active == true`; MAY be present when `active == false` if the deployment chooses to disclose that the token had expired (rather than been revoked).\",\n      \"type\": \"string\",\n      \"format\": \"date-time\"\n    },\n    \"issuedAt\": {\n      \"description\": \"UTC RFC 3339 timestamp when the token was issued.\",\n      \"type\": \"string\",\n      \"format\": \"date-time\"\n    },\n    \"loginKind\": {\n      \"description\": \"Credential family used to obtain the original session. Omitted when `active == false`.\",\n      \"$ref\": \"#/$defs/LoginKind\"\n    },\n    \"mfaSatisfied\": {\n      \"description\": \"True when the session has satisfied a second-factor challenge. Omitted when `active == false`.\",\n      \"type\": \"boolean\"\n    },\n    \"scope\": {\n      \"description\": \"Active scope tuple bound to the token (ADR 0068 D-2 — Proposed). Omitted when `active == false`.\",\n      \"$ref\": \"#/$defs/ActorScope\"\n    },\n    \"tokenKind\": {\n      \"description\": \"Closed token-kind taxonomy. Always `bearer` at v1. Omitted when `active == false`.\",\n      \"$ref\": \"#/$defs/TokenKind\"\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
+        "description": "Token introspection response returned by `GET /api/v1/auth/introspect` for the bearer token presented on the request. Modeled after RFC 7662 (OAuth 2.0 Token Introspection) with WOS-specific scope and assurance fields. The `active` flag is the load-bearing field: when false, all other fields except possibly `expiresAt` MAY be omitted (the server is asserting the token does not authenticate). Service-account and workload calls (per VISION §V) use this endpoint to verify their token's continuing validity without round-tripping a real read.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Token introspection response returned by `GET /api/v1/auth/introspect` for the bearer token presented on the request. Modeled after RFC 7662 (OAuth 2.0 Token Introspection) with WOS-specific scope and assurance fields. The `active` flag is the load-bearing field: when false, all other fields except possibly `expiresAt` MAY be omitted (the server is asserting the token does not authenticate). Service-account and workload calls (per VISION §V) use this endpoint to verify their token's continuing validity without round-tripping a real read.\",\n  \"type\": \"object\",\n  \"required\": [\n    \"active\"\n  ],\n  \"properties\": {\n    \"active\": {\n      \"description\": \"True when the bearer token is currently valid (signature verified, not expired, not revoked, not bumped by a global-logout `auth_epoch` rotation). False otherwise.\",\n      \"type\": \"boolean\"\n    },\n    \"actorRef\": {\n      \"description\": \"URN of the principal the token authenticates. Omitted when `active == false`.\",\n      \"$ref\": \"#/$defs/ActorRef\"\n    },\n    \"assuranceLevel\": {\n      \"description\": \"Authentication-assurance level attested by this session (ADR 0068 D-3.1 — Accepted). Omitted when `active == false`.\",\n      \"$ref\": \"#/$defs/AuthAssuranceLevel\"\n    },\n    \"expiresAt\": {\n      \"description\": \"UTC RFC 3339 expiry timestamp. Present when `active == true`; MAY be present when `active == false` if the deployment chooses to disclose that the token had expired (rather than been revoked).\",\n      \"type\": \"string\",\n      \"format\": \"date-time\"\n    },\n    \"issuedAt\": {\n      \"description\": \"UTC RFC 3339 timestamp when the token was issued.\",\n      \"type\": \"string\",\n      \"format\": \"date-time\"\n    },\n    \"loginKind\": {\n      \"description\": \"Credential family used to obtain the original session. Omitted when `active == false`.\",\n      \"$ref\": \"#/$defs/LoginKind\"\n    },\n    \"mfaSatisfied\": {\n      \"description\": \"True when the session has satisfied a second-factor challenge. Omitted when `active == false`.\",\n      \"type\": \"boolean\"\n    },\n    \"scope\": {\n      \"description\": \"Active scope tuple bound to the token (ADR 0082 D-9). Omitted when `active == false`.\",\n      \"$ref\": \"#/$defs/ActorScope\"\n    },\n    \"tokenKind\": {\n      \"description\": \"Closed token-kind taxonomy. Always `bearer` at v1. Omitted when `active == false`.\",\n      \"$ref\": \"#/$defs/TokenKind\"\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
         "required": [
           "active"
         ],
@@ -9810,7 +9995,7 @@
               },
               {
                 "$ref": "#/components/schemas/AuthAssuranceLevel",
-                "description": "Authentication-assurance level attested by this session (ADR 0068 D-3.1 — Proposed). Omitted when `active == false`."
+                "description": "Authentication-assurance level attested by this session (ADR 0068 D-3.1 — Accepted). Omitted when `active == false`."
               }
             ]
           },
@@ -9855,7 +10040,7 @@
               },
               {
                 "$ref": "#/components/schemas/ActorScope",
-                "description": "Active scope tuple bound to the token (ADR 0068 D-2 — Proposed). Omitted when `active == false`."
+                "description": "Active scope tuple bound to the token (ADR 0082 D-9). Omitted when `active == false`."
               }
             ]
           },
