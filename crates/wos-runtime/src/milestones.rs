@@ -149,6 +149,7 @@ mod tests {
 
     fn bare_instance() -> WorkflowProcess {
         WorkflowProcess {
+            actor_bindings: None,
             process_id: "test".to_string(),
             case_ledger_id: "test-case".to_string(),
             tenant: stack_common_typeid::DEFAULT_TENANT.to_string(),

@@ -27,6 +27,14 @@ impl DurableRuntime for WosRuntime {
         WosRuntime::create_process(self, request)
     }
 
+    fn create_process_with_actor_bindings(
+        &mut self,
+        request: CreateProcessRequest,
+        bindings: Vec<wos_core::instance::HumanActorBinding>,
+    ) -> Result<WorkflowProcess, RuntimeError> {
+        WosRuntime::create_process_with_actor_bindings(self, request, bindings)
+    }
+
     fn load_process(&self, process_id: &str) -> Result<WorkflowProcess, RuntimeError> {
         WosRuntime::load_process(self, process_id)
     }

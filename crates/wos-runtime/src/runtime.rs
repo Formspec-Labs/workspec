@@ -3,6 +3,7 @@
 //! Runtime command surface for WOS processors.
 
 mod actions;
+pub(crate) mod actor_bindings;
 mod custody_trellis;
 mod drain;
 mod durable_impl;
@@ -347,6 +348,10 @@ pub enum RuntimeError {
     /// Required workflow metadata is absent.
     #[error("missing workflow metadata: {0}")]
     MissingMetadata(String),
+
+    /// Explicit human assignment resolution failed.
+    #[error("actor binding failed: {0}")]
+    ActorBinding(String),
 
     /// The referenced task was not found.
     #[error("active task not found: {0}")]
@@ -2454,6 +2459,7 @@ mod tests {
 
     fn workflow_intake_request(handoff_id: &str, case_ref: &str) -> IntakeAcceptanceRequest {
         IntakeAcceptanceRequest {
+            actor_bindings: None,
             document: serde_json::json!({
                 "$formspecIntakeHandoff": "1.0",
                 "handoffId": handoff_id,
@@ -2473,6 +2479,7 @@ mod tests {
         definition_version: &str,
     ) -> IntakeAcceptanceRequest {
         IntakeAcceptanceRequest {
+            actor_bindings: None,
             document: serde_json::json!({
                 "$formspecIntakeHandoff": "1.0",
                 "handoffId": handoff_id,
@@ -3217,6 +3224,7 @@ mod tests {
                 let mut decision =
                     AutoCreatePublicIntakePolicy.evaluate_intake_acceptance(context)?;
                 decision.creation = Some(crate::ProcessCreationSnapshot {
+                    actor_bindings: None,
                     process_id: "forged".into(),
                     case_ledger_id: "forged".into(),
                     tenant: "forged".into(),
@@ -3941,6 +3949,7 @@ mod tests {
             .accept_intake_handoff(
                 "unknown",
                 IntakeAcceptanceRequest {
+                    actor_bindings: None,
                     document: serde_json::json!({}),
                     actor_id: None,
                     governed_case_ref: None,
@@ -4405,6 +4414,7 @@ mod tests {
     ) -> ActiveTask {
         let task_id = make_task_id(process_id, ordinal as u64, "review");
         ActiveTask {
+            declared_actor: None,
             task_id: task_id.clone(),
             task_ref: "review".to_string(),
             status: ActiveTaskStatus::Assigned,
@@ -8422,5 +8432,962 @@ mod tests {
             "InvokerSpec::Anthropic MUST route to the anthropic-bound adapter, not the stub"
         );
         assert_eq!(result.output["agent"], "extractor");
+    }
+
+    fn bound_actor_kernel() -> KernelDocument {
+        serde_json::from_value(serde_json::json!({
+            "$wosWorkflow":"1.0", "url":"urn:test:bound-actors", "version":"1.0.0",
+            "actors":[{"id":"reviewer","type":"human"},{"id":"worker","type":"system"}],
+            "lifecycle":{"initialState":"initial","states":{
+                "initial":{"type":"atomic","onEntry":[{"action":"createTask","taskRef":"first","assignTo":"reviewer"}],
+                    "transitions":[{"event":"advance","target":"later"}]},
+                "later":{"type":"atomic","onEntry":[
+                    {"action":"createTask","taskRef":"second","assignTo":"reviewer"},
+                    {"action":"createTask","taskRef":"machine","assignTo":"worker"},
+                    {"action":"createTask","taskRef":"unassigned"}
+                ]}
+            }}
+        })).unwrap()
+    }
+
+    fn bound_actor_request() -> CreateProcessRequest {
+        CreateProcessRequest {
+            process_id: stack_common_typeid::mint_process_id(),
+            tenant: None,
+            definition_url: "urn:test:bound-actors".into(),
+            definition_version: "1.0.0".into(),
+            initial_case_state: None,
+        }
+    }
+
+    fn human_binding(actor: &str) -> Vec<crate::HumanActorBinding> {
+        vec![crate::HumanActorBinding {
+            declared_actor: "reviewer".into(),
+            assigned_actor: actor.into(),
+        }]
+    }
+
+    #[test]
+    fn bound_actor_creation_and_later_tasks_retain_local_slots_and_actual_humans() {
+        let mut runtime = runtime_with_kernel(bound_actor_kernel());
+        let first = DurableRuntime::create_process_with_actor_bindings(
+            &mut runtime,
+            bound_actor_request(),
+            human_binding("actor:human:original"),
+        )
+        .unwrap();
+        assert_eq!(
+            first.active_tasks[0].declared_actor.as_deref(),
+            Some("reviewer")
+        );
+        assert_eq!(
+            first.active_tasks[0].assigned_actor.as_deref(),
+            Some("actor:human:original")
+        );
+        runtime
+            .enqueue_event(
+                &first.process_id,
+                PendingEvent {
+                    event: "advance".into(),
+                    actor_id: Some("actor:human:original".into()),
+                    data: None,
+                    timestamp: first.created_at.clone(),
+                    idempotency_token: None,
+                },
+            )
+            .unwrap();
+        runtime.drain_once(&first.process_id).unwrap();
+        let record = runtime.store.load_record(&first.process_id).unwrap();
+        assert_eq!(record.process.active_tasks.len(), 4);
+        let later = record
+            .process
+            .active_tasks
+            .iter()
+            .find(|t| t.task_ref == "second")
+            .unwrap();
+        assert_eq!(later.declared_actor.as_deref(), Some("reviewer"));
+        assert_eq!(
+            later.assigned_actor.as_deref(),
+            Some("actor:human:original")
+        );
+        let machine = record
+            .process
+            .active_tasks
+            .iter()
+            .find(|t| t.task_ref == "machine")
+            .unwrap();
+        assert_eq!(machine.declared_actor.as_deref(), Some("worker"));
+        assert_eq!(machine.assigned_actor.as_deref(), Some("worker"));
+        let unassigned = record
+            .process
+            .active_tasks
+            .iter()
+            .find(|t| t.task_ref == "unassigned")
+            .unwrap();
+        assert_eq!(unassigned.declared_actor, None);
+        assert_eq!(unassigned.assigned_actor, None);
+        assert_eq!(record.creation.as_ref().unwrap().tasks.len(), 1);
+        assert_eq!(
+            record
+                .provenance_log
+                .iter()
+                .filter(|p| p.record_kind == ProvenanceKind::TaskCreated)
+                .count(),
+            4
+        );
+        record.validate_creation().unwrap();
+    }
+
+    #[test]
+    fn bound_actor_resolution_refuses_missing_foreign_duplicate_and_nonhuman_bindings() {
+        let candidates = vec![
+            vec![],
+            human_binding("actor:human:"),
+            human_binding("actor:human:contains space"),
+            human_binding("actor:workload:original"),
+            vec![crate::HumanActorBinding {
+                declared_actor: "unknown".into(),
+                assigned_actor: "actor:human:original".into(),
+            }],
+            vec![crate::HumanActorBinding {
+                declared_actor: "worker".into(),
+                assigned_actor: "actor:human:original".into(),
+            }],
+            vec![
+                human_binding("actor:human:original")[0].clone(),
+                human_binding("actor:human:other")[0].clone(),
+            ],
+        ];
+        for bindings in candidates {
+            let mut runtime = runtime_with_kernel(bound_actor_kernel());
+            let request = bound_actor_request();
+            let id = request.process_id.clone();
+            assert!(matches!(
+                runtime.create_process_with_actor_bindings(request, bindings),
+                Err(RuntimeError::ActorBinding(_))
+            ));
+            assert!(matches!(
+                runtime.store.load_record(&id),
+                Err(StoreError::NotFound(_))
+            ));
+        }
+        let mut ambiguous = bound_actor_kernel();
+        ambiguous.actors.push(ambiguous.actors[0].clone());
+        assert!(matches!(
+            runtime_with_kernel(ambiguous).create_process_with_actor_bindings(
+                bound_actor_request(),
+                human_binding("actor:human:original")
+            ),
+            Err(RuntimeError::ActorBinding(_))
+        ));
+        assert!(serde_json::from_str::<crate::HumanActorBinding>(r#"{"declaredActor":"reviewer","assignedActor":"actor:human:original","role":"reviewer"}"#).is_err());
+        assert!(serde_json::from_str::<crate::HumanActorBinding>(r#"{"declaredActor":"reviewer","declaredActor":"other","assignedActor":"actor:human:original"}"#).is_err());
+    }
+
+    #[test]
+    fn bound_actor_processes_with_same_local_slot_keep_distinct_original_humans() {
+        let mut runtime = runtime_with_kernel(bound_actor_kernel());
+        let first = runtime
+            .create_process_with_actor_bindings(
+                bound_actor_request(),
+                human_binding("actor:human:first"),
+            )
+            .unwrap();
+        let second = runtime
+            .create_process_with_actor_bindings(
+                bound_actor_request(),
+                human_binding("actor:human:second"),
+            )
+            .unwrap();
+        assert_ne!(first.process_id, second.process_id);
+        assert_ne!(
+            first.active_tasks[0].task_id,
+            second.active_tasks[0].task_id
+        );
+        assert_eq!(
+            runtime
+                .load_process(&first.process_id)
+                .unwrap()
+                .active_tasks[0]
+                .assigned_actor
+                .as_deref(),
+            Some("actor:human:first")
+        );
+        assert_eq!(
+            runtime
+                .load_process(&second.process_id)
+                .unwrap()
+                .active_tasks[0]
+                .assigned_actor
+                .as_deref(),
+            Some("actor:human:second")
+        );
+    }
+
+    #[test]
+    fn bound_actor_dismissal_keeps_actual_human_type_and_replay_identity() {
+        let mut runtime = runtime_with_kernel(bound_actor_kernel());
+        runtime.access_control = Box::new(TaskDelegationProbe::default());
+        let process = runtime
+            .create_process_with_actor_bindings(
+                bound_actor_request(),
+                human_binding("actor:human:original"),
+            )
+            .unwrap();
+        let task = &process.active_tasks[0].task_id;
+        assert!(matches!(
+            runtime.dismiss_task(task, "later", "reviewer", "wrong-slot"),
+            Err(RuntimeError::Unauthorized(_))
+        ));
+        assert!(matches!(
+            runtime.dismiss_task(task, "later", "actor:human:other", "wrong-human"),
+            Err(RuntimeError::Unauthorized(_))
+        ));
+        let result = runtime
+            .dismiss_task(task, "later", "actor:human:original", "original-key")
+            .unwrap();
+        let mut record = runtime.store.load_record(&process.process_id).unwrap();
+        let dismissal = record
+            .provenance_log
+            .iter()
+            .find(|p| p.id == result.provenance_id)
+            .unwrap();
+        assert_eq!(dismissal.actor_id.as_deref(), Some("actor:human:original"));
+        assert_eq!(dismissal.actor_type.as_deref(), Some("human"));
+        assert!(
+            record
+                .replay_entries
+                .keys()
+                .all(|key| key.actor_id == "actor:human:original")
+        );
+        record.process.active_tasks.clear();
+        runtime.store.save_record(record).unwrap();
+        let replay = runtime
+            .dismiss_task(task, "later", "actor:human:original", "original-key")
+            .unwrap();
+        assert_eq!(result, replay);
+    }
+
+    #[test]
+    fn bound_actor_store_refuses_attribution_drift_and_retains_completed_witnesses() {
+        let mut runtime = runtime_with_kernel(bound_actor_kernel());
+        let process = runtime
+            .create_process_with_actor_bindings(
+                bound_actor_request(),
+                human_binding("actor:human:original"),
+            )
+            .unwrap();
+        runtime
+            .enqueue_event(
+                &process.process_id,
+                PendingEvent {
+                    event: "advance".into(),
+                    actor_id: None,
+                    data: None,
+                    timestamp: process.created_at.clone(),
+                    idempotency_token: None,
+                },
+            )
+            .unwrap();
+        runtime.drain_once(&process.process_id).unwrap();
+        let original = runtime.store.load_record(&process.process_id).unwrap();
+        for id in [
+            "malformed".to_string(),
+            stack_common_typeid::mint_process_id(),
+        ] {
+            let mut malformed = original.clone();
+            malformed
+                .provenance_log
+                .iter_mut()
+                .find(|p| p.record_kind == ProvenanceKind::TaskCreated)
+                .unwrap()
+                .id = id;
+            assert!(malformed.validate_creation().is_err());
+        }
+        let mut malformed = original.clone();
+        malformed
+            .provenance_log
+            .iter_mut()
+            .find(|p| p.record_kind == ProvenanceKind::TaskCreated)
+            .unwrap()
+            .timestamp = "malformed".into();
+        assert!(malformed.validate_creation().is_err());
+        let mut malformed = original.clone();
+        malformed
+            .provenance_log
+            .iter_mut()
+            .find(|p| p.record_kind == ProvenanceKind::TaskCreated)
+            .unwrap()
+            .data
+            .as_mut()
+            .unwrap()["details"]
+            .as_object_mut()
+            .unwrap()
+            .remove("binding");
+        assert!(malformed.validate_creation().is_err());
+        let mut changed = original.clone();
+        changed.process.actor_bindings = Some(human_binding("actor:human:other"));
+        assert!(changed.validate_creation().is_err());
+        let mut changed = original.clone();
+        changed.process.active_tasks[1].declared_actor = None;
+        assert!(changed.validate_creation().is_err());
+        let mut changed = original.clone();
+        changed
+            .provenance_log
+            .retain(|p| p.record_kind != ProvenanceKind::TaskCreated);
+        assert!(changed.validate_creation().is_err());
+        let mut changed = original.clone();
+        let witness = changed
+            .provenance_log
+            .iter()
+            .find(|p| p.record_kind == ProvenanceKind::TaskCreated)
+            .unwrap()
+            .clone();
+        changed.provenance_log.push(witness);
+        assert!(changed.validate_creation().is_err());
+        let mut reassigned = original.clone();
+        reassigned.process.active_tasks[1].assigned_actor = Some("actor:human:new-assignee".into());
+        runtime.store.save_record(reassigned).unwrap();
+        let mut completed = runtime.store.load_record(&process.process_id).unwrap();
+        completed.process.active_tasks.clear();
+        runtime.store.save_record(completed.clone()).unwrap();
+        let aux = crate::runtime_aux_from_json(&crate::runtime_aux_to_json(&completed)).unwrap();
+        assert_eq!(aux.creation, completed.creation);
+        let mut changed = completed.clone();
+        let later = changed
+            .provenance_log
+            .iter_mut()
+            .find(|p| {
+                p.record_kind == ProvenanceKind::TaskCreated
+                    && p.data.as_ref().unwrap()["details"]["taskRef"] == "second"
+            })
+            .unwrap();
+        later.data.as_mut().unwrap()["details"]["declaredActor"] = serde_json::json!("worker");
+        later.data.as_mut().unwrap()["details"]["assignedActor"] = serde_json::json!("worker");
+        assert!(changed.validate_creation_update(&completed).is_err());
+        let mut changed = completed.clone();
+        let initial_id = &completed.creation.as_ref().unwrap().tasks[0].task_id;
+        changed.provenance_log.retain(|p| {
+            p.record_kind != ProvenanceKind::TaskCreated
+                || p.data.as_ref().unwrap()["taskId"] == *initial_id
+        });
+        assert!(changed.validate_creation_update(&completed).is_err());
+        let mut stamped = completed.clone();
+        let created = stamped
+            .provenance_log
+            .iter_mut()
+            .find(|p| p.record_kind == ProvenanceKind::TaskCreated)
+            .unwrap();
+        crate::runtime::stamp_custody_receipt(
+            created,
+            &wos_events::custody::CustodyAppendReceipt::new("a".repeat(64)),
+        )
+        .unwrap();
+        stamped.validate_creation_update(&completed).unwrap();
+    }
+
+    #[test]
+    fn bound_actor_intake_replay_refuses_changed_binding_and_preserves_original_creation() {
+        let mut runtime = runtime_with_kernel(bound_actor_kernel())
+            .with_intake_policy(AutoCreatePublicIntakePolicy);
+        let mut request = public_intake_request(
+            "ih-bound-actor",
+            test_case_ledger_urn("bound-intake"),
+            "urn:test:bound-actors",
+            "1.0.0",
+        );
+        request.actor_bindings = Some(human_binding("actor:human:original"));
+        let accepted = runtime
+            .accept_intake_handoff("formspec", request.clone())
+            .unwrap();
+        let original = accepted.creation.unwrap();
+        assert_eq!(original.actor_bindings, request.actor_bindings);
+        assert_eq!(
+            original.tasks[0].declared_actor.as_deref(),
+            Some("reviewer")
+        );
+        assert_eq!(
+            original.tasks[0].assigned_actor.as_deref(),
+            Some("actor:human:original")
+        );
+        let replay = runtime
+            .accept_intake_handoff("formspec", request.clone())
+            .unwrap();
+        assert_eq!(replay.creation, Some(original.clone()));
+        request.actor_bindings = Some(human_binding("actor:human:other"));
+        assert!(matches!(
+            runtime.accept_intake_handoff("formspec", request),
+            Err(RuntimeError::IntakeConflict(_))
+        ));
+        assert_eq!(
+            runtime
+                .store
+                .load_record(&original.process_id)
+                .unwrap()
+                .creation,
+            Some(original)
+        );
+    }
+
+    #[test]
+    fn bound_actor_migration_refuses_definition_change_and_legacy_assignment_stays_supported() {
+        let mut runtime = runtime_with_kernel(bound_actor_kernel());
+        let process = runtime
+            .create_process_with_actor_bindings(
+                bound_actor_request(),
+                human_binding("actor:human:original"),
+            )
+            .unwrap();
+        assert!(matches!(
+            runtime.migrate(&process.process_id, "2.0.0", MigrationMap::default(), None),
+            Err(RuntimeError::MigrationRejected(_))
+        ));
+        let legacy = runtime.create_process(bound_actor_request()).unwrap();
+        assert_eq!(legacy.actor_bindings, None);
+        assert_eq!(
+            legacy.active_tasks[0].assigned_actor.as_deref(),
+            Some("reviewer")
+        );
+        assert_eq!(legacy.active_tasks[0].declared_actor, None);
+        let mut original = runtime.store.load_record(&process.process_id).unwrap();
+        original.process.definition_version = "2.0.0".into();
+        assert!(original.validate_creation().is_err());
+    }
+
+    #[test]
+    fn bound_actor_intake_types_human_before_system_fallback_and_refuses_conflicting_type() {
+        fn request(id: &str) -> IntakeAcceptanceRequest {
+            let mut request = public_intake_request(
+                id,
+                test_case_ledger_urn(id),
+                "urn:test:bound-actors",
+                "1.0.0",
+            );
+            request.actor_id = Some("actor:human:original".into());
+            request.actor_bindings = Some(human_binding("actor:human:original"));
+            request
+        }
+        let mut runtime = runtime_with_kernel(bound_actor_kernel())
+            .with_intake_policy(AutoCreatePublicIntakePolicy);
+        let accepted = runtime
+            .accept_intake_handoff("formspec", request("ih-bound-human-accepted"))
+            .unwrap();
+        for provenance in accepted.provenance.iter().filter(|p| {
+            matches!(
+                p.record_kind,
+                ProvenanceKind::IntakeAccepted | ProvenanceKind::CaseCreated
+            )
+        }) {
+            assert_eq!(provenance.actor_id.as_deref(), Some("actor:human:original"));
+            assert_eq!(provenance.actor_type.as_deref(), Some("human"));
+        }
+        assert!(
+            accepted
+                .provenance
+                .iter()
+                .any(|p| p.record_kind == ProvenanceKind::IntakeAccepted)
+        );
+        let mut rejected = runtime_with_kernel(bound_actor_kernel())
+            .with_intake_policy(PublicIntakeDisabledPolicy);
+        let rejection = rejected
+            .accept_intake_handoff("formspec", request("ih-bound-human-rejected"))
+            .unwrap();
+        let provenance = rejection
+            .provenance
+            .iter()
+            .find(|p| p.record_kind == ProvenanceKind::IntakeRejected)
+            .unwrap();
+        assert_eq!(provenance.actor_type.as_deref(), Some("human"));
+        let mut deferred =
+            runtime_with_kernel(bound_actor_kernel()).with_intake_policy(ManualReviewIntakePolicy);
+        let decision = deferred
+            .accept_intake_handoff("formspec", request("ih-bound-human-deferred"))
+            .unwrap();
+        assert_eq!(
+            decision
+                .provenance
+                .iter()
+                .find(|p| p.record_kind == ProvenanceKind::IntakeDeferred)
+                .unwrap()
+                .actor_type
+                .as_deref(),
+            Some("human")
+        );
+        let process = runtime
+            .load_process(&accepted.creation.unwrap().process_id)
+            .unwrap();
+        let mut conflicting = vec![ProvenanceRecord::task_lifecycle(
+            ProvenanceKind::TaskPresented,
+            "test",
+            Some("actor:human:original"),
+            None,
+        )];
+        conflicting[0].actor_type = Some("system".into());
+        assert!(matches!(
+            super::provenance::populate_process_provenance_fields(
+                &mut conflicting,
+                &bound_actor_kernel(),
+                &process
+            ),
+            Err(RuntimeError::ActorBinding(_))
+        ));
+        assert_eq!(conflicting[0].actor_type.as_deref(), Some("system"));
+    }
+
+    #[test]
+    fn bound_actor_refuses_foreign_resolved_definition_at_initial_and_later_creation() {
+        for foreign_version in [false, true] {
+            let mut foreign = bound_actor_kernel();
+            if foreign_version {
+                foreign.version = Some("2.0.0".into());
+            } else {
+                foreign.url = Some("urn:test:foreign-workflow".into());
+            }
+            fn resolver(kernel: KernelDocument) -> TestResolver {
+                TestResolver {
+                    kernels: HashMap::from([(
+                        ("urn:test:bound-actors".into(), "1.0.0".into()),
+                        kernel,
+                    )]),
+                }
+            }
+            let mut initial = runtime_with_kernel(bound_actor_kernel());
+            initial.resolver = Box::new(resolver(foreign.clone()));
+            let request = bound_actor_request();
+            let id = request.process_id.clone();
+            assert!(matches!(
+                initial.create_process_with_actor_bindings(
+                    request,
+                    human_binding("actor:human:original")
+                ),
+                Err(RuntimeError::ActorBinding(_))
+            ));
+            assert!(matches!(
+                initial.store.load_record(&id),
+                Err(StoreError::NotFound(_))
+            ));
+            let mut later = runtime_with_kernel(bound_actor_kernel());
+            let process = later
+                .create_process_with_actor_bindings(
+                    bound_actor_request(),
+                    human_binding("actor:human:original"),
+                )
+                .unwrap();
+            later
+                .enqueue_event(
+                    &process.process_id,
+                    PendingEvent {
+                        event: "advance".into(),
+                        actor_id: Some("actor:human:original".into()),
+                        data: None,
+                        timestamp: process.created_at.clone(),
+                        idempotency_token: None,
+                    },
+                )
+                .unwrap();
+            let before = later.store.load_record(&process.process_id).unwrap();
+            later.resolver = Box::new(resolver(foreign));
+            assert!(matches!(
+                later.drain_once(&process.process_id),
+                Err(RuntimeError::ActorBinding(_))
+            ));
+            let after = later.store.load_record(&process.process_id).unwrap();
+            assert_eq!(
+                serde_json::to_value(&after.process).unwrap(),
+                serde_json::to_value(&before.process).unwrap()
+            );
+            assert_eq!(
+                crate::runtime_aux_to_json(&after),
+                crate::runtime_aux_to_json(&before)
+            );
+        }
+    }
+
+    fn bound_formspec_kernel() -> KernelDocument {
+        let mut value = serde_json::to_value(bound_actor_kernel()).unwrap();
+        value["contracts"] =
+            serde_json::json!({"reviewForm":{"binding":"formspec","ref":"urn:formspec:review"}});
+        value["lifecycle"]["states"]["initial"]["onEntry"][0]["contractRef"] =
+            serde_json::json!("reviewForm");
+        value["lifecycle"]["states"]["initial"]["onEntry"][0]["extensions"] = serde_json::json!({"x-wos-signature-profile-key":"bound-profile", "x-wos-signature-step-id":"applicantSigns"});
+        serde_json::from_value(value).unwrap()
+    }
+
+    #[test]
+    fn bound_actor_formspec_persist_present_and_authorized_reassignment_keep_original_attribution()
+    {
+        #[derive(Debug)]
+        struct BoundPresenter {
+            store: Arc<Mutex<InMemoryStore>>,
+            calls: Arc<AtomicUsize>,
+        }
+        impl TaskPresenter for BoundPresenter {
+            type Error = PresenterError;
+            fn present_task(&mut self, context: &FormspecTaskContext) -> Result<(), Self::Error> {
+                let store = self.store.lock().unwrap();
+                let record = store.load_record(&context.process_id).unwrap();
+                let task = record
+                    .process
+                    .active_tasks
+                    .iter()
+                    .find(|t| t.task_id == context.task_id)
+                    .unwrap();
+                assert_eq!(task.status, ActiveTaskStatus::Assigned);
+                assert_eq!(task.assigned_actor.as_deref(), Some("actor:human:original"));
+                assert_eq!(task.declared_actor.as_deref(), Some("reviewer"));
+                assert_eq!(context.assigned_actor, "actor:human:original");
+                record.validate_creation().unwrap();
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            }
+            fn dismiss_task(&mut self, _task: &str, _reason: &str) -> Result<(), Self::Error> {
+                Ok(())
+            }
+        }
+        let store = Arc::new(Mutex::new(InMemoryStore::new()));
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut runtime = runtime_with_store(SharedStore(store.clone()), bound_formspec_kernel());
+        runtime.presenter = Box::new(BoundPresenter {
+            store: store.clone(),
+            calls: calls.clone(),
+        });
+        runtime.access_control = Box::new(TaskDelegationProbe::default());
+        let profile_file: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../fixtures/profiles/signature-runtime-sequential.json"
+        ))
+        .unwrap();
+        let mut profile = profile_file["signature"].clone();
+        profile["roles"][0]["actorId"] = serde_json::json!("reviewer");
+        profile["reassignmentPolicy"]["authorizedActorIds"] =
+            serde_json::json!(["actor:human:original"]);
+        runtime = runtime
+            .with_signature_profile("bound-profile", serde_json::from_value(profile).unwrap());
+        let process = runtime
+            .create_process_with_actor_bindings(
+                bound_actor_request(),
+                human_binding("actor:human:original"),
+            )
+            .unwrap();
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        let original = runtime.store.load_record(&process.process_id).unwrap();
+        let original_creation = original.creation.clone();
+        let task = &process.active_tasks[0].task_id;
+        let result = runtime.submit_task_response(task, serde_json::json!({"status":"reassigned","data":{"reason":"qualified reassignment","newActorId":"actor:human:successor"}}), "actor:human:original", Some("reassignment-key")).unwrap();
+        assert!(matches!(result, TaskSubmissionResult::Completed { .. }));
+        let current = runtime.store.load_record(&process.process_id).unwrap();
+        assert_eq!(current.creation, original_creation);
+        assert_eq!(
+            current.process.actor_bindings,
+            original.process.actor_bindings
+        );
+        assert_eq!(
+            current.process.active_tasks[0].declared_actor.as_deref(),
+            Some("reviewer")
+        );
+        assert_eq!(
+            current.process.active_tasks[0].assigned_actor.as_deref(),
+            Some("actor:human:successor")
+        );
+        assert_eq!(
+            current.process.active_tasks[0]
+                .context
+                .as_ref()
+                .unwrap()
+                .assigned_actor,
+            "actor:human:successor"
+        );
+        current.validate_creation().unwrap();
+        assert!(matches!(
+            runtime.dismiss_task(task, "later", "actor:human:original", "old-assignee"),
+            Err(RuntimeError::Unauthorized(_))
+        ));
+    }
+
+    #[test]
+    fn bound_actor_interrupted_intake_resumes_original_allocation_after_task_removal() {
+        for fail_on_save in [1, 2] {
+            let mut runtime = runtime_with_store(
+                IntakeSaveFailingStore::new(fail_on_save),
+                bound_actor_kernel(),
+            )
+            .with_intake_policy(AutoCreatePublicIntakePolicy);
+            let mut request = public_intake_request(
+                &format!("ih-bound-retry-{fail_on_save}"),
+                test_case_ledger_urn(&format!("bound-retry-{fail_on_save}")),
+                "urn:test:bound-actors",
+                "1.0.0",
+            );
+            request.actor_bindings = Some(human_binding("actor:human:original"));
+            assert!(matches!(
+                runtime.accept_intake_handoff("formspec", request.clone()),
+                Err(RuntimeError::Store(StoreError::Failed(_)))
+            ));
+            let mut original = runtime
+                .load_single_record_by_case_ledger_id(
+                    WorkflowProcess::extract_urn_type_id(
+                        request.governed_case_ref.as_deref().unwrap(),
+                    )
+                    .unwrap(),
+                )
+                .unwrap();
+            let creation = original.creation.clone().unwrap();
+            let mut changed = request.clone();
+            changed.actor_bindings = Some(human_binding("actor:human:other"));
+            assert!(matches!(
+                runtime.accept_intake_handoff("formspec", changed),
+                Err(RuntimeError::IntakeConflict(_))
+            ));
+            original.process.active_tasks.clear();
+            runtime.store.save_record(original).unwrap();
+            let resumed = runtime
+                .accept_intake_handoff("formspec", request.clone())
+                .unwrap();
+            assert_eq!(resumed.creation, Some(creation.clone()));
+            assert!(
+                runtime
+                    .load_process(&creation.process_id)
+                    .unwrap()
+                    .active_tasks
+                    .is_empty()
+            );
+            let replay = runtime.accept_intake_handoff("formspec", request).unwrap();
+            assert_eq!(replay.creation, Some(creation.clone()));
+            let record = runtime.store.load_record(&creation.process_id).unwrap();
+            assert_eq!(
+                record
+                    .provenance_log
+                    .iter()
+                    .filter(|p| p.record_kind == ProvenanceKind::TaskCreated)
+                    .count(),
+                1
+            );
+            assert_eq!(
+                record
+                    .provenance_log
+                    .iter()
+                    .filter(|p| p.record_kind == ProvenanceKind::IntakeAccepted)
+                    .count(),
+                1
+            );
+            record.validate_creation().unwrap();
+        }
+    }
+
+    #[test]
+    fn bound_actor_applied_intake_replays_without_resolver_and_refuses_changed_request() {
+        #[derive(Debug)]
+        struct UnavailableResolver {
+            calls: Arc<AtomicUsize>,
+        }
+        impl DocumentResolver for UnavailableResolver {
+            type Error = TestResolverError;
+            fn resolve_kernel(
+                &self,
+                _url: &str,
+                _version: &str,
+            ) -> Result<KernelDocument, Self::Error> {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                Err(TestResolverError("unavailable".into()))
+            }
+            fn resolve_governance(
+                &self,
+                _url: &str,
+                _version: &str,
+            ) -> Result<wos_core::GovernanceDocument, Self::Error> {
+                Err(TestResolverError("unused".into()))
+            }
+            fn resolve_sidecar(
+                &self,
+                _url: &str,
+                _anchor_date: Option<&str>,
+            ) -> Result<serde_json::Value, Self::Error> {
+                Err(TestResolverError("unused".into()))
+            }
+        }
+        for outcome in ["accepted", "rejected", "deferred"] {
+            let runtime = runtime_with_kernel(bound_actor_kernel());
+            let mut runtime = match outcome {
+                "accepted" => runtime.with_intake_policy(AutoCreatePublicIntakePolicy),
+                "rejected" => runtime.with_intake_policy(PublicIntakeDisabledPolicy),
+                _ => runtime.with_intake_policy(ManualReviewIntakePolicy),
+            };
+            let label = format!("ih-bound-outage-{outcome}");
+            let mut request = public_intake_request(
+                &label,
+                test_case_ledger_urn(&label),
+                "urn:test:bound-actors",
+                "1.0.0",
+            );
+            request.actor_id = Some("actor:human:original".into());
+            request.actor_bindings = Some(human_binding("actor:human:original"));
+            let original = runtime
+                .accept_intake_handoff("formspec", request.clone())
+                .unwrap();
+            let original_json = serde_json::to_value(&original).unwrap();
+            let original_receipt = serde_json::to_value(
+                runtime
+                    .store
+                    .load_intake_record("formspec", &label)
+                    .unwrap(),
+            )
+            .unwrap();
+            let calls = Arc::new(AtomicUsize::new(0));
+            runtime.resolver = Box::new(UnavailableResolver {
+                calls: calls.clone(),
+            });
+            let replay = runtime
+                .accept_intake_handoff("formspec", request.clone())
+                .unwrap();
+            assert_eq!(serde_json::to_value(replay).unwrap(), original_json);
+            for change in ["binding", "body", "url", "version"] {
+                let mut changed = request.clone();
+                match change {
+                    "binding" => changed.actor_bindings = Some(human_binding("actor:human:other")),
+                    "body" => changed.document["responseHash"] = serde_json::json!("changed-body"),
+                    "url" => {
+                        changed
+                            .governed_case_definition
+                            .as_mut()
+                            .unwrap()
+                            .definition_url = "urn:test:other".into()
+                    }
+                    _ => {
+                        changed
+                            .governed_case_definition
+                            .as_mut()
+                            .unwrap()
+                            .definition_version = "2.0.0".into()
+                    }
+                }
+                assert!(
+                    matches!(
+                        runtime.accept_intake_handoff("formspec", changed),
+                        Err(RuntimeError::IntakeConflict(_))
+                    ),
+                    "{outcome}: {change}"
+                );
+            }
+            assert_eq!(calls.load(Ordering::SeqCst), 0);
+            assert_eq!(
+                serde_json::to_value(
+                    runtime
+                        .store
+                        .load_intake_record("formspec", &label)
+                        .unwrap()
+                )
+                .unwrap(),
+                original_receipt
+            );
+            let fresh_label = format!("ih-bound-fresh-outage-{outcome}");
+            request.document["handoffId"] = serde_json::json!(fresh_label);
+            request.governed_case_ref = Some(test_case_ledger_urn(&fresh_label).into());
+            assert!(matches!(
+                runtime.accept_intake_handoff("formspec", request),
+                Err(RuntimeError::Resolver(_))
+            ));
+            assert_eq!(calls.load(Ordering::SeqCst), 1);
+            assert!(matches!(
+                runtime.store.load_intake_record("formspec", &fresh_label),
+                Err(StoreError::NotFound(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn bound_actor_foreign_drain_definition_refuses_before_policy_and_service_effects() {
+        #[derive(Debug)]
+        struct RecordingCompanion {
+            calls: Arc<AtomicUsize>,
+        }
+        impl CompanionPolicy for RecordingCompanion {
+            fn evaluate_event(
+                &mut self,
+                context: RuntimeEventContext,
+            ) -> Result<RuntimeEventDecision, RuntimeError> {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                Ok(RuntimeEventDecision::proceed(context.event))
+            }
+        }
+        for identity in ["matching", "foreign-url", "foreign-version"] {
+            for service_only in [false, true] {
+                for integration in [false, true] {
+                    let mut foreign = serde_json::to_value(bound_actor_kernel()).unwrap();
+                    if identity == "foreign-version" {
+                        foreign["version"] = serde_json::json!("2.0.0");
+                    } else if identity == "foreign-url" {
+                        foreign["url"] = serde_json::json!("urn:test:foreign-workflow");
+                    }
+                    let mut actions =
+                        vec![serde_json::json!({"action":"invokeService","serviceRef":"effect"})];
+                    if !service_only {
+                        actions.push(serde_json::json!({"action":"createTask","taskRef":"second","assignTo":"reviewer"}));
+                    }
+                    foreign["lifecycle"]["states"]["later"]["onEntry"] = serde_json::json!(actions);
+                    let foreign: KernelDocument = serde_json::from_value(foreign).unwrap();
+                    let mut runtime = runtime_with_kernel(bound_actor_kernel());
+                    let service = RecordingService::with_response(serde_json::json!({"ok":true}));
+                    let service_calls = service.calls.clone();
+                    runtime.service = Box::new(service);
+                    let policy_calls = Arc::new(AtomicUsize::new(0));
+                    runtime = runtime.with_companion_policy(RecordingCompanion {
+                        calls: policy_calls.clone(),
+                    });
+                    let process = runtime
+                        .create_process_with_actor_bindings(
+                            bound_actor_request(),
+                            human_binding("actor:human:original"),
+                        )
+                        .unwrap();
+                    if integration {
+                        runtime = runtime.with_integration_profile(serde_json::from_value(serde_json::json!({
+                            "targetWorkflow":{"url":"urn:test:bound-actors","compatibleVersions":">=1.0.0 <3.0.0"},
+                            "bindings":{"effect":{"type":"request-response","interface":{"$ref":"urn:openapi:effect"},
+                                "operation":"effect","requestContract":{"definitionRef":"urn:contracts:effect-request"},
+                                "responseContract":{"definitionRef":"urn:contracts:effect-response"}}}
+                        })).unwrap());
+                    }
+                    runtime
+                        .enqueue_event(
+                            &process.process_id,
+                            PendingEvent {
+                                event: "advance".into(),
+                                actor_id: Some("actor:human:original".into()),
+                                data: None,
+                                timestamp: process.created_at.clone(),
+                                idempotency_token: None,
+                            },
+                        )
+                        .unwrap();
+                    let before = runtime.store.load_record(&process.process_id).unwrap();
+                    runtime.resolver = Box::new(TestResolver {
+                        kernels: HashMap::from([(
+                            ("urn:test:bound-actors".into(), "1.0.0".into()),
+                            foreign,
+                        )]),
+                    });
+                    if identity == "matching" {
+                        runtime.drain_once(&process.process_id).unwrap();
+                        assert_eq!(policy_calls.load(Ordering::SeqCst), 1);
+                        assert_eq!(service_calls.load(Ordering::SeqCst), 1);
+                        continue;
+                    }
+                    assert!(matches!(
+                        runtime.drain_once(&process.process_id),
+                        Err(RuntimeError::ActorBinding(_))
+                    ));
+                    assert_eq!(policy_calls.load(Ordering::SeqCst), 0);
+                    assert_eq!(service_calls.load(Ordering::SeqCst), 0);
+                    let after = runtime.store.load_record(&process.process_id).unwrap();
+                    assert_eq!(
+                        serde_json::to_value(&after.process).unwrap(),
+                        serde_json::to_value(&before.process).unwrap()
+                    );
+                    assert_eq!(
+                        crate::runtime_aux_to_json(&after),
+                        crate::runtime_aux_to_json(&before)
+                    );
+                }
+            }
+        }
     }
 }

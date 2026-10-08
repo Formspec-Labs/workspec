@@ -36,10 +36,11 @@
   ],
   "expected_provenance": [
     {
-      "recordKind": "taskDismissed",
+      "recordKind": "taskFailed",
       "data": {
         "details": {
           "signatureStatus": "voided",
+          "reason": "Application withdrawn before signature.",
           "cancelledTaskCount": 5
         }
       }

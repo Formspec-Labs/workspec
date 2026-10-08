@@ -258,6 +258,7 @@ fn runtime_formspec_intake_workflow_attach_uses_case_ledger_identity() {
         .accept_intake_handoff(
             "formspec",
             IntakeAcceptanceRequest {
+                actor_bindings: None,
                 document: workflow_handoff(TEST_CASE_LEDGER_ID, "ih-runtime-it-1"),
                 actor_id: Some("intake-service".to_string()),
                 governed_case_ref: None,
@@ -324,6 +325,7 @@ fn runtime_formspec_intake_public_create_uses_governed_case_ref() {
         .accept_intake_handoff(
             "formspec",
             IntakeAcceptanceRequest {
+                actor_bindings: None,
                 document: public_intake_handoff("ih-public-it-legacy", def_url, def_version),
                 actor_id: Some("intake-service".to_string()),
                 governed_case_ref: Some(TEST_CASE_LEDGER_ID.to_string()),

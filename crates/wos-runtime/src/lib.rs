@@ -65,6 +65,8 @@ pub use store::{
 };
 pub use wos_core::business_calendar::BusinessCalendarDocument;
 #[doc(inline)]
+pub use wos_core::instance::HumanActorBinding;
+#[doc(inline)]
 pub use wos_events::custody::{
     CustodyAppendContext, CustodyAppendError, CustodyAppendInput, CustodyAppendMetadata,
     CustodyAppendReceipt,

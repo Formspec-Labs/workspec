@@ -73,6 +73,7 @@ impl RuntimeRecord {
                 StoreError::InvalidCreationEvidence("original process creation is missing".into())
             })?
             .validate_created_process(&self.process)?;
+        self.validate_bound_task_attribution()?;
         self.validate_dismissal_replay()
     }
 
@@ -88,6 +89,7 @@ impl RuntimeRecord {
                 StoreError::InvalidCreationEvidence("original process creation is missing".into())
             })?
             .validate_process(&self.process)?;
+        self.validate_bound_task_attribution()?;
         self.validate_dismissal_replay()
     }
 
@@ -103,6 +105,25 @@ impl RuntimeRecord {
             ));
         }
         self.validate_creation()?;
+        if previous.process.actor_bindings.is_some() {
+            previous.validate_creation()?;
+            let old: Vec<_> = previous
+                .provenance_log
+                .iter()
+                .filter(|p| p.record_kind == wos_core::ProvenanceKind::TaskCreated)
+                .collect();
+            let new: Vec<_> = self
+                .provenance_log
+                .iter()
+                .filter(|p| p.record_kind == wos_core::ProvenanceKind::TaskCreated)
+                .collect();
+            if new.len() < old.len() {
+                return Err(invalid_attribution("original task attribution was removed"));
+            }
+            for (old, new) in old.into_iter().zip(new) {
+                validate_retained_provenance(old, new)?;
+            }
+        }
         self.validate_dismissal_replay_update(previous)
     }
 
@@ -139,33 +160,141 @@ impl RuntimeRecord {
         }
         let mut changes = Vec::new();
         for (old, incoming) in previous.provenance_log.iter().zip(&self.provenance_log) {
-            let mut expected = old.clone();
-            if let Some(hash) = &incoming.canonical_event_hash {
-                let receipt = wos_events::custody::CustodyAppendReceipt::new(hash.clone());
-                crate::runtime::stamp_custody_receipt(&mut expected, &receipt)
-                    .map_err(|error| StoreError::InvalidProvenanceEvidence(error.to_string()))?;
-                if old.canonical_event_hash.is_none() {
-                    changes.push(ProvenanceCustodyUpdate {
-                        record_id: old.id.clone(),
-                        receipt,
-                    });
-                }
-            } else if old.canonical_event_hash.is_some() {
-                return Err(StoreError::InvalidProvenanceEvidence(
-                    "retained custody receipt was erased".into(),
-                ));
-            }
-            let expected_json = serde_json::to_value(&expected)
-                .map_err(|error| StoreError::InvalidProvenanceEvidence(error.to_string()))?;
-            let incoming_json = serde_json::to_value(incoming)
-                .map_err(|error| StoreError::InvalidProvenanceEvidence(error.to_string()))?;
-            if expected_json != incoming_json {
-                return Err(StoreError::InvalidProvenanceEvidence(
-                    "retained provenance differs beyond its permitted custody stamp".into(),
-                ));
+            if let Some(receipt) = validate_retained_provenance(old, incoming)? {
+                changes.push(ProvenanceCustodyUpdate {
+                    record_id: old.id.clone(),
+                    receipt,
+                });
             }
         }
         Ok(changes)
+    }
+
+    fn validate_bound_task_attribution(&self) -> Result<(), StoreError> {
+        let Some(bindings) = self.process.actor_bindings.as_deref() else {
+            return Ok(());
+        };
+        crate::runtime::actor_bindings::validate_binding_shape(Some(bindings))
+            .map_err(|e| invalid_attribution(&e))?;
+        let mut witnesses = HashMap::new();
+        let mut ids = HashSet::new();
+        let mut ordinals = HashSet::new();
+        for record in self
+            .provenance_log
+            .iter()
+            .filter(|p| p.record_kind == wos_core::ProvenanceKind::TaskCreated)
+        {
+            if !stack_common_typeid::is_valid_type_id(
+                &record.id,
+                Some(stack_common_typeid::PROVENANCE_PREFIX),
+            ) || chrono::DateTime::parse_from_rfc3339(&record.timestamp).is_err()
+                || !ids.insert(&record.id)
+            {
+                return Err(invalid_attribution(
+                    "task creation provenance identity is missing or duplicated",
+                ));
+            }
+            let data = record
+                .data
+                .as_ref()
+                .ok_or_else(|| invalid_attribution("task creation data is absent"))?;
+            let witness: BoundTaskWitness = serde_json::from_value(data.clone())
+                .map_err(|_| invalid_attribution("task creation attribution is malformed"))?;
+            let details = data
+                .get("details")
+                .and_then(serde_json::Value::as_object)
+                .ok_or_else(|| invalid_attribution("task creation details are absent"))?;
+            if !details.contains_key("binding")
+                || !details.contains_key("declaredActor")
+                || !details.contains_key("assignedActor")
+                || crate::task_process_id(&witness.task_id).ok().as_deref()
+                    != Some(self.process.process_id.as_str())
+                || witness.details.task_ref.trim().is_empty()
+                || witnesses.contains_key(&witness.task_id)
+            {
+                return Err(invalid_attribution(
+                    "task creation attribution is missing, foreign or duplicated",
+                ));
+            }
+            let mut parts = witness.task_id.splitn(4, ':');
+            let kind = parts.next();
+            let _encoded_process = parts.next();
+            let raw_ordinal = parts.next().unwrap_or_default();
+            let task_ref = parts.next();
+            let ordinal = raw_ordinal
+                .parse::<u64>()
+                .map_err(|_| invalid_attribution("task creation sequence is malformed"))?;
+            if kind != Some("wos-task")
+                || ordinal == 0
+                || ordinal > self.process.next_task_sequence
+                || ordinal.to_string() != raw_ordinal
+                || task_ref != Some(witness.details.task_ref.as_str())
+                || !ordinals.insert(ordinal)
+            {
+                return Err(invalid_attribution(
+                    "task creation sequence is foreign or duplicated",
+                ));
+            }
+            let expected = match witness.details.declared_actor.as_deref() {
+                Some(declared) => {
+                    if !crate::runtime::actor_bindings::valid_local_actor(declared) {
+                        return Err(invalid_attribution("declared task actor is malformed"));
+                    }
+                    Some(
+                        bindings
+                            .iter()
+                            .find(|b| b.declared_actor == declared)
+                            .map(|b| b.assigned_actor.as_str())
+                            .unwrap_or(declared),
+                    )
+                }
+                None => None,
+            };
+            if witness.details.assigned_actor.as_deref() != expected {
+                return Err(invalid_attribution(
+                    "original task assignment differs from its retained binding",
+                ));
+            }
+            witnesses.insert(witness.task_id.clone(), witness);
+        }
+        if u64::try_from(witnesses.len()).ok() != Some(self.process.next_task_sequence) {
+            return Err(invalid_attribution(
+                "task creation attribution does not cover every created task",
+            ));
+        }
+        let mut active = HashSet::new();
+        for task in &self.process.active_tasks {
+            let witness = witnesses
+                .get(&task.task_id)
+                .ok_or_else(|| invalid_attribution("active task has no original attribution"))?;
+            if !active.insert(&task.task_id)
+                || task.declared_actor != witness.details.declared_actor
+                || task.task_ref != witness.details.task_ref
+            {
+                return Err(invalid_attribution(
+                    "active task declared attribution differs from its original witness",
+                ));
+            }
+        }
+        for task in &self
+            .creation
+            .as_ref()
+            .ok_or_else(|| invalid_attribution("original process creation is absent"))?
+            .tasks
+        {
+            let witness = witnesses
+                .get(&task.task_id)
+                .ok_or_else(|| invalid_attribution("original task has no retained attribution"))?;
+            if task.declared_actor != witness.details.declared_actor
+                || task.assigned_actor != witness.details.assigned_actor
+                || task.task_ref != witness.details.task_ref
+            {
+                return Err(invalid_attribution(
+                    "original creation task attribution conflicts",
+                ));
+            }
+        }
+        Ok(())
     }
 
     /// Validates both directions of retained dismissal operation evidence.
@@ -1089,6 +1218,57 @@ fn decode_dismissal_replays(
     Ok(entries)
 }
 
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct BoundTaskWitness {
+    task_id: String,
+    details: BoundTaskDetails,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct BoundTaskDetails {
+    task_ref: String,
+    #[serde(rename = "binding")]
+    _binding: Option<String>,
+    declared_actor: Option<String>,
+    assigned_actor: Option<String>,
+}
+
+fn invalid_attribution(message: &str) -> StoreError {
+    StoreError::InvalidCreationEvidence(message.into())
+}
+
+fn validate_retained_provenance(
+    old: &ProvenanceRecord,
+    incoming: &ProvenanceRecord,
+) -> Result<Option<wos_events::custody::CustodyAppendReceipt>, StoreError> {
+    let mut expected = old.clone();
+    let mut new_receipt = None;
+    if let Some(hash) = &incoming.canonical_event_hash {
+        let receipt = wos_events::custody::CustodyAppendReceipt::new(hash.clone());
+        crate::runtime::stamp_custody_receipt(&mut expected, &receipt)
+            .map_err(|error| StoreError::InvalidProvenanceEvidence(error.to_string()))?;
+        if old.canonical_event_hash.is_none() {
+            new_receipt = Some(receipt);
+        }
+    } else if old.canonical_event_hash.is_some() {
+        return Err(StoreError::InvalidProvenanceEvidence(
+            "retained custody receipt was erased".into(),
+        ));
+    }
+    let expected_json = serde_json::to_value(&expected)
+        .map_err(|error| StoreError::InvalidProvenanceEvidence(error.to_string()))?;
+    let incoming_json = serde_json::to_value(incoming)
+        .map_err(|error| StoreError::InvalidProvenanceEvidence(error.to_string()))?;
+    if expected_json != incoming_json {
+        return Err(StoreError::InvalidProvenanceEvidence(
+            "retained provenance differs beyond its permitted custody stamp".into(),
+        ));
+    }
+    Ok(new_receipt)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1170,6 +1350,7 @@ mod tests {
             .process
             .active_tasks
             .push(wos_core::instance::ActiveTask {
+                declared_actor: None,
                 task_id: "not-the-captured-task".into(),
                 task_ref: "review".into(),
                 status: wos_core::instance::ActiveTaskStatus::Assigned,
@@ -1397,6 +1578,7 @@ mod tests {
 
     fn record_with(process_id: &str, case_ledger_id: &str) -> RuntimeRecord {
         let instance = WorkflowProcess {
+            actor_bindings: None,
             process_id: process_id.to_string(),
             case_ledger_id: case_ledger_id.to_string(),
             tenant: stack_common_typeid::DEFAULT_TENANT.to_string(),

@@ -8,6 +8,7 @@
   "inline_documents": {
     "kernel": {
       "$wosWorkflow": "1.0",
+      "version": "1.0.0",
       "url": "https://test.example/rel-isolation",
       "actors": [
         {

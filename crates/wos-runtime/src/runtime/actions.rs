@@ -44,14 +44,19 @@ impl WosRuntime {
                 ActionKind::CreateTask => {
                     let task = self.create_active_task(kernel, record, observed, now_iso)?;
                     created_task_ids.push(task.task_id.clone());
+                    let mut details = serde_json::json!({
+                        "taskRef": task.task_ref,
+                        "binding": task.binding,
+                    });
+                    if record.process.actor_bindings.is_some() {
+                        details["declaredActor"] = serde_json::json!(task.declared_actor);
+                        details["assignedActor"] = serde_json::json!(task.assigned_actor);
+                    }
                     provenance.push(ProvenanceRecord::task_lifecycle(
                         ProvenanceKind::TaskCreated,
                         &task.task_id,
                         observed.actor_id.as_deref(),
-                        Some(serde_json::json!({
-                            "taskRef": task.task_ref,
-                            "binding": task.binding,
-                        })),
+                        Some(details),
                     ));
                     record.process.active_tasks.push(task);
                 }
@@ -337,6 +342,17 @@ impl WosRuntime {
         let task_ref = action.task_ref.clone().ok_or_else(|| {
             RuntimeError::MissingMetadata("createTask missing taskRef".to_string())
         })?;
+        super::actor_bindings::validate_binding_definition(
+            record.process.actor_bindings.as_deref(),
+            kernel,
+            &record.process.definition_url,
+            &record.process.definition_version,
+        )?;
+        let assigned_actor = super::actor_bindings::resolve_assignment(
+            record.process.actor_bindings.as_deref(),
+            kernel,
+            action.assign_to.as_deref(),
+        )?;
         let task_sequence = record.process.next_task_sequence + 1;
         record.process.next_task_sequence = task_sequence;
         let task_id = make_task_id(&record.process.process_id, task_sequence, &task_ref);
@@ -345,7 +361,12 @@ impl WosRuntime {
             task_id,
             task_ref,
             status: ActiveTaskStatus::Created,
-            assigned_actor: action.assign_to.clone(),
+            declared_actor: record
+                .process
+                .actor_bindings
+                .as_ref()
+                .and(action.assign_to.clone()),
+            assigned_actor,
             contract_ref: action.contract_ref.clone(),
             binding: None,
             definition_url: None,

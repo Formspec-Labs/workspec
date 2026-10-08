@@ -216,6 +216,7 @@ mod tests {
         assert!(store.is_empty());
 
         let instance = WorkflowProcess {
+            actor_bindings: None,
             process_id: "test-001".to_string(),
             case_ledger_id: "test-case-001".to_string(),
             tenant: "default".to_string(),

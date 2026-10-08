@@ -26,6 +26,55 @@ pub fn stamp_provenance(records: &mut [ProvenanceRecord], now_iso: &str) {
     }
 }
 
+/// Populate provenance using validated process-local human bindings.
+///
+/// Preserves actual acting identities. A declaration or canonical-looking ID
+/// alone does not supply a resolved human type or any access authority.
+///
+/// # Errors
+/// Returns an error for bindings inconsistent with the governing workflow.
+pub(super) fn populate_process_provenance_fields(
+    records: &mut [ProvenanceRecord],
+    kernel: &KernelDocument,
+    process: &WorkflowProcess,
+) -> Result<(), super::RuntimeError> {
+    super::actor_bindings::validate_binding_definition(
+        process.actor_bindings.as_deref(),
+        kernel,
+        &process.definition_url,
+        &process.definition_version,
+    )?;
+    populate_provenance_record_fields(records, kernel, &process.definition_version);
+    populate_bound_actor_types(records, process.actor_bindings.as_deref())?;
+    Ok(())
+}
+
+pub(super) fn populate_bound_actor_types(
+    records: &mut [ProvenanceRecord],
+    bindings: Option<&[wos_core::instance::HumanActorBinding]>,
+) -> Result<(), super::RuntimeError> {
+    for record in records {
+        if record.actor_id.as_deref().is_some_and(|actor| {
+            bindings
+                .into_iter()
+                .flatten()
+                .any(|binding| binding.assigned_actor == actor)
+        }) {
+            if record
+                .actor_type
+                .as_deref()
+                .is_some_and(|kind| kind != "human")
+            {
+                return Err(super::RuntimeError::ActorBinding(
+                    "explicit provenance type conflicts with resolved human".into(),
+                ));
+            }
+            record.actor_type = Some("human".into());
+        }
+    }
+    Ok(())
+}
+
 /// Populate push-stamped Semantic Profile fields on `records`.
 ///
 /// This is the sole append-path site where these fields are filled in, so

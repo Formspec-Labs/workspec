@@ -126,7 +126,7 @@ impl WosRuntime {
         &mut self,
         request: CreateProcessRequest,
     ) -> Result<WorkflowProcess, RuntimeError> {
-        self.create_process_inner(request, None)
+        self.create_process_inner(request, None, None)
     }
 
     /// Create and persist a new workflow process bound to an existing case ledger.
@@ -139,13 +139,42 @@ impl WosRuntime {
         request: CreateProcessRequest,
         case_ledger_id: String,
     ) -> Result<WorkflowProcess, RuntimeError> {
-        self.create_process_inner(request, Some(case_ledger_id))
+        self.create_process_inner(request, Some(case_ledger_id), None)
+    }
+
+    /// Create a process with explicit host-resolved human assignments.
+    ///
+    /// Bindings retain attribution, never current authority. Missing human
+    /// resolution refuses instead of falling back to an authored local ID.
+    ///
+    /// # Errors
+    /// Returns an error for invalid bindings or normal process creation failures.
+    pub fn create_process_with_actor_bindings(
+        &mut self,
+        request: CreateProcessRequest,
+        bindings: Vec<wos_core::instance::HumanActorBinding>,
+    ) -> Result<WorkflowProcess, RuntimeError> {
+        self.create_process_inner(request, None, Some(bindings))
+    }
+
+    /// Create a case-bound process with explicit human assignments.
+    ///
+    /// # Errors
+    /// Returns an error for invalid bindings, case identity or process creation.
+    pub fn create_process_bound_to_case_with_actor_bindings(
+        &mut self,
+        request: CreateProcessRequest,
+        case_ledger_id: String,
+        bindings: Vec<wos_core::instance::HumanActorBinding>,
+    ) -> Result<WorkflowProcess, RuntimeError> {
+        self.create_process_inner(request, Some(case_ledger_id), Some(bindings))
     }
 
     fn create_process_inner(
         &mut self,
         request: CreateProcessRequest,
         bound_case_ledger_id: Option<String>,
+        actor_bindings: Option<Vec<wos_core::instance::HumanActorBinding>>,
     ) -> Result<WorkflowProcess, RuntimeError> {
         let now_ms = self.clock.now_ms();
         let now_iso = format_timestamp(now_ms)?;
@@ -247,6 +276,12 @@ impl WosRuntime {
         let kernel = self
             .resolver
             .resolve_kernel(&definition_url, &definition_version)?;
+        super::actor_bindings::validate_binding_definition(
+            actor_bindings.as_deref(),
+            &kernel,
+            &definition_url,
+            &definition_version,
+        )?;
         let mut evaluator = Evaluator::with_time_and_case_state(
             kernel.clone(),
             now_ms,
@@ -262,6 +297,7 @@ impl WosRuntime {
             tenant,
             definition_url,
             definition_version,
+            actor_bindings,
             configuration: evaluator.configuration().active_states().to_vec(),
             case_state: evaluator.case_state_json(),
             provenance_position: 0,
@@ -303,11 +339,11 @@ impl WosRuntime {
         let (pending_presentations, presentation_provenance) =
             self.stage_pending_tasks_for_presentation(&mut record, &now_iso)?;
         appended_provenance.extend(presentation_provenance);
-        populate_provenance_record_fields(
+        super::provenance::populate_process_provenance_fields(
             &mut appended_provenance,
             &kernel,
-            &record.process.definition_version,
-        );
+            &record.process,
+        )?;
         stamp_provenance(&mut appended_provenance, &now_iso);
         record.process.provenance_position = appended_provenance.len() as u64;
         record.provenance_log.extend(appended_provenance);
@@ -496,6 +532,11 @@ impl WosRuntime {
             });
         }
 
+        if record.process.actor_bindings.is_some() {
+            return Err(RuntimeError::MigrationRejected(
+                "bound human assignments require explicit definition requalification".into(),
+            ));
+        }
         let url = record.process.definition_url.clone();
         let previous_definition_version = record.process.definition_version.clone();
         let target_kernel = self

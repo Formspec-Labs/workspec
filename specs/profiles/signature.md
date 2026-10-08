@@ -332,7 +332,7 @@ The `deploymentLocalSigningIntents` field was the original mechanism in the Post
 
 A decline MUST record signer, reason, timestamp, and document. It MUST follow the configured decline transition.
 
-A void MUST cancel pending signing steps and record the authorizing actor and reason.
+A void MUST cancel pending signing steps and record the authorizing actor and reason. The cancellation records `taskFailed` provenance with `signatureStatus: "voided"`; it does not leave the signing tasks resumable and therefore does not use `taskDismissed`.
 
 An expiry MUST be driven by a typed kernel timer event and MUST record pending signers and expired documents.
 

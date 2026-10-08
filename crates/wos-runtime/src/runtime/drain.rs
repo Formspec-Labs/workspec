@@ -19,7 +19,7 @@ use super::timers::{
 };
 use super::{
     DrainOnceResult, RuntimeError, RuntimeEventContext, WosRuntime, compensation_provenance,
-    format_timestamp, populate_provenance_record_fields, stamp_provenance,
+    format_timestamp, stamp_provenance,
 };
 
 impl WosRuntime {
@@ -40,11 +40,11 @@ impl WosRuntime {
                     &record.process.definition_url,
                     &record.process.definition_version,
                 )?;
-                populate_provenance_record_fields(
+                super::provenance::populate_process_provenance_fields(
                     &mut appended_provenance,
                     &kernel,
-                    &record.process.definition_version,
-                );
+                    &record.process,
+                )?;
                 stamp_provenance(&mut appended_provenance, &now_iso);
                 record.process.updated_at = now_iso;
                 record.process.provenance_position += appended_provenance.len() as u64;
@@ -56,6 +56,12 @@ impl WosRuntime {
 
         record.process.pending_events.remove(0);
         let kernel = self.resolver.resolve_kernel(
+            &record.process.definition_url,
+            &record.process.definition_version,
+        )?;
+        super::actor_bindings::validate_binding_definition(
+            record.process.actor_bindings.as_deref(),
+            &kernel,
             &record.process.definition_url,
             &record.process.definition_version,
         )?;
@@ -80,11 +86,11 @@ impl WosRuntime {
         appended_provenance.extend(decision.provenance);
 
         let Some(event) = decision.event else {
-            populate_provenance_record_fields(
+            super::provenance::populate_process_provenance_fields(
                 &mut appended_provenance,
                 &kernel,
-                &record.process.definition_version,
-            );
+                &record.process,
+            )?;
             stamp_provenance(&mut appended_provenance, &now_iso);
             record.process.updated_at = now_iso;
             record.process.provenance_position += appended_provenance.len() as u64;
@@ -196,11 +202,11 @@ impl WosRuntime {
                 prov_record.event = Some(drained_event_name.clone());
             }
         }
-        populate_provenance_record_fields(
+        super::provenance::populate_process_provenance_fields(
             &mut appended_provenance,
             &kernel,
-            &record.process.definition_version,
-        );
+            &record.process,
+        )?;
         stamp_provenance(&mut appended_provenance, &now_iso);
         record.process.provenance_position += appended_provenance.len() as u64;
         record.provenance_log.extend(appended_provenance.clone());

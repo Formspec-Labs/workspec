@@ -32,6 +32,20 @@ pub trait DurableRuntime {
         request: CreateProcessRequest,
     ) -> Result<WorkflowProcess, RuntimeError>;
 
+    /// Creates a process with explicit host-resolved human assignments.
+    ///
+    /// # Errors
+    /// Refuses on backends without explicit binding support, including empty bindings.
+    fn create_process_with_actor_bindings(
+        &mut self,
+        _request: CreateProcessRequest,
+        _bindings: Vec<wos_core::instance::HumanActorBinding>,
+    ) -> Result<WorkflowProcess, RuntimeError> {
+        Err(RuntimeError::UnsupportedBinding(
+            "explicit human assignments".into(),
+        ))
+    }
+
     /// Loads the canonical workflow process state.
     ///
     /// # Errors

@@ -48,6 +48,7 @@ impl FormspecProcessor for StubProcessor {
 
 fn task_with_pin(definition_url: &str, definition_version: &str) -> ActiveTask {
     ActiveTask {
+        declared_actor: None,
         task_id: "task-replay-1".to_string(),
         task_ref: "review".to_string(),
         status: wos_core::instance::ActiveTaskStatus::Assigned,
@@ -175,6 +176,7 @@ fn revalidate_ignores_stored_pin_match_true() {
     // Task currently pinned to form-v2, but the stored last_validation_outcome
     // claims pin_match: true from a previous (now-stale) pass against form-v1.
     let task = ActiveTask {
+        declared_actor: None,
         task_id: "task-replay-stale".to_string(),
         task_ref: "review".to_string(),
         status: wos_core::instance::ActiveTaskStatus::Assigned,

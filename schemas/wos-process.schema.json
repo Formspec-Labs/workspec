@@ -423,6 +423,22 @@
     },
     "extensions": {
       "$ref": "#/$defs/ExtensionsMap"
+    },
+    "actorBindings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/HumanActorBinding"
+      },
+      "description": "Original host-resolved human assignments scoped to this process and original workflow version. Presence requires explicit human task resolution; an empty array provides no human assignments. Grants no access authority.",
+      "examples": [
+        [
+          {
+            "declaredActor": "reviewer",
+            "assignedActor": "actor:human:reviewer-17"
+          }
+        ],
+        []
+      ]
     }
   },
   "allOf": [
@@ -772,6 +788,14 @@
         },
         "extensions": {
           "$ref": "#/$defs/ExtensionsMap"
+        },
+        "declaredActor": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "description": "Original authored assignment slot, retained independently of current assignedActor. In explicitly bound processes its TaskCreated witness persists after completion.",
+          "examples": [
+            "reviewer"
+          ]
         }
       },
       "description": "Durable nonterminal task state for an active task."
@@ -1571,6 +1595,39 @@
         "openStringKind": "uri"
       },
       "minLength": 1
+    },
+    "HumanActorBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "declaredActor",
+        "assignedActor"
+      ],
+      "properties": {
+        "declaredActor": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "description": "Original declared workflow-local human actor slot.",
+          "examples": [
+            "reviewer"
+          ]
+        },
+        "assignedActor": {
+          "type": "string",
+          "pattern": "^actor:human:[A-Za-z0-9._-]+$",
+          "description": "Actual canonical human identity selected by qualified host admission.",
+          "examples": [
+            "actor:human:reviewer-17"
+          ]
+        }
+      },
+      "description": "Retained resolved human attribution; the host separately qualifies original user, deployment and current resource authority.",
+      "examples": [
+        {
+          "declaredActor": "reviewer",
+          "assignedActor": "actor:human:reviewer-17"
+        }
+      ]
     }
   }
 }

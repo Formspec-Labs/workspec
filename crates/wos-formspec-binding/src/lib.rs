@@ -1596,6 +1596,7 @@ mod tests {
 
     fn formspec_task() -> ActiveTask {
         ActiveTask {
+            declared_actor: None,
             task_id: "task-1".to_string(),
             task_ref: "review".to_string(),
             status: wos_core::instance::ActiveTaskStatus::Assigned,
@@ -2720,6 +2721,7 @@ mod tests {
 
         let result = adapter
             .interpret_intake_handoff(&IntakeAcceptanceRequest {
+                actor_bindings: None,
                 document: doc,
                 actor_id: Some("urn:iam:actor:intake-service".to_string()),
                 governed_case_ref: None,
@@ -2743,6 +2745,7 @@ mod tests {
 
         let result = adapter
             .interpret_intake_handoff(&IntakeAcceptanceRequest {
+                actor_bindings: None,
                 document: public_intake_handoff(),
                 actor_id: Some("urn:iam:actor:intake-service".to_string()),
                 governed_case_ref: None,
@@ -2770,6 +2773,7 @@ mod tests {
         let provenance = adapter
             .finalize_intake_acceptance(
                 &IntakeAcceptanceRequest {
+                    actor_bindings: None,
                     document: doc,
                     actor_id: Some("urn:iam:actor:intake-service".to_string()),
                     governed_case_ref: None,
@@ -2810,6 +2814,7 @@ mod tests {
         let err = adapter
             .finalize_intake_acceptance(
                 &IntakeAcceptanceRequest {
+                    actor_bindings: None,
                     document: doc,
                     actor_id: Some("urn:iam:actor:intake-service".to_string()),
                     governed_case_ref: None,

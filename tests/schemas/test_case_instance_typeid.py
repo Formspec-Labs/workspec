@@ -136,3 +136,44 @@ def test_workflow_process_accepts_default_tenant_literal():
     doc["tenant"] = "default"
     errors = list(validator.iter_errors(doc))
     assert errors == [], f"valid default-tenant WorkflowProcess rejected: {errors}"
+
+
+
+def test_explicit_human_binding_keeps_local_slot_separate_from_canonical_assignment():
+    validator = Draft202012Validator(json.loads(PROCESS_SCHEMA.read_text()))
+    doc = _minimal_instance()
+    doc["actorBindings"] = [{"declaredActor": "reviewer", "assignedActor": "actor:human:reviewer-17"}]
+    doc["activeTasks"] = [{
+        "taskId": "task-1", "taskRef": "review", "status": "created",
+        "declaredActor": "reviewer", "assignedActor": "actor:human:reviewer-17",
+        "createdAt": doc["createdAt"], "updatedAt": doc["updatedAt"],
+    }]
+    assert list(validator.iter_errors(doc)) == []
+    doc["actorBindings"] = []
+    assert list(validator.iter_errors(doc)) == []  # Resolution is a runtime check.
+
+
+def test_explicit_human_binding_refuses_identity_substitution_and_unknown_fields():
+    validator = Draft202012Validator(json.loads(PROCESS_SCHEMA.read_text()))
+    for binding in [
+        {"declaredActor": "actor:human:reviewer-17", "assignedActor": "actor:human:reviewer-17"},
+        {"declaredActor": "reviewer", "assignedActor": "reviewer"},
+        {"declaredActor": "reviewer", "assignedActor": "actor:workload:reviewer-17"},
+        {"declaredActor": "reviewer", "assignedActor": "actor:human:"},
+        {"declaredActor": "reviewer", "assignedActor": "actor:human:contains space"},
+        {"declaredActor": "reviewer", "assignedActor": "actor:human:reviewer-17", "role": "Adjudicator"},
+    ]:
+        doc = _minimal_instance()
+        doc["actorBindings"] = [binding]
+        assert list(validator.iter_errors(doc)), binding
+
+
+def test_declared_task_actor_refuses_canonical_identity_in_local_slot():
+    validator = Draft202012Validator(json.loads(PROCESS_SCHEMA.read_text()))
+    doc = _minimal_instance()
+    doc["activeTasks"] = [{
+        "taskId": "task-1", "taskRef": "review", "status": "created",
+        "declaredActor": "actor:human:reviewer-17", "assignedActor": "actor:human:reviewer-17",
+        "createdAt": doc["createdAt"], "updatedAt": doc["updatedAt"],
+    }]
+    assert list(validator.iter_errors(doc))

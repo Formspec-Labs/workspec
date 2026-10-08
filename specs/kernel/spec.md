@@ -116,6 +116,21 @@ The `actorExtension` seam (S10.1) allows higher layers to register additional ac
 
 Actor assignment to specific workflow actions is implementation-defined in kernel-only deployments. The kernel declares which actors exist and their types; the runtime determines which specific actor performs which action based on implementation-specific policies (role-based routing, load balancing, manual assignment, etc.).
 
+#### Explicit Human Assignment — Normative Contract
+
+Workflow `Actor.id` and authored `createTask.assignTo` identify local declared actor slots. A host MAY supply explicit human assignments when creating a process. When supplied, the processor MUST validate each binding against exactly one declared human actor and retain the local slot separately from the actual canonical human identity. Every human `createTask`, initially or later, MUST resolve through the original retained bindings; missing, ambiguous, malformed or foreign resolution MUST refuse without falling back to the local slot. Non-human assignment semantics remain unchanged.
+
+The processor MUST retain original bindings with immutable process creation evidence. It MUST retain each bound task's original declared slot and actual assignment in its `TaskCreated` evidence, including after task completion, and refuse missing, conflicting or changed attribution on restore/update. A supported reassignment changes current `assignedActor` without rewriting the original slot or assignment. Bound processes MUST refuse definition-version migration until an explicit qualified rebinding procedure exists.
+
+#### Composition
+
+Explicit assignment implements §3.4; it does not widen the workflow actor identifier syntax or introduce a new authoring extension. The host qualifies the original internal human, deployment and exact workflow selection through maintained identity and admission policies before supplying a binding. Neither an authored slot nor a retained binding grants resource access. Current read/action admission remains independent. Commands and replay keys retain the actual authenticated acting identity. Provenance preserves that actual identity and resolves human type only through qualified binding facts; an unknown delegated identity does not acquire a type from a role label.
+
+#### Conformance
+
+The runtime artifact schema checks closed binding fields, local-slot syntax and canonical human reference syntax. Runtime checks declaration uniqueness and human type, every initial/later task resolution, immutable creation bindings, retained task attribution, process isolation, request equality on intake replay and refusal of unqualified migration. Fixtures check actual canonical command/provenance/replay identity with local IDs preserved, invalid or absent resolution, legitimate current reassignment without original-attribution changes, and unchanged non-human and kernel-only behavior. Host conformance separately checks original-user/deployment/current-resource qualification; Core binding validation supplies no provider or resource authority.
+
+
 ---
 
 ## 4. Lifecycle Topology

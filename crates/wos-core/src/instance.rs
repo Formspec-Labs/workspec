@@ -17,6 +17,19 @@ fn default_tenant() -> String {
     typeid::DEFAULT_TENANT.to_string()
 }
 
+/// A host-resolved human assignment for one authored workflow actor.
+///
+/// This retained attribution grants no read, action, or deployment authority.
+/// Hosts qualify the original human and deployment before process creation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct HumanActorBinding {
+    /// Original workflow-local human actor identifier.
+    pub declared_actor: String,
+    /// Actual canonical human identity selected by the host.
+    pub assigned_actor: String,
+}
+
 /// A running workflow process (Runtime Companion S3.1).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -41,6 +54,14 @@ pub struct WorkflowProcess {
 
     /// Version of the Kernel Document, pinned at creation.
     pub definition_version: String,
+
+    /// Original host-resolved human assignments, scoped to this process and definition.
+    ///
+    /// `None` preserves kernel-only assignment; `Some`, even empty, requires
+    /// explicit resolution for every human task. Original creation evidence
+    /// retains these assignments independently of later task reassignment.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor_bindings: Option<Vec<HumanActorBinding>>,
 
     /// Active leaf states in deterministic document order.
     pub configuration: Vec<String>,
@@ -292,6 +313,10 @@ pub struct ActiveTask {
 
     /// Current nonterminal task status.
     pub status: ActiveTaskStatus,
+
+    /// Original authored actor slot, retained independently of reassignment.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub declared_actor: Option<String>,
 
     /// Assigned actor identifier.
     #[serde(default, skip_serializing_if = "Option::is_none")]

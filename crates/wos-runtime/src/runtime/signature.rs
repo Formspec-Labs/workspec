@@ -1404,7 +1404,7 @@ impl WosRuntime {
                     task_count_before_void.saturating_sub(record.process.active_tasks.len());
                 self.push_signature_lifecycle_record(
                     record,
-                    ProvenanceKind::TaskDismissed,
+                    ProvenanceKind::TaskFailed,
                     &task,
                     actor_id,
                     now_iso,
@@ -1436,6 +1436,11 @@ impl WosRuntime {
                 record.process.active_tasks[task_index].assigned_actor =
                     Some(new_actor.to_string());
                 record.process.active_tasks[task_index].updated_at = now_iso.to_string();
+                if record.process.actor_bindings.is_some()
+                    && let Some(context) = record.process.active_tasks[task_index].context.as_mut()
+                {
+                    context.assigned_actor = new_actor.to_string();
+                }
                 let assignments = record
                     .process
                     .extensions
@@ -1949,11 +1954,11 @@ impl WosRuntime {
             &record.process.definition_url,
             &record.process.definition_version,
         )?;
-        super::populate_provenance_record_fields(
+        super::provenance::populate_process_provenance_fields(
             std::slice::from_mut(&mut provenance),
             &kernel,
-            &record.process.definition_version,
-        );
+            &record.process,
+        )?;
         record.process.provenance_position += 1;
         record.provenance_log.push(provenance);
         record.process.updated_at = now_iso.to_string();

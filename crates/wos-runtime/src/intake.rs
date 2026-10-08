@@ -64,6 +64,11 @@ pub enum IntakeCaseDisposition {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IntakeAcceptanceRequest {
+    /// Host-resolved original human assignments for a newly governed process.
+    ///
+    /// Included in durable intake request equality; never derived from the body.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor_bindings: Option<Vec<wos_core::instance::HumanActorBinding>>,
     /// Binding-native intake handoff document to parse and validate.
     pub document: serde_json::Value,
     /// Actor or service handling the intake boundary.
@@ -142,6 +147,9 @@ pub struct ProcessCreationSnapshot {
     pub definition_version: String,
     /// Original process creation timestamp.
     pub created_at: String,
+    /// Immutable original human assignments selected at process creation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor_bindings: Option<Vec<wos_core::instance::HumanActorBinding>>,
     /// Task metadata after creation staging, in creation order.
     pub tasks: Vec<TaskCreationSnapshot>,
 }
@@ -160,6 +168,9 @@ pub struct TaskCreationSnapshot {
     pub catalog_pattern: Option<String>,
     /// Original nonterminal runtime task status.
     pub status: wos_core::instance::ActiveTaskStatus,
+    /// Original authored actor slot, separate from actual human identity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub declared_actor: Option<String>,
     /// Original assigned actor.
     pub assigned_actor: Option<String>,
     /// Original deadline.
@@ -224,6 +235,7 @@ impl ProcessCreationSnapshot {
                 catalog_title: metadata("title")?,
                 catalog_pattern: metadata("pattern")?,
                 status: task.status,
+                declared_actor: task.declared_actor.clone(),
                 assigned_actor: task.assigned_actor.clone(),
                 deadline: task.deadline.clone(),
                 impact_level: task.impact_level,
@@ -238,6 +250,7 @@ impl ProcessCreationSnapshot {
             definition_url: process.definition_url.clone(),
             definition_version: process.definition_version.clone(),
             created_at: process.created_at.clone(),
+            actor_bindings: process.actor_bindings.clone(),
             tasks,
         };
         snapshot.validate()?;
@@ -264,6 +277,8 @@ impl ProcessCreationSnapshot {
                 "original process identity or metadata is invalid",
             ));
         }
+        crate::runtime::actor_bindings::validate_binding_shape(self.actor_bindings.as_deref())
+            .map_err(|error| invalid_creation(&error))?;
         let mut seen = std::collections::HashSet::new();
         for task in &self.tasks {
             if crate::task_process_id(&task.task_id).ok().as_deref()
@@ -304,6 +319,7 @@ impl ProcessCreationSnapshot {
             if original.task_id != actual.task_id
                 || original.task_ref != actual.task_ref
                 || original.status != actual.status
+                || original.declared_actor != actual.declared_actor
                 || original.assigned_actor != actual.assigned_actor
                 || original.deadline != actual.deadline
                 || original.impact_level != actual.impact_level
@@ -329,6 +345,9 @@ impl ProcessCreationSnapshot {
             || self.tenant != process.tenant
             || self.definition_url != process.definition_url
             || self.created_at != process.created_at
+            || self.actor_bindings != process.actor_bindings
+            || (self.actor_bindings.is_some()
+                && self.definition_version != process.definition_version)
         {
             return Err(invalid_creation(
                 "creation snapshot does not belong to the actual process",
@@ -358,7 +377,8 @@ impl ProcessCreationSnapshot {
         };
         let raw_case =
             wos_core::instance::WorkflowProcess::extract_urn_type_id(case_ref).unwrap_or(case_ref);
-        if raw_case != self.case_ledger_id
+        if self.actor_bindings != request.actor_bindings
+            || raw_case != self.case_ledger_id
             || definition.definition_url != self.definition_url
             || definition.definition_version != self.definition_version
             || request.governed_case_ref.as_deref().is_some_and(|value| {

@@ -24,7 +24,7 @@ use super::{
     AdmissionOutcome, COMPLETION_EVENT_EXTENSION_KEY, DismissTaskResult,
     FAILURE_EVENT_EXTENSION_KEY, PersistDraftResult, RuntimeError, TaskSubmissionResult,
     WosRuntime, contract_validation_record, format_timestamp, impact_level_label, merge_case_state,
-    populate_provenance_record_fields, stamp_provenance, stamp_signature_decision_identity,
+    stamp_provenance, stamp_signature_decision_identity,
 };
 
 impl WosRuntime {
@@ -96,11 +96,11 @@ impl WosRuntime {
             &record.process.definition_url,
             &record.process.definition_version,
         )?;
-        populate_provenance_record_fields(
+        super::provenance::populate_process_provenance_fields(
             std::slice::from_mut(&mut provenance),
             &kernel,
-            &record.process.definition_version,
-        );
+            &record.process,
+        )?;
         record.process.provenance_position += 1;
         record.provenance_log.push(provenance);
         record.process.updated_at = now_iso;
@@ -192,11 +192,11 @@ impl WosRuntime {
             ),
         );
         dismissal.timestamp = now_iso.clone();
-        populate_provenance_record_fields(
+        super::provenance::populate_process_provenance_fields(
             std::slice::from_mut(&mut dismissal),
             &kernel,
-            &record.process.definition_version,
-        );
+            &record.process,
+        )?;
         let result = DismissTaskResult {
             provenance_id: dismissal.id.clone(),
             occurred_at: dismissal.timestamp.clone(),
@@ -334,11 +334,11 @@ impl WosRuntime {
                 &record.process.definition_url,
                 &record.process.definition_version,
             )?;
-            populate_provenance_record_fields(
+            super::provenance::populate_process_provenance_fields(
                 &mut provenance,
                 &kernel,
-                &record.process.definition_version,
-            );
+                &record.process,
+            )?;
             stamp_signature_decision_identity(&mut provenance, &record.process);
             stamp_provenance(&mut provenance, &now_iso);
             record.process.provenance_position += provenance.len() as u64;
@@ -411,11 +411,11 @@ impl WosRuntime {
                 &record.process.definition_url,
                 &record.process.definition_version,
             )?;
-            populate_provenance_record_fields(
+            super::provenance::populate_process_provenance_fields(
                 &mut provenance,
                 &kernel,
-                &record.process.definition_version,
-            );
+                &record.process,
+            )?;
             stamp_signature_decision_identity(&mut provenance, &record.process);
             stamp_provenance(&mut provenance, &now_iso);
             record.process.provenance_position += provenance.len() as u64;
@@ -534,11 +534,11 @@ impl WosRuntime {
                 })),
             ));
         }
-        populate_provenance_record_fields(
+        super::provenance::populate_process_provenance_fields(
             &mut provenance,
             &kernel,
-            &record.process.definition_version,
-        );
+            &record.process,
+        )?;
         stamp_signature_decision_identity(&mut provenance, &record.process);
         stamp_provenance(&mut provenance, &now_iso);
         record.process.provenance_position += provenance.len() as u64;
@@ -615,11 +615,11 @@ impl WosRuntime {
             &record.process.definition_url,
             &record.process.definition_version,
         )?;
-        populate_provenance_record_fields(
+        super::provenance::populate_process_provenance_fields(
             std::slice::from_mut(&mut rejection),
             &kernel,
-            &record.process.definition_version,
-        );
+            &record.process,
+        )?;
         record.provenance_log.push(rejection);
         record.process.updated_at = updated_at.to_string();
         if let Some(token) = idempotency_token {

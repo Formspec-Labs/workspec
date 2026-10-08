@@ -39,6 +39,7 @@ fn fixture_for_kernel(kernel_path: &str) -> ConformanceFixture {
 fn flat_kernel_with_set_data() -> serde_json::Value {
     json!({
         "$wosWorkflow": "1.0",
+        "version": "1.0.0",
         "url": "https://test.example.com/flat",
         "actors": [
             { "id": "user", "type": "human" },
@@ -96,6 +97,7 @@ fn flat_kernel_with_set_data() -> serde_json::Value {
 fn compound_kernel() -> serde_json::Value {
     json!({
         "$wosWorkflow": "1.0",
+        "version": "1.0.0",
         "url": "https://test.example.com/compound",
         "actors": [
             { "id": "user", "type": "human" }
@@ -146,6 +148,7 @@ fn compound_kernel() -> serde_json::Value {
 fn timer_kernel() -> serde_json::Value {
     json!({
         "$wosWorkflow": "1.0",
+        "version": "1.0.0",
         "url": "https://test.example.com/timer",
         "actors": [
             { "id": "user", "type": "human" }
@@ -184,6 +187,7 @@ fn timer_kernel() -> serde_json::Value {
 fn cancel_timer_kernel() -> serde_json::Value {
     json!({
         "$wosWorkflow": "1.0",
+        "version": "1.0.0",
         "url": "https://test.example.com/cancel-timer",
         "actors": [
             { "id": "user", "type": "human" }
@@ -224,6 +228,7 @@ fn cancel_timer_kernel() -> serde_json::Value {
 fn parallel_kernel() -> serde_json::Value {
     json!({
         "$wosWorkflow": "1.0",
+        "version": "1.0.0",
         "url": "https://test.example.com/parallel",
         "actors": [
             { "id": "reviewerA", "type": "human" },
@@ -383,6 +388,7 @@ fn set_data_result_visible_in_guard_evaluation() {
     // checks caseFile.amount > 50.
     let kernel = json!({
         "$wosWorkflow": "1.0",
+        "version": "1.0.0",
         "url": "https://test.example.com/guard-after-setdata",
         "actors": [{ "id": "user", "type": "human" }],
         "caseFile": {
@@ -833,6 +839,7 @@ fn guard_evaluation_first_match_wins_document_order() {
     // Two transitions on the same event, first guard passes.
     let kernel = json!({
         "$wosWorkflow": "1.0",
+        "version": "1.0.0",
         "url": "https://test.example.com/first-match",
         "actors": [{ "id": "user", "type": "human" }],
         "caseFile": {
@@ -896,6 +903,7 @@ fn guard_evaluation_first_match_wins_document_order() {
 fn guard_evaluation_fallthrough_when_first_guard_fails() {
     let kernel = json!({
         "$wosWorkflow": "1.0",
+        "version": "1.0.0",
         "url": "https://test.example.com/fallthrough",
         "actors": [{ "id": "user", "type": "human" }],
         "caseFile": {

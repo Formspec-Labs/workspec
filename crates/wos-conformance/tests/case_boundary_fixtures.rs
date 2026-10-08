@@ -175,6 +175,7 @@ fn registered_event_literals() -> HashSet<String> {
 
 fn workflow_process(spec: &ProcessSpec, case_ledger_id: &str) -> WorkflowProcess {
     WorkflowProcess {
+        actor_bindings: None,
         process_id: spec.process_id.clone(),
         case_ledger_id: case_ledger_id.to_string(),
         tenant: stack_common_typeid::DEFAULT_TENANT.to_string(),
@@ -256,6 +257,7 @@ fn execute_fixture(fixture: &CaseBoundaryFixture) -> FixtureExecution {
     for spec in &fixture.processes {
         let process = workflow_process(spec, &fixture.case_ledger_id);
         let creation = ProcessCreationSnapshot {
+            actor_bindings: None,
             process_id: process.process_id.clone(),
             case_ledger_id: process.case_ledger_id.clone(),
             tenant: process.tenant.clone(),

@@ -43,25 +43,41 @@ impl WosRuntime {
         })?;
         let interpretation = adapter.interpret_intake_handoff(&request)?;
 
-        let persisted =
-            match self.load_replayable_intake_record(binding, &interpretation, &request)? {
-                Some(record) => record,
-                None => {
-                    let decision =
-                        self.intake_policy
-                            .evaluate_intake_acceptance(&IntakePolicyContext {
-                                binding: binding.to_string(),
-                                request: request.clone(),
-                                interpretation: interpretation.clone(),
-                            })?;
-                    self.persist_pending_intake_record(
-                        binding,
-                        &interpretation,
-                        &request,
-                        decision,
-                    )?
-                }
-            };
+        let replay = self.load_replayable_intake_record(binding, &interpretation, &request)?;
+        super::actor_bindings::validate_binding_shape(request.actor_bindings.as_deref())
+            .map_err(RuntimeError::ActorBinding)?;
+        // Applied decisions use retained evidence; fresh or unfinished work
+        // must validate the definition before policy, allocation, or append.
+        if !replay
+            .as_ref()
+            .is_some_and(|record| record.status == IntakeRecordStatus::Applied)
+            && request.actor_bindings.is_some()
+            && let Some(definition) = &request.governed_case_definition
+        {
+            let kernel = self
+                .resolver
+                .resolve_kernel(&definition.definition_url, &definition.definition_version)?;
+            super::actor_bindings::validate_binding_definition(
+                request.actor_bindings.as_deref(),
+                &kernel,
+                &definition.definition_url,
+                &definition.definition_version,
+            )?;
+        }
+
+        let persisted = match replay {
+            Some(record) => record,
+            None => {
+                let decision =
+                    self.intake_policy
+                        .evaluate_intake_acceptance(&IntakePolicyContext {
+                            binding: binding.to_string(),
+                            request: request.clone(),
+                            interpretation: interpretation.clone(),
+                        })?;
+                self.persist_pending_intake_record(binding, &interpretation, &request, decision)?
+            }
+        };
 
         let prepared = self.prepare_intake_record(
             binding,
@@ -156,7 +172,8 @@ impl WosRuntime {
         }
 
         let policy_outcome = record.outcome.clone();
-        let (final_outcome, creation) = self.canonicalize_intake_outcome(&policy_outcome)?;
+        let (final_outcome, creation) =
+            self.canonicalize_intake_outcome(&policy_outcome, request)?;
         let finalize_outcome = outcome_for_binding_finalize(&policy_outcome, &final_outcome);
         let mut provenance = record.provenance_log.clone();
         provenance.push(intake_outcome_provenance(
@@ -182,6 +199,7 @@ impl WosRuntime {
     fn canonicalize_intake_outcome(
         &mut self,
         outcome: &IntakeAcceptanceOutcome,
+        request: &IntakeAcceptanceRequest,
     ) -> Result<
         (
             IntakeAcceptanceOutcome,
@@ -193,6 +211,15 @@ impl WosRuntime {
             IntakeAcceptanceOutcome::Accepted { case_disposition } => match case_disposition {
                 IntakeCaseDisposition::AttachToExistingCase { case_ref } => {
                     let case = self.load_record_for_case_ref(case_ref)?.process;
+                    if request
+                        .actor_bindings
+                        .as_ref()
+                        .is_some_and(|bindings| case.actor_bindings.as_ref() != Some(bindings))
+                    {
+                        return Err(RuntimeError::IntakeConflict(
+                            "attached process human assignments differ".into(),
+                        ));
+                    }
                     Ok((
                         IntakeAcceptanceOutcome::Accepted {
                             case_disposition: IntakeCaseDisposition::AttachToExistingCase {
@@ -214,19 +241,33 @@ impl WosRuntime {
                                 definition,
                                 case_ref,
                             )?;
+                            if existing.process.actor_bindings != request.actor_bindings {
+                                return Err(RuntimeError::IntakeConflict(
+                                    "existing process human assignments differ".into(),
+                                ));
+                            }
                             existing.process
                         }
-                        Err(RuntimeError::Store(StoreError::NotFound(_))) => self
-                            .create_process_bound_to_case(
-                                CreateProcessRequest {
-                                    process_id: String::new(),
-                                    tenant: None,
-                                    definition_url: definition.definition_url.clone(),
-                                    definition_version: definition.definition_version.clone(),
-                                    initial_case_state: initial_case_state.clone(),
-                                },
-                                case_ref.clone(),
-                            )?,
+                        Err(RuntimeError::Store(StoreError::NotFound(_))) => {
+                            let create = CreateProcessRequest {
+                                process_id: String::new(),
+                                tenant: None,
+                                definition_url: definition.definition_url.clone(),
+                                definition_version: definition.definition_version.clone(),
+                                initial_case_state: initial_case_state.clone(),
+                            };
+                            match &request.actor_bindings {
+                                Some(bindings) => self
+                                    .create_process_bound_to_case_with_actor_bindings(
+                                        create,
+                                        case_ref.clone(),
+                                        bindings.clone(),
+                                    )?,
+                                None => {
+                                    self.create_process_bound_to_case(create, case_ref.clone())?
+                                }
+                            }
+                        }
                         Err(error) => return Err(error),
                     };
                     let original = self.store.load_record(&case.process_id)?;
@@ -329,17 +370,25 @@ impl WosRuntime {
             }
 
             let mut prepared = original.clone();
+            super::actor_bindings::validate_bindings(
+                record.process.actor_bindings.as_deref(),
+                &kernel,
+            )?;
+            super::provenance::populate_bound_actor_types(
+                slice::from_mut(&mut prepared),
+                record.process.actor_bindings.as_deref(),
+            )?;
             stamp_intake_provenance_fields(
                 slice::from_mut(&mut prepared),
                 &kernel,
                 &lifecycle_state,
             );
             stamp_case_boundary_identity(slice::from_mut(&mut prepared), &record.process);
-            populate_provenance_record_fields(
+            super::provenance::populate_process_provenance_fields(
                 slice::from_mut(&mut prepared),
                 &kernel,
-                &record.process.definition_version,
-            );
+                &record.process,
+            )?;
             stamp_provenance(slice::from_mut(&mut prepared), &now_iso);
             appended.push(prepared.clone());
             final_provenance.push(prepared);
@@ -378,9 +427,55 @@ impl WosRuntime {
             kernel.lifecycle.initial_state.clone()
         };
         let now_iso = format_timestamp(self.clock.now_ms())?;
+        let existing_process = request
+            .governed_case_ref
+            .as_deref()
+            .map(|case_ref| match self.load_record_for_case_ref(case_ref) {
+                Ok(record) => Ok(Some(record.process)),
+                Err(RuntimeError::Store(StoreError::NotFound(_))) => Ok(None),
+                Err(error) => Err(error),
+            })
+            .transpose()?
+            .flatten();
+        let bindings = existing_process
+            .as_ref()
+            .and_then(|process| process.actor_bindings.as_deref())
+            .or_else(|| {
+                if existing_process.is_none() {
+                    request.actor_bindings.as_deref()
+                } else {
+                    None
+                }
+            });
+        if let Some(process) = &existing_process {
+            super::actor_bindings::validate_binding_definition(
+                bindings,
+                &kernel,
+                &process.definition_url,
+                &process.definition_version,
+            )?;
+        } else if let Some(definition) = &request.governed_case_definition {
+            super::actor_bindings::validate_binding_definition(
+                bindings,
+                &kernel,
+                &definition.definition_url,
+                &definition.definition_version,
+            )?;
+        } else {
+            super::actor_bindings::validate_bindings(bindings, &kernel)?;
+        }
         let mut detached = provenance.to_vec();
+        super::provenance::populate_bound_actor_types(&mut detached, bindings)?;
         stamp_intake_provenance_fields(&mut detached, &kernel, &lifecycle_state);
-        populate_provenance_record_fields(&mut detached, &kernel, &definition_version);
+        if let Some(process) = existing_process {
+            super::provenance::populate_process_provenance_fields(
+                &mut detached,
+                &kernel,
+                &process,
+            )?;
+        } else {
+            populate_provenance_record_fields(&mut detached, &kernel, &definition_version);
+        }
         stamp_provenance(&mut detached, &now_iso);
         Ok(detached)
     }

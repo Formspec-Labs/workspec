@@ -77,6 +77,7 @@ fn workflow_document_status_round_trips_canonical_string() {
 #[test]
 fn active_task_impact_level_round_trips_canonical_string() {
     let task = ActiveTask {
+        declared_actor: None,
         task_id: "task-1".to_string(),
         task_ref: "task-ref".to_string(),
         status: ActiveTaskStatus::Created,

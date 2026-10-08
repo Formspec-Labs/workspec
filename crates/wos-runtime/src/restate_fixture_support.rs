@@ -113,6 +113,7 @@ mod tests {
 
     fn record_with(process_id: &str, case_ledger_id: &str) -> RuntimeRecord {
         let instance = WorkflowProcess {
+            actor_bindings: None,
             process_id: process_id.to_string(),
             case_ledger_id: case_ledger_id.to_string(),
             tenant: stack_common_typeid::DEFAULT_TENANT.to_string(),
