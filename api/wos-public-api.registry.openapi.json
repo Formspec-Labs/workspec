@@ -272,7 +272,7 @@
           {
             "name": "draft_uuid",
             "in": "path",
-            "description": "Canonical source-owned draft UUID.",
+            "description": "Source-owned draft ID: native draft_ plus compact lowercase UUIDv7, or canonical hyphenated UUID.",
             "required": true,
             "schema": {
               "type": "string"
@@ -298,7 +298,7 @@
             }
           },
           "400": {
-            "description": "Noncanonical draft or unsupported query."
+            "description": "Unsupported draft ID or query."
           },
           "401": {
             "description": "Current producer authentication refused."
