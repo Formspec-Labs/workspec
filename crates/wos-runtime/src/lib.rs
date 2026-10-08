@@ -48,20 +48,19 @@ pub use restate_fixture_support::{
 };
 #[doc(inline)]
 pub use runtime::{
-    Clock, CompanionPolicy, CompletionRequirementKind, CreateProcessRequest,
-    DismissTaskPresentation, DismissTaskResult, DrainOnceResult, HttpPostureResolver, MigrationMap,
-    MigrationOutcome, PersistDraftResult, PostureDeclaration, PostureResolver,
-    ResolvedPostureDeclaration, RuntimeError, RuntimeEventContext, RuntimeEventDecision,
-    SIGNATURE_PROFILE_KEY_EXTENSION, SIGNATURE_PROFILE_REF_EXTENSION, SIGNATURE_STEP_ID_EXTENSION,
-    SignatureProfileDocument, StaticPostureResolver, SystemClock, TaskSubmissionResult,
-    TrellisCustodyAppendOutcome, TrellisCustodyAppender, WosRuntime,
-    populate_provenance_record_fields, stamp_provenance, task_outcome_metadata_matches,
-    task_process_id,
+    Clock, CompanionPolicy, CompletionRequirementKind, CreateProcessRequest, DismissTaskResult,
+    DrainOnceResult, HttpPostureResolver, MigrationMap, MigrationOutcome, PersistDraftResult,
+    PostureDeclaration, PostureResolver, ResolvedPostureDeclaration, RuntimeError,
+    RuntimeEventContext, RuntimeEventDecision, SIGNATURE_PROFILE_KEY_EXTENSION,
+    SIGNATURE_PROFILE_REF_EXTENSION, SIGNATURE_STEP_ID_EXTENSION, SignatureProfileDocument,
+    StaticPostureResolver, SystemClock, TaskSubmissionResult, TrellisCustodyAppendOutcome,
+    TrellisCustodyAppender, WosRuntime, populate_provenance_record_fields, stamp_provenance,
+    task_outcome_metadata_matches, task_process_id,
 };
 pub use store::{
-    InMemoryStore, IntakeRecord, ReplayKey, ReplayOperation, ReplayValue, RuntimeAuxFields,
-    RuntimeRecord, RuntimeStore, StoreError, TaskArtifact, TaskArtifactKind, runtime_aux_from_json,
-    runtime_aux_to_json,
+    DismissalReplay, InMemoryStore, IntakeRecord, ReplayKey, ReplayOperation, ReplayValue,
+    RuntimeAuxFields, RuntimeRecord, RuntimeStore, StoreError, TaskArtifact, TaskArtifactKind,
+    runtime_aux_from_json, runtime_aux_to_json,
 };
 pub use wos_core::business_calendar::BusinessCalendarDocument;
 #[doc(inline)]

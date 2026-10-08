@@ -738,7 +738,7 @@
     "TaskDismissal": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Request body for `POST /api/v1/tasks/{id}/dismiss`. UI dismissal records taskDismissed provenance for the actual authenticated acting actor and leaves the runtime task resumable in its current state (Kernel §13.4); it does not emit taskSkipped or advance lifecycle. A dismissed public outcome is UI posture, not abandonment. Notification follows durable commit; storage failure emits none. The host checks current access and command admission before a cached HTTP response or runtime invocation while preserving immutable kernel replay semantics. Idempotent on (taskId, reason) within the authenticated scoped host replay boundary.",
+      "description": "Reason-only dismissal request. Requires a singular readable nonblank Idempotency-Key header, preserved exactly. Records actual acting-actor provenance and leaves the governed task resumable (Kernel §13.4). Matching task/actor/token/reason replay returns the original committed provenance reference and timestamp. Changed reason under the same key or a new token for the same task/actor/reason conflicts without another effect. Current host admission and output-read checks remain required. The runtime does not invoke the presenter; delivery is separately authorized.",
       "required": [
         "reason"
       ],
@@ -763,19 +763,6 @@
           "examples": [
             "not-applicable"
           ]
-        },
-        "detail": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Optional free-form rationale recorded in provenance.",
-          "x-wos": {
-            "openStringKind": "prose"
-          }
-        },
-        "dismissedAt": {
-          "type": "string",
-          "format": "date-time",
-          "description": "Optional client-observed UTC RFC 3339 timestamp. The server MAY replace with its own receipt time."
         }
       }
     },

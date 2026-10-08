@@ -58,8 +58,9 @@ impl DurableRuntime for WosRuntime {
         task_id: &str,
         reason: &str,
         actor_id: &str,
+        idempotency_token: &str,
     ) -> Result<DismissTaskResult, RuntimeError> {
-        WosRuntime::dismiss_task(self, task_id, reason, actor_id)
+        WosRuntime::dismiss_task(self, task_id, reason, actor_id, idempotency_token)
     }
 
     fn submit_task_response(

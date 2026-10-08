@@ -680,6 +680,7 @@ mod tests {
             _task_id: &str,
             _reason: &str,
             _actor_id: &str,
+            _idempotency_token: &str,
         ) -> Result<DismissTaskResult, RuntimeError> {
             unreachable!("not used by custody append test")
         }

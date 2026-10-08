@@ -73,17 +73,20 @@ pub trait DurableRuntime {
 
     /// Records an authorized UI dismissal while keeping the task resumable.
     ///
-    /// Persists provenance for `actor_id` before presentation. A presentation
-    /// failure returns a committed result with failed presentation status.
+    /// Atomically retains exact reason, original provenance ID/time and replay evidence.
+    /// The required token is preserved across retries. Replay precedes historical
+    /// engine authorization; the host still checks current access and output policy.
+    /// This command never calls the presentation sink.
     ///
     /// # Errors
     /// Returns an error when authorization, task lookup, resolution, timestamp
-    /// formatting, or persistence fails before commit.
+    /// formatting, replay evidence validation, key conflict or persistence fails.
     fn dismiss_task(
         &mut self,
         task_id: &str,
         reason: &str,
         actor_id: &str,
+        idempotency_token: &str,
     ) -> Result<DismissTaskResult, RuntimeError>;
 
     /// Submits a completed task response.

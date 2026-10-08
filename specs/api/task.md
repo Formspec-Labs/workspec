@@ -58,7 +58,7 @@ GET   /api/v1/tasks                                  -> TaskPage           (curs
 GET   /api/v1/tasks/{id}                             -> Task
 POST  /api/v1/tasks/{id}/draft                       -> Task               (idempotent on body)
 POST  /api/v1/tasks/{id}/response                    -> Task               (Idempotency-Key REQUIRED)
-POST  /api/v1/tasks/{id}/dismiss                     -> Task               (idempotent on (taskId, reason))
+POST  /api/v1/tasks/{id}/dismiss                     -> TaskOutcomeEvent   (Idempotency-Key REQUIRED)
 GET   /api/v1/cases/{case_id}/processes/{process_id}/tasks -> TaskPage     (case/process route, ADR 0093)
 ```
 
@@ -72,7 +72,7 @@ GET   /api/v1/cases/{case_id}/processes/{process_id}/tasks -> TaskPage     (case
 
 `POST /api/v1/tasks/{id}/response` accepts `TaskSubmission { definitionUrl, definitionVersion, response, submittedAt?, signatureRef? }`. Commits the final response. The `Idempotency-Key` HTTP header is REQUIRED (ADR 0082 D-16). Successful submission transitions the task to `submitted`, fires the kernel `taskCompleted` event, and projects the response into case state via the workflow's `responseMappingRef`. A new submission against a non-`pending`/`drafted` task is rejected with `WOS-1409`; a matching durable task/actor/token replay returns its stored outcome under Kernel §13.5 even after completion removes the active task. `signatureRef` is REQUIRED when `kind == signature`; the value is the URN of a `SignatureAffirmation` provenance record produced by the signature profile.
 
-`POST /api/v1/tasks/{id}/dismiss` accepts `TaskDismissal { reason, detail?, dismissedAt? }`. Records host UI dismissal without submitting a response; the host records `taskDismissed` provenance and leaves the runtime task resumable in its current state (Kernel §13.4). A `dismissed` public outcome or posture describes UI dismissal; it does not complete, fail or skip the governed task. Deliberate abandonment is a separate explicit operation under Kernel §13.4, including its structured rationale and applicable governance. Dismissal against a non-`pending`/`drafted` task is rejected with `WOS-1409`. Idempotent on `(taskId, reason)`.
+`POST /api/v1/tasks/{id}/dismiss` accepts the closed `TaskDismissal { reason }` body and requires one readable, nonblank `Idempotency-Key` header. Preserve the opaque header value exactly, including surrounding whitespace on a nonblank value. The host derives the acting actor from current authenticated identity and checks current command admission and output-read permission. A fresh command records `taskDismissed` provenance and leaves the governed task resumable in its current state (Kernel §13.4). It returns a `TaskOutcomeEvent` with the committed provenance reference and original `occurredAt`; a retry must not substitute the retry time. The same task, actor, exact token and exact reason returns that stored result. Reusing the token with a different reason returns a conflict. A different token for the same task, actor and exact reason also returns a conflict without another write; retry with the original token. A different reason under a new token is a fresh command subject to current checks. Dismissal against a non-`pending`/`drafted` task is rejected with `WOS-1409` by current host admission. Missing or invalid headers return HTTP 400; replay conflicts return HTTP 409. Dismissal does not complete, fail or skip the governed task. Deliberate abandonment remains a separate explicit operation under Kernel §13.4. The runtime returns committed evidence without invoking the presenter; separate notification delivery requires current read permission, and a held presenter result does not prove delivery.
 
 `GET /api/v1/cases/{case_id}/processes/{process_id}/tasks` is the ADR 0093 dual-identity route for workflow-process tasks. The server first validates that `{process_id}` is bound to `{case_id}`, then applies the same path-implied `processId` scoping and `TaskListOptions` filters as the process subresource.
 
@@ -110,11 +110,11 @@ Draft, response and dismissal actions MUST derive the actor from authenticated m
 
 ## Idempotency
 
-`POST /api/v1/tasks/{id}/response` requires `Idempotency-Key` per ADR 0082 D-16 — submission is the only externally-visible side-effecting endpoint that is not naturally idempotent on its body.
+`POST /api/v1/tasks/{id}/response` and `POST /api/v1/tasks/{id}/dismiss` require `Idempotency-Key`.
 
 `POST /api/v1/tasks/{id}/draft` is idempotent on `(taskId, definitionUrl, definitionVersion, response)` so callers can retry without `Idempotency-Key`.
 
-`POST /api/v1/tasks/{id}/dismiss` is idempotent on `(taskId, reason)`.
+Dismissal replay uses the task, authenticated actor and exact opaque token. The exact reason must match. Preserve the original committed provenance reference and timestamp. A new token for the same task, actor and reason conflicts without another effect.
 
 ## Errors
 

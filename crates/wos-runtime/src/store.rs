@@ -2,7 +2,7 @@
 
 //! Atomic runtime persistence for workflow-process state and task artifacts.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use wos_core::ProvenanceRecord;
 use wos_core::instance::WorkflowProcess;
@@ -11,7 +11,7 @@ use crate::intake::{
     IntakeAcceptanceDecision, IntakeAcceptanceOutcome, IntakeAcceptanceRequest, IntakeRecordStatus,
     ProcessCreationSnapshot,
 };
-use crate::runtime::{PersistDraftResult, TaskSubmissionResult};
+use crate::runtime::{DismissTaskResult, PersistDraftResult, TaskSubmissionResult};
 
 /// Atomic runtime record for a single workflow process.
 #[derive(Debug, Clone)]
@@ -51,41 +51,196 @@ impl RuntimeRecord {
     /// Original creation evidence is required before initial persistence.
     ///
     /// # Errors
-    /// Returns invalid-creation evidence for missing evidence or mismatched original definition or task metadata.
+    /// Returns invalid-creation evidence for missing or mismatched original evidence,
+    /// or invalid replay evidence for missing or conflicting dismissal witnesses.
     pub fn validate_initial_creation(&self) -> Result<(), StoreError> {
         self.creation
             .as_ref()
             .ok_or_else(|| {
                 StoreError::InvalidCreationEvidence("original process creation is missing".into())
             })?
-            .validate_created_process(&self.process)
+            .validate_created_process(&self.process)?;
+        self.validate_dismissal_replay()
     }
 
     /// Checks retained creation identity against the actual loaded process.
     ///
     /// # Errors
-    /// Returns invalid-creation evidence for missing evidence or corrupt identity or metadata.
+    /// Returns invalid-creation evidence for missing or corrupt original evidence,
+    /// or invalid replay evidence for missing or conflicting dismissal witnesses.
     pub fn validate_creation(&self) -> Result<(), StoreError> {
         self.creation
             .as_ref()
             .ok_or_else(|| {
                 StoreError::InvalidCreationEvidence("original process creation is missing".into())
             })?
-            .validate_process(&self.process)
+            .validate_process(&self.process)?;
+        self.validate_dismissal_replay()
     }
 
     /// Validates original creation evidence before replacing a stored process.
     ///
     /// # Errors
-    /// Returns invalid-creation evidence when original metadata changes or conflicts with the process.
+    /// Returns invalid-creation evidence when original metadata changes,
+    /// or invalid replay evidence when dismissal evidence changes or disappears.
     pub fn validate_creation_update(&self, previous: &Self) -> Result<(), StoreError> {
         if self.creation != previous.creation {
             return Err(StoreError::InvalidCreationEvidence(
                 "original process creation is immutable".into(),
             ));
         }
-        self.validate_creation()
+        self.validate_creation()?;
+        self.validate_dismissal_replay_update(previous)
     }
+
+    /// Validates both directions of retained dismissal operation evidence.
+    ///
+    /// Every actual dismissal must have one exact replay entry, even after tasks
+    /// disappear. Missing entries never become permission to append again.
+    ///
+    /// # Errors
+    /// Returns invalid replay evidence for malformed, missing or conflicting witnesses.
+    pub fn validate_dismissal_replay(&self) -> Result<(), StoreError> {
+        let mut witnesses = HashMap::new();
+        let mut natural_keys = HashSet::new();
+        let mut provenance_ids = HashSet::new();
+        for provenance in &self.provenance_log {
+            if provenance.record_kind != wos_core::ProvenanceKind::TaskDismissed {
+                continue;
+            }
+            let (key, replay) = dismissal_witness(provenance)?;
+            let parent = crate::runtime::task_process_id(&key.task_id)
+                .map_err(|_| invalid_replay("dismissal task parent is malformed"))?;
+            if parent != self.process.process_id
+                || !natural_keys.insert((
+                    key.task_id.clone(),
+                    key.actor_id.clone(),
+                    replay.reason.clone(),
+                ))
+                || !provenance_ids.insert(provenance.id.clone())
+                || witnesses.insert(key, replay).is_some()
+            {
+                return Err(invalid_replay(
+                    "dismissal provenance identity is inconsistent or duplicated",
+                ));
+            }
+        }
+        for (key, value) in &self.replay_entries {
+            match (&key.operation, value) {
+                (ReplayOperation::DismissTask, ReplayValue::Dismissal(replay)) => {
+                    if witnesses.remove(key).as_ref() != Some(replay) {
+                        return Err(invalid_replay(
+                            "dismissal replay differs from actual provenance",
+                        ));
+                    }
+                }
+                (ReplayOperation::DismissTask, _) | (_, ReplayValue::Dismissal(_)) => {
+                    return Err(invalid_replay(
+                        "dismissal replay operation and value disagree",
+                    ));
+                }
+                _ => {}
+            }
+        }
+        if !witnesses.is_empty() {
+            return Err(invalid_replay(
+                "dismissal provenance has no retained replay entry",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Preserves retained dismissal evidence against the actual previous record.
+    ///
+    /// Storage adapters must supply actual previous provenance within their write.
+    /// An empty substitute or a read outside that transaction proves no guarantee.
+    ///
+    /// # Errors
+    /// Returns invalid replay evidence for previous corruption, replacement or erasure.
+    pub fn validate_dismissal_replay_update(&self, previous: &Self) -> Result<(), StoreError> {
+        previous.validate_dismissal_replay()?;
+        self.validate_dismissal_replay()?;
+        for (key, value) in &previous.replay_entries {
+            if let ReplayValue::Dismissal(retained) = value {
+                if !matches!(self.replay_entries.get(key), Some(ReplayValue::Dismissal(actual)) if actual == retained)
+                {
+                    return Err(invalid_replay("retained dismissal replay is immutable"));
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+fn invalid_replay(message: &str) -> StoreError {
+    StoreError::InvalidReplayEvidence(message.to_string())
+}
+
+fn validate_dismissal_result(result: &DismissTaskResult) -> Result<(), StoreError> {
+    if !stack_common_typeid::is_valid_type_id(
+        &result.provenance_id,
+        Some(stack_common_typeid::PROVENANCE_PREFIX),
+    ) || chrono::DateTime::parse_from_rfc3339(&result.occurred_at).is_err()
+    {
+        return Err(invalid_replay(
+            "dismissal result identity or occurrence time is malformed",
+        ));
+    }
+    Ok(())
+}
+
+fn dismissal_witness(
+    provenance: &ProvenanceRecord,
+) -> Result<(ReplayKey, DismissalReplay), StoreError> {
+    let data = provenance
+        .data
+        .as_ref()
+        .ok_or_else(|| invalid_replay("dismissal witness is missing"))?;
+    let details = data
+        .get("details")
+        .ok_or_else(|| invalid_replay("dismissal details are missing"))?;
+    if details
+        .get("dismissalReplayVersion")
+        .and_then(serde_json::Value::as_u64)
+        != Some(DISMISSAL_REPLAY_VERSION)
+    {
+        return Err(invalid_replay(
+            "dismissal replay version is missing or unsupported",
+        ));
+    }
+    let field = |value: Option<&serde_json::Value>| {
+        value
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string)
+            .ok_or_else(|| invalid_replay("dismissal witness field is malformed"))
+    };
+    let task_id = field(data.get("taskId"))?;
+    let token = field(details.get("operationToken"))?;
+    let actor_id = provenance
+        .actor_id
+        .clone()
+        .filter(|actor| !actor.trim().is_empty())
+        .ok_or_else(|| invalid_replay("dismissal actor is missing"))?;
+    if token.trim().is_empty() {
+        return Err(invalid_replay("dismissal operation token is blank"));
+    }
+    let replay = DismissalReplay {
+        reason: field(details.get("reason"))?,
+        result: DismissTaskResult {
+            provenance_id: provenance.id.clone(),
+            occurred_at: provenance.timestamp.clone(),
+        },
+    };
+    validate_dismissal_result(&replay.result)?;
+    Ok((
+        ReplayKey {
+            operation: ReplayOperation::DismissTask,
+            task_id,
+            actor_id,
+            token,
+        },
+        replay,
+    ))
 }
 
 /// Persisted output from an `invokeService` action.
@@ -136,6 +291,8 @@ pub enum ReplayOperation {
     SubmitTaskResponse,
     /// Intake acceptance replay.
     AcceptIntakeHandoff,
+    /// Resumable UI dismissal replay.
+    DismissTask,
 }
 
 /// Idempotency replay key.
@@ -160,7 +317,23 @@ pub enum ReplayValue {
     Submission(TaskSubmissionResult),
     /// Replay of intake acceptance.
     Intake(IntakeAcceptanceDecision),
+    /// Exact request and committed result of a UI dismissal.
+    Dismissal(DismissalReplay),
 }
+
+/// Retained request and immutable result of a UI dismissal.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DismissalReplay {
+    /// Exact original reason bytes.
+    pub reason: String,
+    /// Original actual provenance identity and occurrence time.
+    pub result: DismissTaskResult,
+}
+
+// Version 1 requires a two-way operation witness; tokenless dismissal records
+// cannot be reinterpreted as fresh commands during persisted reload.
+pub(crate) const DISMISSAL_REPLAY_VERSION: u64 = 1;
 
 /// Persisted intake-acceptance result.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -254,6 +427,10 @@ pub enum StoreError {
     /// Original creation evidence is corrupt or an update attempted to replace it.
     #[error("invalid creation evidence: {0}")]
     InvalidCreationEvidence(String),
+
+    /// Retained dismissal request, result or provenance evidence is inconsistent.
+    #[error("invalid replay evidence: {0}")]
+    InvalidReplayEvidence(String),
 
     /// Store-specific failure.
     #[error("runtime store failure: {0}")]
@@ -383,7 +560,8 @@ impl InMemoryStore {
     ///
     /// # Errors
     /// Returns [`StoreError::InvalidCreationEvidence`] for invalid retained evidence
-    /// or an inconsistent process association, and [`StoreError::AlreadyExists`]
+    /// or an inconsistent process association, [`StoreError::InvalidReplayEvidence`]
+    /// for malformed or inconsistent dismissal evidence, and [`StoreError::AlreadyExists`]
     /// when the process is already present. Refusal leaves records and indexes unchanged.
     pub fn restore_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
         record.validate_creation()?;
@@ -565,6 +743,7 @@ pub fn runtime_aux_to_json(record: &RuntimeRecord) -> serde_json::Value {
                 ReplayOperation::PersistDraft => "persistDraft",
                 ReplayOperation::SubmitTaskResponse => "submitTaskResponse",
                 ReplayOperation::AcceptIntakeHandoff => "acceptIntakeHandoff",
+                ReplayOperation::DismissTask => "dismissTask",
             };
             let value_json = match v {
                 ReplayValue::Draft(d) => serde_json::json!({
@@ -594,6 +773,9 @@ pub fn runtime_aux_to_json(record: &RuntimeRecord) -> serde_json::Value {
                         serde_json::json!({ "kind": "rejected", "code": code })
                     }
                 },
+                ReplayValue::Dismissal(replay) => serde_json::json!({
+                    "kind": "dismissal", "reason": replay.reason, "result": replay.result,
+                }),
                 ReplayValue::Intake(decision) => {
                     let decision_json =
                         serde_json::to_value(decision).unwrap_or(serde_json::json!({}));
@@ -627,7 +809,8 @@ pub fn runtime_aux_to_json(record: &RuntimeRecord) -> serde_json::Value {
 /// Original process creation evidence is required; missing, null, or malformed evidence is refused.
 ///
 /// # Errors
-/// Returns invalid-creation evidence for missing, null, malformed, or inconsistent original metadata.
+/// Returns invalid-creation evidence for missing, null, malformed, or inconsistent original metadata,
+/// or invalid replay evidence for malformed or duplicate dismissal entries.
 pub fn runtime_aux_from_json(v: &serde_json::Value) -> Result<RuntimeAuxFields, StoreError> {
     let creation: ProcessCreationSnapshot =
         serde_json::from_value(v.get("creation").cloned().ok_or_else(|| {
@@ -694,7 +877,10 @@ pub fn runtime_aux_from_json(v: &serde_json::Value) -> Result<RuntimeAuxFields, 
                 .collect()
         })
         .unwrap_or_default();
-    let replay_entries = v
+    // Validate known dismissal entries before the existing permissive codecs
+    // or HashMap collection can discard malformed or duplicate evidence.
+    let dismissals = decode_dismissal_replays(v)?;
+    let mut replay_entries: HashMap<ReplayKey, ReplayValue> = v
         .get("replayEntries")
         .and_then(|x| x.as_array())
         .map(|arr| {
@@ -752,12 +938,77 @@ pub fn runtime_aux_from_json(v: &serde_json::Value) -> Result<RuntimeAuxFields, 
                 .collect()
         })
         .unwrap_or_default();
+    replay_entries.extend(dismissals);
     Ok(RuntimeAuxFields {
         creation: Some(creation),
         step_results,
         artifacts,
         replay_entries,
     })
+}
+
+fn decode_dismissal_replays(
+    v: &serde_json::Value,
+) -> Result<HashMap<ReplayKey, ReplayValue>, StoreError> {
+    let mut entries = HashMap::new();
+    if let Some(raw) = v.get("replayEntries").and_then(serde_json::Value::as_array) {
+        for entry in raw {
+            let key = entry.get("key");
+            let value = entry.get("value");
+            let known = key
+                .and_then(|k| k.get("operation"))
+                .and_then(serde_json::Value::as_str)
+                == Some("dismissTask")
+                || value
+                    .and_then(|v| v.get("kind"))
+                    .and_then(serde_json::Value::as_str)
+                    == Some("dismissal");
+            if !known {
+                continue;
+            }
+            let key = key
+                .and_then(serde_json::Value::as_object)
+                .ok_or_else(|| invalid_replay("dismissal key is malformed"))?;
+            let value = value
+                .and_then(serde_json::Value::as_object)
+                .ok_or_else(|| invalid_replay("dismissal value is malformed"))?;
+            if entry.as_object().map(|o| o.len()) != Some(2)
+                || key.len() != 4
+                || value.len() != 3
+                || key.get("operation").and_then(serde_json::Value::as_str) != Some("dismissTask")
+                || value.get("kind").and_then(serde_json::Value::as_str) != Some("dismissal")
+            {
+                return Err(invalid_replay(
+                    "dismissal replay shape or operation is inconsistent",
+                ));
+            }
+            let field = |name: &str| {
+                key.get(name)
+                    .and_then(serde_json::Value::as_str)
+                    .filter(|s| !s.trim().is_empty())
+                    .map(str::to_string)
+                    .ok_or_else(|| invalid_replay("dismissal key field is malformed"))
+            };
+            let key = ReplayKey {
+                operation: ReplayOperation::DismissTask,
+                task_id: field("taskId")?,
+                actor_id: field("actorId")?,
+                token: field("token")?,
+            };
+            let replay: DismissalReplay = serde_json::from_value(
+                serde_json::json!({"reason": value.get("reason"), "result": value.get("result")}),
+            )
+            .map_err(|_| invalid_replay("dismissal request or result is malformed"))?;
+            validate_dismissal_result(&replay.result)?;
+            if entries
+                .insert(key, ReplayValue::Dismissal(replay))
+                .is_some()
+            {
+                return Err(invalid_replay("duplicate dismissal replay key"));
+            }
+        }
+    }
+    Ok(entries)
 }
 
 #[cfg(test)]

@@ -181,24 +181,14 @@ pub struct PersistDraftResult {
     pub artifact_id: String,
 }
 
-/// Presentation status after a committed task dismissal.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DismissTaskPresentation {
-    /// The task has no presentation context, so no sink call was requested.
-    NotRequested,
-    /// The sink returned success; recipient delivery remains unproven.
-    Attempted,
-    /// The sink failed after dismissal provenance committed.
-    Failed,
-}
-
-/// Committed UI dismissal with its presentation status.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Immutable result of a committed, resumable UI dismissal.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DismissTaskResult {
     /// Identifier of the actual persisted dismissal provenance record.
     pub provenance_id: String,
-    /// Status of the presentation attempt after persistence.
-    pub presentation: DismissTaskPresentation,
+    /// Original persisted RFC 3339 occurrence time, unchanged on replay.
+    pub occurred_at: String,
 }
 
 /// Task submission outcome.
@@ -373,6 +363,10 @@ pub enum RuntimeError {
     /// Intake handoff id replay conflicted with a different document payload.
     #[error("intake handoff id conflict: {0}")]
     IntakeConflict(String),
+
+    /// A dismissal key or natural task/reason identity conflicts with retained evidence.
+    #[error("dismissal replay conflict: {0}")]
+    DismissalConflict(String),
 
     /// A case ledger reference cannot identify one workflow process.
     #[error("case ledger reference conflict: {0}")]
@@ -696,6 +690,7 @@ impl WosRuntime {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::store::ReplayValue;
 
     use std::collections::{HashMap, VecDeque};
     use std::fs;
@@ -2600,7 +2595,12 @@ mod tests {
                 .expect("trait persist_task_draft");
 
             let dismissal = runtime
-                .dismiss_task(&task_id, "trait exercise cleanup", "reviewer")
+                .dismiss_task(
+                    &task_id,
+                    "trait exercise cleanup",
+                    "reviewer",
+                    "trait-dismiss",
+                )
                 .expect("trait dismiss_task");
             let dismissal_window = runtime
                 .load_provenance_window(test_process_id("case-trait"), 0, 100)
@@ -2611,7 +2611,7 @@ mod tests {
                     .any(|entry| entry.id == dismissal.provenance_id
                         && entry.actor_id.as_deref() == Some("reviewer"))
             );
-            assert_eq!(dismissal.presentation, DismissTaskPresentation::Attempted);
+            assert!(!dismissal.occurred_at.is_empty());
 
             let submission = runtime
                 .submit_task_response(
@@ -6196,46 +6196,6 @@ mod tests {
         (runtime, process_id, task_id, initial_record)
     }
 
-    #[derive(Debug)]
-    struct CommittedDismissalPresenter {
-        store: SharedStore,
-        process_id: String,
-        calls: Arc<AtomicUsize>,
-        fail: bool,
-    }
-
-    impl TaskPresenter for CommittedDismissalPresenter {
-        type Error = PresenterError;
-
-        fn present_task(&mut self, _context: &FormspecTaskContext) -> Result<(), Self::Error> {
-            Ok(())
-        }
-
-        fn dismiss_task(&mut self, task_id: &str, _reason: &str) -> Result<(), Self::Error> {
-            let record = self.store.load_record(&self.process_id).unwrap();
-            assert!(
-                record
-                    .provenance_log
-                    .iter()
-                    .any(|entry| entry.record_kind == ProvenanceKind::TaskDismissed
-                        && entry.actor_id.as_deref() == Some("reviewer"))
-            );
-            assert!(
-                record
-                    .process
-                    .active_tasks
-                    .iter()
-                    .any(|task| task.task_id == task_id)
-            );
-            self.calls.fetch_add(1, Ordering::SeqCst);
-            if self.fail {
-                Err(PresenterError("injected postcommit failure".to_string()))
-            } else {
-                Ok(())
-            }
-        }
-    }
-
     #[test]
     fn dismiss_task_refuses_unqualified_actor_without_write_or_presentation() {
         let (mut runtime, process_id, task_id, initial_record) = dismissal_fixture();
@@ -6250,7 +6210,7 @@ mod tests {
         let save_calls = store.observed_save_calls.clone();
         runtime.store = Box::new(store);
         assert!(matches!(
-            runtime.dismiss_task(&task_id, "snoozed", "unrelated"),
+            runtime.dismiss_task(&task_id, "snoozed", "unrelated", "dismiss-1"),
             Err(RuntimeError::Unauthorized(_))
         ));
         assert_eq!(save_calls.load(Ordering::SeqCst), 0);
@@ -6272,7 +6232,7 @@ mod tests {
         runtime.access_control = Box::new(access);
         let before = runtime.store.load_record(&process_id).unwrap();
         let result = runtime
-            .dismiss_task(&task_id, "snoozed", "delegate")
+            .dismiss_task(&task_id, "snoozed", "delegate", "dismiss-1")
             .unwrap();
         let after = runtime.store.load_record(&process_id).unwrap();
         let entry = after
@@ -6310,7 +6270,7 @@ mod tests {
         let calls = presenter.dismissed.clone();
         runtime.presenter = Box::new(presenter);
         assert!(matches!(
-            runtime.dismiss_task(&task_id, "snoozed", "reviewer"),
+            runtime.dismiss_task(&task_id, "snoozed", "reviewer", "dismiss-1"),
             Err(RuntimeError::Store(StoreError::Failed(_)))
         ));
         let after = runtime.store.load_record(&process_id).unwrap();
@@ -6323,42 +6283,27 @@ mod tests {
     }
 
     #[test]
-    fn dismiss_task_presentation_observes_commit_and_reports_postcommit_failure() {
-        for (fail, expected) in [
-            (false, DismissTaskPresentation::Attempted),
-            (true, DismissTaskPresentation::Failed),
-        ] {
-            let (mut runtime, process_id, task_id, initial_record) = dismissal_fixture();
-            let store = SharedStore::default();
-            {
-                let mut seeded = store.0.lock().unwrap();
-                seeded.create_record(initial_record).unwrap();
-                seeded
-                    .save_record(runtime.store.load_record(&process_id).unwrap())
-                    .unwrap();
-            }
-            runtime.store = Box::new(store.clone());
-            let calls = Arc::new(AtomicUsize::new(0));
-            runtime.presenter = Box::new(CommittedDismissalPresenter {
-                store,
-                process_id: process_id.clone(),
-                calls: calls.clone(),
-                fail,
-            });
-            let result = runtime
-                .dismiss_task(&task_id, "snoozed", "reviewer")
-                .unwrap();
-            assert_eq!(result.presentation, expected);
-            assert_eq!(calls.load(Ordering::SeqCst), 1);
-            let after = runtime.store.load_record(&process_id).unwrap();
-            assert!(
-                after
-                    .provenance_log
-                    .iter()
-                    .any(|entry| entry.id == result.provenance_id)
-            );
-            assert_eq!(after.process.active_tasks.len(), 1);
-        }
+    fn dismiss_task_returns_committed_result_without_presentation() {
+        let (mut runtime, process_id, task_id, _) = dismissal_fixture();
+        let presenter = RecordingPresenter::default();
+        let calls = presenter.dismissed.clone();
+        runtime.presenter = Box::new(presenter);
+        let result = runtime
+            .dismiss_task(&task_id, "snoozed", "reviewer", "dismiss-1")
+            .unwrap();
+        let replay = runtime
+            .dismiss_task(&task_id, "snoozed", "reviewer", "dismiss-1")
+            .unwrap();
+        assert_eq!(result, replay);
+        let after = runtime.store.load_record(&process_id).unwrap();
+        let record = after
+            .provenance_log
+            .iter()
+            .find(|entry| entry.id == result.provenance_id)
+            .unwrap();
+        assert_eq!(result.occurred_at, record.timestamp);
+        assert_eq!(after.process.active_tasks.len(), 1);
+        assert!(calls.lock().unwrap().is_empty());
     }
 
     #[test]
@@ -6371,9 +6316,9 @@ mod tests {
         let calls = presenter.dismissed.clone();
         runtime.presenter = Box::new(presenter);
         let result = runtime
-            .dismiss_task(&task_id, "snoozed", "reviewer")
+            .dismiss_task(&task_id, "snoozed", "reviewer", "dismiss-1")
             .unwrap();
-        assert_eq!(result.presentation, DismissTaskPresentation::NotRequested);
+        assert!(!result.occurred_at.is_empty());
         assert!(calls.lock().unwrap().is_empty());
         assert!(
             runtime
@@ -6422,9 +6367,9 @@ mod tests {
         runtime.store.save_record(record).unwrap();
 
         let result = runtime
-            .dismiss_task(&task_id, "snoozed", "reviewer")
+            .dismiss_task(&task_id, "snoozed", "reviewer", "dismiss-1")
             .unwrap();
-        assert_eq!(result.presentation, DismissTaskPresentation::Attempted);
+        assert!(!result.occurred_at.is_empty());
 
         let record = runtime
             .store
@@ -6439,6 +6384,462 @@ mod tests {
                     && entry.id == result.provenance_id
                     && entry.actor_id.as_deref() == Some("reviewer"))
         );
+    }
+
+    #[test]
+    fn dismissal_replay_survives_task_removal_and_current_version_change() {
+        let (mut runtime, process_id, task_id, _) = dismissal_fixture();
+        let access = TaskDelegationProbe::default();
+        access.allowed.store(true, Ordering::SeqCst);
+        let allowed = access.allowed.clone();
+        let checks = access.checks.clone();
+        runtime.access_control = Box::new(access);
+        let result = runtime
+            .dismiss_task(&task_id, "snoozed", "delegate", "replay-key")
+            .unwrap();
+        let mut record = runtime.store.load_record(&process_id).unwrap();
+        record.process.active_tasks.clear();
+        record.process.definition_version = "2.0.0".into();
+        runtime.store.save_record(record).unwrap();
+        allowed.store(false, Ordering::SeqCst);
+        runtime.clock = Box::new(FixedClock { now_ms: u64::MAX });
+        let replay = runtime
+            .dismiss_task(&task_id, "snoozed", "delegate", "replay-key")
+            .unwrap();
+        assert_eq!(result, replay);
+        assert_eq!(checks.load(Ordering::SeqCst), 1);
+        let record = runtime.store.load_record(&process_id).unwrap();
+        assert_eq!(
+            record
+                .provenance_log
+                .iter()
+                .filter(|p| p.record_kind == ProvenanceKind::TaskDismissed)
+                .count(),
+            1
+        );
+        assert!(record.process.active_tasks.is_empty());
+        assert_eq!(record.process.definition_version, "2.0.0");
+    }
+
+    #[test]
+    fn dismissal_replay_conflicts_without_duplicate_natural_effects() {
+        let (mut runtime, process_id, task_id, _) = dismissal_fixture();
+        let access = TaskDelegationProbe::default();
+        let checks = access.checks.clone();
+        runtime.access_control = Box::new(access);
+        let result = runtime
+            .dismiss_task(&task_id, "snoozed", "reviewer", "key-1")
+            .unwrap();
+        let before = runtime.store.load_record(&process_id).unwrap();
+        for (reason, key) in [("changed", "key-1"), ("snoozed", "key-2")] {
+            assert!(matches!(
+                runtime.dismiss_task(&task_id, reason, "reviewer", key),
+                Err(RuntimeError::DismissalConflict(_))
+            ));
+        }
+        assert!(matches!(
+            runtime.dismiss_task(&task_id, "snoozed", "unrelated", "key-1"),
+            Err(RuntimeError::Unauthorized(_))
+        ));
+        assert_eq!(checks.load(Ordering::SeqCst), 1);
+        let after = runtime.store.load_record(&process_id).unwrap();
+        assert_eq!(
+            serde_json::to_value(&before.process).unwrap(),
+            serde_json::to_value(&after.process).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_value(&before.provenance_log).unwrap(),
+            serde_json::to_value(&after.provenance_log).unwrap()
+        );
+        assert_eq!(
+            crate::store::runtime_aux_to_json(&before),
+            crate::store::runtime_aux_to_json(&after)
+        );
+        assert_eq!(
+            runtime
+                .dismiss_task(&task_id, "snoozed", "reviewer", "key-1")
+                .unwrap(),
+            result
+        );
+        let different = runtime
+            .dismiss_task(&task_id, "changed", "reviewer", "key-2")
+            .unwrap();
+        assert_ne!(different.provenance_id, result.provenance_id);
+        let record = runtime.store.load_record(&process_id).unwrap();
+        assert_eq!(
+            record
+                .provenance_log
+                .iter()
+                .filter(|p| p.record_kind == ProvenanceKind::TaskDismissed)
+                .count(),
+            2
+        );
+        assert_eq!(record.process.active_tasks.len(), 1);
+    }
+
+    #[test]
+    fn dismissal_token_refuses_blank_and_preserves_exact_opaque_bytes() {
+        let (mut runtime, process_id, task_id, _) = dismissal_fixture();
+        let before = runtime.store.load_record(&process_id).unwrap();
+        for token in ["", " \t\r\n"] {
+            assert!(matches!(
+                runtime.dismiss_task(&task_id, "snoozed", "reviewer", token),
+                Err(RuntimeError::DismissalConflict(_))
+            ));
+        }
+        assert_eq!(
+            crate::store::runtime_aux_to_json(&before),
+            crate::store::runtime_aux_to_json(&runtime.store.load_record(&process_id).unwrap())
+        );
+        let token = " padded-key ";
+        let result = runtime
+            .dismiss_task(&task_id, "snoozed", "reviewer", token)
+            .unwrap();
+        let record = runtime.store.load_record(&process_id).unwrap();
+        assert_eq!(record.replay_entries.keys().next().unwrap().token, token);
+        let provenance = record
+            .provenance_log
+            .iter()
+            .find(|p| p.id == result.provenance_id)
+            .unwrap();
+        assert_eq!(
+            provenance.data.as_ref().unwrap()["details"]["operationToken"],
+            token
+        );
+        assert!(matches!(
+            runtime.dismiss_task(&task_id, "snoozed", "reviewer", "padded-key"),
+            Err(RuntimeError::DismissalConflict(_))
+        ));
+        assert_eq!(
+            runtime
+                .dismiss_task(&task_id, "snoozed", "reviewer", token)
+                .unwrap(),
+            result
+        );
+    }
+
+    struct CommitThenFailDismissalStore {
+        inner: SharedStore,
+    }
+
+    impl RuntimeStore for CommitThenFailDismissalStore {
+        fn create_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
+            self.inner.create_record(record)
+        }
+        fn load_record(&self, id: &str) -> Result<RuntimeRecord, StoreError> {
+            self.inner.load_record(id)
+        }
+        fn processes_for_case(&self, id: &str) -> Vec<String> {
+            self.inner.processes_for_case(id)
+        }
+        fn provenance_for_case(&self, id: &str) -> Vec<ProvenanceRecord> {
+            self.inner.provenance_for_case(id)
+        }
+        fn append_provenance_for_case(
+            &mut self,
+            case_id: &str,
+            process_id: &str,
+            record: ProvenanceRecord,
+        ) -> Result<(), StoreError> {
+            self.inner
+                .append_provenance_for_case(case_id, process_id, record)
+        }
+        fn create_intake_record(&mut self, record: IntakeRecord) -> Result<(), StoreError> {
+            self.inner.create_intake_record(record)
+        }
+        fn load_intake_record(
+            &self,
+            binding: &str,
+            intake_id: &str,
+        ) -> Result<IntakeRecord, StoreError> {
+            self.inner.load_intake_record(binding, intake_id)
+        }
+        fn save_intake_record(&mut self, record: IntakeRecord) -> Result<(), StoreError> {
+            self.inner.save_intake_record(record)
+        }
+        fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
+            self.inner.save_record(record)?;
+            Err(StoreError::Failed(
+                "injected lost acknowledgement after commit".into(),
+            ))
+        }
+    }
+
+    #[test]
+    fn dismissal_reconstructed_retry_reconciles_committed_save_error() {
+        let (mut runtime, process_id, task_id, initial) = dismissal_fixture();
+        let mut store = SharedStore::default();
+        store.create_record(initial).unwrap();
+        store
+            .save_record(runtime.store.load_record(&process_id).unwrap())
+            .unwrap();
+        runtime.store = Box::new(CommitThenFailDismissalStore {
+            inner: store.clone(),
+        });
+        let presenter = RecordingPresenter::default();
+        let effects = presenter.dismissed.clone();
+        runtime.presenter = Box::new(presenter);
+        assert!(matches!(
+            runtime.dismiss_task(&task_id, "snoozed", "reviewer", "uncertain-key"),
+            Err(RuntimeError::Store(StoreError::Failed(_)))
+        ));
+        let committed = store.load_record(&process_id).unwrap();
+        let encoded = crate::store::runtime_aux_to_json(&committed);
+        let aux = crate::store::runtime_aux_from_json(
+            &serde_json::from_slice::<serde_json::Value>(&serde_json::to_vec(&encoded).unwrap())
+                .unwrap(),
+        )
+        .unwrap();
+        let reconstructed = RuntimeRecord {
+            process: serde_json::from_value(serde_json::to_value(&committed.process).unwrap())
+                .unwrap(),
+            provenance_log: serde_json::from_value(
+                serde_json::to_value(&committed.provenance_log).unwrap(),
+            )
+            .unwrap(),
+            creation: aux.creation,
+            step_results: aux.step_results,
+            artifacts: aux.artifacts,
+            replay_entries: aux.replay_entries,
+        };
+        let mut restored = InMemoryStore::new();
+        restored.restore_record(reconstructed).unwrap();
+        let (mut retry, _, _, _) = dismissal_fixture();
+        retry.store = Box::new(restored);
+        retry.clock = Box::new(FixedClock { now_ms: u64::MAX });
+        let result = retry
+            .dismiss_task(&task_id, "snoozed", "reviewer", "uncertain-key")
+            .unwrap();
+        let after = retry.store.load_record(&process_id).unwrap();
+        assert_eq!(
+            crate::store::runtime_aux_to_json(&committed),
+            crate::store::runtime_aux_to_json(&after)
+        );
+        let witness = after
+            .provenance_log
+            .iter()
+            .find(|p| p.id == result.provenance_id)
+            .unwrap();
+        assert_eq!(result.occurred_at, witness.timestamp);
+        assert_eq!(
+            serde_json::from_value::<DismissTaskResult>(serde_json::to_value(&result).unwrap())
+                .unwrap(),
+            result
+        );
+        assert_eq!(
+            after
+                .provenance_log
+                .iter()
+                .filter(|p| p.record_kind == ProvenanceKind::TaskDismissed)
+                .count(),
+            1
+        );
+        assert!(effects.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn dismissal_corrupt_or_erased_witness_refuses_actual_record_restore() {
+        let (mut runtime, process_id, task_id, _) = dismissal_fixture();
+        runtime
+            .dismiss_task(&task_id, "snoozed", "reviewer", "tamper-key")
+            .unwrap();
+        let record = runtime.store.load_record(&process_id).unwrap();
+        let key = record.replay_entries.keys().next().unwrap().clone();
+        let pos = record
+            .provenance_log
+            .iter()
+            .position(|p| p.record_kind == ProvenanceKind::TaskDismissed)
+            .unwrap();
+        let mut cases = Vec::new();
+        for malformed_id in [
+            "not-a-record".to_string(),
+            process_id.clone(),
+            format!("urn:wos:provenance:{}", record.provenance_log[pos].id),
+        ] {
+            let mut bad = record.clone();
+            bad.provenance_log[pos].id = malformed_id.clone();
+            let ReplayValue::Dismissal(replay) = bad.replay_entries.get_mut(&key).unwrap() else {
+                panic!("actual dismissal replay missing")
+            };
+            replay.result.provenance_id = malformed_id;
+            cases.push(bad);
+        }
+        let mut bad = record.clone();
+        bad.replay_entries.clear();
+        cases.push(bad);
+        let mut bad = record.clone();
+        bad.replay_entries.remove(&key);
+        cases.push(bad);
+        let mut bad = record.clone();
+        bad.provenance_log.remove(pos);
+        cases.push(bad);
+        let mut bad = record.clone();
+        bad.provenance_log[pos].actor_id = Some("other".into());
+        cases.push(bad);
+        let mut bad = record.clone();
+        bad.provenance_log[pos].timestamp = "2030-01-01T00:00:00Z".into();
+        cases.push(bad);
+        let mut bad = record.clone();
+        bad.provenance_log[pos].data.as_mut().unwrap()["details"]["reason"] =
+            serde_json::json!("changed");
+        cases.push(bad);
+        let mut bad = record.clone();
+        bad.provenance_log[pos].data.as_mut().unwrap()["details"]
+            .as_object_mut()
+            .unwrap()
+            .remove("operationToken");
+        cases.push(bad);
+        let mut bad = record.clone();
+        bad.provenance_log[pos].data.as_mut().unwrap()["details"]["dismissalReplayVersion"] =
+            serde_json::json!(0);
+        cases.push(bad);
+        let mut bad = record.clone();
+        bad.provenance_log.push(bad.provenance_log[pos].clone());
+        cases.push(bad);
+        let mut bad = record.clone();
+        bad.replay_entries.insert(
+            key.clone(),
+            ReplayValue::Draft(PersistDraftResult {
+                artifact_id: "wrong-kind".into(),
+            }),
+        );
+        cases.push(bad);
+        for bad in cases {
+            let mut restored = InMemoryStore::new();
+            assert!(matches!(
+                restored.restore_record(bad),
+                Err(StoreError::InvalidReplayEvidence(_))
+            ));
+            assert!(matches!(
+                restored.load_record(&process_id),
+                Err(StoreError::NotFound(_))
+            ));
+            assert!(
+                restored
+                    .processes_for_case(&record.process.case_ledger_id)
+                    .is_empty()
+            );
+        }
+        assert_eq!(
+            crate::store::runtime_aux_to_json(&record),
+            crate::store::runtime_aux_to_json(&runtime.store.load_record(&process_id).unwrap())
+        );
+    }
+
+    #[test]
+    fn dismissal_update_refuses_coherent_erasure_and_replacement() {
+        let (mut runtime, process_id, task_id, _) = dismissal_fixture();
+        runtime
+            .dismiss_task(&task_id, "snoozed", "reviewer", "immutable-key")
+            .unwrap();
+        let record = runtime.store.load_record(&process_id).unwrap();
+        let key = record.replay_entries.keys().next().unwrap().clone();
+        let pos = record
+            .provenance_log
+            .iter()
+            .position(|p| p.record_kind == ProvenanceKind::TaskDismissed)
+            .unwrap();
+        let mut erased = record.clone();
+        erased.replay_entries.clear();
+        erased.provenance_log.remove(pos);
+        // Each standalone shape can look fresh; the actual prior record makes erasure observable.
+        erased.validate_dismissal_replay().unwrap();
+        assert!(matches!(
+            runtime.store.save_record(erased),
+            Err(StoreError::InvalidReplayEvidence(_))
+        ));
+        let mut replaced = record.clone();
+        replaced.provenance_log[pos].timestamp = "2030-01-01T00:00:00Z".into();
+        if let Some(ReplayValue::Dismissal(value)) = replaced.replay_entries.get_mut(&key) {
+            value.result.occurred_at = "2030-01-01T00:00:00Z".into();
+        }
+        replaced.validate_dismissal_replay().unwrap();
+        assert!(matches!(
+            runtime.store.save_record(replaced),
+            Err(StoreError::InvalidReplayEvidence(_))
+        ));
+        let after = runtime.store.load_record(&process_id).unwrap();
+        assert_eq!(
+            crate::store::runtime_aux_to_json(&record),
+            crate::store::runtime_aux_to_json(&after)
+        );
+        assert_eq!(
+            serde_json::to_value(&record.provenance_log).unwrap(),
+            serde_json::to_value(&after.provenance_log).unwrap()
+        );
+    }
+
+    #[test]
+    fn dismissal_auxiliary_codec_refuses_raw_duplicates_and_malformed_entries() {
+        let (mut runtime, process_id, task_id, _) = dismissal_fixture();
+        runtime
+            .dismiss_task(&task_id, "snoozed", "reviewer", "codec-key")
+            .unwrap();
+        let record = runtime.store.load_record(&process_id).unwrap();
+        let encoded = crate::store::runtime_aux_to_json(&record);
+        let mut cases = Vec::new();
+        let mut duplicate = encoded.clone();
+        let entry = duplicate["replayEntries"][0].clone();
+        duplicate["replayEntries"]
+            .as_array_mut()
+            .unwrap()
+            .push(entry);
+        cases.push(duplicate);
+        for path in ["reason", "result"] {
+            let mut bad = encoded.clone();
+            bad["replayEntries"][0]["value"][path] = serde_json::Value::Null;
+            cases.push(bad);
+        }
+        let mut bad = encoded.clone();
+        bad["replayEntries"][0]["key"]["operation"] = serde_json::json!("persistDraft");
+        cases.push(bad);
+        let mut bad = encoded.clone();
+        bad["replayEntries"][0]["value"]["kind"] = serde_json::json!("draft");
+        cases.push(bad);
+        let mut bad = encoded.clone();
+        bad["replayEntries"][0]["key"]["token"] = serde_json::json!("  ");
+        cases.push(bad);
+        let mut bad = encoded.clone();
+        bad["replayEntries"][0]["value"]["result"]["occurredAt"] = serde_json::json!("not-a-time");
+        cases.push(bad);
+        for malformed_id in [
+            "not-a-record".to_string(),
+            process_id.clone(),
+            format!(
+                "urn:wos:provenance:{}",
+                record
+                    .provenance_log
+                    .iter()
+                    .find(|entry| entry.record_kind == ProvenanceKind::TaskDismissed)
+                    .unwrap()
+                    .id
+            ),
+        ] {
+            let mut bad = encoded.clone();
+            bad["replayEntries"][0]["value"]["result"]["provenanceId"] =
+                serde_json::json!(malformed_id);
+            cases.push(bad);
+        }
+        let mut bad = encoded.clone();
+        bad["replayEntries"][0]["value"]["result"]["extra"] = serde_json::json!(true);
+        cases.push(bad);
+        for bad in cases {
+            assert!(matches!(
+                crate::store::runtime_aux_from_json(&bad),
+                Err(StoreError::InvalidReplayEvidence(_))
+            ));
+        }
+        let aux = crate::store::runtime_aux_from_json(&encoded).unwrap();
+        let decoded = RuntimeRecord {
+            process: record.process.clone(),
+            provenance_log: record.provenance_log.clone(),
+            creation: aux.creation,
+            step_results: aux.step_results,
+            artifacts: aux.artifacts,
+            replay_entries: aux.replay_entries,
+        };
+        decoded.validate_dismissal_replay().unwrap();
+        assert_eq!(crate::store::runtime_aux_to_json(&decoded), encoded);
     }
 
     #[test]

@@ -10,7 +10,8 @@
 use crate::binding::SubmissionValidation;
 use crate::milestones::evaluate_milestones;
 use crate::store::{
-    ReplayKey, ReplayOperation, ReplayValue, RuntimeRecord, TaskArtifact, TaskArtifactKind,
+    DISMISSAL_REPLAY_VERSION, DismissalReplay, ReplayKey, ReplayOperation, ReplayValue,
+    RuntimeRecord, TaskArtifact, TaskArtifactKind,
 };
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -20,7 +21,7 @@ use wos_core::traits::AccessControl;
 use wos_core::{ProvenanceKind, ProvenanceRecord, SignatureAdmissionFailedInput};
 
 use super::{
-    AdmissionOutcome, COMPLETION_EVENT_EXTENSION_KEY, DismissTaskPresentation, DismissTaskResult,
+    AdmissionOutcome, COMPLETION_EVENT_EXTENSION_KEY, DismissTaskResult,
     FAILURE_EVENT_EXTENSION_KEY, PersistDraftResult, RuntimeError, TaskSubmissionResult,
     WosRuntime, contract_validation_record, format_timestamp, impact_level_label, merge_case_state,
     populate_provenance_record_fields, stamp_provenance, stamp_signature_decision_identity,
@@ -122,58 +123,96 @@ impl WosRuntime {
 
     /// Records an authorized UI dismissal while keeping the task resumable.
     ///
-    /// Persists provenance for `actor_id` before calling the presentation sink.
-    /// Presentation failure is a committed result, never a failed mutation.
+    /// Retains exact dismissal evidence and returns the original result on retry.
+    ///
+    /// The host supplies a stable nonblank token and checks current access before
+    /// invocation and output. Replays bypass historical engine authorization.
+    /// This command leaves the task resumable and never calls presentation.
     ///
     /// # Errors
-    /// Returns an error when authorization, task lookup, kernel resolution,
-    /// timestamp formatting, or persistence fails before commit.
+    /// Returns errors for invalid token/evidence, conflicting reason or natural
+    /// identity, fresh authorization, task lookup, kernel resolution or persistence.
     pub fn dismiss_task(
         &mut self,
         task_id: &str,
         reason: &str,
         actor_id: &str,
+        idempotency_token: &str,
     ) -> Result<DismissTaskResult, RuntimeError> {
-        let now_iso = format_timestamp(self.clock.now_ms())?;
+        if idempotency_token.trim().is_empty() {
+            return Err(RuntimeError::DismissalConflict(
+                "a nonblank operation token is required".into(),
+            ));
+        }
         let mut record = self.load_record_for_task_id(task_id)?;
+        record.validate_dismissal_replay()?;
+        let key = ReplayKey {
+            operation: ReplayOperation::DismissTask,
+            task_id: task_id.to_string(),
+            actor_id: actor_id.to_string(),
+            token: idempotency_token.to_string(),
+        };
+        if let Some(ReplayValue::Dismissal(replay)) = record.replay_entries.get(&key) {
+            return if replay.reason == reason {
+                Ok(replay.result.clone())
+            } else {
+                Err(RuntimeError::DismissalConflict(
+                    "operation key has a different reason".into(),
+                ))
+            };
+        }
+        if record.replay_entries.iter().any(|(retained, value)| {
+            retained.operation == ReplayOperation::DismissTask
+                && retained.task_id == task_id
+                && retained.actor_id == actor_id
+                && matches!(value, ReplayValue::Dismissal(replay) if replay.reason == reason)
+        }) {
+            return Err(RuntimeError::DismissalConflict(
+                "dismissal already recorded; retry the original operation key".into(),
+            ));
+        }
         let task_index = find_task_index(&record, task_id)
             .ok_or_else(|| RuntimeError::TaskNotFound(task_id.to_string()))?;
-        let task = &record.process.active_tasks[task_index];
-        authorize_actor(&*self.access_control, task, actor_id)?;
-        let has_context = task.context.is_some();
-
-        record.process.provenance_position += 1;
-        let mut dismissal = ProvenanceRecord::task_lifecycle(
-            ProvenanceKind::TaskDismissed,
-            task_id,
-            Some(actor_id),
-            Some(serde_json::json!({ "reason": reason })),
-        );
-        dismissal.timestamp = now_iso.clone();
+        authorize_actor(
+            &*self.access_control,
+            &record.process.active_tasks[task_index],
+            actor_id,
+        )?;
         let kernel = self.resolver.resolve_kernel(
             &record.process.definition_url,
             &record.process.definition_version,
         )?;
+        let now_iso = format_timestamp(self.clock.now_ms())?;
+        let mut dismissal = ProvenanceRecord::task_lifecycle(
+            ProvenanceKind::TaskDismissed,
+            task_id,
+            Some(actor_id),
+            Some(
+                serde_json::json!({ "reason": reason, "operationToken": idempotency_token, "dismissalReplayVersion": DISMISSAL_REPLAY_VERSION }),
+            ),
+        );
+        dismissal.timestamp = now_iso.clone();
         populate_provenance_record_fields(
             std::slice::from_mut(&mut dismissal),
             &kernel,
             &record.process.definition_version,
         );
-        let provenance_id = dismissal.id.clone();
+        let result = DismissTaskResult {
+            provenance_id: dismissal.id.clone(),
+            occurred_at: dismissal.timestamp.clone(),
+        };
+        record.process.provenance_position += 1;
         record.provenance_log.push(dismissal);
         record.process.updated_at = now_iso;
+        record.replay_entries.insert(
+            key,
+            ReplayValue::Dismissal(DismissalReplay {
+                reason: reason.to_string(),
+                result: result.clone(),
+            }),
+        );
         self.store.save_record(record)?;
-        let presentation = if !has_context {
-            DismissTaskPresentation::NotRequested
-        } else if self.presenter.dismiss_task(task_id, reason).is_ok() {
-            DismissTaskPresentation::Attempted
-        } else {
-            DismissTaskPresentation::Failed
-        };
-        Ok(DismissTaskResult {
-            provenance_id,
-            presentation,
-        })
+        Ok(result)
     }
 
     /// Submits a completed task response.

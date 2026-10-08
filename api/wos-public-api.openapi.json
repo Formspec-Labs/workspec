@@ -457,7 +457,7 @@
       "get": {
         "operationId": "get_case_export_fence",
         "summary": "Capture WOS high-water marks and policy/config source digests for a case export.",
-        "description": "WOS-side source fence for a case-export attempt (ADR 0093 D-1, sibling of `case-view`). Captures the current case-ledger and policy/config high-water marks at fence-acquisition time under the per-case mutation lease (`LeaseScope::WosCaseSource`); downstream Trellis publication binds its seal fence (`trellis-export-seal-fence-v1`, Trellis Core \u00a718.3e) to these values. Lease-busy timeouts surface as `423 Locked` with closed code `WOS-1423` (idempotently retriable). See `specs/api/case-export-fence.md` for verifier obligations.",
+        "description": "WOS-side source fence for a case-export attempt (ADR 0093 D-1, sibling of `case-view`). Captures the current case-ledger and policy/config high-water marks at fence-acquisition time under the per-case mutation lease (`LeaseScope::WosCaseSource`); downstream Trellis publication binds its seal fence (`trellis-export-seal-fence-v1`, Trellis Core §18.3e) to these values. Lease-busy timeouts surface as `423 Locked` with closed code `WOS-1423` (idempotently retriable). See `specs/api/case-export-fence.md` for verifier obligations.",
         "parameters": [
           {
             "name": "case_id",
@@ -910,7 +910,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Server-assembled explanation per workflow-governance \u00a73.8.1 deterministic algorithm.",
+            "description": "Server-assembled explanation per workflow-governance §3.8.1 deterministic algorithm.",
             "headers": {
               "X-WOS-API-Version": {
                 "description": "Current public API major.minor version.",
@@ -2065,7 +2065,7 @@
     "/tasks/{id}/dismiss": {
       "post": {
         "operationId": "dismissTask",
-        "summary": "Decline a task without submitting a response (transitions the task to `dismissed`).",
+        "summary": "Record a resumable UI dismissal and return its committed outcome.",
         "parameters": [
           {
             "name": "id",
@@ -2079,8 +2079,8 @@
           {
             "name": "Idempotency-Key",
             "in": "header",
-            "required": false,
-            "description": "Optional idempotency key (ADR 0082 D-16). RECOMMENDED on naturally-idempotent mutations.",
+            "required": true,
+            "description": "Required singular readable nonblank opaque operation token; preserve exact bytes. Matching task, actor, token and reason replay returns the original result. Changed reason or a distinct token for the same task, actor and reason conflicts without another effect.",
             "schema": {
               "type": "string",
               "minLength": 1
@@ -2089,7 +2089,7 @@
         ],
         "requestBody": {
           "required": true,
-          "description": "Closed-with-vendor-extension dismissal rationale and optional detail.",
+          "description": "Closed reason-only dismissal rationale, with the existing vendor-extension rule.",
           "content": {
             "application/json": {
               "schema": {
@@ -2100,7 +2100,7 @@
         },
         "responses": {
           "200": {
-            "description": "Updated task projection with `status == dismissed`.",
+            "description": "Committed resumable UI dismissal outcome with the original provenance reference and occurredAt. Replay preserves both values. Notification delivery is separately authorized.",
             "headers": {
               "X-WOS-API-Version": {
                 "description": "Current public API major.minor version.",
@@ -2113,7 +2113,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/Task"
+                  "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskOutcomeEvent"
                 }
               }
             }
@@ -2439,7 +2439,7 @@
         ],
         "requestBody": {
           "required": true,
-          "description": "Delegation creation request \u2014 server assigns URN and `createdAt`.",
+          "description": "Delegation creation request — server assigns URN and `createdAt`.",
           "content": {
             "application/json": {
               "schema": {
@@ -2649,7 +2649,7 @@
             "name": "policyUrl",
             "in": "path",
             "required": true,
-            "description": "URL-encoded workflow URL (governance \u00a7S13).",
+            "description": "URL-encoded workflow URL (governance §S13).",
             "schema": {
               "type": "string",
               "format": "uri"
@@ -2955,7 +2955,7 @@
         ],
         "requestBody": {
           "required": true,
-          "description": "Correspondence message recording payload \u2014 server assigns URN and `recordedAt`.",
+          "description": "Correspondence message recording payload — server assigns URN and `recordedAt`.",
           "content": {
             "application/json": {
               "schema": {
@@ -4958,7 +4958,7 @@
         ],
         "requestBody": {
           "required": true,
-          "description": "Bundle build request \u2014 server emits Trellis events as the build progresses.",
+          "description": "Bundle build request — server emits Trellis events as the build progresses.",
           "content": {
             "application/json": {
               "schema": {
