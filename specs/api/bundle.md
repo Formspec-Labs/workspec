@@ -9,7 +9,7 @@
 
 ## Purpose
 
-A `Bundle` is the case-export download seam. The **bundle itself is Trellis-emitted CBOR** (`trellis-export/1`; Trellis Core §18.3 `ExportManifestPayload.format`) — a byte-exact, append-only, offline-verifiable archive carrying the case's events, checkpoints, signing-key registry, inclusion / consistency proofs, and (when applicable) the certificate-of-completion presentation artifact (Trellis ADR 0007). This API surface is the **metadata + download seam** around that byte stream: the JSON resource that lets a client enumerate available bundles, kick off a build, poll its status, and stream the bytes.
+A `Bundle` is the case-export download seam. The **bundle itself is a Trellis-emitted deterministic ZIP archive containing CBOR members** (`trellis-export/1`; Trellis Core §18.3 `ExportManifestPayload.format`) — a byte-exact, append-only, offline-verifiable archive carrying the case's events, checkpoints, signing-key registry, inclusion / consistency proofs, and (when applicable) the certificate-of-completion presentation artifact (Trellis ADR 0007). This API surface is the **metadata + download seam** around that byte stream: the JSON resource that lets a client enumerate available bundles, kick off a build, poll its status, and stream the bytes.
 
 The bundle is a derived projection of authoritative Trellis events — verification runs against the byte stream's COSE_Sign1 signatures and Merkle proofs (Trellis Core §19), not against any JSON metadata this API surfaces. The `Bundle.certificateOfCompletionDigest` and `Bundle.byteSize` are convenience metadata that a verifier MAY cross-check; the byte stream is canon.
 
@@ -23,7 +23,7 @@ Per ADR 0082 D-15 step 6, this domain pairs with `audit.schema.json` (cross-case
 
 `tierInclusion` is a closed-with-vendor-extension taxonomy (ADR 0082 D-12): `facts-only` (Kernel S8 only), `facts-reasoning` (Kernel S8 + Governance S6.2), `full-tier-set` (all four tiers including Governance S6.4 and AI Integration S13). The kernel/governance/AI tier semantics are mirrored from `provenance.schema.json` — bundles compose, they do not redefine.
 
-`mediaType` is a closed enum currently pinned to `application/cbor` (Phase 1 Trellis export). Future formats register here under a major schema bump, NOT a vendor extension — bundle byte format is normative.
+`mediaType` is a closed enum currently pinned to `application/zip` (Phase 1 Trellis export). Future formats register here under a major schema bump, NOT a vendor extension — bundle byte format is normative.
 
 `expiresAt` uses the ADR 0082 D-10 `never` sentinel for retention-indefinite bundles. After expiry the byte stream MAY be purged; metadata is retained for audit, status flips to `expired`.
 
@@ -40,7 +40,7 @@ Per ADR 0082 D-15 step 6, this domain pairs with `audit.schema.json` (cross-case
 | `GET` | `/api/v1/bundles` | `BundleListOptions` (query) -> `BundlePage` | n/a |
 | `GET` | `/api/v1/bundles/{urn}` | -> `Bundle` (metadata only) | n/a |
 | `POST` | `/api/v1/bundles` | `BundleCreateRequest` -> `Bundle` (status `pending` or `building`) | **REQUIRED** |
-| `GET` | `/api/v1/bundles/{urn}/download` | -> `application/cbor` byte stream | n/a |
+| `GET` | `/api/v1/bundles/{urn}/download` | -> `application/zip` byte stream | n/a |
 
 `GET /api/v1/bundles` is cursor-paginated per ADR 0082 D-7. Filters: `processId` (one case), `lifecycleStateAtExport` (e.g., `decided`), `status` (most commonly `available` for download-ready bundles), `createdAfter` (UTC lower bound on `requestedAt`). No `total`, no `page`. Cursors are deploy-lifetime stable; `WOS-1410` on expiry triggers client restart from the top.
 
@@ -50,7 +50,7 @@ Per ADR 0082 D-15 step 6, this domain pairs with `audit.schema.json` (cross-case
 
 `POST /api/v1/bundles` kicks off the bundle build. **`Idempotency-Key` is REQUIRED** per ADR 0082 D-16 because bundle builds are externally-visible side effects (Trellis events emit, key-registry snapshots, attachment lineage resolution). A repeat request within the retention window returns the original `Bundle` resource unchanged. Body: `BundleCreateRequest { processId, tierFilter?, verifierProfile? }`. Response: a `Bundle` resource with `status` typically `pending` or `building`. Clients poll `GET /api/v1/bundles/{urn}` until `status == available`.
 
-`GET /api/v1/bundles/{urn}/download` is the **binary content seam** — distinct from every other endpoint in the public API. Response `Content-Type: application/cbor`; response body is the Trellis CBOR byte stream verbatim. **This is NOT a JSON response.** OpenAPI describes it as `{"type": "string", "format": "binary"}` under the `application/cbor` content key:
+`GET /api/v1/bundles/{urn}/download` is the **binary content seam** — distinct from every other endpoint in the public API. Response `Content-Type: application/zip`; response body is the Trellis ZIP byte stream verbatim; the archive contains CBOR members. **This is NOT a JSON response.** OpenAPI describes it as `{"type": "string", "format": "binary"}` under the `application/zip` content key:
 
 ```yaml
 /bundles/{urn}/download:
@@ -58,9 +58,9 @@ Per ADR 0082 D-15 step 6, this domain pairs with `audit.schema.json` (cross-case
     operationId: downloadBundle
     responses:
       '200':
-        description: Trellis-emitted CBOR export archive (`trellis-export/1`).
+        description: Trellis-emitted deterministic ZIP export archive containing CBOR members (`trellis-export/1`).
         content:
-          application/cbor:
+          application/zip:
             schema:
               type: string
               format: binary
@@ -86,7 +86,7 @@ All non-2xx responses (except `/download`'s binary stream which uses HTTP status
 
 Per ADR 0082 Context section and the owner's greenfield-contracts memory: prior `case-portal` and `workspec-server` bundle DTOs are NOT preserved. The schema makes the worst shapes that prior art accumulated structurally inexpressible:
 
-1. **No inline byte stream.** `Bundle` carries metadata only; the byte stream is a separate endpoint. There is no `bytes: string (base64)` escape hatch tempting clients to ship CBOR through JSON.
+1. **No inline byte stream.** `Bundle` carries metadata only; the byte stream is a separate endpoint. There is no `bytes: string (base64)` escape hatch tempting clients to ship archive bytes through JSON.
 2. **No open `metadata: Record<string, unknown>` bag.** Every field is named; vendor extensions are constrained to `tierInclusion`'s `^x-[a-z]+-` arm. `mediaType` is closed (no vendor extension) because byte format is normative.
 3. **No nullable timestamp ambiguity.** `expiresAt` uses the ADR 0082 D-10 `never` sentinel, not `null`, so "indefinite retention" and "not yet known" do not collapse onto the same wire value.
 4. **`certificateOfCompletionDigest` is the SHA-256 of the artifact, not an opaque string.** Pattern-locked to `^[a-f0-9]{64}$` so a verifier can compute the comparison without dispatch on encoding.
@@ -101,4 +101,4 @@ Per ADR 0082 Context section and the owner's greenfield-contracts memory: prior 
 
 ## ADR Amendments
 
-None required. The bundle/audit pair closes ADR 0082 D-15 step 6 alongside the parallel dashboard / applicant / auth agents. The binary download endpoint (`application/cbor`, `format: binary`) is the first non-JSON response in the API surface — the OpenAPI snapshot follow-on declares the response per the wire-format pattern shown in Endpoints above.
+None required. The bundle/audit pair closes ADR 0082 D-15 step 6 alongside the parallel dashboard / applicant / auth agents. The binary download endpoint (`application/zip`, `format: binary`) is the first non-JSON response in the API surface — the OpenAPI snapshot follow-on declares the response per the wire-format pattern shown in Endpoints above.

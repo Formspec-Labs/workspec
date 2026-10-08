@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.formspec.io/wos-api/bundle/v1",
   "title": "WOS API Bundle",
-  "description": "Public API resource schema for case-export bundles. The bundle ITSELF is a Trellis-emitted CBOR archive (`trellis-export/1`; Trellis Core §18 export package layout, ADR 0007 certificate-of-completion composition). This schema defines the metadata + download seam: clients enumerate available bundles, kick off bundle builds, and download the authoritative byte stream. Bundles are derived projections of canonical Trellis events; they are not themselves authoritative — verification runs against the byte stream's COSE_Sign1 signatures and Merkle proofs (Trellis Core §19). Per ADR 0082 D-15 step 6, bundles complete the case-export surface alongside the cross-case `audit` query schema.",
+  "description": "Public API resource schema for case-export bundles. The bundle ITSELF is a Trellis-emitted deterministic ZIP archive containing CBOR members (`trellis-export/1`; Trellis Core §18 export package layout, ADR 0007 certificate-of-completion composition). This schema defines the metadata + download seam: clients enumerate available bundles, kick off bundle builds, and download the authoritative byte stream. Bundles are derived projections of canonical Trellis events; they are not themselves authoritative — verification runs against the byte stream's COSE_Sign1 signatures and Merkle proofs (Trellis Core §19). Per ADR 0082 D-15 step 6, bundles complete the case-export surface alongside the cross-case `audit` query schema.",
   "oneOf": [
     {
       "$ref": "#/$defs/Bundle"
@@ -54,17 +54,17 @@
     },
     "BundleMediaType": {
       "enum": [
-        "application/cbor"
+        "application/zip"
       ],
-      "description": "Closed MIME type for the bundle byte stream. Phase 1 ships a single Trellis CBOR export format (`trellis-export/1`; Trellis Core §18.3 `ExportManifestPayload.format`). Future formats register here under a major schema bump rather than a vendor extension — bundle byte format is normative.",
+      "description": "Closed MIME type for the bundle byte stream. Phase 1 ships a single Trellis ZIP export format containing CBOR members (`trellis-export/1`; Trellis Core §18.3 `ExportManifestPayload.format`). Future formats register here under a major schema bump rather than a vendor extension — bundle byte format is normative.",
       "examples": [
-        "application/cbor"
+        "application/zip"
       ]
     },
     "Bundle": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Bundle metadata resource. Describes a single case-export bundle: identity, the case it exports, when it was sealed, and the digest a verifier uses to confirm byte-stream integrity. The actual archive bytes are downloaded out-of-band via `GET /api/v1/bundles/{urn}/download` and are NOT inlined here — JSON cannot represent Trellis CBOR.",
+      "description": "Bundle metadata resource. Describes a single case-export bundle: identity, the case it exports, when it was sealed, and the digest a verifier uses to confirm byte-stream integrity. The actual archive bytes are downloaded out-of-band via `GET /api/v1/bundles/{urn}/download` and are NOT inlined here — the ZIP archive is a binary download.",
       "required": [
         "id",
         "processId",

@@ -5079,7 +5079,7 @@
     "/bundles/{urn}/download": {
       "get": {
         "operationId": "downloadBundle",
-        "summary": "Stream the Trellis-emitted CBOR bundle archive (`trellis-export/1`).",
+        "summary": "Stream the Trellis-emitted deterministic ZIP bundle archive containing CBOR members (`trellis-export/1`).",
         "parameters": [
           {
             "name": "urn",
@@ -5093,7 +5093,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Trellis-emitted CBOR export archive byte stream (`trellis-export/1`).",
+            "description": "Trellis-emitted deterministic ZIP export archive byte stream containing CBOR members (`trellis-export/1`).",
             "headers": {
               "X-WOS-API-Version": {
                 "description": "Current public API major.minor version.",
@@ -5104,7 +5104,7 @@
               }
             },
             "content": {
-              "application/cbor": {
+              "application/zip": {
                 "schema": {
                   "type": "string",
                   "format": "binary"
