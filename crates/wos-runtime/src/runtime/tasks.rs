@@ -31,8 +31,8 @@ impl WosRuntime {
     /// Persists a task draft artifact.
     ///
     /// # Errors
-    /// Returns an error when authorization, task lookup, validation, or
-    /// persistence fails.
+    /// Returns an error when authorization, task lookup, retained lifetime evidence,
+    /// validation or persistence fails, or `TaskExpired` for a fresh expired task.
     pub fn persist_task_draft(
         &mut self,
         task_id: &str,
@@ -59,6 +59,8 @@ impl WosRuntime {
 
         let task = record.process.active_tasks[task_index].clone();
         authorize_actor(&*self.access_control, &task, actor_id)?;
+        record.validate_creation()?;
+        require_task_unexpired(&task, now_ms)?;
         let status = response
             .get("status")
             .and_then(serde_json::Value::as_str)
@@ -246,6 +248,8 @@ impl WosRuntime {
 
         let task = record.process.active_tasks[task_index].clone();
         authorize_actor(&*self.access_control, &task, actor_id)?;
+        record.validate_creation()?;
+        require_task_unexpired(&task, now_ms)?;
         let status = response
             .get("status")
             .and_then(serde_json::Value::as_str)
@@ -636,6 +640,61 @@ impl WosRuntime {
         self.store.save_record(record.clone())?;
         Ok(())
     }
+}
+
+/// Refuse fresh commands before response processing when an explicit lifetime expires.
+fn require_task_unexpired(task: &ActiveTask, now_ms: u64) -> Result<(), RuntimeError> {
+    let expiry = crate::store::validate_task_lifetime(
+        task.expires_at.as_deref(),
+        task.expires_with_timer.as_deref(),
+    )?;
+    if expiry.is_some_and(|expiry| now_ms >= expiry) {
+        return Err(RuntimeError::TaskExpired(task.task_id.clone()));
+    }
+    Ok(())
+}
+
+/// Retire only explicitly expired tasks without emitting completion or failure events.
+pub(super) fn retire_expired_tasks(
+    record: &mut RuntimeRecord,
+    now_iso: &str,
+) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
+    let now_ms = super::parse_timestamp(now_iso)?;
+    // Validate every task before removing any, so malformed metadata cannot cause
+    // partial cleanup when another task in this record is already expired.
+    let mut expired_ids = std::collections::HashSet::new();
+    for task in &record.process.active_tasks {
+        let expiry = crate::store::validate_task_lifetime(
+            task.expires_at.as_deref(),
+            task.expires_with_timer.as_deref(),
+        )?;
+        if expiry.is_some_and(|expiry| now_ms >= expiry) {
+            expired_ids.insert(task.task_id.clone());
+        }
+    }
+    let mut provenance = Vec::new();
+    for task in &record.process.active_tasks {
+        if expired_ids.contains(&task.task_id) {
+            let mut failed = ProvenanceRecord::task_lifecycle(
+                ProvenanceKind::TaskFailed,
+                &task.task_id,
+                None,
+                Some(serde_json::json!({
+                    "taskStatus": "expired", "outcome": "expired",
+                    "expiresAt": task.expires_at, "timerRef": task.expires_with_timer,
+                })),
+            );
+            failed.timestamp = now_iso.into();
+            failed.actor_type = Some("system".into());
+            failed.outcome = Some("expired".into());
+            provenance.push(failed);
+        }
+    }
+    record
+        .process
+        .active_tasks
+        .retain(|task| !expired_ids.contains(&task.task_id));
+    Ok(provenance)
 }
 
 /// Decodes a task's internal parent process identifier.

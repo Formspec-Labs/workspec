@@ -352,6 +352,14 @@ pub struct ActiveTask {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deadline: Option<String>,
 
+    /// Immutable admission expiry captured from an actual runtime timer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
+
+    /// Original timer identifier supplying this task's admission expiry.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_with_timer: Option<String>,
+
     /// Task impact level.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub impact_level: Option<crate::model::kernel::ImpactLevel>,

@@ -30,6 +30,7 @@ impl WosRuntime {
         let mut record = self.store.load_record(process_id)?;
         let mut appended_provenance =
             materialize_due_timers(&mut record.process, now_ms, &now_iso)?;
+        appended_provenance.extend(super::tasks::retire_expired_tasks(&mut record, &now_iso)?);
 
         let Some(event) = record.process.pending_events.first().cloned() else {
             if !appended_provenance.is_empty() {

@@ -16,9 +16,7 @@ use super::RuntimeError;
 
 pub(super) fn format_timestamp(timestamp_ms: u64) -> Result<String, RuntimeError> {
     let nanos = i128::from(timestamp_ms) * 1_000_000;
-    let nanos_i64 = i64::try_from(nanos)
-        .map_err(|_| RuntimeError::Clock("timestamp exceeds supported range".to_string()))?;
-    let timestamp = OffsetDateTime::from_unix_timestamp_nanos(nanos_i64.into())
+    let timestamp = OffsetDateTime::from_unix_timestamp_nanos(nanos)
         .map_err(|error| RuntimeError::Clock(error.to_string()))?;
     timestamp
         .format(&Rfc3339)
@@ -70,4 +68,16 @@ pub(super) fn impact_level_label(level: ImpactLevel) -> String {
 pub(super) fn make_task_id(process_id: &str, ordinal: u64, task_ref: &str) -> String {
     let encoded_process_id = URL_SAFE_NO_PAD.encode(process_id);
     format!("wos-task:{encoded_process_id}:{ordinal}:{task_ref}")
+}
+
+#[cfg(test)]
+mod timestamp_range_tests {
+    use super::{format_timestamp, parse_timestamp};
+
+    #[test]
+    fn valid_year_2300_timestamp_round_trips_without_artificial_nanos_limit() {
+        let timestamp = "2300-01-01T00:00:00Z";
+        let millis = parse_timestamp(timestamp).unwrap();
+        assert_eq!(format_timestamp(millis).unwrap(), timestamp);
+    }
 }

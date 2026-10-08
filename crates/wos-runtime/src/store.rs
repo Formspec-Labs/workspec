@@ -74,6 +74,7 @@ impl RuntimeRecord {
             })?
             .validate_created_process(&self.process)?;
         self.validate_bound_task_attribution()?;
+        self.validate_task_lifetimes()?;
         self.validate_dismissal_replay()
     }
 
@@ -90,6 +91,7 @@ impl RuntimeRecord {
             })?
             .validate_process(&self.process)?;
         self.validate_bound_task_attribution()?;
+        self.validate_task_lifetimes()?;
         self.validate_dismissal_replay()
     }
 
@@ -105,6 +107,61 @@ impl RuntimeRecord {
             ));
         }
         self.validate_creation()?;
+        previous.validate_task_lifetimes()?;
+        for old_task in &previous.process.active_tasks {
+            if let Some(incoming) = self
+                .process
+                .active_tasks
+                .iter()
+                .find(|task| task.task_id == old_task.task_id)
+            {
+                if incoming.expires_at != old_task.expires_at
+                    || incoming.expires_with_timer != old_task.expires_with_timer
+                {
+                    return Err(invalid_attribution("task admission lifetime is immutable"));
+                }
+            }
+        }
+        // Lifetime witnesses survive removal/completion of active tasks, including
+        // unbound processes and tasks created after the initial snapshot.
+        for old in previous
+            .provenance_log
+            .iter()
+            .filter(|p| p.record_kind == wos_core::ProvenanceKind::TaskCreated)
+        {
+            let incoming = self.provenance_log.iter().find(|p| p.id == old.id);
+            if task_lifetime_witness(old)?.is_some()
+                || incoming.is_some_and(|p| {
+                    p.data
+                        .as_ref()
+                        .and_then(|d| d.pointer("/details/expiresAt"))
+                        .is_some()
+                })
+            {
+                let incoming = incoming
+                    .ok_or_else(|| invalid_attribution("task lifetime witness was removed"))?;
+                validate_retained_provenance(old, incoming)?;
+            }
+        }
+        let old_lifetime_ids: Vec<_> = previous
+            .provenance_log
+            .iter()
+            .filter(|p| p.record_kind == wos_core::ProvenanceKind::TaskCreated)
+            .filter_map(|p| {
+                task_lifetime_witness(p)
+                    .transpose()
+                    .map(|r| r.map(|_| &p.id))
+            })
+            .collect::<Result<_, _>>()?;
+        let retained_lifetime_ids: Vec<_> = self
+            .provenance_log
+            .iter()
+            .filter(|p| old_lifetime_ids.contains(&&p.id))
+            .map(|p| &p.id)
+            .collect();
+        if old_lifetime_ids != retained_lifetime_ids {
+            return Err(invalid_attribution("task lifetime witness order changed"));
+        }
         if previous.process.actor_bindings.is_some() {
             previous.validate_creation()?;
             let old: Vec<_> = previous
@@ -168,6 +225,76 @@ impl RuntimeRecord {
             }
         }
         Ok(changes)
+    }
+
+    fn validate_task_lifetimes(&self) -> Result<(), StoreError> {
+        let mut witnesses = HashMap::new();
+        let mut witness_ids = HashSet::new();
+        let mut counts = HashMap::new();
+        for record in self
+            .provenance_log
+            .iter()
+            .filter(|p| p.record_kind == wos_core::ProvenanceKind::TaskCreated)
+        {
+            if let Some(task_id) = record
+                .data
+                .as_ref()
+                .and_then(|d| d.get("taskId"))
+                .and_then(serde_json::Value::as_str)
+            {
+                *counts.entry(task_id).or_insert(0_u64) += 1;
+            }
+            if let Some((task_id, expires_at, timer_ref)) = task_lifetime_witness(record)? {
+                if !stack_common_typeid::is_valid_type_id(
+                    &record.id,
+                    Some(stack_common_typeid::PROVENANCE_PREFIX),
+                ) || chrono::DateTime::parse_from_rfc3339(&record.timestamp).is_err()
+                    || !witness_ids.insert(&record.id)
+                    || crate::task_process_id(task_id).ok().as_deref()
+                        != Some(self.process.process_id.as_str())
+                    || witnesses.insert(task_id, (expires_at, timer_ref)).is_some()
+                {
+                    return Err(invalid_attribution(
+                        "task lifetime witness identity is invalid or duplicated",
+                    ));
+                }
+            }
+        }
+        if witnesses.keys().any(|id| counts.get(id) != Some(&1)) {
+            return Err(invalid_attribution(
+                "task lifetime has multiple creation witnesses",
+            ));
+        }
+        for task in &self.process.active_tasks {
+            validate_task_lifetime(
+                task.expires_at.as_deref(),
+                task.expires_with_timer.as_deref(),
+            )?;
+            let retained = witnesses.get(task.task_id.as_str()).copied();
+            let current = task
+                .expires_at
+                .as_deref()
+                .zip(task.expires_with_timer.as_deref());
+            if retained != current {
+                return Err(invalid_attribution(
+                    "active task lifetime differs from its original witness",
+                ));
+            }
+        }
+        if let Some(creation) = &self.creation {
+            for task in &creation.tasks {
+                let original = task
+                    .expires_at
+                    .as_deref()
+                    .zip(task.expires_with_timer.as_deref());
+                if witnesses.get(task.task_id.as_str()).copied() != original {
+                    return Err(invalid_attribution(
+                        "original task lifetime differs from its witness",
+                    ));
+                }
+            }
+        }
+        Ok(())
     }
 
     fn validate_bound_task_attribution(&self) -> Result<(), StoreError> {
@@ -270,6 +397,8 @@ impl RuntimeRecord {
             if !active.insert(&task.task_id)
                 || task.declared_actor != witness.details.declared_actor
                 || task.task_ref != witness.details.task_ref
+                || task.expires_at != witness.details.expires_at
+                || task.expires_with_timer != witness.details.expires_with_timer
             {
                 return Err(invalid_attribution(
                     "active task declared attribution differs from its original witness",
@@ -288,6 +417,8 @@ impl RuntimeRecord {
             if task.declared_actor != witness.details.declared_actor
                 || task.assigned_actor != witness.details.assigned_actor
                 || task.task_ref != witness.details.task_ref
+                || task.expires_at != witness.details.expires_at
+                || task.expires_with_timer != witness.details.expires_with_timer
             {
                 return Err(invalid_attribution(
                     "original creation task attribution conflicts",
@@ -1233,6 +1364,75 @@ struct BoundTaskDetails {
     _binding: Option<String>,
     declared_actor: Option<String>,
     assigned_actor: Option<String>,
+    expires_at: Option<String>,
+    expires_with_timer: Option<String>,
+    #[serde(rename = "calendarVersion")]
+    _calendar_version: Option<String>,
+    #[serde(rename = "calendarVersionConvergenceError")]
+    _calendar_version_convergence_error: Option<bool>,
+}
+
+/// Validate a paired task lifetime without granting command authority.
+pub(crate) fn validate_task_lifetime(
+    expires_at: Option<&str>,
+    timer_ref: Option<&str>,
+) -> Result<Option<u64>, StoreError> {
+    match (expires_at, timer_ref) {
+        (None, None) => Ok(None),
+        (Some(timestamp), Some(timer_ref)) if !timer_ref.trim().is_empty() => {
+            let parsed = time::OffsetDateTime::parse(
+                timestamp,
+                &time::format_description::well_known::Rfc3339,
+            )
+            .map_err(|_| invalid_attribution("task expiry timestamp is malformed"))?;
+            let nanos = parsed.unix_timestamp_nanos();
+            if nanos < 0 {
+                return Err(invalid_attribution(
+                    "task expiry timestamp is out of supported range",
+                ));
+            }
+            Ok(Some(u64::try_from(nanos / 1_000_000).map_err(|_| {
+                invalid_attribution("task expiry timestamp is out of range")
+            })?))
+        }
+        _ => Err(invalid_attribution(
+            "task expiry requires paired timestamp and nonblank timer reference",
+        )),
+    }
+}
+
+/// Extract an explicitly configured lifetime from original task creation evidence.
+fn task_lifetime_witness(
+    record: &ProvenanceRecord,
+) -> Result<Option<(&str, &str, &str)>, StoreError> {
+    let Some(details) = record
+        .data
+        .as_ref()
+        .and_then(|data| data.get("details"))
+        .and_then(serde_json::Value::as_object)
+    else {
+        return Ok(None);
+    };
+    if !details.contains_key("expiresAt") && !details.contains_key("expiresWithTimer") {
+        return Ok(None);
+    }
+    let task_id = record
+        .data
+        .as_ref()
+        .and_then(|data| data.get("taskId"))
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| invalid_attribution("task lifetime witness is missing taskId"))?;
+    let expires_at = details.get("expiresAt").and_then(serde_json::Value::as_str);
+    let timer_ref = details
+        .get("expiresWithTimer")
+        .and_then(serde_json::Value::as_str);
+    validate_task_lifetime(expires_at, timer_ref)?;
+    match (expires_at, timer_ref) {
+        (Some(expires_at), Some(timer_ref)) => Ok(Some((task_id, expires_at, timer_ref))),
+        _ => Err(invalid_attribution(
+            "task lifetime witness fields are malformed",
+        )),
+    }
 }
 
 fn invalid_attribution(message: &str) -> StoreError {
@@ -1362,6 +1562,8 @@ mod tests {
                 prefill_mapping_ref: None,
                 response_mapping_ref: None,
                 deadline: None,
+                expires_at: None,
+                expires_with_timer: None,
                 impact_level: None,
                 context: None,
                 last_validation_outcome: None,

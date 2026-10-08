@@ -10896,6 +10896,13 @@
           "x-wos": {
             "openStringKind": "fel"
           }
+        },
+        "expiresWithTimer": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Existing native timer whose actual absolute deadline becomes the immutable task lifetime at createTask execution. Fresh task drafts and responses refuse at or after that instant before validation or mapping. Later timer cancellation or replacement does not extend the task. Tasks without this property keep their existing lifetime behavior (Kernel §13.2.1).",
+          "examples": ["responseWindow"],
+          "x-wos": {"openStringKind": "identifier"}
         }
       },
       "allOf": [
@@ -10941,6 +10948,22 @@
               "required": [
                 "deadline"
               ]
+            }
+          }
+        },
+        {
+          "if": {"required": ["expiresWithTimer"]},
+          "then": {
+            "required": ["action", "taskRef"],
+            "properties": {
+              "action": {"const": "createTask"},
+              "taskRef": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Task definition reference receiving the explicit timer-bound lifetime.",
+                "examples": ["provideRequestedInformation"],
+                "x-wos": {"openStringKind": "identifier"}
+              }
             }
           }
         }

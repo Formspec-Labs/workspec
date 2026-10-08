@@ -89,6 +89,8 @@ fn active_task_impact_level_round_trips_canonical_string() {
         prefill_mapping_ref: None,
         response_mapping_ref: None,
         deadline: None,
+        expires_at: None,
+        expires_with_timer: None,
         impact_level: Some(ImpactLevel::Operational),
         context: None,
         last_validation_outcome: None,

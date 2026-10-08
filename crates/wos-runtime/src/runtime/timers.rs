@@ -91,7 +91,7 @@ pub(super) fn timers_to_state(
 ///
 /// # Errors
 /// Returns an error when timestamp conversion fails.
-fn timer_to_state(
+pub(super) fn timer_to_state(
     timer: &Timer,
     calendar: Option<&BusinessCalendarDocument>,
 ) -> Result<(wos_core::instance::TimerState, bool), RuntimeError> {

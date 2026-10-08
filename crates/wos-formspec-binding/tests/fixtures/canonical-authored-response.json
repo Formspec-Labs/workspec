@@ -1,0 +1,38 @@
+{
+  "$formspecResponse": "1.0",
+  "id": "resp-synthetic",
+  "status": "completed",
+  "definitionUrl": "urn:test:formspec:synthetic-review",
+  "definitionVersion": "1.0.0",
+  "authored": "2026-04-22T12:00:00Z",
+  "data": {
+    "approved": true
+  },
+  "authoredSignatures": [
+    {
+      "signatureId": "sig-synthetic",
+      "documentId": "syntheticReview",
+      "signingIntent": "urn:test:signing-intent:synthetic-review",
+      "signatureValue": "AA==",
+      "signerName": "Synthetic Test Signer",
+      "consentAccepted": true,
+      "consentTextRef": "urn:test:consent",
+      "consentVersion": "1.0.0",
+      "affirmationText": "Synthetic test assertion only.",
+      "signedPayload": {
+        "canonicalization": "formspec-response-signing-v1",
+        "digestAlgorithm": "sha-256",
+        "digest": "0000000000000000000000000000000000000000000000000000000000000000",
+        "responseId": "resp-synthetic",
+        "definitionUrl": "urn:test:formspec:synthetic-review",
+        "definitionVersion": "1.0.0",
+        "signedAt": "2026-04-22T12:00:00Z",
+        "signingIntent": "urn:test:signing-intent:synthetic-review"
+      },
+      "documentHash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "documentHashAlgorithm": "sha-256",
+      "signatureProvider": "urn:test:signature-provider:synthetic",
+      "ceremonyId": "ceremony-synthetic"
+    }
+  ]
+}

@@ -990,6 +990,13 @@ pub struct Action {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub start_at_expression: Option<String>,
 
+    /// Existing timer whose deadline bounds this newly created task.
+    ///
+    /// Applies only to `createTask`. The runtime captures the actual timer
+    /// deadline once; later timer cancellation or replacement does not extend it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_with_timer: Option<String>,
+
     /// Deadline (startTimer).
     #[serde(default)]
     pub deadline: Option<String>,

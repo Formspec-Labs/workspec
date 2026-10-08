@@ -169,6 +169,12 @@ pub struct FormspecSignedPayloadRef {
 
     /// Definition version pinned by the signature.
     pub definition_version: String,
+
+    /// Canonical signing timestamp retained inside the signed-payload pin.
+    pub signed_at: String,
+
+    /// Signing intent mirrored by the authored signature's lookup field.
+    pub signing_intent: String,
 }
 
 /// Minimal authored-signature shape WOS needs to bind Formspec evidence.
@@ -204,8 +210,15 @@ pub struct FormspecAuthoredSignatureRef {
     /// Signer display name required by Formspec schema.
     pub signer_name: String,
 
-    /// Signature timestamp.
-    pub signed_at: String,
+    // The owning schema forbids an outer signedAt, including null. This unit
+    // field exists only to reject it during deserialization, never to store it.
+    #[serde(
+        rename = "signedAt",
+        default,
+        skip_serializing,
+        deserialize_with = "reject_outer_signed_at"
+    )]
+    noncanonical_outer_signed_at: (),
 
     /// Consent flag accepted by the signer.
     pub consent_accepted: bool,
@@ -246,6 +259,22 @@ pub struct FormspecAuthoredSignatureRef {
     /// VerificationReceipt body plus signed `receiptBytes`.
     #[serde(default)]
     pub verification_receipt: Option<FormspecVerificationReceiptRef>,
+}
+
+impl FormspecAuthoredSignatureRef {
+    /// Return the canonical signing timestamp from the signed-payload pin.
+    pub fn signed_at(&self) -> &str {
+        &self.signed_payload.signed_at
+    }
+}
+
+fn reject_outer_signed_at<'de, D>(_: D) -> Result<(), D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Err(serde::de::Error::custom(
+        "authoredSignatures signedAt must appear only inside signedPayload",
+    ))
 }
 
 /// Formspec verification receipt reference accepted by WOS.
@@ -589,6 +618,20 @@ fn validate_authored_signature_shape(
     signature: &FormspecAuthoredSignatureRef,
 ) -> Result<(), BindingError> {
     ensure_non_empty("authoredSignatures.signatureId", &signature.signature_id)?;
+    ensure_non_empty(
+        "authoredSignatures.signedPayload.signedAt",
+        signature.signed_at(),
+    )?;
+    ensure_non_empty(
+        "authoredSignatures.signedPayload.signingIntent",
+        &signature.signed_payload.signing_intent,
+    )?;
+    if signature.signing_intent != signature.signed_payload.signing_intent {
+        return Err(BindingError::InvalidInput(
+            "authoredSignatures signingIntent must match signedPayload.signingIntent".into(),
+        ));
+    }
+
     ensure_non_empty(
         "authoredSignatures.signingIntent",
         &signature.signing_intent,
@@ -1399,7 +1442,7 @@ where
                 signature_method: signature_method_decode.into_option(),
                 signed_payload_digest: signature.signed_payload.digest,
                 signed_payload_digest_algorithm: signature.signed_payload.digest_algorithm,
-                signed_at: signature.signed_at,
+                signed_at: signature.signed_payload.signed_at,
                 document_hash: signature.document_hash,
                 document_hash_algorithm: signature.document_hash_algorithm,
                 signature_provider: Some(signature.signature_provider),
@@ -1608,6 +1651,8 @@ mod tests {
             prefill_mapping_ref: Some("urn:mapping:prefill".to_string()),
             response_mapping_ref: Some("urn:mapping:response".to_string()),
             deadline: None,
+            expires_at: None,
+            expires_with_timer: None,
             impact_level: None,
             context: None,
             last_validation_outcome: None,
@@ -1923,7 +1968,6 @@ mod tests {
                     "signatureValue": cose_sign1_b64_with_method_uri("urn:formspec:sig-method:ed25519-cose-sign1@1"),
                     "signerId": "applicant",
                     "signerName": "Ada Lovelace",
-                    "signedAt": "2026-04-22T12:00:00Z",
                     "consentAccepted": true,
                     "consentTextRef": "urn:test:consent:v1",
                     "consentVersion": "1.0.0",
@@ -1934,11 +1978,13 @@ mod tests {
                         "digest": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
                         "responseId": "resp-2026-0001",
                         "definitionUrl": "urn:formspec:review",
-                        "definitionVersion": "1.0.0"
+                        "definitionVersion": "1.0.0",
+                        "signedAt": "2026-04-22T12:00:00Z",
+                        "signingIntent": "urn:wos:signing-intent:applicant-signature"
                     },
                     "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
                     "documentHashAlgorithm": "sha-256",
-                    "signatureProvider": "formspec",
+                    "signatureProvider": "urn:test:signature-provider:formspec",
                     "ceremonyId": "ceremony-2026-0001"
                 }
             ]

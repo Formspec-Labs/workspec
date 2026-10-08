@@ -189,6 +189,10 @@ pub struct ObservedAction {
     /// state to be entered or exited. Integration handlers (event-consume,
     /// callback inbound) read the CloudEvent envelope from this field.
     pub event_data: Option<serde_json::Value>,
+    /// Exact timer present when an explicitly bounded createTask action executed.
+    /// Runtime applies its selected calendar to this ephemeral capture; later
+    /// timer replacement or cancellation cannot change the task's admission expiry.
+    pub task_expiry_timer: Option<crate::timer::Timer>,
 }
 
 /// Errors from the evaluation algorithm.
@@ -1117,12 +1121,41 @@ impl Evaluator {
         lifecycle_state: &str,
         event_data: Option<&serde_json::Value>,
     ) -> Result<(), EvalError> {
+        if action.expires_with_timer.is_some() && action.action != ActionKind::CreateTask {
+            return Err(EvalError::Internal(
+                "expiresWithTimer is valid only for createTask".into(),
+            ));
+        }
         if action.start_at_expression.is_some() && action.action != ActionKind::StartTimer {
             return Err(EvalError::Timer {
                 timer_id: action.timer_id.clone().unwrap_or_default(),
                 message: "startAtExpression is valid only for startTimer".into(),
             });
         }
+        let task_expiry_timer = if action.action == ActionKind::CreateTask {
+            match action.expires_with_timer.as_deref() {
+                None => None,
+                Some(timer_id) => {
+                    if timer_id.trim().is_empty() {
+                        return Err(EvalError::Internal("expiresWithTimer is blank".into()));
+                    }
+                    let mut matching = self.timers.iter().filter(|timer| timer.id == timer_id);
+                    let timer = matching.next().ok_or_else(|| {
+                        EvalError::Internal(format!(
+                            "expiresWithTimer references absent timer '{timer_id}'"
+                        ))
+                    })?;
+                    if matching.next().is_some() {
+                        return Err(EvalError::Internal(
+                            "expiresWithTimer references duplicate timers".into(),
+                        ));
+                    }
+                    Some(timer.clone())
+                }
+            }
+        } else {
+            None
+        };
         match action.action {
             ActionKind::SetData => {
                 let path = action.path.as_deref().unwrap_or("");
@@ -1229,6 +1262,7 @@ impl Evaluator {
             actor_id: actor.map(String::from),
             action: action.clone(),
             event_data: event_data.cloned(),
+            task_expiry_timer,
         });
 
         Ok(())
@@ -2850,6 +2884,140 @@ mod tests {
                 value["startAtExpression"] = expression.into();
             }
             serde_json::from_value(value).unwrap()
+        }
+
+        #[test]
+        fn task_lifetime_field_refuses_non_create_task_actions_before_effects() {
+            let mut eval = evaluator(10_000);
+            // Initialization enters the initial state and retains genuine provenance.
+            assert!(
+                eval.provenance
+                    .records()
+                    .iter()
+                    .any(
+                        |record| record.record_kind == crate::ProvenanceKind::OnEntry
+                            && record.to_state.as_deref() == Some("waiting")
+                            && record.data.as_ref()
+                                == Some(&serde_json::json!({"state":"waiting"}))
+                    )
+            );
+            // Keep an existing same-ID timer, so refusal also proves no replacement.
+            eval.execute_action_in_state(&action(None, "PT5S"), None, "waiting", None)
+                .unwrap();
+            let timer_values = |eval: &Evaluator| {
+                let mut timers: Vec<_> = eval
+                    .timers
+                    .iter()
+                    .map(|timer| {
+                        (
+                            timer.id.clone(),
+                            timer.created_at_ms,
+                            timer.deadline_ms,
+                            timer.fires_event.clone(),
+                            timer.created_in_state.clone(),
+                            timer.duration_iso.clone(),
+                            timer.duration_ms,
+                        )
+                    })
+                    .collect();
+                timers.sort_by(|left, right| left.0.cmp(&right.0));
+                timers
+            };
+            let observation_values = |eval: &Evaluator| {
+                eval.executed_actions
+                    .iter()
+                    .map(|observed| {
+                        (
+                            observed.lifecycle_state.clone(),
+                            observed.actor_id.clone(),
+                            serde_json::to_value(&observed.action).unwrap(),
+                            observed.event_data.clone(),
+                            observed.task_expiry_timer.as_ref().map(|timer| {
+                                (
+                                    timer.id.clone(),
+                                    timer.created_at_ms,
+                                    timer.deadline_ms,
+                                    timer.fires_event.clone(),
+                                    timer.created_in_state.clone(),
+                                    timer.duration_iso.clone(),
+                                    timer.duration_ms,
+                                )
+                            }),
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            };
+            let before_provenance = serde_json::to_value(eval.provenance.records()).unwrap();
+            let before_timers = timer_values(&eval);
+            let before_observations = observation_values(&eval);
+            let before_case = eval.case_state_json();
+            let before_configuration = eval.config.active_states().to_vec();
+            let before_transitions = serde_json::to_value(&eval.transitions).unwrap();
+            let mut invalid = action(None, "PT1S");
+            invalid.expires_with_timer = Some("anchored".into());
+            assert!(matches!(
+                eval.execute_action_in_state(&invalid, None, "waiting", None),
+                Err(EvalError::Internal(_))
+            ));
+            assert_eq!(
+                serde_json::to_value(eval.provenance.records()).unwrap(),
+                before_provenance
+            );
+            assert_eq!(timer_values(&eval), before_timers);
+            assert_eq!(observation_values(&eval), before_observations);
+            assert_eq!(eval.case_state_json(), before_case);
+            assert_eq!(eval.config.active_states(), before_configuration);
+            assert_eq!(
+                serde_json::to_value(&eval.transitions).unwrap(),
+                before_transitions
+            );
+        }
+
+        #[test]
+        fn bounded_task_observation_keeps_timer_before_later_replace_or_cancel() {
+            for cancel in [false, true] {
+                let mut eval = evaluator(10_000);
+                eval.execute_action_in_state(&action(None, "PT1S"), None, "waiting", None)
+                    .unwrap();
+                let create:Action=serde_json::from_value(serde_json::json!({"action":"createTask","taskRef":"response","expiresWithTimer":"anchored"})).unwrap();
+                eval.execute_action_in_state(&create, None, "waiting", None)
+                    .unwrap();
+                if cancel {
+                    let cancellation: Action = serde_json::from_value(
+                        serde_json::json!({"action":"cancelTimer","timerId":"anchored"}),
+                    )
+                    .unwrap();
+                    eval.execute_action_in_state(&cancellation, None, "waiting", None)
+                        .unwrap();
+                } else {
+                    eval.execute_action_in_state(&action(None, "PT10S"), None, "waiting", None)
+                        .unwrap();
+                }
+                let observed = eval
+                    .executed_actions
+                    .iter()
+                    .find(|o| o.action.action == ActionKind::CreateTask)
+                    .unwrap();
+                assert_eq!(
+                    observed.task_expiry_timer.as_ref().unwrap().deadline_ms,
+                    11_000
+                );
+                assert_eq!(
+                    observed.task_expiry_timer.as_ref().unwrap().created_at_ms,
+                    10_000
+                );
+                assert!(
+                    eval.executed_actions
+                        .iter()
+                        .filter(|o| o.action.action != ActionKind::CreateTask)
+                        .all(|o| o.task_expiry_timer.is_none())
+                );
+                if cancel {
+                    assert!(eval.timers.is_empty());
+                } else {
+                    assert_eq!(timer(&eval).deadline_ms, 20_000);
+                }
+            }
         }
 
         fn timer(eval: &Evaluator) -> &crate::timer::Timer {

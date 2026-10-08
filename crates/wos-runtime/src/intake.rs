@@ -175,6 +175,12 @@ pub struct TaskCreationSnapshot {
     pub assigned_actor: Option<String>,
     /// Original deadline.
     pub deadline: Option<String>,
+    /// Original admission expiry captured from a runtime timer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
+    /// Original timer identifier supplying the admission expiry.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_with_timer: Option<String>,
     /// Original impact level.
     pub impact_level: Option<wos_core::model::kernel::ImpactLevel>,
     /// Original task creation timestamp.
@@ -238,6 +244,8 @@ impl ProcessCreationSnapshot {
                 declared_actor: task.declared_actor.clone(),
                 assigned_actor: task.assigned_actor.clone(),
                 deadline: task.deadline.clone(),
+                expires_at: task.expires_at.clone(),
+                expires_with_timer: task.expires_with_timer.clone(),
                 impact_level: task.impact_level,
                 created_at: task.created_at.clone(),
                 updated_at: task.updated_at.clone(),
@@ -281,6 +289,10 @@ impl ProcessCreationSnapshot {
             .map_err(|error| invalid_creation(&error))?;
         let mut seen = std::collections::HashSet::new();
         for task in &self.tasks {
+            crate::store::validate_task_lifetime(
+                task.expires_at.as_deref(),
+                task.expires_with_timer.as_deref(),
+            )?;
             if crate::task_process_id(&task.task_id).ok().as_deref()
                 != Some(self.process_id.as_str())
                 || !seen.insert(&task.task_id)
@@ -322,6 +334,8 @@ impl ProcessCreationSnapshot {
                 || original.declared_actor != actual.declared_actor
                 || original.assigned_actor != actual.assigned_actor
                 || original.deadline != actual.deadline
+                || original.expires_at != actual.expires_at
+                || original.expires_with_timer != actual.expires_with_timer
                 || original.impact_level != actual.impact_level
                 || original.created_at != actual.created_at
                 || original.updated_at != actual.updated_at

@@ -60,6 +60,8 @@ fn task_with_pin(definition_url: &str, definition_version: &str) -> ActiveTask {
         prefill_mapping_ref: None,
         response_mapping_ref: None,
         deadline: None,
+        expires_at: None,
+        expires_with_timer: None,
         impact_level: None,
         context: None,
         last_validation_outcome: None,
@@ -188,6 +190,8 @@ fn revalidate_ignores_stored_pin_match_true() {
         prefill_mapping_ref: None,
         response_mapping_ref: None,
         deadline: None,
+        expires_at: None,
+        expires_with_timer: None,
         impact_level: None,
         context: None,
         last_validation_outcome: Some(ValidationOutcome {

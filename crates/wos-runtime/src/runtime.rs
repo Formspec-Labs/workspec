@@ -295,6 +295,10 @@ impl Clock for SystemClock {
 /// Errors returned by runtime commands.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum RuntimeError {
+    /// A fresh command targets a task whose explicit lifetime has expired.
+    #[error("task has expired: {0}")]
+    TaskExpired(String),
+
     /// Runtime store failed.
     #[error(transparent)]
     Store(#[from] StoreError),
@@ -4426,6 +4430,8 @@ mod tests {
             prefill_mapping_ref: None,
             response_mapping_ref: response_mapping_ref.map(str::to_string),
             deadline: None,
+            expires_at: None,
+            expires_with_timer: None,
             impact_level: None,
             context: Some(FormspecTaskContext {
                 task_id,
@@ -9388,6 +9394,669 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    mod task_lifetime_tests {
+        use super::*;
+
+        fn kernel(anchor: Option<&str>, lifetime: bool) -> KernelDocument {
+            let mut timer = serde_json::json!({"action":"startTimer", "timerId":"response", "duration":"PT1S",
+                "event":{"kind":"timer","timerId":"response","source":"custom","firesAs":"elapsed"}});
+            if let Some(anchor) = anchor {
+                timer["startAtExpression"] = anchor.into();
+            }
+            let mut task = serde_json::json!({"action":"createTask","taskRef":"review","assignTo":"reviewer",
+                "contractRef":"reviewForm","completionEvent":"done","failureEvent":"failed"});
+            if lifetime {
+                task["expiresWithTimer"] = "response".into();
+            }
+            serde_json::from_value(serde_json::json!({"$wosWorkflow":"1.0","url":"urn:test:lifetime","version":"1.0.0",
+                "contracts":{"reviewForm":{"binding":"formspec","ref":"urn:formspec:review"}},
+                "lifecycle":{"initialState":"open","states":{
+                    "open":{"type":"atomic","onEntry":[timer,task],"transitions":[{"event":"advance","target":"later"}]},
+                    "later":{"type":"atomic"}}}})).unwrap()
+        }
+
+        fn create(kernel: KernelDocument, now: u64) -> (WosRuntime, String) {
+            let mut runtime = runtime_with_kernel(kernel);
+            runtime.clock = Box::new(FixedClock { now_ms: now });
+            let id = stack_common_typeid::mint_process_id();
+            runtime
+                .create_process(CreateProcessRequest {
+                    process_id: id.clone(),
+                    tenant: None,
+                    definition_url: "urn:test:lifetime".into(),
+                    definition_version: "1.0.0".into(),
+                    initial_case_state: Some(
+                        serde_json::json!({"unchanged":true,"origin":"1970-01-01T00:00:00Z"}),
+                    ),
+                })
+                .unwrap();
+            (runtime, id)
+        }
+
+        fn snapshot(runtime: &WosRuntime, id: &str) -> serde_json::Value {
+            let record = runtime.store.load_record(id).unwrap();
+            serde_json::json!({"process":record.process,"aux":crate::runtime_aux_to_json(&record)})
+        }
+
+        #[derive(Debug)]
+        struct CountingProcessor {
+            calls: Arc<AtomicUsize>,
+        }
+
+        impl crate::binding::ContractBindingAdapter for CountingProcessor {
+            fn binding(&self) -> &'static str {
+                "formspec"
+            }
+            fn prepare_task(
+                &self,
+                task: &ActiveTask,
+                state: &serde_json::Value,
+            ) -> Result<PreparedTask, BindingError> {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                crate::binding::ContractBindingAdapter::prepare_task(&TestAdapter, task, state)
+            }
+            fn validate_submission(
+                &self,
+                task: &ActiveTask,
+                response: &serde_json::Value,
+            ) -> Result<SubmissionValidation, BindingError> {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                crate::binding::ContractBindingAdapter::validate_submission(
+                    &TestAdapter,
+                    task,
+                    response,
+                )
+            }
+            fn compute_case_mutation(
+                &self,
+                task: &ActiveTask,
+                response: &serde_json::Value,
+            ) -> Result<Option<CaseMutationBundle>, BindingError> {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                crate::binding::ContractBindingAdapter::compute_case_mutation(
+                    &TestAdapter,
+                    task,
+                    response,
+                )
+            }
+        }
+
+        #[test]
+        fn overdue_task_refuses_fresh_draft_and_submit_before_response_mutation() {
+            let calls = Arc::new(AtomicUsize::new(0));
+            let mut bindings = BindingRegistry::new();
+            bindings.register(CountingProcessor {
+                calls: calls.clone(),
+            });
+            // A real pre-expiry submission proves this processor is installed and called.
+            let (mut positive, positive_id) = create(kernel(None, true), 10_000);
+            positive.bindings = bindings.clone();
+            let positive_task = positive.load_process(&positive_id).unwrap().active_tasks[0]
+                .task_id
+                .clone();
+            assert!(matches!(positive.submit_task_response(&positive_task, serde_json::json!({
+                "status":"completed","definitionUrl":"urn:formspec:review","definitionVersion":"1.0.0","data":{"approved":true}
+            }), "reviewer", Some("positive")), Ok(TaskSubmissionResult::Completed { .. })));
+            assert!(calls.load(Ordering::SeqCst) > 0);
+            calls.store(0, Ordering::SeqCst);
+            let (mut runtime, id) = create(kernel(None, true), 10_000);
+            runtime.bindings = bindings;
+            let task = runtime.load_process(&id).unwrap().active_tasks[0]
+                .task_id
+                .clone();
+            runtime.clock = Box::new(FixedClock { now_ms: 11_000 });
+            let before = snapshot(&runtime, &id);
+            assert!(matches!(
+                runtime.persist_task_draft(
+                    &task,
+                    serde_json::json!({"status":"stopped","data":{"changed":true}}),
+                    "reviewer",
+                    Some("new-draft")
+                ),
+                Err(RuntimeError::TaskExpired(_))
+            ));
+            assert!(matches!(
+                runtime.submit_task_response(
+                    &task,
+                    serde_json::json!({"status":"completed","data":{"changed":true}}),
+                    "reviewer",
+                    Some("new-submit")
+                ),
+                Err(RuntimeError::TaskExpired(_))
+            ));
+            assert_eq!(calls.load(Ordering::SeqCst), 0);
+            assert_eq!(snapshot(&runtime, &id), before);
+        }
+
+        #[test]
+        fn task_lifetime_captures_actual_business_calendar_adjusted_deadline() {
+            let calendar: BusinessCalendarDocument = serde_json::from_value(serde_json::json!({
+                "targetWorkflow":"urn:test:lifetime","version":"1.0.0","timezone":"UTC",
+                "workWeek":["monday","tuesday","wednesday","thursday","friday"]
+            }))
+            .unwrap();
+            let now = parse_timestamp("2026-01-02T23:59:59Z").unwrap();
+            let mut runtime =
+                runtime_with_kernel(kernel(None, true)).with_business_calendar(calendar);
+            runtime.clock = Box::new(FixedClock { now_ms: now });
+            let id = stack_common_typeid::mint_process_id();
+            runtime
+                .create_process(CreateProcessRequest {
+                    process_id: id.clone(),
+                    tenant: None,
+                    definition_url: "urn:test:lifetime".into(),
+                    definition_version: "1.0.0".into(),
+                    initial_case_state: None,
+                })
+                .unwrap();
+            let record = runtime.store.load_record(&id).unwrap();
+            let task = &record.process.active_tasks[0];
+            assert_eq!(record.process.timers[0].deadline, "2026-01-05T00:00:00Z");
+            assert_eq!(task.expires_at.as_deref(), Some("2026-01-05T00:00:00Z"));
+            assert_ne!(task.expires_at.as_deref(), Some("2026-01-03T00:00:00Z"));
+            assert_eq!(task.expires_with_timer.as_deref(), Some("response"));
+            let witness = record
+                .provenance_log
+                .iter()
+                .find(|p| p.record_kind == ProvenanceKind::TaskCreated)
+                .unwrap();
+            assert_eq!(
+                witness.data.as_ref().unwrap()["details"]["expiresAt"],
+                "2026-01-05T00:00:00Z"
+            );
+            assert_eq!(
+                record.creation.as_ref().unwrap().tasks[0].expires_at,
+                task.expires_at
+            );
+            runtime.clock = Box::new(FixedClock {
+                now_ms: parse_timestamp("2026-01-03T00:00:00Z").unwrap(),
+            });
+            runtime
+                .persist_task_draft(
+                    &task.task_id,
+                    serde_json::json!({"status":"stopped"}),
+                    "reviewer",
+                    Some("weekend-draft"),
+                )
+                .unwrap();
+        }
+
+        #[test]
+        fn preexpiry_draft_replays_after_expiry_and_physical_retirement() {
+            let (mut runtime, id) = create(kernel(None, true), 10_000);
+            let task = runtime.load_process(&id).unwrap().active_tasks[0]
+                .task_id
+                .clone();
+            runtime.clock = Box::new(FixedClock { now_ms: 10_999 });
+            let body = serde_json::json!({"status":"stopped","data":{"saved":true}});
+            let original = runtime
+                .persist_task_draft(&task, body.clone(), "reviewer", Some("retained-draft"))
+                .unwrap();
+            assert!(matches!(
+                runtime
+                    .submit_task_response(
+                        &task,
+                        serde_json::json!({"status":"stopped"}),
+                        "reviewer",
+                        Some("retained-submit")
+                    )
+                    .unwrap(),
+                TaskSubmissionResult::Rejected { .. }
+            ));
+            runtime.clock = Box::new(FixedClock { now_ms: 11_000 });
+            runtime.drain_once(&id).unwrap();
+            let record = runtime.store.load_record(&id).unwrap();
+            assert!(record.process.active_tasks.is_empty());
+            assert!(record.provenance_log.iter().any(|p| p.record_kind
+                == ProvenanceKind::TaskFailed
+                && p.outcome.as_deref() == Some("expired")
+                && p.actor_id.is_none()
+                && p.actor_type.as_deref() == Some("system")));
+            assert!(
+                !record
+                    .process
+                    .pending_events
+                    .iter()
+                    .any(|e| e.event == "done" || e.event == "failed")
+            );
+            let before = snapshot(&runtime, &id);
+            assert_eq!(
+                runtime
+                    .persist_task_draft(&task, body, "reviewer", Some("retained-draft"))
+                    .unwrap()
+                    .artifact_id,
+                original.artifact_id
+            );
+            assert!(matches!(
+                runtime
+                    .submit_task_response(
+                        &task,
+                        serde_json::json!({"status":"stopped"}),
+                        "reviewer",
+                        Some("retained-submit")
+                    )
+                    .unwrap(),
+                TaskSubmissionResult::Rejected { .. }
+            ));
+            assert!(matches!(
+                runtime.submit_task_response(
+                    &task,
+                    serde_json::json!({"status":"completed"}),
+                    "reviewer",
+                    None
+                ),
+                Err(RuntimeError::TaskNotFound(_))
+            ));
+            assert_eq!(snapshot(&runtime, &id), before);
+        }
+
+        #[test]
+        fn captured_calendar_fallback_belongs_to_task_not_later_same_id_timer() {
+            let calendar:BusinessCalendarDocument = serde_json::from_value(serde_json::json!({
+                "targetWorkflow":"urn:test:lifetime","version":"fallback-test","timezone":"UTC","workWeek":[]
+            })).unwrap();
+            for cancel in [false, true] {
+                let mut value = serde_json::to_value(kernel(None, true)).unwrap();
+                let actions = value["lifecycle"]["states"]["open"]["onEntry"]
+                    .as_array_mut()
+                    .unwrap();
+                if cancel {
+                    actions.push(serde_json::json!({"action":"cancelTimer","timerId":"response"}));
+                } else {
+                    let mut replacement = actions[0].clone();
+                    replacement["duration"] = "PT0S".into();
+                    actions.push(replacement);
+                }
+                let mut runtime = runtime_with_kernel(serde_json::from_value(value).unwrap())
+                    .with_business_calendar(calendar.clone());
+                runtime.clock = Box::new(FixedClock { now_ms: 10_000 });
+                let id = stack_common_typeid::mint_process_id();
+                runtime
+                    .create_process(CreateProcessRequest {
+                        process_id: id.clone(),
+                        tenant: None,
+                        definition_url: "urn:test:lifetime".into(),
+                        definition_version: "1.0.0".into(),
+                        initial_case_state: None,
+                    })
+                    .unwrap();
+                let record = runtime.store.load_record(&id).unwrap();
+                let task = record
+                    .provenance_log
+                    .iter()
+                    .find(|p| p.record_kind == ProvenanceKind::TaskCreated)
+                    .unwrap();
+                let details = &task.data.as_ref().unwrap()["details"];
+                assert_eq!(details["expiresAt"], "1970-01-01T00:00:11Z");
+                assert_eq!(details["expiresWithTimer"], "response");
+                assert_eq!(details["calendarVersion"], "fallback-test");
+                assert_eq!(details["calendarVersionConvergenceError"], true);
+                if !cancel {
+                    let later = record
+                        .provenance_log
+                        .iter()
+                        .rev()
+                        .find(|p| p.record_kind == ProvenanceKind::TimerCreated)
+                        .unwrap();
+                    assert_ne!(
+                        later.data.as_ref().unwrap()["calendarVersionConvergenceError"],
+                        true
+                    );
+                    assert_eq!(record.process.timers[0].deadline, "1970-01-01T00:00:10Z");
+                } else {
+                    assert!(record.process.timers.is_empty());
+                }
+                let mut restored = InMemoryStore::new();
+                restored.restore_record(record.clone()).unwrap();
+                let mut tampered = record;
+                tampered
+                    .provenance_log
+                    .iter_mut()
+                    .find(|p| p.record_kind == ProvenanceKind::TaskCreated)
+                    .unwrap()
+                    .data
+                    .as_mut()
+                    .unwrap()["details"]["calendarVersionConvergenceError"] = false.into();
+                assert!(restored.save_record(tampered).is_err());
+            }
+        }
+
+        #[test]
+        fn same_command_timer_replacement_preserves_task_action_time_expiry() {
+            let mut value = serde_json::to_value(kernel(None, true)).unwrap();
+            let actions = value["lifecycle"]["states"]["open"]["onEntry"]
+                .as_array_mut()
+                .unwrap();
+            let mut replacement = actions[0].clone();
+            replacement["duration"] = "PT10S".into();
+            actions.push(replacement);
+            let (mut runtime, id) = create(serde_json::from_value(value).unwrap(), 10_000);
+            let process = runtime.load_process(&id).unwrap();
+            assert_eq!(process.timers[0].deadline, "1970-01-01T00:00:20Z");
+            let task = &process.active_tasks[0];
+            assert_eq!(task.expires_at.as_deref(), Some("1970-01-01T00:00:11Z"));
+            runtime.clock = Box::new(FixedClock { now_ms: 11_000 });
+            assert!(matches!(
+                runtime.persist_task_draft(
+                    &task.task_id,
+                    serde_json::json!({"status":"stopped"}),
+                    "reviewer",
+                    None
+                ),
+                Err(RuntimeError::TaskExpired(_))
+            ));
+        }
+
+        #[test]
+        fn same_command_timer_cancellation_preserves_task_action_time_expiry() {
+            let mut value = serde_json::to_value(kernel(None, true)).unwrap();
+            value["lifecycle"]["states"]["open"]["onEntry"]
+                .as_array_mut()
+                .unwrap()
+                .push(serde_json::json!({"action":"cancelTimer","timerId":"response"}));
+            // Cancellation after createTask must not undo valid task creation.
+            let (mut runtime, id) = create(serde_json::from_value(value).unwrap(), 10_000);
+            let process = runtime.load_process(&id).unwrap();
+            assert!(process.timers.is_empty());
+            let task = &process.active_tasks[0];
+            assert_eq!(task.expires_at.as_deref(), Some("1970-01-01T00:00:11Z"));
+            runtime.clock = Box::new(FixedClock { now_ms: 11_000 });
+            assert!(matches!(
+                runtime.submit_task_response(
+                    &task.task_id,
+                    serde_json::json!({"status":"completed"}),
+                    "reviewer",
+                    None
+                ),
+                Err(RuntimeError::TaskExpired(_))
+            ));
+        }
+
+        #[test]
+        fn timer_replacement_and_state_change_do_not_extend_original_admission() {
+            let (mut runtime, id) = create(kernel(None, true), 10_000);
+            let mut record = runtime.store.load_record(&id).unwrap();
+            let task = record.process.active_tasks[0].clone();
+            record.process.timers[0].deadline = "1970-01-01T00:01:00Z".into();
+            runtime.store.save_record(record).unwrap();
+            runtime
+                .enqueue_event(
+                    &id,
+                    PendingEvent {
+                        event: "advance".into(),
+                        actor_id: None,
+                        data: None,
+                        timestamp: String::new(),
+                        idempotency_token: None,
+                    },
+                )
+                .unwrap();
+            runtime.drain_once(&id).unwrap();
+            let retained = runtime.load_process(&id).unwrap();
+            assert_eq!(retained.active_tasks[0].expires_at, task.expires_at);
+            runtime.clock = Box::new(FixedClock { now_ms: 11_000 });
+            assert!(matches!(
+                runtime.persist_task_draft(
+                    &task.task_id,
+                    serde_json::json!({"status":"stopped"}),
+                    "reviewer",
+                    None
+                ),
+                Err(RuntimeError::TaskExpired(_))
+            ));
+        }
+
+        #[test]
+        fn unbounded_task_survives_clock_expiry_and_state_change() {
+            let (mut runtime, id) = create(kernel(None, false), 10_000);
+            let task = runtime.load_process(&id).unwrap().active_tasks[0]
+                .task_id
+                .clone();
+            runtime.clock = Box::new(FixedClock { now_ms: 11_000 });
+            runtime
+                .enqueue_event(
+                    &id,
+                    PendingEvent {
+                        event: "advance".into(),
+                        actor_id: None,
+                        data: None,
+                        timestamp: String::new(),
+                        idempotency_token: None,
+                    },
+                )
+                .unwrap();
+            runtime.drain_once(&id).unwrap();
+            assert!(
+                runtime
+                    .load_process(&id)
+                    .unwrap()
+                    .active_tasks
+                    .iter()
+                    .any(|t| t.task_id == task)
+            );
+            runtime
+                .persist_task_draft(
+                    &task,
+                    serde_json::json!({"status":"stopped"}),
+                    "reviewer",
+                    None,
+                )
+                .unwrap();
+        }
+
+        #[test]
+        fn already_expired_creation_retains_created_and_failed_without_presentation() {
+            let (runtime, id) = create(kernel(Some("caseFile.origin"), true), 10_000);
+            let record = runtime.store.load_record(&id).unwrap();
+            assert!(record.process.active_tasks.is_empty());
+            assert!(
+                record
+                    .provenance_log
+                    .iter()
+                    .any(|p| p.record_kind == ProvenanceKind::TaskCreated)
+            );
+            assert!(
+                record
+                    .provenance_log
+                    .iter()
+                    .any(|p| p.record_kind == ProvenanceKind::TaskFailed
+                        && p.outcome.as_deref() == Some("expired"))
+            );
+            assert!(
+                !record
+                    .provenance_log
+                    .iter()
+                    .any(|p| p.record_kind == ProvenanceKind::TaskPresented)
+            );
+            assert!(record.process.pending_events.is_empty());
+        }
+
+        #[test]
+        fn captured_lifetime_and_completed_task_witness_are_immutable_on_save_restore() {
+            let (mut runtime, id) = create(kernel(None, true), 10_000);
+            let original = runtime.store.load_record(&id).unwrap();
+            let mut restored = InMemoryStore::new();
+            restored.restore_record(original.clone()).unwrap();
+            assert_eq!(
+                restored.load_record(&id).unwrap().process.active_tasks[0].expires_at,
+                original.process.active_tasks[0].expires_at
+            );
+            for changed in ["1970-01-01T00:00:12Z", "not-a-time"] {
+                let mut corrupt = original.clone();
+                corrupt.process.active_tasks[0].expires_at = Some(changed.into());
+                assert!(matches!(
+                    InMemoryStore::new().restore_record(corrupt.clone()),
+                    Err(StoreError::InvalidCreationEvidence(_))
+                ));
+                assert!(runtime.store.save_record(corrupt).is_err());
+            }
+            let mut removed = original.clone();
+            removed.process.active_tasks.clear();
+            runtime.store.save_record(removed.clone()).unwrap();
+            removed
+                .provenance_log
+                .retain(|p| p.record_kind != ProvenanceKind::TaskCreated);
+            assert!(runtime.store.save_record(removed).is_err());
+        }
+
+        #[test]
+        fn later_created_unbound_lifetime_witness_survives_task_removal() {
+            let mut value = serde_json::to_value(kernel(None, true)).unwrap();
+            value["lifecycle"]["states"]["open"]["transitions"][0]["actions"] = serde_json::json!([
+                {"action":"createTask","taskRef":"later","assignTo":"reviewer","expiresWithTimer":"response"}
+            ]);
+            let (mut runtime, id) = create(serde_json::from_value(value).unwrap(), 10_000);
+            runtime
+                .enqueue_event(
+                    &id,
+                    PendingEvent {
+                        event: "advance".into(),
+                        actor_id: None,
+                        data: None,
+                        timestamp: String::new(),
+                        idempotency_token: None,
+                    },
+                )
+                .unwrap();
+            runtime.drain_once(&id).unwrap();
+            let mut record = runtime.store.load_record(&id).unwrap();
+            let later = record
+                .process
+                .active_tasks
+                .iter()
+                .find(|t| t.task_ref == "later")
+                .unwrap()
+                .task_id
+                .clone();
+            assert!(
+                !record
+                    .creation
+                    .as_ref()
+                    .unwrap()
+                    .tasks
+                    .iter()
+                    .any(|t| t.task_id == later)
+            );
+            let mut duplicate_identity = record.clone();
+            let first_id = duplicate_identity
+                .provenance_log
+                .iter()
+                .find(|p| p.record_kind == ProvenanceKind::TaskCreated)
+                .unwrap()
+                .id
+                .clone();
+            duplicate_identity
+                .provenance_log
+                .iter_mut()
+                .find(|p| {
+                    p.record_kind == ProvenanceKind::TaskCreated
+                        && p.data
+                            .as_ref()
+                            .and_then(|d| d.get("taskId"))
+                            .and_then(serde_json::Value::as_str)
+                            == Some(later.as_str())
+                })
+                .unwrap()
+                .id = first_id;
+            assert!(matches!(
+                InMemoryStore::new().restore_record(duplicate_identity),
+                Err(StoreError::InvalidCreationEvidence(_))
+            ));
+            record.process.active_tasks.retain(|t| t.task_id != later);
+            runtime.store.save_record(record.clone()).unwrap();
+            record.provenance_log.retain(|p| {
+                p.data
+                    .as_ref()
+                    .and_then(|d| d.get("taskId"))
+                    .and_then(serde_json::Value::as_str)
+                    != Some(later.as_str())
+            });
+            assert!(runtime.store.save_record(record).is_err());
+        }
+
+        #[test]
+        fn malformed_duplicate_and_blank_timer_lifetimes_refuse_before_task_allocation() {
+            let selected = kernel(None, true);
+            let (mut runtime, id) = create(selected.clone(), 10_000);
+            let original = runtime.store.load_record(&id).unwrap();
+            let timer = &original.process.timers[0];
+            let capture = wos_core::timer::Timer {
+                id: timer.timer_id.clone(),
+                created_at_ms: timer.created_at_ms.unwrap(),
+                deadline_ms: parse_timestamp(&timer.deadline).unwrap(),
+                fires_event: timer.event.clone(),
+                created_in_state: timer.scope_state.clone().unwrap_or_default(),
+                duration_iso: timer.duration_iso.clone().unwrap(),
+                duration_ms: timer.duration_ms.unwrap(),
+            };
+            let observed = wos_core::eval::ObservedAction {
+                lifecycle_state:"open".into(),actor_id:None,
+                action:serde_json::from_value(serde_json::json!({
+                    "action":"createTask","taskRef":"later","assignTo":"reviewer","expiresWithTimer":"response"
+                })).unwrap(),event_data:None,task_expiry_timer:Some(capture),
+            };
+            // Establish a real valid capture control before testing each corruption.
+            for mode in ["malformed", "duplicate", "blank", "missing", "foreign"] {
+                let mut control = original.clone();
+                assert!(
+                    runtime
+                        .create_active_task(
+                            &selected,
+                            &mut control,
+                            &observed,
+                            "1970-01-01T00:00:10Z"
+                        )
+                        .is_ok()
+                );
+                let mut record = original.clone();
+                let mut invalid = observed.clone();
+                match mode {
+                    "malformed" => {
+                        invalid.task_expiry_timer.as_mut().unwrap().deadline_ms = u64::MAX
+                    }
+                    "duplicate" => record.process.timers.push(record.process.timers[0].clone()),
+                    "blank" => invalid.action.expires_with_timer = Some(" ".into()),
+                    "missing" => invalid.task_expiry_timer = None,
+                    _ => invalid.task_expiry_timer.as_mut().unwrap().id = "foreign".into(),
+                }
+                let before = serde_json::to_value(&record.process).unwrap();
+                assert!(
+                    runtime
+                        .create_active_task(
+                            &selected,
+                            &mut record,
+                            &invalid,
+                            "1970-01-01T00:00:10Z"
+                        )
+                        .is_err()
+                );
+                assert_eq!(serde_json::to_value(&record.process).unwrap(), before);
+            }
+        }
+
+        #[test]
+        fn missing_timer_refuses_creation_before_any_process_is_saved() {
+            let mut value = serde_json::to_value(kernel(None, true)).unwrap();
+            value["lifecycle"]["states"]["open"]["onEntry"]
+                .as_array_mut()
+                .unwrap()
+                .remove(0);
+            let mut runtime = runtime_with_kernel(serde_json::from_value(value).unwrap());
+            let id = stack_common_typeid::mint_process_id();
+            assert!(matches!(
+                runtime.create_process(CreateProcessRequest {
+                    process_id: id.clone(),
+                    tenant: None,
+                    definition_url: "urn:test:lifetime".into(),
+                    definition_version: "1.0.0".into(),
+                    initial_case_state: None
+                }),
+                Err(RuntimeError::Evaluator(message)) if message.contains("absent timer")
+            ));
+            assert!(runtime.store.load_record(&id).is_err());
         }
     }
 }

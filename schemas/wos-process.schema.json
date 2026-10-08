@@ -593,6 +593,10 @@
         }
       },
       "additionalProperties": false,
+      "dependentRequired": {
+        "expiresAt": ["expiresWithTimer"],
+        "expiresWithTimer": ["expiresAt"]
+      },
       "properties": {
         "taskId": {
           "type": "string",
@@ -724,6 +728,19 @@
             "openStringKind": "identifier"
           },
           "minLength": 1
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Immutable absolute response expiry copied from the actual native timer when this task was created. Fresh drafts and responses refuse at or after this instant; committed replay remains available. Required together with expiresWithTimer (Kernel §13.2.1).",
+          "examples": ["2026-10-18T12:00:00Z"]
+        },
+        "expiresWithTimer": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Immutable identifier of the native timer that supplied expiresAt at task creation. Later timer cancellation or replacement does not change the copied task lifetime (Kernel §13.2.1).",
+          "examples": ["responseWindow"],
+          "x-wos": {"openStringKind": "identifier"}
         },
         "deadline": {
           "type": "string",

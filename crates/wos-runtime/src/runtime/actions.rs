@@ -42,7 +42,8 @@ impl WosRuntime {
         for observed in actions {
             match observed.action.action {
                 ActionKind::CreateTask => {
-                    let task = self.create_active_task(kernel, record, observed, now_iso)?;
+                    let (task, expiry_calendar_fallback) =
+                        self.create_active_task(kernel, record, observed, now_iso)?;
                     created_task_ids.push(task.task_id.clone());
                     let mut details = serde_json::json!({
                         "taskRef": task.task_ref,
@@ -51,6 +52,20 @@ impl WosRuntime {
                     if record.process.actor_bindings.is_some() {
                         details["declaredActor"] = serde_json::json!(task.declared_actor);
                         details["assignedActor"] = serde_json::json!(task.assigned_actor);
+                    }
+                    if task.expires_at.is_some() {
+                        details["expiresAt"] = serde_json::json!(task.expires_at);
+                        details["expiresWithTimer"] = serde_json::json!(task.expires_with_timer);
+                        if expiry_calendar_fallback {
+                            // This diagnostic belongs to the captured task expiry, not
+                            // any later same-ID timer replacement in the final collection.
+                            details["calendarVersionConvergenceError"] = serde_json::json!(true);
+                            details["calendarVersion"] = serde_json::json!(
+                                self.business_calendar
+                                    .as_ref()
+                                    .and_then(|cal| cal.version.as_deref())
+                            );
+                        }
                     }
                     provenance.push(ProvenanceRecord::task_lifecycle(
                         ProvenanceKind::TaskCreated,
@@ -291,7 +306,7 @@ impl WosRuntime {
         now_iso: &str,
     ) -> Result<(Vec<FormspecTaskContext>, Vec<ProvenanceRecord>), RuntimeError> {
         let mut pending_presentations = Vec::new();
-        let mut provenance = Vec::new();
+        let mut provenance = super::tasks::retire_expired_tasks(record, now_iso)?;
 
         for task in &mut record.process.active_tasks {
             let Some(context) = task.context.as_ref() else {
@@ -337,7 +352,7 @@ impl WosRuntime {
         record: &mut RuntimeRecord,
         observed: &ObservedAction,
         now_iso: &str,
-    ) -> Result<ActiveTask, RuntimeError> {
+    ) -> Result<(ActiveTask, bool), RuntimeError> {
         let action = &observed.action;
         let task_ref = action.task_ref.clone().ok_or_else(|| {
             RuntimeError::MissingMetadata("createTask missing taskRef".to_string())
@@ -353,6 +368,49 @@ impl WosRuntime {
             kernel,
             action.assign_to.as_deref(),
         )?;
+        let (expires_at, expiry_calendar_fallback) = match action.expires_with_timer.as_deref() {
+            None => {
+                if observed.task_expiry_timer.is_some() {
+                    return Err(RuntimeError::MissingMetadata(
+                        "unbounded task has an unexpected timer capture".into(),
+                    ));
+                }
+                (None, false)
+            }
+            Some(timer_ref) => {
+                if timer_ref.trim().is_empty() {
+                    return Err(RuntimeError::MissingMetadata(
+                        "expiresWithTimer is blank".into(),
+                    ));
+                }
+                let timer = observed.task_expiry_timer.as_ref().ok_or_else(|| {
+                    RuntimeError::MissingMetadata(
+                        "bounded task is missing its action-time timer capture".into(),
+                    )
+                })?;
+                if timer.id != timer_ref {
+                    return Err(RuntimeError::MissingMetadata(
+                        "task expiry capture references a different timer".into(),
+                    ));
+                }
+                if record
+                    .process
+                    .timers
+                    .iter()
+                    .filter(|timer| timer.timer_id == timer_ref)
+                    .count()
+                    > 1
+                {
+                    return Err(RuntimeError::MissingMetadata(
+                        "expiresWithTimer references duplicate timers".into(),
+                    ));
+                }
+                let (captured, fallback) =
+                    super::timers::timer_to_state(timer, self.business_calendar.as_ref())?;
+                crate::store::validate_task_lifetime(Some(&captured.deadline), Some(timer_ref))?;
+                (Some(captured.deadline), fallback)
+            }
+        };
         let task_sequence = record.process.next_task_sequence + 1;
         record.process.next_task_sequence = task_sequence;
         let task_id = make_task_id(&record.process.process_id, task_sequence, &task_ref);
@@ -374,6 +432,8 @@ impl WosRuntime {
             prefill_mapping_ref: action.prefill_mapping_ref.clone(),
             response_mapping_ref: action.response_mapping_ref.clone(),
             deadline: None,
+            expires_at,
+            expires_with_timer: action.expires_with_timer.clone(),
             impact_level: kernel.impact_level,
             context: None,
             last_validation_outcome: None,
@@ -445,6 +505,6 @@ impl WosRuntime {
             }
         }
 
-        Ok(task)
+        Ok((task, expiry_calendar_fallback))
     }
 }
