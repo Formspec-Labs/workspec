@@ -1,0 +1,990 @@
+{
+  "$wosDelivery": "1.0",
+  "$schema": "https://wos-spec.org/schemas/delivery/1.0",
+  "targetWorkflow": "urn:wos:demo:d1:passport-complete",
+  "version": "0.3.0",
+  "title": "D1 complete passport notices",
+  "description": "Authored English and Spanish notice templates for the complete D1 candidate. Preferred-language key selection, qualified operation facts, server-computed dates, delivery, queueing and notice-sent receipts require host execution; this file establishes none of those outcomes. Ten days is an explicitly labeled dispute-period sample. No business calendar is selected, so this file does not redefine P90D/P10D as business days.",
+  "notifications": {
+    "templates": {
+      "d1PhotoRequestEnUS": {
+        "category": "hold-notification",
+        "description": "D1 complete PhotoRequest notice, authored en-US text. Render only after the corresponding qualified operation.",
+        "subject": "We need more information — reference {{referenceNumber}}",
+        "sections": [
+          {
+            "id": "determination",
+            "title": "What happened",
+            "contentType": "structured",
+            "content": "Notice date: {{noticeDate}}. We need a new photo for your passport application. Your case is waiting for you; active processing is paused.",
+            "required": true
+          },
+          {
+            "id": "reasons",
+            "title": "Why",
+            "contentType": "structured",
+            "content": "Requested items: {{requestedItems}}. Reason: {{requestReason}}. Photo example: {{photoExampleUrl}}.",
+            "required": true
+          },
+          {
+            "id": "requiredAction",
+            "title": "What you need to do",
+            "contentType": "action-required",
+            "content": "Open {{responseUrl}} and replace only the requested photo. Your earlier answers stay visible and unchanged. If you can't get this, tell us and we'll help.",
+            "required": true
+          },
+          {
+            "id": "deadline",
+            "title": "Send by",
+            "contentType": "action-required",
+            "content": "{{sendBy}} ({{daysRemaining}} days left). The response period is 90 days from the qualifying notice-sent date. If you do not respond in time, your application will be denied for no response.",
+            "required": true
+          },
+          {
+            "id": "contactInfo",
+            "title": "Get free help",
+            "contentType": "contact-information",
+            "content": "Free help: {{freeHelpContact}}. You can also respond on paper or in person: {{paperOrInPersonInstructions}}. Free language assistance: {{freeHelpContact}}. Ayuda gratuita en su idioma: {{freeHelpContact}}.",
+            "required": true
+          }
+        ],
+        "requiredVariables": [
+          "daysRemaining",
+          "freeHelpContact",
+          "noticeDate",
+          "paperOrInPersonInstructions",
+          "photoExampleUrl",
+          "referenceNumber",
+          "requestReason",
+          "requestedItems",
+          "responseUrl",
+          "sendBy"
+        ],
+        "deliveryChannels": [
+          "email",
+          "portal",
+          "postal"
+        ],
+        "localeRef": "en-US"
+      },
+      "d1PhotoRequestEsUS": {
+        "category": "hold-notification",
+        "description": "D1 complete PhotoRequest notice, authored es-US text. Render only after the corresponding qualified operation.",
+        "subject": "Necesitamos más información — referencia {{referenceNumber}}",
+        "sections": [
+          {
+            "id": "determination",
+            "title": "Qué pasó",
+            "contentType": "structured",
+            "content": "Fecha del aviso: {{noticeDate}}. Necesitamos una foto nueva para su solicitud de pasaporte. Su caso está esperando su respuesta; la tramitación activa está en pausa.",
+            "required": true
+          },
+          {
+            "id": "reasons",
+            "title": "Por qué",
+            "contentType": "structured",
+            "content": "Elementos solicitados: {{requestedItems}}. Motivo: {{requestReason}}. Ejemplo de foto: {{photoExampleUrl}}.",
+            "required": true
+          },
+          {
+            "id": "requiredAction",
+            "title": "Qué debe hacer",
+            "contentType": "action-required",
+            "content": "Abra {{responseUrl}} y sustituya solo la foto solicitada. Sus respuestas anteriores siguen visibles y no cambian. Si no puede conseguir esto, díganos y le ayudaremos.",
+            "required": true
+          },
+          {
+            "id": "deadline",
+            "title": "Envíe antes de",
+            "contentType": "action-required",
+            "content": "{{sendBy}} (quedan {{daysRemaining}} días). El plazo de respuesta es de 90 días desde la fecha del envío válido del aviso. Si no responde a tiempo, se denegará su solicitud por falta de respuesta.",
+            "required": true
+          },
+          {
+            "id": "contactInfo",
+            "title": "Obtenga ayuda gratuita",
+            "contentType": "contact-information",
+            "content": "Ayuda gratuita: {{freeHelpContact}}. También puede responder en papel o en persona: {{paperOrInPersonInstructions}}. Free language assistance: {{freeHelpContact}}. Ayuda gratuita en su idioma: {{freeHelpContact}}.",
+            "required": true
+          }
+        ],
+        "requiredVariables": [
+          "daysRemaining",
+          "freeHelpContact",
+          "noticeDate",
+          "paperOrInPersonInstructions",
+          "photoExampleUrl",
+          "referenceNumber",
+          "requestReason",
+          "requestedItems",
+          "responseUrl",
+          "sendBy"
+        ],
+        "deliveryChannels": [
+          "email",
+          "portal",
+          "postal"
+        ],
+        "localeRef": "es-US"
+      },
+      "d1OutsideDataDisputeEnUS": {
+        "category": "hold-notification",
+        "description": "D1 complete OutsideDataDispute notice, authored en-US text. Render only after the corresponding qualified operation.",
+        "subject": "Check outside information — reference {{referenceNumber}}",
+        "sections": [
+          {
+            "id": "determination",
+            "title": "What happened",
+            "contentType": "structured",
+            "content": "Notice date: {{noticeDate}}. We received outside information that may affect your application. We have not treated it as confirmed with you.",
+            "required": true
+          },
+          {
+            "id": "reasons",
+            "title": "Why",
+            "contentType": "structured",
+            "content": "Source: {{outsideDataSource}}. Information date: {{outsideDataAsOf}}. Information to check: {{outsideDataSummary}}.",
+            "required": true
+          },
+          {
+            "id": "requiredAction",
+            "title": "What you need to do",
+            "contentType": "action-required",
+            "content": "Review the information at {{responseUrl}}. Tell us what is incorrect and provide any supporting evidence. If you can't get this, tell us and we'll help.",
+            "required": true
+          },
+          {
+            "id": "deadline",
+            "title": "Send by",
+            "contentType": "action-required",
+            "content": "{{sendBy}} ({{daysRemaining}} days left). This demo uses a 10-day sample dispute period. A qualified program rule takes precedence; this sample is not a universal legal deadline. We will not use unconfirmed outside information against you before the required notice and dispute period are satisfied.",
+            "required": true
+          },
+          {
+            "id": "contactInfo",
+            "title": "Get free help",
+            "contentType": "contact-information",
+            "content": "Free help: {{freeHelpContact}}. Paper or in-person response: {{paperOrInPersonInstructions}}. Free language assistance: {{freeHelpContact}}. Ayuda gratuita en su idioma: {{freeHelpContact}}.",
+            "required": true
+          }
+        ],
+        "requiredVariables": [
+          "daysRemaining",
+          "freeHelpContact",
+          "noticeDate",
+          "outsideDataAsOf",
+          "outsideDataSource",
+          "outsideDataSummary",
+          "paperOrInPersonInstructions",
+          "referenceNumber",
+          "responseUrl",
+          "sendBy"
+        ],
+        "deliveryChannels": [
+          "email",
+          "portal",
+          "postal"
+        ],
+        "localeRef": "en-US"
+      },
+      "d1OutsideDataDisputeEsUS": {
+        "category": "hold-notification",
+        "description": "D1 complete OutsideDataDispute notice, authored es-US text. Render only after the corresponding qualified operation.",
+        "subject": "Revise la información externa — referencia {{referenceNumber}}",
+        "sections": [
+          {
+            "id": "determination",
+            "title": "Qué pasó",
+            "contentType": "structured",
+            "content": "Fecha del aviso: {{noticeDate}}. Recibimos información externa que puede afectar su solicitud. No la hemos considerado confirmada con usted.",
+            "required": true
+          },
+          {
+            "id": "reasons",
+            "title": "Por qué",
+            "contentType": "structured",
+            "content": "Fuente: {{outsideDataSource}}. Fecha de la información: {{outsideDataAsOf}}. Información que debe revisar: {{outsideDataSummary}}.",
+            "required": true
+          },
+          {
+            "id": "requiredAction",
+            "title": "Qué debe hacer",
+            "contentType": "action-required",
+            "content": "Revise la información en {{responseUrl}}. Indique qué es incorrecto y aporte las pruebas que tenga. Si no puede conseguir esto, díganos y le ayudaremos.",
+            "required": true
+          },
+          {
+            "id": "deadline",
+            "title": "Envíe antes de",
+            "contentType": "action-required",
+            "content": "{{sendBy}} (quedan {{daysRemaining}} días). Esta demostración usa un plazo de ejemplo de 10 días para disputar la información. Prevalece la regla verificada del programa; este ejemplo no es un plazo legal universal. No usaremos información externa no confirmada en su contra antes de cumplir el aviso y el plazo de disputa requeridos.",
+            "required": true
+          },
+          {
+            "id": "contactInfo",
+            "title": "Obtenga ayuda gratuita",
+            "contentType": "contact-information",
+            "content": "Ayuda gratuita: {{freeHelpContact}}. Respuesta en papel o en persona: {{paperOrInPersonInstructions}}. Free language assistance: {{freeHelpContact}}. Ayuda gratuita en su idioma: {{freeHelpContact}}.",
+            "required": true
+          }
+        ],
+        "requiredVariables": [
+          "daysRemaining",
+          "freeHelpContact",
+          "noticeDate",
+          "outsideDataAsOf",
+          "outsideDataSource",
+          "outsideDataSummary",
+          "paperOrInPersonInstructions",
+          "referenceNumber",
+          "responseUrl",
+          "sendBy"
+        ],
+        "deliveryChannels": [
+          "email",
+          "portal",
+          "postal"
+        ],
+        "localeRef": "es-US"
+      },
+      "d1ApprovedEnUS": {
+        "category": "case-status-update",
+        "description": "D1 complete Approved notice, authored en-US text. Render only after the corresponding qualified operation.",
+        "subject": "Decision on your application — approved — reference {{referenceNumber}}",
+        "sections": [
+          {
+            "id": "determination",
+            "title": "What happened",
+            "contentType": "structured",
+            "content": "Decision date: {{decisionDate}}. Your passport application is approved.",
+            "required": true
+          },
+          {
+            "id": "reasons",
+            "title": "Why",
+            "contentType": "structured",
+            "content": "Specific approval reasons: {{decisionReasons}}.",
+            "required": true
+          },
+          {
+            "id": "requiredAction",
+            "title": "What you need to do",
+            "contentType": "action-required",
+            "content": "{{nextSteps}}",
+            "required": true
+          },
+          {
+            "id": "deadline",
+            "title": "Send by",
+            "contentType": "action-required",
+            "content": "{{sendByInstructions}}",
+            "required": true
+          },
+          {
+            "id": "appealRights",
+            "title": "If you disagree",
+            "contentType": "appeal-rights",
+            "content": "{{disagreementInstructions}}",
+            "required": true
+          },
+          {
+            "id": "contactInfo",
+            "title": "Get free help",
+            "contentType": "contact-information",
+            "content": "Free help: {{freeHelpContact}}. This service is also available on paper or in person: {{paperOrInPersonInstructions}}. Free language assistance: {{freeHelpContact}}. Ayuda gratuita en su idioma: {{freeHelpContact}}.",
+            "required": true
+          }
+        ],
+        "requiredVariables": [
+          "decisionDate",
+          "decisionReasons",
+          "disagreementInstructions",
+          "freeHelpContact",
+          "nextSteps",
+          "paperOrInPersonInstructions",
+          "referenceNumber",
+          "sendByInstructions"
+        ],
+        "deliveryChannels": [
+          "email",
+          "portal",
+          "postal"
+        ],
+        "localeRef": "en-US"
+      },
+      "d1ApprovedEsUS": {
+        "category": "case-status-update",
+        "description": "D1 complete Approved notice, authored es-US text. Render only after the corresponding qualified operation.",
+        "subject": "Decisión sobre su solicitud — aprobada — referencia {{referenceNumber}}",
+        "sections": [
+          {
+            "id": "determination",
+            "title": "Qué pasó",
+            "contentType": "structured",
+            "content": "Fecha de la decisión: {{decisionDate}}. Su solicitud de pasaporte está aprobada.",
+            "required": true
+          },
+          {
+            "id": "reasons",
+            "title": "Por qué",
+            "contentType": "structured",
+            "content": "Motivos específicos de la aprobación: {{decisionReasons}}.",
+            "required": true
+          },
+          {
+            "id": "requiredAction",
+            "title": "Qué debe hacer",
+            "contentType": "action-required",
+            "content": "{{nextSteps}}",
+            "required": true
+          },
+          {
+            "id": "deadline",
+            "title": "Envíe antes de",
+            "contentType": "action-required",
+            "content": "{{sendByInstructions}}",
+            "required": true
+          },
+          {
+            "id": "appealRights",
+            "title": "Si no está de acuerdo",
+            "contentType": "appeal-rights",
+            "content": "{{disagreementInstructions}}",
+            "required": true
+          },
+          {
+            "id": "contactInfo",
+            "title": "Obtenga ayuda gratuita",
+            "contentType": "contact-information",
+            "content": "Ayuda gratuita: {{freeHelpContact}}. Este servicio también está disponible en papel o en persona: {{paperOrInPersonInstructions}}. Free language assistance: {{freeHelpContact}}. Ayuda gratuita en su idioma: {{freeHelpContact}}.",
+            "required": true
+          }
+        ],
+        "requiredVariables": [
+          "decisionDate",
+          "decisionReasons",
+          "disagreementInstructions",
+          "freeHelpContact",
+          "nextSteps",
+          "paperOrInPersonInstructions",
+          "referenceNumber",
+          "sendByInstructions"
+        ],
+        "deliveryChannels": [
+          "email",
+          "portal",
+          "postal"
+        ],
+        "localeRef": "es-US"
+      },
+      "d1DeniedEnUS": {
+        "category": "adverse-decision",
+        "description": "D1 complete Denied notice, authored en-US text. Render only after the corresponding qualified operation.",
+        "subject": "Decision on your application — denied — reference {{referenceNumber}}",
+        "sections": [
+          {
+            "id": "determination",
+            "title": "What happened",
+            "contentType": "structured",
+            "content": "Decision date: {{decisionDate}}. Your passport application is denied.",
+            "required": true
+          },
+          {
+            "id": "reasons",
+            "title": "Why",
+            "contentType": "structured",
+            "content": "Specific reasons: {{decisionReasons}}. Applicable rule references: {{decisionRuleReferences}}.",
+            "required": true
+          },
+          {
+            "id": "requiredAction",
+            "title": "What you need to do",
+            "contentType": "action-required",
+            "content": "{{nextSteps}}",
+            "required": true
+          },
+          {
+            "id": "deadline",
+            "title": "Send by",
+            "contentType": "action-required",
+            "content": "{{sendByInstructions}}",
+            "required": true
+          },
+          {
+            "id": "appealRights",
+            "title": "If you disagree",
+            "contentType": "appeal-rights",
+            "content": "{{disagreementInstructions}}",
+            "required": true
+          },
+          {
+            "id": "contactInfo",
+            "title": "Get free help",
+            "contentType": "contact-information",
+            "content": "Free help: {{freeHelpContact}}. Paper or in-person service: {{paperOrInPersonInstructions}}. Free language assistance: {{freeHelpContact}}. Ayuda gratuita en su idioma: {{freeHelpContact}}.",
+            "required": true
+          }
+        ],
+        "requiredVariables": [
+          "decisionDate",
+          "decisionReasons",
+          "decisionRuleReferences",
+          "disagreementInstructions",
+          "freeHelpContact",
+          "nextSteps",
+          "paperOrInPersonInstructions",
+          "referenceNumber",
+          "sendByInstructions"
+        ],
+        "deliveryChannels": [
+          "email",
+          "portal",
+          "postal"
+        ],
+        "localeRef": "en-US"
+      },
+      "d1DeniedEsUS": {
+        "category": "adverse-decision",
+        "description": "D1 complete Denied notice, authored es-US text. Render only after the corresponding qualified operation.",
+        "subject": "Decisión sobre su solicitud — denegada — referencia {{referenceNumber}}",
+        "sections": [
+          {
+            "id": "determination",
+            "title": "Qué pasó",
+            "contentType": "structured",
+            "content": "Fecha de la decisión: {{decisionDate}}. Su solicitud de pasaporte está denegada.",
+            "required": true
+          },
+          {
+            "id": "reasons",
+            "title": "Por qué",
+            "contentType": "structured",
+            "content": "Motivos específicos: {{decisionReasons}}. Referencias de las reglas aplicables: {{decisionRuleReferences}}.",
+            "required": true
+          },
+          {
+            "id": "requiredAction",
+            "title": "Qué debe hacer",
+            "contentType": "action-required",
+            "content": "{{nextSteps}}",
+            "required": true
+          },
+          {
+            "id": "deadline",
+            "title": "Envíe antes de",
+            "contentType": "action-required",
+            "content": "{{sendByInstructions}}",
+            "required": true
+          },
+          {
+            "id": "appealRights",
+            "title": "Si no está de acuerdo",
+            "contentType": "appeal-rights",
+            "content": "{{disagreementInstructions}}",
+            "required": true
+          },
+          {
+            "id": "contactInfo",
+            "title": "Obtenga ayuda gratuita",
+            "contentType": "contact-information",
+            "content": "Ayuda gratuita: {{freeHelpContact}}. Servicio en papel o en persona: {{paperOrInPersonInstructions}}. Free language assistance: {{freeHelpContact}}. Ayuda gratuita en su idioma: {{freeHelpContact}}.",
+            "required": true
+          }
+        ],
+        "requiredVariables": [
+          "decisionDate",
+          "decisionReasons",
+          "decisionRuleReferences",
+          "disagreementInstructions",
+          "freeHelpContact",
+          "nextSteps",
+          "paperOrInPersonInstructions",
+          "referenceNumber",
+          "sendByInstructions"
+        ],
+        "deliveryChannels": [
+          "email",
+          "portal",
+          "postal"
+        ],
+        "localeRef": "es-US"
+      },
+      "d1NoResponseDeniedEnUS": {
+        "category": "adverse-decision",
+        "description": "D1 complete NoResponseDenied notice, authored en-US text. Render only after the corresponding qualified operation.",
+        "subject": "Decision on your application — denied for no response — reference {{referenceNumber}}",
+        "sections": [
+          {
+            "id": "determination",
+            "title": "What happened",
+            "contentType": "structured",
+            "content": "Decision date: {{decisionDate}}. Your application is closed and denied for no response.",
+            "required": true
+          },
+          {
+            "id": "reasons",
+            "title": "Why",
+            "contentType": "structured",
+            "content": "We requested {{requestedItems}} in the notice sent on {{noticeDate}}, for this reason: {{requestReason}}. The 90-day response period ended on {{sendBy}} without an accepted response.",
+            "required": true
+          },
+          {
+            "id": "requiredAction",
+            "title": "What you need to do",
+            "contentType": "action-required",
+            "content": "Apply again with a new application and fees. Instructions: {{reapplicationInstructions}}. Late evidence can attach to this case, but it does not reopen the case automatically.",
+            "required": true
+          },
+          {
+            "id": "deadline",
+            "title": "Send by",
+            "contentType": "action-required",
+            "content": "The previous response deadline was {{sendBy}}. This closed application has no new response deadline.",
+            "required": true
+          },
+          {
+            "id": "appealRights",
+            "title": "If you disagree",
+            "contentType": "appeal-rights",
+            "content": "You can't ask for a hearing on this decision. Reopening requires an authorized Adjudicator and a recorded reason.",
+            "required": true
+          },
+          {
+            "id": "contactInfo",
+            "title": "Get free help",
+            "contentType": "contact-information",
+            "content": "Free help: {{freeHelpContact}}. Paper or in-person service: {{paperOrInPersonInstructions}}. Free language assistance: {{freeHelpContact}}. Ayuda gratuita en su idioma: {{freeHelpContact}}.",
+            "required": true
+          }
+        ],
+        "requiredVariables": [
+          "decisionDate",
+          "freeHelpContact",
+          "noticeDate",
+          "paperOrInPersonInstructions",
+          "reapplicationInstructions",
+          "referenceNumber",
+          "requestReason",
+          "requestedItems",
+          "sendBy"
+        ],
+        "deliveryChannels": [
+          "email",
+          "portal",
+          "postal"
+        ],
+        "localeRef": "en-US"
+      },
+      "d1NoResponseDeniedEsUS": {
+        "category": "adverse-decision",
+        "description": "D1 complete NoResponseDenied notice, authored es-US text. Render only after the corresponding qualified operation.",
+        "subject": "Decisión sobre su solicitud — denegada por falta de respuesta — referencia {{referenceNumber}}",
+        "sections": [
+          {
+            "id": "determination",
+            "title": "Qué pasó",
+            "contentType": "structured",
+            "content": "Fecha de la decisión: {{decisionDate}}. Su solicitud está cerrada y denegada por falta de respuesta.",
+            "required": true
+          },
+          {
+            "id": "reasons",
+            "title": "Por qué",
+            "contentType": "structured",
+            "content": "Solicitamos {{requestedItems}} en el aviso enviado el {{noticeDate}}, por este motivo: {{requestReason}}. El plazo de respuesta de 90 días terminó el {{sendBy}} sin una respuesta aceptada.",
+            "required": true
+          },
+          {
+            "id": "requiredAction",
+            "title": "Qué debe hacer",
+            "contentType": "action-required",
+            "content": "Presente una solicitud nueva y pague las tarifas correspondientes. Instrucciones: {{reapplicationInstructions}}. Las pruebas tardías pueden adjuntarse a este caso, pero no lo reabren automáticamente.",
+            "required": true
+          },
+          {
+            "id": "deadline",
+            "title": "Envíe antes de",
+            "contentType": "action-required",
+            "content": "El plazo anterior para responder fue el {{sendBy}}. Esta solicitud cerrada no tiene un plazo nuevo.",
+            "required": true
+          },
+          {
+            "id": "appealRights",
+            "title": "Si no está de acuerdo",
+            "contentType": "appeal-rights",
+            "content": "No puede solicitar una audiencia sobre esta decisión. La reapertura requiere una persona autorizada con el rol Adjudicator y un motivo registrado.",
+            "required": true
+          },
+          {
+            "id": "contactInfo",
+            "title": "Obtenga ayuda gratuita",
+            "contentType": "contact-information",
+            "content": "Ayuda gratuita: {{freeHelpContact}}. Servicio en papel o en persona: {{paperOrInPersonInstructions}}. Free language assistance: {{freeHelpContact}}. Ayuda gratuita en su idioma: {{freeHelpContact}}.",
+            "required": true
+          }
+        ],
+        "requiredVariables": [
+          "decisionDate",
+          "freeHelpContact",
+          "noticeDate",
+          "paperOrInPersonInstructions",
+          "reapplicationInstructions",
+          "referenceNumber",
+          "requestReason",
+          "requestedItems",
+          "sendBy"
+        ],
+        "deliveryChannels": [
+          "email",
+          "portal",
+          "postal"
+        ],
+        "localeRef": "es-US"
+      },
+      "d1ReopenedEnUS": {
+        "category": "resume-notification",
+        "description": "D1 complete Reopened notice, authored en-US text. Render only after the corresponding qualified operation.",
+        "subject": "Application reopened — reference {{referenceNumber}}",
+        "sections": [
+          {
+            "id": "determination",
+            "title": "What happened",
+            "contentType": "structured",
+            "content": "Your application was reopened on {{reopenedAt}} by {{reviewerName}}, acting as Adjudicator.",
+            "required": true
+          },
+          {
+            "id": "reasons",
+            "title": "Why",
+            "contentType": "structured",
+            "content": "Recorded reopening reason: {{reopeningReason}}.",
+            "required": true
+          },
+          {
+            "id": "requiredAction",
+            "title": "What you need to do",
+            "contentType": "action-required",
+            "content": "{{nextSteps}}",
+            "required": true
+          },
+          {
+            "id": "deadline",
+            "title": "Send by",
+            "contentType": "action-required",
+            "content": "{{sendByInstructions}}",
+            "required": true
+          },
+          {
+            "id": "contactInfo",
+            "title": "Get free help",
+            "contentType": "contact-information",
+            "content": "Free help: {{freeHelpContact}}. Paper or in-person service: {{paperOrInPersonInstructions}}. Free language assistance: {{freeHelpContact}}. Ayuda gratuita en su idioma: {{freeHelpContact}}.",
+            "required": true
+          }
+        ],
+        "requiredVariables": [
+          "freeHelpContact",
+          "nextSteps",
+          "paperOrInPersonInstructions",
+          "referenceNumber",
+          "reopenedAt",
+          "reopeningReason",
+          "reviewerName",
+          "sendByInstructions"
+        ],
+        "deliveryChannels": [
+          "email",
+          "portal",
+          "postal"
+        ],
+        "localeRef": "en-US"
+      },
+      "d1ReopenedEsUS": {
+        "category": "resume-notification",
+        "description": "D1 complete Reopened notice, authored es-US text. Render only after the corresponding qualified operation.",
+        "subject": "Solicitud reabierta — referencia {{referenceNumber}}",
+        "sections": [
+          {
+            "id": "determination",
+            "title": "Qué pasó",
+            "contentType": "structured",
+            "content": "Su solicitud fue reabierta el {{reopenedAt}} por {{reviewerName}}, con el rol Adjudicator.",
+            "required": true
+          },
+          {
+            "id": "reasons",
+            "title": "Por qué",
+            "contentType": "structured",
+            "content": "Motivo registrado de la reapertura: {{reopeningReason}}.",
+            "required": true
+          },
+          {
+            "id": "requiredAction",
+            "title": "Qué debe hacer",
+            "contentType": "action-required",
+            "content": "{{nextSteps}}",
+            "required": true
+          },
+          {
+            "id": "deadline",
+            "title": "Envíe antes de",
+            "contentType": "action-required",
+            "content": "{{sendByInstructions}}",
+            "required": true
+          },
+          {
+            "id": "contactInfo",
+            "title": "Obtenga ayuda gratuita",
+            "contentType": "contact-information",
+            "content": "Ayuda gratuita: {{freeHelpContact}}. Servicio en papel o en persona: {{paperOrInPersonInstructions}}. Free language assistance: {{freeHelpContact}}. Ayuda gratuita en su idioma: {{freeHelpContact}}.",
+            "required": true
+          }
+        ],
+        "requiredVariables": [
+          "freeHelpContact",
+          "nextSteps",
+          "paperOrInPersonInstructions",
+          "referenceNumber",
+          "reopenedAt",
+          "reopeningReason",
+          "reviewerName",
+          "sendByInstructions"
+        ],
+        "deliveryChannels": [
+          "email",
+          "portal",
+          "postal"
+        ],
+        "localeRef": "es-US"
+      },
+      "d1InformationReceivedEnUS": {
+        "category": "resume-notification",
+        "description": "D1 complete InformationReceived notice, authored en-US text. Render only after the corresponding qualified operation.",
+        "subject": "Information received, in process again — reference {{referenceNumber}}",
+        "sections": [
+          {
+            "id": "determination",
+            "title": "What happened",
+            "contentType": "structured",
+            "content": "We accepted your response on {{receivedAt}}. Your application has returned to the reviewer's queue, flagged as information received.",
+            "required": true
+          },
+          {
+            "id": "reasons",
+            "title": "Why",
+            "contentType": "structured",
+            "content": "Received items: {{receivedItems}}. The earlier response and new response remain part of the case history.",
+            "required": true
+          },
+          {
+            "id": "requiredAction",
+            "title": "What you need to do",
+            "contentType": "action-required",
+            "content": "{{nextSteps}}",
+            "required": true
+          },
+          {
+            "id": "deadline",
+            "title": "Send by",
+            "contentType": "action-required",
+            "content": "{{sendByInstructions}}",
+            "required": true
+          },
+          {
+            "id": "contactInfo",
+            "title": "Get free help",
+            "contentType": "contact-information",
+            "content": "Free help: {{freeHelpContact}}. Paper or in-person service: {{paperOrInPersonInstructions}}. Free language assistance: {{freeHelpContact}}. Ayuda gratuita en su idioma: {{freeHelpContact}}.",
+            "required": true
+          }
+        ],
+        "requiredVariables": [
+          "freeHelpContact",
+          "nextSteps",
+          "paperOrInPersonInstructions",
+          "receivedAt",
+          "receivedItems",
+          "referenceNumber",
+          "sendByInstructions"
+        ],
+        "deliveryChannels": [
+          "email",
+          "portal",
+          "postal"
+        ],
+        "localeRef": "en-US"
+      },
+      "d1InformationReceivedEsUS": {
+        "category": "resume-notification",
+        "description": "D1 complete InformationReceived notice, authored es-US text. Render only after the corresponding qualified operation.",
+        "subject": "Información recibida, en trámite de nuevo — referencia {{referenceNumber}}",
+        "sections": [
+          {
+            "id": "determination",
+            "title": "Qué pasó",
+            "contentType": "structured",
+            "content": "Aceptamos su respuesta el {{receivedAt}}. Su solicitud volvió a la lista de revisión, marcada como información recibida.",
+            "required": true
+          },
+          {
+            "id": "reasons",
+            "title": "Por qué",
+            "contentType": "structured",
+            "content": "Elementos recibidos: {{receivedItems}}. La respuesta anterior y la nueva siguen formando parte del historial del caso.",
+            "required": true
+          },
+          {
+            "id": "requiredAction",
+            "title": "Qué debe hacer",
+            "contentType": "action-required",
+            "content": "{{nextSteps}}",
+            "required": true
+          },
+          {
+            "id": "deadline",
+            "title": "Envíe antes de",
+            "contentType": "action-required",
+            "content": "{{sendByInstructions}}",
+            "required": true
+          },
+          {
+            "id": "contactInfo",
+            "title": "Obtenga ayuda gratuita",
+            "contentType": "contact-information",
+            "content": "Ayuda gratuita: {{freeHelpContact}}. Servicio en papel o en persona: {{paperOrInPersonInstructions}}. Free language assistance: {{freeHelpContact}}. Ayuda gratuita en su idioma: {{freeHelpContact}}.",
+            "required": true
+          }
+        ],
+        "requiredVariables": [
+          "freeHelpContact",
+          "nextSteps",
+          "paperOrInPersonInstructions",
+          "receivedAt",
+          "receivedItems",
+          "referenceNumber",
+          "sendByInstructions"
+        ],
+        "deliveryChannels": [
+          "email",
+          "portal",
+          "postal"
+        ],
+        "localeRef": "es-US"
+      },
+      "d1LateEvidenceReceivedEnUS": {
+        "category": "case-status-update",
+        "description": "D1 complete LateEvidenceReceived notice, authored en-US text. Render only after the corresponding qualified operation.",
+        "subject": "Late evidence received — reference {{referenceNumber}}",
+        "sections": [
+          {
+            "id": "determination",
+            "title": "What happened",
+            "contentType": "structured",
+            "content": "We attached your late evidence to the case on {{receivedAt}}. The case remains closed.",
+            "required": true
+          },
+          {
+            "id": "reasons",
+            "title": "Why",
+            "contentType": "structured",
+            "content": "Received items: {{receivedItems}}. Receiving evidence does not reverse the no-response denial.",
+            "required": true
+          },
+          {
+            "id": "requiredAction",
+            "title": "What you need to do",
+            "contentType": "action-required",
+            "content": "{{nextSteps}}. Reopening requires an authorized Adjudicator and a recorded reason; it is not automatic.",
+            "required": true
+          },
+          {
+            "id": "deadline",
+            "title": "Send by",
+            "contentType": "action-required",
+            "content": "The previous deadline was {{sendBy}}. Attaching this evidence does not start a new response period.",
+            "required": true
+          },
+          {
+            "id": "contactInfo",
+            "title": "Get free help",
+            "contentType": "contact-information",
+            "content": "Free help: {{freeHelpContact}}. Paper or in-person service: {{paperOrInPersonInstructions}}. Free language assistance: {{freeHelpContact}}. Ayuda gratuita en su idioma: {{freeHelpContact}}.",
+            "required": true
+          }
+        ],
+        "requiredVariables": [
+          "freeHelpContact",
+          "nextSteps",
+          "paperOrInPersonInstructions",
+          "receivedAt",
+          "receivedItems",
+          "referenceNumber",
+          "sendBy"
+        ],
+        "deliveryChannels": [
+          "email",
+          "portal",
+          "postal"
+        ],
+        "localeRef": "en-US"
+      },
+      "d1LateEvidenceReceivedEsUS": {
+        "category": "case-status-update",
+        "description": "D1 complete LateEvidenceReceived notice, authored es-US text. Render only after the corresponding qualified operation.",
+        "subject": "Pruebas tardías recibidas — referencia {{referenceNumber}}",
+        "sections": [
+          {
+            "id": "determination",
+            "title": "Qué pasó",
+            "contentType": "structured",
+            "content": "Adjuntamos sus pruebas tardías al caso el {{receivedAt}}. El caso sigue cerrado.",
+            "required": true
+          },
+          {
+            "id": "reasons",
+            "title": "Por qué",
+            "contentType": "structured",
+            "content": "Elementos recibidos: {{receivedItems}}. Recibir pruebas no revoca la denegación por falta de respuesta.",
+            "required": true
+          },
+          {
+            "id": "requiredAction",
+            "title": "Qué debe hacer",
+            "contentType": "action-required",
+            "content": "{{nextSteps}}. La reapertura requiere una persona autorizada con el rol Adjudicator y un motivo registrado; no es automática.",
+            "required": true
+          },
+          {
+            "id": "deadline",
+            "title": "Envíe antes de",
+            "contentType": "action-required",
+            "content": "El plazo anterior fue el {{sendBy}}. Adjuntar estas pruebas no inicia un plazo nuevo de respuesta.",
+            "required": true
+          },
+          {
+            "id": "contactInfo",
+            "title": "Obtenga ayuda gratuita",
+            "contentType": "contact-information",
+            "content": "Ayuda gratuita: {{freeHelpContact}}. Servicio en papel o en persona: {{paperOrInPersonInstructions}}. Free language assistance: {{freeHelpContact}}. Ayuda gratuita en su idioma: {{freeHelpContact}}.",
+            "required": true
+          }
+        ],
+        "requiredVariables": [
+          "freeHelpContact",
+          "nextSteps",
+          "paperOrInPersonInstructions",
+          "receivedAt",
+          "receivedItems",
+          "referenceNumber",
+          "sendBy"
+        ],
+        "deliveryChannels": [
+          "email",
+          "portal",
+          "postal"
+        ],
+        "localeRef": "es-US"
+      }
+    }
+  }
+}
