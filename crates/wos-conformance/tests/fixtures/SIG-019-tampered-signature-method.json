@@ -39,7 +39,6 @@
               "signatureValue": "0oRYSKMBJwRQAAAAAAAAAAAAAAAAAAAAADoAAQADeCx1cm46Zm9ybXNwZWM6c2lnLW1ldGhvZDplZDI1NTE5LWNvc2Utc2lnbjFAMaD2WEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
               "signerId": "applicant",
               "signerName": "Applicant",
-              "signedAt": "2026-04-22T12:00:00Z",
               "consentAccepted": true,
               "consentTextRef": "urn:test:consent:esign",
               "consentVersion": "1.0.0",
@@ -50,7 +49,9 @@
                 "digest": "39cc22282ffcb5a632635803d838c2517527684533ceb5ae8d2614b050683856",
                 "responseId": "resp-sig-001-sequential-single-signer-applicantTask",
                 "definitionUrl": "urn:test:formspec:signature",
-                "definitionVersion": "1.0.0"
+                "definitionVersion": "1.0.0",
+                "signedAt": "2026-04-22T12:00:00Z",
+                "signingIntent": "urn:wos:signing-intent:applicant-signature"
               },
               "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
               "documentHashAlgorithm": "sha-256",
