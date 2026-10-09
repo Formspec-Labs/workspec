@@ -12,7 +12,7 @@ use wos_core::{ProvenanceKind, ProvenanceRecord};
 use crate::intake::{
     IntakeAcceptanceAdapter, IntakeAcceptanceDecision, IntakeAcceptanceOutcome,
     IntakeAcceptanceRequest, IntakeCaseDefinition, IntakeCaseDisposition, IntakeCaseIntent,
-    IntakeInterpretation, IntakePolicyContext, IntakeRecordStatus,
+    IntakeInterpretation, IntakePolicyContext, IntakeRecordStatus, ProcessAllocation,
 };
 use crate::store::{IntakeRecord, StoreError};
 
@@ -20,6 +20,21 @@ use super::{
     CreateProcessRequest, RuntimeError, WosRuntime, format_timestamp,
     populate_provenance_record_fields, stamp_provenance,
 };
+
+fn validate_allocation_creation(
+    allocation: &ProcessAllocation,
+    creation: &crate::intake::ProcessCreationSnapshot,
+) -> Result<(), RuntimeError> {
+    if allocation.process_id != creation.process_id
+        || allocation.case_ledger_id != creation.case_ledger_id
+        || allocation.tenant != creation.tenant
+    {
+        return Err(RuntimeError::IntakeConflict(
+            "allocation differs from original process creation".into(),
+        ));
+    }
+    Ok(())
+}
 
 impl WosRuntime {
     /// Accept a binding-native intake handoff through the host-side intake seam.
@@ -36,6 +51,28 @@ impl WosRuntime {
         binding: &str,
         request: IntakeAcceptanceRequest,
     ) -> Result<IntakeAcceptanceDecision, RuntimeError> {
+        self.accept_intake_handoff_with_allocation(binding, request, None)
+    }
+
+    /// Accept intake using a host-retained identity for process creation.
+    ///
+    /// The host must protect the reservation before a process exists. Existing
+    /// creation evidence is authoritative on recovery; this option cannot
+    /// replace it. An allocation for attachment, rejection or defer refuses.
+    /// The ordinary intake request and its replay identity remain unchanged.
+    ///
+    /// # Errors
+    /// Returns the ordinary intake errors, or `IntakeConflict` for invalid,
+    /// unused or conflicting allocation or a changed replay request.
+    pub fn accept_intake_handoff_with_allocation(
+        &mut self,
+        binding: &str,
+        request: IntakeAcceptanceRequest,
+        allocation: Option<ProcessAllocation>,
+    ) -> Result<IntakeAcceptanceDecision, RuntimeError> {
+        if let Some(allocation) = &allocation {
+            allocation.validate()?;
+        }
         let adapter = self.intake_acceptors.get(binding).ok_or_else(|| {
             RuntimeError::UnsupportedBinding(format!(
                 "intake acceptance binding unsupported: {binding}"
@@ -44,6 +81,23 @@ impl WosRuntime {
         let interpretation = adapter.interpret_intake_handoff(&request)?;
 
         let replay = self.load_replayable_intake_record(binding, &interpretation, &request)?;
+        if allocation.is_some()
+            && matches!(
+                &interpretation.case_intent,
+                IntakeCaseIntent::AttachToExistingCase { .. }
+            )
+        {
+            return Err(RuntimeError::IntakeConflict(
+                "process allocation cannot be used for attachment".into(),
+            ));
+        }
+        if let (Some(record), Some(allocation)) = (&replay, &allocation) {
+            record.validate_creation()?;
+            self.validate_intake_allocation(&record.outcome, &request, Some(allocation))?;
+            if let Some(creation) = &record.creation {
+                validate_allocation_creation(allocation, creation)?;
+            }
+        }
         super::actor_bindings::validate_binding_shape(request.actor_bindings.as_deref())
             .map_err(RuntimeError::ActorBinding)?;
         // Applied decisions use retained evidence; fresh or unfinished work
@@ -75,6 +129,7 @@ impl WosRuntime {
                             request: request.clone(),
                             interpretation: interpretation.clone(),
                         })?;
+                self.validate_intake_allocation(&decision.outcome, &request, allocation.as_ref())?;
                 self.persist_pending_intake_record(binding, &interpretation, &request, decision)?
             }
         };
@@ -84,6 +139,7 @@ impl WosRuntime {
             &request,
             &interpretation,
             adapter.as_ref(),
+            allocation.as_ref(),
             persisted,
         )?;
         let applied = self.apply_prepared_intake_record(prepared)?;
@@ -161,6 +217,7 @@ impl WosRuntime {
         request: &IntakeAcceptanceRequest,
         interpretation: &IntakeInterpretation,
         adapter: &dyn IntakeAcceptanceAdapter,
+        allocation: Option<&ProcessAllocation>,
         mut record: IntakeRecord,
     ) -> Result<IntakeRecord, RuntimeError> {
         record.validate_creation()?;
@@ -173,7 +230,7 @@ impl WosRuntime {
 
         let policy_outcome = record.outcome.clone();
         let (final_outcome, creation) =
-            self.canonicalize_intake_outcome(&policy_outcome, request)?;
+            self.canonicalize_intake_outcome(&policy_outcome, request, allocation)?;
         let finalize_outcome = outcome_for_binding_finalize(&policy_outcome, &final_outcome);
         let mut provenance = record.provenance_log.clone();
         provenance.push(intake_outcome_provenance(
@@ -200,6 +257,7 @@ impl WosRuntime {
         &mut self,
         outcome: &IntakeAcceptanceOutcome,
         request: &IntakeAcceptanceRequest,
+        allocation: Option<&ProcessAllocation>,
     ) -> Result<
         (
             IntakeAcceptanceOutcome,
@@ -250,8 +308,9 @@ impl WosRuntime {
                         }
                         Err(RuntimeError::Store(StoreError::NotFound(_))) => {
                             let create = CreateProcessRequest {
-                                process_id: String::new(),
-                                tenant: None,
+                                process_id: allocation
+                                    .map_or_else(String::new, |value| value.process_id.clone()),
+                                tenant: allocation.map(|value| value.tenant.clone()),
                                 definition_url: definition.definition_url.clone(),
                                 definition_version: definition.definition_version.clone(),
                                 initial_case_state: initial_case_state.clone(),
@@ -273,6 +332,14 @@ impl WosRuntime {
                     let original = self.store.load_record(&case.process_id)?;
                     original.validate_creation()?;
                     let creation = original.creation;
+                    if let Some(allocation) = allocation {
+                        let creation = creation.as_ref().ok_or_else(|| {
+                            RuntimeError::IntakeConflict(
+                                "allocated process lacks original creation evidence".into(),
+                            )
+                        })?;
+                        validate_allocation_creation(allocation, creation)?;
+                    }
                     Ok((
                         IntakeAcceptanceOutcome::Accepted {
                             case_disposition: IntakeCaseDisposition::CreateGovernedCase {
@@ -293,6 +360,90 @@ impl WosRuntime {
                 IntakeAcceptanceOutcome::Deferred { code: code.clone() },
                 None,
             )),
+        }
+    }
+
+    fn validate_intake_allocation(
+        &self,
+        outcome: &IntakeAcceptanceOutcome,
+        request: &IntakeAcceptanceRequest,
+        allocation: Option<&ProcessAllocation>,
+    ) -> Result<(), RuntimeError> {
+        let Some(allocation) = allocation else {
+            return Ok(());
+        };
+        let IntakeAcceptanceOutcome::Accepted {
+            case_disposition:
+                IntakeCaseDisposition::CreateGovernedCase {
+                    case_ref,
+                    definition,
+                    ..
+                },
+        } = outcome
+        else {
+            return Err(RuntimeError::IntakeConflict(
+                "process allocation is unused by intake outcome".into(),
+            ));
+        };
+        let canonical = |value: &str| {
+            WorkflowProcess::extract_urn_type_id(value)
+                .unwrap_or(value)
+                .to_string()
+        };
+        if request
+            .governed_case_definition
+            .as_ref()
+            .is_some_and(|requested| requested != definition)
+        {
+            return Err(RuntimeError::IntakeConflict(
+                "allocated creation differs from requested definition".into(),
+            ));
+        }
+        if canonical(case_ref) != allocation.case_ledger_id
+            || request
+                .governed_case_ref
+                .as_deref()
+                .is_some_and(|value| canonical(value) != allocation.case_ledger_id)
+        {
+            return Err(RuntimeError::IntakeConflict(
+                "allocated case differs from intake case".into(),
+            ));
+        }
+        match self.load_record_for_case_ref(case_ref) {
+            Ok(record) => {
+                record.validate_creation()?;
+                if record.process.actor_bindings != request.actor_bindings {
+                    return Err(RuntimeError::IntakeConflict(
+                        "existing process human assignments differ".into(),
+                    ));
+                }
+                let creation = record.creation.as_ref().ok_or_else(|| {
+                    RuntimeError::IntakeConflict(
+                        "allocated process lacks original creation evidence".into(),
+                    )
+                })?;
+                creation.validate_intake(outcome, request)?;
+                validate_allocation_creation(allocation, creation)
+            }
+            Err(RuntimeError::Store(StoreError::NotFound(_))) => {
+                match self.store.load_record(&allocation.process_id) {
+                    Ok(record) => {
+                        record.validate_creation()?;
+                        let creation = record.creation.as_ref().ok_or_else(|| {
+                            RuntimeError::IntakeConflict(
+                                "allocated process lacks original creation evidence".into(),
+                            )
+                        })?;
+                        validate_allocation_creation(allocation, creation)?;
+                        Err(RuntimeError::IntakeConflict(
+                            "allocated process exists without its case lookup".into(),
+                        ))
+                    }
+                    Err(StoreError::NotFound(_)) => Ok(()),
+                    Err(error) => Err(error.into()),
+                }
+            }
+            Err(error) => Err(error),
         }
     }
 

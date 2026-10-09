@@ -33,8 +33,8 @@ pub use intake::{
     IntakeAcceptanceOutcome, IntakeAcceptancePolicy, IntakeAcceptanceRegistry,
     IntakeAcceptanceRequest, IntakeCaseDefinition, IntakeCaseDisposition, IntakeCaseIntent,
     IntakeInterpretation, IntakePolicyContext, IntakeRecordStatus, ManualReviewIntakePolicy,
-    NoopIntakeAcceptancePolicy, ProcessCreationSnapshot, PublicIntakeDisabledPolicy,
-    TaskCreationSnapshot,
+    NoopIntakeAcceptancePolicy, ProcessAllocation, ProcessCreationSnapshot,
+    PublicIntakeDisabledPolicy, TaskCreationSnapshot,
 };
 pub use integration::{
     IntegrationBinding, IntegrationBindingKind, IntegrationContractRef, IntegrationProfileDocument,

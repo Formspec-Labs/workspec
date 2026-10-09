@@ -152,7 +152,8 @@ pub struct MigrationOutcome {
 }
 
 /// Single-step drain result.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DrainOnceResult {
     /// Event processed by this drain step, if any.
     pub processed_event: Option<String>,
@@ -176,7 +177,8 @@ pub struct DrainOnceResult {
 }
 
 /// Draft persistence result.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PersistDraftResult {
     /// Stable artifact identifier for the draft.
     pub artifact_id: String,
@@ -193,7 +195,11 @@ pub struct DismissTaskResult {
 }
 
 /// Task submission outcome.
-#[derive(Debug, Clone)]
+///
+/// Serde uses externally tagged camelCase variants and fields. This native result
+/// representation is separate from the maintained auxiliary replay codec.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum TaskSubmissionResult {
     /// Submission completed successfully.
     Completed {
@@ -204,7 +210,7 @@ pub enum TaskSubmissionResult {
         /// Completion event emitted, if any.
         emitted_event: Option<String>,
     },
-    /// Submission reached a terminal failure.
+    /// Submission reported a native failure; some failures keep the task active.
     Failed {
         /// Machine-readable failure code.
         code: String,
@@ -2461,6 +2467,204 @@ mod tests {
         runtime_with_store_sig013_harness(InMemoryStore::new(), kernel)
     }
 
+    fn assert_drain_result_roundtrip(original: &DrainOnceResult) {
+        let encoded = serde_json::to_value(original).unwrap();
+        assert_eq!(
+            encoded,
+            serde_json::json!({
+                "processedEvent":original.processed_event,
+                "processedEventToken":original.processed_event_token,
+                "transitions":original.transitions,"provenance":original.provenance,
+                "createdTaskIds":original.created_task_ids,"emittedEvents":original.emitted_events,
+                "guardEvaluations":original.guard_evaluations,
+            })
+        );
+        let decoded: DrainOnceResult = serde_json::from_value(encoded).unwrap();
+        assert_eq!(decoded.processed_event, original.processed_event);
+        assert_eq!(
+            decoded.processed_event_token,
+            original.processed_event_token
+        );
+        assert_eq!(decoded.transitions.len(), original.transitions.len());
+        for (decoded, original) in decoded.transitions.iter().zip(&original.transitions) {
+            assert_eq!(decoded.from, original.from);
+            assert_eq!(decoded.to, original.to);
+            assert_eq!(decoded.event, original.event);
+            assert_eq!(decoded.tags, original.tags);
+        }
+        assert_eq!(
+            serde_json::to_value(&decoded.provenance).unwrap(),
+            serde_json::to_value(&original.provenance).unwrap()
+        );
+        assert_eq!(decoded.created_task_ids, original.created_task_ids);
+        assert_eq!(decoded.emitted_events, original.emitted_events);
+        assert_eq!(decoded.guard_evaluations, original.guard_evaluations);
+    }
+
+    fn assert_draft_result_roundtrip(original: &PersistDraftResult) {
+        let encoded = serde_json::to_value(original).unwrap();
+        assert_eq!(
+            encoded,
+            serde_json::json!({"artifactId":original.artifact_id})
+        );
+        let decoded: PersistDraftResult = serde_json::from_value(encoded).unwrap();
+        assert_eq!(decoded.artifact_id, original.artifact_id);
+    }
+
+    fn submission_json_fields(
+        original: &TaskSubmissionResult,
+    ) -> (&'static str, serde_json::Value) {
+        match original {
+            TaskSubmissionResult::Completed {
+                artifact_id,
+                case_mutated,
+                emitted_event,
+            } => (
+                "completed",
+                serde_json::json!({"artifactId":artifact_id,"caseMutated":case_mutated,"emittedEvent":emitted_event}),
+            ),
+            TaskSubmissionResult::Failed {
+                code,
+                emitted_event,
+            } => (
+                "failed",
+                serde_json::json!({"code":code,"emittedEvent":emitted_event}),
+            ),
+            TaskSubmissionResult::Rejected { code } => {
+                ("rejected", serde_json::json!({"code":code}))
+            }
+        }
+    }
+
+    fn assert_submission_result_roundtrip(original: &TaskSubmissionResult) {
+        let (kind, fields) = submission_json_fields(original);
+        let encoded = serde_json::to_value(original).unwrap();
+        let mut expected = serde_json::Map::new();
+        expected.insert(kind.into(), fields);
+        assert_eq!(encoded, serde_json::Value::Object(expected));
+        let decoded: TaskSubmissionResult = serde_json::from_value(encoded).unwrap();
+        match (&decoded, original) {
+            (
+                TaskSubmissionResult::Completed {
+                    artifact_id: a,
+                    case_mutated: b,
+                    emitted_event: c,
+                },
+                TaskSubmissionResult::Completed {
+                    artifact_id: x,
+                    case_mutated: y,
+                    emitted_event: z,
+                },
+            ) => {
+                assert_eq!(a, x);
+                assert_eq!(b, y);
+                assert_eq!(c, z);
+            }
+            (
+                TaskSubmissionResult::Failed {
+                    code: a,
+                    emitted_event: b,
+                },
+                TaskSubmissionResult::Failed {
+                    code: x,
+                    emitted_event: y,
+                },
+            ) => {
+                assert_eq!(a, x);
+                assert_eq!(b, y);
+            }
+            (
+                TaskSubmissionResult::Rejected { code: a },
+                TaskSubmissionResult::Rejected { code: x },
+            ) => assert_eq!(a, x),
+            other => panic!("native result variant changed: {other:?}"),
+        }
+    }
+
+    fn assert_aux_submission_format(
+        record: &RuntimeRecord,
+        original: &TaskSubmissionResult,
+        token: &str,
+    ) {
+        let (kind, mut fields) = submission_json_fields(original);
+        fields
+            .as_object_mut()
+            .unwrap()
+            .insert("kind".into(), kind.into());
+        let encoded = crate::runtime_aux_to_json(record);
+        let entry = encoded["replayEntries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|entry| entry["key"]["token"] == token)
+            .unwrap();
+        assert_eq!(entry["value"], fields);
+        let decoded = crate::runtime_aux_from_json(&encoded).unwrap();
+        let replay = decoded
+            .replay_entries
+            .iter()
+            .find(|(key, _)| key.token == token)
+            .unwrap()
+            .1;
+        let ReplayValue::Submission(decoded) = replay else {
+            panic!("aux replay variant changed")
+        };
+        assert_eq!(
+            submission_json_fields(decoded),
+            submission_json_fields(original)
+        );
+    }
+
+    #[test]
+    fn native_outcome_serde_preserves_options_and_default_idle() {
+        let idle = DrainOnceResult::default();
+        assert_drain_result_roundtrip(&idle);
+        assert_eq!(
+            serde_json::to_value(&idle).unwrap(),
+            serde_json::json!({
+                "processedEvent":null,"processedEventToken":null,"transitions":[],"provenance":[],
+                "createdTaskIds":[],"emittedEvents":[],"guardEvaluations":[],
+            })
+        );
+        let options = DrainOnceResult {
+            processed_event: Some("event".into()),
+            processed_event_token: Some("token".into()),
+            ..Default::default()
+        };
+        assert_drain_result_roundtrip(&options);
+        for case_mutated in [false, true] {
+            for emitted_event in [None, Some("completed.event".into())] {
+                assert_submission_result_roundtrip(&TaskSubmissionResult::Completed {
+                    artifact_id: "artifact:exact".into(),
+                    case_mutated,
+                    emitted_event,
+                });
+            }
+        }
+        for emitted_event in [None, Some("failed.event".into())] {
+            assert_submission_result_roundtrip(&TaskSubmissionResult::Failed {
+                code: "exactFailure".into(),
+                emitted_event,
+            });
+        }
+        assert_submission_result_roundtrip(&TaskSubmissionResult::Rejected {
+            code: "exactRejection".into(),
+        });
+        assert_draft_result_roundtrip(&PersistDraftResult {
+            artifact_id: "artifact:draft-exact".into(),
+        });
+        // Required vectors and booleans must not be fabricated from missing data.
+        let mut missing = serde_json::to_value(&idle).unwrap();
+        missing.as_object_mut().unwrap().remove("provenance");
+        assert!(serde_json::from_value::<DrainOnceResult>(missing).is_err());
+        assert!(
+            serde_json::from_value::<TaskSubmissionResult>(
+                serde_json::json!({"completed":{"artifactId":"a","emittedEvent":null}})
+            )
+            .is_err()
+        );
+    }
+
     fn workflow_intake_request(handoff_id: &str, case_ref: &str) -> IntakeAcceptanceRequest {
         IntakeAcceptanceRequest {
             actor_bindings: None,
@@ -3349,6 +3553,428 @@ mod tests {
                     .is_empty()
             );
         }
+    }
+
+    fn allocation_record_snapshot(record: &RuntimeRecord) -> serde_json::Value {
+        serde_json::json!({
+            "process": record.process,
+            "provenance": record.provenance_log,
+            "aux": crate::runtime_aux_to_json(record),
+        })
+    }
+
+    fn allocation_test_kernel() -> KernelDocument {
+        serde_json::from_value(serde_json::json!({
+            "$wosWorkflow": "1.0", "url": "urn:test:retained-allocation", "version": "1.0.0",
+            "governance": { "taskCatalog": [{ "id": "review", "pattern": "review", "title": "Review" }] },
+            "lifecycle": { "initialState": "open", "states": {
+                "open": { "type": "atomic", "onEntry": [{
+                    "action": "createTask", "taskRef": "review", "assignTo": "reviewer"
+                }] }
+            } }
+        })).expect("allocation kernel")
+    }
+
+    fn allocation_test_identity() -> crate::intake::ProcessAllocation {
+        crate::intake::ProcessAllocation {
+            process_id: test_process_id("allocated").into(),
+            case_ledger_id: test_case_ledger_id("allocated").into(),
+            tenant: "allocated".into(),
+        }
+    }
+
+    fn allocation_test_request(id: &str) -> IntakeAcceptanceRequest {
+        public_intake_request(
+            id,
+            test_case_ledger_urn("allocated"),
+            "urn:test:retained-allocation",
+            "1.0.0",
+        )
+    }
+
+    #[test]
+    fn intake_allocation_invalid_or_conflicting_identity_has_no_receipt_or_process() {
+        let valid = allocation_test_identity();
+        let mut variants = vec![];
+        for (process_id, case_ledger_id, tenant) in [
+            ("", valid.case_ledger_id.as_str(), "allocated"),
+            (
+                valid.case_ledger_id.as_str(),
+                valid.case_ledger_id.as_str(),
+                "allocated",
+            ),
+            (valid.process_id.as_str(), "not-a-case", "allocated"),
+            (
+                valid.process_id.as_str(),
+                "allocated_case_01hw7rm71vfay8vvw14d2pf2dc",
+                "allocated",
+            ),
+            (
+                valid.process_id.as_str(),
+                valid.case_ledger_id.as_str(),
+                "other",
+            ),
+            (valid.process_id.as_str(), valid.case_ledger_id.as_str(), ""),
+            (
+                valid.process_id.as_str(),
+                test_case_ledger_id("other"),
+                "allocated",
+            ),
+        ] {
+            variants.push(crate::intake::ProcessAllocation {
+                process_id: process_id.into(),
+                case_ledger_id: case_ledger_id.into(),
+                tenant: tenant.into(),
+            });
+        }
+        for allocation in variants {
+            let mut runtime = runtime_with_kernel(allocation_test_kernel())
+                .with_intake_policy(AutoCreatePublicIntakePolicy);
+            assert!(matches!(
+                runtime.accept_intake_handoff_with_allocation(
+                    "formspec",
+                    allocation_test_request("ih-invalid-allocation"),
+                    Some(allocation)
+                ),
+                Err(RuntimeError::IntakeConflict(_))
+            ));
+            assert!(matches!(
+                runtime
+                    .store
+                    .load_intake_record("formspec", "ih-invalid-allocation"),
+                Err(StoreError::NotFound(_))
+            ));
+            assert!(
+                runtime
+                    .store
+                    .processes_for_case(&valid.case_ledger_id)
+                    .is_empty()
+            );
+        }
+    }
+
+    #[test]
+    fn intake_unused_allocation_refuses_rejection_defer_and_attachment() {
+        for deferred in [false, true] {
+            let mut runtime = runtime_with_kernel(allocation_test_kernel());
+            runtime = if deferred {
+                runtime.with_intake_policy(ManualReviewIntakePolicy)
+            } else {
+                runtime.with_intake_policy(PublicIntakeDisabledPolicy)
+            };
+            assert!(matches!(
+                runtime.accept_intake_handoff_with_allocation(
+                    "formspec",
+                    allocation_test_request("ih-unused"),
+                    Some(allocation_test_identity())
+                ),
+                Err(RuntimeError::IntakeConflict(_))
+            ));
+            assert!(matches!(
+                runtime.store.load_intake_record("formspec", "ih-unused"),
+                Err(StoreError::NotFound(_))
+            ));
+        }
+        let mut runtime = runtime_with_kernel(allocation_test_kernel())
+            .with_intake_policy(AutoCreatePublicIntakePolicy);
+        runtime
+            .accept_intake_handoff_with_allocation(
+                "formspec",
+                allocation_test_request("ih-create"),
+                Some(allocation_test_identity()),
+            )
+            .expect("create");
+        let before = allocation_record_snapshot(
+            &runtime
+                .store
+                .load_record(test_process_id("allocated"))
+                .unwrap(),
+        );
+        let request = workflow_intake_request("ih-attach", test_case_ledger_urn("allocated"));
+        assert!(matches!(
+            runtime.accept_intake_handoff_with_allocation(
+                "formspec",
+                request,
+                Some(allocation_test_identity())
+            ),
+            Err(RuntimeError::IntakeConflict(_))
+        ));
+        assert_eq!(
+            before,
+            allocation_record_snapshot(
+                &runtime
+                    .store
+                    .load_record(test_process_id("allocated"))
+                    .unwrap()
+            )
+        );
+        assert!(matches!(
+            runtime.store.load_intake_record("formspec", "ih-attach"),
+            Err(StoreError::NotFound(_))
+        ));
+    }
+
+    #[test]
+    fn intake_retained_allocation_recovery_preserves_original_and_refuses_swaps() {
+        // Failure at the first receipt update retains Pending plus an actual process;
+        // failure at the second retains Prepared plus original creation evidence.
+        for fail_on_save in [1, 2] {
+            let mut runtime = runtime_with_store(
+                IntakeSaveFailingStore::new(fail_on_save),
+                allocation_test_kernel(),
+            )
+            .with_intake_policy(AutoCreatePublicIntakePolicy);
+            let request = allocation_test_request("ih-recovery-allocation");
+            let allocation = allocation_test_identity();
+            assert!(matches!(
+                runtime.accept_intake_handoff_with_allocation(
+                    "formspec",
+                    request.clone(),
+                    Some(allocation.clone())
+                ),
+                Err(RuntimeError::Store(StoreError::Failed(_)))
+            ));
+            let prior = runtime.store.load_record(&allocation.process_id).unwrap();
+            let receipt = runtime
+                .store
+                .load_intake_record("formspec", "ih-recovery-allocation")
+                .unwrap();
+            let mut swapped = allocation.clone();
+            swapped.process_id = "allocated_process_01hw7rm71vfay8vvw14d2pf2dc".into();
+            assert!(matches!(
+                runtime.accept_intake_handoff_with_allocation(
+                    "formspec",
+                    request.clone(),
+                    Some(swapped)
+                ),
+                Err(RuntimeError::IntakeConflict(_))
+            ));
+            assert_eq!(
+                allocation_record_snapshot(&prior),
+                allocation_record_snapshot(
+                    &runtime.store.load_record(&allocation.process_id).unwrap()
+                )
+            );
+            assert_eq!(
+                serde_json::to_value(&receipt).unwrap(),
+                serde_json::to_value(
+                    runtime
+                        .store
+                        .load_intake_record("formspec", "ih-recovery-allocation")
+                        .unwrap()
+                )
+                .unwrap()
+            );
+            let decision = runtime
+                .accept_intake_handoff_with_allocation(
+                    "formspec",
+                    request.clone(),
+                    Some(allocation.clone()),
+                )
+                .expect("recovery");
+            assert_eq!(decision.creation.as_ref(), prior.creation.as_ref());
+            let applied = runtime
+                .store
+                .load_intake_record("formspec", "ih-recovery-allocation")
+                .unwrap();
+            assert_eq!(applied.request, request);
+            let mut swapped = allocation.clone();
+            swapped.process_id = "allocated_process_01hw7rm71vfay8vvw14d2pf2dc".into();
+            assert!(matches!(
+                runtime.accept_intake_handoff_with_allocation(
+                    "formspec",
+                    request.clone(),
+                    Some(swapped)
+                ),
+                Err(RuntimeError::IntakeConflict(_))
+            ));
+            let mut changed = request.clone();
+            changed.initial_case_state = Some(serde_json::json!({"changed":true}));
+            assert!(matches!(
+                runtime.accept_intake_handoff_with_allocation(
+                    "formspec",
+                    changed,
+                    Some(allocation.clone())
+                ),
+                Err(RuntimeError::IntakeConflict(_))
+            ));
+            let replay = runtime
+                .accept_intake_handoff_with_allocation("formspec", request, Some(allocation))
+                .expect("applied replay");
+            assert_eq!(
+                serde_json::to_value(&decision).unwrap(),
+                serde_json::to_value(&replay).unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn intake_allocation_preserves_empty_binding_option_and_refuses_existing_unbound_process() {
+        let mut kernel_value = serde_json::to_value(allocation_test_kernel()).unwrap();
+        kernel_value["lifecycle"]["states"]["open"]["onEntry"] = serde_json::json!([]);
+        let kernel: KernelDocument = serde_json::from_value(kernel_value).unwrap();
+        let mut runtime =
+            runtime_with_kernel(kernel.clone()).with_intake_policy(AutoCreatePublicIntakePolicy);
+        let mut request = allocation_test_request("ih-bound-empty");
+        request.actor_bindings = Some(vec![]);
+        let decision = runtime
+            .accept_intake_handoff_with_allocation(
+                "formspec",
+                request.clone(),
+                Some(allocation_test_identity()),
+            )
+            .expect("explicit empty binding map");
+        assert_eq!(decision.creation.unwrap().actor_bindings, Some(vec![]));
+        assert_eq!(
+            runtime
+                .store
+                .load_record(test_process_id("allocated"))
+                .unwrap()
+                .process
+                .actor_bindings,
+            Some(vec![])
+        );
+        let mut changed = request;
+        changed.actor_bindings = None;
+        assert!(matches!(
+            runtime.accept_intake_handoff_with_allocation(
+                "formspec",
+                changed,
+                Some(allocation_test_identity())
+            ),
+            Err(RuntimeError::IntakeConflict(_))
+        ));
+
+        let mut runtime =
+            runtime_with_kernel(kernel).with_intake_policy(AutoCreatePublicIntakePolicy);
+        runtime
+            .accept_intake_handoff_with_allocation(
+                "formspec",
+                allocation_test_request("ih-unbound"),
+                Some(allocation_test_identity()),
+            )
+            .expect("unbound creation");
+        let before = allocation_record_snapshot(
+            &runtime
+                .store
+                .load_record(test_process_id("allocated"))
+                .unwrap(),
+        );
+        let mut request = allocation_test_request("ih-new-bound-empty");
+        request.actor_bindings = Some(vec![]);
+        assert!(matches!(
+            runtime.accept_intake_handoff_with_allocation(
+                "formspec",
+                request,
+                Some(allocation_test_identity())
+            ),
+            Err(RuntimeError::IntakeConflict(_))
+        ));
+        assert_eq!(
+            before,
+            allocation_record_snapshot(
+                &runtime
+                    .store
+                    .load_record(test_process_id("allocated"))
+                    .unwrap()
+            )
+        );
+    }
+
+    #[test]
+    fn intake_pending_before_creation_uses_host_protected_allocation_without_native_reservation_claim()
+     {
+        let mut runtime = runtime_with_kernel(allocation_test_kernel())
+            .with_intake_policy(AutoCreatePublicIntakePolicy);
+        let request = allocation_test_request("ih-pending-no-process");
+        let decision = NoopIntakeAcceptancePolicy
+            .evaluate_intake_acceptance(&IntakePolicyContext {
+                binding: "formspec".into(),
+                request: request.clone(),
+                interpretation: IntakeInterpretation {
+                    intake_id: "ih-pending-no-process".into(),
+                    case_intent: IntakeCaseIntent::RequestGovernedCaseCreation,
+                },
+            })
+            .unwrap();
+        runtime
+            .store
+            .create_intake_record(IntakeRecord {
+                binding: "formspec".into(),
+                intake_id: "ih-pending-no-process".into(),
+                request: request.clone(),
+                outcome: decision.outcome,
+                creation: None,
+                provenance_log: decision.provenance,
+                status: crate::intake::IntakeRecordStatus::Pending,
+                recorded_at: "2024-03-09T16:00:00Z".into(),
+                updated_at: "2024-03-09T16:00:00Z".into(),
+            })
+            .unwrap();
+        // No native process evidence exists yet. The host's immutable command row,
+        // rather than this Pending receipt, protects the choice of valid process ID.
+        let mut allocation = allocation_test_identity();
+        allocation.process_id = "allocated_process_01hw7rm71vfay8vvw14d2pf2dc".into();
+        let result = runtime
+            .accept_intake_handoff_with_allocation(
+                "formspec",
+                request.clone(),
+                Some(allocation.clone()),
+            )
+            .expect("host-protected recovery allocation");
+        assert_eq!(result.creation.unwrap().process_id, allocation.process_id);
+        assert_eq!(
+            runtime
+                .store
+                .load_intake_record("formspec", "ih-pending-no-process")
+                .unwrap()
+                .request,
+            request
+        );
+    }
+
+    #[test]
+    fn intake_honors_retained_owner_allocation() {
+        let mut runtime = runtime_with_kernel(allocation_test_kernel())
+            .with_intake_policy(AutoCreatePublicIntakePolicy);
+        let reserved_process = test_process_id("allocated");
+        let request = public_intake_request(
+            "ih-allocation",
+            test_case_ledger_urn("allocated"),
+            "urn:test:retained-allocation",
+            "1.0.0",
+        );
+        let allocation = allocation_test_identity();
+        let decision = runtime
+            .accept_intake_handoff_with_allocation(
+                "formspec",
+                request.clone(),
+                Some(allocation.clone()),
+            )
+            .expect("accepted");
+        let replay = runtime
+            .accept_intake_handoff_with_allocation("formspec", request, Some(allocation))
+            .expect("exact replay");
+        assert_eq!(
+            serde_json::to_value(&decision).unwrap(),
+            serde_json::to_value(&replay).unwrap()
+        );
+        let original = decision.creation.expect("original creation");
+        assert_eq!(original.process_id, reserved_process);
+        assert_eq!(original.case_ledger_id, test_case_ledger_id("allocated"));
+        assert_eq!(original.tenant, "allocated");
+        assert_eq!(original.tasks.len(), 1);
+        assert_eq!(original.tasks[0].task_ref, "review");
+        assert_eq!(
+            original.tasks[0].assigned_actor.as_deref(),
+            Some("reviewer")
+        );
+        let stored = runtime
+            .store
+            .load_record(reserved_process)
+            .expect("exact reserved process");
+        assert_eq!(stored.creation.as_ref(), Some(&original));
+        assert_eq!(stored.process.actor_bindings, None);
     }
 
     #[test]
@@ -4516,6 +5142,7 @@ mod tests {
             .unwrap();
 
         let result = runtime.drain_once(test_process_id("case-1")).unwrap();
+        assert_drain_result_roundtrip(&result);
         assert_eq!(result.processed_event.as_deref(), Some("start"));
         assert_eq!(result.created_task_ids.len(), 1);
         assert!(result.created_task_ids[0].starts_with("wos-task:"));
@@ -4586,10 +5213,12 @@ mod tests {
         }
 
         let first = runtime.drain_once(test_process_id("case-token")).unwrap();
+        assert_drain_result_roundtrip(&first);
         assert_eq!(first.processed_event.as_deref(), Some("same"));
         assert_eq!(first.processed_event_token.as_deref(), Some("old-token"));
 
         let second = runtime.drain_once(test_process_id("case-token")).unwrap();
+        assert_drain_result_roundtrip(&second);
         assert_eq!(second.processed_event.as_deref(), Some("same"));
         assert_eq!(
             second.processed_event_token.as_deref(),
@@ -4988,6 +5617,15 @@ mod tests {
             )
             .unwrap();
 
+        assert_submission_result_roundtrip(&result);
+        assert_aux_submission_format(
+            &runtime
+                .store
+                .load_record(test_process_id("case-2"))
+                .unwrap(),
+            &result,
+            "token-1",
+        );
         match result {
             TaskSubmissionResult::Completed {
                 case_mutated,
@@ -5356,6 +5994,12 @@ mod tests {
             )
             .expect("signature admission failure should be represented as a failed submission");
 
+        assert_submission_result_roundtrip(&result);
+        assert_aux_submission_format(
+            &runtime.store.load_record(process_id).unwrap(),
+            &result,
+            "sig013-admission-failed-submit",
+        );
         assert!(
             matches!(
                 result,
@@ -6065,6 +6709,29 @@ mod tests {
             .store
             .load_record(test_process_id("case-3"))
             .unwrap();
+        assert_draft_result_roundtrip(&draft);
+        let aux = crate::runtime_aux_to_json(&record);
+        let entry = aux["replayEntries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|entry| entry["key"]["token"] == "draft-token")
+            .unwrap();
+        assert_eq!(
+            entry["value"],
+            serde_json::json!({"kind":"draft", "artifactId":draft.artifact_id})
+        );
+        let decoded_aux = crate::runtime_aux_from_json(&aux).unwrap();
+        let replay = decoded_aux
+            .replay_entries
+            .iter()
+            .find(|(key, _)| key.token == "draft-token")
+            .unwrap()
+            .1;
+        let ReplayValue::Draft(decoded_draft) = replay else {
+            panic!("aux draft replay variant changed")
+        };
+        assert_eq!(decoded_draft.artifact_id, draft.artifact_id);
         assert!(record.artifacts.contains_key(&draft.artifact_id));
         assert_eq!(
             record.process.case_state["decision"],
@@ -7204,6 +7871,16 @@ mod tests {
             .submit_task_response(&task_id, response, "delegate", Some("token-shared"))
             .unwrap();
 
+        assert_submission_result_roundtrip(&first);
+        assert_submission_result_roundtrip(&second);
+        assert_aux_submission_format(
+            &runtime
+                .store
+                .load_record(test_process_id("case-6"))
+                .unwrap(),
+            &first,
+            "token-shared",
+        );
         assert!(matches!(
             first,
             TaskSubmissionResult::Rejected { ref code }
@@ -8144,7 +8821,9 @@ mod tests {
                             {
                                 "event": "approve",
                                 "target": "escalated",
-                                "guard": "caseFile.amount >= 100"
+                                "guard": "caseFile.amount >= 100",
+                                "tags": ["serde-roundtrip"],
+                                "actions": [{"action":"emitEvent", "eventType":"serde.followup"}]
                             }
                         ]
                     },
@@ -8174,12 +8853,21 @@ mod tests {
                     actor_id: Some("approver".to_string()),
                     data: None,
                     timestamp: String::new(),
-                    idempotency_token: None,
+                    idempotency_token: Some("serde-guard-token".into()),
                 },
             )
             .unwrap();
 
         let result = runtime.drain_once(test_process_id("case-guards")).unwrap();
+
+        assert_eq!(
+            result.processed_event_token.as_deref(),
+            Some("serde-guard-token")
+        );
+        assert_eq!(result.transitions[0].tags, vec!["serde-roundtrip"]);
+        assert!(!result.provenance.is_empty());
+        assert_eq!(result.emitted_events, vec!["serde.followup"]);
+        assert_drain_result_roundtrip(&result);
 
         // DrainOnceResult must carry both guard evaluations for this event:
         // the first one blocked (amount < 100 = false), the second fired

@@ -16,6 +16,38 @@ use wos_core::ProvenanceRecord;
 use crate::binding::BindingError;
 use crate::runtime::RuntimeError;
 
+/// Host-retained identity for an accepted intake that creates a process.
+///
+/// The host protects this reservation before creation. Once creation exists,
+/// the runtime compares these values with its actual retained creation facts.
+/// This option is separate from the intake request and its identity.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProcessAllocation {
+    /// Canonical process TypeID reserved by the host.
+    pub process_id: String,
+    /// Canonical case TypeID selected for that process.
+    pub case_ledger_id: String,
+    /// Tenant shared by the process and case identifiers.
+    pub tenant: String,
+}
+
+impl ProcessAllocation {
+    pub(crate) fn validate(&self) -> Result<(), RuntimeError> {
+        use stack_common_typeid as typeid;
+        if !typeid::is_valid_type_id(&self.process_id, Some(typeid::PROCESS_PREFIX))
+            || !typeid::is_valid_type_id(&self.case_ledger_id, Some(typeid::CASE_PREFIX))
+            || !typeid::is_valid_tenant(&self.tenant)
+            || typeid::extract_tenant(&self.process_id) != Some(self.tenant.as_str())
+            || typeid::extract_tenant(&self.case_ledger_id) != Some(self.tenant.as_str())
+        {
+            return Err(RuntimeError::IntakeConflict(
+                "invalid retained process allocation".into(),
+            ));
+        }
+        Ok(())
+    }
+}
+
 /// Binding-derived case intent before host policy decides what to do.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "kind")]
