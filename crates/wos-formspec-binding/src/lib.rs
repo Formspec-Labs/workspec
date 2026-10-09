@@ -1204,6 +1204,46 @@ pub trait FormspecProcessor {
         data: &serde_json::Value,
     ) -> Result<Option<Vec<serde_json::Value>>, BindingError>;
 
+    /// Validate a complete Response using the actual task context.
+    ///
+    /// The default preserves existing processors. Hosts that qualify named
+    /// instances can override this method without losing Response metadata.
+    ///
+    /// # Errors
+    /// Returns missing data or the processor's Definition validation error.
+    fn validate_task_definition(
+        &self,
+        task: &ActiveTask,
+        response: &serde_json::Value,
+    ) -> Result<Option<Vec<serde_json::Value>>, BindingError> {
+        let data = response
+            .get("data")
+            .ok_or_else(|| BindingError::InvalidInput("response.data missing".to_string()))?;
+        self.validate_definition(
+            task.definition_url.as_deref().unwrap_or_default(),
+            task.definition_version.as_deref().unwrap_or_default(),
+            data,
+        )
+    }
+
+    /// Map a complete Response using the actual task context.
+    ///
+    /// Override alongside `validate_task_definition` when mapping evaluates
+    /// task-qualified instances. The default preserves existing processors.
+    ///
+    /// # Errors
+    /// Returns the processor's mapping error.
+    fn map_task_response(
+        &self,
+        task: &ActiveTask,
+        response: &serde_json::Value,
+    ) -> Result<Option<CaseMutationBundle>, BindingError> {
+        let Some(mapping_ref) = task.response_mapping_ref.as_deref() else {
+            return Ok(None);
+        };
+        self.map_response(mapping_ref, response)
+    }
+
     /// Compute prefill data for a task.
     fn compute_prefill(
         &self,
@@ -1290,14 +1330,7 @@ where
 
         let mut validation_results = None;
         let definition_valid = if errors.is_empty() && pin_match {
-            let data = response
-                .get("data")
-                .ok_or_else(|| BindingError::InvalidInput("response.data missing".to_string()))?;
-            validation_results = self.processor.validate_definition(
-                task.definition_url.as_deref().unwrap_or_default(),
-                task.definition_version.as_deref().unwrap_or_default(),
-                data,
-            )?;
+            validation_results = self.processor.validate_task_definition(task, response)?;
             validation_results
                 .as_ref()
                 .is_none_or(std::vec::Vec::is_empty)
@@ -1364,10 +1397,10 @@ where
         task: &ActiveTask,
         response: &serde_json::Value,
     ) -> Result<Option<CaseMutationBundle>, BindingError> {
-        let Some(mapping_ref) = task.response_mapping_ref.as_deref() else {
+        if task.response_mapping_ref.is_none() {
             return Ok(None);
-        };
-        self.processor.map_response(mapping_ref, response)
+        }
+        self.processor.map_task_response(task, response)
     }
 
     fn signature_evidence(
@@ -1660,6 +1693,113 @@ mod tests {
             updated_at: "2024-03-09T00:00:00Z".to_string(),
             extensions: Default::default(),
         }
+    }
+
+    #[derive(Debug, Clone)]
+    struct TaskContextProcessor {
+        expected_task: serde_json::Value,
+        expected_response: serde_json::Value,
+        calls: std::sync::Arc<std::sync::Mutex<Vec<&'static str>>>,
+    }
+
+    impl FormspecProcessor for TaskContextProcessor {
+        fn validate_envelope(
+            &self,
+            response: &serde_json::Value,
+        ) -> Result<Vec<serde_json::Value>, BindingError> {
+            StubProcessor.validate_envelope(response)
+        }
+
+        fn validate_definition(
+            &self,
+            _: &str,
+            _: &str,
+            _: &serde_json::Value,
+        ) -> Result<Option<Vec<serde_json::Value>>, BindingError> {
+            panic!("task-aware validation must not fall back to data-only validation")
+        }
+
+        fn compute_prefill(
+            &self,
+            mapping_ref: Option<&str>,
+            case_state: &serde_json::Value,
+        ) -> Result<Option<serde_json::Value>, BindingError> {
+            StubProcessor.compute_prefill(mapping_ref, case_state)
+        }
+
+        fn map_response(
+            &self,
+            _: &str,
+            _: &serde_json::Value,
+        ) -> Result<Option<CaseMutationBundle>, BindingError> {
+            panic!("task-aware mapping must not fall back to context-free mapping")
+        }
+
+        fn validate_task_definition(
+            &self,
+            task: &ActiveTask,
+            response: &serde_json::Value,
+        ) -> Result<Option<Vec<serde_json::Value>>, BindingError> {
+            assert_eq!(serde_json::to_value(task).unwrap(), self.expected_task);
+            assert_eq!(response, &self.expected_response);
+            self.calls.lock().unwrap().push("validate");
+            Ok(None)
+        }
+
+        fn map_task_response(
+            &self,
+            task: &ActiveTask,
+            response: &serde_json::Value,
+        ) -> Result<Option<CaseMutationBundle>, BindingError> {
+            assert_eq!(serde_json::to_value(task).unwrap(), self.expected_task);
+            assert_eq!(response, &self.expected_response);
+            self.calls.lock().unwrap().push("map");
+            Ok(None)
+        }
+    }
+
+    #[test]
+    fn task_hooks_preserve_full_response_and_actual_task_for_validation_replay_and_mapping() {
+        let mut task = formspec_task();
+        task.context = Some(serde_json::from_value(serde_json::json!({
+            "taskId": task.task_id,
+            "processId": "test-process",
+            "contractRef": task.contract_ref,
+            "definitionUrl": task.definition_url,
+            "definitionVersion": task.definition_version,
+            "binding": "formspec",
+            "assignedActor": task.assigned_actor,
+            "prefillData": {"retained": true},
+            "prefillMappingRef": task.prefill_mapping_ref,
+            "responseMappingRef": task.response_mapping_ref
+        })).unwrap());
+        // Existing owning canonical fixture; transport preservation does not
+        // assert that its signature has been verified for operational intake.
+        let response = signed_response();
+        let original = response.clone();
+        let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let adapter = FormspecBinding::new(TaskContextProcessor {
+            expected_task: serde_json::to_value(&task).unwrap(),
+            expected_response: response.clone(),
+            calls: calls.clone(),
+        });
+        assert!(adapter.validate_submission(&task, &response).unwrap().validation_outcome.definition_valid);
+        assert!(adapter.revalidate_submission(&task, &response).unwrap().validation_outcome.definition_valid);
+        assert!(adapter.compute_case_mutation(&task, &response).unwrap().is_none());
+        assert_eq!(*calls.lock().unwrap(), vec!["validate", "validate", "map"]);
+        assert_eq!(response, original);
+
+        let mut mismatched = response.clone();
+        mismatched["definitionVersion"] = serde_json::json!("2.0.0");
+        assert!(!adapter.validate_submission(&task, &mismatched).unwrap().validation_outcome.definition_valid);
+        assert_eq!(*calls.lock().unwrap(), vec!["validate", "validate", "map"]);
+        let mut rejected = response.clone();
+        rejected["meta"] = serde_json::json!({"rejectEnvelope": true});
+        assert!(!adapter.validate_submission(&task, &rejected).unwrap().validation_outcome.definition_valid);
+        let mut unmapped = task.clone();
+        unmapped.response_mapping_ref = None;
+        assert!(adapter.compute_case_mutation(&unmapped, &response).unwrap().is_none());
+        assert_eq!(*calls.lock().unwrap(), vec!["validate", "validate", "map"]);
     }
 
     #[test]
