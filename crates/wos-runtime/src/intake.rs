@@ -21,7 +21,8 @@ use crate::runtime::RuntimeError;
 /// The host protects this reservation before creation. Once creation exists,
 /// the runtime compares these values with its actual retained creation facts.
 /// This option is separate from the intake request and its identity.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProcessAllocation {
     /// Canonical process TypeID reserved by the host.
     pub process_id: String,

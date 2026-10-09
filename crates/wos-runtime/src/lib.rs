@@ -37,14 +37,23 @@ pub use intake::{
     PublicIntakeDisabledPolicy, TaskCreationSnapshot,
 };
 pub use integration::{
-    IntegrationBinding, IntegrationBindingKind, IntegrationContractRef, IntegrationProfileDocument,
-    TargetWorkflow,
+    CallbackPhase, IntegrationBinding, IntegrationBindingKind, IntegrationContractRef,
+    IntegrationDispatchMode, IntegrationProfileDocument, TargetWorkflow,
 };
 pub use restate_fixture_support::{
     FixtureResolverError, MinimalFixtureFormspecAdapter, SharedInMemoryStore,
     SignatureFixtureResolver, restate_signature_fixture_bindings,
     restate_signature_fixture_runtime, signature_runtime_fixture_kernel,
     signature_runtime_fixture_profile,
+};
+#[doc(inline)]
+pub use runtime::{
+    CaseProcessMembership, DeferredOutboundEvent, NativeCommandKey, NativeIntakeBindingOperation,
+    NativeIntakeChange, NativePreparationError, NativePreparationFailure, NativePreparationPolicy,
+    NativePresentationAcknowledgement, NativePresentationArtifactIdentity,
+    NativePresentationInvocationOutcome, NativeProcessChange, NativeReadOnlyDependency,
+    NativeRecoveryReference, NativeRuntimeCommand, NativeRuntimeOutcome, NativeRuntimeSnapshot,
+    NativeTaskBindingOperation, PendingNativePresentationIntent, PreparedNativeCommand,
 };
 #[doc(inline)]
 pub use runtime::{

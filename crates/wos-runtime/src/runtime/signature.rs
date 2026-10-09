@@ -1976,6 +1976,7 @@ impl WosRuntime {
                 "posture declaration URI '{posture_uri}' is not allowed; expected https URL or loopback http URL"
             )));
         }
+        self.require_native_dependency(super::NativeReadOnlyDependency::PostureResolver)?;
         let resolved = self
             .posture_resolver
             .resolve_posture_declaration(posture_uri)?;

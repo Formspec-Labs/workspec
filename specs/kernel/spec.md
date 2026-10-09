@@ -1384,6 +1384,22 @@ A `callback` binding models a long-running external interaction: the workflow se
 | `inputMapping` | object | OPTIONAL | Input mapping for the initial request. |
 | `outputBinding` | object | OPTIONAL | Maps callback event data to case state paths. |
 
+##### Explicit deferred callback dispatch
+
+`dispatchMode` is an optional **typed** property of the maintained callback binding. Omission retains immediate provider invocation and existing phase inference. `immediate` also uses the immediate path. `deferred` records an immutable request for owner-managed delivery after the process commit and MUST NOT invoke the provider during action execution. Explicit null, unsupported values, or dispatch on a non-callback binding MUST be rejected. A deferred binding MUST declare a nonblank `callbackEventType`.
+
+An `invokeService` action for a deferred binding MUST declare `callbackPhase: "outbound"` or `callbackPhase: "inbound"`. This property MUST NOT appear on other actions or refer to non-callback bindings. Explicit phase determines the action role; a CloudEvent in an initiating outbound action does not silently turn that action into receipt processing. Unsupported declarations, including unreachable lifecycle actions, MUST fail before external effects.
+
+An outbound action MUST save the callback registration and its `pendingOutboundEvents` request in the same process update, keyed by the exact subject. The request MUST retain actual process definition URL/version, binding ID, invocation ID, subject, native CloudEvent JSON and the single typed binding snapshot. Invocation sequence MUST be monotonic and retry-stable; a failed save MUST NOT consume its identity. Pending and historical subjects MUST NOT be reused for a new deferred firing. The native `callbackPending` provenance witness MUST retain the original request. Missing process maps mean empty and missing `nextDeferredCallbackSequence` means zero; explicit portable fields follow the owning WOS Process schema.
+
+Inbound admission MUST check native event syntax, known subject, exact original binding/definition interpretation, expected event type and a receipt event ID distinct from the original invocation ID. All mappings MUST validate before case mutation or removal of either half. A rejected, unknown, mismatched, repeated or drifted receipt MUST NOT map data, consume pending work, invoke another provider, or emit a business wake-up. A matching admitted receipt MUST save mapping, pair removal and a `callbackReceived` witness correlated to the original invocation atomically. Host provider authentication, source authority and receipt qualification remain separate obligations; CloudEvent syntax alone proves none of them.
+
+Restore and update MUST check the registration/request bijection, original pending/received evidence and immutable retained request fields. Owners MUST supply actual transaction-scoped previous process/provenance to update validation. Runtime shape checks cannot authenticate fabricated history; custody and durable writer coordination remain owner responsibilities. Definition migration MUST refuse unresolved deferred requests rather than discard or reinterpret them. Business closure MUST retain pending work.
+
+Default limits are 1000 current pending requests and 1 MiB aggregate serialized native request JSON. A host MAY tighten either limit. Count exhaustion MUST fail before request mapping or identity allocation; byte exhaustion MUST fail before pair installation. No silent eviction, provider fallback or counter wrap is permitted. These limits do not bound historical provenance or all payload-construction memory.
+
+A workflow MAY use an independent parallel receipt region so matching admitted callbacks remain routable after business closure, late evidence, reopening or a main-region final state. The region MUST avoid task-creating reentry effects and MUST emit any business follow-on only after successful admission. Under default wait-all, a permanently atomic receipt region prevents the parallel join: a main final state is regional business finality, not whole-process completion. Authors and hosts MUST distinguish business closure, current task/UI facts, process liveness and terminal cleanup. Retained pending work MUST NOT be cancelled implicitly. Idle drain/reconstruction MUST preserve exact pending work without recreating tasks or growing queue/provenance; host scheduling and export/terminal policy require separate qualification.
+
 ### 9.2.26 Retry Policy
 
 | Property | Type | Required | Description |

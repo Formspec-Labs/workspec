@@ -73,6 +73,10 @@ impl WosRuntime {
         if let Some(allocation) = &allocation {
             allocation.validate()?;
         }
+        self.require_native_intake_binding(
+            super::NativeIntakeBindingOperation::Interpret,
+            binding,
+        )?;
         let adapter = self.intake_acceptors.get(binding).ok_or_else(|| {
             RuntimeError::UnsupportedBinding(format!(
                 "intake acceptance binding unsupported: {binding}"
@@ -93,10 +97,14 @@ impl WosRuntime {
         }
         if let (Some(record), Some(allocation)) = (&replay, &allocation) {
             record.validate_creation()?;
+            self.require_native_creation_allocation(&record.outcome, Some(allocation))?;
             self.validate_intake_allocation(&record.outcome, &request, Some(allocation))?;
             if let Some(creation) = &record.creation {
                 validate_allocation_creation(allocation, creation)?;
             }
+        }
+        if let Some(record) = &replay {
+            self.require_native_creation_allocation(&record.outcome, allocation.as_ref())?;
         }
         super::actor_bindings::validate_binding_shape(request.actor_bindings.as_deref())
             .map_err(RuntimeError::ActorBinding)?;
@@ -122,6 +130,7 @@ impl WosRuntime {
         let persisted = match replay {
             Some(record) => record,
             None => {
+                self.require_native_dependency(super::NativeReadOnlyDependency::IntakePolicy)?;
                 let decision =
                     self.intake_policy
                         .evaluate_intake_acceptance(&IntakePolicyContext {
@@ -129,6 +138,7 @@ impl WosRuntime {
                             request: request.clone(),
                             interpretation: interpretation.clone(),
                         })?;
+                self.require_native_creation_allocation(&decision.outcome, allocation.as_ref())?;
                 self.validate_intake_allocation(&decision.outcome, &request, allocation.as_ref())?;
                 self.persist_pending_intake_record(binding, &interpretation, &request, decision)?
             }
@@ -239,6 +249,7 @@ impl WosRuntime {
             interpretation,
             &final_outcome,
         ));
+        self.require_native_intake_binding(super::NativeIntakeBindingOperation::Finalize, binding)?;
         provenance.extend(adapter.finalize_intake_acceptance(request, &finalize_outcome)?);
 
         record.outcome = final_outcome;

@@ -1,0 +1,180 @@
+{
+  "scope": "Synthetic inputs and authored Mapping outputs independently evaluated by the native Studio engine. The Rust SelectedMappings processor remains a controlled test double, not Definition or server-admission qualification.",
+  "initial": {
+    "input": {
+      "preferredLanguage": "en",
+      "mailingCountry": "United States",
+      "occupation": "Sample occupation",
+      "employerOrSchool": "Example Organization",
+      "otherNameA": "",
+      "additionalPhoneB": "",
+      "priorPassportName": "Alex Rivera",
+      "emergencyEmail": "sam.okafor@example.com",
+      "travelCountries": "None",
+      "dateOfBirth": "1988-04-12",
+      "primaryPhone": "202-555-0101",
+      "permanentAddressDifferent": false,
+      "emergencyPhone": "202-555-0102",
+      "sex": "M",
+      "socialSecurityNumber": "000000000",
+      "placeOfBirth": "Sample City, United States",
+      "priorPassportIssueDate": "2016-03-01",
+      "ssnIssued": true,
+      "mailingPostalCode": "00000",
+      "height": "5 feet 9 inches",
+      "photo": {
+        "contentType": "image/jpeg",
+        "url": "urn:formspec:fixture:owned-photo"
+      },
+      "firstName": "Alex",
+      "documentSelection": "book",
+      "additionalPhoneA": "",
+      "emergencyCity": "Sample City",
+      "priorDocumentHeld": "book",
+      "mailingAddressLine1": "123 Example Street",
+      "mailingState": "NJ",
+      "eyeColor": "Brown",
+      "mailingAddress": "123 Example Street, Sample City, NJ 00000",
+      "emergencyApartment": "",
+      "emergencyContactName": "Sam Okafor",
+      "mailingAddressLine2": "",
+      "emergencyAddressLine1": "456 Example Avenue",
+      "fullName": "Alex Rivera",
+      "hairColor": "Brown",
+      "declarationAcknowledged": true,
+      "additionalPhoneAType": "cell",
+      "priorPassportNumber": "DEMO-PASSPORT-001",
+      "bookSize": "regular",
+      "middleName": "",
+      "emergencyState": "NJ",
+      "emergencyCountry": "United States",
+      "emergencyRelationship": "Friend",
+      "hasTravelPlans": false,
+      "email": "alex.rivera@example.com",
+      "mailingCity": "Sample City",
+      "otherNameB": "",
+      "emergencyPostalCode": "00000",
+      "lastName": "Rivera",
+      "additionalPhoneBType": "home",
+      "actsOrConditionsApply": false,
+      "nameChanged": false
+    }
+  },
+  "correction": {
+    "input": {
+      "fullName": "Alex Rivera",
+      "dateOfBirth": "1988-04-12",
+      "placeOfBirth": "Sample City, United States",
+      "email": "alex.rivera@example.com",
+      "mailingAddress": "123 Example Street, Sample City, NJ 00000",
+      "priorPassportNumber": "DEMO-PASSPORT-001",
+      "priorPassportIssueDate": "2016-03-01",
+      "ssnIssued": true,
+      "socialSecurityNumber": "000000000",
+      "neverIssuedStatement": null,
+      "photo": {
+        "contentType": "image/jpeg",
+        "url": "urn:formspec:fixture:replacement"
+      },
+      "declarationAcknowledged": true,
+      "priorDocumentHeld": "book",
+      "documentSelection": "book",
+      "bookSize": "regular",
+      "lastName": "Rivera",
+      "firstName": "Alex",
+      "middleName": "",
+      "sex": "M",
+      "primaryPhone": "202-555-0101",
+      "mailingAddressLine1": "123 Example Street",
+      "mailingAddressLine2": "",
+      "mailingCity": "Sample City",
+      "mailingState": "NJ",
+      "mailingPostalCode": "00000",
+      "mailingCountry": "United States",
+      "otherNameA": "",
+      "otherNameB": "",
+      "additionalNames": null,
+      "priorPassportName": "Alex Rivera",
+      "priorPassportCardNumber": null,
+      "priorPassportCardIssueDate": null,
+      "nameChanged": false,
+      "nameChangeType": null,
+      "nameChangePlace": null,
+      "nameChangeDate": null,
+      "nameChangeEvidence": null,
+      "height": "5 feet 9 inches",
+      "hairColor": "Brown",
+      "eyeColor": "Brown",
+      "occupation": "Sample occupation",
+      "employerOrSchool": "Example Organization",
+      "additionalPhoneA": "",
+      "additionalPhoneAType": "cell",
+      "additionalPhoneB": "",
+      "additionalPhoneBType": "home",
+      "permanentAddressDifferent": false,
+      "permanentAddressLine1": null,
+      "permanentApartment": null,
+      "permanentCity": null,
+      "permanentState": null,
+      "permanentPostalCode": null,
+      "permanentCountry": null,
+      "emergencyContactName": "Sam Okafor",
+      "emergencyAddressLine1": "456 Example Avenue",
+      "emergencyApartment": "",
+      "emergencyCity": "Sample City",
+      "emergencyState": "NJ",
+      "emergencyPostalCode": "00000",
+      "emergencyCountry": "United States",
+      "emergencyEmail": "sam.okafor@example.com",
+      "emergencyPhone": "202-555-0102",
+      "emergencyRelationship": "Friend",
+      "hasTravelPlans": false,
+      "travelDepartureDate": null,
+      "travelReturnDate": null,
+      "travelCountries": "None",
+      "actsOrConditionsApply": false,
+      "actsOrConditionsExplanation": null,
+      "preferredLanguage": "en",
+      "originalFilingRef": "urn:formspec:fixture:original-filing"
+    },
+    "mappingOutput": {
+      "correctionPhoto": {
+        "contentType": "image/jpeg",
+        "url": "urn:formspec:fixture:replacement"
+      },
+      "correctionFilingRef": "urn:formspec:fixture:original-filing"
+    }
+  },
+  "sendBack": {
+    "input": {
+      "choice": "sendBackPhoto",
+      "reason": "Photo does not show a clear face.",
+      "photoRuleReason": "plain-background",
+      "requestedItems": [
+        "photo"
+      ]
+    },
+    "mappingOutput": {
+      "reviewChoice": "sendBackPhoto",
+      "reviewReason": "Photo does not show a clear face.",
+      "photoRuleReason": "plain-background",
+      "requestedItems": [
+        "photo"
+      ]
+    }
+  },
+  "dispute": {
+    "input": {
+      "checkRef": "urn:formspec:fixture:mockPriorPassportCheck",
+      "response": "dispute",
+      "reason": "The mock prior passport result refers to a different person.",
+      "evidence": null
+    },
+    "mappingOutput": {
+      "outsideCheckRef": "urn:formspec:fixture:mockPriorPassportCheck",
+      "outsideCheckResponse": "dispute",
+      "outsideCheckReason": "The mock prior passport result refers to a different person.",
+      "outsideCheckEvidence": null
+    }
+  }
+}

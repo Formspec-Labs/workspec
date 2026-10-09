@@ -1307,6 +1307,15 @@
         },
         "regions": {
           "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "states": {
+                "type": "object",
+                "additionalProperties": {"$ref": "#/$defs/State"}
+              }
+            }
+          },
           "description": "Parallel regions for parallel states (`type=='parallel'`). Map of region identifier to a region object containing its own `initial` and `states`. All regions execute concurrently; the parallel state exits only when join semantics declared by `cancellationPolicy` are satisfied (Kernel §4.8).",
           "examples": [
             {
@@ -10886,6 +10895,18 @@
       "type": "object",
       "description": "Lifecycle action data. Existing action fields retain their Kernel §9.2 semantics; startAtExpression adds an explicit historical origin for a duration timer.",
       "properties": {
+        "compensatingAction": {
+          "anyOf": [{"type": "null"}, {"$ref": "#/$defs/LifecycleAction"}],
+          "description": "Existing native compensating action. Explicit callbackPhase restrictions also apply recursively here."
+        },
+          "callbackPhase": {
+            "type": "string",
+            "enum": [
+              "outbound",
+              "inbound"
+            ],
+            "description": "Explicit invokeService callback role. Required for deferred callback bindings; outbound persists a request, inbound admits a matching receipt before any business wake-up. Missing retains existing immediate phase inference. Binding kind/dispatch compatibility requires runtime validation."
+          },
         "startAtExpression": {
           "type": "string",
           "minLength": 1,
@@ -10906,6 +10927,29 @@
         }
       },
       "allOf": [
+        {
+          "if": {
+            "required": [
+              "callbackPhase"
+            ]
+          },
+          "then": {
+            "required": [
+              "action",
+              "serviceRef"
+            ],
+            "properties": {
+              "action": {
+                "const": "invokeService"
+              },
+              "serviceRef": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              }
+            }
+          }
+        },
         {
           "if": {
             "required": [

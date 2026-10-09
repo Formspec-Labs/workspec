@@ -58,6 +58,7 @@ impl WosRuntime {
             .ok_or_else(|| RuntimeError::TaskNotFound(task_id.to_string()))?;
 
         let task = record.process.active_tasks[task_index].clone();
+        self.require_native_dependency(super::NativeReadOnlyDependency::AccessControl)?;
         authorize_actor(&*self.access_control, &task, actor_id)?;
         record.validate_creation()?;
         require_task_unexpired(&task, now_ms)?;
@@ -175,6 +176,7 @@ impl WosRuntime {
         }
         let task_index = find_task_index(&record, task_id)
             .ok_or_else(|| RuntimeError::TaskNotFound(task_id.to_string()))?;
+        self.require_native_dependency(super::NativeReadOnlyDependency::AccessControl)?;
         authorize_actor(
             &*self.access_control,
             &record.process.active_tasks[task_index],
@@ -247,6 +249,7 @@ impl WosRuntime {
             .ok_or_else(|| RuntimeError::TaskNotFound(task_id.to_string()))?;
 
         let task = record.process.active_tasks[task_index].clone();
+        self.require_native_dependency(super::NativeReadOnlyDependency::AccessControl)?;
         authorize_actor(&*self.access_control, &task, actor_id)?;
         record.validate_creation()?;
         require_task_unexpired(&task, now_ms)?;
@@ -303,6 +306,7 @@ impl WosRuntime {
             .bindings
             .get(binding)
             .ok_or_else(|| RuntimeError::UnsupportedBinding(binding.to_string()))?;
+        self.require_native_task_binding(super::NativeTaskBindingOperation::Validate, binding)?;
         let validation = adapter.validate_submission(&task, &response)?;
         let mut provenance = vec![ProvenanceRecord::task_lifecycle(
             ProvenanceKind::TaskResponseSubmitted,
@@ -368,6 +372,10 @@ impl WosRuntime {
         }
 
         let signature_evidence = if Self::is_signature_task(&task) {
+            self.require_native_task_binding(
+                super::NativeTaskBindingOperation::SignatureEvidence,
+                binding,
+            )?;
             adapter.signature_evidence(&task, &response)?
         } else {
             None
@@ -456,6 +464,7 @@ impl WosRuntime {
             accepted_artifact.artifact_id.clone(),
             accepted_artifact.clone(),
         );
+        self.require_native_task_binding(super::NativeTaskBindingOperation::Map, binding)?;
         let mutation = adapter.compute_case_mutation(&task, &response)?;
         let case_mutated = mutation
             .as_ref()
@@ -731,7 +740,7 @@ fn find_task_index(record: &RuntimeRecord, task_id: &str) -> Option<usize> {
         .position(|task| task.task_id == task_id)
 }
 
-fn authorize_actor(
+pub(super) fn authorize_actor(
     access_control: &dyn AccessControl,
     task: &ActiveTask,
     actor_id: &str,

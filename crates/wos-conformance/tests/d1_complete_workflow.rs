@@ -228,6 +228,16 @@ fn controlled_runtime(
 ) -> WosRuntime {
     let kernel = selected_workflow();
     let profile: IntegrationProfileDocument = serde_json::from_str(INTEGRATION).unwrap();
+    controlled_runtime_with_artifacts(store, clock, ports, kernel, profile)
+}
+
+fn controlled_runtime_with_artifacts(
+    store: SharedInMemoryStore,
+    clock: ManualClock,
+    ports: ControlledPorts,
+    kernel: KernelDocument,
+    profile: IntegrationProfileDocument,
+) -> WosRuntime {
     let mut bindings = BindingRegistry::new();
     bindings.register(FormspecBinding::new(SelectedMappings));
     WosRuntime::new(
@@ -243,15 +253,32 @@ fn controlled_runtime(
     .with_integration_profile(profile)
 }
 
+// These synthetic inputs passed independent native Definition and Mapping probes.
+// SelectedMappings still does not implement native Definition validation or
+// enforce protected original-answer admission.
+fn native_deferred_inputs() -> Value {
+    serde_json::from_str(include_str!(
+        "fixtures/d1/deferred-native-valid-inputs.json"
+    ))
+    .unwrap()
+}
+
 struct Fixture {
     runtime: WosRuntime,
     store: SharedInMemoryStore,
     process: WorkflowProcess,
     clock: ManualClock,
     ports: ControlledPorts,
+    deferred: bool,
 }
 impl Fixture {
     fn new(photo_qualifying: bool, sent_at: u64, adverse: bool) -> Self {
+        Self::build(photo_qualifying, sent_at, adverse, false)
+    }
+    fn deferred(sent_at: u64) -> Self {
+        Self::build(true, sent_at, false, true)
+    }
+    fn build(photo_qualifying: bool, sent_at: u64, adverse: bool, deferred: bool) -> Self {
         let store = SharedInMemoryStore::default();
         let clock = ManualClock(Arc::new(AtomicU64::new(START)));
         let ports = ControlledPorts {
@@ -261,15 +288,55 @@ impl Fixture {
             adverse,
             fail_no_response: Arc::new(AtomicBool::new(false)),
         };
-        let mut runtime = controlled_runtime(store.clone(), clock.clone(), ports.clone());
-        let process = runtime.create_process_with_actor_bindings(CreateProcessRequest {
-            process_id: stack_common_typeid::mint_process_id(), tenant: None,
-            definition_url:"urn:wos:demo:d1:passport-complete".into(), definition_version:"0.3.0".into(),
-            initial_case_state:Some(json!({"originalFilingRef":"filing-original",
-                "originalAnswers":{"fullName":"Alex Rivera","photo":{"digest":"original-photo"}},"originalPhoto":{"digest":"original-photo"},
-                "referenceNumber":"D1-TEST","preferredLanguage":"en-US","caseClosed":false})),
-        }, vec![HumanActorBinding {declared_actor:"adjudicator".into(),assigned_actor:REVIEWER.into()},
-            HumanActorBinding {declared_actor:"applicant".into(),assigned_actor:APPLICANT.into()}]).unwrap();
+        let mut runtime = if deferred {
+            controlled_runtime_with_artifacts(
+                store.clone(),
+                clock.clone(),
+                ports.clone(),
+                serde_json::from_str(include_str!(
+                    "../../../examples/d1-passport-complete-deferred.workflow.json"
+                ))
+                .unwrap(),
+                serde_json::from_str(include_str!(
+                    "../../../examples/d1-passport-complete-deferred.integration.json"
+                ))
+                .unwrap(),
+            )
+        } else {
+            controlled_runtime(store.clone(), clock.clone(), ports.clone())
+        };
+        let initial_case_state = if deferred {
+            let original_answers = native_deferred_inputs()["initial"]["input"].clone();
+            json!({"originalFilingRef":"urn:formspec:fixture:original-filing",
+                "originalPhoto":original_answers["photo"], "originalAnswers":original_answers,
+                "referenceNumber":"D1-TEST", "preferredLanguage":"en", "caseClosed":false})
+        } else {
+            json!({"originalFilingRef":"filing-original",
+                "originalAnswers":{"fullName":"Alex Rivera","photo":{"digest":"original-photo"}},
+                "originalPhoto":{"digest":"original-photo"},
+                "referenceNumber":"D1-TEST","preferredLanguage":"en-US","caseClosed":false})
+        };
+        let process = runtime
+            .create_process_with_actor_bindings(
+                CreateProcessRequest {
+                    process_id: stack_common_typeid::mint_process_id(),
+                    tenant: None,
+                    definition_url: "urn:wos:demo:d1:passport-complete".into(),
+                    definition_version: "0.3.0".into(),
+                    initial_case_state: Some(initial_case_state),
+                },
+                vec![
+                    HumanActorBinding {
+                        declared_actor: "adjudicator".into(),
+                        assigned_actor: REVIEWER.into(),
+                    },
+                    HumanActorBinding {
+                        declared_actor: "applicant".into(),
+                        assigned_actor: APPLICANT.into(),
+                    },
+                ],
+            )
+            .unwrap();
         runtime.drain_until_idle(&process.process_id).unwrap();
         Self {
             runtime,
@@ -277,6 +344,7 @@ impl Fixture {
             process,
             clock,
             ports,
+            deferred,
         }
     }
     fn current(&self) -> WorkflowProcess {
@@ -319,11 +387,21 @@ impl Fixture {
         );
     }
     fn send_back(&mut self) {
-        self.review(
-            "sendBackPhoto",
-            "Photo does not show a clear face.",
-            "sendback",
-        );
+        if self.deferred {
+            self.submit(
+                "reviewApplication",
+                REVIEWER,
+                REVIEW,
+                native_deferred_inputs()["sendBack"]["input"].clone(),
+                "sendback",
+            );
+        } else {
+            self.review(
+                "sendBackPhoto",
+                "Photo does not show a clear face.",
+                "sendback",
+            );
+        }
     }
     fn advance(&mut self, days: u64) {
         self.clock.0.store(START + days * DAY, Ordering::SeqCst);
@@ -332,13 +410,12 @@ impl Fixture {
             .unwrap();
     }
     fn late_reply(&mut self) {
-        self.submit(
-            "attachLatePhoto",
-            APPLICANT,
-            APPLICATION,
-            json!({"photo":{"digest":"late-photo"},"originalFilingRef":"filing-original"}),
-            "late",
-        );
+        let data = if self.deferred {
+            native_deferred_inputs()["correction"]["input"].clone()
+        } else {
+            json!({"photo":{"digest":"late-photo"},"originalFilingRef":"filing-original"})
+        };
+        self.submit("attachLatePhoto", APPLICANT, APPLICATION, data, "late");
     }
 }
 
@@ -1081,4 +1158,593 @@ fn unanswered_outside_data_window_allows_reasoned_denial_at_full_boundary() {
     fixture.review("deny", reason, "unanswered-adverse-denial");
     assert_recorded_denial(&fixture, reason);
     assert!(fixture.current().timers.is_empty());
+}
+
+// These receipts are explicit controlled native ingress, not provider qualification.
+fn controlled_deferred_receipt(fixture: &mut Fixture, service: &str, qualifying: bool) {
+    let process = fixture.current();
+    let outbound = process
+        .pending_outbound_events
+        .values()
+        .find(|pending| pending.binding_id == service)
+        .unwrap();
+    let receipt = json!({"id":format!("controlled-receipt-{}",outbound.invocation_id),
+        "source":"urn:test:controlled-delivery","specversion":"1.0","type":"com.wos.demo.d1.delivery.receipt",
+        "subject":outbound.subject,"data":{"qualifying":qualifying,"sentAt":iso(fixture.ports.sent_at),"testDouble":true}});
+    fixture
+        .runtime
+        .enqueue_event(
+            &fixture.process.process_id,
+            wos_core::instance::PendingEvent {
+                event: format!("delivery.{service}.receipt"),
+                actor_id: None,
+                data: Some(receipt),
+                timestamp: iso(fixture.clock.now_ms()),
+                idempotency_token: None,
+            },
+        )
+        .unwrap();
+    fixture
+        .runtime
+        .drain_until_idle(&fixture.process.process_id)
+        .unwrap();
+}
+
+fn assert_deferred_main_state(fixture: &Fixture, state: &str) {
+    let current = fixture.current();
+    // Native configuration retains the active parallel parent and both regions.
+    let mut actual = current.configuration;
+    actual.sort();
+    let mut expected = vec![
+        "caseAndDelivery".to_string(),
+        state.to_string(),
+        "awaitingDeliveryReceipt".to_string(),
+    ];
+    expected.sort();
+    assert_eq!(actual, expected);
+}
+
+fn deferred_outage_fixture() -> Fixture {
+    let mut fixture = Fixture::deferred(START);
+    fixture.send_back();
+    assert_deferred_main_state(&fixture, "photoNoticePending");
+    assert!(fixture.current().timers.is_empty());
+    assert!(fixture.current().case_state["photoRequestNotice"].is_null());
+    controlled_deferred_receipt(&mut fixture, "sendPhotoRequestNotice", true);
+    assert_deferred_main_state(&fixture, "awaitingPhoto");
+    fixture.ports.fail_no_response.store(true, Ordering::SeqCst);
+    fixture.advance(91);
+    assert_deferred_main_state(&fixture, "closedForNoResponse");
+    assert_eq!(fixture.current().case_state["caseClosed"], true);
+    assert!(
+        fixture
+            .current()
+            .pending_outbound_events
+            .values()
+            .any(|pending| pending.binding_id == "sendNoResponseNotice")
+    );
+    fixture
+}
+
+#[test]
+fn deferred_delivery_continuing_outage_allows_late_evidence_and_global_receipts_without_duplicate_tasks()
+ {
+    let mut fixture = deferred_outage_fixture();
+    fixture.late_reply();
+    let expected = native_deferred_inputs()["correction"]["mappingOutput"].clone();
+    assert_eq!(
+        fixture.current().case_state["correctionPhoto"],
+        expected["correctionPhoto"]
+    );
+    assert_eq!(
+        fixture.current().case_state["correctionFilingRef"],
+        expected["correctionFilingRef"]
+    );
+    assert_eq!(
+        fixture.current().case_state["originalAnswers"],
+        fixture.process.case_state["originalAnswers"]
+    );
+    assert_deferred_main_state(&fixture, "closedWithLateEvidence");
+    let tasks = serde_json::to_value(&fixture.current().active_tasks).unwrap();
+    controlled_deferred_receipt(&mut fixture, "sendNoResponseNotice", true);
+    controlled_deferred_receipt(&mut fixture, "sendLateEvidenceReceivedNotice", true);
+    assert_deferred_main_state(&fixture, "closedWithLateEvidence");
+    assert_eq!(
+        serde_json::to_value(&fixture.current().active_tasks).unwrap(),
+        tasks
+    );
+    assert_eq!(fixture.current().case_state["caseClosed"], true);
+    assert!(
+        fixture
+            .current()
+            .active_tasks
+            .iter()
+            .any(|task| task.task_ref == "considerReopening"
+                && task.assigned_actor.as_deref() == Some(REVIEWER))
+    );
+    assert!(
+        !fixture
+            .ports
+            .calls
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(name, _)| name.starts_with("send"))
+    );
+}
+
+#[test]
+fn deferred_receipts_remain_routable_after_reopening_and_returned_review_without_task_reentry() {
+    let mut fixture = deferred_outage_fixture();
+    fixture.late_reply();
+    fixture.submit(
+        "considerReopening",
+        REVIEWER,
+        REVIEW,
+        json!({"choice":"reopen","reason":"Accepted late evidence warrants reconsideration."}),
+        "deferred-reopen",
+    );
+    assert_deferred_main_state(&fixture, "reopened");
+    let tasks = serde_json::to_value(&fixture.current().active_tasks).unwrap();
+    controlled_deferred_receipt(&mut fixture, "sendNoResponseNotice", true);
+    controlled_deferred_receipt(&mut fixture, "sendLateEvidenceReceivedNotice", true);
+    assert_deferred_main_state(&fixture, "reopened");
+    assert_eq!(
+        serde_json::to_value(&fixture.current().active_tasks).unwrap(),
+        tasks
+    );
+    controlled_deferred_receipt(&mut fixture, "sendReopenedNotice", true);
+    assert_deferred_main_state(&fixture, "returnedReview");
+    let tasks = serde_json::to_value(&fixture.current().active_tasks).unwrap();
+    controlled_deferred_receipt(&mut fixture, "sendInformationReceivedNotice", true);
+    assert_deferred_main_state(&fixture, "returnedReview");
+    assert_eq!(
+        serde_json::to_value(&fixture.current().active_tasks).unwrap(),
+        tasks
+    );
+    assert_eq!(fixture.current().case_state["caseClosed"], false);
+}
+
+#[test]
+fn deferred_nonqualifying_receipt_does_not_start_notice_clock() {
+    let mut fixture = Fixture::deferred(START);
+    fixture.send_back();
+    controlled_deferred_receipt(&mut fixture, "sendPhotoRequestNotice", false);
+    assert_deferred_main_state(&fixture, "photoNoticePending");
+    assert!(fixture.current().timers.is_empty());
+    assert!(
+        !fixture
+            .current()
+            .active_tasks
+            .iter()
+            .any(|task| task.task_ref == "replacePhoto")
+    );
+}
+
+#[test]
+fn deferred_receipt_region_keeps_global_ingress_active_after_main_case_finality() {
+    let mut fixture = deferred_outage_fixture();
+    fixture.late_reply();
+    fixture.submit(
+        "considerReopening",
+        REVIEWER,
+        REVIEW,
+        json!({"choice":"reopen","reason":"Reconsideration is warranted."}),
+        "deferred-final-reopen",
+    );
+    controlled_deferred_receipt(&mut fixture, "sendReopenedNotice", true);
+    fixture.review(
+        "approve",
+        "The corrected application satisfies eligibility.",
+        "deferred-final-approval",
+    );
+    controlled_deferred_receipt(&mut fixture, "sendApprovalNotice", true);
+    assert_deferred_main_state(&fixture, "approved");
+    // Finality belongs to the main case region. No whole-process completion or
+    // implicit cancellation is claimed while receipt ingress remains active.
+    assert_eq!(
+        fixture.current().status,
+        wos_core::instance::InstanceStatus::Active
+    );
+    assert!(
+        fixture
+            .current()
+            .pending_outbound_events
+            .values()
+            .any(|pending| pending.binding_id == "sendNoResponseNotice")
+    );
+    controlled_deferred_receipt(&mut fixture, "sendNoResponseNotice", true);
+    assert_deferred_main_state(&fixture, "approved");
+}
+
+#[test]
+fn deferred_receipt_in_closed_case_preserves_late_task_identity() {
+    let mut fixture = deferred_outage_fixture();
+    let tasks = serde_json::to_value(&fixture.current().active_tasks).unwrap();
+    controlled_deferred_receipt(&mut fixture, "sendNoResponseNotice", true);
+    assert_deferred_main_state(&fixture, "closedForNoResponse");
+    assert_eq!(
+        serde_json::to_value(&fixture.current().active_tasks).unwrap(),
+        tasks
+    );
+    assert!(fixture.current().pending_outbound_events.is_empty());
+    assert_eq!(fixture.current().case_state["caseClosed"], true);
+}
+
+#[test]
+fn invalid_and_duplicate_deferred_receipts_never_wake_case_or_restart_clock() {
+    for mode in [
+        "unknown",
+        "wrong-binding",
+        "wrong-type",
+        "missing-id",
+        "drift",
+        "duplicate",
+    ] {
+        let mut fixture = Fixture::deferred(START);
+        fixture.send_back();
+        let outbound = fixture
+            .current()
+            .pending_outbound_events
+            .values()
+            .find(|pending| pending.binding_id == "sendPhotoRequestNotice")
+            .unwrap()
+            .clone();
+        let mut event = "delivery.sendPhotoRequestNotice.receipt".to_string();
+        let mut receipt = json!({"id":"controlled-negative-receipt","source":"urn:test:receipt","specversion":"1.0",
+            "type":"com.wos.demo.d1.delivery.receipt","subject":outbound.subject,"data":{"qualifying":true,"sentAt":iso(START)}});
+        match mode {
+            "unknown" => receipt["subject"] = json!("unknown"),
+            "wrong-binding" => event = "delivery.sendOutsideDataNotice.receipt".into(),
+            "wrong-type" => receipt["type"] = json!("com.example.unrelated"),
+            "missing-id" => {
+                receipt.as_object_mut().unwrap().remove("id");
+            }
+            "drift" => {
+                // Rebuild only the host-selected profile, leaving persisted request untouched.
+                let mut profile: IntegrationProfileDocument = serde_json::from_str(include_str!(
+                    "../../../examples/d1-passport-complete-deferred.integration.json"
+                ))
+                .unwrap();
+                profile
+                    .bindings
+                    .get_mut("sendPhotoRequestNotice")
+                    .unwrap()
+                    .output_binding
+                    .insert("caseFile.foreignReceipt".into(), "$".into());
+                fixture.runtime = controlled_runtime_with_artifacts(
+                    fixture.store.clone(),
+                    fixture.clock.clone(),
+                    fixture.ports.clone(),
+                    serde_json::from_str(include_str!(
+                        "../../../examples/d1-passport-complete-deferred.workflow.json"
+                    ))
+                    .unwrap(),
+                    profile,
+                );
+            }
+            _ => controlled_deferred_receipt(&mut fixture, "sendPhotoRequestNotice", true),
+        }
+        fixture
+            .runtime
+            .enqueue_event(
+                &fixture.process.process_id,
+                wos_core::instance::PendingEvent {
+                    event,
+                    actor_id: None,
+                    data: Some(receipt),
+                    timestamp: iso(START),
+                    idempotency_token: None,
+                },
+            )
+            .unwrap();
+        let before = fixture
+            .store
+            .0
+            .lock()
+            .unwrap()
+            .load_record(&fixture.process.process_id)
+            .unwrap();
+        assert!(
+            fixture
+                .runtime
+                .drain_once(&fixture.process.process_id)
+                .is_err(),
+            "{mode}"
+        );
+        let after = fixture
+            .store
+            .0
+            .lock()
+            .unwrap()
+            .load_record(&fixture.process.process_id)
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(&after.process).unwrap(),
+            serde_json::to_value(&before.process).unwrap(),
+            "{mode}"
+        );
+        assert_eq!(
+            serde_json::to_value(&after.provenance_log).unwrap(),
+            serde_json::to_value(&before.provenance_log).unwrap(),
+            "{mode}"
+        );
+        assert!(
+            !after
+                .process
+                .pending_events
+                .iter()
+                .any(|pending| pending.event == "photo.noticeDeliveryAttempted")
+        );
+    }
+}
+
+#[test]
+fn deferred_closed_case_idle_and_reload_preserve_exact_pending_work_without_busy_loop() {
+    let mut fixture = deferred_outage_fixture();
+    let original = fixture
+        .store
+        .0
+        .lock()
+        .unwrap()
+        .load_record(&fixture.process.process_id)
+        .unwrap();
+    for _ in 0..3 {
+        assert!(
+            fixture
+                .runtime
+                .drain_until_idle(&fixture.process.process_id)
+                .unwrap()
+                .is_empty()
+        );
+        let current = fixture
+            .store
+            .0
+            .lock()
+            .unwrap()
+            .load_record(&fixture.process.process_id)
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(&current.process).unwrap(),
+            serde_json::to_value(&original.process).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_value(&current.provenance_log).unwrap(),
+            serde_json::to_value(&original.provenance_log).unwrap()
+        );
+    }
+    let mut reconstructed = original.clone();
+    reconstructed.process =
+        serde_json::from_value(serde_json::to_value(&original.process).unwrap()).unwrap();
+    let fresh = SharedInMemoryStore::default();
+    fresh
+        .0
+        .lock()
+        .unwrap()
+        .restore_record(reconstructed)
+        .unwrap();
+    fixture.store = fresh.clone();
+    fixture.runtime = controlled_runtime_with_artifacts(
+        fresh,
+        fixture.clock.clone(),
+        fixture.ports.clone(),
+        serde_json::from_str(include_str!(
+            "../../../examples/d1-passport-complete-deferred.workflow.json"
+        ))
+        .unwrap(),
+        serde_json::from_str(include_str!(
+            "../../../examples/d1-passport-complete-deferred.integration.json"
+        ))
+        .unwrap(),
+    );
+    assert!(
+        fixture
+            .runtime
+            .drain_until_idle(&fixture.process.process_id)
+            .unwrap()
+            .is_empty()
+    );
+    let restored = fixture
+        .store
+        .0
+        .lock()
+        .unwrap()
+        .load_record(&fixture.process.process_id)
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(&restored.process).unwrap(),
+        serde_json::to_value(&original.process).unwrap()
+    );
+    assert_eq!(
+        serde_json::to_value(&restored.provenance_log).unwrap(),
+        serde_json::to_value(&original.provenance_log).unwrap()
+    );
+    assert_deferred_main_state(&fixture, "closedForNoResponse");
+}
+
+// Deferred adverse paths use native-valid synthetic dispute data, while the
+// processor and admitted delivery receipts remain explicitly controlled doubles.
+fn deferred_adverse_dispute_fixture() -> Fixture {
+    let mut fixture = Fixture::build(true, START, true, true);
+    assert_deferred_main_state(&fixture, "outsideDataNoticePending");
+    assert!(fixture.current().timers.is_empty());
+    assert!(
+        !fixture
+            .current()
+            .active_tasks
+            .iter()
+            .any(|task| task.task_ref == "disputeOutsideData")
+    );
+    controlled_deferred_receipt(&mut fixture, "sendOutsideDataNotice", true);
+    assert_deferred_main_state(&fixture, "outsideDataDisputeWindow");
+    assert_eq!(fixture.ports.calls.lock().unwrap().len(), 2);
+    fixture.advance(9);
+    fixture.submit(
+        "disputeOutsideData",
+        APPLICANT,
+        "urn:formspec:demo:d1:passport-outside-data-dispute",
+        native_deferred_inputs()["dispute"]["input"].clone(),
+        "deferred-dispute",
+    );
+    assert_deferred_main_state(&fixture, "awaitingDisputeReview");
+    let expected = native_deferred_inputs()["dispute"]["mappingOutput"].clone();
+    for key in [
+        "outsideCheckRef",
+        "outsideCheckResponse",
+        "outsideCheckReason",
+        "outsideCheckEvidence",
+    ] {
+        assert_eq!(fixture.current().case_state[key], expected[key]);
+    }
+    assert!(fixture.current().active_tasks.iter().any(|task| {
+        task.task_ref == "reviewApplication" && task.assigned_actor.as_deref() == Some(REVIEWER)
+    }));
+    fixture
+}
+
+fn assert_deferred_recorded_denial(fixture: &Fixture, reason: &str) {
+    assert_deferred_main_state(fixture, "denied");
+    let current = fixture.current();
+    assert_eq!(current.case_state["decision"], "denied");
+    assert_eq!(current.case_state["caseClosed"], true);
+    assert_eq!(current.case_state["displayStatus"], "Denied");
+    assert_eq!(current.case_state["reviewReason"], reason);
+    let record = fixture
+        .store
+        .0
+        .lock()
+        .unwrap()
+        .load_record(&current.process_id)
+        .unwrap();
+    let determination: Vec<_> = record
+        .provenance_log
+        .iter()
+        .filter(|entry| {
+            entry
+                .transition_tags
+                .iter()
+                .any(|tag| tag == "determination")
+        })
+        .collect();
+    assert_eq!(determination.len(), 1);
+    let snapshot: Value = serde_json::from_str(
+        &determination[0]
+            .case_file_snapshot
+            .as_ref()
+            .unwrap()
+            .jcs_canonical,
+    )
+    .unwrap();
+    assert_eq!(snapshot["decision"], "denied");
+    assert_eq!(snapshot["caseClosed"], true);
+    assert_eq!(snapshot["reviewReason"], reason);
+    assert_eq!(
+        snapshot["originalAnswers"],
+        fixture.process.case_state["originalAnswers"]
+    );
+    assert!(
+        !fixture
+            .ports
+            .calls
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(name, _)| name.starts_with("send"))
+    );
+}
+
+#[test]
+fn deferred_adverse_dispute_denial_waits_exact_minimum_boundary_and_receipt_before_regional_finality()
+ {
+    let mut fixture = deferred_adverse_dispute_fixture();
+    let reason = "The retained dispute and source evidence do not establish eligibility.";
+    fixture.review("deny", reason, "deferred-adverse-denial");
+    assert_deferred_main_state(&fixture, "outsideDataMinimumPending");
+    assert_no_effective_adverse_decision(&fixture);
+    let timer = fixture
+        .current()
+        .timers
+        .into_iter()
+        .find(|timer| timer.timer_id == "outsideDataMinimumPeriod")
+        .unwrap();
+    assert_eq!(
+        OffsetDateTime::parse(&timer.deadline, &Rfc3339)
+            .unwrap()
+            .unix_timestamp_nanos()
+            / 1_000_000,
+        i128::from(START + 10 * DAY)
+    );
+    fixture
+        .clock
+        .0
+        .store(START + 10 * DAY - 1, Ordering::SeqCst);
+    fixture
+        .runtime
+        .drain_until_idle(&fixture.process.process_id)
+        .unwrap();
+    assert_deferred_main_state(&fixture, "outsideDataMinimumPending");
+    assert_no_effective_adverse_decision(&fixture);
+    fixture.advance(10);
+    assert_deferred_main_state(&fixture, "denialNoticePending");
+    assert_eq!(fixture.current().case_state["decision"], "denied");
+    assert_eq!(fixture.current().case_state["caseClosed"], true);
+    let tasks = serde_json::to_value(fixture.current().active_tasks).unwrap();
+    controlled_deferred_receipt(&mut fixture, "sendDenialNotice", true);
+    assert_deferred_recorded_denial(&fixture, reason);
+    assert_eq!(
+        serde_json::to_value(fixture.current().active_tasks).unwrap(),
+        tasks
+    );
+    assert_eq!(
+        fixture.current().status,
+        wos_core::instance::InstanceStatus::Active
+    );
+}
+
+#[test]
+fn deferred_nonadverse_denied_final_retains_global_receipt_ingress_without_task_recreation() {
+    let mut fixture = deferred_outage_fixture();
+    fixture.late_reply();
+    fixture.submit(
+        "considerReopening",
+        REVIEWER,
+        REVIEW,
+        json!({"choice":"reopen","reason":"Accepted late evidence warrants reconsideration."}),
+        "deferred-denial-reopen",
+    );
+    controlled_deferred_receipt(&mut fixture, "sendReopenedNotice", true);
+    let reason = "The retained application does not meet the stated requirement.";
+    fixture.review("deny", reason, "deferred-nonadverse-denial");
+    assert_deferred_main_state(&fixture, "denialNoticePending");
+    controlled_deferred_receipt(&mut fixture, "sendDenialNotice", true);
+    assert_deferred_recorded_denial(&fixture, reason);
+    let before = serde_json::to_value(fixture.current().active_tasks).unwrap();
+    controlled_deferred_receipt(&mut fixture, "sendNoResponseNotice", true);
+    controlled_deferred_receipt(&mut fixture, "sendLateEvidenceReceivedNotice", true);
+    controlled_deferred_receipt(&mut fixture, "sendInformationReceivedNotice", true);
+    assert_deferred_recorded_denial(&fixture, reason);
+    assert_eq!(
+        serde_json::to_value(fixture.current().active_tasks).unwrap(),
+        before
+    );
+    assert!(fixture.current().pending_outbound_events.is_empty());
+}
+
+#[test]
+fn deferred_early_dispute_approval_remains_available_before_adverse_use_boundary() {
+    let mut fixture = deferred_adverse_dispute_fixture();
+    fixture.review(
+        "approve",
+        "The dispute establishes eligibility.",
+        "deferred-early-approve",
+    );
+    assert_deferred_main_state(&fixture, "approvalNoticePending");
+    assert!(fixture.current().timers.is_empty());
+    controlled_deferred_receipt(&mut fixture, "sendApprovalNotice", true);
+    assert_deferred_main_state(&fixture, "approved");
+    assert_eq!(
+        fixture.current().status,
+        wos_core::instance::InstanceStatus::Active
+    );
+    assert_eq!(fixture.clock.0.load(Ordering::SeqCst), START + 9 * DAY);
 }

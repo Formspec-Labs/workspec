@@ -77,6 +77,7 @@ impl WosRuntime {
         };
 
         let drained_event_name = event.event.clone();
+        self.require_native_dependency(super::NativeReadOnlyDependency::CompanionPolicy)?;
         let decision = self.companion_policy.evaluate_event(RuntimeEventContext {
             kernel: kernel.clone(),
             instance: record.process.clone(),

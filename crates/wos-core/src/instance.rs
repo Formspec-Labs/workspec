@@ -156,6 +156,14 @@ pub struct WorkflowProcess {
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub pending_callbacks: HashMap<String, PendingCallback>,
 
+    /// Portable native requests retained until their matching deferred receipt is admitted.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub pending_outbound_events: HashMap<String, PendingOutboundEvent>,
+
+    /// Monotonic deferred request identity sequence; never derived from mutable pending count.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub next_deferred_callback_sequence: u64,
+
     /// Extension data (keys prefixed with `x-`).
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub extensions: HashMap<String, serde_json::Value>,
@@ -225,9 +233,12 @@ impl WorkflowProcess {
 }
 
 /// A callback registration that is waiting for a matching inbound CloudEvent (NB.3).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PendingCallback {
+    /// Present only for explicitly deferred callback registrations.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dispatch_mode: Option<crate::model::integration::IntegrationDispatchMode>,
     /// Stable invocation identifier for this callback firing.
     pub invocation_id: String,
 
@@ -584,4 +595,123 @@ pub struct CompensationEntry {
     /// Persisted output of the original action.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output: Option<serde_json::Value>,
+}
+
+fn is_zero(value: &u64) -> bool {
+    *value == 0
+}
+
+/// An immutable deferred native request paired with a callback registration.
+///
+/// Request JSON is the maintained Runtime CloudEvent representation. It is not
+/// an authenticated receipt or a claim of delivery. Owners persist/send it after commit.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PendingOutboundEvent {
+    /// Actual governing definition URL at original request creation.
+    pub definition_url: String,
+    /// Actual governing definition version at original request creation.
+    pub definition_version: String,
+    /// Binding identifier retained at request creation.
+    pub binding_id: String,
+    /// Exact original outbound CloudEvent identifier.
+    pub invocation_id: String,
+    /// Exact subject used by both halves of this pending association.
+    pub subject: String,
+    /// Exact native request JSON, without a second Core CloudEvent type.
+    pub request: serde_json::Value,
+    /// Typed binding interpretation pinned at the original request.
+    pub binding_snapshot: crate::model::integration::IntegrationBinding,
+}
+
+impl WorkflowProcess {
+    /// Validates deferred registration/request associations without invoking providers.
+    ///
+    /// # Errors
+    /// Rejects orphan, duplicate-identity, mismatched or malformed retained associations.
+    /// Runtime additionally validates each native CloudEvent with its maintained reader.
+    pub fn validate_deferred_callbacks(&self) -> Result<(), String> {
+        use crate::model::integration::IntegrationDispatchMode;
+        let mut ids = std::collections::HashSet::new();
+        for (subject, outbound) in &self.pending_outbound_events {
+            let pending = self
+                .pending_callbacks
+                .get(subject)
+                .ok_or("deferred request lacks callback registration")?;
+            if subject.trim().is_empty()
+                || outbound.definition_url != self.definition_url
+                || outbound.definition_version != self.definition_version
+                || outbound.binding_id.trim().is_empty()
+                || outbound.invocation_id.trim().is_empty()
+                || subject != &outbound.subject
+                || pending.dispatch_mode != Some(IntegrationDispatchMode::Deferred)
+                || pending.binding_id != outbound.binding_id
+                || pending.invocation_id != outbound.invocation_id
+                || !ids.insert(&outbound.invocation_id)
+                || outbound.binding_snapshot.dispatch_mode
+                    != Some(IntegrationDispatchMode::Deferred)
+                || outbound
+                    .request
+                    .get("id")
+                    .and_then(serde_json::Value::as_str)
+                    != Some(outbound.invocation_id.as_str())
+                || outbound
+                    .request
+                    .get("subject")
+                    .and_then(serde_json::Value::as_str)
+                    != Some(subject.as_str())
+            {
+                return Err("deferred request/callback association is inconsistent".into());
+            }
+            let prefix = format!("{}:{}:deferred:", self.process_id, outbound.binding_id);
+            let sequence = outbound
+                .invocation_id
+                .strip_prefix(&prefix)
+                .and_then(|value| value.parse::<u64>().ok())
+                .ok_or("deferred invocation identity is malformed")?;
+            if sequence >= self.next_deferred_callback_sequence {
+                return Err("deferred invocation identity exceeds allocated sequence".into());
+            }
+            outbound.binding_snapshot.validate_dispatch()?;
+        }
+        for (subject, callback) in &self.pending_callbacks {
+            if callback.dispatch_mode == Some(IntegrationDispatchMode::Deferred)
+                && !self.pending_outbound_events.contains_key(subject)
+            {
+                return Err("deferred callback lacks native request".into());
+            }
+        }
+        Ok(())
+    }
+
+    /// Validates associations and immutable retained requests across an update.
+    ///
+    /// Runtime separately requires matched receipt provenance for removed pairs.
+    ///
+    /// # Errors
+    /// Rejects inconsistent associations, sequence rollback or changes to retained requests.
+    pub fn validate_deferred_callback_update(&self, previous: &Self) -> Result<(), String> {
+        self.validate_deferred_callbacks()?;
+        previous.validate_deferred_callbacks()?;
+        if !previous.pending_outbound_events.is_empty()
+            && (self.definition_url != previous.definition_url
+                || self.definition_version != previous.definition_version)
+        {
+            return Err("unresolved deferred requests prohibit definition changes".into());
+        }
+        if self.next_deferred_callback_sequence < previous.next_deferred_callback_sequence {
+            return Err("deferred request sequence cannot decrease".into());
+        }
+        for (subject, old) in &previous.pending_outbound_events {
+            if let Some(retained) = self.pending_outbound_events.get(subject) {
+                if old != retained
+                    || self.pending_callbacks.get(subject)
+                        != previous.pending_callbacks.get(subject)
+                {
+                    return Err("retained deferred request and registration are immutable".into());
+                }
+            }
+        }
+        Ok(())
+    }
 }

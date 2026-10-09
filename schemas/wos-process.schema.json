@@ -26,6 +26,40 @@
   },
   "additionalProperties": false,
   "properties": {
+      "pendingCallbacks": {
+        "type": "object",
+        "default": {},
+        "propertyNames": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "additionalProperties": {
+          "$ref": "#/$defs/PendingCallback"
+        },
+        "description": "Registrations keyed by exact callback subject. Missing means empty. Deferred registrations MUST biject with pendingOutboundEvents; immediate legacy registrations need no outbound entry. Runtime checks association and immutable evidence."
+      },
+      "pendingOutboundEvents": {
+        "type": "object",
+        "default": {},
+        "maxProperties": 1000,
+        "propertyNames": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "additionalProperties": {
+          "$ref": "#/$defs/PendingOutboundEvent"
+        },
+        "description": "Immutable deferred native requests keyed by exact callback subject. Missing means empty. Runtime checks keys, IDs, definition pins, paired callback and original provenance witness; aggregate serialized request JSON is bounded to 1 MiB, optionally tightened."
+      },
+      "nextDeferredCallbackSequence": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 18446744073709551615,
+        "default": 0,
+        "description": "Monotonic deferred invocation sequence. Missing means zero. Runtime refuses rollback, identity exhaustion and unresolved request removal without admitted receipt evidence."
+      },
     "$wosProcess": {
       "type": "string",
       "const": "1.0",
@@ -513,6 +547,291 @@
     }
   ],
   "$defs": {
+      "PendingCallback": {
+        "type": "object",
+        "required": [
+          "invocationId",
+          "bindingId"
+        ],
+        "properties": {
+          "invocationId": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "bindingId": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "expectedUntil": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
+          "dispatchMode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "immediate",
+              "deferred",
+              null
+            ],
+            "default": null
+          }
+        },
+        "description": "Existing immediate callback registration with an optional deferred marker. The maintained Rust reader permits unknown registration extensions; runtime validates association semantics."
+      },
+      "IntegrationBindingSnapshot": {
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "request-response",
+              "event-emit",
+              "event-consume",
+              "callback",
+              "arazzo-sequence",
+              "tool",
+              "policy-engine"
+            ]
+          },
+          "dispatchMode": {
+            "type": "string",
+            "enum": [
+              "immediate",
+              "deferred"
+            ],
+            "description": "Optional typed mode; omission means immediate. Explicit null is invalid. Dispatch mode is supported only for callback bindings."
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
+          "requestContract": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "required": [
+              "definitionRef"
+            ],
+            "properties": {
+              "definitionRef": {
+                "type": "string"
+              }
+            }
+          },
+          "responseContract": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "required": [
+              "definitionRef"
+            ],
+            "properties": {
+              "definitionRef": {
+                "type": "string"
+              }
+            }
+          },
+          "inputMapping": {
+            "type": "object",
+            "default": {},
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "contextMapping": {
+            "type": "object",
+            "default": {},
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "dataMapping": {
+            "type": "object",
+            "default": {},
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "outputBinding": {
+            "type": "object",
+            "default": {},
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "idempotencyKeyExpression": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          }
+        },
+        "additionalProperties": true,
+        "description": "The single maintained typed IntegrationBinding snapshot. Unknown binding properties remain flattened extensions; no IntegrationProfile marker or independent artifact is introduced. Mapping objects default to empty; optional description/contracts/expression default to null.",
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "dispatchMode"
+              ]
+            },
+            "then": {
+              "properties": {
+                "type": {
+                  "const": "callback"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "dispatchMode"
+              ],
+              "properties": {
+                "dispatchMode": {
+                  "const": "deferred"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "callbackEventType"
+              ],
+              "properties": {
+                "callbackEventType": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "\\S"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "DeferredNativeRequest": {
+        "type": "object",
+        "required": [
+          "id",
+          "source",
+          "specversion",
+          "type",
+          "subject"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "specversion": {
+            "const": "1.0"
+          },
+          "type": {
+            "type": "string",
+            "minLength": 1
+          },
+          "subject": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "datacontenttype": {
+            "type": "string"
+          },
+          "data": {}
+        },
+        "description": "Exact maintained Runtime CloudEvent JSON retained by outbound creation; no second Core CloudEvent type. Required attributes and subject are checked here; runtime performs native reader/writer equality and original request correlation. This syntax is not provider authentication."
+      },
+      "PendingOutboundEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "definitionUrl",
+          "definitionVersion",
+          "bindingId",
+          "invocationId",
+          "subject",
+          "request",
+          "bindingSnapshot"
+        ],
+        "properties": {
+          "definitionUrl": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "definitionVersion": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "bindingId": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "invocationId": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "subject": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "request": {
+            "$ref": "#/$defs/DeferredNativeRequest"
+          },
+          "bindingSnapshot": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/IntegrationBindingSnapshot"
+              },
+              {
+                "required": [
+                  "dispatchMode"
+                ],
+                "properties": {
+                  "type": {
+                    "const": "callback"
+                  },
+                  "dispatchMode": {
+                    "const": "deferred"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "description": "Original actual process definition pins, binding/invocation/subject, native request, and immutable typed interpretation. Runtime additionally validates equal map keys/IDs/subjects, exact current definition pins and sequence bounds; shape validation alone cannot prove these relationships."
+      },
     "TimerState": {
       "type": "object",
       "required": [

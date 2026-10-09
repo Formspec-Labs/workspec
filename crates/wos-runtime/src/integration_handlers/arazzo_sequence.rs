@@ -384,6 +384,7 @@ fn build_step_binding(
     // We create a synthetic IntegrationBinding so we can call `build_integration_input`.
     let mut ephemeral_binding = IntegrationBinding {
         kind: IntegrationBindingKind::ArazzoSequence,
+        dispatch_mode: None,
         description: None,
         request_contract: None,
         response_contract: None,

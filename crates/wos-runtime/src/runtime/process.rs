@@ -317,6 +317,8 @@ impl WosRuntime {
             volume_counters: None,
             fired_milestones: Default::default(),
             pending_callbacks: Default::default(),
+            pending_outbound_events: Default::default(),
+            next_deferred_callback_sequence: 0,
             created_at: now_iso.clone(),
             updated_at: now_iso.clone(),
             extensions: Default::default(),
@@ -532,6 +534,11 @@ impl WosRuntime {
             });
         }
 
+        if !record.process.pending_outbound_events.is_empty() {
+            return Err(RuntimeError::MigrationRejected(
+                "unresolved deferred callbacks require original definition interpretation".into(),
+            ));
+        }
         if record.process.actor_bindings.is_some() {
             return Err(RuntimeError::MigrationRejected(
                 "bound human assignments require explicit definition requalification".into(),

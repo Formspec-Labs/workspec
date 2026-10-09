@@ -11,9 +11,21 @@ mod intake;
 mod process;
 mod provenance;
 mod signature;
+mod staging;
+mod staging_store;
 mod support;
 mod tasks;
 mod timers;
+
+#[doc(inline)]
+pub use staging::{
+    CaseProcessMembership, DeferredOutboundEvent, NativeCommandKey, NativeIntakeBindingOperation,
+    NativeIntakeChange, NativePreparationError, NativePreparationFailure, NativePreparationPolicy,
+    NativePresentationAcknowledgement, NativePresentationArtifactIdentity,
+    NativePresentationInvocationOutcome, NativeProcessChange, NativeReadOnlyDependency,
+    NativeRecoveryReference, NativeRuntimeCommand, NativeRuntimeOutcome, NativeRuntimeSnapshot,
+    NativeTaskBindingOperation, PendingNativePresentationIntent, PreparedNativeCommand,
+};
 
 #[doc(inline)]
 pub use tasks::task_process_id;
@@ -105,7 +117,8 @@ pub fn task_outcome_metadata_matches(
 }
 
 /// Request for instance creation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateProcessRequest {
     /// Stable WOS workflow-process identifier.
     pub process_id: String,
@@ -355,6 +368,10 @@ pub enum RuntimeError {
     #[error(transparent)]
     CustodyAppend(#[from] CustodyAppendError),
 
+    /// Native preparation refused an unsupported effect or inconsistent input.
+    #[error(transparent)]
+    NativePreparation(#[from] NativePreparationError),
+
     /// Required workflow metadata is absent.
     #[error("missing workflow metadata: {0}")]
     MissingMetadata(String),
@@ -547,6 +564,9 @@ where
 
 /// Generic WOS runtime.
 pub struct WosRuntime {
+    preparation: Option<staging::PreparationState>,
+    #[cfg(test)]
+    preparation_fault_at_write: Option<usize>,
     store: Box<dyn RuntimeStore + Send + Sync>,
     resolver: Box<dyn ResolveDocumentsDyn + Send + Sync>,
     presenter: Box<dyn PresentTasksDyn + Send + Sync>,
@@ -556,6 +576,8 @@ pub struct WosRuntime {
     clock: Box<dyn Clock + Send + Sync>,
     companion_policy: Box<dyn CompanionPolicy + Send + Sync>,
     integration_profile: Option<IntegrationProfileDocument>,
+    deferred_callback_max_count: usize,
+    deferred_callback_max_bytes: usize,
     /// Attached business calendar for SLA deadline computation (BC.1).
     business_calendar: Option<BusinessCalendarDocument>,
     bindings: BindingRegistry,
@@ -604,6 +626,9 @@ impl WosRuntime {
         C: Clock + Send + Sync + 'static,
     {
         Self {
+            preparation: None,
+            #[cfg(test)]
+            preparation_fault_at_write: None,
             store: Box::new(store),
             resolver: Box::new(resolver),
             presenter: Box::new(presenter),
@@ -613,6 +638,8 @@ impl WosRuntime {
             clock: Box::new(clock),
             companion_policy: Box::new(NoopCompanionPolicy),
             integration_profile: None,
+            deferred_callback_max_count: 1000,
+            deferred_callback_max_bytes: 1024 * 1024,
             business_calendar: None,
             bindings,
             intake_acceptors: IntakeAcceptanceRegistry::new(),
@@ -636,6 +663,16 @@ impl WosRuntime {
     /// Attach an Integration Profile document for `invokeService` bindings.
     pub fn with_integration_profile(mut self, profile: IntegrationProfileDocument) -> Self {
         self.integration_profile = Some(profile);
+        self
+    }
+
+    /// Tightens deferred request count and aggregate serialized-byte limits.
+    ///
+    /// Defaults are 1000 requests and 1 MiB per process. Values above these
+    /// bounds do not expand capacity; zero prohibits new deferred dispatch.
+    pub fn with_deferred_callback_limits(mut self, count: usize, bytes: usize) -> Self {
+        self.deferred_callback_max_count = count.min(1000);
+        self.deferred_callback_max_bytes = bytes.min(1024 * 1024);
         self
     }
 
@@ -704,6 +741,9 @@ impl WosRuntime {
 
 #[cfg(test)]
 mod tests {
+    mod native_stage_tests {
+        include!("runtime/staging_tests.rs");
+    }
     use super::*;
     use crate::store::ReplayValue;
 
@@ -10747,4 +10787,5 @@ mod tests {
             assert!(runtime.store.load_record(&id).is_err());
         }
     }
+    include!("deferred_callback_tests.rs");
 }

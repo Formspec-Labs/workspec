@@ -1121,6 +1121,11 @@ impl Evaluator {
         lifecycle_state: &str,
         event_data: Option<&serde_json::Value>,
     ) -> Result<(), EvalError> {
+        if action.callback_phase.is_some() && action.action != ActionKind::InvokeService {
+            return Err(EvalError::Internal(
+                "callbackPhase is valid only for invokeService".into(),
+            ));
+        }
         if action.expires_with_timer.is_some() && action.action != ActionKind::CreateTask {
             return Err(EvalError::Internal(
                 "expiresWithTimer is valid only for createTask".into(),

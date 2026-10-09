@@ -35,10 +35,71 @@ impl WosRuntime {
         actions: &[ObservedAction],
         now_iso: &str,
     ) -> Result<(Vec<String>, Vec<String>, Vec<ProvenanceRecord>), RuntimeError> {
+        wos_core::model::integration::validate_callback_actions(
+            kernel,
+            self.integration_profile.as_ref(),
+        )
+        .map_err(RuntimeError::Integration)?;
         let mut created_task_ids = Vec::new();
         let mut emitted_events = Vec::new();
         let mut provenance = Vec::new();
 
+        // Correlation/configuration errors must precede every external action in this step.
+        let mut inbound_subjects = std::collections::HashSet::new();
+        for observed in actions {
+            if observed.action.callback_phase == Some(crate::integration::CallbackPhase::Inbound) {
+                if let Some(subject) = observed
+                    .event_data
+                    .as_ref()
+                    .and_then(|data| data.get("subject"))
+                    .and_then(serde_json::Value::as_str)
+                {
+                    if !inbound_subjects.insert(subject) {
+                        return Err(RuntimeError::Integration(
+                            "one receipt cannot be consumed twice in the same step".into(),
+                        ));
+                    }
+                }
+            }
+            let binding = observed.action.service_ref.as_ref().and_then(|id| {
+                self.integration_profile
+                    .as_ref()
+                    .and_then(|profile| profile.bindings.get(id))
+            });
+            if let Some(binding) = binding {
+                binding
+                    .validate_dispatch()
+                    .map_err(RuntimeError::Integration)?;
+                if observed.action.callback_phase.is_some()
+                    && binding.kind != crate::integration::IntegrationBindingKind::Callback
+                {
+                    return Err(RuntimeError::Integration(
+                        "callbackPhase requires callback binding".into(),
+                    ));
+                }
+                if observed.action.callback_phase
+                    == Some(crate::integration::CallbackPhase::Inbound)
+                {
+                    crate::integration_handlers::callback::validate_callback_inbound(
+                        record,
+                        observed,
+                        observed.action.service_ref.as_deref().unwrap_or(""),
+                        binding,
+                    )?;
+                } else if binding.dispatch_mode
+                    == Some(crate::integration::IntegrationDispatchMode::Deferred)
+                    && observed.action.callback_phase.is_none()
+                {
+                    return Err(RuntimeError::Integration(
+                        "deferred callback requires explicit callbackPhase".into(),
+                    ));
+                }
+            } else if observed.action.callback_phase.is_some() {
+                return Err(RuntimeError::Integration(
+                    "callbackPhase requires callback binding".into(),
+                ));
+            }
+        }
         for observed in actions {
             match observed.action.action {
                 ActionKind::CreateTask => {
@@ -111,6 +172,12 @@ impl WosRuntime {
                         continue;
                     }
 
+                    self.refuse_native_plain_service(&service_ref)?;
+                    if observed.action.callback_phase.is_some() {
+                        return Err(RuntimeError::Integration(
+                            "callbackPhase requires a callback binding".into(),
+                        ));
+                    }
                     let input = observed
                         .action
                         .data
@@ -234,10 +301,13 @@ impl WosRuntime {
         binding: &IntegrationBinding,
         now_iso: &str,
     ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
+        self.require_native_integration(service_ref, binding)?;
         self.validate_integration_profile_target(kernel, &record.process)?;
         let ctx = InvocationContext {
             service: self.service.as_ref(),
             validator: self.validator.as_ref(),
+            deferred_callback_max_count: self.deferred_callback_max_count,
+            deferred_callback_max_bytes: self.deferred_callback_max_bytes,
         };
         dispatch_integration_binding(
             &ctx,
@@ -259,6 +329,11 @@ impl WosRuntime {
             return Ok(());
         };
 
+        for binding in profile.bindings.values() {
+            binding
+                .validate_dispatch()
+                .map_err(RuntimeError::Integration)?;
+        }
         if profile.target_workflow.url != instance.definition_url {
             return Err(RuntimeError::Integration(format!(
                 "integration profile targets '{}' but instance uses '{}'",
@@ -322,6 +397,10 @@ impl WosRuntime {
             task.status = ActiveTaskStatus::Assigned;
             task.updated_at = now_iso.to_string();
             pending_presentations.push(context.clone());
+            if let Some(state) = &mut self.preparation {
+                state.contexts.push(context.clone());
+                continue;
+            }
             provenance.push(ProvenanceRecord::task_lifecycle(
                 ProvenanceKind::TaskPresented,
                 &task.task_id,
@@ -340,6 +419,9 @@ impl WosRuntime {
         &mut self,
         contexts: &[FormspecTaskContext],
     ) -> Result<(), RuntimeError> {
+        if self.preparation.is_some() {
+            return Ok(());
+        }
         for context in contexts {
             self.presenter.present_task(context)?;
         }
@@ -484,6 +566,10 @@ impl WosRuntime {
                     .bindings
                     .get(&contract.binding)
                     .ok_or_else(|| RuntimeError::UnsupportedBinding(contract.binding.clone()))?;
+                self.require_native_task_binding(
+                    super::NativeTaskBindingOperation::Prepare,
+                    &contract.binding,
+                )?;
                 let prepared = adapter.prepare_task(&task, &record.process.case_state)?;
                 task.context = Some(FormspecTaskContext {
                     task_id: task.task_id.clone(),

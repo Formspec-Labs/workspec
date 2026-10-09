@@ -241,6 +241,8 @@ mod tests {
             volume_counters: None,
             fired_milestones: Default::default(),
             pending_callbacks: Default::default(),
+            pending_outbound_events: Default::default(),
+            next_deferred_callback_sequence: 0,
             created_at: "2026-01-01T00:00:00Z".to_string(),
             updated_at: "2026-01-01T00:00:00Z".to_string(),
             extensions: HashMap::new(),

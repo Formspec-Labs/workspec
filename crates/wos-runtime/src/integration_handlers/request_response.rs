@@ -197,6 +197,8 @@ impl IntegrationBindingHandler for RequestResponseHandler {
 pub(crate) struct InvocationContext<'r> {
     pub(crate) service: &'r dyn InvokeServicesDyn,
     pub(crate) validator: &'r dyn ValidateContractsDyn,
+    pub(crate) deferred_callback_max_count: usize,
+    pub(crate) deferred_callback_max_bytes: usize,
 }
 
 // --- Contract validation helper (extracted from WosRuntime method) ---

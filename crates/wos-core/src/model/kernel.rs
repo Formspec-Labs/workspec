@@ -959,6 +959,14 @@ pub struct Action {
     #[serde(default)]
     pub correlation_key: Option<String>,
 
+    /// Explicit outbound/inbound callback action phase; required for deferred dispatch.
+    #[serde(
+        default,
+        deserialize_with = "deserialize_callback_phase",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub callback_phase: Option<super::integration::CallbackPhase>,
+
     /// Case file field path (setData).
     #[serde(default)]
     pub path: Option<String>,
@@ -1160,4 +1168,10 @@ pub struct Milestone {
         skip_serializing_if = "Option::is_none"
     )]
     pub trigger_mode: Option<String>,
+}
+
+fn deserialize_callback_phase<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<super::integration::CallbackPhase>, D::Error> {
+    super::integration::CallbackPhase::deserialize(deserializer).map(Some)
 }

@@ -110,6 +110,15 @@ pub(crate) fn dispatch_integration_binding(
     binding: &IntegrationBinding,
     now_iso: &str,
 ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
+    binding
+        .validate_dispatch()
+        .map_err(RuntimeError::Integration)?;
+    if observed.action.callback_phase.is_some() && binding.kind != IntegrationBindingKind::Callback
+    {
+        return Err(RuntimeError::Integration(
+            "callbackPhase requires callback binding".into(),
+        ));
+    }
     match binding.kind {
         IntegrationBindingKind::RequestResponse => request_response::RequestResponseHandler
             .execute(ctx, record, kernel, observed, service_ref, binding, now_iso),

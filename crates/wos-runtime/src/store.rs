@@ -65,7 +65,9 @@ impl RuntimeRecord {
     ///
     /// # Errors
     /// Returns invalid-creation evidence for missing or mismatched original evidence,
-    /// or invalid replay evidence for missing or conflicting dismissal witnesses.
+    /// invalid replay evidence for missing or conflicting dismissal witnesses,
+    /// invalid integration evidence for inconsistent deferred request associations,
+    /// or invalid provenance evidence for malformed native presentation acknowledgements.
     pub fn validate_initial_creation(&self) -> Result<(), StoreError> {
         self.creation
             .as_ref()
@@ -75,6 +77,9 @@ impl RuntimeRecord {
             .validate_created_process(&self.process)?;
         self.validate_bound_task_attribution()?;
         self.validate_task_lifetimes()?;
+        self.validate_native_presentations()?;
+        crate::integration_handlers::callback::validate_pending_record(self)
+            .map_err(StoreError::InvalidIntegrationEvidence)?;
         self.validate_dismissal_replay()
     }
 
@@ -82,7 +87,9 @@ impl RuntimeRecord {
     ///
     /// # Errors
     /// Returns invalid-creation evidence for missing or corrupt original evidence,
-    /// or invalid replay evidence for missing or conflicting dismissal witnesses.
+    /// invalid replay evidence for missing or conflicting dismissal witnesses,
+    /// invalid integration evidence for inconsistent deferred request associations,
+    /// or invalid provenance evidence for malformed native presentation acknowledgements.
     pub fn validate_creation(&self) -> Result<(), StoreError> {
         self.creation
             .as_ref()
@@ -92,6 +99,9 @@ impl RuntimeRecord {
             .validate_process(&self.process)?;
         self.validate_bound_task_attribution()?;
         self.validate_task_lifetimes()?;
+        self.validate_native_presentations()?;
+        crate::integration_handlers::callback::validate_pending_record(self)
+            .map_err(StoreError::InvalidIntegrationEvidence)?;
         self.validate_dismissal_replay()
     }
 
@@ -99,7 +109,9 @@ impl RuntimeRecord {
     ///
     /// # Errors
     /// Returns invalid-creation evidence when original metadata changes,
-    /// or invalid replay evidence when dismissal evidence changes or disappears.
+    /// invalid replay evidence when dismissal evidence changes or disappears,
+    /// invalid integration evidence when retained deferred requests change or vanish,
+    /// or invalid provenance evidence when native acknowledgement witnesses change or vanish.
     pub fn validate_creation_update(&self, previous: &Self) -> Result<(), StoreError> {
         if self.creation != previous.creation {
             return Err(StoreError::InvalidCreationEvidence(
@@ -107,6 +119,59 @@ impl RuntimeRecord {
             ));
         }
         self.validate_creation()?;
+        previous.validate_native_presentations()?;
+        let old_presentations: Vec<_> = previous
+            .provenance_log
+            .iter()
+            .filter(|record| native_presentation_details(record).is_some())
+            .collect();
+        let retained_presentations: Vec<_> = self
+            .provenance_log
+            .iter()
+            .filter(|record| old_presentations.iter().any(|old| old.id == record.id))
+            .collect();
+        if old_presentations.len() != retained_presentations.len() {
+            return Err(invalid_presentation(
+                "native presentation evidence was erased or duplicated",
+            ));
+        }
+        for (old, incoming) in old_presentations.into_iter().zip(retained_presentations) {
+            validate_retained_provenance(old, incoming)?;
+        }
+        crate::integration_handlers::callback::validate_pending_update(self, previous)
+            .map_err(StoreError::InvalidIntegrationEvidence)?;
+        let mut retained_index = HashMap::new();
+        for incoming in &self.provenance_log {
+            let entry = retained_index
+                .entry(incoming.id.as_str())
+                .or_insert((incoming, 0usize));
+            entry.1 += 1;
+        }
+        for original in previous.provenance_log.iter().filter(|record| {
+            record.record_kind == wos_core::ProvenanceKind::CallbackPending
+                && record
+                    .data
+                    .as_ref()
+                    .and_then(|data| data.get("dispatchMode"))
+                    .and_then(serde_json::Value::as_str)
+                    == Some("deferred")
+        }) {
+            let (incoming, count) = retained_index.get(original.id.as_str()).ok_or_else(|| {
+                StoreError::InvalidIntegrationEvidence(
+                    "original deferred callback witness was erased".into(),
+                )
+            })?;
+            if *count != 1 {
+                return Err(StoreError::InvalidIntegrationEvidence(
+                    "original deferred callback witness is ambiguous".into(),
+                ));
+            }
+            validate_retained_provenance(original, incoming).map_err(|_| {
+                StoreError::InvalidIntegrationEvidence(
+                    "original deferred callback witness is immutable".into(),
+                )
+            })?;
+        }
         previous.validate_task_lifetimes()?;
         for old_task in &previous.process.active_tasks {
             if let Some(incoming) = self
@@ -225,6 +290,113 @@ impl RuntimeRecord {
             }
         }
         Ok(changes)
+    }
+
+    fn validate_native_presentations(&self) -> Result<(), StoreError> {
+        let mut ids = HashSet::new();
+        let mut intents = HashSet::new();
+        for record in &self.provenance_log {
+            let Some(details) = native_presentation_details(record) else {
+                continue;
+            };
+            let text = |name| details.get(name).and_then(serde_json::Value::as_str);
+            let intent = text("nativePresentationIntentId")
+                .ok_or_else(|| invalid_presentation("native presentation intent is missing"))?;
+            let digest = text("nativePresentationIntentDigest")
+                .ok_or_else(|| invalid_presentation("native presentation digest is missing"))?;
+            if record.record_kind != wos_core::ProvenanceKind::TaskPresented
+                || !stack_common_typeid::is_valid_type_id(
+                    &record.id,
+                    Some(stack_common_typeid::PROVENANCE_PREFIX),
+                )
+                || !ids.insert(&record.id)
+                || !intents.insert(intent)
+                || !native_presentation_hash(intent)
+                || !native_presentation_hash(digest)
+                || self
+                    .provenance_log
+                    .iter()
+                    .filter(|other| other.id == record.id)
+                    .count()
+                    != 1
+            {
+                return Err(invalid_presentation(
+                    "native presentation identity is invalid or ambiguous",
+                ));
+            }
+            let invocation: crate::runtime::NativePresentationInvocationOutcome =
+                serde_json::from_value(
+                    details
+                        .get("nativePresentationInvocation")
+                        .cloned()
+                        .ok_or_else(|| {
+                            invalid_presentation("native presentation invocation is missing")
+                        })?,
+                )
+                .map_err(|_| invalid_presentation("native presentation invocation is invalid"))?;
+            let crate::runtime::NativePresentationInvocationOutcome::Invoked {
+                attempt_id,
+                occurred_at,
+            } = invocation
+            else {
+                return Err(invalid_presentation(
+                    "unconfirmed invocation cannot claim TaskPresented",
+                ));
+            };
+            if attempt_id.trim().is_empty()
+                || occurred_at != record.timestamp
+                || time::OffsetDateTime::parse(
+                    &record.timestamp,
+                    &time::format_description::well_known::Rfc3339,
+                )
+                .is_err()
+            {
+                return Err(invalid_presentation(
+                    "native presentation attempt or timestamp is invalid",
+                ));
+            }
+            let witness_id = text("taskCreatedRecordId").ok_or_else(|| {
+                invalid_presentation("native presentation creation reference is missing")
+            })?;
+            let task_id = record
+                .data
+                .as_ref()
+                .and_then(|data| data.get("taskId"))
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| invalid_presentation("native presentation task is missing"))?;
+            let witnesses: Vec<_> = self
+                .provenance_log
+                .iter()
+                .filter(|candidate| {
+                    candidate.record_kind == wos_core::ProvenanceKind::TaskCreated
+                        && candidate
+                            .data
+                            .as_ref()
+                            .and_then(|data| data.get("taskId"))
+                            .and_then(serde_json::Value::as_str)
+                            == Some(task_id)
+                })
+                .collect();
+            if witnesses.len() != 1
+                || witnesses[0].id != witness_id
+                || !stack_common_typeid::is_valid_type_id(
+                    witness_id,
+                    Some(stack_common_typeid::PROVENANCE_PREFIX),
+                )
+            {
+                return Err(invalid_presentation(
+                    "native presentation creation witness is invalid or ambiguous",
+                ));
+            }
+            let parse_time = |value: &str| {
+                time::OffsetDateTime::parse(value, &time::format_description::well_known::Rfc3339)
+                    .map_err(|_| invalid_presentation("native presentation chronology is invalid"))
+            };
+            if parse_time(&record.timestamp)? < parse_time(&witnesses[0].timestamp)? {
+                return Err(invalid_presentation("presentation precedes task creation"));
+            }
+        }
+        Ok(())
     }
 
     fn validate_task_lifetimes(&self) -> Result<(), StoreError> {
@@ -769,6 +941,10 @@ pub enum StoreError {
     /// A retained provenance prefix or custody update is inconsistent.
     #[error("invalid provenance evidence: {0}")]
     InvalidProvenanceEvidence(String),
+
+    /// A retained deferred request/receipt association is corrupt or changed.
+    #[error("invalid integration evidence: {0}")]
+    InvalidIntegrationEvidence(String),
 
     /// Store-specific failure.
     #[error("runtime store failure: {0}")]
@@ -1439,6 +1615,31 @@ fn invalid_attribution(message: &str) -> StoreError {
     StoreError::InvalidCreationEvidence(message.into())
 }
 
+// Only the new native acknowledgement marker opts into these checks. Legacy
+// TaskPresented rows retain their existing format and are never relabeled.
+fn native_presentation_details(record: &ProvenanceRecord) -> Option<&serde_json::Value> {
+    let details = record.data.as_ref()?.get("details")?;
+    [
+        "nativePresentationIntentId",
+        "nativePresentationIntentDigest",
+        "nativePresentationInvocation",
+    ]
+    .iter()
+    .any(|key| details.get(*key).is_some())
+    .then_some(details)
+}
+fn native_presentation_hash(value: &str) -> bool {
+    value.strip_prefix("sha256:").is_some_and(|hash| {
+        hash.len() == 64
+            && hash
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    })
+}
+fn invalid_presentation(message: &str) -> StoreError {
+    StoreError::InvalidProvenanceEvidence(message.into())
+}
+
 fn validate_retained_provenance(
     old: &ProvenanceRecord,
     incoming: &ProvenanceRecord,
@@ -1805,6 +2006,8 @@ mod tests {
             volume_counters: None,
             fired_milestones: Default::default(),
             pending_callbacks: Default::default(),
+            pending_outbound_events: Default::default(),
+            next_deferred_callback_sequence: 0,
             created_at: "1970-01-01T00:00:00Z".to_string(),
             updated_at: "1970-01-01T00:00:00Z".to_string(),
             extensions: Default::default(),
