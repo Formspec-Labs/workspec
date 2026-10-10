@@ -870,6 +870,11 @@
           },
           "minLength": 1
         },
+        "absoluteDeadline": {
+          "type": "boolean",
+          "default": false,
+          "description": "True when startTimer supplied a fixed deadline. Preserved across restoration; business calendars do not recompute it."
+        },
         "event": {
           "type": "string",
           "minLength": 1,

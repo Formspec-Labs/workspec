@@ -289,17 +289,22 @@ pub struct TimerState {
     pub timer_id: String,
     /// Absolute deadline (ISO 8601).
     pub deadline: String,
+    /// Whether the original action supplied a fixed absolute deadline.
+    /// Preserved across restoration to exclude business-calendar adjustment.
+    #[serde(default)]
+    pub absolute_deadline: bool,
     /// Event to emit when fired.
     pub event: String,
     /// State that scoped this timer.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scope_state: Option<String>,
 
-    /// Original ISO 8601 duration string, if preserved by the runtime.
+    /// Duration string for tolerance reporting, if preserved by the runtime.
+    /// Absolute timers use the derived creation-to-deadline interval.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub duration_iso: Option<String>,
 
-    /// Original duration in milliseconds, if preserved by the runtime.
+    /// Duration in milliseconds for tolerance reporting, if preserved by the runtime.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub duration_ms: Option<u64>,
 

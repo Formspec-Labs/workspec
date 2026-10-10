@@ -967,6 +967,11 @@
             "openStringKind": "timestamp"
           }
         },
+        "absoluteDeadline": {
+          "type": "boolean",
+          "default": false,
+          "description": "True for a fixed authored deadline; business calendars preserve its instant across restoration."
+        },
         "event": {
           "type": "string",
           "minLength": 1,

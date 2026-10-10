@@ -10313,6 +10313,71 @@ mod tests {
         }
 
         #[test]
+        fn absolute_timer_preserves_calendar_deadline_and_task_expiry_after_restore() {
+            let mut selected = kernel(None, true);
+            let timer = &mut selected.lifecycle.states.get_mut("open").unwrap().on_entry[0];
+            timer.duration = None;
+            timer.deadline = Some("2026-01-03T00:00:00.230Z".into());
+            let calendar: BusinessCalendarDocument = serde_json::from_value(serde_json::json!({
+                "targetWorkflow":"urn:test:lifetime", "version":"1.0.0", "timezone":"UTC",
+                "workWeek":["monday","tuesday","wednesday","thursday","friday"]
+            }))
+            .unwrap();
+            let now = parse_timestamp("2026-01-02T23:59:59Z").unwrap();
+            let mut runtime =
+                runtime_with_kernel(selected.clone()).with_business_calendar(calendar.clone());
+            runtime.clock = Box::new(FixedClock { now_ms: now });
+            let id = stack_common_typeid::mint_process_id();
+            runtime
+                .create_process(CreateProcessRequest {
+                    process_id: id.clone(),
+                    tenant: None,
+                    definition_url: "urn:test:lifetime".into(),
+                    definition_version: "1.0.0".into(),
+                    initial_case_state: None,
+                })
+                .unwrap();
+            let record = runtime.store.load_record(&id).unwrap();
+            let expected = "2026-01-03T00:00:00.23Z";
+            assert_eq!(record.process.timers[0].deadline, expected);
+            assert!(record.process.timers[0].absolute_deadline);
+            assert_eq!(
+                record.process.active_tasks[0].expires_at.as_deref(),
+                Some(expected)
+            );
+            let roundtrip =
+                serde_json::from_value(serde_json::to_value(&record.process).unwrap()).unwrap();
+            let restored =
+                wos_core::Evaluator::from_instance(selected, &roundtrip, now + 500).unwrap();
+            let (states, errors) =
+                super::super::timers::timers_to_state(restored.timers(), Some(&calendar)).unwrap();
+            assert!(errors.is_empty());
+            assert_eq!(states[0].deadline, expected);
+            assert!(states[0].absolute_deadline);
+            let task = record.process.active_tasks[0].task_id.clone();
+            runtime
+                .persist_task_draft(
+                    &task,
+                    serde_json::json!({"status":"stopped"}),
+                    "reviewer",
+                    Some("before"),
+                )
+                .unwrap();
+            runtime.clock = Box::new(FixedClock {
+                now_ms: parse_timestamp(expected).unwrap(),
+            });
+            assert!(matches!(
+                runtime.persist_task_draft(
+                    &task,
+                    serde_json::json!({"status":"stopped"}),
+                    "reviewer",
+                    Some("after")
+                ),
+                Err(RuntimeError::TaskExpired(_))
+            ));
+        }
+
+        #[test]
         fn preexpiry_draft_replays_after_expiry_and_physical_retirement() {
             let (mut runtime, id) = create(kernel(None, true), 10_000);
             let task = runtime.load_process(&id).unwrap().active_tasks[0]
@@ -10715,6 +10780,7 @@ mod tests {
                 id: timer.timer_id.clone(),
                 created_at_ms: timer.created_at_ms.unwrap(),
                 deadline_ms: parse_timestamp(&timer.deadline).unwrap(),
+                absolute_deadline: timer.absolute_deadline,
                 fires_event: timer.event.clone(),
                 created_in_state: timer.scope_state.clone().unwrap_or_default(),
                 duration_iso: timer.duration_iso.clone().unwrap(),

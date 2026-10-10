@@ -96,13 +96,15 @@ pub(super) fn timer_to_state(
     calendar: Option<&BusinessCalendarDocument>,
 ) -> Result<(wos_core::instance::TimerState, bool), RuntimeError> {
     let (deadline_ms, had_convergence_error) = match calendar {
-        Some(cal) => business_deadline_ms(timer, cal)?,
+        Some(cal) if !timer.absolute_deadline => business_deadline_ms(timer, cal)?,
+        Some(_) => (timer.deadline_ms, false),
         None => (timer.deadline_ms, false),
     };
 
     let state = wos_core::instance::TimerState {
         timer_id: timer.id.clone(),
         deadline: format_timestamp(deadline_ms)?,
+        absolute_deadline: timer.absolute_deadline,
         event: timer.fires_event.clone(),
         scope_state: if timer.created_in_state.is_empty() {
             None

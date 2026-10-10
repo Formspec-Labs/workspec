@@ -27,16 +27,22 @@ pub struct Timer {
     /// Absolute deadline in simulated milliseconds.
     pub deadline_ms: u64,
 
+    /// True when the action supplied a fixed deadline rather than a duration.
+    /// Business calendars must preserve this deadline.
+    pub absolute_deadline: bool,
+
     /// Event to fire when the timer expires.
     pub fires_event: String,
 
     /// State that created this timer (for region scoping).
     pub created_in_state: String,
 
-    /// Original ISO 8601 duration string (for tolerance violation reporting).
+    /// ISO 8601 duration used for tolerance reporting.
+    /// Absolute timers store the derived nonnegative creation-to-deadline interval.
     pub duration_iso: String,
 
-    /// Duration in milliseconds (for tolerance tier calculation).
+    /// Duration in milliseconds for tolerance tier calculation.
+    /// Absolute timers use the derived nonnegative creation-to-deadline interval.
     pub duration_ms: u64,
 }
 

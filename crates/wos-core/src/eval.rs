@@ -210,7 +210,7 @@ pub enum EvalError {
     #[error("internal error: {0}")]
     Internal(String),
 
-    /// Anchored timer expression, duration, or timestamp validation failed.
+    /// Timer expression, duration, or timestamp validation failed.
     #[error("timer '{timer_id}': {message}")]
     Timer { timer_id: String, message: String },
 
@@ -325,6 +325,7 @@ impl Evaluator {
                 id: timer.timer_id.clone(),
                 created_at_ms,
                 deadline_ms,
+                absolute_deadline: timer.absolute_deadline,
                 fires_event: timer.event.clone(),
                 created_in_state: timer.scope_state.clone().unwrap_or_default(),
                 duration_iso: timer
@@ -1188,6 +1189,8 @@ impl Evaluator {
                 // Resolve and validate anchored input before replacing an existing timer.
                 let timing = if let Some(expression) = action.start_at_expression.as_deref() {
                     self.anchored_timer_timing(action, expression, event_data)?
+                } else if let Some(deadline) = action.deadline.as_deref() {
+                    self.absolute_timer_timing(action, deadline)?
                 } else {
                     // Preserve unanchored duration parsing and current-time behavior.
                     let duration_ms = parse_iso_duration_to_ms(duration).unwrap_or_else(|raw| {
@@ -1211,18 +1214,38 @@ impl Evaluator {
                     ));
                 }
 
+                let duration_iso = if action.deadline.is_some() {
+                    format!(
+                        "PT{}.{:03}S",
+                        timing.duration_ms / 1_000,
+                        timing.duration_ms % 1_000
+                    )
+                } else {
+                    duration.to_string()
+                };
                 self.timers.create(crate::timer::Timer {
                     id: timer_id.to_string(),
                     created_at_ms: timing.origin_ms,
                     deadline_ms: timing.deadline_ms,
+                    absolute_deadline: action.deadline.is_some(),
                     fires_event: fires_event.to_string(),
                     created_in_state: lifecycle_state.to_string(),
-                    duration_iso: duration.to_string(),
+                    duration_iso: duration_iso.clone(),
                     duration_ms: timing.duration_ms,
                 });
 
                 let mut created =
-                    ProvenanceRecord::timer_created(timer_id, duration, fires_event.as_str());
+                    ProvenanceRecord::timer_created(timer_id, &duration_iso, fires_event.as_str());
+                if let Some(deadline) = &action.deadline {
+                    if let Some(data) = created.data.as_mut().and_then(|data| data.as_object_mut())
+                    {
+                        data.remove("duration");
+                        data.insert(
+                            "deadline".into(),
+                            serde_json::Value::String(deadline.clone()),
+                        );
+                    }
+                }
                 if let Some(origin_at) = timing.origin_at {
                     if let Some(data) = created.data.as_mut().and_then(|data| data.as_object_mut())
                     {
@@ -1367,6 +1390,41 @@ impl Evaluator {
                     event,
                 ),
         }
+    }
+
+    /// Validate an absolute deadline before replacing a timer.
+    fn absolute_timer_timing(
+        &self,
+        action: &Action,
+        deadline: &str,
+    ) -> Result<TimerTiming, EvalError> {
+        let fail = |message: String| EvalError::Timer {
+            timer_id: action.timer_id.clone().unwrap_or_default(),
+            message,
+        };
+        if action.duration.is_some() {
+            return Err(fail("deadline excludes duration".into()));
+        }
+        if action
+            .timer_id
+            .as_deref()
+            .is_none_or(|id| id.trim().is_empty())
+            || action
+                .event
+                .as_ref()
+                .is_none_or(|event| event.start_timer_fires_string().trim().is_empty())
+        {
+            return Err(fail(
+                "absolute timer requires a nonblank timerId and firing event".into(),
+            ));
+        }
+        let deadline_ms = parse_rfc3339_to_ms(deadline).map_err(|error| fail(error.to_string()))?;
+        Ok(TimerTiming {
+            origin_ms: self.simulated_time_ms,
+            duration_ms: deadline_ms.saturating_sub(self.simulated_time_ms),
+            deadline_ms,
+            origin_at: None,
+        })
     }
 
     /// Validate an anchored duration without mutating timers or provenance.
@@ -2587,7 +2645,13 @@ fn parse_rfc3339_to_ms(value: &str) -> Result<u64, EvalError> {
     let parsed = OffsetDateTime::parse(value, &Rfc3339).map_err(|error| {
         EvalError::Internal(format!("invalid timer deadline '{value}': {error}"))
     })?;
-    let millis = parsed.unix_timestamp_nanos() / 1_000_000;
+    let nanos = parsed.unix_timestamp_nanos();
+    if nanos < 0 {
+        return Err(EvalError::Internal(format!(
+            "timer deadline '{value}' predates Unix epoch"
+        )));
+    }
+    let millis = nanos / 1_000_000;
     u64::try_from(millis).map_err(|_| {
         EvalError::Internal(format!(
             "timer deadline '{value}' predates Unix epoch and cannot be restored"

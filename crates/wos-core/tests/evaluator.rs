@@ -2456,3 +2456,129 @@ fn fel_and_decision_table_guards_agree_on_equivalent_predicates() {
         );
     }
 }
+
+#[test]
+fn absolute_timer_waits_until_declared_deadline() {
+    let timer: Action = serde_json::from_value(serde_json::json!({
+        "action": "startTimer", "timerId": "fixed",
+        "deadline": "1970-01-01T00:00:10Z",
+        "event": {"kind": "timer", "timerId": "fixed", "source": "state"}
+    }))
+    .unwrap();
+    let mut waiting = atomic(vec![transition("$timeout.state", "done")]);
+    waiting.on_entry.push(timer);
+    let states = IndexMap::from([("waiting".into(), waiting), ("done".into(), final_state())]);
+    let mut eval = Evaluator::with_time(minimal_kernel("waiting", states), 1_000).unwrap();
+    assert_eq!(eval.timers().iter().next().unwrap().deadline_ms, 10_000);
+    eval.advance_time(0, None).unwrap();
+    assert!(eval.configuration().contains("waiting"));
+    eval.advance_time(8_999, None).unwrap();
+    assert!(eval.configuration().contains("waiting"));
+    eval.advance_time(1, None).unwrap();
+    assert!(eval.configuration().contains("done"));
+}
+
+fn absolute_timer_kernel(deadline: &str) -> KernelDocument {
+    let timer: Action = serde_json::from_value(serde_json::json!({
+        "action":"startTimer", "timerId":"fixed", "deadline":deadline,
+        "event":{"kind":"timer","timerId":"fixed","source":"state"}
+    }))
+    .unwrap();
+    let mut waiting = atomic(vec![transition("$timeout.state", "done")]);
+    waiting.on_entry.push(timer);
+    minimal_kernel(
+        "waiting",
+        IndexMap::from([("waiting".into(), waiting), ("done".into(), final_state())]),
+    )
+}
+
+#[test]
+fn absolute_timer_accepts_offsets_fractional_and_past_deadlines() {
+    for (deadline, expected) in [
+        ("1970-01-01T01:00:10.230+01:00", 10_230),
+        ("1970-01-01T00:00:00.999Z", 999),
+    ] {
+        let mut eval = Evaluator::with_time(absolute_timer_kernel(deadline), 1_000).unwrap();
+        let timer = eval.timers().iter().next().unwrap();
+        assert_eq!(timer.deadline_ms, expected);
+        assert!(timer.absolute_deadline);
+        assert_eq!(timer.duration_ms, expected.saturating_sub(1_000));
+        let created = eval
+            .provenance()
+            .records()
+            .iter()
+            .find(|r| r.record_kind == ProvenanceKind::TimerCreated)
+            .unwrap();
+        assert_eq!(created.data.as_ref().unwrap()["deadline"], deadline);
+        assert!(created.data.as_ref().unwrap().get("duration").is_none());
+        eval.advance_time(0, None).unwrap();
+        assert_eq!(eval.configuration().contains("done"), expected <= 1_000);
+    }
+}
+
+#[test]
+fn absolute_timer_invalid_replacement_preserves_existing_timer() {
+    for invalid in [
+        serde_json::json!({"deadline":"invalid"}),
+        serde_json::json!({"deadline":"1969-12-31T23:59:59.999999Z"}),
+        serde_json::json!({"deadline":"1970-01-01T00:00:20Z", "duration":"PT1S"}),
+        serde_json::json!({"deadline":"1970-01-01T00:00:20Z", "startAtExpression":"event.at"}),
+    ] {
+        let mut kernel = absolute_timer_kernel("1970-01-01T00:00:10Z");
+        let mut value = serde_json::json!({"action":"startTimer", "timerId":"fixed", "event":{"kind":"timer","timerId":"fixed","source":"state"}});
+        value
+            .as_object_mut()
+            .unwrap()
+            .extend(invalid.as_object().unwrap().clone());
+        let mut reset = transition("reset", "waiting");
+        reset.actions.push(serde_json::from_value(value).unwrap());
+        kernel
+            .lifecycle
+            .states
+            .get_mut("waiting")
+            .unwrap()
+            .transitions
+            .push(reset);
+        let mut eval = Evaluator::with_time(kernel, 1_000).unwrap();
+        let before = serde_json::to_value(eval.provenance().records()).unwrap();
+        assert!(matches!(
+            eval.process_event("reset", None, None),
+            Err(wos_core::eval::EvalError::Timer { .. })
+        ));
+        assert_eq!(eval.timers().iter().next().unwrap().deadline_ms, 10_000);
+        assert_eq!(
+            serde_json::to_value(eval.provenance().records()).unwrap(),
+            before
+        );
+    }
+}
+
+#[test]
+fn absolute_timer_refuses_missing_identity_and_event() {
+    for field in ["timerId", "event"] {
+        for blank in [false, true] {
+            let mut value =
+                serde_json::to_value(absolute_timer_kernel("1970-01-01T00:00:10Z")).unwrap();
+            let action = &mut value["lifecycle"]["states"]["waiting"]["onEntry"][0];
+            if blank {
+                action[field] = serde_json::json!("");
+            } else {
+                action.as_object_mut().unwrap().remove(field);
+            }
+            let kernel = serde_json::from_value(value).unwrap();
+            assert!(matches!(
+                Evaluator::with_time(kernel, 1_000),
+                Err(wos_core::eval::EvalError::Timer { .. })
+            ));
+        }
+    }
+}
+
+#[test]
+fn timer_state_without_absolute_marker_retains_relative_mode() {
+    let state: wos_core::instance::TimerState = serde_json::from_value(serde_json::json!({
+        "timerId":"relative", "deadline":"1970-01-01T00:00:10Z", "event":"$timeout.relative"
+    }))
+    .unwrap();
+    assert!(!state.absolute_deadline);
+}

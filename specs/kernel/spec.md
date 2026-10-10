@@ -1774,6 +1774,8 @@ A `startTimer` action creates a durable timer with:
 
 When the timer fires, it emits the declared event as a kernel-generated event with the `$timeout.` prefix (Kernel S4.10). The event is processed by the lifecycle like any other event.
 
+**Absolute deadline.** A fixed `deadline` MUST be an RFC 3339 timestamp at or after the Unix epoch. The processor MUST reject invalid timestamps and simultaneous `duration` before replacing an existing timer. It retains the declared instant, at millisecond precision, including past deadlines that become due at the next normal timer-processing opportunity. Business calendars MUST NOT adjust fixed deadlines. The persisted `absoluteDeadline` marker preserves this distinction through restoration. For firing tolerance, the duration is the nonnegative interval from creation to deadline; an already-due timer has a zero interval. Timer-created provenance records the authored deadline instead of an authored duration.
+
 **Anchored duration — normative contract.** When `startAtExpression` is absent, a relative timer starts at the current logical time. When present, the processor MUST evaluate it in the normal FEL `caseFile`/`event` context and require an RFC 3339 timestamp string no later than the current logical time. This historical-anchor mode MUST reject missing, nonstring, malformed, pre-Unix-epoch, future, or out-of-range timestamps, invalid durations, and deadline arithmetic overflow. Validation MUST finish before cancelling or replacing a timer. The immutable duration origin is the evaluated timestamp; the deadline is that origin plus the declared duration. If processing occurs after the deadline, the timer MUST retain that deadline and become due at the next normal timer-processing opportunity.
 
 **Composition.** The host remains responsible for admitting the timestamp witness and its association with the current case and qualifying event. A case field or FEL expression alone does not establish notice delivery. For example, an admitted sent-notice receipt can supply `caseFile.photoRequestNotice.sentAt`, while the lifecycle separately gates entry on the qualifying receipt. Neither queue intent nor a client timestamp substitutes for that receipt. Existing calendar adjustment uses the immutable duration origin. Timer-created provenance records the actual processing time separately from the configured expression and evaluated origin.
@@ -1916,6 +1918,7 @@ A **WorkflowProcess** is the serialization format for a running workflow instanc
 | `timerId` | string | REQUIRED | Timer identifier, as declared in the `startTimer` action. |
 | `deadline` | string (datetime) | REQUIRED | Absolute deadline when this timer fires (ISO 8601). If the original action used a relative `duration`, the processor converts it to an absolute deadline at creation time. |
 | `event` | string | REQUIRED | Event to emit when the timer fires. |
+| `absoluteDeadline` | boolean | OPTIONAL | Whether the original action supplied a fixed deadline. Defaults to false; true excludes business-calendar recomputation after restoration. |
 | `scopeState` | string | OPTIONAL | The state or region that scoped this timer. Used for cancellation on region exit (Lifecycle Detail S6.5). |
 
 ### 11.2 Configuration Ordering
