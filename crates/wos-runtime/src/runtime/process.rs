@@ -126,7 +126,7 @@ impl WosRuntime {
         &mut self,
         request: CreateProcessRequest,
     ) -> Result<WorkflowProcess, RuntimeError> {
-        self.create_process_inner(request, None, None)
+        self.create_process_inner(request, None, None, None)
     }
 
     /// Create and persist a new workflow process bound to an existing case ledger.
@@ -139,7 +139,7 @@ impl WosRuntime {
         request: CreateProcessRequest,
         case_ledger_id: String,
     ) -> Result<WorkflowProcess, RuntimeError> {
-        self.create_process_inner(request, Some(case_ledger_id), None)
+        self.create_process_inner(request, Some(case_ledger_id), None, None)
     }
 
     /// Create a process with explicit host-resolved human assignments.
@@ -154,7 +154,7 @@ impl WosRuntime {
         request: CreateProcessRequest,
         bindings: Vec<wos_core::instance::HumanActorBinding>,
     ) -> Result<WorkflowProcess, RuntimeError> {
-        self.create_process_inner(request, None, Some(bindings))
+        self.create_process_inner(request, None, Some(bindings), None)
     }
 
     /// Create a case-bound process with explicit human assignments.
@@ -167,14 +167,15 @@ impl WosRuntime {
         case_ledger_id: String,
         bindings: Vec<wos_core::instance::HumanActorBinding>,
     ) -> Result<WorkflowProcess, RuntimeError> {
-        self.create_process_inner(request, Some(case_ledger_id), Some(bindings))
+        self.create_process_inner(request, Some(case_ledger_id), Some(bindings), None)
     }
 
-    fn create_process_inner(
+    pub(super) fn create_process_inner(
         &mut self,
         request: CreateProcessRequest,
         bound_case_ledger_id: Option<String>,
         actor_bindings: Option<Vec<wos_core::instance::HumanActorBinding>>,
+        initial_initiating_actor_id: Option<&str>,
     ) -> Result<WorkflowProcess, RuntimeError> {
         let now_ms = self.clock.now_ms();
         let now_iso = format_timestamp(now_ms)?;
@@ -276,16 +277,20 @@ impl WosRuntime {
         let kernel = self
             .resolver
             .resolve_kernel(&definition_url, &definition_version)?;
+        // The immutable selected workflow fixes every task form's own version,
+        // including tasks created by later transitions.
+        super::actions::validate_task_contract_pins(&kernel)?;
         super::actor_bindings::validate_binding_definition(
             actor_bindings.as_deref(),
             &kernel,
             &definition_url,
             &definition_version,
         )?;
-        let mut evaluator = Evaluator::with_time_and_case_state(
+        let mut evaluator = Evaluator::with_time_and_case_state_and_actor(
             kernel.clone(),
             now_ms,
             initial_case_state.as_ref(),
+            initial_initiating_actor_id,
         )
         .map_err(|error| RuntimeError::Evaluator(error.to_string()))?;
 
@@ -432,6 +437,11 @@ impl WosRuntime {
         process_id: &str,
         mut event: PendingEvent,
     ) -> Result<(), RuntimeError> {
+        if event.origin.is_some() {
+            return Err(RuntimeError::UnsupportedAction(
+                "external enqueue cannot supply native event origin".into(),
+            ));
+        }
         let mut record = self.store.load_record(process_id)?;
         if event.timestamp.is_empty() {
             event.timestamp = format_timestamp(self.clock.now_ms())?;
@@ -549,6 +559,8 @@ impl WosRuntime {
         let target_kernel = self
             .resolver
             .resolve_kernel(&url, target_definition_version)?;
+        super::actions::validate_task_contract_pins(&target_kernel)
+            .map_err(|error| RuntimeError::MigrationRejected(error.to_string()))?;
         validate_migration_configuration(&target_kernel, &record.process.configuration)
             .map_err(|e| RuntimeError::MigrationRejected(e.to_string()))?;
 

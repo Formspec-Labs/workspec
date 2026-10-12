@@ -534,6 +534,7 @@ impl WorkflowEngine {
             .enqueue_event(
                 CONFORMANCE_INSTANCE_ID,
                 PendingEvent {
+                    origin: None,
                     event: event_name.to_string(),
                     actor_id: actor_id.map(str::to_string),
                     data: data.cloned(),

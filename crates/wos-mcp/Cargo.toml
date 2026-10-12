@@ -33,5 +33,6 @@ clap = { version = "4", features = ["derive"] }
 uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
+jsonschema = "0.46"
 tempfile = "3"
 tokio = { version = "1", features = ["io-std", "macros", "rt-multi-thread", "process"] }

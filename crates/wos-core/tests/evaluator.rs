@@ -2582,3 +2582,78 @@ fn timer_state_without_absolute_marker_retains_relative_mode() {
     .unwrap();
     assert!(!state.absolute_deadline);
 }
+
+/// Each supported body transition owns transition, exit and target entry emissions.
+#[test]
+fn foreach_compound_body_emissions_retain_each_actual_transition() {
+    for initial_entry in [false, true] {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosWorkflow":"1.0", "url":"urn:test:body-origin", "version":"1.0.0",
+            "actors":[{"id":"worker","type":"human"}],
+            "lifecycle":{"initialState":if initial_entry {"iteration"} else {"ready"}, "states":{
+                "ready":{"type":"atomic","transitions":[{"event":"go","target":"iteration"}]},
+                "iteration":{"type":"foreach","collection":"[1, 2]","body":{
+                    "type":"compound","initialState":"first","states":{
+                        "first":{"type":"atomic","transitions":[{"target":"last","tags":["determination"],
+                            "actions":[{"action":"emitEvent","eventType":"body.transition"}]}],
+                            "onExit":[{"action":"emitEvent","eventType":"body.exit"}]},
+                        "last":{"type":"final","onEntry":[{"action":"emitEvent","eventType":"body.entry"}]}
+                    }
+                },"transitions":[{"target":"done"}]},
+                "done":{"type":"final"}
+            }}
+        })).unwrap();
+        let mut evaluator =
+            Evaluator::with_time_and_case_state_and_actor(kernel, 42, None, Some("worker"))
+                .unwrap();
+        if !initial_entry {
+            evaluator.process_event("go", Some("worker"), None).unwrap();
+        }
+        let emitted: Vec<_> = evaluator
+            .executed_actions()
+            .iter()
+            .filter(|action| action.action.action == ActionKind::EmitEvent)
+            .collect();
+        assert_eq!(emitted.len(), 6);
+        let mut iterations = Vec::new();
+        for actions in emitted.chunks_exact(3) {
+            for (action, event) in
+                actions
+                    .iter()
+                    .zip(["body.transition", "body.exit", "body.entry"])
+            {
+                assert_eq!(action.action.event_type.as_deref(), Some(event));
+                assert_eq!(action.transition_record_id, actions[0].transition_record_id);
+            }
+            let origin = actions[0]
+                .transition_record_id
+                .as_ref()
+                .expect("actual body transition");
+            let transition = evaluator
+                .provenance()
+                .records()
+                .iter()
+                .find(|record| &record.id == origin)
+                .unwrap();
+            assert_eq!(
+                transition.from_state.as_deref(),
+                Some("iteration:body:first")
+            );
+            assert_eq!(transition.to_state.as_deref(), Some("iteration:body:last"));
+            assert_eq!(transition.actor_id.as_deref(), Some("worker"));
+            assert_eq!(
+                transition.data.as_ref().unwrap()["transitionEvent"],
+                "$bodyAuto"
+            );
+            assert!(
+                transition
+                    .transition_tags
+                    .iter()
+                    .any(|tag| tag == "determination")
+            );
+            assert!(transition.case_file_snapshot.is_some());
+            iterations.push(origin);
+        }
+        assert_ne!(iterations[0], iterations[1]);
+    }
+}

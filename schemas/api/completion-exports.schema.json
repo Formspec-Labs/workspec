@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "CompletionExportRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "processId"
+      ],
+      "properties": {
+        "processId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ProcessPathId",
+          "description": "Actual workflow process selected by full process URN or bare process TypeID."
+        }
+      },
+      "title": "CompletionExportRequest",
+      "description": "One actual workflow process selector for a completion request; current human credentials and retry identity remain transport inputs."
+    },
+    "CompletionExportResult": {
+      "oneOf": [
+        {
+          "properties": {
+            "status": {
+              "const": "pending",
+              "description": "Closed retained completion state: pending or ready."
+            },
+            "processId": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ProcessPathId/oneOf/0",
+              "description": "Canonical full URN of the actual workflow process."
+            },
+            "requestId": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{32}$",
+              "description": "Retained request identity as 32 lowercase hexadecimal characters."
+            },
+            "checkpointRef": {
+              "type": "null",
+              "description": "Retained checkpoint reference when ready; null while pending."
+            }
+          },
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "processId",
+            "requestId",
+            "checkpointRef"
+          ]
+        },
+        {
+          "properties": {
+            "status": {
+              "const": "ready",
+              "description": "Closed retained completion state: pending or ready."
+            },
+            "processId": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ProcessPathId/oneOf/0",
+              "description": "Canonical full URN of the actual workflow process."
+            },
+            "requestId": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{32}$",
+              "description": "Retained request identity as 32 lowercase hexadecimal characters."
+            },
+            "checkpointRef": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Retained checkpoint reference when ready; null while pending.",
+              "x-wos": {
+                "openStringKind": "opaque-token"
+              }
+            }
+          },
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "processId",
+            "requestId",
+            "checkpointRef"
+          ]
+        }
+      ],
+      "title": "CompletionExportResult",
+      "description": "Exact retained completion request state under current caller authority. POST succeeds only when ready; status reads may return pending."
+    }
+  },
+  "description": "Resolve wos-common to the owning work-spec/schemas/api/_common.schema.json. POST succeeds with ready and HTTP 200. GET status may return pending. Human credentials and Idempotency-Key are transport-only.",
+  "$id": "https://schemas.formspec.io/wos-api/completion-exports/v1",
+  "title": "WOS API Browser Completion Exports",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/CompletionExportRequest"
+    },
+    {
+      "$ref": "#/$defs/CompletionExportResult"
+    }
+  ]
+}

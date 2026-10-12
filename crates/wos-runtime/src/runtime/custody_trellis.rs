@@ -7,16 +7,17 @@
 //! through the same trait, while the append itself is delegated to the shared
 //! Trellis substrate client.
 
+use async_trait::async_trait;
 use stack_common_http::tenant::TenantScope;
 use trellis_service_client::{
-    AppendActor, ComputeContext, SubstrateAppendResult, SubstrateClient, SubstrateClientExt,
-    WosProvenanceAppend,
+    AppendActor, ComputeContext, SubstrateAppendRequest, SubstrateAppendResult, SubstrateClient,
+    wos_provenance_append_request,
 };
 use trellis_types::ArtifactType;
-use wos_events::ProvenanceRecord;
 use wos_events::custody::{
     CustodyAppendContext, CustodyAppendError, CustodyAppendInput, CustodyAppendReceipt,
 };
+use wos_events::{NativeProvenanceEvent, ProvenanceRecord, WOS_NATIVE_PROVENANCE_EVENT_LITERAL};
 
 use crate::DurableRuntime;
 use crate::runtime::RuntimeError;
@@ -33,6 +34,7 @@ pub struct TrellisCustodyAppender<'a> {
     tenant_scope: TenantScope,
     actor: AppendActor,
     compute_context: ComputeContext,
+    ledger_scope: Option<String>,
 }
 
 impl<'a> TrellisCustodyAppender<'a> {
@@ -49,7 +51,99 @@ impl<'a> TrellisCustodyAppender<'a> {
             tenant_scope,
             actor,
             compute_context,
+            ledger_scope: None,
         }
+    }
+
+    /// Creates an appender with independently selected immutable ledger routing.
+    ///
+    /// The host must qualify this namespace from original protected evidence.
+    /// Native case identity and stable append keys remain unchanged.
+    ///
+    /// # Errors
+    /// Refuses blank routing, NUL or a namespace containing a slash.
+    pub fn new_for_ledger_scope(
+        client: &'a dyn SubstrateClient,
+        tenant_scope: TenantScope,
+        actor: AppendActor,
+        compute_context: ComputeContext,
+        ledger_scope: String,
+    ) -> Result<Self, RuntimeError> {
+        // Match the client's documented single-segment scope rule. The actual
+        // request constructor revalidates routing before any network call.
+        if ledger_scope.trim().is_empty()
+            || ledger_scope.contains('/')
+            || ledger_scope.contains('\0')
+        {
+            return Err(RuntimeError::Service(
+                "custody ledger scope must be a nonblank single segment".into(),
+            ));
+        }
+        let mut appender = Self::new(client, tenant_scope, actor, compute_context);
+        appender.ledger_scope = Some(ledger_scope);
+        Ok(appender)
+    }
+
+    /// Appends custody records with current admission and owner persistence.
+    ///
+    /// Requires independently selected routing. The handler commits the complete
+    /// verified association and native hash atomically; this method never calls
+    /// the legacy hash-only stamp. It stops on the first error and never resends.
+    ///
+    /// # Errors
+    /// Retains actual verified results when post-append admission or persistence
+    /// fails. A persistence error may follow a committed transaction; callers
+    /// must qualify current authorized readback before deciding recovery.
+    pub async fn append_window_with_handler<R>(
+        &self,
+        runtime: &mut R,
+        handler: &dyn TrellisCustodyAppendHandler,
+        process_id: &str,
+        cursor: usize,
+        limit: usize,
+        context: CustodyAppendContext,
+    ) -> Result<Vec<TrellisCustodyAppendOutcome>, TrellisCustodyAppendFailure>
+    where
+        R: DurableRuntime + ?Sized,
+    {
+        let scope = self.ledger_scope.as_deref().ok_or_else(|| {
+            TrellisCustodyAppendFailure::new(
+                TrellisCustodyAppendStage::BeforeAppend,
+                RuntimeError::Service(
+                    "custody handler requires independently selected ledger scope".into(),
+                ),
+            )
+        })?;
+        let inputs = runtime
+            .load_custody_append_window(process_id, cursor, limit, context)
+            .map_err(|error| {
+                TrellisCustodyAppendFailure::new(TrellisCustodyAppendStage::BeforeAppend, error)
+            })?;
+        let mut persisted = Vec::with_capacity(inputs.len());
+        for input in inputs {
+            let appended = match self
+                .append_input_admitted(input, scope, Some(handler))
+                .await
+            {
+                Ok(value) => value,
+                Err(mut failure) => {
+                    failure.persisted_outcomes = persisted;
+                    return Err(failure);
+                }
+            };
+            if let Some((outcome, _receipt)) = appended {
+                if let Err(error) = handler.persist_verified(&outcome, scope).await {
+                    return Err(TrellisCustodyAppendFailure {
+                        stage: TrellisCustodyAppendStage::Persistence,
+                        error,
+                        verified_outcome: Some(outcome),
+                        persisted_outcomes: persisted,
+                    });
+                }
+                persisted.push(outcome);
+            }
+        }
+        Ok(persisted)
     }
 
     /// Appends and stamps one durable custody window.
@@ -89,47 +183,217 @@ impl<'a> TrellisCustodyAppender<'a> {
         &self,
         input: CustodyAppendInput,
     ) -> Result<Option<(TrellisCustodyAppendOutcome, CustodyAppendReceipt)>, RuntimeError> {
-        let record = provenance_record_from_input(&input)?;
-        validate_input_record_metadata(&input, &record)?;
-        if let Some(canonical_event_hash) = record.canonical_event_hash.as_deref() {
-            if canonical_event_hash.trim().is_empty() {
-                return Err(RuntimeError::Service(format!(
-                    "custody record {} already carries an empty canonical_event_hash",
-                    input.record_id
-                )));
-            }
-            return Ok(None);
-        }
-        let result = self
-            .client
-            .append_wos_provenance(WosProvenanceAppend {
-                scope: input.case_id.clone(),
-                tenant_scope: self.tenant_scope.clone(),
-                idempotency_key: trellis_idempotency_key(&input),
-                actor: self.actor.clone(),
-                record,
-                compute_context: self.compute_context.clone(),
-            })
+        let scope = self
+            .ledger_scope
+            .as_deref()
+            .unwrap_or(&input.case_id)
+            .to_owned();
+        self.append_input_admitted(input, &scope, None)
             .await
-            .map_err(|error| {
+            .map_err(|failure| failure.error)
+    }
+
+    async fn append_input_admitted(
+        &self,
+        input: CustodyAppendInput,
+        ledger_scope: &str,
+        handler: Option<&dyn TrellisCustodyAppendHandler>,
+    ) -> Result<
+        Option<(TrellisCustodyAppendOutcome, CustodyAppendReceipt)>,
+        TrellisCustodyAppendFailure,
+    > {
+        let request = self.prepare_input(&input, ledger_scope).map_err(|error| {
+            TrellisCustodyAppendFailure::new(TrellisCustodyAppendStage::BeforeAppend, error)
+        })?;
+        let Some(request) = request else {
+            return Ok(None);
+        };
+        if let Some(handler) = handler {
+            handler
+                .authorize_before_append(&input, ledger_scope)
+                .await
+                .map_err(|error| {
+                    TrellisCustodyAppendFailure::new(TrellisCustodyAppendStage::BeforeAppend, error)
+                })?;
+        }
+        let result = self.client.append_event(request).await.map_err(|error| {
+            TrellisCustodyAppendFailure::new(
+                TrellisCustodyAppendStage::Append,
                 RuntimeError::Service(format!(
                     "trellis custody append failed for record {}: {error}",
                     input.record_id
-                ))
+                )),
+            )
+        })?;
+        validate_trellis_result_for_scope(&input, &result, ledger_scope, handler.is_some())
+            .map_err(|error| {
+                TrellisCustodyAppendFailure::new(TrellisCustodyAppendStage::ResultValidation, error)
             })?;
-        validate_trellis_result(&input, &result)?;
         let receipt = CustodyAppendReceipt::new(result.canonical_event_hash.clone());
-        Ok(Some((
-            TrellisCustodyAppendOutcome::from_result(input, result),
-            receipt,
-        )))
+        let outcome = TrellisCustodyAppendOutcome::from_result(input.clone(), result);
+        if let Some(handler) = handler {
+            if let Err(error) = handler
+                .authorize_after_append(&input, &outcome, ledger_scope)
+                .await
+            {
+                return Err(TrellisCustodyAppendFailure {
+                    stage: TrellisCustodyAppendStage::AfterAppendAdmission,
+                    error,
+                    verified_outcome: Some(outcome),
+                    persisted_outcomes: Vec::new(),
+                });
+            }
+        }
+        Ok(Some((outcome, receipt)))
+    }
+
+    fn prepare_input(
+        &self,
+        input: &CustodyAppendInput,
+        ledger_scope: &str,
+    ) -> Result<Option<SubstrateAppendRequest>, RuntimeError> {
+        if input.case_id.contains('\0') || input.record_id.contains('\0') {
+            return Err(RuntimeError::Service(
+                "custody case and record identifiers must not contain NUL".to_string(),
+            ));
+        }
+        let request = if input.event_type == WOS_NATIVE_PROVENANCE_EVENT_LITERAL {
+            // Validate original authored bytes before an inspection or typed
+            // deserializer can collapse keys, interpret tags or drop fields.
+            let native = NativeProvenanceEvent::from_record_dcbor_slice(input.record_bytes())
+                .map_err(|error| {
+                    RuntimeError::Service(format!("native custody record refused: {error}"))
+                })?;
+            if native.record_id() != input.record_id {
+                return Err(RuntimeError::Service(format!(
+                    "custody input recordId {} does not match payload record id {}",
+                    input.record_id,
+                    native.record_id()
+                )));
+            }
+            if custody_record_is_stamped(
+                input,
+                native
+                    .record()
+                    .get("canonicalEventHash")
+                    .and_then(serde_json::Value::as_str),
+            )? {
+                return Ok(None);
+            }
+            SubstrateAppendRequest::new_json(
+                ledger_scope,
+                self.tenant_scope.clone(),
+                input.event_type.clone(),
+                trellis_idempotency_key(input),
+                self.actor.clone(),
+                native.payload().clone(),
+                self.compute_context.clone(),
+            )
+        } else {
+            let record = provenance_record_from_input(input)?;
+            validate_input_record_metadata(input, &record)?;
+            if custody_record_is_stamped(input, record.canonical_event_hash.as_deref())? {
+                return Ok(None);
+            }
+            wos_provenance_append_request(
+                ledger_scope,
+                self.tenant_scope.clone(),
+                trellis_idempotency_key(input),
+                self.actor.clone(),
+                record,
+                self.compute_context.clone(),
+            )
+        }
+        .map_err(|error| RuntimeError::Service(format!("custody request refused: {error}")))?;
+        Ok(Some(request))
+    }
+}
+
+/// Current authority and atomic persistence supplied by the owning host.
+///
+/// Implementations retain original identities and recheck current permission
+/// inside persistence after their awaits. Multi-record handlers advance their
+/// protected expected row only through exact confirmed custody changes.
+#[async_trait]
+pub trait TrellisCustodyAppendHandler: Send + Sync {
+    /// Checks original callers and routing immediately before the network append.
+    ///
+    /// # Errors
+    /// Refusal prevents the append.
+    async fn authorize_before_append(
+        &self,
+        input: &CustodyAppendInput,
+        ledger_scope: &str,
+    ) -> Result<(), RuntimeError>;
+
+    /// Rechecks current permission after actual append and result validation.
+    ///
+    /// # Errors
+    /// Refusal prevents owner persistence and retains the verified append result.
+    async fn authorize_after_append(
+        &self,
+        input: &CustodyAppendInput,
+        outcome: &TrellisCustodyAppendOutcome,
+        ledger_scope: &str,
+    ) -> Result<(), RuntimeError>;
+
+    /// Atomically persists the complete verified association and native stamp.
+    ///
+    /// # Errors
+    /// May refuse before or after commit. An error does not prove no local stamp;
+    /// the owner must qualify readback without automatic append recovery.
+    async fn persist_verified(
+        &self,
+        outcome: &TrellisCustodyAppendOutcome,
+        ledger_scope: &str,
+    ) -> Result<(), RuntimeError>;
+}
+
+/// Last boundary reached by a refused custody append window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrellisCustodyAppendStage {
+    /// Input, routing, window loading or pre-append authority was refused.
+    BeforeAppend,
+    /// Network append failed; external append status can be unknown.
+    Append,
+    /// Actual append returned a result that did not qualify as verified.
+    ResultValidation,
+    /// Verified append exists, but post-append permission was refused.
+    AfterAppendAdmission,
+    /// Owner persistence failed and may already have committed.
+    Persistence,
+}
+
+/// Custody failure retaining observed effects without granting authority.
+#[derive(Debug, thiserror::Error)]
+#[error("custody append failed at {stage:?}: {error}")]
+pub struct TrellisCustodyAppendFailure {
+    /// Last boundary reached; Persistence does not establish rollback.
+    pub stage: TrellisCustodyAppendStage,
+    /// Original refusal or service error.
+    #[source]
+    pub error: RuntimeError,
+    /// Actual verified result when admission or persistence failed after append.
+    pub verified_outcome: Option<TrellisCustodyAppendOutcome>,
+    /// Earlier outcomes confirmed persisted by successful handler calls.
+    pub persisted_outcomes: Vec<TrellisCustodyAppendOutcome>,
+}
+
+impl TrellisCustodyAppendFailure {
+    fn new(stage: TrellisCustodyAppendStage, error: RuntimeError) -> Self {
+        Self {
+            stage,
+            error,
+            verified_outcome: None,
+            persisted_outcomes: Vec::new(),
+        }
     }
 }
 
 /// Trellis append result projected for WOS runtime callers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TrellisCustodyAppendOutcome {
-    /// WOS case ledger scope used for the Trellis append.
+    /// Original native WOS case ledger identity, independent of URL routing.
     pub case_id: String,
     /// WOS provenance record identifier stamped by the receipt.
     pub record_id: String,
@@ -137,7 +401,7 @@ pub struct TrellisCustodyAppendOutcome {
     pub event_type: String,
     /// Trellis event identifier.
     pub event_id: String,
-    /// Trellis sequence assigned within the case scope.
+    /// Trellis sequence assigned within the selected ledger namespace.
     pub sequence: u64,
     /// Trellis canonical event hash text.
     pub canonical_event_hash: String,
@@ -173,6 +437,20 @@ fn provenance_record_from_input(
     })
 }
 
+fn custody_record_is_stamped(
+    input: &CustodyAppendInput,
+    canonical_event_hash: Option<&str>,
+) -> Result<bool, RuntimeError> {
+    match canonical_event_hash {
+        Some(hash) if hash.trim().is_empty() => Err(RuntimeError::Service(format!(
+            "custody record {} already carries an empty canonical_event_hash",
+            input.record_id
+        ))),
+        Some(_) => Ok(true),
+        None => Ok(false),
+    }
+}
+
 fn validate_input_record_metadata(
     input: &CustodyAppendInput,
     record: &ProvenanceRecord,
@@ -206,15 +484,20 @@ fn validate_input_record_metadata(
 }
 
 fn trellis_idempotency_key(input: &CustodyAppendInput) -> String {
-    format!(
-        "{IDEMPOTENCY_KEY_PREFIX}:{}:{}",
-        input.case_id, input.record_id
-    )
+    // Trellis Core §17.2 permits at most 64 wire bytes. Hash the stable
+    // domain/case/record tuple; retain original identities in the event payload.
+    stack_common_hash::sha256_nul_separated_parts(&[
+        IDEMPOTENCY_KEY_PREFIX,
+        &input.case_id,
+        &input.record_id,
+    ])
 }
 
-fn validate_trellis_result(
+fn validate_trellis_result_for_scope(
     input: &CustodyAppendInput,
     result: &SubstrateAppendResult,
+    ledger_scope: &str,
+    require_checkpoint_suffix: bool,
 ) -> Result<(), RuntimeError> {
     if !is_sha256_hash_text(&result.canonical_event_hash) {
         return Err(RuntimeError::Service(format!(
@@ -228,11 +511,13 @@ fn validate_trellis_result(
             input.record_id
         )));
     }
-    let checkpoint_prefix = format!("trellis://{}/checkpoints/", input.case_id);
-    if !result.checkpoint_ref.starts_with(&checkpoint_prefix) {
+    let checkpoint_prefix = format!("trellis://{ledger_scope}/checkpoints/");
+    if !result.checkpoint_ref.starts_with(&checkpoint_prefix)
+        || (require_checkpoint_suffix && result.checkpoint_ref.len() == checkpoint_prefix.len())
+    {
         return Err(RuntimeError::Service(format!(
-            "trellis custody append checkpoint_ref is outside case scope {} for record {}",
-            input.case_id, input.record_id
+            "trellis custody append checkpoint_ref is outside requested scope {} for record {}",
+            ledger_scope, input.record_id
         )));
     }
     if result.bundle_ref.trim().is_empty() {
@@ -288,6 +573,35 @@ mod tests {
         TaskSubmissionResult,
     };
 
+    #[test]
+    fn native_custody_key_is_bounded_stable_and_separates_case_and_record() {
+        let case_id = typeid::mint_case_ledger_id();
+        let record = ProvenanceRecord::state_transition("open", "closed", "close", Some("actor"));
+        let context = CustodyAppendContext {
+            event_type_prefix: "wos.kernel".into(),
+            case_id: Some(case_id.clone()),
+            max_inline_record_bytes: None,
+            workflow_ref: Some("urn:test:custody-key".into()),
+        };
+        let metadata = context
+            .metadata_for_provenance_record(&case_id, 0, &record)
+            .unwrap();
+        let input =
+            CustodyAppendInput::from_provenance_record(&record, &context, metadata).unwrap();
+        let key = trellis_idempotency_key(&input);
+        assert!(trellis_types::idempotency_key_length_in_bound(
+            key.as_bytes()
+        ));
+        assert_eq!(key.len(), 64);
+        assert_eq!(trellis_idempotency_key(&input), key);
+        let mut other_case = input.clone();
+        other_case.case_id = typeid::mint_case_ledger_id();
+        assert_ne!(trellis_idempotency_key(&other_case), key);
+        let mut other_record = input.clone();
+        other_record.record_id = typeid::mint_provenance_id();
+        assert_ne!(trellis_idempotency_key(&other_record), key);
+    }
+
     #[tokio::test]
     async fn append_window_delegates_to_trellis_and_stamps_receipt() {
         let case_id = typeid::mint_case_ledger_id();
@@ -333,11 +647,15 @@ mod tests {
         assert_eq!(requests[0].scope, outcomes[0].case_id);
         assert_eq!(
             requests[0].idempotency_key,
-            format!(
-                "{IDEMPOTENCY_KEY_PREFIX}:{}:{}",
-                outcomes[0].case_id, outcomes[0].record_id
-            )
+            stack_common_hash::sha256_nul_separated_parts(&[
+                IDEMPOTENCY_KEY_PREFIX,
+                &outcomes[0].case_id,
+                &outcomes[0].record_id,
+            ])
         );
+        assert!(trellis_types::idempotency_key_length_in_bound(
+            requests[0].idempotency_key.as_bytes()
+        ));
         assert_eq!(requests[0].tenant_scope.tenant, "tenant-one");
         assert_eq!(requests[0].event_type, "wos.kernel.state_transition");
         let applied = runtime.applied.lock().expect("applied");
@@ -386,6 +704,32 @@ mod tests {
         assert!(outcomes.is_empty());
         assert!(client.requests.lock().expect("requests").is_empty());
         assert!(runtime.applied.lock().expect("applied").is_empty());
+    }
+
+    #[tokio::test]
+    async fn append_window_rejects_nul_identifiers_before_trellis_call() {
+        for nul_in_case in [true, false] {
+            let context = test_context(typeid::mint_case_ledger_id());
+            let mut input = test_input(&context);
+            if nul_in_case {
+                input.case_id.push('\0');
+            } else {
+                input.record_id.push('\0');
+            }
+            let client = RecordingSubstrateClient::default();
+            let mut runtime = RecordingDurableRuntime::new(input);
+            let appender = test_appender(&client);
+
+            let err = appender
+                .append_window(&mut runtime, "process-1", 0, 25, context)
+                .await
+                .expect_err("NUL identifiers must fail");
+
+            assert!(matches!(err, RuntimeError::Service(message)
+                if message == "custody case and record identifiers must not contain NUL"));
+            assert!(client.requests.lock().expect("requests").is_empty());
+            assert!(runtime.applied.lock().expect("applied").is_empty());
+        }
     }
 
     #[tokio::test]
@@ -488,6 +832,8 @@ mod tests {
         assert_eq!(client.requests.lock().expect("requests").len(), 1);
         assert!(runtime.applied.lock().expect("applied").is_empty());
     }
+
+    include!("custody_admission_tests.rs");
 
     const TEST_HASH: &str =
         "sha256:9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c";

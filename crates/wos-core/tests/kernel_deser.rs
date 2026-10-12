@@ -158,7 +158,13 @@ fn contract_reference_typed() {
     let contract = &doc.contracts["myForm"];
     assert_eq!(contract.binding, "formspec");
     assert_eq!(contract.reference, "urn:formspec:test:1.0");
-    assert_eq!(contract.description.as_deref(), Some("Test contract"));
+    assert_eq!(
+        contract
+            .description
+            .as_ref()
+            .and_then(serde_json::Value::as_str),
+        Some("Test contract")
+    );
     assert_eq!(
         contract.prefill_mapping_ref.as_deref(),
         Some("urn:formspec:test-prefill:1.0")

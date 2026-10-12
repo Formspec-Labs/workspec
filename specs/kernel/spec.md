@@ -934,6 +934,10 @@ Every persisted or exported provenance record MUST include:
 
 `wos-provenance-log.schema.json` validates the persisted/exported shape above, not unstamped in-memory constructors. Runtime append paths MUST populate the required export fields before persistence; helper constructors in `wos-core` MAY leave those fields empty until the runtime stamps them.
 
+For processor-evaluated lifecycle control actions, `actorId` identifies the admitted principal initiating that evaluation when the processor knows one. This attribution identifies the principal responsible for requesting the control action; it MUST NOT be interpreted as identifying the machine or remote service executing an external effect. Initial evaluation MAY receive an explicit admitted initiating principal from the accepted intake. Processors MUST preserve that exact optional identity through initial actions and events emitted by those actions. Existing anonymous constructors remain valid and MUST NOT invent a system actor. Initial evaluation MUST NOT fabricate a triggering event or event payload to carry this identity.
+
+An external-service result MUST identify its actual performer only when that identity is known; the processor MUST NOT silently substitute the initiating principal as the remote performer. Attaching intake to an existing process, replaying a retained intake, or recovering an existing process MUST NOT reattribute its original records. The retained intake input and original process creation association supply the initialization cause; processing timestamps remain distinct from intake acceptance and event-submission times.
+
 #### 8.2.1 Snapshot Semantics
 
 When a transition tagged `determination` fires, the processor MUST copy the transition's semantic tags into `transitionTags` on the Facts-tier state-transition record and capture the current case-file state in `caseFileSnapshot` immediately before any transition action or post-transition action mutates the case file. The snapshot records the facts the determination was made from, not the values produced by the determination.
@@ -2103,6 +2107,8 @@ A Formspec task has one completion bundle: one task, one pinned Formspec Definit
 
 When a Formspec-backed `createTask` action executes, the processor resolves the ContractReference and creates an ActiveTask entry in WorkflowProcess `activeTasks`.
 
+A task's Formspec ContractReference MUST declare `definitionVersion`, the exact version of the Definition named by `ref`. This form version is independent of the Kernel Document version. The process-selected immutable Kernel Document fixes each task contract's form pin at instance creation, including tasks created later. A processor MUST reject missing or blank task form pins before task allocation or presentation, and MUST copy the selected contract's exact URL and form version into ActiveTask and FormspecTaskContext. It MUST NOT infer a form version from the workflow version, a URI suffix, or a submitted Response. Existing archived task pins remain as recorded; this rule does not silently rewrite historical tasks.
+
 The processor then constructs a FormspecTaskContext:
 
 | Property | Type | Required | Description |
@@ -2396,6 +2402,39 @@ Manages the per-instance event queue for serial processing (S4.1).
 The EventQueue is a logical abstraction -- implementations MAY use an in-process queue, a message broker, or a database-backed queue. The only requirement is FIFO ordering per instance (S4.1). The queue MUST be durable: events enqueued but not yet processed MUST survive processor restarts.
 
 Error conditions: `queueUnavailable`.
+
+#### 16.8.1 Native emitted-event origin
+
+When present, `origin` MUST be an object with nonblank record identifiers. Explicit null values MUST be rejected; omitted origin and omitted transition references retain their distinct meaning.
+
+**Normative Contract.** A native `emitEvent` occurrence retains optional
+`PendingEvent.origin` with `actionRecordId` naming its actual `ActionExecuted`
+record. That record's `data.eventType` identifies the emitted event. When a
+transition executes the action, `transitionRecordId` names that exact
+`StateTransition` record. This includes transition actions and actions on exit
+or entry. Nested transitions retain their own nearest transition association;
+parallel sibling cancellation actions name the transition causing cancellation.
+Direct initial process entry has no transition association. Actual anonymous
+transitions inside a compound `foreach` body retain `$bodyAuto` records with
+`<foreach-state>:body:<substate>` labels and distinct record IDs per iteration.
+Their transition actions, source exit and destination entry emissions name
+that internal transition, including during initial evaluation. Origin references MUST NOT
+be inferred for older retained events or non-emit producers. External enqueue
+callers MUST NOT supply native origin references.
+
+**Composition.** Origin refers to the same process's separate retained
+provenance log. It does not grant read or action authority, change the event
+payload, or replace the event's enqueue timestamp. Consumers requiring an
+originating transition MUST resolve and validate the exact references; absent
+or mismatched evidence cannot be replaced with event-name, state-name or
+latest-timestamp matching. Existing queue order and deduplication semantics
+remain unchanged. Persistence preserves references alongside the queued event.
+
+**Conformance.** Tests MUST distinguish emission and later consumption clocks,
+preserve origins through serialization, distinguish repeated same-named
+emissions, bind nonempty compound-body and parallel transitions accurately, retain absence for
+old events and initial-entry transition references, and reject externally
+supplied origins before any queue mutation.
 
 ### 16.9 TaskPresenter
 

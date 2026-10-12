@@ -104,7 +104,11 @@ pub struct IntakeAcceptanceRequest {
     pub actor_bindings: Option<Vec<wos_core::instance::HumanActorBinding>>,
     /// Binding-native intake handoff document to parse and validate.
     pub document: serde_json::Value,
-    /// Actor or service handling the intake boundary.
+    /// Admitted principal initiating intake and any newly created process evaluation.
+    ///
+    /// This attributes lifecycle control actions, not machine or external-service
+    /// execution. The host selects the exact actor; absence remains anonymous
+    /// during initialization. Attachment and replay never reattribute a process.
     pub actor_id: Option<String>,
     /// Governed case reference chosen by the host when one is already known.
     ///

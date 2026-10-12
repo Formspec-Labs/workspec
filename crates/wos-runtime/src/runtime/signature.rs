@@ -1360,6 +1360,7 @@ impl WosRuntime {
                 let emitted_event = profile.decline_policy.as_ref().map(|policy| {
                     let event = policy.transition_id.clone();
                     record.process.pending_events.push(PendingEvent {
+                        origin: None,
                         event: event.clone(),
                         actor_id: Some(actor_id.to_string()),
                         data: Some(serde_json::json!({
@@ -1485,6 +1486,7 @@ impl WosRuntime {
                 let emitted_event = profile.expiry_policy.as_ref().map(|policy| {
                     let event = policy.event_name.clone();
                     record.process.pending_events.push(PendingEvent {
+                        origin: None,
                         event: event.clone(),
                         actor_id: Some(actor_id.to_string()),
                         data: Some(serde_json::json!({ "taskId": task.task_id })),

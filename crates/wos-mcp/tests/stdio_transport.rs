@@ -15,19 +15,9 @@ use std::time::Duration;
 /// message instead of hanging the suite.
 const RUN_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Build the binary path from the current CARGO_MANIFEST_DIR, falling back
-/// to discovering it through `cargo build`.
+/// Locate the binary selected and built by Cargo for this integration test.
 fn binary_path() -> std::path::PathBuf {
-    // When running under `cargo nextest run`, the binary has already been built.
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    let mut path = std::path::PathBuf::from(manifest_dir);
-    // Walk up to workspace root, then into the target directory.
-    path.pop(); // crates/wos-mcp -> crates
-    path.pop(); // crates -> workspace root
-    path.push("target");
-    path.push("debug");
-    path.push("wos-mcp");
-    path
+    std::path::PathBuf::from(env!("CARGO_BIN_EXE_wos-mcp"))
 }
 
 /// Send a sequence of newline-delimited JSON requests to the binary and

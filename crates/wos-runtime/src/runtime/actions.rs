@@ -10,9 +10,10 @@
 use semver::{Version, VersionReq};
 use wos_core::eval::ObservedAction;
 use wos_core::instance::{
-    ActiveTask, ActiveTaskStatus, FormspecTaskContext, PendingEvent, WorkflowProcess,
+    ActiveTask, ActiveTaskStatus, FormspecTaskContext, PendingEvent, PendingEventOrigin,
+    WorkflowProcess,
 };
-use wos_core::model::kernel::{ActionKind, KernelDocument};
+use wos_core::model::kernel::{ActionKind, ContractReference, KernelDocument, State};
 use wos_core::{ProvenanceKind, ProvenanceRecord};
 
 use crate::integration::IntegrationBinding;
@@ -26,6 +27,59 @@ use super::{
     impact_level_label, make_task_id, normalize_semver_range_expression,
     signature::append_signature_task_extensions,
 };
+
+fn form_definition_version<'a>(
+    contract_key: &str,
+    contract: &'a ContractReference,
+) -> Result<&'a str, RuntimeError> {
+    contract
+        .definition_version
+        .as_deref()
+        .filter(|version| !version.trim().is_empty())
+        .ok_or_else(|| {
+            RuntimeError::MissingMetadata(format!(
+                "formspec task contract '{contract_key}' requires definitionVersion"
+            ))
+        })
+}
+
+pub(super) fn validate_task_contract_pins(kernel: &KernelDocument) -> Result<(), RuntimeError> {
+    fn validate_state(state: &State, kernel: &KernelDocument) -> Result<(), RuntimeError> {
+        let actions = state.on_entry.iter().chain(&state.on_exit).chain(
+            state
+                .transitions
+                .iter()
+                .flat_map(|transition| &transition.actions),
+        );
+        for action in actions.filter(|action| action.action == ActionKind::CreateTask) {
+            if let Some(key) = &action.contract_ref {
+                let contract = kernel
+                    .contracts
+                    .get(key)
+                    .ok_or_else(|| RuntimeError::ContractNotFound(key.clone()))?;
+                if contract.binding == "formspec" {
+                    form_definition_version(key, contract)?;
+                }
+            }
+        }
+        for child in state.states.values() {
+            validate_state(child, kernel)?;
+        }
+        for region in state.regions.values() {
+            for child in region.states.values() {
+                validate_state(child, kernel)?;
+            }
+        }
+        if let Some(body) = state.body.as_deref() {
+            validate_state(body, kernel)?;
+        }
+        Ok(())
+    }
+    for state in kernel.lifecycle.states.values() {
+        validate_state(state, kernel)?;
+    }
+    Ok(())
+}
 
 impl WosRuntime {
     pub(super) fn apply_observed_actions(
@@ -140,7 +194,17 @@ impl WosRuntime {
                     let event_name = observed.action.event_type.clone().ok_or_else(|| {
                         RuntimeError::UnsupportedAction("emitEvent missing eventType".to_string())
                     })?;
+                    let action_record_id =
+                        observed.provenance_record_id.clone().ok_or_else(|| {
+                            RuntimeError::UnsupportedAction(
+                                "emitEvent missing native action origin".into(),
+                            )
+                        })?;
                     record.process.pending_events.push(PendingEvent {
+                        origin: Some(PendingEventOrigin {
+                            action_record_id,
+                            transition_record_id: observed.transition_record_id.clone(),
+                        }),
                         event: event_name.clone(),
                         actor_id: observed.actor_id.clone(),
                         data: observed.action.data.clone(),
@@ -493,6 +557,16 @@ impl WosRuntime {
                 (Some(captured.deadline), fallback)
             }
         };
+        // Refuse a missing form pin before allocating a task or staging presentation.
+        if let Some(key) = &action.contract_ref {
+            let contract = kernel
+                .contracts
+                .get(key)
+                .ok_or_else(|| RuntimeError::ContractNotFound(key.clone()))?;
+            if contract.binding == "formspec" {
+                form_definition_version(key, contract)?;
+            }
+        }
         let task_sequence = record.process.next_task_sequence + 1;
         record.process.next_task_sequence = task_sequence;
         let task_id = make_task_id(&record.process.process_id, task_sequence, &task_ref);
@@ -546,9 +620,11 @@ impl WosRuntime {
                 .ok_or_else(|| RuntimeError::ContractNotFound(contract_key.clone()))?;
             task.binding = Some(contract.binding.clone());
             task.definition_url = Some(contract.reference.clone());
-            task.definition_version = Some(kernel.version.clone().ok_or_else(|| {
-                RuntimeError::MissingMetadata("kernel version required".to_string())
-            })?);
+            task.definition_version = if contract.binding == "formspec" {
+                Some(form_definition_version(contract_key, contract)?.to_owned())
+            } else {
+                contract.definition_version.clone()
+            };
             if task.prefill_mapping_ref.is_none() {
                 task.prefill_mapping_ref = contract.prefill_mapping_ref.clone();
             }

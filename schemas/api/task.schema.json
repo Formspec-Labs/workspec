@@ -386,6 +386,10 @@
     "TaskListItem": {
       "type": "object",
       "additionalProperties": false,
+      "dependentRequired": {
+        "expiresAt": ["expiresWithTimer"],
+        "expiresWithTimer": ["expiresAt"]
+      },
       "description": "Lightweight task projection for list views (ADR 0082 D-3). Carries identity, classification, status, deadline, and binding metadata — enough to drive an inbox-style list without forcing the heavier `Task` body. The full `Task` shape is fetched per row on detail navigation.",
       "required": [
         "id",
@@ -403,6 +407,16 @@
         "processId": {
           "$ref": "#/$defs/WosResourceUrn",
           "description": "Workflow process URN this task belongs to."
+        },
+        "caseLedgerId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Governed case ledger URN associated with this task's process, when available."
+        },
+        "taskRevision": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque stored revision of the current task, when available. Send this exact value when an operation requires an expected task revision.",
+          "x-wos": {"openStringKind": "opaque-token"}
         },
         "workflowUrl": {
           "$ref": "#/$defs/WorkflowUrl",
@@ -440,6 +454,17 @@
           "format": "date-time",
           "description": "UTC RFC 3339 deadline by which the actor SHOULD submit the response before SLA breach (governance S10.3)."
         },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Immutable expiry copied from the actual native timer at task creation. Fresh drafts and responses refuse at or after this instant; committed replay remains available. Required together with expiresWithTimer (Kernel §13.2.1)."
+        },
+        "expiresWithTimer": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Original native timer identifier supplying expiresAt. Forwarded unchanged; later timer cancellation or replacement does not change the copied task lifetime (Kernel §13.2.1).",
+          "x-wos": {"openStringKind": "identifier"}
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",
@@ -455,6 +480,10 @@
     "Task": {
       "type": "object",
       "additionalProperties": false,
+      "dependentRequired": {
+        "expiresAt": ["expiresWithTimer"],
+        "expiresWithTimer": ["expiresAt"]
+      },
       "description": "Full public task projection (ADR 0082 D-3). Adds contract binding, draft state, and validation outcome to the `TaskListItem` core. The kernel runtime artifact `wos-process.schema.json#/$defs/ActiveTask` is prior art; this is greenfield (ADR 0082 D-15) so the projection diverges intentionally: identifiers are URNs (D-4), `status` is the closed user-facing taxonomy (not the kernel `created|assigned|claimed|...` set), and the form-rendering `context` block is not surfaced (clients fetch the form via `definitionUrl`/`definitionVersion`).",
       "required": [
         "id",
@@ -474,6 +503,16 @@
         "processId": {
           "$ref": "#/$defs/WosResourceUrn",
           "description": "Workflow process URN this task belongs to."
+        },
+        "caseLedgerId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Governed case ledger URN associated with this task's process, when available."
+        },
+        "taskRevision": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque stored revision of the current task, when available. Send this exact value when an operation requires an expected task revision.",
+          "x-wos": {"openStringKind": "opaque-token"}
         },
         "workflowUrl": {
           "$ref": "#/$defs/WorkflowUrl",
@@ -550,6 +589,17 @@
             "$ref": "#/$defs/TaskDeadline"
           }
         },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Immutable expiry copied from the actual native timer at task creation. Fresh drafts and responses refuse at or after this instant; committed replay remains available. Required together with expiresWithTimer (Kernel §13.2.1)."
+        },
+        "expiresWithTimer": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Original native timer identifier supplying expiresAt. Forwarded unchanged; later timer cancellation or replacement does not change the copied task lifetime (Kernel §13.2.1).",
+          "x-wos": {"openStringKind": "identifier"}
+        },
         "reviewProtocol": {
           "$ref": "#/$defs/ReviewProtocolKind",
           "description": "Closed-with-vendor-extension review-protocol classification (governance §4.1-§4.2; workflow-governance.md:248-260). Surfaces the `independentFirst` / `considerOpposite` / `calibratedConfidence` / `dualBlind` / `unassisted` posture so a staff portal can lock recommendation visibility until the reviewer's independent assessment is recorded. Present iff `kind == review` and the workflow declares a review protocol on this task pattern."
@@ -611,6 +661,24 @@
         "workflowUrl": {
           "$ref": "#/$defs/WorkflowUrl",
           "description": "Filter to tasks on instances of the supplied Workflow Document."
+        },
+        "workflowVersion": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Exact governing workflow version from the process definition_version, independent of the task's form or contract definitionVersion.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "taskRef": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Exact authored task reference from the authorized native task facts.task_ref.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "deadlineBefore": {
           "type": "string",
@@ -723,6 +791,46 @@
         "response": {
           "$ref": "#/$defs/ResponseValue",
           "description": "Final response payload conforming to the task's contract."
+        },
+        "signedDraft": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Signed Source draft selectors and expected values. Required by configured signed-correction tasks and optional for other submissions. These values are preconditions; the server derives the owner, current task, scope and authority and reads the signed record before committing the response.",
+          "required": [
+            "draftId",
+            "expectedSignedDraftVersion",
+            "expectedSignedResponseHash",
+            "associationHash",
+            "taskBindingHash"
+          ],
+          "properties": {
+            "draftId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Opaque identifier of the signed Source draft.",
+              "x-wos": {"openStringKind": "identifier"}
+            },
+            "expectedSignedDraftVersion": {
+              "type": "integer",
+              "minimum": 2,
+              "description": "Expected stored signed draft version."
+            },
+            "expectedSignedResponseHash": {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}$",
+              "description": "Expected hash of the retained signed response."
+            },
+            "associationHash": {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}$",
+              "description": "Expected hash of the retained Source association."
+            },
+            "taskBindingHash": {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}$",
+              "description": "Expected hash of the retained current-task binding."
+            }
+          }
         },
         "submittedAt": {
           "type": "string",

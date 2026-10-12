@@ -1,0 +1,375 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json",
+  "title": "Complete native WOS provenance custody event",
+  "description": "Transport for known original provenance kinds without a specialized canonical event. Retains the original recordKind and all original typed fields; specialized canonical kinds retain their existing routes. The recordKind enum mirrors record-kind-registry.json entries without eventLiteral. Application data is arbitrary JSON within the owning signed-64-bit/depth-128 JSON-to-CBOR subset.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "record"
+  ],
+  "properties": {
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "required": ["outcome"],
+            "properties": {"outcome": {"const": "expired"}}
+          },
+          "then": {
+            "properties": {"recordKind": {"const": "taskFailed"}}
+          }
+        }
+      ],
+      "required": [
+        "id",
+        "recordKind",
+        "timestamp",
+        "auditLayer",
+        "definitionVersion"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "minLength": 1
+        },
+        "actorId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fromState": {
+          "type": "string",
+          "minLength": 1
+        },
+        "toState": {
+          "type": "string",
+          "minLength": 1
+        },
+        "event": {
+          "type": "string",
+          "minLength": 1
+        },
+        "actorType": {
+          "type": "string",
+          "oneOf": [
+            {
+              "enum": [
+                "human",
+                "system",
+                "agent"
+              ]
+            },
+            {
+              "pattern": "^x-[a-z][a-z0-9-]*$"
+            }
+          ],
+          "description": "Actor classification when the processor can resolve one canonically. Reserved literals are `human`, `system`, and `agent`; extension values MUST use an `x-` prefix.",
+          "examples": [
+            "human",
+            "system",
+            "agent"
+          ]
+        },
+        "lifecycleState": {
+          "type": "string",
+          "minLength": 1
+        },
+        "definitionVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inputDigest": {
+          "type": "string",
+          "minLength": 1
+        },
+        "outputDigest": {
+          "type": "string",
+          "minLength": 1
+        },
+        "canonicalEventHash": {
+          "type": "string",
+          "pattern": "^(?:sha256:)?[a-f0-9]{64}$",
+          "description": "Trellis `canonical_event_hash` text stamped after custody admission, when present. Current Trellis service receipts use `sha256:<lowercase hex>`; older local fixtures may use bare lowercase hex.",
+          "examples": [
+            "sha256:9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c"
+          ]
+        },
+        "outcome": {
+          "description": "Preserves maintained native TaskFailed expiry facts. The expired literal is allowed only with TaskFailed; other outcomes retain the shared provenance outcome rules.",
+          "anyOf": [
+            {"$ref": "#/$defs/ProvenanceOutcome"},
+            {"const": "expired"}
+          ]
+        },
+        "recordKind": {
+          "enum": [
+            "unmatchedEvent",
+            "caseStateMutation",
+            "timerCreated",
+            "timerFired",
+            "timerCancelled",
+            "onEntry",
+            "onExit",
+            "actionExecuted",
+            "invalidDuration",
+            "toleranceViolation",
+            "convergenceCapReached",
+            "deonticViolation",
+            "deonticEvaluation",
+            "deonticResolution",
+            "deonticBypass",
+            "rightsViolation",
+            "consistencyViolation",
+            "autonomyViolation",
+            "autonomyCapped",
+            "autonomyComputed",
+            "humanTaskCreated",
+            "toolViolation",
+            "escalationPending",
+            "autonomyDemotion",
+            "autonomyEscalation",
+            "confidenceViolation",
+            "confidenceDecay",
+            "cumulativeConfidenceViolation",
+            "sessionPaused",
+            "groundTruthLabel",
+            "agentOutput",
+            "actorTypeViolation",
+            "agentProvenanceAnnotation",
+            "agentVersionChange",
+            "narrativeTierRecorded",
+            "constraintTamperBlocked",
+            "driftReclassification",
+            "agentStateTransition",
+            "proxyInvocation",
+            "dispositiveViolation",
+            "fallbackTriggered",
+            "fallbackAttempt",
+            "fallbackTerminal",
+            "noticeSent",
+            "separationViolation",
+            "appealFiled",
+            "protocolViolation",
+            "independentFirstEnforced",
+            "samplingDecision",
+            "overrideViolation",
+            "overrideRecorded",
+            "legalHoldPlaced",
+            "legalHoldReleased",
+            "legalHoldDestructionRejected",
+            "continuationOfServicesActivated",
+            "pipelineStageCompleted",
+            "pipelineRiskProfile",
+            "pipelineRejection",
+            "taskCreated",
+            "taskPresented",
+            "taskDismissed",
+            "taskDraftPersisted",
+            "taskResponseSubmitted",
+            "taskResponseRejected",
+            "dataMapping",
+            "taskCompleted",
+            "taskFailed",
+            "taskSkipped",
+            "parameterResolved",
+            "compensationLogEntry",
+            "compensationExecuted",
+            "compensationScopeBoundary",
+            "delegationViolation",
+            "instanceSuspended",
+            "instanceResumed",
+            "instanceTerminated",
+            "stepResultPersisted",
+            "idempotencyDedup",
+            "contractValidation",
+            "historyCleared",
+            "dcrActivityExecuted",
+            "dcrRelationEvaluated",
+            "dcrResolutionError",
+            "zoneSatisfied",
+            "dcrZoneViolation",
+            "equityAlert",
+            "circuitBreakerTripped",
+            "circuitBreakerReset",
+            "shadowModeDivergence",
+            "driftAlert",
+            "verificationReportProduced",
+            "immutabilityViolation",
+            "activationBlocked",
+            "calendarIgnored",
+            "notificationSuppressed",
+            "reportTimedOut",
+            "configurationWarning",
+            "relationshipChanged",
+            "milestoneFired",
+            "eventEmitted",
+            "eventConsumed",
+            "callbackReceived",
+            "callbackPending",
+            "arazzoStep",
+            "toolInvoked",
+            "policyDecision"
+          ]
+        },
+        "auditLayer": {
+          "enum": [
+            "facts",
+            "reasoning",
+            "counterfactual",
+            "narrative"
+          ]
+        },
+        "data": {},
+        "inputs": {
+          "type": "array",
+          "description": "Input entity references used by this activity.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Opaque or resolvable token naming an input entity this activity consumed, aligned with PROV-O `prov:used` semantics for downstream audit graph materialization.",
+            "examples": [
+              "handoff-public-2026-0001"
+            ],
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          },
+          "examples": [
+            [
+              "handoff-public-2026-0001"
+            ]
+          ]
+        },
+        "outputs": {
+          "type": "array",
+          "description": "Output entity references generated by this activity.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Opaque or resolvable token naming an output entity this activity produced so exporters can stitch forward references into case files or external systems.",
+            "examples": [
+              "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc"
+            ],
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          },
+          "examples": [
+            [
+              "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc"
+            ]
+          ]
+        },
+        "transitionTags": {
+          "type": "array",
+          "description": "Semantic tags copied from the firing transition when this record represents a state transition. The presence of 'determination' makes caseFileSnapshot mandatory.",
+          "examples": [
+            [
+              "determination"
+            ],
+            [
+              "review"
+            ]
+          ],
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "One semantic transition tag copied from the Kernel transition definition, such as 'determination' for consequential decisions or 'review' for human review steps.",
+            "examples": [
+              "determination",
+              "review"
+            ],
+            "x-wos": {
+              "openStringKind": "tagLabel"
+            }
+          }
+        },
+        "caseFileSnapshot": {
+          "$ref": "#/$defs/CaseFileSnapshot"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "CaseFileSnapshot": {
+      "type": "object",
+      "description": "Canonical case-file snapshot captured immediately before a determination-tagged transition fires. The value is the factual input to the determination; jcsCanonical and sha256 make the snapshot stable and tamper-evident for notices, appeals, and audit export.",
+      "examples": [
+        {
+          "value": {
+            "income": 17500,
+            "eligible": true
+          },
+          "jcsCanonical": "{\"eligible\":true,\"income\":17500}",
+          "sha256": "b19f000c0cd497b52c4a78e50641651e4b1e96931a1b1558984d69e722f73f5e"
+        }
+      ],
+      "required": [
+        "value",
+        "jcsCanonical",
+        "sha256"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "description": "Raw case-file JSON value observed immediately before the determination transition fires. This value may be an object, array, string, number, boolean, or null depending on the processor's case-state representation.",
+          "examples": [
+            {
+              "income": 17500,
+              "eligible": true
+            }
+          ]
+        },
+        "jcsCanonical": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Canonical JSON string for value using JCS (RFC 8785) canonicalization semantics. Identical case-file state MUST produce byte-identical canonical strings.",
+          "examples": [
+            "{\"eligible\":true,\"income\":17500}"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "Lowercase SHA-256 hex digest of jcsCanonical. This digest links the human-readable snapshot to tamper-evident exports without requiring downstream systems to reserialize value.",
+          "examples": [
+            "b19f000c0cd497b52c4a78e50641651e4b1e96931a1b1558984d69e722f73f5e"
+          ]
+        }
+      }
+    },
+    "ProvenanceOutcome": {
+      "type": "string",
+      "description": "Outcome literal recorded on a Facts-tier provenance record when the processor completes (or declines to complete) an action. Open enum: the listed values are reserved across all tiers; vendor extensions MUST use an `x-` prefix to avoid future conflicts. Reserved literals currently defined: `preconditionNotSatisfied` (AI Integration \u00a73.3.1 -- emitted when a capability precondition FEL expression evaluates to false or non-boolean, blocking agent invocation and falling through to the fallback chain) and `convergenceCapReached` (Runtime \u00a710.3 -- emitted when continuous-mode re-evaluation hits the 100-cycle convergence cap for a single triggering mutation).",
+      "examples": [
+        "preconditionNotSatisfied",
+        "convergenceCapReached",
+        "x-vendor-quota-exceeded"
+      ],
+      "oneOf": [
+        {
+          "enum": [
+            "preconditionNotSatisfied",
+            "convergenceCapReached"
+          ]
+        },
+        {
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "x-wos": {
+        "open-enum": true
+      }
+    }
+  }
+}

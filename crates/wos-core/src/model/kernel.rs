@@ -55,31 +55,31 @@ pub struct KernelDocument {
     pub wos_workflow: String,
 
     /// Optional JSON Schema URI for editor validation.
-    #[serde(rename = "$schema", default)]
+    #[serde(rename = "$schema", default, skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>,
 
     /// Canonical URL identifying this workflow definition.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
 
     /// Document version.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
 
     /// Human-readable title.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
 
     /// Human-readable description.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 
     /// Document status.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<PublicationStatus>,
 
     /// Impact level classification (Kernel S6).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub impact_level: Option<ImpactLevel>,
 
     /// Actor declarations.
@@ -90,7 +90,7 @@ pub struct KernelDocument {
     pub lifecycle: Lifecycle,
 
     /// Case state schema.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub case_file: Option<CaseFile>,
 
     /// Named contract references (Kernel S11).
@@ -98,19 +98,19 @@ pub struct KernelDocument {
     pub contracts: HashMap<String, ContractReference>,
 
     /// Provenance configuration (Kernel S8).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provenance: Option<serde_json::Value>,
 
     /// Execution configuration (Kernel S9).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub execution: Option<ExecutionConfig>,
 
     /// Evaluation mode (Runtime Companion S10).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub evaluation_mode: Option<EvaluationMode>,
 
     /// Cascade depth cap for `$related.*` events (Kernel S4.10).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_relationship_event_depth: Option<u32>,
 
     // ── Embedded blocks (ADR 0076) ─────────────────────────────────────────
@@ -311,16 +311,29 @@ pub struct ContractReference {
     #[serde(rename = "ref")]
     pub reference: String,
 
-    /// Human-readable description.
-    #[serde(default)]
-    pub description: Option<String>,
+    /// Exact referenced Definition version for a Formspec task.
+    ///
+    /// This version identifies the form independently of the workflow version.
+    /// Formspec-backed task creation requires a nonblank authored pin.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub definition_version: Option<String>,
+
+    /// Authored description metadata, including an explicit JSON null.
+    ///
+    /// The owning schema leaves this metadata open to any JSON value.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present_json"
+    )]
+    pub description: Option<serde_json::Value>,
 
     /// Mapping used to prefill a Formspec task response.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub prefill_mapping_ref: Option<String>,
 
     /// Mapping used to project a completed Formspec response.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub response_mapping_ref: Option<String>,
 }
 
@@ -329,15 +342,15 @@ pub struct ContractReference {
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionConfig {
     /// Maximum total workflow duration (ISO 8601).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workflow_timeout: Option<String>,
 
     /// Default task timeout (ISO 8601).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_task_timeout: Option<String>,
 
     /// Default service timeout (ISO 8601).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_service_timeout: Option<String>,
 
     /// Whether the workflow scope is compensable (Kernel S9.5).
@@ -345,7 +358,7 @@ pub struct ExecutionConfig {
     pub compensable: bool,
 
     /// Instance versioning policy.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub instance_versioning: Option<String>,
 
     /// Extension data.
@@ -397,9 +410,15 @@ pub struct Actor {
     #[serde(rename = "type")]
     pub kind: ActorKind,
 
-    /// Human-readable description.
-    #[serde(default)]
-    pub description: Option<String>,
+    /// Authored description metadata, including an explicit JSON null.
+    ///
+    /// The owning schema leaves this metadata open to any JSON value.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present_json"
+    )]
+    pub description: Option<serde_json::Value>,
 
     /// Extension data.
     #[serde(default)]
@@ -422,16 +441,22 @@ pub struct Lifecycle {
 }
 
 /// A lifecycle state (Kernel S4.3).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct State {
     /// State type.
     #[serde(rename = "type")]
     pub kind: StateKind,
 
-    /// Human-readable description.
-    #[serde(default)]
-    pub description: Option<String>,
+    /// Authored description metadata, including an explicit JSON null.
+    ///
+    /// The owning schema leaves this metadata open to any JSON value.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present_json"
+    )]
+    pub description: Option<serde_json::Value>,
 
     /// Outgoing transitions, evaluated in document order.
     #[serde(default)]
@@ -450,7 +475,7 @@ pub struct State {
     pub on_exit: Vec<Action>,
 
     /// Initial substate for compound states.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub initial_state: Option<String>,
 
     /// Substates for compound states.
@@ -462,15 +487,15 @@ pub struct State {
     pub regions: IndexMap<String, Region>,
 
     /// Cancellation policy for parallel states.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cancellation_policy: Option<CancellationPolicy>,
 
     /// History state mode for compound states.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub history_state: Option<HistoryMode>,
 
     /// Machine-readable outcome code for final states (Kernel S4.3).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub outcome_code: Option<String>,
 
     // ── ForEach iteration fields (Kernel S4.10 ForEach states) ─────────────
@@ -530,6 +555,68 @@ pub struct State {
     /// Extension data.
     #[serde(default)]
     pub extensions: HashMap<String, serde_json::Value>,
+}
+
+// Serialize state topology directly: atomic states cannot declare hierarchy fields.
+// Non-atomic empty maps stay present because the owning schema permits them.
+impl Serialize for State {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+
+        let mut state = serializer.serialize_map(None)?;
+        state.serialize_entry("type", &self.kind)?;
+        if let Some(value) = &self.description {
+            state.serialize_entry("description", value)?;
+        }
+        state.serialize_entry("transitions", &self.transitions)?;
+        state.serialize_entry("tags", &self.tags)?;
+        state.serialize_entry("onEntry", &self.on_entry)?;
+        state.serialize_entry("onExit", &self.on_exit)?;
+        if let Some(value) = &self.initial_state {
+            state.serialize_entry("initialState", value)?;
+        }
+        if self.kind != StateKind::Atomic || !self.states.is_empty() {
+            state.serialize_entry("states", &self.states)?;
+        }
+        if self.kind != StateKind::Atomic || !self.regions.is_empty() {
+            state.serialize_entry("regions", &self.regions)?;
+        }
+        if let Some(value) = &self.cancellation_policy {
+            state.serialize_entry("cancellationPolicy", value)?;
+        }
+        if let Some(value) = &self.history_state {
+            state.serialize_entry("historyState", value)?;
+        }
+        if let Some(value) = &self.outcome_code {
+            state.serialize_entry("outcomeCode", value)?;
+        }
+        if let Some(value) = &self.collection {
+            state.serialize_entry("collection", value)?;
+        }
+        if let Some(value) = &self.item_variable {
+            state.serialize_entry("itemVariable", value)?;
+        }
+        if let Some(value) = &self.index_variable {
+            state.serialize_entry("indexVariable", value)?;
+        }
+        if let Some(value) = &self.concurrency {
+            state.serialize_entry("concurrency", value)?;
+        }
+        if let Some(value) = &self.break_condition {
+            state.serialize_entry("breakCondition", value)?;
+        }
+        if let Some(value) = &self.output_path {
+            state.serialize_entry("outputPath", value)?;
+        }
+        if let Some(value) = &self.merge_strategy {
+            state.serialize_entry("mergeStrategy", value)?;
+        }
+        if let Some(value) = &self.body {
+            state.serialize_entry("body", value)?;
+        }
+        state.serialize_entry("extensions", &self.extensions)?;
+        state.end()
+    }
 }
 
 /// State type discriminator (Kernel S4.3).
@@ -878,7 +965,7 @@ pub struct Transition {
     /// variant; use [`Guard::as_fel_str`] to preserve the legacy
     /// `Option<&str>` shape those call sites previously got from
     /// `transition.guard.as_deref()`.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub guard: Option<Guard>,
 
     /// Actions executed during this transition.
@@ -890,9 +977,15 @@ pub struct Transition {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub actor: Option<String>,
 
-    /// Human-readable description.
-    #[serde(default)]
-    pub description: Option<String>,
+    /// Authored description metadata, including an explicit JSON null.
+    ///
+    /// The owning schema leaves this metadata open to any JSON value.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present_json"
+    )]
+    pub description: Option<serde_json::Value>,
 
     /// Semantic tags.
     #[serde(default)]
@@ -940,23 +1033,23 @@ pub struct Action {
     pub action: ActionKind,
 
     /// Task reference (createTask).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub task_ref: Option<String>,
 
     /// Actor to assign (createTask).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub assign_to: Option<String>,
 
     /// Service reference (invokeService).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub service_ref: Option<String>,
 
     /// Idempotency key (invokeService).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub idempotency_key: Option<String>,
 
     /// Correlation key (invokeService).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub correlation_key: Option<String>,
 
     /// Explicit outbound/inbound callback action phase; required for deferred dispatch.
@@ -968,27 +1061,35 @@ pub struct Action {
     pub callback_phase: Option<super::integration::CallbackPhase>,
 
     /// Case file field path (setData).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
 
     /// Value to set (setData).
-    #[serde(default)]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present_json"
+    )]
     pub value: Option<serde_json::Value>,
 
     /// Event type (emitEvent).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub event_type: Option<String>,
 
     /// Event data (emitEvent).
-    #[serde(default)]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present_json"
+    )]
     pub data: Option<serde_json::Value>,
 
     /// Timer identifier (startTimer, cancelTimer).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timer_id: Option<String>,
 
     /// Duration (startTimer).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub duration: Option<String>,
 
     /// FEL expression providing a historical or current timer origin.
@@ -1006,7 +1107,7 @@ pub struct Action {
     pub expires_with_timer: Option<String>,
 
     /// Deadline (startTimer).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deadline: Option<String>,
 
     /// Event to fire (startTimer).
@@ -1018,35 +1119,41 @@ pub struct Action {
     pub event: Option<TransitionEvent>,
 
     /// Log message (log).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
 
-    /// Human-readable description.
-    #[serde(default)]
-    pub description: Option<String>,
+    /// Authored description metadata, including an explicit JSON null.
+    ///
+    /// The owning schema leaves this metadata open to any JSON value.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present_json"
+    )]
+    pub description: Option<serde_json::Value>,
 
     /// Contract reference for validation.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub contract_ref: Option<String>,
 
     /// Mapping used to prefill a Formspec task response.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub prefill_mapping_ref: Option<String>,
 
     /// Mapping used to project a completed Formspec response.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub response_mapping_ref: Option<String>,
 
     /// Event emitted when a Formspec-backed task completes.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub completion_event: Option<String>,
 
     /// Event emitted when a Formspec-backed task fails.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub failure_event: Option<String>,
 
     /// Compensating action (Kernel S9.5).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub compensating_action: Option<Box<Action>>,
 
     /// Extension data.
@@ -1116,11 +1223,15 @@ pub struct FieldDefinition {
     pub required: bool,
 
     /// Default value.
-    #[serde(default)]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present_json"
+    )]
     pub default: Option<serde_json::Value>,
 
     /// Human-readable description.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 }
 
@@ -1136,7 +1247,7 @@ pub struct CaseRelationship {
     pub target_case: String,
 
     /// Semantic relationship label.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub relationship: Option<String>,
 
     /// Whether the inverse should also be recorded.
@@ -1153,7 +1264,7 @@ pub struct Milestone {
     pub condition: String,
 
     /// Human-readable description.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 
     /// When the processor evaluates the condition (Kernel §4.13).
@@ -1168,6 +1279,13 @@ pub struct Milestone {
         skip_serializing_if = "Option::is_none"
     )]
     pub trigger_mode: Option<String>,
+}
+
+// Preserve explicit JSON nulls while `default` keeps absent properties as None.
+fn deserialize_present_json<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<serde_json::Value>, D::Error> {
+    serde_json::Value::deserialize(deserializer).map(Some)
 }
 
 fn deserialize_callback_phase<'de, D: serde::Deserializer<'de>>(

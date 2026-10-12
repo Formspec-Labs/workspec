@@ -7,6 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+async-trait = "0.1"
 base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
 fel-core.workspace = true
@@ -15,6 +16,7 @@ serde_json = "1"
 semver = "1"
 sha2 = "0.10"
 stack-common-http.workspace = true
+stack-common-hash.workspace = true
 stack-common-typeid.workspace = true
 thiserror = "2"
 time = { version = "0.3", features = ["formatting", "parsing"] }
@@ -25,7 +27,13 @@ wos-core = { path = "../wos-core" }
 wos-events = { path = "../wos-events" }
 
 [dev-dependencies]
-async-trait = "0.1"
+axum = "0.8"
+integrity-bundle = { path = "../../../integrity-stack/crates/integrity-bundle" }
+integrity-cbor = { path = "../../../integrity-stack/crates/integrity-cbor" }
+integrity-cose = { path = "../../../integrity-stack/crates/integrity-cose" }
 jsonschema = "0.46"
 stack-common-error = { path = "../../../stack-common/crates/stack-common-error", default-features = false }
 tokio = { version = "1", features = ["macros", "rt"] }
+trellis-export-writer = { path = "../../../trellis/crates/trellis-export-writer" }
+trellis-server = { path = "../../../trellis/crates/trellis-server", features = ["test-harness"] }
+trellis-verify-wos = { path = "../../../trellis/crates/trellis-verify-wos" }

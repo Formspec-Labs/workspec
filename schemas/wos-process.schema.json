@@ -1531,6 +1531,34 @@
       },
       "description": "A single entry in the compensation log -- one completed action with its compensating counterpart."
     },
+    "PendingEventOrigin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actionRecordId"
+      ],
+      "description": "Actual same-process provenance references for a native emitted event; absence is retained for pre-existing or non-emit events.",
+      "properties": {
+        "actionRecordId": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Actual emitEvent ActionExecuted record ID.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "transitionRecordId": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Actual StateTransition record that executed the action, absent for initial entry.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        }
+      }
+    },
     "PendingEvent": {
       "type": "object",
       "required": [
@@ -1544,6 +1572,9 @@
       },
       "additionalProperties": false,
       "properties": {
+        "origin": {
+          "$ref": "#/$defs/PendingEventOrigin"
+        },
         "event": {
           "type": "string",
           "minLength": 1,

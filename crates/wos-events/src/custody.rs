@@ -11,6 +11,7 @@ use integrity_cbor::{JsonCborError, dcbor_bytes_to_json, json_to_dcbor_bytes_wit
 use serde::{Deserialize, Serialize};
 use stack_common_typeid as typeid;
 
+use crate::WOS_NATIVE_PROVENANCE_EVENT_LITERAL;
 use crate::provenance::ProvenanceRecord;
 
 /// WOS authored records are small governance facts and must stay inside the
@@ -277,17 +278,7 @@ fn provenance_event_type(
         };
     }
 
-    let kind = serde_json::to_value(record.record_kind)
-        .map_err(|error| CustodyAppendError::JsonSerialization(error.to_string()))?;
-    let Some(kind) = kind.as_str() else {
-        return Err(CustodyAppendError::JsonSerialization(
-            "provenance kind did not serialize to a string".to_string(),
-        ));
-    };
-    Ok(format!(
-        "{event_type_prefix}.{}",
-        camel_case_record_kind_to_event_tail(kind)
-    ))
+    Ok(WOS_NATIVE_PROVENANCE_EVENT_LITERAL.to_string())
 }
 
 fn provenance_record_to_custody_json(
@@ -316,21 +307,6 @@ fn provenance_record_to_custody_json(
     }
 
     Ok(authored)
-}
-
-fn camel_case_record_kind_to_event_tail(kind: &str) -> String {
-    let mut event_tail = String::with_capacity(kind.len());
-    for character in kind.chars() {
-        if character.is_ascii_uppercase() {
-            if !event_tail.is_empty() {
-                event_tail.push('_');
-            }
-            event_tail.push(character.to_ascii_lowercase());
-        } else {
-            event_tail.push(character);
-        }
-    }
-    event_tail
 }
 
 fn provenance_string_tags() -> Vec<(Vec<String>, u64)> {
@@ -400,25 +376,18 @@ mod tests {
     }
 
     #[test]
-    fn provenance_event_type_uses_snake_case_record_tail() {
-        assert_eq!(
-            camel_case_record_kind_to_event_tail("signatureAffirmation"),
-            "signature_affirmation"
-        );
-        assert_eq!(
-            camel_case_record_kind_to_event_tail("stateTransition"),
-            "state_transition"
-        );
-        assert_eq!(
-            camel_case_record_kind_to_event_tail("dcrActivityExecuted"),
-            "dcr_activity_executed"
-        );
-
-        let record =
+    fn provenance_event_type_preserves_canonical_and_routes_native_kinds() {
+        let mut record =
             ProvenanceRecord::state_transition("intake", "review", "submitted", Some("worker"));
         assert_eq!(
             provenance_event_type("wos.kernel", &record).expect("event type"),
             "wos.kernel.state_transition"
+        );
+        record.record_kind = ProvenanceKind::OnEntry;
+        record.event = None;
+        assert_eq!(
+            provenance_event_type("wos.kernel", &record).unwrap(),
+            WOS_NATIVE_PROVENANCE_EVENT_LITERAL
         );
     }
 

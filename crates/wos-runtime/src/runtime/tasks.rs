@@ -812,6 +812,7 @@ fn remove_task_with_event(
         .map(str::to_string);
     if let Some(event) = &emitted_event {
         instance.pending_events.push(PendingEvent {
+            origin: None,
             event: event.clone(),
             actor_id: Some(actor_id.to_string()),
             data: Some(serde_json::json!({ "taskId": task.task_id })),

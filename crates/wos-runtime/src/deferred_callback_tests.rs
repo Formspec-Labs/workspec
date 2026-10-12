@@ -61,6 +61,7 @@ mod deferred_callback_acceptance {
             .enqueue_event(
                 id,
                 PendingEvent {
+                    origin: None,
                     event: "receipt".into(),
                     actor_id: None,
                     data: Some(data),
@@ -228,6 +229,8 @@ mod deferred_callback_acceptance {
                 );
             }
             let observed=wos_core::eval::ObservedAction {
+                provenance_record_id: None,
+                transition_record_id: None,
                 action:serde_json::from_value(serde_json::json!({"action":"invokeService","serviceRef":"notice","callbackPhase":"outbound"})).unwrap(),
                 actor_id:None,lifecycle_state:"open".into(),event_data:None,task_expiry_timer:None,
             };
@@ -258,6 +261,8 @@ mod deferred_callback_acceptance {
         let (mut runtime, id, calls) = fixture();
         let mut record = runtime.store.load_record(&id).unwrap();
         let observed=wos_core::eval::ObservedAction {
+            provenance_record_id: None,
+            transition_record_id: None,
             action:serde_json::from_value(serde_json::json!({"action":"invokeService","serviceRef":"notice","callbackPhase":"outbound"})).unwrap(),
             actor_id:None,lifecycle_state:"open".into(),event_data:Some(receipt(&record)),task_expiry_timer:None,
         };
@@ -453,6 +458,8 @@ mod deferred_callback_acceptance {
         let mut invalid = profile().bindings.remove("notice").unwrap();
         invalid.kind = crate::integration::IntegrationBindingKind::RequestResponse;
         let observed=wos_core::eval::ObservedAction {
+            provenance_record_id: None,
+            transition_record_id: None,
             action:serde_json::from_value(serde_json::json!({"action":"invokeService","serviceRef":"notice","callbackPhase":"outbound"})).unwrap(),
             actor_id:None,lifecycle_state:"open".into(),event_data:None,task_expiry_timer:None,
         };
@@ -529,6 +536,8 @@ mod deferred_callback_acceptance {
             serde_json::json!(original.process.pending_callbacks.keys().next().unwrap()),
         );
         let observed=wos_core::eval::ObservedAction {
+            provenance_record_id: None,
+            transition_record_id: None,
             action:serde_json::from_value(serde_json::json!({"action":"invokeService","serviceRef":"notice","callbackPhase":"outbound"})).unwrap(),
             actor_id:None,lifecycle_state:"open".into(),event_data:None,task_expiry_timer:None,
         };

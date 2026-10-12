@@ -2096,6 +2096,22 @@
     },
     "Contracts": {
       "type": "object",
+      "additionalProperties": {
+        "if": {
+          "required": ["binding"],
+          "properties": {"binding": {"const": "formspec"}}
+        },
+        "then": {
+          "properties": {
+            "definitionVersion": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S",
+              "description": "Exact version of the Formspec Definition named by ref, independent of the workflow version. Required when this entry backs a createTask action; processors validate referenced task contracts at process admission."
+            }
+          }
+        }
+      },
       "$comment": "Validation/guard contracts and capability contracts. Pairs with bindings[] per ADR 0080 governed output-commit pipeline.",
       "description": "Named validation and capability contracts referenced by lifecycle transitions, output bindings, and the governed output-commit pipeline (ADR 0080). Contracts compose with the `contractHook` seam (ADR 0077 §10.2). Concrete shape varies by binding kind; see kernel/spec.md §9.2 for the merged contract surface.",
       "examples": [

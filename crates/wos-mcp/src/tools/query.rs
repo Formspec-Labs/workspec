@@ -299,7 +299,8 @@ pub async fn wos_search(
                 id.to_lowercase().contains(&q)
                     || state
                         .description
-                        .as_deref()
+                        .as_ref()
+                        .and_then(Value::as_str)
                         .map(|d| d.to_lowercase().contains(&q))
                         .unwrap_or(false)
             })
@@ -354,7 +355,8 @@ pub async fn wos_search(
             .filter(|a| {
                 a.id.to_lowercase().contains(&q)
                     || a.description
-                        .as_deref()
+                        .as_ref()
+                        .and_then(Value::as_str)
                         .map(|d| d.to_lowercase().contains(&q))
                         .unwrap_or(false)
             })

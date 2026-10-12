@@ -197,7 +197,7 @@ impl RawWosProject {
         }
 
         let mut state = empty_state(kind);
-        state.description = description;
+        state.description = description.map(serde_json::Value::String);
         if let Some(meta) = metadata {
             state.extensions.insert("x-meta".to_owned(), meta);
         }
@@ -536,6 +536,7 @@ impl RawWosProject {
             ContractReference {
                 binding,
                 reference: ref_uri,
+                definition_version: None,
                 description: None,
                 prefill_mapping_ref: None,
                 response_mapping_ref: None,
@@ -548,6 +549,26 @@ impl RawWosProject {
     }
 
     // ── AddActorDeontic handler ───────────────────────────────────────────
+
+    fn apply_set_contract_definition_version(
+        &mut self,
+        name: String,
+        definition_version: String,
+    ) -> CommandResult {
+        if definition_version.trim().is_empty() {
+            return Err(AuthoringDiagnostic::error(
+                format!("/contracts/{name}/definitionVersion"),
+                "contract Definition version must not be blank",
+            ));
+        }
+        let contract = self.doc.contracts.get_mut(&name).ok_or_else(|| {
+            AuthoringDiagnostic::error(format!("/contracts/{name}"), "unknown contract")
+        })?;
+        contract.definition_version = Some(definition_version);
+        Ok(AppliedCommand::without_inverse(format!(
+            "SetContractDefinitionVersion({name})"
+        )))
+    }
 
     /// Append a deontic constraint under `x-wos-ai.deonticConstraints`.
     ///
@@ -1004,6 +1025,10 @@ impl RawWosProject {
                 binding,
                 ref_uri,
             } => self.apply_add_contract(name, binding, ref_uri),
+            Command::SetContractDefinitionVersion {
+                name,
+                definition_version,
+            } => self.apply_set_contract_definition_version(name, definition_version),
             Command::AddActorDeontic {
                 constraint_id,
                 rule,
@@ -1753,6 +1778,41 @@ mod tests {
             .expect("contract must exist");
         assert_eq!(contract.binding, "formspec");
         assert_eq!(contract.reference, "urn:formspec:example.gov:po:1.0");
+    }
+
+    /// Form pins survive authoring export without changing the workflow version.
+    #[test]
+    fn authored_contract_form_version_is_independent_and_blank_update_is_atomic() {
+        let mut p = make_project();
+        p.dispatch(Command::AddContract {
+            name: "review".into(),
+            binding: "formspec".into(),
+            ref_uri: "urn:form:review".into(),
+        })
+        .unwrap();
+        let workflow_version = p.snapshot().version.clone();
+        p.dispatch(Command::SetContractDefinitionVersion {
+            name: "review".into(),
+            definition_version: "0.3.2".into(),
+        })
+        .unwrap();
+        let serialized = serde_json::to_value(p.snapshot()).unwrap();
+        let restored: KernelDocument = serde_json::from_value(serialized.clone()).unwrap();
+        assert_eq!(
+            restored.contracts["review"].definition_version.as_deref(),
+            Some("0.3.2")
+        );
+        assert_eq!(restored.version, workflow_version);
+        for (name, version) in [("review", " "), ("missing", "0.3.1")] {
+            assert!(
+                p.dispatch(Command::SetContractDefinitionVersion {
+                    name: name.into(),
+                    definition_version: version.into()
+                })
+                .is_err()
+            );
+            assert_eq!(serde_json::to_value(p.snapshot()).unwrap(), serialized);
+        }
     }
 
     /// AddContract twice with the same name must fail.

@@ -162,6 +162,14 @@ pub(crate) enum Command {
         ref_uri: String,
     },
 
+    /// Pin a named contract to its referenced Definition version.
+    SetContractDefinitionVersion {
+        /// Contract name in the workflow's contracts map.
+        name: String,
+        /// Exact referenced Definition version, independent of workflow version.
+        definition_version: String,
+    },
+
     // ── AI integration ─────────────────────────────────────────────────────
     /// Append a deontic constraint to `x-wos-ai`.
     AddActorDeontic {

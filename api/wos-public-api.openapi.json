@@ -1224,6 +1224,24 @@
             }
           },
           {
+            "name": "workflowVersion",
+            "in": "query",
+            "required": false,
+            "description": "Exact governing workflow version from the process definition_version, independent of the task's form or contract definitionVersion.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskListOptions/properties/workflowVersion"
+            }
+          },
+          {
+            "name": "taskRef",
+            "in": "query",
+            "required": false,
+            "description": "Exact authored task reference from the authorized native task facts.task_ref.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskListOptions/properties/taskRef"
+            }
+          },
+          {
             "name": "deadlineBefore",
             "in": "query",
             "required": false,
@@ -1756,6 +1774,24 @@
             "schema": {
               "type": "string",
               "format": "uri"
+            }
+          },
+          {
+            "name": "workflowVersion",
+            "in": "query",
+            "required": false,
+            "description": "Exact governing workflow version from the process definition_version, independent of the task's form or contract definitionVersion.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskListOptions/properties/workflowVersion"
+            }
+          },
+          {
+            "name": "taskRef",
+            "in": "query",
+            "required": false,
+            "description": "Exact authored task reference from the authorized native task facts.task_ref.",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskListOptions/properties/taskRef"
             }
           },
           {
@@ -5840,6 +5876,339 @@
           }
         ]
       }
+    },
+    "/completion-exports": {
+      "post": {
+        "operationId": "requestCompletionExport",
+        "summary": "Request or reconcile whole-case completion for an actual process.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/completion-exports/v1#/$defs/CompletionExportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authorized exact request state. POST succeeds only when ready.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/completion-exports/v1#/$defs/CompletionExportResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid process or retry header."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Current human completion or archive permission refused."
+          },
+          "409": {
+            "description": "Changed retry identity or native request inputs."
+          },
+          "500": {
+            "description": "Required retained evidence is invalid or unavailable."
+          },
+          "503": {
+            "description": "Owner unavailable or operation timed out. Retry the original request."
+          }
+        }
+      }
+    },
+    "/processes/{process_id}/completion-exports/{request_id}": {
+      "get": {
+        "operationId": "getCompletionExport",
+        "summary": "Read current authorized state of one retained completion request.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "process_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ProcessPathId"
+            }
+          },
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized exact request state. POST succeeds only when ready.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/completion-exports/v1#/$defs/CompletionExportResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid process or retry header."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Current human completion or archive permission refused."
+          },
+          "409": {
+            "description": "Changed retry identity or native request inputs."
+          },
+          "500": {
+            "description": "Required retained evidence is invalid or unavailable."
+          },
+          "503": {
+            "description": "Owner unavailable or operation timed out. Retry the original request."
+          }
+        }
+      }
+    },
+    "/processes/{process_id}/completion-exports/{request_id}/download": {
+      "get": {
+        "operationId": "downloadCompletionExport",
+        "summary": "Download the existing receipt-pinned whole-case archive.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "process_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ProcessPathId"
+            }
+          },
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Original pinned ZIP under current human authority.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string",
+                  "const": "attachment; filename=case-completion.zip"
+                }
+              }
+            },
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid process or retry header."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Current human completion or archive permission refused."
+          },
+          "409": {
+            "description": "Changed retry identity or native request inputs."
+          },
+          "500": {
+            "description": "Required retained evidence is invalid or unavailable."
+          },
+          "503": {
+            "description": "Owner unavailable or operation timed out. Retry the original request."
+          }
+        }
+      }
+    },
+    "/application-cases/start": {
+      "post": {
+        "tags": [
+          "case-file"
+        ],
+        "operationId": "application_case_start",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Required; equals the source-owned draftRef.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartApplicationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Durable owned application case; no accepted filing is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationCaseReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid source draft or singular idempotency key."
+          },
+          "401": {
+            "description": "Producer authentication refused."
+          },
+          "403": {
+            "description": "Disabled feature, changed owner, source scope or selected pins."
+          },
+          "409": {
+            "description": "Retained application association conflicts."
+          },
+          "503": {
+            "description": "Qualified source or durable storage unavailable."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/application-cases/by-draft/{draft_uuid}": {
+      "get": {
+        "tags": [
+          "case-file"
+        ],
+        "operationId": "application_case_lookup",
+        "parameters": [
+          {
+            "name": "draft_uuid",
+            "in": "path",
+            "description": "Source-owned draft ID: native draft_ plus compact lowercase UUIDv7, or canonical hyphenated UUID.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Existing application case, or JSON null for qualified absence; never creates a case.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApplicationCaseReceipt"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unsupported draft ID or query."
+          },
+          "401": {
+            "description": "Current producer authentication refused."
+          },
+          "403": {
+            "description": "Current source ownership, scope or selected pins refused."
+          },
+          "409": {
+            "description": "Source or retained association conflicts."
+          },
+          "503": {
+            "description": "Qualified source reads or storage unavailable."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -6101,6 +6470,15 @@
       },
       "IntakeHandoffReceipt": {
         "$ref": "https://schemas.formspec.io/wos-api/case-file/v1#/$defs/IntakeHandoffReceipt"
+      },
+      "StartApplicationRequest": {
+        "$ref": "wos-public-api.registry.openapi.json#/components/schemas/StartApplicationRequest"
+      },
+      "ApplicationCaseReceipt": {
+        "$ref": "wos-public-api.registry.openapi.json#/components/schemas/ApplicationCaseReceipt"
+      },
+      "ApplicationCaseStatus": {
+        "$ref": "wos-public-api.registry.openapi.json#/components/schemas/ApplicationCaseStatus"
       }
     },
     "responses": {

@@ -56,7 +56,10 @@ use crate::store::{RuntimeStore, StoreError};
 use wos_events::custody::CustodyAppendError;
 
 #[doc(inline)]
-pub use custody_trellis::{TrellisCustodyAppendOutcome, TrellisCustodyAppender};
+pub use custody_trellis::{
+    TrellisCustodyAppendFailure, TrellisCustodyAppendHandler, TrellisCustodyAppendOutcome,
+    TrellisCustodyAppendStage, TrellisCustodyAppender,
+};
 pub use provenance::{
     CustodyReceiptStampError, populate_provenance_record_fields, stamp_custody_receipt,
     stamp_provenance, stamp_signature_decision_identity,
@@ -741,6 +744,13 @@ impl WosRuntime {
 
 #[cfg(test)]
 mod tests {
+    include!("runtime/queued_event_origin_tests.rs");
+    mod form_definition_pin_tests {
+        include!("runtime/form_definition_pin_tests.rs");
+    }
+    mod custody_router_tests {
+        include!("runtime/custody_trellis_router_tests.rs");
+    }
     mod native_stage_tests {
         include!("runtime/staging_tests.rs");
     }
@@ -1022,6 +1032,7 @@ mod tests {
             .enqueue_event(
                 test_process_id("case-determination"),
                 PendingEvent {
+                    origin: None,
                     event: "decide".to_string(),
                     actor_id: Some("reviewer".to_string()),
                     data: None,
@@ -1116,6 +1127,7 @@ mod tests {
             .enqueue_event(
                 test_process_id("case-join-determination"),
                 PendingEvent {
+                    origin: None,
                     event: "completeReview".to_string(),
                     actor_id: Some("reviewer".to_string()),
                     data: None,
@@ -1203,6 +1215,7 @@ mod tests {
                 .enqueue_event(
                     test_process_id("case-multi-determination"),
                     PendingEvent {
+                        origin: None,
                         event: event.to_string(),
                         actor_id: Some("reviewer".to_string()),
                         data: None,
@@ -2495,6 +2508,97 @@ mod tests {
         .with_intake_acceptors(intake_acceptors())
     }
 
+    #[test]
+    fn drain_transition_mutation_marker_uses_canonical_event_and_retains_trigger() {
+        for (prior_mutation, current_mutation) in [(true, false), (false, true), (false, false)] {
+            let mutation = serde_json::json!({
+                "action": "setData", "path": "caseFile.reviewed", "value": true
+            });
+            let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+                "$wosWorkflow": "1.0",
+                "url": "urn:test:transition-mutation-marker",
+                "version": "1.0.0",
+                "lifecycle": {
+                    "initialState": "open",
+                    "states": {
+                        "open": {
+                            "type": "atomic",
+                            "onEntry": if prior_mutation { vec![mutation.clone()] } else { vec![] },
+                            "transitions": [{
+                                "event": "review.completed", "target": "done",
+                                "actions": if current_mutation { vec![mutation.clone()] } else { vec![] }
+                            }]
+                        },
+                        "done": { "type": "final" }
+                    }
+                }
+            })).unwrap();
+            let mut runtime = runtime_with_kernel(kernel);
+            let process_id = test_process_id("transition-marker");
+            runtime
+                .create_process(CreateProcessRequest {
+                    process_id: process_id.to_string(),
+                    tenant: None,
+                    definition_url: "urn:test:transition-mutation-marker".to_string(),
+                    definition_version: "1.0.0".to_string(),
+                    initial_case_state: None,
+                })
+                .unwrap();
+            runtime
+                .enqueue_event(
+                    process_id,
+                    PendingEvent {
+                        origin: None,
+                        event: "review.completed".to_string(),
+                        actor_id: Some("reviewer".to_string()),
+                        data: None,
+                        timestamp: String::new(),
+                        idempotency_token: None,
+                    },
+                )
+                .unwrap();
+            let result = runtime.drain_once(process_id).unwrap();
+            assert_eq!(result.transitions.len(), 1);
+            let markers: Vec<_> = result
+                .provenance
+                .iter()
+                .filter(|record| {
+                    record
+                        .data
+                        .as_ref()
+                        .and_then(|data| data.get("caseStateUnchangedByTransition"))
+                        == Some(&serde_json::Value::Bool(true))
+                })
+                .collect();
+            assert_eq!(
+                markers.len(),
+                usize::from(prior_mutation || current_mutation)
+            );
+            for marker in markers {
+                assert_eq!(marker.record_kind, ProvenanceKind::StateTransition);
+                assert_eq!(marker.event.as_deref(), Some("wos.kernel.state_transition"));
+                assert_eq!(
+                    marker.data.as_ref().unwrap()["transitionEvent"],
+                    "review.completed"
+                );
+                assert_eq!(marker.actor_id.as_deref(), Some("reviewer"));
+                assert_eq!(marker.from_state, None);
+                assert_eq!(marker.to_state, None);
+                assert!(!marker.timestamp.is_empty());
+                let retained = runtime.store.load_record(process_id).unwrap();
+                let persisted = retained
+                    .provenance_log
+                    .iter()
+                    .find(|record| record.id == marker.id)
+                    .unwrap();
+                assert_eq!(
+                    serde_json::to_value(persisted).unwrap(),
+                    serde_json::to_value(marker).unwrap()
+                );
+            }
+        }
+    }
+
     fn runtime_with_kernel(kernel: KernelDocument) -> WosRuntime {
         runtime_with_store(InMemoryStore::new(), kernel)
     }
@@ -2766,6 +2870,7 @@ mod tests {
                 .enqueue_event(
                     test_process_id("case-trait"),
                     PendingEvent {
+                        origin: None,
                         event: "start".to_string(),
                         actor_id: Some("reviewer".to_string()),
                         data: None,
@@ -2820,10 +2925,12 @@ mod tests {
                 custody_window[0].idempotency_tuple(),
                 (created.case_ledger_id.as_str(), window[0].id.as_str())
             );
-            assert!(
-                custody_window[0].event_type.starts_with("wos.kernel."),
-                "unexpected custody event type: {}",
-                custody_window[0].event_type
+            assert_eq!(
+                custody_window[0].event_type,
+                window[0]
+                    .record_kind
+                    .canonical_event_literal()
+                    .unwrap_or(wos_events::WOS_NATIVE_PROVENANCE_EVENT_LITERAL)
             );
             let mut expected_custody_record =
                 serde_json::to_value(&window[0]).expect("json provenance");
@@ -2926,7 +3033,7 @@ mod tests {
             "contracts": {
                 "reviewForm": {
                     "binding": "formspec",
-                    "ref": "urn:formspec:review"
+                    "ref": "urn:formspec:review", "definitionVersion": "1.0.0"
                 }
             }
         }))
@@ -3390,6 +3497,58 @@ mod tests {
     }
 
     #[test]
+    fn deferred_intake_replay_retains_empty_original_inventory_after_task_creation() {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosWorkflow":"1.0", "url":"urn:test:deferred-intake", "version":"1.0.0",
+            "contracts":{"review":{"binding":"formspec","ref":"urn:form:review","definitionVersion":"1.2.3"}},
+            "lifecycle":{"initialState":"checking","states":{
+                "checking":{"type":"atomic","onEntry":[{"action":"emitEvent","eventType":"checks.ready"}],
+                    "transitions":[{"event":"checks.ready","target":"reviewing"}]},
+                "reviewing":{"type":"atomic","onEntry":[{"action":"createTask","taskRef":"review",
+                    "assignTo":"reviewer","contractRef":"review"}]}
+            }}
+        })).unwrap();
+        let mut runtime =
+            runtime_with_kernel(kernel).with_intake_policy(AutoCreatePublicIntakePolicy);
+        let request = public_intake_request(
+            "ih-deferred-inventory",
+            test_case_ledger_urn("deferred-inventory"),
+            "urn:test:deferred-intake",
+            "1.0.0",
+        );
+        let accepted = runtime
+            .accept_intake_handoff("formspec", request.clone())
+            .unwrap();
+        let original = accepted.creation.expect("committed creation inventory");
+        assert!(original.tasks.is_empty());
+        let before = runtime.load_process(&original.process_id).unwrap();
+        assert!(before.active_tasks.is_empty());
+        assert_eq!(before.pending_events.len(), 1);
+        runtime.drain_until_idle(&original.process_id).unwrap();
+        let after = runtime.load_process(&original.process_id).unwrap();
+        assert_eq!(after.active_tasks.len(), 1);
+        assert_eq!(after.active_tasks[0].task_ref, "review");
+        assert_eq!(
+            after.active_tasks[0].definition_version.as_deref(),
+            Some("1.2.3")
+        );
+        let replay = runtime.accept_intake_handoff("formspec", request).unwrap();
+        assert_eq!(
+            serde_json::to_value(replay.creation).unwrap(),
+            serde_json::to_value(Some(original)).unwrap()
+        );
+        assert_eq!(
+            runtime
+                .load_provenance_window(&after.process_id, 0, 100)
+                .unwrap()
+                .iter()
+                .filter(|record| record.record_kind == ProvenanceKind::IntakeAccepted)
+                .count(),
+            1
+        );
+    }
+
+    #[test]
     fn intake_creation_snapshot_survives_prepared_write_failure_and_task_removal() {
         creation_snapshot_retry(1);
     }
@@ -3591,6 +3750,193 @@ mod tests {
                     .store
                     .processes_for_case(WorkflowProcess::extract_urn_type_id(&case).unwrap())
                     .is_empty()
+            );
+        }
+    }
+
+    mod initial_initiating_actor {
+        use super::*;
+
+        fn kernel() -> KernelDocument {
+            serde_json::from_value(serde_json::json!({
+                "$wosWorkflow": "1.0", "url": "urn:test:initial-actor", "version": "1.0.0",
+                "lifecycle": { "initialState": "waiting", "states": {
+                    "waiting": { "type": "atomic", "onEntry": [
+                        { "action": "setData", "path": "caseFile.initialized", "value": true },
+                        { "action": "emitEvent", "eventType": "checks.completed" }
+                    ], "transitions": [{ "event": "checks.completed", "target": "done" }] },
+                    "done": { "type": "final" }
+                } }
+            }))
+            .unwrap()
+        }
+
+        fn request(actor: Option<&str>) -> IntakeAcceptanceRequest {
+            let mut request = public_intake_request(
+                "ih-initial-actor",
+                test_case_ledger_urn("initial-actor"),
+                "urn:test:initial-actor",
+                "1.0.0",
+            );
+            request.actor_id = actor.map(String::from);
+            request
+        }
+
+        fn check(actor: Option<&str>) {
+            let mut runtime =
+                runtime_with_kernel(kernel()).with_intake_policy(AutoCreatePublicIntakePolicy);
+            let request = request(actor);
+            let decision = runtime
+                .accept_intake_handoff("formspec", request.clone())
+                .unwrap();
+            let creation = decision.creation.as_ref().unwrap();
+            let process_id = &creation.process_id;
+            let original = runtime.store.load_record(process_id).unwrap();
+            let action = original
+                .provenance_log
+                .iter()
+                .find(|record| record.record_kind == ProvenanceKind::ActionExecuted)
+                .unwrap();
+            let mutation = original
+                .provenance_log
+                .iter()
+                .find(|record| record.record_kind == ProvenanceKind::CaseStateMutation)
+                .unwrap();
+            assert_eq!(action.actor_id.as_deref(), actor);
+            assert_eq!(mutation.actor_id.as_deref(), actor);
+            assert_eq!(action.timestamp, creation.created_at);
+            assert_eq!(original.process.case_state["initialized"], true);
+            let pending = original.process.pending_events.first().unwrap();
+            assert_eq!(pending.actor_id.as_deref(), actor);
+            assert_eq!(pending.event, "checks.completed");
+            let origin = pending.origin.as_ref().unwrap();
+            assert_eq!(origin.action_record_id, action.id);
+            assert!(origin.transition_record_id.is_none());
+            let receipt = runtime
+                .store
+                .load_intake_record("formspec", "ih-initial-actor")
+                .unwrap();
+            assert_eq!(receipt.request, request);
+            assert_eq!(receipt.creation.as_ref(), Some(creation));
+            let accepted = original
+                .provenance_log
+                .iter()
+                .find(|record| record.event.as_deref() == Some("wos.kernel.intake_accepted"))
+                .unwrap();
+            assert_eq!(
+                accepted.data.as_ref().unwrap()["intakeId"],
+                "ih-initial-actor"
+            );
+            let before_replay = allocation_record_snapshot(&original);
+            assert_eq!(
+                serde_json::to_value(
+                    runtime
+                        .accept_intake_handoff("formspec", request.clone())
+                        .unwrap()
+                )
+                .unwrap(),
+                serde_json::to_value(&decision).unwrap()
+            );
+            assert_eq!(
+                allocation_record_snapshot(&runtime.store.load_record(process_id).unwrap()),
+                before_replay
+            );
+            let mut changed = request.clone();
+            changed.actor_id = Some("different-initiator".into());
+            assert!(matches!(
+                runtime.accept_intake_handoff("formspec", changed),
+                Err(RuntimeError::IntakeConflict(_))
+            ));
+            assert_eq!(
+                allocation_record_snapshot(&runtime.store.load_record(process_id).unwrap()),
+                before_replay
+            );
+
+            // Restore the actual queued process after JSON serialization and a later clock.
+            let mut restored = original.clone();
+            restored.process =
+                serde_json::from_value(serde_json::to_value(&original.process).unwrap()).unwrap();
+            let mut delayed = runtime_with_kernel(kernel());
+            delayed.clock = Box::new(FixedClock {
+                now_ms: 1_710_000_001_000,
+            });
+            delayed.store.create_record(restored).unwrap();
+            delayed.drain_once(process_id).unwrap();
+            let drained = delayed.store.load_record(process_id).unwrap();
+            let transition = drained
+                .provenance_log
+                .iter()
+                .find(|record| record.event.as_deref() == Some("wos.kernel.state_transition"))
+                .unwrap();
+            assert_eq!(transition.actor_id.as_deref(), actor);
+            assert_eq!(
+                transition.data.as_ref().unwrap()["transitionEvent"],
+                "checks.completed"
+            );
+            assert_eq!(drained.process.configuration, vec!["done".to_string()]);
+            assert!(drained.process.pending_events.is_empty());
+        }
+
+        #[test]
+        fn accepted_human_survives_initialization_and_delayed_drain() {
+            check(Some("actor:human:supplied-initiation"));
+        }
+
+        #[test]
+        fn accepted_system_survives_initialization_and_delayed_drain() {
+            check(Some("intake-service"));
+        }
+
+        #[test]
+        fn absent_initiator_remains_absent_in_initial_actions_and_queue() {
+            check(None);
+        }
+
+        #[test]
+        fn anonymous_constructor_stays_actorless_and_attachment_preserves_initial_rows() {
+            let mut runtime = runtime_with_kernel(kernel());
+            let created = runtime
+                .create_process_bound_to_case(
+                    CreateProcessRequest {
+                        process_id: test_process_id("initial-actor").into(),
+                        tenant: None,
+                        definition_url: "urn:test:initial-actor".into(),
+                        definition_version: "1.0.0".into(),
+                        initial_case_state: None,
+                    },
+                    test_case_ledger_id("initial-actor").into(),
+                )
+                .unwrap();
+            let original = runtime.store.load_record(&created.process_id).unwrap();
+            assert!(
+                original
+                    .provenance_log
+                    .iter()
+                    .all(|record| record.actor_id.is_none())
+            );
+            assert!(
+                original
+                    .process
+                    .pending_events
+                    .iter()
+                    .all(|event| event.actor_id.is_none())
+            );
+            let mut attached = workflow_intake_request(
+                "ih-attach-initial-actor",
+                test_case_ledger_urn("initial-actor"),
+            );
+            attached.actor_id = Some("new-intake-initiator".into());
+            attached.document["caseRef"] = serde_json::json!(test_case_ledger_urn("initial-actor"));
+            runtime.accept_intake_handoff("formspec", attached).unwrap();
+            let after = runtime.store.load_record(&created.process_id).unwrap();
+            assert_eq!(
+                serde_json::to_value(&after.process.pending_events).unwrap(),
+                serde_json::to_value(&original.process.pending_events).unwrap()
+            );
+            assert_eq!(
+                serde_json::to_value(&after.provenance_log[..original.provenance_log.len()])
+                    .unwrap(),
+                serde_json::to_value(&original.provenance_log).unwrap()
             );
         }
     }
@@ -5027,6 +5373,7 @@ mod tests {
             .enqueue_event(
                 process_id,
                 PendingEvent {
+                    origin: None,
                     event: "start".to_string(),
                     actor_id: Some("applicant".to_string()),
                     data: None,
@@ -5151,7 +5498,7 @@ mod tests {
             "contracts": {
                 "reviewForm": {
                     "binding": "formspec",
-                    "ref": "urn:formspec:review"
+                    "ref": "urn:formspec:review", "definitionVersion": "1.0.0"
                 }
             }
         }))
@@ -5172,6 +5519,7 @@ mod tests {
             .enqueue_event(
                 test_process_id("case-1"),
                 PendingEvent {
+                    origin: None,
                     event: "start".to_string(),
                     actor_id: Some("reviewer".to_string()),
                     data: None,
@@ -5242,6 +5590,7 @@ mod tests {
                 .enqueue_event(
                     test_process_id("case-token"),
                     PendingEvent {
+                        origin: None,
                         event: "same".to_string(),
                         actor_id: Some("reviewer".to_string()),
                         data: None,
@@ -5299,6 +5648,7 @@ mod tests {
                 .enqueue_event(
                     process_id,
                     PendingEvent {
+                        origin: None,
                         event: "submit".to_string(),
                         actor_id: Some("reviewer".to_string()),
                         data: Some(serde_json::json!({ "idempotencyKey": "shared-key" })),
@@ -5350,7 +5700,7 @@ mod tests {
             "contracts": {
                 "reviewForm": {
                     "binding": "formspec",
-                    "ref": "urn:formspec:review"
+                    "ref": "urn:formspec:review", "definitionVersion": "1.0.0"
                 }
             }
         }))
@@ -5412,7 +5762,7 @@ mod tests {
             "contracts": {
                 "reviewForm": {
                     "binding": "formspec",
-                    "ref": "urn:formspec:review"
+                    "ref": "urn:formspec:review", "definitionVersion": "1.0.0"
                 }
             }
         }))
@@ -5708,6 +6058,7 @@ mod tests {
             .enqueue_event(
                 process_id,
                 PendingEvent {
+                    origin: None,
                     event: "start".to_string(),
                     actor_id: Some("applicant".to_string()),
                     data: None,
@@ -5781,6 +6132,7 @@ mod tests {
             .enqueue_event(
                 process_id,
                 PendingEvent {
+                    origin: None,
                     event: "start".to_string(),
                     actor_id: Some("applicant".to_string()),
                     data: None,
@@ -5890,6 +6242,7 @@ mod tests {
             .enqueue_event(
                 process_id,
                 PendingEvent {
+                    origin: None,
                     event: "start".to_string(),
                     actor_id: Some("applicant".to_string()),
                     data: None,
@@ -5985,6 +6338,7 @@ mod tests {
             .enqueue_event(
                 process_id,
                 PendingEvent {
+                    origin: None,
                     event: "start".to_string(),
                     actor_id: Some("applicant".to_string()),
                     data: None,
@@ -6140,6 +6494,7 @@ mod tests {
                 .enqueue_event(
                     &process_id,
                     PendingEvent {
+                        origin: None,
                         event: "start".to_string(),
                         actor_id: Some("applicant".to_string()),
                         data: None,
@@ -6286,6 +6641,7 @@ mod tests {
             .enqueue_event(
                 process_id,
                 PendingEvent {
+                    origin: None,
                     event: "start".to_string(),
                     actor_id: Some("applicant".to_string()),
                     data: None,
@@ -6491,6 +6847,7 @@ mod tests {
             .enqueue_event(
                 process_id,
                 PendingEvent {
+                    origin: None,
                     event: "start".to_string(),
                     actor_id: Some("applicant".to_string()),
                     data: None,
@@ -6613,6 +6970,7 @@ mod tests {
             .enqueue_event(
                 process_id,
                 PendingEvent {
+                    origin: None,
                     event: "start".to_string(),
                     actor_id: Some("applicant".to_string()),
                     data: None,
@@ -8062,6 +8420,7 @@ mod tests {
             .enqueue_event(
                 test_process_id("case-8"),
                 PendingEvent {
+                    origin: None,
                     event: "start".to_string(),
                     actor_id: Some("reviewer".to_string()),
                     data: None,
@@ -8105,7 +8464,7 @@ mod tests {
             "contracts": {
                 "reviewForm": {
                     "binding": "formspec",
-                    "ref": "urn:formspec:review"
+                    "ref": "urn:formspec:review", "definitionVersion": "1.0.0"
                 }
             }
         }))
@@ -8136,6 +8495,7 @@ mod tests {
             .enqueue_event(
                 test_process_id("case-9"),
                 PendingEvent {
+                    origin: None,
                     event: "start".to_string(),
                     actor_id: Some("reviewer".to_string()),
                     data: None,
@@ -8299,6 +8659,7 @@ mod tests {
             .enqueue_event(
                 test_process_id("case-service"),
                 PendingEvent {
+                    origin: None,
                     event: "verify".to_string(),
                     actor_id: Some("verificationSystem".to_string()),
                     data: None,
@@ -8426,6 +8787,7 @@ mod tests {
             .enqueue_event(
                 test_process_id("case-integration"),
                 PendingEvent {
+                    origin: None,
                     event: "verify".to_string(),
                     actor_id: Some("system".to_string()),
                     data: None,
@@ -8495,6 +8857,7 @@ mod tests {
             .enqueue_event(
                 test_process_id("case-integration"),
                 PendingEvent {
+                    origin: None,
                     event: "verify".to_string(),
                     actor_id: Some("system".to_string()),
                     data: None,
@@ -8605,6 +8968,7 @@ mod tests {
             .enqueue_event(
                 test_process_id("case-target-mismatch"),
                 PendingEvent {
+                    origin: None,
                     event: "verify".to_string(),
                     actor_id: Some("system".to_string()),
                     data: None,
@@ -8705,6 +9069,7 @@ mod tests {
             .enqueue_event(
                 test_process_id("case-tool-integration-binding"),
                 PendingEvent {
+                    origin: None,
                     event: "verify".to_string(),
                     actor_id: Some("system".to_string()),
                     data: None,
@@ -8819,6 +9184,7 @@ mod tests {
             .enqueue_event(
                 test_process_id("case-invalid-idempotency"),
                 PendingEvent {
+                    origin: None,
                     event: "verify".to_string(),
                     actor_id: Some("system".to_string()),
                     data: None,
@@ -8889,6 +9255,7 @@ mod tests {
             .enqueue_event(
                 test_process_id("case-guards"),
                 PendingEvent {
+                    origin: None,
                     event: "approve".to_string(),
                     actor_id: Some("approver".to_string()),
                     data: None,
@@ -8977,6 +9344,7 @@ mod tests {
                 .enqueue_event(
                     test_process_id("case-scope"),
                     PendingEvent {
+                        origin: None,
                         event: name.to_string(),
                         actor_id: None,
                         data: None,
@@ -9222,6 +9590,7 @@ mod tests {
             .enqueue_event(
                 &first.process_id,
                 PendingEvent {
+                    origin: None,
                     event: "advance".into(),
                     actor_id: Some("actor:human:original".into()),
                     data: None,
@@ -9415,6 +9784,7 @@ mod tests {
             .enqueue_event(
                 &process.process_id,
                 PendingEvent {
+                    origin: None,
                     event: "advance".into(),
                     actor_id: None,
                     data: None,
@@ -9711,6 +10081,7 @@ mod tests {
                 .enqueue_event(
                     &process.process_id,
                     PendingEvent {
+                        origin: None,
                         event: "advance".into(),
                         actor_id: Some("actor:human:original".into()),
                         data: None,
@@ -9739,8 +10110,7 @@ mod tests {
 
     fn bound_formspec_kernel() -> KernelDocument {
         let mut value = serde_json::to_value(bound_actor_kernel()).unwrap();
-        value["contracts"] =
-            serde_json::json!({"reviewForm":{"binding":"formspec","ref":"urn:formspec:review"}});
+        value["contracts"] = serde_json::json!({"reviewForm":{"binding":"formspec","ref":"urn:formspec:review","definitionVersion":"1.0.0"}});
         value["lifecycle"]["states"]["initial"]["onEntry"][0]["contractRef"] =
             serde_json::json!("reviewForm");
         value["lifecycle"]["states"]["initial"]["onEntry"][0]["extensions"] = serde_json::json!({"x-wos-signature-profile-key":"bound-profile", "x-wos-signature-step-id":"applicantSigns"});
@@ -10084,6 +10454,7 @@ mod tests {
                         .enqueue_event(
                             &process.process_id,
                             PendingEvent {
+                                origin: None,
                                 event: "advance".into(),
                                 actor_id: Some("actor:human:original".into()),
                                 data: None,
@@ -10140,7 +10511,7 @@ mod tests {
                 task["expiresWithTimer"] = "response".into();
             }
             serde_json::from_value(serde_json::json!({"$wosWorkflow":"1.0","url":"urn:test:lifetime","version":"1.0.0",
-                "contracts":{"reviewForm":{"binding":"formspec","ref":"urn:formspec:review"}},
+                "contracts":{"reviewForm":{"binding":"formspec","ref":"urn:formspec:review","definitionVersion":"1.0.0"}},
                 "lifecycle":{"initialState":"open","states":{
                     "open":{"type":"atomic","onEntry":[timer,task],"transitions":[{"event":"advance","target":"later"}]},
                     "later":{"type":"atomic"}}}})).unwrap()
@@ -10579,6 +10950,7 @@ mod tests {
                 .enqueue_event(
                     &id,
                     PendingEvent {
+                        origin: None,
                         event: "advance".into(),
                         actor_id: None,
                         data: None,
@@ -10613,6 +10985,7 @@ mod tests {
                 .enqueue_event(
                     &id,
                     PendingEvent {
+                        origin: None,
                         event: "advance".into(),
                         actor_id: None,
                         data: None,
@@ -10706,6 +11079,7 @@ mod tests {
                 .enqueue_event(
                     &id,
                     PendingEvent {
+                        origin: None,
                         event: "advance".into(),
                         actor_id: None,
                         data: None,
@@ -10787,6 +11161,8 @@ mod tests {
                 duration_ms: timer.duration_ms.unwrap(),
             };
             let observed = wos_core::eval::ObservedAction {
+                provenance_record_id: None,
+                transition_record_id: None,
                 lifecycle_state:"open".into(),actor_id:None,
                 action:serde_json::from_value(serde_json::json!({
                     "action":"createTask","taskRef":"later","assignTo":"reviewer","expiresWithTimer":"response"

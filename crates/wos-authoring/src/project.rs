@@ -250,6 +250,21 @@ impl WosProject {
         })
     }
 
+    /// Pins a contract to its referenced Definition version.
+    ///
+    /// # Errors
+    /// Returns a diagnostic for an unknown contract or blank version.
+    pub fn set_contract_definition_version(
+        &mut self,
+        name: impl Into<String>,
+        definition_version: impl Into<String>,
+    ) -> AuthoringResult {
+        self.core.dispatch(Command::SetContractDefinitionVersion {
+            name: name.into(),
+            definition_version: definition_version.into(),
+        })
+    }
+
     // ── Governance ────────────────────────────────────────────────────────
 
     /// Record a due-process path under `x-wos-governance.dueProcessPaths`.

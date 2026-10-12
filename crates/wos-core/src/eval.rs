@@ -189,6 +189,10 @@ pub struct ObservedAction {
     /// state to be entered or exited. Integration handlers (event-consume,
     /// callback inbound) read the CloudEvent envelope from this field.
     pub event_data: Option<serde_json::Value>,
+    /// Actual emitEvent ActionExecuted record, captured during evaluation.
+    pub provenance_record_id: Option<String>,
+    /// Nearest actual transition that executed this emitEvent action, if any.
+    pub transition_record_id: Option<String>,
     /// Exact timer present when an explicitly bounded createTask action executed.
     /// Runtime applies its selected calendar to this ephemeral capture; later
     /// timer replacement or cancellation cannot change the task's admission expiry.
@@ -273,6 +277,24 @@ impl Evaluator {
         current_time_ms: u64,
         initial_case_state: Option<&serde_json::Value>,
     ) -> Result<Self, EvalError> {
+        Self::with_time_and_case_state_and_actor(kernel, current_time_ms, initial_case_state, None)
+    }
+
+    /// Initialize evaluation with an explicitly admitted initiating principal.
+    ///
+    /// `initial_initiating_actor_id` attributes initial lifecycle control actions
+    /// to the principal initiating evaluation, not a machine or external-service
+    /// executor. The host must admit that identity; `None` remains anonymous.
+    /// Initial evaluation has no event data or synthetic triggering event.
+    ///
+    /// # Errors
+    /// Returns evaluation errors, including invalid anchored timer input.
+    pub fn with_time_and_case_state_and_actor(
+        kernel: KernelDocument,
+        current_time_ms: u64,
+        initial_case_state: Option<&serde_json::Value>,
+        initial_initiating_actor_id: Option<&str>,
+    ) -> Result<Self, EvalError> {
         let initial = kernel.lifecycle.initial_state.clone();
         let state_index = build_state_index(&kernel);
         let case_state = build_default_case_state(&kernel);
@@ -301,7 +323,7 @@ impl Evaluator {
             guard_evaluations: Vec::new(),
             history_store: HashMap::new(),
         };
-        eval.enter_state(&initial, None, None)?;
+        eval.enter_state(&initial, initial_initiating_actor_id, None)?;
         Ok(eval)
     }
 
@@ -635,6 +657,8 @@ impl Evaluator {
                 let target = transition.target.clone();
                 let case_file_snapshot = self.case_file_snapshot_for_transition(&transition.tags);
 
+                let actions_start = self.executed_actions.len();
+
                 // Execute onExit.
                 self.execute_on_exit_actions(&active, actor, event_data)?;
 
@@ -653,15 +677,16 @@ impl Evaluator {
                     event: dispatch_event.to_string(),
                     tags: transition.tags.clone(),
                 });
-                self.provenance
-                    .push(ProvenanceRecord::tagged_state_transition(
-                        &active,
-                        &target,
-                        dispatch_event,
-                        actor,
-                        &transition.tags,
-                        case_file_snapshot,
-                    ));
+                let transition_record = ProvenanceRecord::tagged_state_transition(
+                    &active,
+                    &target,
+                    dispatch_event,
+                    actor,
+                    &transition.tags,
+                    case_file_snapshot,
+                );
+                let transition_record_id = transition_record.id.clone();
+                self.provenance.push(transition_record);
 
                 self.apply_parallel_cancellation_policy(
                     parallel_id,
@@ -671,6 +696,7 @@ impl Evaluator {
                     actor,
                     event_data,
                 )?;
+                self.bind_emitted_action_origins(actions_start, &transition_record_id);
                 any_fired = true;
                 break;
             }
@@ -1073,6 +1099,7 @@ impl Evaluator {
         event_data: Option<&serde_json::Value>,
     ) -> Result<(), EvalError> {
         let case_file_snapshot = self.case_file_snapshot_for_transition(tags);
+        let actions_start = self.executed_actions.len();
 
         self.execute_on_exit_actions(source, actor, event_data)?;
 
@@ -1086,23 +1113,52 @@ impl Evaluator {
         self.exit_state_and_descendants(source);
         self.enter_state(target, actor, event_data)?;
 
-        self.provenance
-            .push(ProvenanceRecord::tagged_state_transition(
-                source,
-                target,
-                event,
-                actor,
-                tags,
-                case_file_snapshot,
-            ));
-        self.transitions.push(ObservedTransition {
-            from: source.to_string(),
-            to: target.to_string(),
-            event: event.to_string(),
-            tags: tags.to_vec(),
-        });
+        self.record_transition(
+            ObservedTransition {
+                from: source.to_string(),
+                to: target.to_string(),
+                event: event.to_string(),
+                tags: tags.to_vec(),
+            },
+            actor,
+            case_file_snapshot,
+            actions_start,
+        );
 
         Ok(())
+    }
+
+    /// Retain an actual transition and bind its still-unbound emissions.
+    fn record_transition(
+        &mut self,
+        transition: ObservedTransition,
+        actor: Option<&str>,
+        case_file_snapshot: Option<CaseFileSnapshot>,
+        actions_start: usize,
+    ) {
+        let record = ProvenanceRecord::tagged_state_transition(
+            &transition.from,
+            &transition.to,
+            &transition.event,
+            actor,
+            &transition.tags,
+            case_file_snapshot,
+        );
+        let record_id = record.id.clone();
+        self.provenance.push(record);
+        self.bind_emitted_action_origins(actions_start, &record_id);
+        self.transitions.push(transition);
+    }
+
+    /// Bind still-unbound emissions to their nearest actual transition.
+    fn bind_emitted_action_origins(&mut self, start: usize, transition_record_id: &str) {
+        for action in &mut self.executed_actions[start..] {
+            // Nested transitions already own their emissions. Non-emit actions
+            // have no captured emit provenance and allocate no origin references.
+            if action.provenance_record_id.is_some() && action.transition_record_id.is_none() {
+                action.transition_record_id = Some(transition_record_id.to_string());
+            }
+        }
     }
 
     fn case_file_snapshot_for_transition(&self, tags: &[String]) -> Option<CaseFileSnapshot> {
@@ -1162,6 +1218,7 @@ impl Evaluator {
         } else {
             None
         };
+        let mut provenance_record_id = None;
         match action.action {
             ActionKind::SetData => {
                 let path = action.path.as_deref().unwrap_or("");
@@ -1278,14 +1335,21 @@ impl Evaluator {
                     ActionKind::Log => "log",
                     _ => &action_name,
                 };
-                self.provenance.push(ProvenanceRecord::action_executed(
-                    lifecycle_state,
-                    action_name_camel,
-                ));
+                let mut action_record =
+                    ProvenanceRecord::action_executed(lifecycle_state, action_name_camel);
+                action_record.actor_id = actor.map(String::from);
+                if action.action == ActionKind::EmitEvent {
+                    action_record.data.as_mut().expect("action record has data")["eventType"] =
+                        serde_json::json!(action.event_type);
+                    provenance_record_id = Some(action_record.id.clone());
+                }
+                self.provenance.push(action_record);
             }
         }
 
         self.executed_actions.push(ObservedAction {
+            provenance_record_id,
+            transition_record_id: None,
             lifecycle_state: lifecycle_state.to_string(),
             actor_id: actor.map(String::from),
             action: action.clone(),
@@ -1675,6 +1739,7 @@ impl Evaluator {
         }
 
         let mut current_id = initial_id.to_string();
+        let mut entered_by = None;
 
         for _step in 0..MAX_BODY_STEPS {
             let substate = body
@@ -1715,6 +1780,12 @@ impl Evaluator {
                 self.execute_action_in_state(action, actor, &substate_label, event_data)?;
             }
 
+            // The transition owns its actions, source exit and destination entry.
+            // Initial body entry has no internal transition to invent here.
+            if let Some((transition, snapshot, actions_start)) = entered_by.take() {
+                self.record_transition(transition, actor, snapshot, actions_start);
+            }
+
             // Final substate ⇒ body has completed.
             if substate.kind == StateKind::Final {
                 return Ok(());
@@ -1722,7 +1793,7 @@ impl Evaluator {
 
             // Find the first eligible anonymous outgoing transition.
             let transitions = substate.transitions.clone();
-            let mut next_id: Option<String> = None;
+            let mut next_id = None;
             for transition in &transitions {
                 if transition.event.is_some() {
                     // Explicit-event transitions do not auto-fire inside a
@@ -1741,16 +1812,23 @@ impl Evaluator {
                 if !passes {
                     continue;
                 }
+                let actions_start = self.executed_actions.len();
+                let snapshot = self.case_file_snapshot_for_transition(&transition.tags);
                 // Run transition actions — attributed to the source substate
                 // for provenance — before walking the source's onExit.
                 for action in &transition.actions {
                     self.execute_action_in_state(action, actor, &substate_label, event_data)?;
                 }
-                next_id = Some(transition.target.clone());
+                next_id = Some((
+                    transition.target.clone(),
+                    transition.tags.clone(),
+                    snapshot,
+                    actions_start,
+                ));
                 break;
             }
 
-            let next = match next_id {
+            let (next, tags, snapshot, actions_start) = match next_id {
                 Some(n) => n,
                 None => {
                     return Err(EvalError::ForEach {
@@ -1774,6 +1852,16 @@ impl Evaluator {
                 self.execute_action_in_state(action, actor, &substate_label, event_data)?;
             }
 
+            entered_by = Some((
+                ObservedTransition {
+                    from: substate_label,
+                    to: format!("{foreach_state_id}:body:{next}"),
+                    event: SYNTHETIC_EVENT.to_string(),
+                    tags,
+                },
+                snapshot,
+                actions_start,
+            ));
             current_id = next;
         }
 
@@ -2923,6 +3011,163 @@ fn insert_nested(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod initial_initiating_actor {
+        use super::*;
+
+        fn kernel() -> KernelDocument {
+            serde_json::from_value(serde_json::json!({
+                "$wosWorkflow": "1.0",
+                "lifecycle": { "initialState": "waiting", "states": {
+                    "waiting": { "type": "atomic", "onEntry": [
+                        { "action": "emitEvent", "eventType": "checks.completed" }
+                    ] }
+                } }
+            }))
+            .unwrap()
+        }
+
+        #[test]
+        fn explicit_initial_actor_is_optional_and_not_event_data() {
+            for actor in [Some("actor:human:initiator"), Some("intake-service"), None] {
+                let eval = Evaluator::with_time_and_case_state_and_actor(kernel(), 42, None, actor)
+                    .unwrap();
+                let action = eval.executed_actions().first().unwrap();
+                assert_eq!(action.actor_id.as_deref(), actor);
+                assert!(action.event_data.is_none());
+                let record = eval
+                    .provenance
+                    .records()
+                    .iter()
+                    .find(|record| record.record_kind == crate::ProvenanceKind::ActionExecuted)
+                    .unwrap();
+                assert_eq!(record.actor_id.as_deref(), actor);
+                assert!(action.transition_record_id.is_none());
+            }
+        }
+
+        #[test]
+        fn existing_initializers_remain_actorless() {
+            for eval in [
+                Evaluator::new(kernel()).unwrap(),
+                Evaluator::with_time(kernel(), 42).unwrap(),
+                Evaluator::with_time_and_case_state(kernel(), 42, None).unwrap(),
+            ] {
+                assert!(
+                    eval.executed_actions()
+                        .iter()
+                        .all(|action| action.actor_id.is_none())
+                );
+                assert!(
+                    eval.provenance
+                        .records()
+                        .iter()
+                        .all(|record| record.actor_id.is_none())
+                );
+            }
+        }
+    }
+
+    mod action_actor_preservation {
+        use super::*;
+
+        fn check_actor(actor: Option<&str>) {
+            let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+                "$wosWorkflow": "1.0",
+                "lifecycle": {
+                    "initialState": "waiting",
+                    "states": {
+                        "waiting": {
+                            "type": "atomic",
+                            "onExit": [{ "action": "log", "message": "leaving" }],
+                            "transitions": [{
+                                "event": { "kind": "message", "name": "review.completed" },
+                                "target": "done",
+                                "actions": [{ "action": "emitEvent", "eventType": "notice.ready" }]
+                            }]
+                        },
+                        "done": {
+                            "type": "atomic",
+                            "onEntry": [
+                                { "action": "invokeService", "serviceRef": "notice" },
+                                { "action": "createTask", "taskRef": "review.followup" }
+                            ]
+                        }
+                    }
+                }
+            }))
+            .unwrap();
+            let mut eval = Evaluator::new(kernel).unwrap();
+            assert!(eval.process_event("review.completed", actor, None).unwrap());
+            let actions: Vec<_> = eval
+                .provenance
+                .records()
+                .iter()
+                .filter(|record| record.record_kind == crate::ProvenanceKind::ActionExecuted)
+                .collect();
+            assert_eq!(actions.len(), 4);
+            for record in &actions {
+                assert_eq!(record.actor_id.as_deref(), actor);
+                assert!(record.actor_type.is_none());
+                let json = serde_json::to_value(record).unwrap();
+                assert_eq!(
+                    json.get("actorId").and_then(serde_json::Value::as_str),
+                    actor
+                );
+                if actor.is_none() {
+                    assert!(json.get("actorId").is_none());
+                }
+            }
+            let transition = eval
+                .provenance
+                .records()
+                .iter()
+                .find(|record| record.event.as_deref() == Some("wos.kernel.state_transition"))
+                .unwrap();
+            assert_eq!(transition.actor_id.as_deref(), actor);
+            assert_eq!(
+                transition.data.as_ref().unwrap()["transitionEvent"],
+                "review.completed"
+            );
+            let emission = eval
+                .executed_actions()
+                .iter()
+                .find(|action| action.action.action == ActionKind::EmitEvent)
+                .unwrap();
+            assert_eq!(emission.actor_id.as_deref(), actor);
+            assert_eq!(
+                emission.transition_record_id.as_deref(),
+                Some(transition.id.as_str())
+            );
+            let emission_record = actions
+                .iter()
+                .find(|record| record.data.as_ref().unwrap()["actionType"] == "emitEvent")
+                .unwrap();
+            assert_eq!(
+                emission.provenance_record_id.as_deref(),
+                Some(emission_record.id.as_str())
+            );
+            assert_eq!(
+                emission_record.data.as_ref().unwrap()["eventType"],
+                "notice.ready"
+            );
+        }
+
+        #[test]
+        fn human_actor_survives_action_provenance() {
+            check_actor(Some("actor:human:actual-supplied-id"));
+        }
+
+        #[test]
+        fn system_actor_survives_action_provenance() {
+            check_actor(Some("scheduler:actual-supplied-id"));
+        }
+
+        #[test]
+        fn absent_actor_stays_absent_in_action_provenance() {
+            check_actor(None);
+        }
+    }
 
     mod anchored_timers {
         use super::*;

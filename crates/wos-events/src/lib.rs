@@ -12,7 +12,12 @@ use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub mod custody;
+mod native_provenance;
 pub mod provenance;
+
+pub use native_provenance::{
+    NativeProvenanceError, NativeProvenanceEvent, WOS_NATIVE_PROVENANCE_EVENT_LITERAL,
+};
 
 pub use custody::{
     CustodyAppendContext, CustodyAppendError, CustodyAppendInput, CustodyAppendMetadata,

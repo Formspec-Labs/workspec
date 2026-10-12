@@ -93,7 +93,7 @@ fn stage_policy() -> NativePreparationPolicy {
 fn stage_kernel() -> KernelDocument {
     serde_json::from_value(serde_json::json!({
         "$wosWorkflow":"1.0", "url":"urn:test:native-stage", "version":"1.0.0",
-        "contracts":{"review":{"binding":"formspec","ref":"urn:formspec:stage-review"}},
+        "contracts":{"review":{"binding":"formspec","ref":"urn:formspec:stage-review","definitionVersion":"1.0.0"}},
         "lifecycle":{"initialState":"open","states":{"open":{"type":"atomic", "onEntry":[
             {"action":"createTask","taskRef":"review","assignTo":"reviewer","contractRef":"review"}
         ]}}}

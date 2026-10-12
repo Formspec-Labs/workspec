@@ -495,9 +495,64 @@ pub struct PendingEvent {
     pub data: Option<serde_json::Value>,
     /// Submission timestamp (ISO 8601).
     pub timestamp: String,
+    /// Native emitting action and its exact transition, when produced internally.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present_origin"
+    )]
+    pub origin: Option<PendingEventOrigin>,
     /// Deduplication token.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub idempotency_token: Option<String>,
+}
+
+/// Provenance references for one native emitted event occurrence.
+///
+/// References identify actual same-process records; they grant no authority.
+/// Initial-entry actions have no transition. Older retained events lack origin.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PendingEventOrigin {
+    /// Exact ActionExecuted record for the emitEvent occurrence.
+    #[serde(deserialize_with = "deserialize_origin_record_id")]
+    pub action_record_id: String,
+    /// Exact StateTransition record that executed the action, when applicable.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present_origin_record_id"
+    )]
+    pub transition_record_id: Option<String>,
+}
+
+fn deserialize_present_origin<'de, D>(
+    deserializer: D,
+) -> Result<Option<PendingEventOrigin>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    PendingEventOrigin::deserialize(deserializer).map(Some)
+}
+
+fn deserialize_origin_record_id<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = String::deserialize(deserializer)?;
+    if value.trim().is_empty() {
+        return Err(serde::de::Error::custom(
+            "origin record ID must be nonblank",
+        ));
+    }
+    Ok(value)
+}
+
+fn deserialize_present_origin_record_id<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    deserialize_origin_record_id(deserializer).map(Some)
 }
 
 /// Governance runtime state.

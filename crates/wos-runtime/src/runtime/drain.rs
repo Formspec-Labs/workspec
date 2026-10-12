@@ -147,28 +147,14 @@ impl WosRuntime {
             .chain(appended_provenance.iter())
             .any(|record| record.record_kind == ProvenanceKind::CaseStateMutation);
         if !runtime_result.transitions.is_empty() && case_state_can_mutate_explicitly {
-            appended_provenance.push(ProvenanceRecord {
-                id: ProvenanceRecord::mint_id(),
-                record_kind: ProvenanceKind::StateTransition,
-                timestamp: String::new(),
-                actor_id: event.actor_id.clone(),
-                from_state: None,
-                to_state: None,
-                event: Some(event.event.clone()),
-                data: Some(serde_json::json!({ "caseStateUnchangedByTransition": true })),
-                audit_layer: None,
-                actor_type: None,
-                lifecycle_state: None,
-                definition_version: None,
-                inputs: Vec::new(),
-                outputs: Vec::new(),
-                input_digest: None,
-                output_digest: None,
-                canonical_event_hash: None,
-                transition_tags: Vec::new(),
-                case_file_snapshot: None,
-                outcome: None,
-            });
+            // This marker describes mutation accounting, not an additional state move.
+            let mut marker = ProvenanceRecord::blank(ProvenanceKind::StateTransition);
+            marker.actor_id = event.actor_id.clone();
+            marker.data = Some(serde_json::json!({
+                "caseStateUnchangedByTransition": true,
+                "transitionEvent": event.event,
+            }));
+            appended_provenance.push(marker);
         }
 
         // Milestone firing: evaluate after the event's transition tree completes

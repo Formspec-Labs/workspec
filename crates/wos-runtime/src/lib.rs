@@ -62,7 +62,8 @@ pub use runtime::{
     PostureDeclaration, PostureResolver, ResolvedPostureDeclaration, RuntimeError,
     RuntimeEventContext, RuntimeEventDecision, SIGNATURE_PROFILE_KEY_EXTENSION,
     SIGNATURE_PROFILE_REF_EXTENSION, SIGNATURE_STEP_ID_EXTENSION, SignatureProfileDocument,
-    StaticPostureResolver, SystemClock, TaskSubmissionResult, TrellisCustodyAppendOutcome,
+    StaticPostureResolver, SystemClock, TaskSubmissionResult, TrellisCustodyAppendFailure,
+    TrellisCustodyAppendHandler, TrellisCustodyAppendOutcome, TrellisCustodyAppendStage,
     TrellisCustodyAppender, WosRuntime, populate_provenance_record_fields, stamp_provenance,
     task_outcome_metadata_matches, task_process_id,
 };

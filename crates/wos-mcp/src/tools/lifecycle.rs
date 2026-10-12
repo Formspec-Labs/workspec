@@ -273,7 +273,10 @@ mod tests {
         let project = registry.get(&pid).unwrap();
         let doc = project.snapshot();
         let state = &doc.lifecycle.states["review"];
-        assert_eq!(state.description.as_deref(), Some("Under Review"));
+        assert_eq!(
+            state.description.as_ref().and_then(Value::as_str),
+            Some("Under Review")
+        );
         assert_eq!(state.extensions["x-meta"]["sla_days"], json!(5));
     }
 

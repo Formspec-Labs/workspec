@@ -257,6 +257,179 @@ mod tests {
         assert_eq!(doc.wos_workflow, "1.0");
     }
 
+    // Exercise the public writer against the owning schema, beyond typed reparse.
+    #[tokio::test]
+    async fn export_document_preserves_authored_values_and_owning_schema() {
+        let input = json!({
+            "$wosWorkflow": "1.0",
+            "url": "urn:test:optional-export",
+            "version": "1.0.0",
+            "title": "Optional value export regression",
+            "impactLevel": "informational",
+            "actors": [
+                {"id": "system", "type": "system"},
+                {"id": "nullable", "type": "system", "description": null},
+                {"id": "described", "type": "system", "description": "Reviewing"}
+            ],
+            "contracts": {"review": {"binding": "jsonschema", "ref": "urn:test:contract", "description": null}},
+            "caseFile": {"fields": {"optionalValue": {"type": "string", "default": null}}},
+            "lifecycle": {
+                "initialState": "open",
+                "states": {
+                    "open": {
+                        "type": "atomic", "description": null,
+                        "onEntry": [{
+                            "action": "setData", "path": "caseFile.optionalValue", "value": null, "description": null,
+                            "extensions": {"x-test": {"nested": null, "values": [null]}}
+                        }],
+                        "transitions": [{"event": {"kind": "message", "name": "advance"}, "target": "done", "description": null}]
+                    },
+                    "done": {"type": "final"}
+                }
+            }
+        });
+        let schema: Value =
+            serde_json::from_str(include_str!("../../../../schemas/wos-workflow.schema.json"))
+                .unwrap();
+        let validator = jsonschema::validator_for(&schema).unwrap();
+        assert!(
+            validator.is_valid(&input),
+            "authored fixture must satisfy its schema"
+        );
+        let mut registry = ProjectRegistry::new();
+        let loaded = wos_load_document(&mut registry, "", json!({ "json": input.to_string() }))
+            .await
+            .unwrap();
+        let exported = wos_export_document(
+            &mut registry,
+            "",
+            json!({ "project_id": loaded["project_id"] }),
+        )
+        .await
+        .unwrap();
+        let output: Value = serde_json::from_str(exported["document"].as_str().unwrap()).unwrap();
+        let errors: Vec<String> = validator
+            .iter_errors(&output)
+            .map(|error| error.to_string())
+            .collect();
+        assert!(
+            errors.is_empty(),
+            "native export must satisfy owning schema: {errors:?}"
+        );
+        assert_authored_values_preserved(&input, &output);
+        assert_eq!(output["lifecycle"]["states"].as_object().unwrap().len(), 2);
+        assert!(output["actors"][0].get("description").is_none());
+        let matches = crate::tools::query::wos_search(
+            &mut registry,
+            "",
+            json!({ "project_id": loaded["project_id"], "kind": "actor", "query": "Reviewing" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(matches["matches"].as_array().unwrap().len(), 1);
+        assert_eq!(matches["matches"][0]["id"], "described");
+        let reopened = wos_load_document(&mut registry, "", json!({ "json": output.to_string() }))
+            .await
+            .unwrap();
+        let reexported = wos_export_document(
+            &mut registry,
+            "",
+            json!({ "project_id": reopened["project_id"] }),
+        )
+        .await
+        .unwrap();
+        let reexported: Value =
+            serde_json::from_str(reexported["document"].as_str().unwrap()).unwrap();
+        assert_eq!(reexported, output);
+    }
+
+    #[tokio::test]
+    async fn export_document_preserves_state_kinds_and_explicit_empty_maps() {
+        let schema: Value =
+            serde_json::from_str(include_str!("../../../../schemas/wos-workflow.schema.json"))
+                .unwrap();
+        let validator = jsonschema::validator_for(&schema).unwrap();
+        let leaf = json!({"type": "atomic", "description": null});
+        let cases = [
+            leaf.clone(),
+            json!({"type": "final", "states": {}, "regions": {}}),
+            json!({
+                "type": "compound", "initialState": "child", "states": {"child": leaf.clone()},
+                "regions": {}, "historyState": "shallow", "description": null
+            }),
+            json!({
+                "type": "parallel", "states": {}, "cancellationPolicy": "wait-all",
+                "regions": {"review": {"initialState": "child", "states": {"child": leaf.clone()}}}
+            }),
+            json!({"type": "foreach", "collection": "[1]", "body": leaf, "states": {}, "regions": {}}),
+        ];
+        for state in cases {
+            let input = json!({
+                "$wosWorkflow": "1.0", "url": "urn:test:state-export", "version": "1.0.0",
+                "title": "State export regression", "impactLevel": "informational",
+                "actors": [{"id": "system", "type": "system"}],
+                "lifecycle": {"initialState": "root", "states": {"root": state}}
+            });
+            assert!(
+                validator.is_valid(&input),
+                "invalid authored shape: {input}"
+            );
+            let mut registry = ProjectRegistry::new();
+            let loaded = wos_load_document(&mut registry, "", json!({"json": input.to_string()}))
+                .await
+                .unwrap();
+            let exported = wos_export_document(
+                &mut registry,
+                "",
+                json!({"project_id": loaded["project_id"]}),
+            )
+            .await
+            .unwrap();
+            let output: Value =
+                serde_json::from_str(exported["document"].as_str().unwrap()).unwrap();
+            assert!(
+                validator.is_valid(&output),
+                "invalid native shape: {output}"
+            );
+            assert_authored_values_preserved(&input, &output);
+            let reopened =
+                wos_load_document(&mut registry, "", json!({"json": output.to_string()}))
+                    .await
+                    .unwrap();
+            let reexported = wos_export_document(
+                &mut registry,
+                "",
+                json!({"project_id": reopened["project_id"]}),
+            )
+            .await
+            .unwrap();
+            let reexported: Value =
+                serde_json::from_str(reexported["document"].as_str().unwrap()).unwrap();
+            assert_eq!(reexported, output);
+        }
+    }
+
+    fn assert_authored_values_preserved(input: &Value, output: &Value) {
+        match input {
+            Value::Object(fields) => {
+                for (key, value) in fields {
+                    assert!(output.get(key).is_some(), "authored property lost: {key}");
+                    assert_authored_values_preserved(value, &output[key]);
+                }
+            }
+            Value::Array(values) => {
+                let exported = output
+                    .as_array()
+                    .expect("authored array must remain an array");
+                assert_eq!(values.len(), exported.len());
+                for (value, exported) in values.iter().zip(exported) {
+                    assert_authored_values_preserved(value, exported);
+                }
+            }
+            _ => assert_eq!(input, output),
+        }
+    }
+
     #[tokio::test]
     async fn export_document_unknown_project_errors() {
         let mut registry = ProjectRegistry::new();

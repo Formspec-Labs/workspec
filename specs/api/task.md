@@ -17,6 +17,8 @@ The contract carries identity, workflow binding, assignment, contract-binding co
 - `id`: `urn:wos:<typeid>` URN per ADR 0092 D-1. Tasks are sub-resources identified by URL path context; their wire identity appends `/tasks/{taskId}` to the parent workflow process URN, as defined by `_common.schema.json#/$defs/WosResourceUrn`. The case ledger and workflow process are distinct identities.
 
 - `processId`: `urn:wos:<typeid>` URN of the owning workflow process, bound independently to its case ledger.
+- `caseLedgerId`: optional actual governed case ledger URN associated with that process.
+- `taskRevision`: optional opaque stored revision of the current task. Preserve its exact value when an operation requires an expected task revision; it grants no read or action authority.
 - `workflowUrl`: governing Workflow Document.
 - `kind`: closed-with-vendor-extension task family (see "Closed taxonomies" below).
 - `status`: closed user-facing posture (no vendor-extension seam — see "Closed taxonomies").
@@ -26,6 +28,7 @@ The contract carries identity, workflow binding, assignment, contract-binding co
 - `binding`: closed-with-vendor-extension contract-binding kind (`formspec | jsonSchema | freeform`) mirroring `wos-process.schema.json#/$defs/ActiveTask/properties/binding`.
 - `contractRef`, `definitionUrl`, `definitionVersion`: pinned contract references; REQUIRED when `binding` is `formspec` or `jsonSchema`.
 - `deadlines`: full set of named SLA / statutory / internal deadlines (governance §10.4.1; workflow-governance.md:548-560 — `slaDefinitions`). Each entry is `TaskDeadline { kind: sla | statutory | internal, at: ExpirableTimestamp, severity: advisory | enforcing, id? }`. Multi-SLA workflows expose both `firstResponse` and `fullResolution` here so the applicant can see both clocks and the staff portal can prioritize by which window is closer to breach.
+- `expiresAt`, `expiresWithTimer`: optional paired fields copied unchanged from the native task's immutable lifetime (Kernel §13.2.1). `expiresAt` is an RFC 3339 timestamp; `expiresWithTimer` is the original native timer identifier, not a public resource URN.
 - `reviewProtocol`: closed-with-vendor-extension review-protocol classification (governance §4.1-§4.2; workflow-governance.md:248-260) — `independentFirst | considerOpposite | calibratedConfidence | dualBlind | unassisted`. Present iff `kind == review` and the workflow declares a review protocol on this task pattern.
 - `mustCompleteBeforeContinuationEnds`: when true, this task MUST be completed before the case's `continuationOfServicesEndsAt` window closes (governance §3.6 cross-cut). Applicant- and staff-facing UIs surface this flag to prioritize work that gates continued service delivery during an appeal window.
 - `assignmentRoles`: `AssignmentRoles` projection (governance §7.2 + §10.2; workflow-governance.md:502-514). Closed object with optional `excludedOwner: ActorRef`, `requiredOwner: ActorRef`, `eligiblePool: ActorRef[]`, `currentAssignee: ActorRef`, `delegatedFrom: ActorRef`, `businessAdministrator: ActorRef`. Surfaces the kernel's five-role table so a staff portal can answer "who is excluded?", "who is in the pool?", "who is the business administrator?" without re-deriving from delegation graphs. The §10.2 precedence rule (`excludedOwner` overrides all other roles, workflow-governance.md:514) is enforced at the runtime, not in the projection.
@@ -33,7 +36,11 @@ The contract carries identity, workflow binding, assignment, contract-binding co
 - `lastValidationOutcome`: most recent WOS `ValidationOutcome` wrapper from Kernel §13.6 / `wos-process.schema.json#/$defs/ValidationOutcome`.
 - `createdAt`, `updatedAt`: RFC 3339 UTC timestamps per ADR 0082 D-10.
 
-`TaskListItem` is a lighter projection for inbox-style list views — same identity, classification, status, deadline, assignment. Detail navigation fetches the full `Task`.
+`TaskListItem` is a lighter projection for inbox-style list views — same identity, classification, status, deadline, assignment, and optional paired expiry fields. Detail navigation fetches the full `Task`.
+
+For both shapes, the server MUST forward the original stored `expiresAt` and `expiresWithTimer` together or omit both when the native task has no recorded expiry. It MUST NOT derive expiry from an advisory `deadline`, a named service target in `deadlines`, or the current state of a timer that may have changed since task creation. Absence means no recorded explicit expiry; clients MUST NOT invent one.
+
+Fresh drafts and responses refuse at or after `expiresAt`; an already committed result remains replayable. The runtime enforces this rule. Public fields let clients display the recorded expiry and retain its source identifier; they do not replace runtime admission checks or establish a new expiry algorithm.
 
 ## Closed taxonomies
 
@@ -62,7 +69,9 @@ POST  /api/v1/tasks/{id}/dismiss                     -> TaskOutcomeEvent   (Idem
 GET   /api/v1/cases/{case_id}/processes/{process_id}/tasks -> TaskPage     (case/process route, ADR 0093)
 ```
 
-`GET /api/v1/tasks` accepts `TaskListOptions`: `assignedActor` (defaults to the calling actor), `status`, `kind`, `processId`, `workflowUrl`, `deadlineBefore`, `cursor`, `limit` (max 200). Returns `TaskPage` (cursor envelope per `pagination.schema.json`, ADR 0082 D-7). Default scope is the calling actor's inbox; admins MAY widen via `assignedActor` subject to ReBAC checks.
+`GET /api/v1/tasks` accepts `TaskListOptions`: `assignedActor` (defaults to the calling actor), `status`, `kind`, `processId`, `workflowUrl`, `workflowVersion`, `taskRef`, `deadlineBefore`, `cursor`, `limit` (max 200). Returns `TaskPage` (cursor envelope per `pagination.schema.json`, ADR 0082 D-7). Default scope is the calling actor's inbox; admins MAY widen via `assignedActor` subject to ReBAC checks.
+
+`workflowVersion` matches the governing process's `definition_version` exactly; it is independent of the Formspec task's `definition_pin_version` and public task `definitionVersion`. `taskRef` matches the actual authorized native task's `facts.task_ref` exactly. Both filters are optional nonblank identifiers. Supplied filters combine with each other and existing filters; omitted filters preserve the existing selection. Authorization and these filters MUST apply before pagination, counts, and cursor construction. Filters do not grant task-read authority.
 
 `GET /api/v1/tasks/{id}` returns the full `Task` projection. While the workflow runs `lastValidationOutcome` on each draft save, clients MAY refresh by re-fetching this endpoint.
 
@@ -111,6 +120,8 @@ Draft, response and dismissal actions MUST derive the actor from authenticated m
 ## Idempotency
 
 `POST /api/v1/tasks/{id}/response` and `POST /api/v1/tasks/{id}/dismiss` require `Idempotency-Key`.
+
+`TaskSubmission.signedDraft` supplies signed Source draft preconditions when configured signed-correction tasks require them; other submissions may omit it. When supplied, it contains only `draftId`, `expectedSignedDraftVersion` (integer, at least 2), `expectedSignedResponseHash`, `associationHash`, and `taskBindingHash`. Each hash uses `sha256:` followed by 64 lowercase hexadecimal characters. These selectors establish no owner, actor, deployment scope or authority. The server derives those facts from maintained identity and task associations and reads the retained signed record before committing. JSON Schema validates the supplied shape; the configured task policy and source checks establish whether it is required and whether its values match the actual record.
 
 `POST /api/v1/tasks/{id}/draft` is idempotent on `(taskId, definitionUrl, definitionVersion, response)` so callers can retry without `Idempotency-Key`.
 

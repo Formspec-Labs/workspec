@@ -52,6 +52,7 @@ pub(super) fn materialize_due_timers(
             ));
         }
         instance.pending_events.push(PendingEvent {
+            origin: None,
             event: timer.event.clone(),
             actor_id: None,
             data: Some(serde_json::json!({ "timerId": timer.timer_id })),

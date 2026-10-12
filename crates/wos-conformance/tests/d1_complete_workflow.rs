@@ -1176,6 +1176,7 @@ fn controlled_deferred_receipt(fixture: &mut Fixture, service: &str, qualifying:
         .enqueue_event(
             &fixture.process.process_id,
             wos_core::instance::PendingEvent {
+                origin: None,
                 event: format!("delivery.{service}.receipt"),
                 actor_id: None,
                 data: Some(receipt),
@@ -1430,6 +1431,7 @@ fn invalid_and_duplicate_deferred_receipts_never_wake_case_or_restart_clock() {
             .enqueue_event(
                 &fixture.process.process_id,
                 wos_core::instance::PendingEvent {
+                    origin: None,
                     event,
                     actor_id: None,
                     data: Some(receipt),

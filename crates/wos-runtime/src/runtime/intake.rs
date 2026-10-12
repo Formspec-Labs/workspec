@@ -326,17 +326,12 @@ impl WosRuntime {
                                 definition_version: definition.definition_version.clone(),
                                 initial_case_state: initial_case_state.clone(),
                             };
-                            match &request.actor_bindings {
-                                Some(bindings) => self
-                                    .create_process_bound_to_case_with_actor_bindings(
-                                        create,
-                                        case_ref.clone(),
-                                        bindings.clone(),
-                                    )?,
-                                None => {
-                                    self.create_process_bound_to_case(create, case_ref.clone())?
-                                }
-                            }
+                            self.create_process_inner(
+                                create,
+                                Some(case_ref.clone()),
+                                request.actor_bindings.clone(),
+                                request.actor_id.as_deref(),
+                            )?
                         }
                         Err(error) => return Err(error),
                     };

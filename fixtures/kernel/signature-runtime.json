@@ -39,7 +39,8 @@
   "contracts": {
     "signatureContract": {
       "binding": "formspec",
-      "ref": "urn:test:formspec:signature"
+      "ref": "urn:test:formspec:signature",
+      "definitionVersion": "1.0.0"
     }
   },
   "lifecycle": {
