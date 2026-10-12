@@ -284,12 +284,12 @@
         },
         "tasks": {
           "type": "array",
-          "description": "Actual tasks created by the maintained runtime, never pre-reserved or synthesized.",
+          "description": "Original tasks created at committed intake acceptance. Empty when the native workflow queues checks before creating human tasks; later tasks are read from the task API.",
           "items": {
             "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskListItem",
             "description": "Maintained task read shape."
           },
-          "minItems": 1
+          "minItems": 0
         },
         "intake": {
           "$ref": "#/$defs/AcceptedIntakeEvidence",
@@ -303,7 +303,7 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "description": "Return only after actual case/process and human task creation commits.",
+          "description": "Return after actual case/process acceptance commits. Tasks retain the original creation inventory; queued checks may create human tasks later.",
           "required": [
             "handoffId",
             "status",
@@ -343,12 +343,12 @@
             },
             "tasks": {
               "type": "array",
-              "description": "Actually created reviewer tasks.",
+              "description": "Original actually created tasks, including an empty inventory before queued checks complete. Accepted replay preserves this inventory.",
               "items": {
                 "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskListItem",
                 "description": "Maintained task read shape."
               },
-              "minItems": 1
+              "minItems": 0
             }
           }
         },

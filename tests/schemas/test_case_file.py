@@ -77,3 +77,40 @@ def test_native_codegen_annotation_preserves_json_without_shape_assertions():
     owner = Draft202012Validator(response_schema)
     for invalid_native_response in ([], 'opaque', None):
         assert not owner.is_valid(invalid_native_response)
+
+
+def accepted_receipt(tasks):
+    return {'handoffId': 'original-handoff', 'status': 'accepted',
+            'caseLedgerId': 'urn:wos:default_case_01m4kv34fgf68924g68cd6bpza',
+            'caseReference': '437681102',
+            'processId': 'urn:wos:default_process_01m4mey9j0e6stas981f5ey15v',
+            'tasks': tasks}
+
+
+def test_committed_acceptance_allows_deferred_tasks_without_weakening_identity():
+    check = validator('IntakeHandoffReceipt')
+    value = accepted_receipt([])
+    check.validate(value)
+    for field in value:
+        altered = dict(value)
+        del altered[field]
+        assert not check.is_valid(altered), field
+    for field in ('caseLedgerId', 'processId'):
+        assert not check.is_valid({**value, field: 'invented'}), field
+    assert not check.is_valid({**value, 'tasks': None})
+    assert not check.is_valid({**value, 'futureTaskId': 'invented'})
+
+
+def test_acceptance_keeps_full_validation_of_each_created_task():
+    task = {'id': 'urn:wos:default_process_01m4mey9j0e6stas981f5ey15v/tasks/review',
+            'processId': 'urn:wos:default_process_01m4mey9j0e6stas981f5ey15v',
+            'kind': 'review', 'status': 'pending', 'title': 'Review filing',
+            'createdAt': '2026-10-11T03:08:50.459Z'}
+    check = validator('IntakeHandoffReceipt')
+    check.validate(accepted_receipt([task]))
+    for field in ('id', 'processId', 'kind', 'status', 'title', 'createdAt'):
+        altered = dict(task)
+        del altered[field]
+        assert not check.is_valid(accepted_receipt([altered])), field
+    assert not check.is_valid(accepted_receipt([{}]))
+    assert not check.is_valid(accepted_receipt([{**task, 'status': 'invented'}]))
