@@ -1381,7 +1381,7 @@
             "description": "Authentication required"
           },
           "403": {
-            "description": "Supervisor role required"
+            "description": "Configured workflow management permission required"
           },
           "404": {
             "description": "Case ledger not found (no bound processes and no direct-append events)"
@@ -1567,6 +1567,61 @@
             "description": "Case-source lock contention (`WOS-1423`); idempotently retriable after brief backoff."
           }
         }
+      }
+    },
+    "/completion-exports": {
+      "post": {
+        "tags": [
+          "completion"
+        ],
+        "operationId": "requestCompletionExport",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Stable native action invocation identity.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompletionExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Ready original request or exact replay.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompletionExportResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Current human archive permission refused."
+          },
+          "409": {
+            "description": "Changed retry inputs."
+          },
+          "503": {
+            "description": "Unavailable or uncertain; retry original request."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/correspondence": {
@@ -2314,6 +2369,98 @@
                 }
               }
             }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/processes/{process_id}/completion-exports/{request_id}": {
+      "get": {
+        "tags": [
+          "completion"
+        ],
+        "operationId": "getCompletionExport",
+        "parameters": [
+          {
+            "name": "process_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProcessPathId"
+            }
+          },
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Exact current authorized state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompletionExportResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Current human archive permission refused."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/processes/{process_id}/completion-exports/{request_id}/download": {
+      "get": {
+        "tags": [
+          "completion"
+        ],
+        "operationId": "downloadCompletionExport",
+        "parameters": [
+          {
+            "name": "process_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProcessPathId"
+            }
+          },
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Existing receipt-pinned archive.",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Current human archive permission refused."
           }
         },
         "security": [
@@ -4720,7 +4867,7 @@
       },
       "CaseFileRead": {
         "type": "object",
-        "description": "Authorized staff read of the immutable initial filing and actual WOS identities. This is separate from mutable runtime case state.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Authorized staff read of the immutable initial filing and actual WOS identities. This is separate from mutable runtime case state.\",\n  \"type\": \"object\",\n  \"required\": [\n    \"caseLedgerId\",\n    \"caseReference\",\n    \"intake\",\n    \"processId\",\n    \"tasks\"\n  ],\n  \"properties\": {\n    \"caseLedgerId\": {\n      \"description\": \"Actual accepted durable case ledger URN.\",\n      \"$ref\": \"#/$defs/WosResourceUrn\"\n    },\n    \"caseReference\": {\n      \"description\": \"Actual separate human-readable case reference.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"prose\"\n      }\n    },\n    \"intake\": {\n      \"description\": \"Immutable initial accepted source snapshot, qualified and durably associated with this case.\",\n      \"$ref\": \"#/$defs/AcceptedIntakeEvidence\"\n    },\n    \"processId\": {\n      \"description\": \"Actual process created for this intake.\",\n      \"$ref\": \"#/$defs/WosResourceUrn\"\n    },\n    \"tasks\": {\n      \"description\": \"Actual tasks created by the maintained runtime, never pre-reserved or synthesized.\",\n      \"type\": \"array\",\n      \"items\": {\n        \"description\": \"Maintained task read shape.\",\n        \"$ref\": \"#/$defs/TaskListItem\"\n      },\n      \"minItems\": 1\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
+        "description": "Authorized staff read of the immutable initial filing and actual WOS identities. This is separate from mutable runtime case state.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Authorized staff read of the immutable initial filing and actual WOS identities. This is separate from mutable runtime case state.\",\n  \"type\": \"object\",\n  \"required\": [\n    \"caseLedgerId\",\n    \"caseReference\",\n    \"intake\",\n    \"processId\",\n    \"tasks\"\n  ],\n  \"properties\": {\n    \"caseLedgerId\": {\n      \"description\": \"Actual accepted durable case ledger URN.\",\n      \"$ref\": \"#/$defs/WosResourceUrn\"\n    },\n    \"caseReference\": {\n      \"description\": \"Actual separate human-readable case reference.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"prose\"\n      }\n    },\n    \"intake\": {\n      \"description\": \"Immutable initial accepted source snapshot, qualified and durably associated with this case.\",\n      \"$ref\": \"#/$defs/AcceptedIntakeEvidence\"\n    },\n    \"processId\": {\n      \"description\": \"Actual process created for this intake.\",\n      \"$ref\": \"#/$defs/WosResourceUrn\"\n    },\n    \"tasks\": {\n      \"description\": \"Immutable original task inventory from committed intake creation facts. Empty only when those facts establish no tasks were created, including while checks are queued; later tasks require separately authorized task API reads.\",\n      \"type\": \"array\",\n      \"items\": {\n        \"description\": \"Maintained task read shape.\",\n        \"$ref\": \"#/$defs/TaskListItem\"\n      },\n      \"minItems\": 0\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
         "required": [
           "caseLedgerId",
           "caseReference",
@@ -4750,8 +4897,8 @@
             "items": {
               "$ref": "#/components/schemas/TaskListItem"
             },
-            "description": "Actual tasks created by the maintained runtime, never pre-reserved or synthesized.",
-            "minItems": 1
+            "description": "Immutable original task inventory from committed intake creation facts. Empty only when those facts establish no tasks were created, including while checks are queued; later tasks require separately authorized task API reads.",
+            "minItems": 0
           }
         },
         "additionalProperties": false
@@ -4996,6 +5143,90 @@
           "open",
           "half-open"
         ]
+      },
+      "CompletionExportRequest": {
+        "type": "object",
+        "description": "One actual workflow process selector for a completion request; current human credentials and retry identity remain transport inputs.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"title\": \"CompletionExportRequest\",\n  \"description\": \"One actual workflow process selector for a completion request; current human credentials and retry identity remain transport inputs.\",\n  \"type\": \"object\",\n  \"required\": [\n    \"processId\"\n  ],\n  \"properties\": {\n    \"processId\": {\n      \"description\": \"Actual workflow process selected by full process URN or bare process TypeID.\",\n      \"$ref\": \"#/$defs/ProcessPathId\"\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
+        "required": [
+          "processId"
+        ],
+        "properties": {
+          "processId": {
+            "$ref": "#/components/schemas/ProcessPathId",
+            "description": "Actual workflow process selected by full process URN or bare process TypeID."
+          }
+        },
+        "additionalProperties": false
+      },
+      "CompletionExportResult": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "checkpointRef",
+              "processId",
+              "requestId",
+              "status"
+            ],
+            "properties": {
+              "checkpointRef": {
+                "default": null
+              },
+              "processId": {
+                "$ref": "#/components/schemas/ProcessPathIdOneOf0",
+                "description": "Canonical full URN of the actual workflow process."
+              },
+              "requestId": {
+                "$ref": "#/components/schemas/CompletionExportResultRequestId",
+                "description": "Retained request identity as 32 lowercase hexadecimal characters."
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "pending"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "checkpointRef",
+              "processId",
+              "requestId",
+              "status"
+            ],
+            "properties": {
+              "checkpointRef": {
+                "$ref": "#/components/schemas/CompletionExportResultCheckpointRef",
+                "description": "Retained checkpoint reference when ready; null while pending."
+              },
+              "processId": {
+                "$ref": "#/components/schemas/ProcessPathIdOneOf0",
+                "description": "Canonical full URN of the actual workflow process."
+              },
+              "requestId": {
+                "$ref": "#/components/schemas/CompletionExportResultRequestId",
+                "description": "Retained request identity as 32 lowercase hexadecimal characters."
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "ready"
+                ]
+              }
+            }
+          }
+        ],
+        "description": "Exact retained completion request state under current caller authority. POST succeeds only when ready; status reads may return pending.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"title\": \"CompletionExportResult\",\n  \"description\": \"Exact retained completion request state under current caller authority. POST succeeds only when ready; status reads may return pending.\",\n  \"oneOf\": [\n    {\n      \"type\": \"object\",\n      \"required\": [\n        \"checkpointRef\",\n        \"processId\",\n        \"requestId\",\n        \"status\"\n      ],\n      \"properties\": {\n        \"checkpointRef\": {\n          \"description\": \"Retained checkpoint reference when ready; null while pending.\",\n          \"type\": \"null\"\n        },\n        \"processId\": {\n          \"description\": \"Canonical full URN of the actual workflow process.\",\n          \"$ref\": \"#/$defs/ProcessPathIdOneOf0\"\n        },\n        \"requestId\": {\n          \"description\": \"Retained request identity as 32 lowercase hexadecimal characters.\",\n          \"type\": \"string\",\n          \"pattern\": \"^[0-9a-f]{32}$\"\n        },\n        \"status\": {\n          \"description\": \"Closed retained completion state: pending or ready.\",\n          \"const\": \"pending\"\n        }\n      },\n      \"additionalProperties\": false\n    },\n    {\n      \"type\": \"object\",\n      \"required\": [\n        \"checkpointRef\",\n        \"processId\",\n        \"requestId\",\n        \"status\"\n      ],\n      \"properties\": {\n        \"checkpointRef\": {\n          \"description\": \"Retained checkpoint reference when ready; null while pending.\",\n          \"type\": \"string\",\n          \"minLength\": 1,\n          \"x-wos\": {\n            \"openStringKind\": \"opaque-token\"\n          }\n        },\n        \"processId\": {\n          \"description\": \"Canonical full URN of the actual workflow process.\",\n          \"$ref\": \"#/$defs/ProcessPathIdOneOf0\"\n        },\n        \"requestId\": {\n          \"description\": \"Retained request identity as 32 lowercase hexadecimal characters.\",\n          \"type\": \"string\",\n          \"pattern\": \"^[0-9a-f]{32}$\"\n        },\n        \"status\": {\n          \"description\": \"Closed retained completion state: pending or ready.\",\n          \"const\": \"ready\"\n        }\n      },\n      \"additionalProperties\": false\n    }\n  ]\n}\n ```\n </details>"
+      },
+      "CompletionExportResultCheckpointRef": {
+        "type": "string",
+        "description": "Retained checkpoint reference when ready; null while pending.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Retained checkpoint reference when ready; null while pending.\",\n  \"type\": \"string\",\n  \"minLength\": 1,\n  \"x-wos\": {\n    \"openStringKind\": \"opaque-token\"\n  }\n}\n ```\n </details>"
+      },
+      "CompletionExportResultRequestId": {
+        "type": "string",
+        "description": "Retained request identity as 32 lowercase hexadecimal characters.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Retained request identity as 32 lowercase hexadecimal characters.\",\n  \"type\": \"string\",\n  \"pattern\": \"^[0-9a-f]{32}$\"\n}\n ```\n </details>"
       },
       "ConfidenceReport": {
         "type": "object",
@@ -7161,7 +7392,7 @@
         "oneOf": [
           {
             "type": "object",
-            "description": "Return only after actual case/process and human task creation commits.",
+            "description": "Return after actual case/process acceptance commits. Tasks retain the original creation inventory; queued checks may create human tasks later.",
             "required": [
               "caseLedgerId",
               "caseReference",
@@ -7198,8 +7429,8 @@
                 "items": {
                   "$ref": "#/components/schemas/TaskListItem"
                 },
-                "description": "Actually created reviewer tasks.",
-                "minItems": 1
+                "description": "Immutable original task inventory from committed intake creation facts. Empty only when those facts establish no tasks were created, never for missing metadata or refused disclosure. Accepted replay preserves this inventory after queued checks create tasks.",
+                "minItems": 0
               }
             },
             "additionalProperties": false
@@ -7257,7 +7488,7 @@
             "additionalProperties": false
           }
         ],
-        "description": "Closed transport outcome. Pending is retriable qualification/delivery before runtime acceptance, not a finalized deferred runtime receipt. Identical accepted replay returns the same identities.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Closed transport outcome. Pending is retriable qualification/delivery before runtime acceptance, not a finalized deferred runtime receipt. Identical accepted replay returns the same identities.\",\n  \"oneOf\": [\n    {\n      \"description\": \"Return only after actual case/process and human task creation commits.\",\n      \"type\": \"object\",\n      \"required\": [\n        \"caseLedgerId\",\n        \"caseReference\",\n        \"handoffId\",\n        \"processId\",\n        \"status\",\n        \"tasks\"\n      ],\n      \"properties\": {\n        \"caseLedgerId\": {\n          \"description\": \"Committed case.\",\n          \"$ref\": \"#/$defs/WosResourceUrn\"\n        },\n        \"caseReference\": {\n          \"description\": \"Assigned human reference.\",\n          \"type\": \"string\",\n          \"minLength\": 1,\n          \"x-wos\": {\n            \"openStringKind\": \"prose\"\n          }\n        },\n        \"handoffId\": {\n          \"description\": \"Original stable source handoff identifier; never regenerated on retry.\",\n          \"type\": \"string\",\n          \"minLength\": 1,\n          \"x-wos\": {\n            \"openStringKind\": \"identifier\"\n          }\n        },\n        \"processId\": {\n          \"description\": \"Created process.\",\n          \"$ref\": \"#/$defs/WosResourceUrn\"\n        },\n        \"status\": {\n          \"description\": \"Committed WOS acceptance.\",\n          \"const\": \"accepted\"\n        },\n        \"tasks\": {\n          \"description\": \"Actually created reviewer tasks.\",\n          \"type\": \"array\",\n          \"items\": {\n            \"description\": \"Maintained task read shape.\",\n            \"$ref\": \"#/$defs/TaskListItem\"\n          },\n          \"minItems\": 1\n        }\n      },\n      \"additionalProperties\": false\n    },\n    {\n      \"description\": \"No case identity is asserted for this outcome.\",\n      \"type\": \"object\",\n      \"required\": [\n        \"code\",\n        \"handoffId\",\n        \"status\"\n      ],\n      \"properties\": {\n        \"code\": {\n          \"description\": \"Stable machine-readable reason.\",\n          \"type\": \"string\",\n          \"minLength\": 1,\n          \"x-wos\": {\n            \"openStringKind\": \"identifier\"\n          }\n        },\n        \"handoffId\": {\n          \"description\": \"Original stable source handoff identifier; never regenerated on retry.\",\n          \"type\": \"string\",\n          \"minLength\": 1,\n          \"x-wos\": {\n            \"openStringKind\": \"identifier\"\n          }\n        },\n        \"status\": {\n          \"description\": \"Transport outcome.\",\n          \"const\": \"pending\"\n        }\n      },\n      \"additionalProperties\": false\n    },\n    {\n      \"description\": \"No case identity is asserted for this outcome.\",\n      \"type\": \"object\",\n      \"required\": [\n        \"code\",\n        \"handoffId\",\n        \"status\"\n      ],\n      \"properties\": {\n        \"code\": {\n          \"description\": \"Stable machine-readable reason.\",\n          \"type\": \"string\",\n          \"minLength\": 1,\n          \"x-wos\": {\n            \"openStringKind\": \"identifier\"\n          }\n        },\n        \"handoffId\": {\n          \"description\": \"Original stable source handoff identifier; never regenerated on retry.\",\n          \"type\": \"string\",\n          \"minLength\": 1,\n          \"x-wos\": {\n            \"openStringKind\": \"identifier\"\n          }\n        },\n        \"status\": {\n          \"description\": \"Transport outcome.\",\n          \"const\": \"rejected\"\n        }\n      },\n      \"additionalProperties\": false\n    }\n  ]\n}\n ```\n </details>"
+        "description": "Closed transport outcome. Pending is retriable qualification/delivery before runtime acceptance, not a finalized deferred runtime receipt. Identical accepted replay returns the same identities.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Closed transport outcome. Pending is retriable qualification/delivery before runtime acceptance, not a finalized deferred runtime receipt. Identical accepted replay returns the same identities.\",\n  \"oneOf\": [\n    {\n      \"description\": \"Return after actual case/process acceptance commits. Tasks retain the original creation inventory; queued checks may create human tasks later.\",\n      \"type\": \"object\",\n      \"required\": [\n        \"caseLedgerId\",\n        \"caseReference\",\n        \"handoffId\",\n        \"processId\",\n        \"status\",\n        \"tasks\"\n      ],\n      \"properties\": {\n        \"caseLedgerId\": {\n          \"description\": \"Committed case.\",\n          \"$ref\": \"#/$defs/WosResourceUrn\"\n        },\n        \"caseReference\": {\n          \"description\": \"Assigned human reference.\",\n          \"type\": \"string\",\n          \"minLength\": 1,\n          \"x-wos\": {\n            \"openStringKind\": \"prose\"\n          }\n        },\n        \"handoffId\": {\n          \"description\": \"Original stable source handoff identifier; never regenerated on retry.\",\n          \"type\": \"string\",\n          \"minLength\": 1,\n          \"x-wos\": {\n            \"openStringKind\": \"identifier\"\n          }\n        },\n        \"processId\": {\n          \"description\": \"Created process.\",\n          \"$ref\": \"#/$defs/WosResourceUrn\"\n        },\n        \"status\": {\n          \"description\": \"Committed WOS acceptance.\",\n          \"const\": \"accepted\"\n        },\n        \"tasks\": {\n          \"description\": \"Immutable original task inventory from committed intake creation facts. Empty only when those facts establish no tasks were created, never for missing metadata or refused disclosure. Accepted replay preserves this inventory after queued checks create tasks.\",\n          \"type\": \"array\",\n          \"items\": {\n            \"description\": \"Maintained task read shape.\",\n            \"$ref\": \"#/$defs/TaskListItem\"\n          },\n          \"minItems\": 0\n        }\n      },\n      \"additionalProperties\": false\n    },\n    {\n      \"description\": \"No case identity is asserted for this outcome.\",\n      \"type\": \"object\",\n      \"required\": [\n        \"code\",\n        \"handoffId\",\n        \"status\"\n      ],\n      \"properties\": {\n        \"code\": {\n          \"description\": \"Stable machine-readable reason.\",\n          \"type\": \"string\",\n          \"minLength\": 1,\n          \"x-wos\": {\n            \"openStringKind\": \"identifier\"\n          }\n        },\n        \"handoffId\": {\n          \"description\": \"Original stable source handoff identifier; never regenerated on retry.\",\n          \"type\": \"string\",\n          \"minLength\": 1,\n          \"x-wos\": {\n            \"openStringKind\": \"identifier\"\n          }\n        },\n        \"status\": {\n          \"description\": \"Transport outcome.\",\n          \"const\": \"pending\"\n        }\n      },\n      \"additionalProperties\": false\n    },\n    {\n      \"description\": \"No case identity is asserted for this outcome.\",\n      \"type\": \"object\",\n      \"required\": [\n        \"code\",\n        \"handoffId\",\n        \"status\"\n      ],\n      \"properties\": {\n        \"code\": {\n          \"description\": \"Stable machine-readable reason.\",\n          \"type\": \"string\",\n          \"minLength\": 1,\n          \"x-wos\": {\n            \"openStringKind\": \"identifier\"\n          }\n        },\n        \"handoffId\": {\n          \"description\": \"Original stable source handoff identifier; never regenerated on retry.\",\n          \"type\": \"string\",\n          \"minLength\": 1,\n          \"x-wos\": {\n            \"openStringKind\": \"identifier\"\n          }\n        },\n        \"status\": {\n          \"description\": \"Transport outcome.\",\n          \"const\": \"rejected\"\n        }\n      },\n      \"additionalProperties\": false\n    }\n  ]\n}\n ```\n </details>"
       },
       "IntakeHandoffReceiptCaseReference": {
         "type": "string",
@@ -8529,6 +8760,29 @@
             "type": "string"
           }
         }
+      },
+      "ProcessPathId": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ProcessPathIdVariant0"
+          },
+          {
+            "$ref": "#/components/schemas/ProcessPathIdVariant1"
+          }
+        ],
+        "description": "Path parameter accepted by workflow-process routes. Deployments MAY accept either the full WOS process URN (`urn:wos:<tenant>_process_<ulid>`) or the bare TypeID (`<tenant>_process_<ulid>`) while response bodies always carry the full `WosResourceUrn`.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Path parameter accepted by workflow-process routes. Deployments MAY accept either the full WOS process URN (`urn:wos:<tenant>_process_<ulid>`) or the bare TypeID (`<tenant>_process_<ulid>`) while response bodies always carry the full `WosResourceUrn`.\",\n  \"oneOf\": [\n    {\n      \"type\": \"string\",\n      \"pattern\": \"^urn:wos:[a-z][a-z0-9-]*_process_[0-9a-hjkmnp-tv-z]{26}$\"\n    },\n    {\n      \"type\": \"string\",\n      \"pattern\": \"^[a-z][a-z0-9-]*_process_[0-9a-hjkmnp-tv-z]{26}$\"\n    }\n  ]\n}\n ```\n </details>"
+      },
+      "ProcessPathIdOneOf0": {
+        "type": "string",
+        "description": "`ProcessPathIdOneOf0`\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"type\": \"string\",\n  \"pattern\": \"^urn:wos:[a-z][a-z0-9-]*_process_[0-9a-hjkmnp-tv-z]{26}$\"\n}\n ```\n </details>"
+      },
+      "ProcessPathIdVariant0": {
+        "type": "string",
+        "description": "`ProcessPathIdVariant0`\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"type\": \"string\",\n  \"pattern\": \"^urn:wos:[a-z][a-z0-9-]*_process_[0-9a-hjkmnp-tv-z]{26}$\"\n}\n ```\n </details>"
+      },
+      "ProcessPathIdVariant1": {
+        "type": "string",
+        "description": "`ProcessPathIdVariant1`\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"type\": \"string\",\n  \"pattern\": \"^[a-z][a-z0-9-]*_process_[0-9a-hjkmnp-tv-z]{26}$\"\n}\n ```\n </details>"
       },
       "ProvenanceRecord": {
         "oneOf": [
@@ -9904,7 +10158,7 @@
       },
       "TaskListItem": {
         "type": "object",
-        "description": "Lightweight task projection for list views (ADR 0082 D-3). Carries identity, classification, status, deadline, and binding metadata — enough to drive an inbox-style list without forcing the heavier `Task` body. The full `Task` shape is fetched per row on detail navigation.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Lightweight task projection for list views (ADR 0082 D-3). Carries identity, classification, status, deadline, and binding metadata — enough to drive an inbox-style list without forcing the heavier `Task` body. The full `Task` shape is fetched per row on detail navigation.\",\n  \"type\": \"object\",\n  \"required\": [\n    \"createdAt\",\n    \"id\",\n    \"kind\",\n    \"processId\",\n    \"status\",\n    \"title\"\n  ],\n  \"properties\": {\n    \"assignedActor\": {\n      \"description\": \"Actor URN currently responsible for this task. Updated on delegation or escalation.\",\n      \"$ref\": \"#/$defs/ActorRef\"\n    },\n    \"createdAt\": {\n      \"description\": \"UTC RFC 3339 timestamp when the task was created.\",\n      \"type\": \"string\",\n      \"format\": \"date-time\"\n    },\n    \"deadline\": {\n      \"description\": \"UTC RFC 3339 deadline by which the actor SHOULD submit the response before SLA breach (governance S10.3).\",\n      \"type\": \"string\",\n      \"format\": \"date-time\"\n    },\n    \"id\": {\n      \"description\": \"Stable public URN for this task.\",\n      \"$ref\": \"#/$defs/WosResourceUrn\"\n    },\n    \"impactLevel\": {\n      \"description\": \"Closed-with-vendor-extension impact level.\",\n      \"$ref\": \"#/$defs/ImpactLevel\"\n    },\n    \"kind\": {\n      \"description\": \"Closed-with-vendor-extension task family classification.\",\n      \"$ref\": \"#/$defs/TaskKind\"\n    },\n    \"processId\": {\n      \"description\": \"Workflow process URN this task belongs to.\",\n      \"$ref\": \"#/$defs/WosResourceUrn\"\n    },\n    \"status\": {\n      \"description\": \"Closed user-facing task lifecycle posture.\",\n      \"$ref\": \"#/$defs/TaskStatus\"\n    },\n    \"title\": {\n      \"description\": \"Short human-readable task headline.\",\n      \"examples\": [\n        \"Complete eligibility intake\"\n      ],\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"prose\"\n      }\n    },\n    \"updatedAt\": {\n      \"description\": \"UTC RFC 3339 timestamp when the task projection was last refreshed.\",\n      \"type\": \"string\",\n      \"format\": \"date-time\"\n    },\n    \"workflowUrl\": {\n      \"description\": \"Absolute URI of the governing Workflow Document.\",\n      \"$ref\": \"#/$defs/WorkflowUrl\"\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
+        "description": "Lightweight task projection for list views (ADR 0082 D-3). Carries identity, classification, status, deadline, and binding metadata — enough to drive an inbox-style list without forcing the heavier `Task` body. The full `Task` shape is fetched per row on detail navigation.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Lightweight task projection for list views (ADR 0082 D-3). Carries identity, classification, status, deadline, and binding metadata — enough to drive an inbox-style list without forcing the heavier `Task` body. The full `Task` shape is fetched per row on detail navigation.\",\n  \"type\": \"object\",\n  \"required\": [\n    \"createdAt\",\n    \"id\",\n    \"kind\",\n    \"processId\",\n    \"status\",\n    \"title\"\n  ],\n  \"properties\": {\n    \"assignedActor\": {\n      \"description\": \"Actor URN currently responsible for this task. Updated on delegation or escalation.\",\n      \"$ref\": \"#/$defs/ActorRef\"\n    },\n    \"caseLedgerId\": {\n      \"description\": \"Governed case ledger URN associated with this task's process, when available.\",\n      \"$ref\": \"#/$defs/WosResourceUrn\"\n    },\n    \"createdAt\": {\n      \"description\": \"UTC RFC 3339 timestamp when the task was created.\",\n      \"type\": \"string\",\n      \"format\": \"date-time\"\n    },\n    \"deadline\": {\n      \"description\": \"UTC RFC 3339 deadline by which the actor SHOULD submit the response before SLA breach (governance S10.3).\",\n      \"type\": \"string\",\n      \"format\": \"date-time\"\n    },\n    \"expiresAt\": {\n      \"description\": \"Immutable expiry copied from the actual native timer at task creation. Fresh drafts and responses refuse at or after this instant; committed replay remains available. Required together with expiresWithTimer (Kernel §13.2.1).\",\n      \"type\": \"string\",\n      \"format\": \"date-time\"\n    },\n    \"expiresWithTimer\": {\n      \"description\": \"Original native timer identifier supplying expiresAt. Forwarded unchanged; later timer cancellation or replacement does not change the copied task lifetime (Kernel §13.2.1).\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"identifier\"\n      }\n    },\n    \"id\": {\n      \"description\": \"Stable public URN for this task.\",\n      \"$ref\": \"#/$defs/WosResourceUrn\"\n    },\n    \"impactLevel\": {\n      \"description\": \"Closed-with-vendor-extension impact level.\",\n      \"$ref\": \"#/$defs/ImpactLevel\"\n    },\n    \"kind\": {\n      \"description\": \"Closed-with-vendor-extension task family classification.\",\n      \"$ref\": \"#/$defs/TaskKind\"\n    },\n    \"processId\": {\n      \"description\": \"Workflow process URN this task belongs to.\",\n      \"$ref\": \"#/$defs/WosResourceUrn\"\n    },\n    \"status\": {\n      \"description\": \"Closed user-facing task lifecycle posture.\",\n      \"$ref\": \"#/$defs/TaskStatus\"\n    },\n    \"taskRevision\": {\n      \"description\": \"Opaque stored revision of the current task, when available. Send this exact value when an operation requires an expected task revision.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"opaque-token\"\n      }\n    },\n    \"title\": {\n      \"description\": \"Short human-readable task headline.\",\n      \"examples\": [\n        \"Complete eligibility intake\"\n      ],\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"prose\"\n      }\n    },\n    \"updatedAt\": {\n      \"description\": \"UTC RFC 3339 timestamp when the task projection was last refreshed.\",\n      \"type\": \"string\",\n      \"format\": \"date-time\"\n    },\n    \"workflowUrl\": {\n      \"description\": \"Absolute URI of the governing Workflow Document.\",\n      \"$ref\": \"#/$defs/WorkflowUrl\"\n    }\n  },\n  \"additionalProperties\": false,\n  \"dependentRequired\": {\n    \"expiresAt\": [\n      \"expiresWithTimer\"\n    ],\n    \"expiresWithTimer\": [\n      \"expiresAt\"\n    ]\n  }\n}\n ```\n </details>",
         "required": [
           "createdAt",
           "id",
@@ -9925,6 +10179,17 @@
               }
             ]
           },
+          "caseLedgerId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WosResourceUrn",
+                "description": "Governed case ledger URN associated with this task's process, when available."
+              }
+            ]
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -9937,6 +10202,25 @@
             ],
             "format": "date-time",
             "description": "UTC RFC 3339 deadline by which the actor SHOULD submit the response before SLA breach (governance S10.3)."
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Immutable expiry copied from the actual native timer at task creation. Fresh drafts and responses refuse at or after this instant; committed replay remains available. Required together with expiresWithTimer (Kernel §13.2.1)."
+          },
+          "expiresWithTimer": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TaskListItemExpiresWithTimer",
+                "description": "Original native timer identifier supplying expiresAt. Forwarded unchanged; later timer cancellation or replacement does not change the copied task lifetime (Kernel §13.2.1)."
+              }
+            ]
           },
           "id": {
             "$ref": "#/components/schemas/WosResourceUrn",
@@ -9965,6 +10249,17 @@
             "$ref": "#/components/schemas/TaskStatus",
             "description": "Closed user-facing task lifecycle posture."
           },
+          "taskRevision": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TaskListItemTaskRevision",
+                "description": "Opaque stored revision of the current task, when available. Send this exact value when an operation requires an expected task revision."
+              }
+            ]
+          },
           "title": {
             "$ref": "#/components/schemas/TaskListItemTitle",
             "description": "Short human-readable task headline."
@@ -9990,6 +10285,14 @@
           }
         },
         "additionalProperties": false
+      },
+      "TaskListItemExpiresWithTimer": {
+        "type": "string",
+        "description": "Original native timer identifier supplying expiresAt. Forwarded unchanged; later timer cancellation or replacement does not change the copied task lifetime (Kernel §13.2.1).\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Original native timer identifier supplying expiresAt. Forwarded unchanged; later timer cancellation or replacement does not change the copied task lifetime (Kernel §13.2.1).\",\n  \"type\": \"string\",\n  \"minLength\": 1,\n  \"x-wos\": {\n    \"openStringKind\": \"identifier\"\n  }\n}\n ```\n </details>"
+      },
+      "TaskListItemTaskRevision": {
+        "type": "string",
+        "description": "Opaque stored revision of the current task, when available. Send this exact value when an operation requires an expected task revision.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Opaque stored revision of the current task, when available. Send this exact value when an operation requires an expected task revision.\",\n  \"type\": \"string\",\n  \"minLength\": 1,\n  \"x-wos\": {\n    \"openStringKind\": \"opaque-token\"\n  }\n}\n ```\n </details>"
       },
       "TaskListItemTitle": {
         "type": "string",
@@ -10251,6 +10554,10 @@
     }
   },
   "tags": [
+    {
+      "name": "completion",
+      "description": "Authorized browser completion requests and retained archive downloads."
+    },
     {
       "name": "auth",
       "description": "Token + session lifecycle (login, logout, refresh, scope-swap, introspect, scope context). ADR 0082 D-15 step 6."

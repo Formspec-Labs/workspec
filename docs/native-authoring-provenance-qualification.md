@@ -38,6 +38,10 @@ Common `9a0712714a31918de5b2846ea6b398d7c4fc07c4`, Integrity
 `246610e517a2dc369e018ef223c62190328023fa`.
 
 WOS owns generated-registry emission and host configuration qualification.
+Its canonical emitter subsequently supplied exact registry bytes with SHA-256
+`141c0303174aaa1b01ec92e03b88413210af1e7a8fc022ef786155b349dda8bb`.
+Final parity passed across 44 registered operations, and 59 affected schema/API
+checks passed against those emitted bytes.
 Source and WOS own accepted-record authority; Trellis owns append and archive
 verification. These package checks qualify the framework components. The
 deployment owners qualify runtime selection and the completed application
