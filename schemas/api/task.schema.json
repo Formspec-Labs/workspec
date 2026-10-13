@@ -33,6 +33,15 @@
     },
     {
       "$ref": "#/$defs/AssignmentRoles"
+    },
+    {
+      "$ref": "#/$defs/TaskProgressionContinuation"
+    },
+    {
+      "$ref": "#/$defs/TaskProgressionReference"
+    },
+    {
+      "$ref": "#/$defs/TaskProgressionResult"
     }
   ],
   "$defs": {
@@ -930,6 +939,80 @@
           "description": "Optional URN of the provenance record that captures this outcome (Kernel S8). Present when the runtime has stamped the record before emission."
         }
       }
+    },
+    "TaskProgressionContinuation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "acceptedCommandRef"
+      ],
+      "properties": {
+        "acceptedCommandRef": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "description": "Nonsecret owner-issued accepted operation reference; grants no authority."
+        }
+      },
+      "description": "Continues the original committed submission using retained server-side inputs. No new submission or operation key."
+    },
+    "TaskProgressionReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "acceptedCommandRef",
+        "parentCommitted"
+      ],
+      "properties": {
+        "acceptedCommandRef": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "description": "Nonsecret owner-issued accepted operation reference; grants no authority."
+        },
+        "parentCommitted": {
+          "const": true,
+          "description": "The original native submission parent is committed; later child work may remain unsettled."
+        }
+      },
+      "description": "Identifies one original committed submission. Does not assert that its subsequent work has settled."
+    },
+    "TaskProgressionResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "acceptedCommandRef",
+        "parentCommitted",
+        "applied",
+        "outcomeRef"
+      ],
+      "properties": {
+        "acceptedCommandRef": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "description": "Nonsecret owner-issued accepted operation reference; grants no authority."
+        },
+        "parentCommitted": {
+          "const": true,
+          "description": "The original native submission parent is committed; later child work may remain unsettled."
+        },
+        "applied": {
+          "const": true,
+          "description": "The owning original continuation returned successfully under current authority."
+        },
+        "outcomeRef": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "description": "Nonsecret reference to the original owning outcome; grants no authority."
+        }
+      },
+      "description": "Original submission continuation returned under current original actor authority. The outcome reference does not grant access or assert external delivery."
     }
   }
 }

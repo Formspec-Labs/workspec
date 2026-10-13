@@ -87,6 +87,33 @@ GET   /api/v1/cases/{case_id}/processes/{process_id}/tasks -> TaskPage     (case
 
 ## Authenticated task access
 
+`GET /api/v1/tasks/{id}/progression` discovers one original committed submission
+after a new login, using the persisted task identity and current original actor.
+`TaskProgressionReference` carries only `acceptedCommandRef` and
+`parentCommitted: true`. It does not assert that subsequent work has settled.
+The server qualifies current archived task Read and accepted TaskSubmit authority,
+including the original user, role, actor, deployment grants, and operation scopes.
+It independently verifies the new bearer; original credential custody remains
+unchanged. Current signed correction evidence remains required where selected.
+No matching acceptance returns 404 after current read rechecks. Multiple matching
+attempts, including abandoned attempts under different operation keys, return 409;
+the server never chooses the latest attempt. Uncommitted or uncertain parents and
+unavailable current authority return 503.
+
+`POST /api/v1/tasks/{id}/progression` accepts the closed
+`TaskProgressionContinuation { acceptedCommandRef }`. The server reloads the
+original accepted delivery and full retained inputs, checks their exact task,
+process, case, and actor association, and continues the original committed parent.
+The reference is the retry identity; this operation requires no new
+`Idempotency-Key`, response body, clock, claim, or logical TaskSubmit.
+`TaskProgressionResult` carries `applied: true`, `parentCommitted: true`,
+`acceptedCommandRef`, and the original owning `outcomeRef`. References grant no
+access. Current original authority is rechecked before effects and output release;
+the maintained owner survives request disconnect and preserves uncertain child
+effects as 503. A wrong actor or task association returns 403, changed retained
+inputs return 409, and an invalid closed request returns 422. Successful
+continuation does not assert external delivery or grant a later read permission.
+
 Task reads and notifications MUST use an injected resource-read decision shared by task list/detail and task notification delivery. Its inputs are the current authenticated internal principal and canonical ActorRef, current deployment grants, exact configured scope, and the actual case/process/task association. Caller filters, OAuth scopes, provider roles, task identifiers and event-append permissions MUST NOT create task-read authority. Missing identity, resource association, policy facts or authorization availability refuses disclosure. Default composition denies authenticated task delivery until a read policy is explicitly selected and qualified. This section adds current host admission and disclosure requirements; it does not amend the processor submission algorithm in Kernel §13.5 or resumable UI dismissal in Kernel §13.4.
 
 The creation metadata in an accepted `IntakeHandoffReceipt`, and that same frozen initial metadata in an authorized `CaseFileRead`, use the existing `TaskListItem` shape but are separate disclosures governed by `case-file.md`. The explicitly selected intake producer policy may authorize its own exact committed creation receipt; the current case-evidence policy may authorize its frozen initial references. Neither decision grants current task-list/detail/body/action or notification access. Preserve the current task-read rule for those operations; never widen it, impersonate a reviewer or use an always-allow read decision to construct a producer receipt.

@@ -6209,6 +6209,108 @@
           }
         ]
       }
+    },
+    "/tasks/{id}/progression": {
+      "get": {
+        "operationId": "taskProgressionReference",
+        "summary": "Discover the original committed submission.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Original committed parent reference; subsequent work may remain unsettled.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskProgressionReference"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "continueTaskProgression",
+        "summary": "Continue the original submission using retained server-side inputs.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "WOS resource URN (ADR 0082 D-4).",
+            "schema": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Original continuation applied under current authority.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskProgressionResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskProgressionContinuation"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -6479,6 +6581,15 @@
       },
       "ApplicationCaseStatus": {
         "$ref": "wos-public-api.registry.openapi.json#/components/schemas/ApplicationCaseStatus"
+      },
+      "TaskProgressionContinuation": {
+        "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskProgressionContinuation"
+      },
+      "TaskProgressionReference": {
+        "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskProgressionReference"
+      },
+      "TaskProgressionResult": {
+        "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/TaskProgressionResult"
       }
     },
     "responses": {
