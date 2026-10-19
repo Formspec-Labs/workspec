@@ -63,7 +63,7 @@ fn kernel_version_role(role: &str) -> Option<&str> {
 // ── Public types ─────────────────────────────────────────────────
 
 /// Observed state transition during execution.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct Transition {
     /// Source state identifier.
     pub from: String,
@@ -101,6 +101,20 @@ pub struct WorkflowEngine {
 
     /// Binding discriminator used for this fixture.
     binding_used: String,
+
+    /// Whether runtime rejections are retained for authoring assertions.
+    authoring_replay: bool,
+
+    /// Native result of the most recent task submission.
+    submission_result: Option<serde_json::Value>,
+    migration_result: Option<serde_json::Value>,
+    pending_observation_errors: Vec<String>,
+
+    /// Successful native drains retained even if a later drain rejects.
+    observed_drains: Vec<DrainOnceResult>,
+
+    /// Captured native process creation request, result, and error.
+    initialization: serde_json::Value,
 }
 
 impl WorkflowEngine {
@@ -114,6 +128,20 @@ impl WorkflowEngine {
     /// Returns `ConformanceError::DocumentNotFound` if a referenced document
     /// cannot be read, or `ConformanceError::Parse` if the JSON is invalid.
     pub fn new(fixture: &ConformanceFixture) -> Result<Self, ConformanceError> {
+        let frozen = freeze_fixture(fixture)?;
+        Self::from_resolved(&frozen, 0, false)
+    }
+
+    pub(crate) fn from_resolved(
+        fixture: &ConformanceFixture,
+        clock_start_ms: u64,
+        authoring_replay: bool,
+    ) -> Result<Self, ConformanceError> {
+        if fixture.documents.values().any(|path| path != "inline") {
+            return Err(ConformanceError::Parse(
+                "resolved fixture contains a mutable path".into(),
+            ));
+        }
         let kernel_json = fixture_document_json(fixture, "kernel")?;
         let kernel: KernelDocument = serde_json::from_value(kernel_json)
             .map_err(|e| ConformanceError::Parse(format!("kernel parse error: {e}")))?;
@@ -124,7 +152,10 @@ impl WorkflowEngine {
         let definition_version = kernel.version.clone().unwrap_or_default();
 
         let mut kernels_by_version = HashMap::new();
-        kernels_by_version.insert(definition_version.clone(), kernel.clone());
+        kernels_by_version.insert(
+            (definition_url.clone(), definition_version.clone()),
+            kernel.clone(),
+        );
         // Migration fixtures can add extra kernel documents under `kernel@<version>`.
         for key in fixture.documents.keys() {
             if key == "kernel" || kernel_version_role(key).is_none() {
@@ -134,7 +165,12 @@ impl WorkflowEngine {
             let parsed: KernelDocument = serde_json::from_value(raw)
                 .map_err(|e| ConformanceError::Parse(format!("{key} parse error: {e}")))?;
             let version = parsed.version.clone().unwrap_or_default();
-            kernels_by_version.insert(version, parsed);
+            let url = parsed.url.clone().unwrap_or_else(|| definition_url.clone());
+            if kernels_by_version.insert((url, version), parsed).is_some() {
+                return Err(ConformanceError::Parse(format!(
+                    "duplicate resolved kernel identity: {key}"
+                )));
+            }
         }
 
         // Load AI integration content (the embedded `aiOversight` block of a
@@ -269,7 +305,7 @@ impl WorkflowEngine {
             None => StubService::null_response(),
         };
 
-        let clock = SharedClock::new(0);
+        let clock = SharedClock::new(clock_start_ms);
         let mut bindings = BindingRegistry::new();
         let binding_used = match fixture.binding.as_deref() {
             Some("formspec") | Some("conformance") | None => {
@@ -297,13 +333,14 @@ impl WorkflowEngine {
         let mut runtime = WosRuntime::new(
             wos_runtime::InMemoryStore::new(),
             FixtureResolver {
-                kernel: kernel.clone(),
                 kernels_by_version,
                 governance_json: governance_json.clone(),
                 sidecars: companion_docs.clone(),
             },
             NoopPresenter,
-            wos_core::traits::DefaultRuntime::new(),
+            FixtureAccessControl {
+                allow_delegation: !authoring_replay,
+            },
             stub_service,
             StubValidator::from_contract_outcomes(&fixture.contract_outcomes),
             clock.clone(),
@@ -334,6 +371,12 @@ impl WorkflowEngine {
             definition_version,
             next_fixture_event_token: 0,
             binding_used,
+            authoring_replay,
+            submission_result: None,
+            migration_result: None,
+            pending_observation_errors: Vec::new(),
+            observed_drains: Vec::new(),
+            initialization: serde_json::Value::Null,
         })
     }
 
@@ -350,20 +393,28 @@ impl WorkflowEngine {
         &mut self,
         fixture: &ConformanceFixture,
     ) -> Result<crate::ConformanceResult, ConformanceError> {
-        self.runtime
-            .create_process(CreateProcessRequest {
-                process_id: CONFORMANCE_INSTANCE_ID.to_string(),
-                tenant: None,
-                definition_url: self.definition_url.clone(),
-                definition_version: self.definition_version.clone(),
-                initial_case_state: Some(
-                    serde_json::to_value(&fixture.initial_case_state)
-                        .map_err(|error| ConformanceError::Parse(error.to_string()))?,
-                ),
-            })
-            .map_err(|error| ConformanceError::Engine(error.to_string()))?;
-
-        let mut lifecycle_provenance = self.load_runtime_provenance_window(0, usize::MAX)?;
+        let creation_request = CreateProcessRequest {
+            process_id: CONFORMANCE_INSTANCE_ID.to_string(),
+            tenant: None,
+            definition_url: self.definition_url.clone(),
+            definition_version: self.definition_version.clone(),
+            initial_case_state: Some(
+                serde_json::to_value(&fixture.initial_case_state)
+                    .map_err(|error| ConformanceError::Parse(error.to_string()))?,
+            ),
+        };
+        self.initialization =
+            serde_json::json!({"request":creation_request,"result":null,"error":null});
+        match self.runtime.create_process(creation_request) {
+            Ok(created) => {
+                self.initialization["result"] = serde_json::to_value(created)
+                    .map_err(|error| ConformanceError::Engine(error.to_string()))?
+            }
+            Err(error) => {
+                self.initialization["error"] = serde_json::Value::String(error.to_string());
+                return Err(ConformanceError::Engine(error.to_string()));
+            }
+        }
 
         // Fixture-level provenance is limited to harness concerns, such as
         // invalid fixture delay strings. Runtime behavior must be observed
@@ -372,9 +423,12 @@ impl WorkflowEngine {
         let mut observed_transitions: Vec<Transition> = Vec::new();
         let mut observed_guards: Vec<GuardEvaluation> = Vec::new();
 
-        for event_entry in &fixture.event_sequence {
-            // Advance simulated clock if the fixture declares a delay.
+        let mut attempts = Vec::new();
+        let mut operation_errors = Vec::new();
+        for (event_index, event_entry) in fixture.event_sequence.iter().enumerate() {
             if let Some(delay) = &event_entry.delay {
+                self.begin_attempt();
+                let before = self.snapshot();
                 let ms = match parse_iso_duration_to_ms(delay) {
                     Ok(ms) => ms,
                     Err(raw) => {
@@ -383,45 +437,67 @@ impl WorkflowEngine {
                     }
                 };
                 self.clock.advance(ms);
-                let due_results = self.drain_runtime_until_idle()?;
-                for result in due_results {
-                    append_runtime_result(
-                        result,
-                        &mut observed_transitions,
-                        &mut lifecycle_provenance,
-                        &mut observed_guards,
-                    );
-                }
-            }
-
-            if event_entry.event == "$migrate" {
-                let results = self.process_migration_event(event_entry)?;
-                lifecycle_provenance.extend(results);
-            } else if let Some(submission) = &event_entry.task_submission {
-                let results = self.process_task_submission(submission)?;
-                for result in results {
-                    append_runtime_result(
-                        result,
-                        &mut observed_transitions,
-                        &mut lifecycle_provenance,
-                        &mut observed_guards,
-                    );
-                }
-            } else {
-                let results = self.process_runtime_event(
-                    &event_entry.event,
-                    event_entry.actor.as_deref(),
-                    event_entry.data.as_ref(),
+                let operation = self.drain_runtime_until_idle();
+                let attempt = self.finish_attempt(
+                    event_index,
+                    "clock",
+                    "$clock",
+                    None,
+                    None,
+                    before,
+                    operation,
                 )?;
-                for result in results {
-                    append_runtime_result(
-                        result,
-                        &mut observed_transitions,
-                        &mut lifecycle_provenance,
-                        &mut observed_guards,
-                    );
-                }
+                self.append_attempt(
+                    attempt,
+                    &mut attempts,
+                    &mut operation_errors,
+                    &mut observed_transitions,
+                    &mut observed_guards,
+                );
             }
+            self.begin_attempt();
+            let before = self.snapshot();
+            let (kind, operation) = if event_entry.event == "$migrate" {
+                (
+                    "migration",
+                    self.process_migration_event(event_entry).map(|_| ()),
+                )
+            } else if let Some(submission) = &event_entry.task_submission {
+                (
+                    "taskSubmission",
+                    self.process_task_submission(submission, event_entry.actor.as_deref()),
+                )
+            } else {
+                (
+                    "event",
+                    self.process_runtime_event(
+                        &event_entry.event,
+                        event_entry.actor.as_deref(),
+                        event_entry.data.as_ref(),
+                    ),
+                )
+            };
+            let attempt = self.finish_attempt(
+                event_index,
+                kind,
+                &event_entry.event,
+                event_entry.actor.clone(),
+                event_entry.data.clone().or_else(|| {
+                    event_entry
+                        .task_submission
+                        .as_ref()
+                        .map(|submission| submission.response.clone())
+                }),
+                before,
+                operation,
+            )?;
+            self.append_attempt(
+                attempt,
+                &mut attempts,
+                &mut operation_errors,
+                &mut observed_transitions,
+                &mut observed_guards,
+            );
         }
 
         // Auxiliary provenance (invalid fixture delay strings, etc.) is
@@ -436,11 +512,42 @@ impl WorkflowEngine {
         stamp_provenance(&mut auxiliary_provenance, &now_iso);
 
         // Merge lifecycle provenance with auxiliary provenance.
-        let mut provenance = lifecycle_provenance;
+        let mut observation_errors: Vec<String> = attempts
+            .iter()
+            .flat_map(|attempt| attempt.observation_errors.iter().cloned())
+            .collect();
+        let final_snapshot =
+            capture_readback(self.snapshot(), "final snapshot", &mut observation_errors);
+        let complete_provenance = capture_readback(
+            self.load_runtime_provenance_window(0, usize::MAX),
+            "final provenance",
+            &mut observation_errors,
+        );
+        let provenance_complete = complete_provenance.is_some();
+        let mut provenance = complete_provenance.unwrap_or_else(|| {
+            attempts
+                .iter()
+                .flat_map(|attempt| {
+                    attempt
+                        .drains
+                        .iter()
+                        .flat_map(|drain| drain.provenance.clone())
+                })
+                .collect()
+        });
         provenance.extend(auxiliary_provenance);
 
         // Check assertions.
-        let mut failures = Vec::new();
+        let mut failures: Vec<String> = operation_errors
+            .iter()
+            .filter(|error| {
+                !fixture
+                    .expected_errors
+                    .iter()
+                    .any(|expected| error.contains(expected))
+            })
+            .map(|error| format!("unexpected runtime rejection: {error}"))
+            .collect();
 
         // Transition assertions. `expected.target` matches the canonical
         // workflow-schema vocabulary; `actual.to` belongs to the runtime
@@ -505,7 +612,10 @@ impl WorkflowEngine {
                         .and_then(|v| v.as_str())
                         .is_some_and(|s| s.contains(expected_err.as_str()))
             });
-            if !in_failures && !in_provenance {
+            let in_operations = operation_errors
+                .iter()
+                .any(|error| error.contains(expected_err));
+            if !in_failures && !in_provenance && !in_operations {
                 failures.push(format!(
                     "expected_errors[{i}]: no engine failure or provenance record matched '{expected_err}'"
                 ));
@@ -513,13 +623,132 @@ impl WorkflowEngine {
         }
 
         Ok(crate::ConformanceResult {
-            passed: failures.is_empty(),
+            passed: failures.is_empty() && observation_errors.is_empty(),
             failures,
             transitions: observed_transitions,
             provenance,
             guard_evaluations: observed_guards,
             binding_used: Some(self.binding_used.clone()),
+            attempts,
+            final_snapshot,
+            definition_version: self.definition_version.clone(),
+            initialization: self.initialization.clone(),
+            observation_errors,
+            provenance_complete,
         })
+    }
+
+    pub(crate) fn initialization(&self) -> serde_json::Value {
+        self.initialization.clone()
+    }
+
+    fn snapshot(&self) -> Result<crate::studio_api::RuntimeSnapshot, ConformanceError> {
+        let process = self
+            .runtime
+            .load_process(CONFORMANCE_INSTANCE_ID)
+            .map_err(|error| ConformanceError::Engine(error.to_string()))?;
+        Ok(crate::studio_api::RuntimeSnapshot {
+            configuration: process.configuration,
+            case_state: process.case_state,
+            active_tasks: serde_json::to_value(process.active_tasks)
+                .map_err(|error| ConformanceError::Engine(error.to_string()))?,
+            timers: serde_json::to_value(process.timers)
+                .map_err(|error| ConformanceError::Engine(error.to_string()))?,
+            definition_version: process.definition_version,
+            provenance_position: usize::try_from(process.provenance_position)
+                .map_err(|error| ConformanceError::Engine(format!("provenance cursor: {error}")))?,
+        })
+    }
+
+    fn begin_attempt(&mut self) {
+        self.observed_drains.clear();
+        self.submission_result = None;
+        self.migration_result = None;
+        self.pending_observation_errors.clear();
+    }
+
+    fn finish_attempt(
+        &mut self,
+        event_index: usize,
+        kind: &str,
+        event: &str,
+        actor: Option<String>,
+        payload: Option<serde_json::Value>,
+        before: Result<crate::studio_api::RuntimeSnapshot, ConformanceError>,
+        operation: Result<(), ConformanceError>,
+    ) -> Result<crate::studio_api::ReplayAttempt, ConformanceError> {
+        let error = match operation {
+            Ok(()) => None,
+            Err(error) if self.authoring_replay => Some(error.to_string()),
+            Err(error) => return Err(error),
+        };
+        let provenance = match &before {
+            Ok(before) => {
+                self.load_runtime_provenance_window(before.provenance_position, usize::MAX)
+            }
+            Err(_) => Err(ConformanceError::Engine(
+                "provenance window unavailable without initial snapshot".into(),
+            )),
+        };
+        let mut attempt = crate::studio_api::ReplayAttempt {
+            event_index,
+            kind: kind.into(),
+            event: event.into(),
+            actor,
+            payload,
+            clock_ms: self.clock.now_ms(),
+            before: None,
+            after: None,
+            drains: std::mem::take(&mut self.observed_drains),
+            submission_result: self.submission_result.take(),
+            migration_result: self.migration_result.take(),
+            error,
+            provenance: None,
+            observation_errors: std::mem::take(&mut self.pending_observation_errors),
+        };
+        capture_attempt_readbacks(&mut attempt, before, self.snapshot(), provenance);
+        Ok(attempt)
+    }
+
+    fn append_attempt(
+        &self,
+        attempt: crate::studio_api::ReplayAttempt,
+        attempts: &mut Vec<crate::studio_api::ReplayAttempt>,
+        errors: &mut Vec<String>,
+        transitions: &mut Vec<Transition>,
+        guards: &mut Vec<GuardEvaluation>,
+    ) {
+        if let Some(error) = &attempt.error {
+            errors.push(error.clone());
+        }
+        if attempt.kind == "migration" && attempt.error.is_some() {
+            if let (Some(before), Some(after)) = (&attempt.before, &attempt.after) {
+                if before.definition_version != after.definition_version {
+                    errors.push(format!(
+                        "migration rejection mutated instance version: before={}, after={}",
+                        before.definition_version, after.definition_version
+                    ));
+                }
+            }
+        }
+        if self.authoring_replay {
+            if let Some(result) = &attempt.submission_result {
+                for kind in ["rejected", "failed"] {
+                    if let Some(rejected) = result.get(kind) {
+                        errors.push(format!("task submission {kind}: {rejected}"));
+                    }
+                }
+            }
+        }
+        for drain in &attempt.drains {
+            transitions.extend(drain.transitions.iter().map(|transition| Transition {
+                from: transition.from.clone(),
+                to: transition.to.clone(),
+                event: transition.event.clone(),
+            }));
+            guards.extend(drain.guard_evaluations.iter().cloned());
+        }
+        attempts.push(attempt);
     }
 
     fn process_runtime_event(
@@ -527,7 +756,7 @@ impl WorkflowEngine {
         event_name: &str,
         actor_id: Option<&str>,
         data: Option<&serde_json::Value>,
-    ) -> Result<Vec<DrainOnceResult>, ConformanceError> {
+    ) -> Result<(), ConformanceError> {
         self.next_fixture_event_token += 1;
         let fixture_event_token = format!("fixture-event-{}", self.next_fixture_event_token);
         self.runtime
@@ -544,7 +773,6 @@ impl WorkflowEngine {
             )
             .map_err(|error| ConformanceError::Engine(error.to_string()))?;
 
-        let mut results = Vec::new();
         loop {
             let result = self
                 .runtime
@@ -552,7 +780,7 @@ impl WorkflowEngine {
                 .map_err(|error| ConformanceError::Engine(error.to_string()))?;
             let processed_event = result.processed_event.clone();
             let processed_event_token = result.processed_event_token.clone();
-            results.push(result);
+            self.observed_drains.push(result);
             if processed_event_token.as_deref() == Some(fixture_event_token.as_str())
                 || processed_event.is_none()
             {
@@ -560,15 +788,14 @@ impl WorkflowEngine {
             }
         }
 
-        Ok(results)
+        Ok(())
     }
 
     fn process_task_submission(
         &mut self,
         submission: &crate::fixture::TaskSubmission,
-    ) -> Result<Vec<DrainOnceResult>, ConformanceError> {
-        let provenance_before = self.load_runtime_provenance_window(0, usize::MAX)?.len();
-
+        submitted_actor: Option<&str>,
+    ) -> Result<(), ConformanceError> {
         let instance = self
             .runtime
             .load_process(CONFORMANCE_INSTANCE_ID)
@@ -584,12 +811,12 @@ impl WorkflowEngine {
                 ))
             })?;
         let task_id = task.task_id.clone();
-        let actor_id = task
-            .assigned_actor
-            .clone()
+        let actor_id = submitted_actor
+            .map(str::to_string)
+            .or_else(|| task.assigned_actor.clone())
             .ok_or_else(|| ConformanceError::Engine("task has no assigned actor".to_string()))?;
 
-        let _result = self
+        let submission_result = self
             .runtime
             .submit_task_response(
                 &task_id,
@@ -599,28 +826,14 @@ impl WorkflowEngine {
             )
             .map_err(|error| ConformanceError::Engine(error.to_string()))?;
 
-        // submit_task_response writes provenance directly to the store,
-        // not through the drain mechanism. Capture the submission provenance
-        // delta before draining any triggered events.
-        let provenance_after_submit = self.load_runtime_provenance_window(0, usize::MAX)?;
-        let submission_provenance: Vec<ProvenanceRecord> = provenance_after_submit
-            .into_iter()
-            .skip(provenance_before)
-            .collect();
+        self.submission_result = Some(
+            serde_json::to_value(&submission_result)
+                .map_err(|error| ConformanceError::Engine(error.to_string()))?,
+        );
 
-        let mut results = Vec::new();
-
-        if !submission_provenance.is_empty() {
-            results.push(DrainOnceResult {
-                provenance: submission_provenance,
-                ..DrainOnceResult::default()
-            });
-        }
-
-        let mut drain_results = self.drain_runtime_until_idle()?;
-        results.append(&mut drain_results);
-
-        Ok(results)
+        // Submission provenance is read from the native log by finish_attempt;
+        // do not manufacture a DrainOnceResult for a non-drain operation.
+        self.drain_runtime_until_idle()
     }
 
     fn process_migration_event(
@@ -664,16 +877,6 @@ impl WorkflowEngine {
         ) {
             Ok(outcome) => outcome,
             Err(RuntimeError::MigrationRejected(message)) => {
-                let after_instance = self
-                    .runtime
-                    .load_process(CONFORMANCE_INSTANCE_ID)
-                    .map_err(|error| ConformanceError::Engine(error.to_string()))?;
-                if after_instance.definition_version != previous_definition_version {
-                    return Err(ConformanceError::Engine(format!(
-                        "migration rejection mutated instance version: before={}, after={}",
-                        previous_definition_version, after_instance.definition_version
-                    )));
-                }
                 return Err(ConformanceError::Engine(format!(
                     "migration rejected: {message}"
                 )));
@@ -681,6 +884,10 @@ impl WorkflowEngine {
             Err(error) => return Err(ConformanceError::Engine(error.to_string())),
         };
 
+        self.migration_result = Some(
+            serde_json::to_value(&outcome)
+                .map_err(|error| ConformanceError::Engine(error.to_string()))?,
+        );
         if outcome.process_id != CONFORMANCE_INSTANCE_ID {
             return Err(ConformanceError::Engine(format!(
                 "migration outcome instance mismatch: expected {CONFORMANCE_INSTANCE_ID}, got {}",
@@ -709,10 +916,14 @@ impl WorkflowEngine {
             ));
         }
 
-        let after_instance = self
-            .runtime
-            .load_process(CONFORMANCE_INSTANCE_ID)
-            .map_err(|error| ConformanceError::Engine(error.to_string()))?;
+        let after_instance = match self.runtime.load_process(CONFORMANCE_INSTANCE_ID) {
+            Ok(process) => process,
+            Err(error) => {
+                self.pending_observation_errors
+                    .push(format!("migration after snapshot readback failed: {error}"));
+                return Ok(Vec::new());
+            }
+        };
         if after_instance.definition_version != migration.target_definition_version {
             return Err(ConformanceError::Engine(format!(
                 "migration did not persist target version: expected {}, got {}",
@@ -720,7 +931,14 @@ impl WorkflowEngine {
             )));
         }
 
-        let provenance_after = self.load_runtime_provenance_window(0, usize::MAX)?;
+        let provenance_after = match self.load_runtime_provenance_window(0, usize::MAX) {
+            Ok(records) => records,
+            Err(error) => {
+                self.pending_observation_errors
+                    .push(format!("migration provenance readback failed: {error}"));
+                return Ok(Vec::new());
+            }
+        };
         let delta: Vec<ProvenanceRecord> = provenance_after
             .into_iter()
             .skip(provenance_before)
@@ -741,10 +959,18 @@ impl WorkflowEngine {
         Ok(delta)
     }
 
-    fn drain_runtime_until_idle(&mut self) -> Result<Vec<DrainOnceResult>, ConformanceError> {
-        self.runtime
-            .drain_until_idle(CONFORMANCE_INSTANCE_ID)
-            .map_err(|error| ConformanceError::Engine(error.to_string()))
+    fn drain_runtime_until_idle(&mut self) -> Result<(), ConformanceError> {
+        loop {
+            let result = self
+                .runtime
+                .drain_once(CONFORMANCE_INSTANCE_ID)
+                .map_err(|error| ConformanceError::Engine(error.to_string()))?;
+            let idle = result.processed_event.is_none();
+            self.observed_drains.push(result);
+            if idle {
+                return Ok(());
+            }
+        }
     }
 
     fn load_runtime_provenance_window(
@@ -756,6 +982,35 @@ impl WorkflowEngine {
             .load_provenance_window(CONFORMANCE_INSTANCE_ID, cursor, limit)
             .map_err(|error| ConformanceError::Engine(error.to_string()))
     }
+}
+
+fn capture_readback<T>(
+    value: Result<T, ConformanceError>,
+    label: &str,
+    errors: &mut Vec<String>,
+) -> Option<T> {
+    match value {
+        Ok(value) => Some(value),
+        Err(error) => {
+            errors.push(format!("{label} readback failed: {error}"));
+            None
+        }
+    }
+}
+
+fn capture_attempt_readbacks(
+    attempt: &mut crate::studio_api::ReplayAttempt,
+    before: Result<crate::studio_api::RuntimeSnapshot, ConformanceError>,
+    after: Result<crate::studio_api::RuntimeSnapshot, ConformanceError>,
+    provenance: Result<Vec<ProvenanceRecord>, ConformanceError>,
+) {
+    attempt.before = capture_readback(before, "before snapshot", &mut attempt.observation_errors);
+    attempt.after = capture_readback(after, "after snapshot", &mut attempt.observation_errors);
+    attempt.provenance = capture_readback(
+        provenance,
+        "attempt provenance",
+        &mut attempt.observation_errors,
+    );
 }
 
 // ── Module-level helpers ─────────────────────────────────────────
@@ -794,6 +1049,16 @@ fn format_timestamp_millis(timestamp_ms: u64) -> Result<String, ConformanceError
     timestamp
         .format(&Rfc3339)
         .map_err(|error| ConformanceError::Engine(format!("clock timestamp format: {error}")))
+}
+
+fn freeze_fixture(fixture: &ConformanceFixture) -> Result<ConformanceFixture, ConformanceError> {
+    let mut frozen = fixture.clone();
+    for role in fixture.documents.keys() {
+        let value = fixture_document_json(fixture, role)?;
+        frozen.documents.insert(role.clone(), "inline".into());
+        frozen.inline_documents.insert(role.clone(), value);
+    }
+    Ok(frozen)
 }
 
 fn fixture_document_json(
@@ -889,8 +1154,7 @@ fn embedded_block_for_role(role: &str) -> Option<&'static str> {
 
 #[derive(Debug, Clone)]
 struct FixtureResolver {
-    kernel: KernelDocument,
-    kernels_by_version: HashMap<String, KernelDocument>,
+    kernels_by_version: HashMap<(String, String), KernelDocument>,
     governance_json: Option<serde_json::Value>,
     sidecars: HashMap<String, serde_json::Value>,
 }
@@ -900,6 +1164,9 @@ enum FixtureResolverError {
     #[error("governance document unavailable")]
     GovernanceUnavailable,
 
+    #[error("workflow document unavailable: {0}@{1}")]
+    KernelUnavailable(String, String),
+
     #[error("sidecar document unavailable: {0}")]
     SidecarUnavailable(String),
 }
@@ -907,20 +1174,21 @@ enum FixtureResolverError {
 impl DocumentResolver for FixtureResolver {
     type Error = FixtureResolverError;
 
-    fn resolve_kernel(&self, _url: &str, version: &str) -> Result<KernelDocument, Self::Error> {
-        Ok(self
-            .kernels_by_version
-            .get(version)
+    fn resolve_kernel(&self, url: &str, version: &str) -> Result<KernelDocument, Self::Error> {
+        self.kernels_by_version
+            .get(&(url.to_string(), version.to_string()))
             .cloned()
-            .unwrap_or_else(|| self.kernel.clone()))
+            .ok_or_else(|| FixtureResolverError::KernelUnavailable(url.into(), version.into()))
     }
 
     fn resolve_governance(
         &self,
-        _url: &str,
-        _version: &str,
+        url: &str,
+        version: &str,
     ) -> Result<GovernanceDocument, Self::Error> {
-        self.governance_json
+        let kernel = self.resolve_kernel(url, version)?;
+        let governance = kernel.governance.or_else(|| self.governance_json.clone());
+        governance
             .as_ref()
             .cloned()
             .ok_or(FixtureResolverError::GovernanceUnavailable)
@@ -942,6 +1210,30 @@ impl DocumentResolver for FixtureResolver {
     }
 }
 
+/// Fixture policy: authoring replay allows assigned task actors, without delegation.
+/// Legacy fixture execution retains its existing permissive access-control adapter.
+#[derive(Debug, Clone, Copy)]
+struct FixtureAccessControl {
+    allow_delegation: bool,
+}
+
+impl wos_core::traits::AccessControl for FixtureAccessControl {
+    fn can_transition(&self, _actor_id: &str, _event: &str) -> bool {
+        true
+    }
+    fn can_read(&self, _actor_id: &str, _field_path: &str) -> bool {
+        true
+    }
+    fn can_delegate(
+        &self,
+        _delegator: &str,
+        _delegate: &str,
+        _scope: &wos_core::model::governance::DelegationScope,
+    ) -> bool {
+        self.allow_delegation
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 struct NoopPresenter;
 
@@ -959,21 +1251,6 @@ impl TaskPresenter for NoopPresenter {
     fn dismiss_task(&mut self, _task_id: &str, _reason: &str) -> Result<(), Self::Error> {
         Ok(())
     }
-}
-
-fn append_runtime_result(
-    result: DrainOnceResult,
-    transitions: &mut Vec<Transition>,
-    provenance: &mut Vec<ProvenanceRecord>,
-    guard_evaluations: &mut Vec<GuardEvaluation>,
-) {
-    transitions.extend(result.transitions.into_iter().map(|transition| Transition {
-        from: transition.from,
-        to: transition.to,
-        event: transition.event,
-    }));
-    provenance.extend(result.provenance);
-    guard_evaluations.extend(result.guard_evaluations);
 }
 
 /// Check whether an expected provenance record partially matches an actual one.
@@ -1038,5 +1315,69 @@ fn json_partial_match(expected: &serde_json::Value, actual: &serde_json::Value) 
         }
         // Non-object values use exact equality.
         _ => expected == actual,
+    }
+}
+
+#[cfg(test)]
+mod observation_failure_tests {
+    use super::*;
+
+    #[test]
+    fn injected_readback_failure_preserves_native_error_result_and_successful_drain() {
+        // This tests observation collection with injected read failures. The
+        // integration control separately exercises actual native partial drains.
+        let mut attempt = crate::studio_api::ReplayAttempt {
+            event_index: 0,
+            kind: "taskSubmission".into(),
+            event: "submit".into(),
+            actor: Some("intruder".into()),
+            payload: None,
+            clock_ms: 0,
+            before: None,
+            after: None,
+            drains: vec![DrainOnceResult {
+                processed_event: Some("earlier-native-event".into()),
+                ..Default::default()
+            }],
+            submission_result: Some(serde_json::json!({"rejected":{"code":"native-rejection"}})),
+            migration_result: None,
+            error: Some("original native operation error".into()),
+            provenance: None,
+            observation_errors: Vec::new(),
+        };
+        let after = crate::studio_api::RuntimeSnapshot {
+            configuration: vec!["observed-state".into()],
+            case_state: serde_json::json!({"actual":42}),
+            active_tasks: serde_json::json!([]),
+            timers: serde_json::json!([]),
+            definition_version: "1.0.0".into(),
+            provenance_position: 1,
+        };
+        capture_attempt_readbacks(
+            &mut attempt,
+            Err(ConformanceError::Engine(
+                "injected before-read failure".into(),
+            )),
+            Ok(after.clone()),
+            Err(ConformanceError::Engine(
+                "injected provenance-read failure".into(),
+            )),
+        );
+        assert_eq!(
+            attempt.error.as_deref(),
+            Some("original native operation error")
+        );
+        assert_eq!(
+            attempt.drains[0].processed_event.as_deref(),
+            Some("earlier-native-event")
+        );
+        assert_eq!(
+            attempt.submission_result.as_ref().unwrap()["rejected"]["code"],
+            "native-rejection"
+        );
+        assert!(attempt.before.is_none());
+        assert!(attempt.provenance.is_none());
+        assert_eq!(attempt.after, Some(after));
+        assert_eq!(attempt.observation_errors.len(), 2);
     }
 }

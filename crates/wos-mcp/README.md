@@ -1,61 +1,51 @@
-# wos-mcp
+# WOS MCP
 
-MCP adapter exposing WOS authoring operations as JSON-RPC-2.0 tools.
+The stdio server and in-process `dispatch()` function use the same executable
+catalog in `src/catalog.rs`. Each declaration owns its name, description,
+argument schema, defaults, output schema, behavior hints, native field coverage
+and handler. Named native edits have one declaration per action.
 
-## Two audiences, one set of handlers
-
-`wos-mcp` exposes the same tool handlers to two audiences:
-
-1. **External MCP clients** (Claude Desktop, Cline) via the `wos-mcp` stdio binary wrapping JSON-RPC-2.0.
-2. **In-workspace Rust callers** (`wos-synth-core`, `wos-bench`, tests) via direct import of `wos_mcp::dispatch::dispatch`.
-
-No protocol round-trip for in-process callers; they call the async function directly.
-
-```rust
-// External: JSON-RPC-2.0 over stdio (launched by Claude Desktop / Cline)
-// $ echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"wos_ping","arguments":{}}}' | wos-mcp
-
-// In-process: direct library call (zero overhead)
-let result = wos_mcp::dispatch::dispatch("wos_ping", serde_json::json!({})).await?;
-assert_eq!(result, serde_json::json!({"pong": true}));
+```rust,ignore
+let result = wos_mcp::dispatch::dispatch(
+    &mut registry, "wos_edit_workflow", project_id,
+    serde_json::json!({"project_id":project_id,"fields":{"title":"Review"}}),
+).await?;
 ```
 
-## MCP transport decision
+`wos_edit_workflow` defaults to `metadata` when `action` is omitted. Other actions
+edit an inline case field, a contract/Formspec reference, a complete nested state,
+a state action, governance, an agent, an agent constraint or AI oversight.
+Every edit preserves native JSON outside the requested value. Draft creation
+returns `draft: true`; payload validation does not claim whole-workflow readiness.
+The coverage file records every canonical root field as incremental or
+import/export. Historical extension values remain intact, while obsolete
+extension-writing tools are retired.
 
-**Hand-rolled** — `rust-mcp-sdk` v0.9.0 exists on crates.io but pulls in hyper, axum, reqwest, SSL, and tokio-stream as default features. That is far too heavy for a pure stdio adapter where the protocol is 3 methods (`initialize`, `tools/list`, `tools/call`) over newline-delimited JSON. The hand-rolled transport in `src/server.rs` is ~130 lines, has no ecosystem risk, and can be upgraded to an SDK if the ecosystem stabilises.
+`wos_run_conformance` replays the selected project's current native snapshot. It
+accepts inline fixture JSON, frozen resolved dependencies, controlled clock and
+explicit observation expectations. File-based `base_dir` substitution is
+unsupported. Its evidence records both execution and observation failures.
 
-## Running
-
-```bash
-# Build
-cargo build -p wos-mcp
-
-# Smoke test
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | cargo run -q -p wos-mcp
-
-# Full test suite (unit + subprocess integration)
-cargo nextest run -p wos-mcp
+```sh
+cargo run -p wos-mcp -- --list-tools
+cargo run -p wos-mcp -- --tool-help wos_edit_workflow
+cargo run -p wos-mcp --example generate_catalog -- --write
+cargo run -p wos-mcp --example generate_catalog -- --check
+cargo nextest run -p wos-authoring -p wos-mcp
 ```
 
-## Architecture
+`tool-catalog.json` and `WORKFLOW-COVERAGE.json` are checked generated views.
+`tools/list` and command-line help read the same declarations directly. Adding a
+tool requires its handler and a catalog declaration, then regeneration. There is
+no separate dispatch match or tool-name allowlist.
 
-```
-src/
-  lib.rs          — public module declarations
-  server.rs       — [[bin]] stdio JSON-RPC-2.0 loop
-  dispatch.rs     — in-process dispatch entry point (library API)
-  registry.rs     — ProjectRegistry (stub; expanded in Task 3)
-  errors.rs       — ToolError, DispatchError
-  tools/
-    mod.rs        — re-exports all tool handlers
-    ping.rs       — wos_ping health-check tool
-tests/
-  stdio_transport.rs — subprocess integration tests
-```
+Native payload schemas reference `schemas/wos-workflow.schema.json`; diagnostics
+reference `schemas/wos-tooling.schema.json`. In-process validation registers both
+bundled resources and explicitly refuses all other retrieval. Offline consumers
+must distribute those owner schemas and register their `$id` values. The
+standalone MCP catalog schema is a thin view of the tooling owner; missing owner
+resources produce a resolution error.
 
-## Adding a new tool
-
-1. Create `src/tools/<name>.rs` with `pub async fn <name>(args: Value) -> Result<Value, ToolError>`.
-2. `pub use self::<name>::<name>;` in `src/tools/mod.rs`.
-3. Add a match arm in `src/dispatch.rs`.
-4. Add the tool descriptor to `tools/list` in `src/server.rs`.
+The binary retains newline-delimited JSON-RPC over stdin/stdout. Transport changes
+are outside this authoring change. Tool failures return MCP `isError` results;
+unknown tool names return the existing JSON-RPC invalid-params error.

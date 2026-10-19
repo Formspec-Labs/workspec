@@ -28,7 +28,7 @@ use crate::{
 /// diagnostic they can surface to authoring tooling.
 pub type AuthoringResult = CommandResult;
 
-/// Intent-driven authoring façade for WOS Kernel Documents.
+/// Intent-driven edits of a complete native JSON Workflow document.
 ///
 /// Wraps a `RawWosProject` and exposes only the operation-specific helper
 /// methods plus undo/redo. The underlying `Command` enum and the
@@ -41,7 +41,7 @@ pub struct WosProject {
 }
 
 impl WosProject {
-    /// Construct a minimal valid project with the given impact level and title.
+    /// Construct an editable draft with the given impact level and title.
     ///
     /// The document has no states, no actors, no contracts, and an empty
     /// `lifecycle.initialState` sentinel.
@@ -69,6 +69,104 @@ impl WosProject {
         Self {
             core: RawWosProject::from_document(document),
         }
+    }
+
+    /// Import a complete native JSON document, including unmodeled authored values.
+    ///
+    /// This constructor preserves drafts; full readiness checks belong to validation callers.
+    ///
+    /// # Errors
+    /// Returns a diagnostic when the supplied document is not a JSON object.
+    pub fn from_native_document(document: serde_json::Value) -> Result<Self, AuthoringDiagnostic> {
+        Ok(Self {
+            core: RawWosProject::from_native_document(document)?,
+        })
+    }
+
+    /// Replace selected native fields as one undoable edit.
+    ///
+    /// # Errors
+    /// Returns a diagnostic for an unknown field or an invalid payload shape.
+    pub fn set_native_fields(
+        &mut self,
+        fields: serde_json::Map<String, serde_json::Value>,
+    ) -> AuthoringResult {
+        self.core.dispatch(Command::SetNativeFields { fields })
+    }
+
+    /// Add or replace a complete inline case field.
+    ///
+    /// # Errors
+    /// Returns a diagnostic for an invalid field or contract-backed case file.
+    pub fn put_case_field(
+        &mut self,
+        name: String,
+        definition: serde_json::Value,
+    ) -> AuthoringResult {
+        self.core
+            .dispatch(Command::PutCaseField { name, definition })
+    }
+
+    /// Add or replace a complete native contract reference.
+    ///
+    /// # Errors
+    /// Returns a diagnostic for an invalid contract reference.
+    pub fn put_contract(&mut self, name: String, contract: serde_json::Value) -> AuthoringResult {
+        self.core.dispatch(Command::PutContract { name, contract })
+    }
+
+    /// Add or replace the state at a native state locator.
+    ///
+    /// # Errors
+    /// Returns a diagnostic for an invalid state, locator, or missing parent.
+    pub fn put_state(&mut self, pointer: String, state: serde_json::Value) -> AuthoringResult {
+        self.core.dispatch(Command::PutState { pointer, state })
+    }
+
+    /// Append an action to a named native state phase.
+    ///
+    /// # Errors
+    /// Returns a diagnostic for an invalid state locator, phase, or action.
+    pub fn append_state_action(
+        &mut self,
+        pointer: String,
+        phase: String,
+        action: serde_json::Value,
+    ) -> AuthoringResult {
+        self.core.dispatch(Command::AppendStateAction {
+            pointer,
+            phase,
+            action,
+        })
+    }
+
+    /// Add or replace a complete agent declaration by identity.
+    ///
+    /// # Errors
+    /// Returns a diagnostic when the agent declaration is invalid.
+    pub fn put_agent(&mut self, agent: serde_json::Value) -> AuthoringResult {
+        self.core.dispatch(Command::PutAgent { agent })
+    }
+
+    /// Remove one agent while preserving every other declaration verbatim.
+    ///
+    /// # Errors
+    /// Returns a diagnostic when the agent is absent.
+    pub fn remove_agent(&mut self, id: String) -> AuthoringResult {
+        self.core.dispatch(Command::RemoveAgent { id })
+    }
+
+    /// Append a canonical deontic constraint to an existing agent.
+    ///
+    /// # Errors
+    /// Returns a diagnostic for an absent agent or invalid constraint.
+    pub fn add_agent_constraint(
+        &mut self,
+        id: String,
+        constraint: serde_json::Value,
+    ) -> AuthoringResult {
+        self.core
+            .dispatch(Command::AddAgentConstraint { id, constraint })
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────
@@ -197,9 +295,8 @@ impl WosProject {
 
     // ── Actors ────────────────────────────────────────────────────────────
 
-    /// Add an actor declaration. `kind` is `Human` or `System` per kernel
-    /// §S3; AI agents route through [`Self::add_actor_deontic`] / the
-    /// `x-wos-ai.agents` surface, not through new ActorKind variants.
+    /// Add a human, system or agent actor declaration. Agent policy declarations
+    /// are authored separately in native `agents` with [`Self::put_agent`].
     pub fn add_actor(&mut self, id: impl Into<String>, kind: ActorKind) -> AuthoringResult {
         self.core.dispatch(Command::AddActor {
             id: id.into(),
@@ -267,7 +364,7 @@ impl WosProject {
 
     // ── Governance ────────────────────────────────────────────────────────
 
-    /// Record a due-process path under `x-wos-governance.dueProcessPaths`.
+    /// Refuse the retired extension-writing shape; use native governance instead.
     pub fn add_due_process_path(
         &mut self,
         path_id: impl Into<String>,
@@ -281,7 +378,7 @@ impl WosProject {
         })
     }
 
-    /// Add an assertion gate under `x-wos-governance.assertionGates`.
+    /// Refuse the retired extension-writing shape; use native governance instead.
     pub fn add_assertion_gate(
         &mut self,
         gate_id: impl Into<String>,
@@ -297,9 +394,7 @@ impl WosProject {
 
     // ── AI integration ────────────────────────────────────────────────────
 
-    /// Register an AI agent under `x-wos-ai.agents`.
-    ///
-    /// AI agents are NOT actors (kernel §S3); they live in `x-wos-ai.agents`.
+    /// Register a native `agents` declaration with modelIdentifier and capabilities.
     pub fn add_ai_agent(
         &mut self,
         agent_id: impl Into<String>,
@@ -315,9 +410,7 @@ impl WosProject {
         })
     }
 
-    /// Append a structured deontic constraint under `x-wos-ai.deonticConstraints`.
-    ///
-    /// `modality` must be `"must"`, `"must_not"`, or `"may"`.
+    /// Refuse the retired constraint shape; use [`Self::add_agent_constraint`].
     pub fn add_deontic_constraint(
         &mut self,
         constraint_id: impl Into<String>,
@@ -333,7 +426,7 @@ impl WosProject {
         })
     }
 
-    /// Append a deontic constraint under `x-wos-ai.deonticConstraints`.
+    /// Refuse free-text legacy constraints; use [`Self::add_agent_constraint`].
     pub fn add_actor_deontic(
         &mut self,
         constraint_id: impl Into<String>,
@@ -410,8 +503,16 @@ impl WosProject {
     // ── Export / diagnostics ──────────────────────────────────────────────
 
     /// Return a clone of the current document state.
-    pub fn snapshot(&self) -> KernelDocument {
-        self.core.snapshot()
+    pub fn native_snapshot(&self) -> serde_json::Value {
+        self.core.native_snapshot()
+    }
+
+    /// Derive a runtime model without discarding the complete authored source.
+    ///
+    /// # Errors
+    /// Returns a diagnostic when the runtime model cannot represent the native document.
+    pub fn typed_snapshot(&self) -> Result<KernelDocument, AuthoringDiagnostic> {
+        self.core.typed_snapshot()
     }
 
     /// Return all warnings accumulated during this session.
@@ -438,7 +539,13 @@ mod tests {
             .add_state("draft", StateKind::Atomic)
             .expect("add_state must succeed");
         assert!(applied.label.contains("AddState"));
-        assert!(p.snapshot().lifecycle.states.contains_key("draft"));
+        assert!(
+            p.typed_snapshot()
+                .unwrap()
+                .lifecycle
+                .states
+                .contains_key("draft")
+        );
     }
 
     /// Undo/redo operate at the helper boundary.
@@ -456,8 +563,8 @@ mod tests {
 
         p.redo().unwrap();
         p.redo().unwrap();
-        assert_eq!(p.snapshot().lifecycle.states.len(), 1);
-        assert_eq!(p.snapshot().actors.len(), 1);
+        assert_eq!(p.typed_snapshot().unwrap().lifecycle.states.len(), 1);
+        assert_eq!(p.typed_snapshot().unwrap().actors.len(), 1);
     }
 
     /// set_impact_level walks through the façade to the inner handler.
@@ -466,7 +573,7 @@ mod tests {
         let mut p = make_project();
         p.set_impact_level(ImpactLevel::SafetyImpacting).unwrap();
         assert_eq!(
-            p.snapshot().impact_level,
+            p.typed_snapshot().unwrap().impact_level,
             Some(ImpactLevel::SafetyImpacting)
         );
     }

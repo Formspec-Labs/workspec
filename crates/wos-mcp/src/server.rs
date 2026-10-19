@@ -23,7 +23,14 @@ use wos_mcp::registry::ProjectRegistry;
 
 #[derive(Parser)]
 #[command(name = "wos-mcp", about = "WOS MCP stdio server")]
-struct Cli {}
+struct Cli {
+    /// Print the current tools/list JSON and exit.
+    #[arg(long)]
+    list_tools: bool,
+    /// Print one tool declaration, including actions and defaults, and exit.
+    #[arg(long)]
+    tool_help: Option<String>,
+}
 
 // ── JSON-RPC-2.0 types ───────────────────────────────────────────────────────
 
@@ -116,288 +123,7 @@ async fn handle_request(
         ),
 
         // Return the current tool catalog.
-        "tools/list" => JsonRpcResponse::ok(
-            id,
-            serde_json::json!({
-                "tools": [
-                    {
-                        "name": "wos_ping",
-                        "description": "Health-check tool. Returns {\"pong\": true}. Used in scaffold tests and transport smoke tests.",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {},
-                            "required": []
-                        }
-                    },
-                    {
-                        "name": "wos_create_kernel",
-                        "description": "Create a new empty WOS kernel project. Returns {\"project_id\": \"<uuid>\"}.",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {},
-                            "required": []
-                        }
-                    },
-                    {
-                        "name": "wos_load_document",
-                        "description": "Parse and register a WOS kernel document from inline JSON text or a file path. Returns {\"project_id\": \"<uuid>\"}.",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "json": { "type": "string", "description": "WOS kernel document as a JSON string." },
-                                "path": { "type": "string", "description": "Path to a WOS kernel JSON file." }
-                            },
-                            "required": []
-                        }
-                    },
-                    {
-                        "name": "wos_export_document",
-                        "description": "Serialize a registered project back to a JSON string. Returns {\"document\": \"<json-string>\"}.",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "project_id": { "type": "string", "description": "UUID of the open project." }
-                            },
-                            "required": ["project_id"]
-                        }
-                    },
-                    {
-                        "name": "wos_describe_document",
-                        "description": "Return summary counts for a registered project: state_count, transition_count, actor_count, impact_level, ai_agent_count.",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "project_id": { "type": "string", "description": "UUID of the open project." }
-                            },
-                            "required": ["project_id"]
-                        }
-                    },
-                    {
-                        "name": "wos_add_state",
-                        "description": "Add a top-level state to a registered project. Returns {\"state_id\": \"<id>\"}.",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "project_id": { "type": "string", "description": "UUID of the open project." },
-                                "state_id": { "type": "string", "description": "Unique state identifier." },
-                                "kind": { "type": "string", "enum": ["atomic", "compound", "parallel", "final"], "description": "State kind; defaults to atomic." },
-                                "label": { "type": "string", "description": "Optional human-readable description stored on the state." },
-                                "metadata": { "type": "object", "description": "Optional metadata stored under state.extensions.x-meta." }
-                            },
-                            "required": ["project_id", "state_id"]
-                        }
-                    },
-                    {
-                        "name": "wos_add_transition",
-                        "description": "Add a transition between two existing states. Returns {\"from\": \"...\", \"to\": \"...\", \"trigger\": \"...\", \"event\": ...}. Use `trigger` for a legacy string event, or `event` for a typed TransitionEvent object (not both).",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "project_id": { "type": "string", "description": "UUID of the open project." },
-                                "from": { "type": "string", "description": "Source state identifier." },
-                                "to": { "type": "string", "description": "Target state identifier." },
-                                "trigger": { "type": "string", "description": "Optional legacy string event name (mutually exclusive with `event`)." },
-                                "event": { "description": "Optional typed TransitionEvent object (mutually exclusive with non-empty `trigger`)." },
-                                "guard": { "type": "string", "description": "Optional FEL guard expression." }
-                            },
-                            "required": ["project_id", "from", "to"]
-                        }
-                    },
-                    {
-                        "name": "wos_set_initial_state",
-                        "description": "Set the lifecycle initial state for a registered project. The state must already exist. Returns {\"state_id\": \"...\"}.",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "project_id": { "type": "string", "description": "UUID of the open project." },
-                                "state_id": { "type": "string", "description": "Identifier of an existing state to set as initial." }
-                            },
-                            "required": ["project_id", "state_id"]
-                        }
-                    },
-                    {
-                        "name": "wos_remove_state",
-                        "description": "Remove a state and all transitions referencing it. Returns {\"state_id\": \"...\", \"transitions_removed\": N}.",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "project_id": { "type": "string", "description": "UUID of the open project." },
-                                "state_id": { "type": "string", "description": "Identifier of the state to remove." }
-                            },
-                            "required": ["project_id", "state_id"]
-                        }
-                    },
-                    {
-                        "name": "wos_add_actor",
-                        "description": "Declare a human or system actor on a registered project. Returns {\"actor_id\": \"...\"}.",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "project_id": { "type": "string", "description": "UUID of the open project." },
-                                "actor_id": { "type": "string", "description": "Unique actor identifier." },
-                                "kind": { "type": "string", "enum": ["human", "system"], "description": "Actor kind; defaults to human." }
-                            },
-                            "required": ["project_id", "actor_id"]
-                        }
-                    },
-                    {
-                        "name": "wos_add_actor_extension",
-                        "description": "Attach an x-prefixed extension key to an existing actor (kernel §10.6). Returns {\"actor_id\": \"...\", \"key\": \"...\"}.",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "project_id": { "type": "string", "description": "UUID of the open project." },
-                                "actor_id": { "type": "string", "description": "Identifier of an existing actor." },
-                                "key": { "type": "string", "description": "Extension key; must start with x-." },
-                                "value": { "description": "JSON value to store under the extension key." }
-                            },
-                            "required": ["project_id", "actor_id", "key", "value"]
-                        }
-                    },
-                    // ── Task 5: Governance + AI tools ─────────────────────────────────
-                    {
-                        "name": "wos_add_due_process_path",
-                        "description": "Record a due-process path under x-wos-governance.dueProcessPaths. Returns {\"path_id\": \"...\"}.",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "project_id":  { "type": "string", "description": "UUID of the open project." },
-                                "path_id":     { "type": "string", "description": "Unique path identifier." },
-                                "description": { "type": "string", "description": "Human-readable description of the due-process path." },
-                                "steps":       { "type": "array", "items": { "type": "string" }, "description": "Ordered list of step identifiers." }
-                            },
-                            "required": ["project_id", "path_id", "description"]
-                        }
-                    },
-                    {
-                        "name": "wos_add_assertion_gate",
-                        "description": "Register an assertion gate in x-wos-governance.assertionGates. Returns {\"gate_id\": \"...\"}.",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "project_id": { "type": "string", "description": "UUID of the open project." },
-                                "gate_id":    { "type": "string", "description": "Unique gate identifier." },
-                                "assertion":  { "type": "string", "description": "FEL expression that must hold." },
-                                "transition": { "type": "string", "description": "Lifecycle transition event this gate guards." }
-                            },
-                            "required": ["project_id", "gate_id", "assertion", "transition"]
-                        }
-                    },
-                    {
-                        "name": "wos_set_impact_level",
-                        "description": "Set the document-level impact classification (kernel §S6). Returns {\"level\": \"...\"}.",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "project_id": { "type": "string", "description": "UUID of the open project." },
-                                "level": { "type": "string", "enum": ["rights-impacting", "safety-impacting", "operational", "informational"], "description": "Impact level variant." }
-                            },
-                            "required": ["project_id", "level"]
-                        }
-                    },
-                    {
-                        "name": "wos_add_ai_agent",
-                        "description": "Register an AI agent under x-wos-ai.agents. AI agents are NOT actors — they route through x-wos-ai. Returns {\"agent_id\": \"...\"}.",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "project_id":   { "type": "string", "description": "UUID of the open project." },
-                                "agent_id":     { "type": "string", "description": "Unique agent identifier." },
-                                "role":         { "type": "string", "description": "Role description." },
-                                "model":        { "type": "string", "description": "Model identifier string." },
-                                "capabilities": { "type": "array", "items": { "type": "string" }, "description": "Capability strings." }
-                            },
-                            "required": ["project_id", "agent_id", "role", "model"]
-                        }
-                    },
-                    {
-                        "name": "wos_add_deontic_constraint",
-                        "description": "Append a structured deontic constraint under x-wos-ai.deonticConstraints. Returns {\"constraint_id\": \"...\"}.",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "project_id":    { "type": "string", "description": "UUID of the open project." },
-                                "constraint_id": { "type": "string", "description": "Unique constraint identifier." },
-                                "target":        { "type": "string", "description": "Actor or scope this constraint targets." },
-                                "modality":      { "type": "string", "enum": ["must", "must_not", "may"], "description": "Deontic modality." },
-                                "action":        { "type": "string", "description": "Action description." }
-                            },
-                            "required": ["project_id", "constraint_id", "target", "modality", "action"]
-                        }
-                    },
-                    // ── Task 6: Validation + query tools ──────────────────────────────
-                    {
-                        "name": "wos_lint",
-                        "description": "Export project and lint it. Returns {\"diagnostics\": [...], \"error_count\": N, \"warning_count\": N}.",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "project_id": { "type": "string", "description": "UUID of the open project." }
-                            },
-                            "required": ["project_id"]
-                        }
-                    },
-                    {
-                        "name": "wos_run_conformance",
-                        "description": "Run a conformance fixture and return the ConformanceTrace as JSON. Returns {\"passed\": bool, \"failures\": [...], \"trace\": {...}}.",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "project_id":   { "type": "string", "description": "UUID of the open project (unused; conformance operates on fixture_json)." },
-                                "fixture_json": { "type": "string", "description": "Inline conformance fixture JSON string." },
-                                "base_dir":     { "type": "string", "description": "Base directory for resolving document paths in the fixture (defaults to '.')." }
-                            },
-                            "required": ["fixture_json"]
-                        }
-                    },
-                    {
-                        "name": "wos_preview_state_graph",
-                        "description": "Construct a state graph string from the project's states and transitions. Returns {\"graph\": \"...\", \"format\": \"mermaid|dot\"}.",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "project_id": { "type": "string", "description": "UUID of the open project." },
-                                "format":     { "type": "string", "enum": ["mermaid", "dot"], "description": "Output format; defaults to mermaid." }
-                            },
-                            "required": ["project_id"]
-                        }
-                    },
-                    {
-                        "name": "wos_search",
-                        "description": "Linear substring search over states, transitions, actors, or deontic constraints. Returns {\"matches\": [...], \"kind\": \"...\", \"query\": \"...\"}.",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "project_id": { "type": "string", "description": "UUID of the open project." },
-                                "kind":  { "type": "string", "enum": ["state", "transition", "actor", "constraint"], "description": "Entity kind to search." },
-                                "query": { "type": "string", "description": "Substring to match against id and label fields." }
-                            },
-                            "required": ["project_id", "kind", "query"]
-                        }
-                    },
-                    {
-                        "name": "wos_list_projects",
-                        "description": "List all open project UUIDs in the current session. Returns {\"projects\": [...], \"count\": N}.",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {},
-                            "required": []
-                        }
-                    },
-                    {
-                        "name": "wos_close_project",
-                        "description": "Close (remove) an open project from the session registry. Returns {\"project_id\": \"...\", \"closed\": true}.",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "project_id": { "type": "string", "description": "UUID of the project to close." }
-                            },
-                            "required": ["project_id"]
-                        }
-                    }
-                ]
-            }),
-        ),
+        "tools/list" => JsonRpcResponse::ok(id, wos_mcp::catalog::descriptors()),
 
         // Route tool calls through the unified dispatch function.
         "tools/call" => {
@@ -457,7 +183,21 @@ async fn handle_request(
 
 #[tokio::main]
 async fn main() {
-    let _cli = Cli::parse();
+    let cli = Cli::parse();
+    if cli.list_tools {
+        println!("{}", wos_mcp::catalog::descriptors());
+        return;
+    }
+    if let Some(name) = cli.tool_help {
+        match wos_mcp::catalog::help(&name) {
+            Some(help) => println!("{help}"),
+            None => {
+                eprintln!("unknown tool: {name}");
+                std::process::exit(2);
+            }
+        }
+        return;
+    }
 
     tracing_subscriber::fmt()
         .with_env_filter(

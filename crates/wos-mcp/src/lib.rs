@@ -5,6 +5,7 @@
 //! 2. **Library function** (`wos_mcp::dispatch::dispatch`): called directly by
 //!    in-workspace Rust crates with no protocol overhead.
 
+pub mod catalog;
 pub mod dispatch;
 pub mod errors;
 pub mod registry;

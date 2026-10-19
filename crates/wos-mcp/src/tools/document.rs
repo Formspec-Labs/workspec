@@ -17,7 +17,7 @@
 use std::fs;
 
 use serde_json::Value;
-use wos_authoring::{KernelDocument, WosProject};
+use wos_authoring::WosProject;
 
 use crate::errors::ToolError;
 use crate::registry::ProjectRegistry;
@@ -35,7 +35,7 @@ pub async fn wos_create_kernel(
 ) -> Result<Value, ToolError> {
     let project = WosProject::new_kernel();
     let id = registry.insert(project)?;
-    Ok(serde_json::json!({ "project_id": id.to_string() }))
+    Ok(serde_json::json!({ "project_id": id.to_string(), "draft": true }))
 }
 
 // ── wos_load_document ─────────────────────────────────────────────────────────
@@ -71,10 +71,11 @@ pub async fn wos_load_document(
     }
 
     // Deserialize into a typed document, then wrap in a WosProject.
-    let document: KernelDocument = serde_json::from_str(&json_text)
+    let document: Value = serde_json::from_str(&json_text)
         .map_err(|e| ToolError::ValidationFailed(format!("deserialization failed: {e}")))?;
 
-    let project = WosProject::from_document(document);
+    let project = WosProject::from_native_document(document)
+        .map_err(|e| ToolError::ValidationFailed(e.message))?;
     let id = registry.insert(project)?;
     Ok(serde_json::json!({ "project_id": id.to_string() }))
 }
@@ -107,7 +108,7 @@ pub async fn wos_export_document(
 ) -> Result<Value, ToolError> {
     let pid = require_project_id(&args)?;
     let project = registry.get(pid)?;
-    let document = project.snapshot();
+    let document = project.native_snapshot();
     let json = serde_json::to_string(&document)
         .map_err(|e| ToolError::Internal(format!("serialization failed: {e}")))?;
     Ok(serde_json::json!({ "document": json }))
@@ -118,7 +119,7 @@ pub async fn wos_export_document(
 /// Return a summary of a registered project's current document state.
 ///
 /// Counts top-level states, outgoing transitions across all states, declared
-/// actors, and AI agents in the native `WorkflowDocument::agents` field.
+/// actors, and AI agents in the maintained native `agents` array.
 ///
 /// Returns:
 /// ```json
@@ -137,32 +138,31 @@ pub async fn wos_describe_document(
 ) -> Result<Value, ToolError> {
     let pid = require_project_id(&args)?;
     let project = registry.get(pid)?;
-    let doc = project.snapshot();
-
-    let state_count = doc.lifecycle.states.len();
-
-    let transition_count: usize = doc
-        .lifecycle
-        .states
-        .values()
-        .map(|s| s.transitions.len())
-        .sum();
-
-    let actor_count = doc.actors.len();
-
-    let impact_level = doc
-        .impact_level
-        .map(|level| {
-            // Serialize through serde to get the kebab-case string form the
-            // kernel spec uses (e.g. "rights-impacting", "safety-impacting").
-            serde_json::to_value(level)
-                .ok()
-                .and_then(|v| v.as_str().map(str::to_string))
-                .unwrap_or_else(|| format!("{level:?}"))
+    let doc = project.native_snapshot();
+    let states = doc.pointer("/lifecycle/states").and_then(Value::as_object);
+    let state_count = states.map_or(0, serde_json::Map::len);
+    let transition_count: usize = states
+        .into_iter()
+        .flat_map(|states| states.values())
+        .map(|state| {
+            state
+                .get("transitions")
+                .and_then(Value::as_array)
+                .map_or(0, Vec::len)
         })
-        .unwrap_or_else(|| "none".to_string());
-
-    let ai_agent_count = doc.agents.len();
+        .sum();
+    let actor_count = doc
+        .get("actors")
+        .and_then(Value::as_array)
+        .map_or(0, Vec::len);
+    let impact_level = doc
+        .get("impactLevel")
+        .and_then(Value::as_str)
+        .unwrap_or("none");
+    let ai_agent_count = doc
+        .get("agents")
+        .and_then(Value::as_array)
+        .map_or(0, Vec::len);
 
     Ok(serde_json::json!({
         "state_count": state_count,
@@ -195,6 +195,7 @@ fn require_project_id(args: &Value) -> Result<&str, ToolError> {
 mod tests {
     use super::*;
     use serde_json::json;
+    use wos_authoring::KernelDocument;
     use wos_authoring::{ActorKind, ImpactLevel, StateKind};
 
     // ── wos_create_kernel ─────────────────────────────────────────────────
@@ -562,7 +563,7 @@ mod tests {
 
         let pid = result["project_id"].as_str().expect("must have project_id");
         let project = registry.get(pid).unwrap();
-        let doc = project.snapshot();
+        let doc = project.typed_snapshot().unwrap();
         assert_eq!(doc.title.as_deref(), Some("loaded workflow"));
     }
 
@@ -618,7 +619,7 @@ mod tests {
         assert!(!pid.is_empty());
 
         let project = registry.get(pid).expect("project must be registered");
-        let doc = project.snapshot();
+        let doc = project.typed_snapshot().unwrap();
         assert_eq!(doc.title.as_deref(), Some("path-loaded workflow"));
     }
 }

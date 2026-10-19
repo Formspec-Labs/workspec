@@ -1,0 +1,192 @@
+{
+  "workflowSchema": "https://wos-spec.org/schemas/wos-workflow.schema.json",
+  "fields": {
+    "$wosWorkflow": {
+      "support": "incremental",
+      "editors": [
+        "wos_edit_workflow.metadata"
+      ],
+      "preservesNativeValues": true
+    },
+    "wosVersionPin": {
+      "support": "incremental",
+      "editors": [
+        "wos_edit_workflow.metadata"
+      ],
+      "preservesNativeValues": true
+    },
+    "url": {
+      "support": "incremental",
+      "editors": [
+        "wos_edit_workflow.metadata"
+      ],
+      "preservesNativeValues": true
+    },
+    "version": {
+      "support": "incremental",
+      "editors": [
+        "wos_edit_workflow.metadata"
+      ],
+      "preservesNativeValues": true
+    },
+    "title": {
+      "support": "incremental",
+      "editors": [
+        "wos_edit_workflow.metadata"
+      ],
+      "preservesNativeValues": true
+    },
+    "description": {
+      "support": "incremental",
+      "editors": [
+        "wos_edit_workflow.metadata"
+      ],
+      "preservesNativeValues": true
+    },
+    "status": {
+      "support": "incremental",
+      "editors": [
+        "wos_edit_workflow.metadata"
+      ],
+      "preservesNativeValues": true
+    },
+    "impactLevel": {
+      "support": "incremental",
+      "editors": [
+        "wos_set_impact_level",
+        "wos_edit_workflow.metadata"
+      ],
+      "preservesNativeValues": true
+    },
+    "caseFile": {
+      "support": "incremental",
+      "editors": [
+        "wos_edit_workflow.case_field"
+      ],
+      "preservesNativeValues": true
+    },
+    "intake": {
+      "support": "import-export",
+      "editors": [],
+      "preservesNativeValues": true
+    },
+    "actors": {
+      "support": "incremental",
+      "editors": [
+        "wos_add_actor",
+        "wos_add_actor_extension"
+      ],
+      "preservesNativeValues": true
+    },
+    "lifecycle": {
+      "support": "incremental",
+      "editors": [
+        "wos_add_state",
+        "wos_add_transition",
+        "wos_set_initial_state",
+        "wos_remove_state",
+        "wos_edit_workflow.state",
+        "wos_edit_workflow.state_action"
+      ],
+      "preservesNativeValues": true
+    },
+    "contracts": {
+      "support": "incremental",
+      "editors": [
+        "wos_edit_workflow.contract"
+      ],
+      "preservesNativeValues": true
+    },
+    "bindings": {
+      "support": "import-export",
+      "editors": [],
+      "preservesNativeValues": true
+    },
+    "provenance": {
+      "support": "import-export",
+      "editors": [],
+      "preservesNativeValues": true
+    },
+    "governance": {
+      "support": "incremental",
+      "editors": [
+        "wos_edit_workflow.governance"
+      ],
+      "preservesNativeValues": true
+    },
+    "agents": {
+      "support": "incremental",
+      "editors": [
+        "wos_add_ai_agent",
+        "wos_edit_workflow.agent",
+        "wos_edit_workflow.remove_agent",
+        "wos_edit_workflow.agent_constraint"
+      ],
+      "preservesNativeValues": true
+    },
+    "aiOversight": {
+      "support": "incremental",
+      "editors": [
+        "wos_edit_workflow.ai_oversight"
+      ],
+      "preservesNativeValues": true
+    },
+    "signature": {
+      "support": "import-export",
+      "editors": [],
+      "preservesNativeValues": true
+    },
+    "custody": {
+      "support": "import-export",
+      "editors": [],
+      "preservesNativeValues": true
+    },
+    "advanced": {
+      "support": "import-export",
+      "editors": [],
+      "preservesNativeValues": true
+    },
+    "assurance": {
+      "support": "import-export",
+      "editors": [],
+      "preservesNativeValues": true
+    },
+    "decisionTables": {
+      "support": "import-export",
+      "editors": [],
+      "preservesNativeValues": true
+    },
+    "extensions": {
+      "support": "import-export",
+      "editors": [],
+      "preservesNativeValues": true
+    },
+    "$schema": {
+      "support": "import-export",
+      "editors": [],
+      "preservesNativeValues": true
+    },
+    "execution": {
+      "support": "import-export",
+      "editors": [],
+      "preservesNativeValues": true
+    },
+    "evaluationMode": {
+      "support": "import-export",
+      "editors": [],
+      "preservesNativeValues": true
+    },
+    "maxRelationshipEventDepth": {
+      "support": "import-export",
+      "editors": [],
+      "preservesNativeValues": true
+    }
+  },
+  "notes": [
+    "Imports and exports preserve every native value, including additional x-* root fields.",
+    "Complete Workflow readiness is separate from draft creation and payload-shape validation.",
+    "Replacing an entire named value intentionally replaces its descendants; other values remain unchanged.",
+    "Historical x-wos-governance and x-wos-ai values are retained but never written by native editors.",
+    "Reordering arrays and generic JSON patches are unsupported; use explicit edits or complete native import."
+  ]
+}

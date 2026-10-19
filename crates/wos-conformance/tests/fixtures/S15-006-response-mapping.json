@@ -70,7 +70,8 @@
         "reviewContract": {
           "binding": "formspec",
           "ref": "urn:formspec:review:1.0.0",
-          "responseMappingRef": "urn:mapping:response"
+          "responseMappingRef": "urn:mapping:response",
+          "definitionVersion": "1.0.0"
         }
       },
       "caseFile": {

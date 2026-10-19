@@ -3,7 +3,8 @@
   "rule": "K-028",
   "description": "Instance migration MUST produce provenance (Kernel S9.6). When a workflow version changes and an instance migrates, provenance records the migration.",
   "documents": {
-    "kernel": "../../../../fixtures/kernel/durability.json"
+    "kernel": "../../../../fixtures/kernel/durability.json",
+    "kernel@1.1.0": "inline"
   },
   "initial_case_state": {},
   "event_sequence": [
@@ -36,5 +37,115 @@
         "toVersion": "1.1.0"
       }
     }
-  ]
+  ],
+  "inline_documents": {
+    "kernel@1.1.0": {
+      "$wosWorkflow": "1.0",
+      "$schema": "https://wos-spec.org/schemas/workflow/1.0",
+      "url": "https://test.wos-spec.org/workflows/durability",
+      "version": "1.1.0",
+      "title": "Durability Test",
+      "description": "Minimal workflow for testing crash recovery, idempotency, persist-before-advance, lifecycle/case separation, history clearing, contract validation, and instance migration provenance.",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "operator",
+          "type": "human",
+          "description": "Operator"
+        },
+        {
+          "id": "verificationSystem",
+          "type": "system",
+          "description": "External verification"
+        }
+      ],
+      "lifecycle": {
+        "initialState": "intake",
+        "states": {
+          "intake": {
+            "type": "atomic",
+            "onEntry": [
+              {
+                "action": "setData",
+                "path": "caseFile.intakeRecorded",
+                "value": "true"
+              }
+            ],
+            "transitions": [
+              {
+                "event": {
+                  "kind": "message",
+                  "name": "submit"
+                },
+                "target": "review"
+              }
+            ]
+          },
+          "review": {
+            "type": "compound",
+            "initialState": "pendingReview",
+            "historyState": "shallow",
+            "states": {
+              "pendingReview": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "verificationSystem",
+                    "idempotencyKey": "${instance.id}-verify",
+                    "contractRef": "reviewContract"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "verified"
+                    },
+                    "target": "reviewComplete"
+                  }
+                ]
+              },
+              "reviewComplete": {
+                "type": "final"
+              }
+            },
+            "transitions": [
+              {
+                "event": {
+                  "kind": "message",
+                  "name": "approved"
+                },
+                "target": "done"
+              }
+            ]
+          },
+          "done": {
+            "type": "final"
+          }
+        }
+      },
+      "caseFile": {
+        "fields": {
+          "intakeRecorded": {
+            "type": "boolean"
+          },
+          "reviewResult": {
+            "type": "string"
+          }
+        }
+      },
+      "contracts": {
+        "reviewContract": {
+          "binding": "formspec",
+          "ref": "urn:formspec:test:review:1.0.0"
+        }
+      },
+      "execution": {
+        "workflowTimeout": "P30D",
+        "instanceVersioning": "pinned"
+      }
+    }
+  }
 }

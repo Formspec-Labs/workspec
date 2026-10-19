@@ -6345,6 +6345,7 @@ name = "wos-authoring"
 version = "0.0.1"
 dependencies = [
  "indexmap 2.14.0",
+ "jsonschema 0.46.1",
  "serde",
  "serde_json",
  "wos-core",
@@ -6357,6 +6358,7 @@ dependencies = [
  "assert_cmd",
  "insta",
  "integrity-bundle-fixtures",
+ "integrity-canonical",
  "quick-xml 0.36.2",
  "serde",
  "serde_json",

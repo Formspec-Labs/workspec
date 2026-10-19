@@ -8,10 +8,11 @@
 //! # Adding a new tool
 //! 1. Implement the handler in `src/tools/<module>.rs`.
 //! 2. `pub use` it from `src/tools/mod.rs`.
-//! 3. Add a match arm here.
+//! 3. Register its declaration in `catalog.rs`.
 
 use crate::errors::DispatchError;
 use crate::registry::ProjectRegistry;
+#[cfg(test)]
 use crate::tools;
 
 /// Route a tool call to its handler by name.
@@ -40,145 +41,15 @@ pub async fn dispatch(
     project_id: &str,
     args: serde_json::Value,
 ) -> Result<serde_json::Value, DispatchError> {
-    match tool_name {
-        "wos_ping" => tools::ping(registry, project_id, args)
-            .await
-            .map_err(|source| DispatchError::ToolFailed {
-                tool: tool_name.to_string(),
-                source,
-            }),
-        "wos_create_kernel" => tools::wos_create_kernel(registry, project_id, args)
-            .await
-            .map_err(|source| DispatchError::ToolFailed {
-                tool: tool_name.to_string(),
-                source,
-            }),
-        "wos_load_document" => tools::wos_load_document(registry, project_id, args)
-            .await
-            .map_err(|source| DispatchError::ToolFailed {
-                tool: tool_name.to_string(),
-                source,
-            }),
-        "wos_export_document" => tools::wos_export_document(registry, project_id, args)
-            .await
-            .map_err(|source| DispatchError::ToolFailed {
-                tool: tool_name.to_string(),
-                source,
-            }),
-        "wos_describe_document" => tools::wos_describe_document(registry, project_id, args)
-            .await
-            .map_err(|source| DispatchError::ToolFailed {
-                tool: tool_name.to_string(),
-                source,
-            }),
-        "wos_add_state" => tools::wos_add_state(registry, project_id, args)
-            .await
-            .map_err(|source| DispatchError::ToolFailed {
-                tool: tool_name.to_string(),
-                source,
-            }),
-        "wos_add_transition" => tools::wos_add_transition(registry, project_id, args)
-            .await
-            .map_err(|source| DispatchError::ToolFailed {
-                tool: tool_name.to_string(),
-                source,
-            }),
-        "wos_set_initial_state" => tools::wos_set_initial_state(registry, project_id, args)
-            .await
-            .map_err(|source| DispatchError::ToolFailed {
-                tool: tool_name.to_string(),
-                source,
-            }),
-        "wos_remove_state" => tools::wos_remove_state(registry, project_id, args)
-            .await
-            .map_err(|source| DispatchError::ToolFailed {
-                tool: tool_name.to_string(),
-                source,
-            }),
-        "wos_add_actor" => tools::wos_add_actor(registry, project_id, args)
-            .await
-            .map_err(|source| DispatchError::ToolFailed {
-                tool: tool_name.to_string(),
-                source,
-            }),
-        "wos_add_actor_extension" => tools::wos_add_actor_extension(registry, project_id, args)
-            .await
-            .map_err(|source| DispatchError::ToolFailed {
-                tool: tool_name.to_string(),
-                source,
-            }),
-        // ── Governance / AI tools (Task 5) ────────────────────────────────
-        "wos_add_due_process_path" => tools::wos_add_due_process_path(registry, project_id, args)
-            .await
-            .map_err(|source| DispatchError::ToolFailed {
-                tool: tool_name.to_string(),
-                source,
-            }),
-        "wos_add_assertion_gate" => tools::wos_add_assertion_gate(registry, project_id, args)
-            .await
-            .map_err(|source| DispatchError::ToolFailed {
-                tool: tool_name.to_string(),
-                source,
-            }),
-        "wos_set_impact_level" => tools::wos_set_impact_level(registry, project_id, args)
-            .await
-            .map_err(|source| DispatchError::ToolFailed {
-                tool: tool_name.to_string(),
-                source,
-            }),
-        "wos_add_ai_agent" => tools::wos_add_ai_agent(registry, project_id, args)
-            .await
-            .map_err(|source| DispatchError::ToolFailed {
-                tool: tool_name.to_string(),
-                source,
-            }),
-        "wos_add_deontic_constraint" => {
-            tools::wos_add_deontic_constraint(registry, project_id, args)
-                .await
-                .map_err(|source| DispatchError::ToolFailed {
-                    tool: tool_name.to_string(),
-                    source,
-                })
-        }
-        // ── Validation / query tools (Task 6) ────────────────────────────
-        "wos_lint" => tools::wos_lint(registry, project_id, args)
-            .await
-            .map_err(|source| DispatchError::ToolFailed {
-                tool: tool_name.to_string(),
-                source,
-            }),
-        "wos_run_conformance" => tools::wos_run_conformance(registry, project_id, args)
-            .await
-            .map_err(|source| DispatchError::ToolFailed {
-                tool: tool_name.to_string(),
-                source,
-            }),
-        "wos_preview_state_graph" => tools::wos_preview_state_graph(registry, project_id, args)
-            .await
-            .map_err(|source| DispatchError::ToolFailed {
-                tool: tool_name.to_string(),
-                source,
-            }),
-        "wos_search" => tools::wos_search(registry, project_id, args)
-            .await
-            .map_err(|source| DispatchError::ToolFailed {
-                tool: tool_name.to_string(),
-                source,
-            }),
-        "wos_list_projects" => tools::wos_list_projects(registry, project_id, args)
-            .await
-            .map_err(|source| DispatchError::ToolFailed {
-                tool: tool_name.to_string(),
-                source,
-            }),
-        "wos_close_project" => tools::wos_close_project(registry, project_id, args)
-            .await
-            .map_err(|source| DispatchError::ToolFailed {
-                tool: tool_name.to_string(),
-                source,
-            }),
-        other => Err(DispatchError::UnknownTool(other.to_string())),
-    }
+    let declaration = crate::catalog::find(tool_name)
+        .ok_or_else(|| DispatchError::UnknownTool(tool_name.into()))?;
+    declaration
+        .execute(registry, project_id, args)
+        .await
+        .map_err(|source| DispatchError::ToolFailed {
+            tool: tool_name.into(),
+            source,
+        })
 }
 
 #[cfg(test)]

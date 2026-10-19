@@ -2,25 +2,15 @@
 
 //! Published Studio-facing surface of `wos-runtime`.
 //!
-//! Mirrors the contract laid out in `wos_core::studio_api` /
-//! `wos_lint::studio_api`. Studio (Authoring) crates may consume
-//! `wos-runtime` ONLY through this module. Boundary is enforced by
-//! one workspace-wide guard test at
-//! `studio/crates/wos-studio-types/tests/api_surface.rs`.
+//! Mirrors the boundary in `wos_core::studio_api` and `wos_lint::studio_api`.
+//! Studio authoring crates consume runtime types through this module. The
+//! sibling Policy Studio boundary guard lives at
+//! `policy-studio/crates/wos-studio-types/tests/api_surface.rs`.
 //!
-//! ## What lives here
-//!
-//! - [`DurableRuntime`] — the trait every adapter implements (in-memory,
-//!   Restate, Temporal). Studio's scenario simulator (Wave 3 of the
-//!   decoupling plan) takes a `&dyn DurableRuntime` and replays scenario
-//!   step events against it.
-//!
-//! ## What does NOT live here (yet)
-//!
-//! Wave 3 will add a Studio-specific `replay(&KernelDocument, &[Event])
-//! -> ActualTrace` surface — a thin wrapper over the in-memory runtime
-//! that returns scenarios in the conformance-trace shape. Held until
-//! Wave 3 has a concrete consumer to design against (the Studio scenario
-//! runner). See `studio/specs/scenario-authoring.md` for the contract.
+//! [`DurableRuntime`] is the trait implemented by runtime adapters, including
+//! in-memory and hosted adapters. Frozen candidate scenario replay is owned by
+//! `wos_conformance::studio_api`, which uses the maintained in-memory runtime
+//! and returns observed traces and explicit fixture limitations. Runtime does
+//! not re-export that API because conformance already depends on runtime.
 
 pub use crate::DurableRuntime;

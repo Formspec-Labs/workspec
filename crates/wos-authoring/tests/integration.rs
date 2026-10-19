@@ -113,8 +113,8 @@ fn authoring_session_round_trip_with_undo_redo() {
         .set_timer("approvalDeadline", "P7D")
         .expect("set timer");
     project
-        .add_actor_deontic("humanApprovalRequired", "humans must review all orders")
-        .expect("add deontic");
+        .set_native_fields(serde_json::json!({"governance":{"reviewProtocols":[{"id":"humanApprovalRequired","description":"Humans review all orders."}]}}).as_object().unwrap().clone())
+        .expect("configure native governance");
 
     // ── Interleave undo / redo mid-session ────────────────────────────────
     // Undo the deontic + timer, then redo the deontic only. This leaves
@@ -122,12 +122,22 @@ fn authoring_session_round_trip_with_undo_redo() {
     project.undo().expect("undo deontic");
     project.undo().expect("undo timer");
     assert!(
-        project.snapshot().extensions.get("x-wos-timers").is_none(),
+        project
+            .typed_snapshot()
+            .unwrap()
+            .extensions
+            .get("x-wos-timers")
+            .is_none(),
         "undo must have removed x-wos-timers"
     );
     project.redo().expect("redo timer");
     assert!(
-        project.snapshot().extensions.get("x-wos-timers").is_some(),
+        project
+            .typed_snapshot()
+            .unwrap()
+            .extensions
+            .get("x-wos-timers")
+            .is_some(),
         "redo must have restored x-wos-timers"
     );
     // Redo the deontic (LIFO pop from the redo stack, restoring the
@@ -141,7 +151,7 @@ fn authoring_session_round_trip_with_undo_redo() {
         .expect("escalate impact level");
 
     // ── Save: serialize to JSON ──────────────────────────────────────────
-    let exported = project.snapshot();
+    let exported = project.typed_snapshot().unwrap();
     let json = serde_json::to_string_pretty(&exported).expect("serialize KernelDocument");
 
     // ── Load: parse JSON back into a KernelDocument ──────────────────────
@@ -235,13 +245,10 @@ fn authoring_session_round_trip_with_undo_redo() {
         .expect("x-wos-timers extension present");
     assert_eq!(timers["approvalDeadline"]["duration"], "P7D");
 
-    let ai = reloaded
-        .extensions
-        .get("x-wos-ai")
-        .expect("x-wos-ai extension present");
-    let constraints = ai["deonticConstraints"]
-        .as_array()
-        .expect("deonticConstraints is an array");
-    assert_eq!(constraints.len(), 1);
-    assert_eq!(constraints[0]["id"], "humanApprovalRequired");
+    let governance = reloaded.governance.expect("native governance present");
+    assert_eq!(
+        governance["reviewProtocols"][0]["id"],
+        "humanApprovalRequired"
+    );
+    assert!(!reloaded.extensions.contains_key("x-wos-ai"));
 }

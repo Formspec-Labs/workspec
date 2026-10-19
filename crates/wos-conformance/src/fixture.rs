@@ -10,7 +10,7 @@ fn default_binding() -> Option<String> {
 }
 
 /// A conformance test fixture declaring documents, events, and expectations.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConformanceFixture {
     /// Contract binding to use for this fixture.
     ///
@@ -37,6 +37,7 @@ pub struct ConformanceFixture {
     pub description: String,
 
     /// Document paths keyed by role (kernel, governance, ai, etc.).
+    #[serde(default)]
     pub documents: HashMap<String, String>,
 
     /// Inline document contents keyed by role.
@@ -97,7 +98,7 @@ pub struct ConformanceFixture {
 }
 
 /// Expected outcome of a Formspec contract validation.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContractOutcome {
     /// Whether validation should pass (`true`) or fail (`false`).
     pub valid: bool,
@@ -108,7 +109,7 @@ pub struct ContractOutcome {
 }
 
 /// An event in the test sequence.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventEntry {
     /// Event name.
     pub event: String,
@@ -133,7 +134,7 @@ pub struct EventEntry {
 }
 
 /// A task response submission within a fixture event sequence.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskSubmission {
     /// Logical task reference (matches `taskRef` in the kernel's createTask action).
     pub task_ref: String,
@@ -153,7 +154,7 @@ pub struct TaskSubmission {
 /// fixture-vs-struct asymmetry where fixtures emitted `target` and the
 /// struct deserialized `to`. Renamed wholesale post-ADR-0076 (no compat
 /// alias — the legacy `to` shape no longer round-trips).
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExpectedTransition {
     /// Source state.
     pub from: String,

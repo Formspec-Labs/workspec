@@ -19,6 +19,7 @@ mod meta;
 mod provenance;
 pub mod rules;
 pub mod stubs;
+pub mod studio_api;
 pub mod trace;
 
 pub use engine::WorkflowEngine;
@@ -146,20 +147,12 @@ pub fn run_fixture_with_trace(
 /// in-drain ordering (guards fire strictly before the transition they
 /// gate) and gives the §5.3 teaching signal per-step granularity.
 ///
-/// The `kernel_version` is extracted from the fixture's event sequence
-/// metadata. Because the conformance harness does not re-expose the parsed
-/// kernel document after `run_fixture` completes, the version defaults to
-/// `"unknown"` — callers that need the exact kernel version should read it
-/// directly from the kernel document before calling this function.
+/// The workflow version comes from the definition actually selected by the engine.
 fn build_trace_from_result(
     fixture: &ConformanceFixture,
     result: &ConformanceResult,
 ) -> ConformanceTrace {
-    // Use a synthetic kernel version derived from fixture metadata. The engine
-    // does not return kernel metadata through `ConformanceResult`, so we use
-    // "1.0" as the stable conformance-harness sentinel. Real version info is
-    // available by parsing the kernel document independently.
-    let kernel_version = "1.0".to_string();
+    let kernel_version = result.definition_version.clone();
 
     let outcome = if result.passed {
         Outcome::Pass
@@ -370,6 +363,24 @@ pub struct ConformanceResult {
 
     /// Binding discriminator used during execution.
     pub binding_used: Option<String>,
+
+    /// Attempt-local native observations, including rejected operations.
+    pub attempts: Vec<studio_api::ReplayAttempt>,
+
+    /// Final process values read from the runtime.
+    pub final_snapshot: Option<studio_api::RuntimeSnapshot>,
+
+    /// Initially selected workflow version.
+    pub definition_version: String,
+
+    /// Actual process creation request and native returned result.
+    pub initialization: serde_json::Value,
+
+    /// Readback failures retained separately from operation failures.
+    pub observation_errors: Vec<String>,
+
+    /// Whether final native provenance retrieval succeeded.
+    pub provenance_complete: bool,
 }
 
 /// Errors from the conformance runner.

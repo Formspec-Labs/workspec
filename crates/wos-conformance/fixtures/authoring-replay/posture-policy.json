@@ -1,0 +1,371 @@
+{
+  "candidate": {
+    "$wosWorkflow": "1.0",
+    "url": "urn:test:signature-runtime",
+    "version": "1.0.0",
+    "title": "Signature Runtime Fixture Kernel",
+    "impactLevel": "operational",
+    "actors": [
+      {
+        "id": "applicant",
+        "type": "human"
+      },
+      {
+        "id": "agency",
+        "type": "human"
+      },
+      {
+        "id": "witness",
+        "type": "human"
+      },
+      {
+        "id": "notary",
+        "type": "human"
+      },
+      {
+        "id": "caseworker",
+        "type": "human"
+      }
+    ],
+    "caseFile": {
+      "fields": {
+        "routeApplicant": {
+          "type": "boolean"
+        },
+        "requiresNotary": {
+          "type": "boolean"
+        }
+      }
+    },
+    "contracts": {
+      "signatureContract": {
+        "binding": "formspec",
+        "ref": "urn:test:formspec:signature",
+        "definitionVersion": "1.0.0"
+      }
+    },
+    "lifecycle": {
+      "initialState": "draft",
+      "states": {
+        "draft": {
+          "type": "atomic",
+          "transitions": [
+            {
+              "event": {
+                "kind": "message",
+                "name": "start"
+              },
+              "target": "signing"
+            }
+          ]
+        },
+        "signing": {
+          "type": "atomic",
+          "tags": [
+            "awaiting-signature"
+          ],
+          "onEntry": [
+            {
+              "action": "createTask",
+              "taskRef": "applicantTask",
+              "assignTo": "applicant",
+              "contractRef": "signatureContract",
+              "completionEvent": "signature.completed",
+              "failureEvent": "signature.failed",
+              "extensions": {
+                "x-wos-signature-profile-key": "signatureProfile",
+                "x-wos-signature-step-id": "applicantSigns"
+              }
+            },
+            {
+              "action": "createTask",
+              "taskRef": "agencyTask",
+              "assignTo": "agency",
+              "contractRef": "signatureContract",
+              "completionEvent": "signature.completed",
+              "failureEvent": "signature.failed",
+              "extensions": {
+                "x-wos-signature-profile-key": "signatureProfile",
+                "x-wos-signature-step-id": "agencyApproves"
+              }
+            },
+            {
+              "action": "createTask",
+              "taskRef": "witnessTask",
+              "assignTo": "witness",
+              "contractRef": "signatureContract",
+              "completionEvent": "signature.completed",
+              "failureEvent": "signature.failed",
+              "extensions": {
+                "x-wos-signature-profile-key": "signatureProfile",
+                "x-wos-signature-step-id": "witnessSigns"
+              }
+            },
+            {
+              "action": "createTask",
+              "taskRef": "notaryTask",
+              "assignTo": "notary",
+              "contractRef": "signatureContract",
+              "completionEvent": "signature.completed",
+              "failureEvent": "signature.failed",
+              "extensions": {
+                "x-wos-signature-profile-key": "signatureProfile",
+                "x-wos-signature-step-id": "notaryAttests"
+              }
+            },
+            {
+              "action": "createTask",
+              "taskRef": "adminTask",
+              "assignTo": "caseworker",
+              "contractRef": "signatureContract",
+              "extensions": {
+                "x-wos-signature-profile-key": "signatureProfile",
+                "x-wos-signature-step-id": "applicantSigns"
+              }
+            },
+            {
+              "action": "startTimer",
+              "timerId": "signatureExpiry",
+              "duration": "P7D",
+              "event": {
+                "kind": "timer",
+                "timerId": "signatureExpiry",
+                "source": "custom",
+                "firesAs": "signature.expired"
+              }
+            }
+          ],
+          "transitions": [
+            {
+              "event": {
+                "kind": "message",
+                "name": "signature.completed"
+              },
+              "target": "complete"
+            },
+            {
+              "event": {
+                "kind": "message",
+                "name": "signature.declined"
+              },
+              "target": "declined"
+            },
+            {
+              "event": {
+                "kind": "message",
+                "name": "signature.expired"
+              },
+              "target": "expired"
+            },
+            {
+              "event": {
+                "kind": "message",
+                "name": "signature.failed"
+              },
+              "target": "failed"
+            }
+          ]
+        },
+        "complete": {
+          "type": "final",
+          "tags": [
+            "signature-complete"
+          ]
+        },
+        "declined": {
+          "type": "final",
+          "tags": [
+            "signature-declined"
+          ]
+        },
+        "expired": {
+          "type": "final",
+          "tags": [
+            "signature-expired"
+          ]
+        },
+        "failed": {
+          "type": "final",
+          "tags": [
+            "signature-voided"
+          ]
+        }
+      }
+    },
+    "signature": {
+      "posturePolicy": {
+        "url": "https://example.gov/posture/signature-conformance.json",
+        "version": "1.0.0"
+      },
+      "roles": [
+        {
+          "id": "applicantSigner",
+          "role": "signer",
+          "actorId": "applicant",
+          "authenticationPolicyKey": "emailOtp"
+        }
+      ],
+      "documents": [
+        {
+          "id": "application",
+          "documentRef": "urn:test:document:application",
+          "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          "documentHashAlgorithm": "sha-256",
+          "sourceResponseRef": "urn:test:formspec-response:application"
+        }
+      ],
+      "authenticationPolicies": [
+        {
+          "key": "emailOtp",
+          "method": "email-otp",
+          "assuranceLevel": "standard"
+        }
+      ],
+      "signingFlow": {
+        "type": "sequential",
+        "steps": [
+          {
+            "id": "applicantSigns",
+            "roleId": "applicantSigner",
+            "documentId": "application",
+            "signingIntent": "urn:wos:signing-intent:applicant-signature"
+          }
+        ],
+        "completion": {
+          "type": "all-required"
+        }
+      },
+      "evidence": {
+        "requiredFields": [
+          "response.signature.acceptedAt",
+          "response.signature.affirmed",
+          "response.signature.documentHash"
+        ],
+        "consentReference": {
+          "consentTextRef": "urn:test:consent:esign",
+          "consentVersion": "1.0.0",
+          "acceptedAtPath": "response.signature.acceptedAt",
+          "affirmationPath": "response.signature.affirmed"
+        },
+        "identityBinding": {
+          "method": "email-otp",
+          "assuranceLevel": "standard"
+        },
+        "custodyHookEligible": true
+      }
+    }
+  },
+  "fixture": {
+    "binding": "formspec",
+    "id": "SIG-029-posture-declaration-loaded",
+    "rule": "SIG-RT",
+    "description": "A fixture-provided Posture Declaration is loaded by the conformance runner and admits an otherwise standard signature submission.",
+    "documents": {},
+    "event_sequence": [
+      {
+        "event": "start",
+        "actor": "applicant"
+      },
+      {
+        "event": "submit",
+        "task_submission": {
+          "task_ref": "applicantTask",
+          "response": {
+            "status": "completed",
+            "definitionUrl": "urn:test:formspec:signature",
+            "definitionVersion": "1.0.0",
+            "data": {
+              "signerId": "applicant",
+              "signatureProvider": "formspec",
+              "ceremonyId": "ceremony-sig-029",
+              "signature": {
+                "acceptedAt": "2026-05-08T12:00:00Z",
+                "affirmed": true,
+                "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+              }
+            },
+            "id": "resp-sig-029-posture-declaration-loaded-applicantTask",
+            "authoredSignatures": [
+              {
+                "signatureId": "sig-sig-029-posture-declaration-loaded-applicantTask",
+                "documentId": "application",
+                "signingIntent": "urn:wos:signing-intent:applicant-signature",
+                "signatureValue": "0oRYSKMBJwRQAAAAAAAAAAAAAAAAAAAAADoAAQADeCx1cm46Zm9ybXNwZWM6c2lnLW1ldGhvZDplZDI1NTE5LWNvc2Utc2lnbjFAMaD2WEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                "signerId": "applicant",
+                "signerName": "Applicant",
+                "consentAccepted": true,
+                "consentTextRef": "urn:test:consent:esign",
+                "consentVersion": "1.0.0",
+                "affirmationText": "I certify this signing act.",
+                "signedPayload": {
+                  "canonicalization": "formspec-response-signing-v1",
+                  "digestAlgorithm": "sha-256",
+                  "digest": "669c9d99abc138b69ff2aec737e6b08d6c27c181b82f6a60584fd699206e4a48",
+                  "responseId": "resp-sig-029-posture-declaration-loaded-applicantTask",
+                  "definitionUrl": "urn:test:formspec:signature",
+                  "definitionVersion": "1.0.0",
+                  "signedAt": "2026-05-08T12:00:00Z",
+                  "signingIntent": "urn:wos:signing-intent:applicant-signature"
+                },
+                "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                "documentHashAlgorithm": "sha-256",
+                "signatureProvider": "formspec",
+                "ceremonyId": "ceremony-sig-029"
+              }
+            ]
+          }
+        },
+        "actor": "applicant"
+      }
+    ],
+    "expected_transitions": [
+      {
+        "from": "draft",
+        "target": "signing",
+        "event": "start"
+      },
+      {
+        "from": "signing",
+        "target": "complete",
+        "event": "signature.completed"
+      }
+    ],
+    "expected_provenance": [
+      {
+        "recordKind": "signatureAffirmation",
+        "data": {
+          "roleId": "applicantSigner",
+          "documentId": "application",
+          "primitiveVerification": {
+            "status": "deferredPendingHelper",
+            "reason": "formspec-signing-helper-pending"
+          }
+        }
+      }
+    ]
+  },
+  "dependency": {
+    "role": "postureDeclaration",
+    "url": "https://example.gov/posture/signature-conformance.json",
+    "version": "1.0.0",
+    "document": {
+      "$postureDeclaration": "1.0",
+      "url": "https://example.gov/posture/signature-conformance.json",
+      "version": "1.0.0",
+      "signaturePolicy": {
+        "allowedMethods": [
+          "urn:formspec:sig-method:ed25519-cose-sign1@1"
+        ],
+        "minimumPrimitiveVerification": "deferredPendingHelper",
+        "receiptSigningRequired": false,
+        "allowedSigningIntents": [
+          "urn:wos:signing-intent:applicant-signature"
+        ]
+      }
+    }
+  },
+  "expectedConfiguration": [
+    "complete"
+  ],
+  "expectedPrimitiveVerification": "deferredPendingHelper"
+}

@@ -1,0 +1,1500 @@
+{
+  "tools": [
+    {
+      "name": "wos_ping",
+      "description": "Check the server is responding.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "pong": {
+            "const": true
+          }
+        },
+        "required": [
+          "pong"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "x-wos-capabilities": []
+    },
+    {
+      "name": "wos_create_kernel",
+      "description": "Create an editable draft. Complete required Workflow fields before validation or execution.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "draft": {
+            "const": true
+          }
+        },
+        "required": [
+          "project_id",
+          "draft"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "x-wos-capabilities": []
+    },
+    {
+      "name": "wos_load_document",
+      "description": "Import native Workflow JSON without reconstructing its fields; accepts drafts that pass the existing lint gate.",
+      "inputSchema": {
+        "type": "object",
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "json": {
+                "type": "string",
+                "minLength": 1
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          }
+        ],
+        "oneOf": [
+          {
+            "required": [
+              "json"
+            ]
+          },
+          {
+            "required": [
+              "path"
+            ]
+          }
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "x-wos-capabilities": []
+    },
+    {
+      "name": "wos_export_document",
+      "description": "Export the exact current native JSON values, including unmodeled authored content.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "document": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "document"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "x-wos-capabilities": []
+    },
+    {
+      "name": "wos_describe_document",
+      "description": "Count top-level states, transitions, actors and native agents.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "state_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "transition_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "actor_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "impact_level": {
+            "type": "string"
+          },
+          "ai_agent_count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "state_count",
+          "transition_count",
+          "actor_count",
+          "impact_level",
+          "ai_agent_count"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "x-wos-capabilities": []
+    },
+    {
+      "name": "wos_add_state",
+      "description": "Add a top-level state; use wos_edit_workflow.state for nested or complete native states.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "state_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "allOf": [
+              {
+                "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/State/properties/type"
+              }
+            ],
+            "default": "atomic"
+          },
+          "label": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "project_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "state_id",
+          "project_id"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "state_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "state_id"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "x-wos-capabilities": [
+        "lifecycle"
+      ]
+    },
+    {
+      "name": "wos_add_transition",
+      "description": "Add a native transition. Choose a string trigger or a typed event.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "minLength": 1
+          },
+          "to": {
+            "type": "string",
+            "minLength": 1
+          },
+          "trigger": {
+            "type": "string"
+          },
+          "event": {
+            "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/TransitionEvent"
+          },
+          "guard": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "project_id"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "minLength": 1
+          },
+          "to": {
+            "type": "string",
+            "minLength": 1
+          },
+          "trigger": {
+            "type": "string"
+          },
+          "event": {
+            "anyOf": [
+              {
+                "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/TransitionEvent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "trigger",
+          "event"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "x-wos-capabilities": [
+        "lifecycle"
+      ]
+    },
+    {
+      "name": "wos_set_initial_state",
+      "description": "Choose an existing top-level initial state.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "state_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "project_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "state_id",
+          "project_id"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "state_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "state_id"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "x-wos-capabilities": [
+        "lifecycle"
+      ]
+    },
+    {
+      "name": "wos_remove_state",
+      "description": "Remove a top-level state and transitions targeting it.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "state_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "project_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "state_id",
+          "project_id"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "state_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "transitions_removed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "state_id",
+          "transitions_removed"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "x-wos-capabilities": [
+        "lifecycle"
+      ]
+    },
+    {
+      "name": "wos_add_actor",
+      "description": "Declare a human, system or agent actor.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "allOf": [
+              {
+                "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/Actor/properties/type/oneOf/0"
+              }
+            ],
+            "default": "human"
+          },
+          "project_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "actor_id",
+          "project_id"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "actor_id"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "x-wos-capabilities": [
+        "actors"
+      ]
+    },
+    {
+      "name": "wos_add_actor_extension",
+      "description": "Attach an x-prefixed extension to an existing actor.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "key": {
+            "type": "string",
+            "pattern": "^x-"
+          },
+          "value": {},
+          "project_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "actor_id",
+          "key",
+          "value",
+          "project_id"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "actor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "key": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "actor_id",
+          "key"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "x-wos-capabilities": [
+        "actors"
+      ]
+    },
+    {
+      "name": "wos_set_impact_level",
+      "description": "Set the native Workflow impact classification.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/properties/impactLevel"
+          },
+          "project_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "level",
+          "project_id"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/properties/impactLevel"
+          }
+        },
+        "required": [
+          "level"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "x-wos-capabilities": [
+        "impactLevel"
+      ]
+    },
+    {
+      "name": "wos_add_ai_agent",
+      "description": "Add a native agents declaration with modelIdentifier and capabilities.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "role": {
+            "type": "string",
+            "minLength": 1
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          },
+          "project_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "agent_id",
+          "role",
+          "model",
+          "project_id"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "agent_id"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "x-wos-capabilities": [
+        "agents"
+      ]
+    },
+    {
+      "name": "wos_lint",
+      "description": "Return unchanged native diagnostics and counts for block, error, warning and info.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "https://wos-spec.org/schemas/tooling/1.0#/$defs/lintDiagnostic__Root"
+            }
+          },
+          "block_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "error_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "warning_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "info_count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "diagnostics",
+          "block_count",
+          "error_count",
+          "warning_count",
+          "info_count"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "x-wos-capabilities": []
+    },
+    {
+      "name": "wos_preview_state_graph",
+      "description": "Render a Mermaid or DOT state graph; reports typed-view limitations explicitly.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "mermaid",
+              "dot"
+            ],
+            "default": "mermaid"
+          },
+          "project_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "graph": {
+            "type": "string"
+          },
+          "format": {
+            "enum": [
+              "mermaid",
+              "dot"
+            ]
+          }
+        },
+        "required": [
+          "graph",
+          "format"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "x-wos-capabilities": []
+    },
+    {
+      "name": "wos_search",
+      "description": "Search native states, transitions and actors through the typed read view; historical extension constraints remain searchable.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "state",
+              "transition",
+              "actor",
+              "constraint"
+            ]
+          },
+          "query": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "kind",
+          "query",
+          "project_id"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "matches": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "kind": {
+            "type": "string",
+            "minLength": 1
+          },
+          "query": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "matches",
+          "kind",
+          "query"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "x-wos-capabilities": []
+    },
+    {
+      "name": "wos_list_projects",
+      "description": "List open project identifiers.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "projects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "projects",
+          "count"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "x-wos-capabilities": []
+    },
+    {
+      "name": "wos_close_project",
+      "description": "Close an open project.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "closed": {
+            "const": true
+          }
+        },
+        "required": [
+          "project_id",
+          "closed"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "x-wos-capabilities": []
+    },
+    {
+      "name": "wos_run_conformance",
+      "description": "Replay the selected current native Workflow and explicit frozen dependencies. Fixture assertions cannot replace selected documents. Mutable base_dir paths are unsupported.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "fixture_json": {
+            "type": "string",
+            "minLength": 1
+          },
+          "resolved_dependencies": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "role": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "url": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "version": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "document_json": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "role",
+                "url",
+                "document_json"
+              ],
+              "additionalProperties": false
+            },
+            "default": []
+          },
+          "clock_start_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 18446744073709551615,
+            "default": 0
+          },
+          "required_observations": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "configuration",
+                "caseState",
+                "activeTasks",
+                "timers",
+                "provenance",
+                "noticeProvenance",
+                "guards",
+                "drains",
+                "taskSubmission"
+              ]
+            },
+            "default": []
+          },
+          "expected_observations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "pointer": {
+                  "type": "string"
+                },
+                "expected": {}
+              },
+              "required": [
+                "pointer",
+                "expected"
+              ],
+              "additionalProperties": false
+            },
+            "default": []
+          },
+          "project_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "fixture_json",
+          "project_id"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "passed": {
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "pass",
+              "fail",
+              "refused"
+            ]
+          },
+          "identity": {
+            "type": "string",
+            "minLength": 1
+          },
+          "inputs": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "runtimeIdentity": {
+            "type": "object"
+          },
+          "execution": {
+            "type": "object"
+          },
+          "failures": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "refusals": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "differences": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "attempts": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "finalSnapshot": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "provenance": {
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "trace": {
+            "type": "object"
+          },
+          "initialization": {
+            "type": "object"
+          },
+          "observationErrors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "passed",
+          "status",
+          "identity",
+          "inputs",
+          "runtimeIdentity",
+          "execution",
+          "failures",
+          "refusals",
+          "differences",
+          "attempts",
+          "finalSnapshot",
+          "provenance",
+          "trace",
+          "initialization",
+          "observationErrors"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "x-wos-capabilities": []
+    },
+    {
+      "name": "wos_edit_workflow",
+      "description": "Apply one native authoring edit. Fields outside the requested edit retain their exact JSON values. Omitted action defaults to metadata.",
+      "inputSchema": {
+        "type": "object",
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "fields": {
+                "type": "object",
+                "properties": {
+                  "$wosWorkflow": {
+                    "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/properties/$wosWorkflow"
+                  },
+                  "wosVersionPin": {
+                    "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/properties/wosVersionPin"
+                  },
+                  "url": {
+                    "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/properties/url"
+                  },
+                  "version": {
+                    "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/properties/version"
+                  },
+                  "title": {
+                    "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/properties/title"
+                  },
+                  "description": {
+                    "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/properties/description"
+                  },
+                  "status": {
+                    "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/properties/status"
+                  },
+                  "impactLevel": {
+                    "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/properties/impactLevel"
+                  }
+                },
+                "required": [],
+                "additionalProperties": false,
+                "minProperties": 1
+              },
+              "project_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "action": {
+                "const": "metadata",
+                "default": "metadata"
+              }
+            },
+            "required": [
+              "fields",
+              "project_id"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "definition": {
+                "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/FieldDeclaration"
+              },
+              "project_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "action": {
+                "const": "case_field"
+              }
+            },
+            "required": [
+              "name",
+              "definition",
+              "project_id",
+              "action"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "contract": {
+                "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/Contracts/additionalProperties"
+              },
+              "project_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "action": {
+                "const": "contract"
+              }
+            },
+            "required": [
+              "name",
+              "contract",
+              "project_id",
+              "action"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "pointer": {
+                "type": "string",
+                "minLength": 1
+              },
+              "state": {
+                "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/State"
+              },
+              "project_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "action": {
+                "const": "state"
+              }
+            },
+            "required": [
+              "pointer",
+              "state",
+              "project_id",
+              "action"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "pointer": {
+                "type": "string",
+                "minLength": 1
+              },
+              "phase": {
+                "enum": [
+                  "onEntry",
+                  "onExit"
+                ]
+              },
+              "value": {
+                "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/LifecycleAction"
+              },
+              "project_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "action": {
+                "const": "state_action"
+              }
+            },
+            "required": [
+              "pointer",
+              "phase",
+              "value",
+              "project_id",
+              "action"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "value": {
+                "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/properties/governance"
+              },
+              "project_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "action": {
+                "const": "governance"
+              }
+            },
+            "required": [
+              "value",
+              "project_id",
+              "action"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "value": {
+                "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/AgentDeclaration"
+              },
+              "project_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "action": {
+                "const": "agent"
+              }
+            },
+            "required": [
+              "value",
+              "project_id",
+              "action"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "agent_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "project_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "action": {
+                "const": "remove_agent"
+              }
+            },
+            "required": [
+              "agent_id",
+              "project_id",
+              "action"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "agent_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "constraint": {
+                "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/DeonticConstraint"
+              },
+              "project_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "action": {
+                "const": "agent_constraint"
+              }
+            },
+            "required": [
+              "agent_id",
+              "constraint",
+              "project_id",
+              "action"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "value": {
+                "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/properties/aiOversight"
+              },
+              "project_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "action": {
+                "const": "ai_oversight"
+              }
+            },
+            "required": [
+              "value",
+              "project_id",
+              "action"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "applied": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "applied"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "x-wos-capabilities": [
+        "$wosWorkflow",
+        "agents",
+        "aiOversight",
+        "caseFile",
+        "contracts",
+        "description",
+        "governance",
+        "impactLevel",
+        "lifecycle",
+        "status",
+        "title",
+        "url",
+        "version",
+        "wosVersionPin"
+      ],
+      "x-wos-actions": [
+        {
+          "name": "metadata",
+          "description": "Set selected identity and descriptive fields atomically.",
+          "fields": [
+            "$wosWorkflow",
+            "wosVersionPin",
+            "url",
+            "version",
+            "title",
+            "description",
+            "status",
+            "impactLevel"
+          ]
+        },
+        {
+          "name": "case_field",
+          "description": "Add or replace one inline case field.",
+          "fields": [
+            "caseFile"
+          ]
+        },
+        {
+          "name": "contract",
+          "description": "Add or replace one native contract, including Formspec definition/version references.",
+          "fields": [
+            "contracts"
+          ]
+        },
+        {
+          "name": "state",
+          "description": "Add or replace a native state at /lifecycle/states/<id> or a nested states/regions locator.",
+          "fields": [
+            "lifecycle"
+          ]
+        },
+        {
+          "name": "state_action",
+          "description": "Append a native action, including createTask/taskRef, to a state phase.",
+          "fields": [
+            "lifecycle"
+          ]
+        },
+        {
+          "name": "governance",
+          "description": "Replace native governance, including taskCatalog and reviewProtocols.",
+          "fields": [
+            "governance"
+          ]
+        },
+        {
+          "name": "agent",
+          "description": "Add or replace a complete native agent by id.",
+          "fields": [
+            "agents"
+          ]
+        },
+        {
+          "name": "remove_agent",
+          "description": "Remove one native agent by id.",
+          "fields": [
+            "agents"
+          ]
+        },
+        {
+          "name": "agent_constraint",
+          "description": "Append a canonical native agent deontic constraint.",
+          "fields": [
+            "agents"
+          ]
+        },
+        {
+          "name": "ai_oversight",
+          "description": "Replace native aiOversight.",
+          "fields": [
+            "aiOversight"
+          ]
+        }
+      ],
+      "x-wos-default-action": "metadata"
+    }
+  ]
+}

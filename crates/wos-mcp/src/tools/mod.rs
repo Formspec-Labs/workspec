@@ -9,16 +9,14 @@ mod document;
 mod governance;
 mod lifecycle;
 mod ping;
+pub(crate) mod product;
 mod query;
 
 pub use actors::{wos_add_actor, wos_add_actor_extension};
 pub use document::{
     wos_create_kernel, wos_describe_document, wos_export_document, wos_load_document,
 };
-pub use governance::{
-    wos_add_ai_agent, wos_add_assertion_gate, wos_add_deontic_constraint, wos_add_due_process_path,
-    wos_set_impact_level,
-};
+pub use governance::{wos_add_ai_agent, wos_set_impact_level};
 pub use lifecycle::{wos_add_state, wos_add_transition, wos_remove_state, wos_set_initial_state};
 pub use ping::ping;
 pub use query::{

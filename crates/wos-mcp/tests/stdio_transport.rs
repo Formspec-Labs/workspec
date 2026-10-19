@@ -246,12 +246,9 @@ fn unknown_tool_name_returns_invalid_params_error() {
     );
 }
 
-/// `tools/list` must advertise exactly 22 tools:
-///   1 ping + 4 document + 4 lifecycle + 2 actor + 5 gov/AI + 6 validation/query.
-/// Any regression in the list manifest (adding or removing a tool without
-/// updating this count) is caught here.
+/// Discovery comes from the shared executable catalog; retired writers stay absent.
 #[test]
-fn tools_list_advertises_twenty_two_tools() {
+fn tools_list_matches_shared_catalog() {
     let requests = vec![serde_json::json!({
         "jsonrpc": "2.0",
         "id": 20,
@@ -268,25 +265,20 @@ fn tools_list_advertises_twenty_two_tools() {
 
     let names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
 
-    assert_eq!(
-        names.len(),
-        22,
-        "tools/list must advertise exactly 22 tools; got {}: {names:?}",
-        names.len()
-    );
-
-    // Verify all Task-5 governance/AI tools are present.
+    assert_eq!(responses[0]["result"], wos_mcp::catalog::descriptors());
     for expected in [
-        "wos_add_due_process_path",
-        "wos_add_assertion_gate",
+        "wos_edit_workflow",
         "wos_set_impact_level",
         "wos_add_ai_agent",
+    ] {
+        assert!(names.contains(&expected));
+    }
+    for retired in [
+        "wos_add_due_process_path",
+        "wos_add_assertion_gate",
         "wos_add_deontic_constraint",
     ] {
-        assert!(
-            names.contains(&expected),
-            "tools/list must include '{expected}'; got: {names:?}"
-        );
+        assert!(!names.contains(&retired));
     }
 
     // Verify all Task-6 validation/query tools are present.

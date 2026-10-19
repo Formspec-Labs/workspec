@@ -251,6 +251,41 @@ pub(crate) enum Command {
         action: String,
     },
 
+    /// Replace selected native top-level fields atomically.
+    SetNativeFields {
+        fields: serde_json::Map<String, serde_json::Value>,
+    },
+    /// Add or replace one inline case field.
+    PutCaseField {
+        name: String,
+        definition: serde_json::Value,
+    },
+    /// Add or replace a complete native contract reference.
+    PutContract {
+        name: String,
+        contract: serde_json::Value,
+    },
+    /// Add or replace one complete native state.
+    PutState {
+        pointer: String,
+        state: serde_json::Value,
+    },
+    /// Append an action to a specific native state phase.
+    AppendStateAction {
+        pointer: String,
+        phase: String,
+        action: serde_json::Value,
+    },
+    /// Add or replace one agent declaration by identity.
+    PutAgent { agent: serde_json::Value },
+    /// Remove the declaration with the specified agent identity.
+    RemoveAgent { id: String },
+    /// Add a canonical deontic constraint to a named agent.
+    AddAgentConstraint {
+        id: String,
+        constraint: serde_json::Value,
+    },
+
     // ── Extensions ─────────────────────────────────────────────────────────
     /// Set an `x-`-prefixed extension key on the document.
     AddExtensionKey {

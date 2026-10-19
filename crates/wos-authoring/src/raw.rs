@@ -1,319 +1,217 @@
-// Rust guideline compliant 2026-02-21
+//! Complete native workflow storage and atomic intent-driven edits.
 
-//! `RawWosProject` — the low-level authoring core.
-//!
-//! `IWosProjectCore` defines the dispatch/undo/redo/snapshot contract.
-//! `RawWosProject` owns the `KernelDocument` and implements that contract.
-
-use std::collections::HashMap;
-
-use wos_core::{
-    ActorKind, ImpactLevel, KernelDocument, Lifecycle, StateKind,
-    model::decision_table::Guard,
-    model::kernel::{Actor, ContractReference, Milestone, State, Transition, TransitionEvent},
-};
+use serde_json::{Map, Value, json};
+use wos_core::{ActorKind, ImpactLevel, KernelDocument, StateKind, TransitionEvent};
 
 use crate::{
     command::{AppliedCommand, Command, CommandResult},
     diagnostics::AuthoringDiagnostic,
+    native_schema,
 };
 
-// ── Trait ─────────────────────────────────────────────────────────────────────
-
-/// Core authoring contract: undo/redo, snapshot, diagnostics.
-///
-/// `dispatch` is deliberately NOT on this trait — it takes the `pub(crate)`
-/// `Command` enum, so exposing it on a public trait would leak a private type.
-/// Command dispatch is an inherent `pub(crate)` method on `RawWosProject`
-/// and is the seam the forthcoming `WosProject` façade (Task 6) calls into.
-/// External consumers only see the intent-driven helper methods on
-/// `WosProject`, never `Command` itself.
 pub(crate) trait IWosProjectCore {
-    /// Reverse the last command.
-    ///
-    /// Returns `Err` until undo is fully implemented (Task 5).
     fn undo(&mut self) -> Result<(), AuthoringDiagnostic>;
-
-    /// Re-apply a reversed command.
-    ///
-    /// Returns `Err` until redo is fully implemented (Task 5).
     fn redo(&mut self) -> Result<(), AuthoringDiagnostic>;
-
-    /// Return a clone of the current document state.
-    fn snapshot(&self) -> KernelDocument;
-
-    /// Return all diagnostics accumulated during this session.
+    fn native_snapshot(&self) -> Value;
+    fn typed_snapshot(&self) -> Result<KernelDocument, AuthoringDiagnostic>;
     fn diagnostics(&self) -> &[AuthoringDiagnostic];
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/// Construct a minimal valid `State` with all optional fields at defaults.
-fn empty_state(kind: StateKind) -> State {
-    State {
-        kind,
-        description: None,
-        transitions: Vec::new(),
-        tags: Vec::new(),
-        on_entry: Vec::new(),
-        on_exit: Vec::new(),
-        initial_state: None,
-        states: indexmap::IndexMap::new(),
-        regions: indexmap::IndexMap::new(),
-        cancellation_policy: None,
-        history_state: None,
-        outcome_code: None,
-        collection: None,
-        item_variable: None,
-        index_variable: None,
-        concurrency: None,
-        break_condition: None,
-        output_path: None,
-        merge_strategy: None,
-        body: None,
-        extensions: HashMap::new(),
-    }
-}
-
-/// Build the minimal `KernelDocument` used by `RawWosProject::new`.
-fn minimal_document(impact_level: ImpactLevel, title: String) -> KernelDocument {
-    KernelDocument {
-        wos_workflow: "1.0".into(),
-        schema: None,
-        url: None,
-        version: None,
-        title: Some(title),
-        description: None,
-        status: None,
-        impact_level: Some(impact_level),
-        actors: Vec::new(),
-        lifecycle: Lifecycle {
-            // Placeholder; callers must set an initial state before the document
-            // is used for evaluation.  The empty string is the conventional
-            // "no initial state yet" sentinel used during authoring.
-            initial_state: String::new(),
-            states: indexmap::IndexMap::new(),
-            milestones: HashMap::new(),
-        },
-        case_file: None,
-        contracts: HashMap::new(),
-        provenance: None,
-        execution: None,
-        evaluation_mode: None,
-        max_relationship_event_depth: None,
-        governance: None,
-        agents: Vec::new(),
-        ai_oversight: None,
-        signature: None,
-        custody: None,
-        advanced: None,
-        assurance: None,
-        intake: None,
-        bindings: Vec::new(),
-        decision_tables: vec![],
-        extensions: HashMap::new(),
-    }
-}
-
-// ── RawWosProject ─────────────────────────────────────────────────────────────
-
-/// Maximum number of pre-command snapshots retained for undo.
-///
-/// A cap is required because every successful dispatch clones the full
-/// `KernelDocument`; memory grows linearly with history depth. 100 is
-/// generous for interactive LLM-driven authoring (repair loops rarely
-/// exceed 20 steps) while still being small enough to keep the working
-/// set bounded for fixture-heavy bench runs.
+// Full source snapshots keep undo lossless. The existing interactive history
+// bound prevents unbounded retention of complete authored documents.
 const UNDO_DEPTH: usize = 100;
 
-/// A history entry pairs the command record with the pre-command snapshot.
-///
-/// Snapshot-based undo avoids the combinatorial complexity of inverting
-/// every command shape (rename across nested states, extension-map writes,
-/// etc.). Inverses recorded on `AppliedCommand` remain available for
-/// future optimizations but the canonical undo path restores the snapshot.
 #[derive(Debug, Clone)]
 struct HistoryEntry {
     applied: AppliedCommand,
-    before: KernelDocument,
+    before: Value,
 }
 
-/// Low-level authoring core: owns a `KernelDocument` and drives it via commands.
-///
-/// Undo and redo use snapshot-based restoration: every successful dispatch
-/// captures the pre-command document state onto `history`; `undo()` pops the
-/// latest entry and replaces the current document with its snapshot, moving
-/// the reverted entry onto `redo_stack`. A forward dispatch clears the redo
-/// stack so any branching authoring session starts a fresh history line.
+/// The complete JSON value is the only writable document authority.
 #[derive(Debug)]
 pub(crate) struct RawWosProject {
-    doc: KernelDocument,
-    /// Pre-command snapshots + applied-command records, capped at `UNDO_DEPTH`.
+    doc: Value,
     history: Vec<HistoryEntry>,
-    /// Entries reverted by `undo`, awaiting `redo`.
     redo_stack: Vec<HistoryEntry>,
     diagnostics: Vec<AuthoringDiagnostic>,
 }
 
+fn error(path: impl Into<String>, message: impl Into<String>) -> AuthoringDiagnostic {
+    AuthoringDiagnostic::error(path, message)
+}
+
+fn object_at<'a>(
+    document: &'a mut Value,
+    pointer: &str,
+) -> Result<&'a mut Map<String, Value>, AuthoringDiagnostic> {
+    document
+        .pointer_mut(pointer)
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| error(pointer, "expected an existing native object"))
+}
+
+fn array_at<'a>(
+    document: &'a mut Value,
+    pointer: &str,
+) -> Result<&'a mut Vec<Value>, AuthoringDiagnostic> {
+    document
+        .pointer_mut(pointer)
+        .and_then(Value::as_array_mut)
+        .ok_or_else(|| error(pointer, "expected an existing native array"))
+}
+
+fn escape(token: &str) -> String {
+    token.replace('~', "~0").replace('/', "~1")
+}
+
+/// Check a locator for the specific native state operation, not a general patch.
+fn state_pointer(pointer: &str) -> Result<(), AuthoringDiagnostic> {
+    let tokens: Vec<_> = pointer.split('/').skip(1).collect();
+    if tokens.len() < 3 || tokens[0] != "lifecycle" || tokens[1] != "states" || tokens[2].is_empty()
+    {
+        return Err(error(pointer, "state path must identify a lifecycle state"));
+    }
+    let mut next = 3;
+    while next < tokens.len() {
+        let width = match tokens[next..] {
+            ["states", id, ..] if !id.is_empty() => 2,
+            ["regions", region, "states", id, ..] if !region.is_empty() && !id.is_empty() => 4,
+            _ => {
+                return Err(error(
+                    pointer,
+                    "state path must follow native states or region states",
+                ));
+            }
+        };
+        next += width;
+    }
+    Ok(())
+}
+
 impl RawWosProject {
-    /// Construct a minimal valid project with the given impact level and title.
-    ///
-    /// The document has no states, no actors, and no initial state yet.
     pub(crate) fn new(impact_level: ImpactLevel, title: impl Into<String>) -> Self {
-        Self {
-            doc: minimal_document(impact_level, title.into()),
-            history: Vec::new(),
-            redo_stack: Vec::new(),
-            diagnostics: Vec::new(),
-        }
+        Self::from_native_document(json!({
+            "$wosWorkflow":"1.0", "title":title.into(), "impactLevel":impact_level,
+            "actors":[], "lifecycle":{"initialState":"", "states":{}, "milestones":{}},
+            "contracts":{}, "decisionTables":[], "extensions":{}
+        }))
+        .expect("built-in authoring draft is an object")
     }
 
-    /// Wrap an already-deserialized `KernelDocument`.
-    ///
-    /// The document becomes the initial state with an empty undo/redo history.
     pub(crate) fn from_document(document: KernelDocument) -> Self {
-        Self {
+        Self::from_native_document(serde_json::to_value(document).expect("native model serializes"))
+            .expect("native model serializes as an object")
+    }
+
+    pub(crate) fn from_native_document(document: Value) -> Result<Self, AuthoringDiagnostic> {
+        if !document.is_object() {
+            return Err(error("/", "workflow document must be a JSON object"));
+        }
+        Ok(Self {
             doc: document,
             history: Vec::new(),
             redo_stack: Vec::new(),
             diagnostics: Vec::new(),
-        }
+        })
     }
-
-    // ── AddState handler ──────────────────────────────────────────────────
 
     fn apply_add_state(
         &mut self,
         id: String,
         kind: StateKind,
         description: Option<String>,
-        metadata: Option<serde_json::Value>,
+        metadata: Option<Value>,
     ) -> CommandResult {
-        if self.doc.lifecycle.states.contains_key(&id) {
-            return Err(AuthoringDiagnostic::error(
-                format!("/lifecycle/states/{id}"),
+        let mut state = json!({"type":kind});
+        if let Some(description) = description {
+            state["description"] = json!(description);
+        }
+        if let Some(metadata) = metadata {
+            state["extensions"] = json!({"x-meta":metadata});
+        }
+        let states = object_at(&mut self.doc, "/lifecycle/states")?;
+        if states.contains_key(&id) {
+            return Err(error(
+                format!("/lifecycle/states/{}", escape(&id)),
                 format!("state '{id}' already exists"),
             ));
         }
-
-        let mut state = empty_state(kind);
-        state.description = description.map(serde_json::Value::String);
-        if let Some(meta) = metadata {
-            state.extensions.insert("x-meta".to_owned(), meta);
-        }
-        self.doc.lifecycle.states.insert(id.clone(), state);
-
+        states.insert(id.clone(), state);
         Ok(AppliedCommand::with_inverse(
             format!("AddState({id})"),
             Command::RemoveState { id },
         ))
     }
 
-    // ── RemoveState handler ───────────────────────────────────────────────
-
     fn apply_remove_state(&mut self, id: String) -> CommandResult {
-        if !self.doc.lifecycle.states.contains_key(&id) {
-            return Err(AuthoringDiagnostic::error(
-                format!("/lifecycle/states/{id}"),
+        let states = object_at(&mut self.doc, "/lifecycle/states")?;
+        let removed = states.remove(&id).ok_or_else(|| {
+            error(
+                format!("/lifecycle/states/{}", escape(&id)),
                 format!("state '{id}' not found"),
-            ));
-        }
-
-        // Count outgoing transitions from the state being removed (they
-        // disappear with the state).
-        let outgoing_count = self
-            .doc
-            .lifecycle
-            .states
-            .get(&id)
-            .map(|s| s.transitions.len())
-            .unwrap_or(0);
-
-        // Remove dangling inbound transitions from all *other* states that
-        // target the removed state, and count them.  Deliberately skips the
-        // removed state itself — its outgoing transitions (including any
-        // self-loops) are already captured in `outgoing_count` above; pruning
-        // them here would double-count every self-loop in `total_removed`.
-        let mut inbound_removed: usize = 0;
-        for (src_id, src_state) in self.doc.lifecycle.states.iter_mut() {
-            if src_id == &id {
-                continue;
+            )
+        })?;
+        let mut count = removed
+            .get("transitions")
+            .and_then(Value::as_array)
+            .map_or(0, Vec::len);
+        for state in states.values_mut() {
+            if let Some(transitions) = state.get_mut("transitions").and_then(Value::as_array_mut) {
+                let before = transitions.len();
+                transitions.retain(|transition| {
+                    transition.get("target").and_then(Value::as_str) != Some(id.as_str())
+                });
+                count += before - transitions.len();
             }
-            let before = src_state.transitions.len();
-            src_state.transitions.retain(|t| t.target != id);
-            inbound_removed += before - src_state.transitions.len();
         }
-
-        let total_removed = outgoing_count + inbound_removed;
-
-        self.doc.lifecycle.states.shift_remove(&id);
-
         Ok(AppliedCommand::without_inverse(format!(
-            "RemoveState({id}); removed {total_removed} transitions"
+            "RemoveState({id}); removed {count} transitions"
         )))
     }
 
-    // ── SetInitialState handler ───────────────────────────────────────────
-
     fn apply_set_initial_state(&mut self, state_id: String) -> CommandResult {
-        if !self.doc.lifecycle.states.contains_key(&state_id) {
-            return Err(AuthoringDiagnostic::error(
-                format!("/lifecycle/initialState"),
+        if !object_at(&mut self.doc, "/lifecycle/states")?.contains_key(&state_id) {
+            return Err(error(
+                "/lifecycle/initialState",
                 format!("state '{state_id}' does not exist; add it before setting as initial"),
             ));
         }
-
-        let prior = self.doc.lifecycle.initial_state.clone();
-        self.doc.lifecycle.initial_state = state_id.clone();
-
-        Ok(AppliedCommand::with_inverse(
-            format!("SetInitialState({state_id})"),
-            Command::SetInitialState { state_id: prior },
-        ))
+        self.doc["lifecycle"]["initialState"] = json!(state_id);
+        Ok(AppliedCommand::without_inverse(format!(
+            "SetInitialState({state_id})"
+        )))
     }
 
-    // ── RenameState handler ───────────────────────────────────────────────
-
-    /// Rename a top-level state and repoint every transition targeting it.
-    ///
-    /// Repoints `lifecycle.initialState` and every transition's `target` that
-    /// matched the old id. Preserves insertion order by rebuilding the state
-    /// map in place; `IndexMap` does not offer an in-place rename.
     fn apply_rename_state(&mut self, old_id: String, new_id: String) -> CommandResult {
-        if !self.doc.lifecycle.states.contains_key(&old_id) {
-            return Err(AuthoringDiagnostic::error(
-                format!("/lifecycle/states/{old_id}"),
-                format!("state '{old_id}' not found"),
-            ));
-        }
-        if self.doc.lifecycle.states.contains_key(&new_id) {
-            return Err(AuthoringDiagnostic::error(
-                format!("/lifecycle/states/{new_id}"),
+        let states = object_at(&mut self.doc, "/lifecycle/states")?;
+        if states.contains_key(&new_id) {
+            return Err(error(
+                format!("/lifecycle/states/{}", escape(&new_id)),
                 format!("state '{new_id}' already exists"),
             ));
         }
-
-        // Preserve insertion order by draining and rebuilding.
-        let states = std::mem::take(&mut self.doc.lifecycle.states);
-        for (id, state) in states {
-            let key = if id == old_id { new_id.clone() } else { id };
-            self.doc.lifecycle.states.insert(key, state);
+        if !states.contains_key(&old_id) {
+            return Err(error(
+                format!("/lifecycle/states/{}", escape(&old_id)),
+                format!("state '{old_id}' not found"),
+            ));
         }
-
-        // Repoint every transition target in every state.
-        for state in self.doc.lifecycle.states.values_mut() {
-            for transition in &mut state.transitions {
-                if transition.target == old_id {
-                    transition.target = new_id.clone();
+        let old = std::mem::take(states);
+        for (id, value) in old {
+            states.insert(if id == old_id { new_id.clone() } else { id }, value);
+        }
+        for state in states.values_mut() {
+            if let Some(transitions) = state.get_mut("transitions").and_then(Value::as_array_mut) {
+                for transition in transitions {
+                    if transition.get("target").and_then(Value::as_str) == Some(old_id.as_str()) {
+                        transition["target"] = json!(new_id);
+                    }
                 }
             }
         }
-
-        // Repoint the document's initial state if it was the renamed one.
-        if self.doc.lifecycle.initial_state == old_id {
-            self.doc.lifecycle.initial_state = new_id.clone();
+        if self.doc["lifecycle"]["initialState"] == old_id {
+            self.doc["lifecycle"]["initialState"] = json!(new_id);
         }
-
         Ok(AppliedCommand::with_inverse(
             format!("RenameState({old_id} → {new_id})"),
             Command::RenameState {
@@ -323,514 +221,267 @@ impl RawWosProject {
         ))
     }
 
-    // ── AddTransition handler ─────────────────────────────────────────────
-
     fn apply_add_transition(
         &mut self,
-        from_state: String,
-        to_state: String,
+        from: String,
+        to: String,
         guard: Option<String>,
         event: Option<String>,
-        event_typed: Option<TransitionEvent>,
+        typed_event: Option<TransitionEvent>,
     ) -> CommandResult {
-        // Both endpoints must exist before a transition can be created.
-        if !self.doc.lifecycle.states.contains_key(&from_state) {
-            return Err(AuthoringDiagnostic::error(
-                format!("/lifecycle/states/{from_state}"),
-                format!("source state '{from_state}' does not exist"),
+        let states = object_at(&mut self.doc, "/lifecycle/states")?;
+        if !states.contains_key(&from) {
+            return Err(error(
+                format!("/lifecycle/states/{}", escape(&from)),
+                format!("source state '{from}' does not exist"),
             ));
         }
-        if !self.doc.lifecycle.states.contains_key(&to_state) {
-            return Err(AuthoringDiagnostic::error(
-                format!("/lifecycle/states/{to_state}"),
-                format!("target state '{to_state}' does not exist"),
+        if !states.contains_key(&to) {
+            return Err(error(
+                format!("/lifecycle/states/{}", escape(&to)),
+                format!("target state '{to}' does not exist"),
             ));
         }
-
-        let has_legacy = event
-            .as_ref()
-            .map(|e| !e.trim().is_empty())
-            .unwrap_or(false);
-        if event_typed.is_some() && has_legacy {
-            return Err(AuthoringDiagnostic::error(
-                "/lifecycle/transitions".to_string(),
-                "AddTransition: use either `event` (legacy string) or `event_typed`, not both"
-                    .to_string(),
+        let legacy = event
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        if typed_event.is_some() && legacy.is_some() {
+            return Err(error(
+                "/lifecycle/transitions",
+                "use either event or typed event, not both",
             ));
         }
-
-        let ev_typed = if let Some(ev) = event_typed {
-            Some(ev)
-        } else {
-            event
-                .as_ref()
-                .map(|e| e.trim())
-                .filter(|e| !e.is_empty())
-                .map(|e| TransitionEvent::from_authoring_trigger(e))
-        };
-        // Wrap String guards into the polymorphic Guard enum (FEL form).
-        // Authoring's command surface accepts Option<String> for ergonomics;
-        // wos-core's Transition.guard is Option<Guard> as of the
-        // decisionTable refactor. Authoring only emits FEL guards today.
-        let transition = Transition {
-            event: ev_typed,
-            target: to_state.clone(),
-            guard: guard.map(Guard::Fel),
-            actions: Vec::new(),
-            actor: None,
-            description: None,
-            tags: Vec::new(),
-        };
-
-        let label = transition.event_dispatch_label();
-
-        // Unwrap is safe: we verified `from_state` exists above.
-        self.doc
-            .lifecycle
-            .states
-            .get_mut(&from_state)
-            .expect("state verified to exist")
-            .transitions
+        let event = typed_event.or_else(|| legacy.map(TransitionEvent::from_authoring_trigger));
+        let mut transition = json!({"target":to});
+        if let Some(event) = event {
+            transition["event"] = serde_json::to_value(event).expect("event serializes");
+        }
+        if let Some(guard) = guard {
+            transition["guard"] = json!(guard);
+        }
+        let source = states
+            .get_mut(&from)
+            .and_then(Value::as_object_mut)
+            .ok_or_else(|| error("/lifecycle/states", "source state must be an object"))?;
+        source
+            .entry("transitions")
+            .or_insert_with(|| json!([]))
+            .as_array_mut()
+            .ok_or_else(|| error("/lifecycle/states", "transitions must be an array"))?
             .push(transition);
-
         Ok(AppliedCommand::without_inverse(format!(
-            "AddTransition({from_state} --[{label}]--> {to_state})"
+            "AddTransition({from} → {to})"
         )))
     }
 
-    // ── AddActor / RemoveActor handlers ───────────────────────────────────
-
     fn apply_add_actor(&mut self, id: String, kind: ActorKind) -> CommandResult {
-        if self.doc.actors.iter().any(|a| a.id == id) {
-            return Err(AuthoringDiagnostic::error(
-                format!("/actors/{id}"),
+        let actors = array_at(&mut self.doc, "/actors")?;
+        if actors
+            .iter()
+            .any(|actor| actor.get("id").and_then(Value::as_str) == Some(id.as_str()))
+        {
+            return Err(error(
+                format!("/actors/{}", escape(&id)),
                 format!("actor '{id}' already exists"),
             ));
         }
-
-        self.doc.actors.push(Actor {
-            id: id.clone(),
-            kind,
-            description: None,
-            extensions: HashMap::new(),
-        });
-
-        Ok(AppliedCommand::with_inverse(
-            format!("AddActor({id})"),
-            Command::RemoveActor { id },
-        ))
+        actors.push(json!({"id":id,"type":kind}));
+        Ok(AppliedCommand::without_inverse("AddActor"))
     }
 
     fn apply_remove_actor(&mut self, id: String) -> CommandResult {
-        let index = match self.doc.actors.iter().position(|a| a.id == id) {
-            Some(idx) => idx,
-            None => {
-                return Err(AuthoringDiagnostic::error(
-                    format!("/actors/{id}"),
+        let actors = array_at(&mut self.doc, "/actors")?;
+        let index = actors
+            .iter()
+            .position(|actor| actor.get("id").and_then(Value::as_str) == Some(id.as_str()))
+            .ok_or_else(|| {
+                error(
+                    format!("/actors/{}", escape(&id)),
                     format!("actor '{id}' not found"),
-                ));
-            }
-        };
-
-        // Warn (do not error) when the actor is referenced by any
-        // transition's `assignTo` action — authors may be mid-migration.
-        for (state_id, state) in &self.doc.lifecycle.states {
-            for transition in &state.transitions {
-                for (action_idx, action) in transition.actions.iter().enumerate() {
-                    if action.assign_to.as_deref() == Some(id.as_str()) {
-                        let ev_label = transition.event_dispatch_label();
-                        self.diagnostics.push(AuthoringDiagnostic::warning(
-                            format!(
-                                "/lifecycle/states/{state_id}/transitions/{}/actions/{action_idx}",
-                                ev_label
-                            ),
-                            format!(
-                                "action assigns to removed actor '{id}' \
-                                 on transition '{state_id}' --[{ev_label}]--> '{}'",
-                                transition.target
-                            ),
-                        ));
-                    }
+                )
+            })?;
+        actors.remove(index);
+        let mut referenced = false;
+        if let Some(states) = self
+            .doc
+            .pointer_mut("/lifecycle/states")
+            .and_then(Value::as_object_mut)
+        {
+            for state in states.values_mut() {
+                for phase in ["onEntry", "onExit"] {
+                    referenced |=
+                        state
+                            .get(phase)
+                            .and_then(Value::as_array)
+                            .is_some_and(|actions| {
+                                actions.iter().any(|action| {
+                                    action.get("assignTo").and_then(Value::as_str)
+                                        == Some(id.as_str())
+                                })
+                            });
+                }
+                if let Some(transitions) = state.get("transitions").and_then(Value::as_array) {
+                    referenced |= transitions.iter().any(|transition| {
+                        transition
+                            .get("actions")
+                            .and_then(Value::as_array)
+                            .is_some_and(|actions| {
+                                actions.iter().any(|action| {
+                                    action.get("assignTo").and_then(Value::as_str)
+                                        == Some(id.as_str())
+                                })
+                            })
+                    });
                 }
             }
         }
-
-        self.doc.actors.remove(index);
-
+        if referenced {
+            self.diagnostics.push(AuthoringDiagnostic::warning(
+                format!("/actors/{}", escape(&id)),
+                format!("removed actor '{id}' remains referenced by an action"),
+            ));
+        }
         Ok(AppliedCommand::without_inverse(format!(
             "RemoveActor({id})"
         )))
     }
 
-    // ── AddActorExtension handler ─────────────────────────────────────────
-
     fn apply_add_actor_extension(
         &mut self,
         actor_id: String,
         key: String,
-        value: serde_json::Value,
+        value: Value,
     ) -> CommandResult {
         if !key.starts_with("x-") {
-            return Err(AuthoringDiagnostic::error(
+            return Err(error(
                 format!("/actors/{actor_id}/extensions/{key}"),
-                format!("extension key '{key}' must start with 'x-'"),
+                "extension key must start with 'x-'",
             ));
         }
-
-        let actor = self
-            .doc
-            .actors
+        let actor = array_at(&mut self.doc, "/actors")?
             .iter_mut()
-            .find(|a| a.id == actor_id)
-            .ok_or_else(|| {
-                AuthoringDiagnostic::error(
-                    format!("/actors/{actor_id}"),
-                    format!("actor '{actor_id}' not found"),
-                )
-            })?;
-
-        actor.extensions.insert(key.clone(), value);
-
-        Ok(AppliedCommand::without_inverse(format!(
-            "AddActorExtension({actor_id}, {key})"
-        )))
+            .find(|actor| actor.get("id").and_then(Value::as_str) == Some(actor_id.as_str()))
+            .and_then(Value::as_object_mut)
+            .ok_or_else(|| error(format!("/actors/{}", escape(&actor_id)), "actor not found"))?;
+        actor
+            .entry("extensions")
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .ok_or_else(|| error("/actors", "extensions must be an object"))?
+            .insert(key, value);
+        Ok(AppliedCommand::without_inverse("AddActorExtension"))
     }
-
-    // ── SetImpactLevel handler ────────────────────────────────────────────
 
     fn apply_set_impact_level(&mut self, level: ImpactLevel) -> CommandResult {
-        // Capture the prior level so undo can restore it exactly,
-        // including the absent-level case (None).
-        let prior = self.doc.impact_level;
-        self.doc.impact_level = Some(level);
-
-        // If there was a prior value, the inverse re-sets it; if there
-        // wasn't, we fall back to snapshot-based undo.
-        let applied = match prior {
-            Some(prev) => AppliedCommand::with_inverse(
-                format!("SetImpactLevel({level:?})"),
-                Command::SetImpactLevel { level: prev },
-            ),
-            None => AppliedCommand::without_inverse(format!("SetImpactLevel({level:?})")),
-        };
-        Ok(applied)
+        self.doc["impactLevel"] = json!(level);
+        Ok(AppliedCommand::without_inverse(format!(
+            "SetImpactLevel({level:?})"
+        )))
     }
-
-    // ── AddContract handler ───────────────────────────────────────────────
 
     fn apply_add_contract(
         &mut self,
         name: String,
         binding: String,
-        ref_uri: String,
+        reference: String,
     ) -> CommandResult {
-        if self.doc.contracts.contains_key(&name) {
-            return Err(AuthoringDiagnostic::error(
-                format!("/contracts/{name}"),
+        let contracts = self
+            .doc
+            .as_object_mut()
+            .expect("document is an object")
+            .entry("contracts")
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .ok_or_else(|| error("/contracts", "contracts must be an object"))?;
+        if contracts.contains_key(&name) {
+            return Err(error(
+                format!("/contracts/{}", escape(&name)),
                 format!("contract '{name}' already exists"),
             ));
         }
-
-        self.doc.contracts.insert(
-            name.clone(),
-            ContractReference {
-                binding,
-                reference: ref_uri,
-                definition_version: None,
-                description: None,
-                prefill_mapping_ref: None,
-                response_mapping_ref: None,
-            },
-        );
-
+        contracts.insert(name.clone(), json!({"binding":binding,"ref":reference}));
         Ok(AppliedCommand::without_inverse(format!(
             "AddContract({name})"
         )))
     }
 
-    // ── AddActorDeontic handler ───────────────────────────────────────────
-
     fn apply_set_contract_definition_version(
         &mut self,
         name: String,
-        definition_version: String,
+        version: String,
     ) -> CommandResult {
-        if definition_version.trim().is_empty() {
-            return Err(AuthoringDiagnostic::error(
+        if version.trim().is_empty() {
+            return Err(error(
                 format!("/contracts/{name}/definitionVersion"),
                 "contract Definition version must not be blank",
             ));
         }
-        let contract = self.doc.contracts.get_mut(&name).ok_or_else(|| {
-            AuthoringDiagnostic::error(format!("/contracts/{name}"), "unknown contract")
-        })?;
-        contract.definition_version = Some(definition_version);
-        Ok(AppliedCommand::without_inverse(format!(
-            "SetContractDefinitionVersion({name})"
-        )))
-    }
-
-    /// Append a deontic constraint under `x-wos-ai.deonticConstraints`.
-    ///
-    /// The extension is authored inline as `serde_json::Value` so this crate
-    /// does not need to depend on `wos-core::model::ai::AIIntegrationDocument`
-    /// for writes. Consumers that need typed access deserialize the exported
-    /// JSON through `wos-core`.
-    fn apply_add_actor_deontic(&mut self, constraint_id: String, rule: String) -> CommandResult {
-        let ext = self
-            .doc
-            .extensions
-            .entry("x-wos-ai".to_owned())
-            .or_insert_with(|| serde_json::json!({}));
-
-        let root = match ext.as_object_mut() {
-            Some(map) => map,
-            None => {
-                return Err(AuthoringDiagnostic::error(
-                    "/extensions/x-wos-ai",
-                    "x-wos-ai extension exists but is not a JSON object",
-                ));
-            }
-        };
-
-        let constraints = root
-            .entry("deonticConstraints")
-            .or_insert_with(|| serde_json::json!([]));
-
-        let array = match constraints.as_array_mut() {
-            Some(array) => array,
-            None => {
-                return Err(AuthoringDiagnostic::error(
-                    "/extensions/x-wos-ai/deonticConstraints",
-                    "x-wos-ai.deonticConstraints exists but is not a JSON array",
-                ));
-            }
-        };
-
-        // Duplicate-id check: every entry should carry a unique `id`.
-        if array
-            .iter()
-            .any(|entry| entry.get("id") == Some(&serde_json::Value::String(constraint_id.clone())))
-        {
-            return Err(AuthoringDiagnostic::error(
-                format!("/extensions/x-wos-ai/deonticConstraints/{constraint_id}"),
-                format!("deontic constraint '{constraint_id}' already exists"),
-            ));
-        }
-
-        array.push(serde_json::json!({
-            "id": constraint_id.clone(),
-            "rule": rule,
-        }));
-
-        Ok(AppliedCommand::without_inverse(format!(
-            "AddActorDeontic({constraint_id})"
-        )))
-    }
-
-    // ── AddMilestone / RemoveMilestone handlers ───────────────────────────
-
-    fn apply_add_milestone(&mut self, milestone_id: String, condition: String) -> CommandResult {
-        if self.doc.lifecycle.milestones.contains_key(&milestone_id) {
-            return Err(AuthoringDiagnostic::error(
-                format!("/lifecycle/milestones/{milestone_id}"),
-                format!("milestone '{milestone_id}' already exists"),
-            ));
-        }
-
-        self.doc.lifecycle.milestones.insert(
-            milestone_id.clone(),
-            Milestone {
-                condition,
-                description: None,
-                trigger_mode: None,
-            },
-        );
-
-        Ok(AppliedCommand::with_inverse(
-            format!("AddMilestone({milestone_id})"),
-            Command::RemoveMilestone { milestone_id },
+        let contract = object_at(&mut self.doc, &format!("/contracts/{}", escape(&name)))?;
+        contract.insert("definitionVersion".into(), json!(version));
+        Ok(AppliedCommand::without_inverse(
+            "SetContractDefinitionVersion",
         ))
     }
 
-    fn apply_remove_milestone(&mut self, milestone_id: String) -> CommandResult {
-        if !self.doc.lifecycle.milestones.contains_key(&milestone_id) {
-            return Err(AuthoringDiagnostic::error(
-                format!("/lifecycle/milestones/{milestone_id}"),
-                format!("milestone '{milestone_id}' not found"),
+    fn apply_add_milestone(&mut self, id: String, condition: String) -> CommandResult {
+        let lifecycle = object_at(&mut self.doc, "/lifecycle")?;
+        let milestones = lifecycle
+            .entry("milestones")
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .ok_or_else(|| error("/lifecycle/milestones", "milestones must be an object"))?;
+        if milestones.contains_key(&id) {
+            return Err(error(
+                format!("/lifecycle/milestones/{}", escape(&id)),
+                format!("milestone '{id}' already exists"),
             ));
         }
-
-        self.doc.lifecycle.milestones.remove(&milestone_id);
-
+        milestones.insert(id.clone(), json!({"condition":condition}));
         Ok(AppliedCommand::without_inverse(format!(
-            "RemoveMilestone({milestone_id})"
+            "AddMilestone({id})"
         )))
     }
 
-    // ── SetTimer handler ──────────────────────────────────────────────────
+    fn apply_remove_milestone(&mut self, id: String) -> CommandResult {
+        object_at(&mut self.doc, "/lifecycle/milestones")?
+            .remove(&id)
+            .ok_or_else(|| {
+                error(
+                    format!("/lifecycle/milestones/{}", escape(&id)),
+                    format!("milestone '{id}' not found"),
+                )
+            })?;
+        Ok(AppliedCommand::without_inverse(format!(
+            "RemoveMilestone({id})"
+        )))
+    }
 
-    /// Set `x-wos-timers.<timer_id>` to a duration string.
-    ///
-    /// `duration` is stored verbatim — ISO 8601 conformance validation is
-    /// outside this layer's responsibility (see `wos-lint`).
     fn apply_set_timer(&mut self, timer_id: String, duration: String) -> CommandResult {
-        let ext = self
+        let extensions = self
             .doc
-            .extensions
-            .entry("x-wos-timers".to_owned())
-            .or_insert_with(|| serde_json::json!({}));
-
-        let root = match ext.as_object_mut() {
-            Some(map) => map,
-            None => {
-                return Err(AuthoringDiagnostic::error(
+            .as_object_mut()
+            .expect("document is an object")
+            .entry("extensions")
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .ok_or_else(|| error("/extensions", "extensions must be an object"))?;
+        let timers = extensions
+            .entry("x-wos-timers")
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .ok_or_else(|| {
+                error(
                     "/extensions/x-wos-timers",
-                    "x-wos-timers extension exists but is not a JSON object",
-                ));
-            }
-        };
-
-        root.insert(
-            timer_id.clone(),
-            serde_json::json!({ "duration": duration }),
-        );
-
+                    "timer extension must be an object",
+                )
+            })?;
+        timers.insert(timer_id.clone(), json!({"duration":duration}));
         Ok(AppliedCommand::without_inverse(format!(
             "SetTimer({timer_id})"
         )))
     }
 
-    // ── AddDueProcessPath handler ─────────────────────────────────────────
-
-    /// Write a due-process path under `x-wos-governance.dueProcessPaths`.
-    ///
-    /// Creates the `x-wos-governance` extension object lazily; preserves
-    /// any sibling keys (e.g. `assertionGates`) that already exist.
-    fn apply_add_due_process_path(
-        &mut self,
-        path_id: String,
-        description: String,
-        steps: Vec<String>,
-    ) -> CommandResult {
-        let gov = self
-            .doc
-            .extensions
-            .entry("x-wos-governance".to_owned())
-            .or_insert_with(|| serde_json::json!({}));
-
-        let root = match gov.as_object_mut() {
-            Some(map) => map,
-            None => {
-                return Err(AuthoringDiagnostic::error(
-                    "/extensions/x-wos-governance",
-                    "x-wos-governance extension exists but is not a JSON object",
-                ));
-            }
-        };
-
-        let paths = root
-            .entry("dueProcessPaths")
-            .or_insert_with(|| serde_json::json!({}));
-
-        let paths_map = match paths.as_object_mut() {
-            Some(map) => map,
-            None => {
-                return Err(AuthoringDiagnostic::error(
-                    "/extensions/x-wos-governance/dueProcessPaths",
-                    "dueProcessPaths exists but is not a JSON object",
-                ));
-            }
-        };
-
-        if paths_map.contains_key(&path_id) {
-            return Err(AuthoringDiagnostic::error(
-                format!("/extensions/x-wos-governance/dueProcessPaths/{path_id}"),
-                format!("due-process path '{path_id}' already exists"),
-            ));
-        }
-
-        paths_map.insert(
-            path_id.clone(),
-            serde_json::json!({
-                "description": description,
-                "steps": steps,
-            }),
-        );
-
-        Ok(AppliedCommand::without_inverse(format!(
-            "AddDueProcessPath({path_id})"
-        )))
-    }
-
-    // ── AddAssertionGate handler ──────────────────────────────────────────
-
-    /// Write an assertion gate under `x-wos-governance.assertionGates`.
-    ///
-    /// Creates the `x-wos-governance` extension object lazily; preserves
-    /// any sibling keys that already exist.
-    fn apply_add_assertion_gate(
-        &mut self,
-        gate_id: String,
-        assertion: String,
-        transition: String,
-    ) -> CommandResult {
-        let gov = self
-            .doc
-            .extensions
-            .entry("x-wos-governance".to_owned())
-            .or_insert_with(|| serde_json::json!({}));
-
-        let root = match gov.as_object_mut() {
-            Some(map) => map,
-            None => {
-                return Err(AuthoringDiagnostic::error(
-                    "/extensions/x-wos-governance",
-                    "x-wos-governance extension exists but is not a JSON object",
-                ));
-            }
-        };
-
-        let gates = root
-            .entry("assertionGates")
-            .or_insert_with(|| serde_json::json!({}));
-
-        let gates_map = match gates.as_object_mut() {
-            Some(map) => map,
-            None => {
-                return Err(AuthoringDiagnostic::error(
-                    "/extensions/x-wos-governance/assertionGates",
-                    "assertionGates exists but is not a JSON object",
-                ));
-            }
-        };
-
-        if gates_map.contains_key(&gate_id) {
-            return Err(AuthoringDiagnostic::error(
-                format!("/extensions/x-wos-governance/assertionGates/{gate_id}"),
-                format!("assertion gate '{gate_id}' already exists"),
-            ));
-        }
-
-        gates_map.insert(
-            gate_id.clone(),
-            serde_json::json!({
-                "assertion": assertion,
-                "transition": transition,
-            }),
-        );
-
-        Ok(AppliedCommand::without_inverse(format!(
-            "AddAssertionGate({gate_id})"
-        )))
-    }
-
-    // ── AddAiAgent handler ────────────────────────────────────────────────
-
-    /// Register an AI agent under `x-wos-ai.agents`.
-    ///
-    /// Creates the `x-wos-ai` extension object lazily; preserves any
-    /// sibling keys (e.g. `deonticConstraints`) that already exist.
     fn apply_add_ai_agent(
         &mut self,
         agent_id: String,
@@ -838,164 +489,188 @@ impl RawWosProject {
         model: String,
         capabilities: Vec<String>,
     ) -> CommandResult {
-        let ext = self
+        let agent =
+            json!({"id":agent_id,"role":role,"modelIdentifier":model,"capabilities":capabilities});
+        let agents = self
             .doc
-            .extensions
-            .entry("x-wos-ai".to_owned())
-            .or_insert_with(|| serde_json::json!({}));
-
-        let root = match ext.as_object_mut() {
-            Some(map) => map,
-            None => {
-                return Err(AuthoringDiagnostic::error(
-                    "/extensions/x-wos-ai",
-                    "x-wos-ai extension exists but is not a JSON object",
-                ));
-            }
-        };
-
-        let agents = root
+            .as_object_mut()
+            .expect("document is an object")
             .entry("agents")
-            .or_insert_with(|| serde_json::json!([]));
-
-        let array = match agents.as_array_mut() {
-            Some(arr) => arr,
-            None => {
-                return Err(AuthoringDiagnostic::error(
-                    "/extensions/x-wos-ai/agents",
-                    "x-wos-ai.agents exists but is not a JSON array",
-                ));
-            }
-        };
-
-        if array
+            .or_insert_with(|| json!([]))
+            .as_array_mut()
+            .ok_or_else(|| error("/agents", "agents must be an array"))?;
+        if agents
             .iter()
-            .any(|entry| entry.get("id") == Some(&serde_json::Value::String(agent_id.clone())))
+            .any(|agent| agent.get("id").and_then(Value::as_str) == Some(agent_id.as_str()))
         {
-            return Err(AuthoringDiagnostic::error(
-                format!("/extensions/x-wos-ai/agents/{agent_id}"),
-                format!("AI agent '{agent_id}' already exists"),
+            return Err(error(
+                "/agents",
+                format!("agent '{agent_id}' already exists"),
             ));
         }
-
-        array.push(serde_json::json!({
-            "id": agent_id.clone(),
-            "role": role,
-            "model": model,
-            "capabilities": capabilities,
-        }));
-
+        agents.push(agent);
         Ok(AppliedCommand::without_inverse(format!(
             "AddAiAgent({agent_id})"
         )))
     }
 
-    // ── AddDeonticConstraint handler ──────────────────────────────────────
-
-    /// Append a structured deontic constraint under `x-wos-ai.deonticConstraints`.
-    ///
-    /// `modality` must be one of `must`, `must_not`, or `may`.
-    fn apply_add_deontic_constraint(
-        &mut self,
-        constraint_id: String,
-        target: String,
-        modality: String,
-        action: String,
-    ) -> CommandResult {
-        if !matches!(modality.as_str(), "must" | "must_not" | "may") {
-            return Err(AuthoringDiagnostic::error(
-                format!("/extensions/x-wos-ai/deonticConstraints/{constraint_id}/modality"),
-                format!("invalid modality '{modality}'; expected must | must_not | may"),
-            ));
-        }
-
-        let ext = self
-            .doc
-            .extensions
-            .entry("x-wos-ai".to_owned())
-            .or_insert_with(|| serde_json::json!({}));
-
-        let root = match ext.as_object_mut() {
-            Some(map) => map,
-            None => {
-                return Err(AuthoringDiagnostic::error(
-                    "/extensions/x-wos-ai",
-                    "x-wos-ai extension exists but is not a JSON object",
-                ));
-            }
-        };
-
-        let constraints = root
-            .entry("deonticConstraints")
-            .or_insert_with(|| serde_json::json!([]));
-
-        let array = match constraints.as_array_mut() {
-            Some(arr) => arr,
-            None => {
-                return Err(AuthoringDiagnostic::error(
-                    "/extensions/x-wos-ai/deonticConstraints",
-                    "x-wos-ai.deonticConstraints exists but is not a JSON array",
-                ));
-            }
-        };
-
-        if array
-            .iter()
-            .any(|entry| entry.get("id") == Some(&serde_json::Value::String(constraint_id.clone())))
-        {
-            return Err(AuthoringDiagnostic::error(
-                format!("/extensions/x-wos-ai/deonticConstraints/{constraint_id}"),
-                format!("deontic constraint '{constraint_id}' already exists"),
-            ));
-        }
-
-        array.push(serde_json::json!({
-            "id": constraint_id.clone(),
-            "target": target,
-            "modality": modality,
-            "action": action,
-        }));
-
-        Ok(AppliedCommand::without_inverse(format!(
-            "AddDeonticConstraint({constraint_id})"
-        )))
-    }
-
-    // ── AddExtensionKey handler ───────────────────────────────────────────
-
-    fn apply_add_extension_key(&mut self, key: String, value: serde_json::Value) -> CommandResult {
+    fn apply_add_extension_key(&mut self, key: String, value: Value) -> CommandResult {
         if !key.starts_with("x-") {
-            return Err(AuthoringDiagnostic::error(
+            return Err(error(
                 format!("/extensions/{key}"),
-                format!("extension key '{key}' must start with 'x-'"),
+                "extension key must start with 'x-'",
             ));
         }
-
-        self.doc.extensions.insert(key.clone(), value);
-
+        self.doc
+            .as_object_mut()
+            .expect("document is an object")
+            .entry("extensions")
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .ok_or_else(|| error("/extensions", "extensions must be an object"))?
+            .insert(key.clone(), value);
         Ok(AppliedCommand::without_inverse(format!(
             "AddExtensionKey({key})"
         )))
     }
-}
 
-// ── Inherent command dispatch ─────────────────────────────────────────────────
+    fn apply_set_native_fields(&mut self, fields: Map<String, Value>) -> CommandResult {
+        for (field, value) in &fields {
+            native_schema::validate_workflow_field(field, value)?;
+        }
+        self.doc
+            .as_object_mut()
+            .expect("document is an object")
+            .extend(fields);
+        Ok(AppliedCommand::without_inverse("SetNativeFields"))
+    }
 
-impl RawWosProject {
-    /// Apply a command to the document, returning a record of what was done.
-    ///
-    /// `pub(crate)` because `Command` is an internal dispatch enum; external
-    /// consumers interact with `WosProject` / `IWosProjectCore` helper methods.
-    ///
-    /// On success, captures the pre-command document onto `history` (bounded
-    /// by `UNDO_DEPTH`) and clears `redo_stack`. Failed commands leave both
-    /// stacks untouched — the document was never mutated.
-    pub(crate) fn dispatch(&mut self, cmd: Command) -> CommandResult {
-        // Snapshot BEFORE mutation so undo can restore the exact prior state,
-        // including any fields the handler doesn't touch.
+    fn apply_put_case_field(&mut self, name: String, definition: Value) -> CommandResult {
+        native_schema::validate_fragment("/$defs/FieldDeclaration", &definition)?;
+        let case = self
+            .doc
+            .as_object_mut()
+            .expect("document is an object")
+            .entry("caseFile")
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .ok_or_else(|| error("/caseFile", "case file must be an object"))?;
+        if case.contains_key("contractRef") {
+            return Err(error(
+                "/caseFile",
+                "inline fields cannot be added to a contract-referenced case file",
+            ));
+        }
+        case.entry("fields")
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .ok_or_else(|| error("/caseFile/fields", "fields must be an object"))?
+            .insert(name, definition);
+        Ok(AppliedCommand::without_inverse("PutCaseField"))
+    }
+
+    fn apply_put_contract(&mut self, name: String, contract: Value) -> CommandResult {
+        native_schema::validate_fragment("/$defs/Contracts/additionalProperties", &contract)?;
+        self.doc
+            .as_object_mut()
+            .expect("document is an object")
+            .entry("contracts")
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .ok_or_else(|| error("/contracts", "contracts must be an object"))?
+            .insert(name, contract);
+        Ok(AppliedCommand::without_inverse("PutContract"))
+    }
+
+    fn apply_put_state(&mut self, pointer: String, state: Value) -> CommandResult {
+        state_pointer(&pointer)?;
+        native_schema::validate_fragment("/$defs/State", &state)?;
+        let (parent, encoded_id) = pointer.rsplit_once('/').expect("state path checked");
+        let id = encoded_id.replace("~1", "/").replace("~0", "~");
+        object_at(&mut self.doc, parent)?.insert(id, state);
+        Ok(AppliedCommand::without_inverse(format!(
+            "PutState({pointer})"
+        )))
+    }
+
+    fn apply_append_state_action(
+        &mut self,
+        pointer: String,
+        phase: String,
+        action: Value,
+    ) -> CommandResult {
+        state_pointer(&pointer)?;
+        if !native_schema::state_action_phases()
+            .iter()
+            .any(|allowed| *allowed == phase)
+        {
+            return Err(error(&pointer, "unsupported state action phase"));
+        }
+        native_schema::validate_fragment("/$defs/LifecycleAction", &action)?;
+        object_at(&mut self.doc, &pointer)?
+            .entry(phase)
+            .or_insert_with(|| json!([]))
+            .as_array_mut()
+            .ok_or_else(|| error(&pointer, "state actions must be an array"))?
+            .push(action);
+        Ok(AppliedCommand::without_inverse("AppendStateAction"))
+    }
+
+    fn apply_put_agent(&mut self, agent: Value) -> CommandResult {
+        native_schema::validate_fragment("/$defs/AgentDeclaration", &agent)?;
+        let id = agent
+            .get("id")
+            .and_then(Value::as_str)
+            .ok_or_else(|| error("/agents", "agent id is required"))?;
+        let agents = self
+            .doc
+            .as_object_mut()
+            .expect("document is an object")
+            .entry("agents")
+            .or_insert_with(|| json!([]))
+            .as_array_mut()
+            .ok_or_else(|| error("/agents", "agents must be an array"))?;
+        if let Some(index) = agents
+            .iter()
+            .position(|existing| existing.get("id").and_then(Value::as_str) == Some(id))
+        {
+            agents[index] = agent;
+        } else {
+            agents.push(agent);
+        }
+        Ok(AppliedCommand::without_inverse("PutAgent"))
+    }
+
+    fn apply_remove_agent(&mut self, id: String) -> CommandResult {
+        let agents = array_at(&mut self.doc, "/agents")?;
+        let index = agents
+            .iter()
+            .position(|agent| agent.get("id").and_then(Value::as_str) == Some(id.as_str()))
+            .ok_or_else(|| error("/agents", "agent not found"))?;
+        agents.remove(index);
+        Ok(AppliedCommand::without_inverse("RemoveAgent"))
+    }
+
+    fn apply_add_agent_constraint(&mut self, id: String, constraint: Value) -> CommandResult {
+        native_schema::validate_fragment("/$defs/DeonticConstraint", &constraint)?;
+        let agent = array_at(&mut self.doc, "/agents")?
+            .iter_mut()
+            .find(|agent| agent.get("id").and_then(Value::as_str) == Some(id.as_str()))
+            .and_then(Value::as_object_mut)
+            .ok_or_else(|| error("/agents", "agent not found"))?;
+        agent
+            .entry("deonticConstraints")
+            .or_insert_with(|| json!([]))
+            .as_array_mut()
+            .ok_or_else(|| error("/agents", "deontic constraints must be an array"))?
+            .push(constraint);
+        Ok(AppliedCommand::without_inverse("AddAgentConstraint"))
+    }
+
+    pub(crate) fn dispatch(&mut self, command: Command) -> CommandResult {
         let before = self.doc.clone();
-
-        let result = match cmd {
+        let diagnostic_count = self.diagnostics.len();
+        let result = match command {
             Command::AddState {
                 id,
                 kind,
@@ -1029,133 +704,113 @@ impl RawWosProject {
                 name,
                 definition_version,
             } => self.apply_set_contract_definition_version(name, definition_version),
-            Command::AddActorDeontic {
-                constraint_id,
-                rule,
-            } => self.apply_add_actor_deontic(constraint_id, rule),
             Command::AddMilestone {
                 milestone_id,
                 condition,
             } => self.apply_add_milestone(milestone_id, condition),
             Command::RemoveMilestone { milestone_id } => self.apply_remove_milestone(milestone_id),
             Command::SetTimer { timer_id, duration } => self.apply_set_timer(timer_id, duration),
-            Command::AddDueProcessPath {
-                path_id,
-                description,
-                steps,
-            } => self.apply_add_due_process_path(path_id, description, steps),
-            Command::AddAssertionGate {
-                gate_id,
-                assertion,
-                transition,
-            } => self.apply_add_assertion_gate(gate_id, assertion, transition),
             Command::AddAiAgent {
                 agent_id,
                 role,
                 model,
                 capabilities,
             } => self.apply_add_ai_agent(agent_id, role, model, capabilities),
-            Command::AddDeonticConstraint {
-                constraint_id,
-                target,
-                modality,
-                action,
-            } => self.apply_add_deontic_constraint(constraint_id, target, modality, action),
             Command::AddExtensionKey { key, value } => self.apply_add_extension_key(key, value),
+            Command::SetNativeFields { fields } => self.apply_set_native_fields(fields),
+            Command::PutCaseField { name, definition } => {
+                self.apply_put_case_field(name, definition)
+            }
+            Command::PutContract { name, contract } => self.apply_put_contract(name, contract),
+            Command::PutState { pointer, state } => self.apply_put_state(pointer, state),
+            Command::AppendStateAction {
+                pointer,
+                phase,
+                action,
+            } => self.apply_append_state_action(pointer, phase, action),
+            Command::PutAgent { agent } => self.apply_put_agent(agent),
+            Command::RemoveAgent { id } => self.apply_remove_agent(id),
+            Command::AddAgentConstraint { id, constraint } => {
+                self.apply_add_agent_constraint(id, constraint)
+            }
+            Command::AddActorDeontic { .. }
+            | Command::AddDueProcessPath { .. }
+            | Command::AddAssertionGate { .. }
+            | Command::AddDeonticConstraint { .. } => Err(error(
+                "/",
+                "obsolete extension operation is unsupported; author native governance or agent constraints",
+            )),
         };
-
-        if let Ok(ref applied) = result {
+        if let Ok(applied) = &result {
             self.history.push(HistoryEntry {
                 applied: applied.clone(),
                 before,
             });
-            // Cap memory: drop the oldest entry when we exceed the bound.
             if self.history.len() > UNDO_DEPTH {
                 self.history.remove(0);
             }
-            // A new forward command closes any open redo branch.
             self.redo_stack.clear();
+        } else {
+            self.doc = before;
+            self.diagnostics.truncate(diagnostic_count);
         }
-
         result
     }
-}
 
-// ── IWosProjectCore implementation ────────────────────────────────────────────
-
-impl IWosProjectCore for RawWosProject {
-    /// Reverse the most recent successful dispatch.
-    ///
-    /// Pops the top of `history`, swaps the pre-command snapshot into the
-    /// current document, and pushes a mirror entry onto `redo_stack` so
-    /// `redo` can re-apply the command. Returns `Err` if the history is
-    /// empty — the document is left untouched.
-    fn undo(&mut self) -> Result<(), AuthoringDiagnostic> {
-        let entry = self
-            .history
-            .pop()
-            .ok_or_else(|| AuthoringDiagnostic::error("/", "cannot undo: history is empty"))?;
-
-        // Swap: restore the pre-command snapshot and remember the current
-        // state as the redo snapshot.
-        let current = std::mem::replace(&mut self.doc, entry.before);
-        self.redo_stack.push(HistoryEntry {
-            applied: entry.applied,
-            before: current,
-        });
-
-        Ok(())
-    }
-
-    /// Re-apply the most recently reversed dispatch.
-    ///
-    /// Mirror of `undo`: pops `redo_stack`, swaps the forward snapshot into
-    /// the current document, and records the inverse entry on `history`.
-    /// Returns `Err` if the redo stack is empty.
-    fn redo(&mut self) -> Result<(), AuthoringDiagnostic> {
-        let entry = self
-            .redo_stack
-            .pop()
-            .ok_or_else(|| AuthoringDiagnostic::error("/", "cannot redo: redo stack is empty"))?;
-
-        let current = std::mem::replace(&mut self.doc, entry.before);
-        self.history.push(HistoryEntry {
-            applied: entry.applied,
-            before: current,
-        });
-
-        Ok(())
-    }
-
-    fn snapshot(&self) -> KernelDocument {
-        self.doc.clone()
-    }
-
-    fn diagnostics(&self) -> &[AuthoringDiagnostic] {
-        &self.diagnostics
-    }
-}
-
-// ── Undo/redo introspection ───────────────────────────────────────────────────
-
-impl RawWosProject {
-    /// True if there is at least one entry on the undo stack.
     pub(crate) fn can_undo(&self) -> bool {
         !self.history.is_empty()
     }
-
-    /// True if there is at least one entry on the redo stack.
     pub(crate) fn can_redo(&self) -> bool {
         !self.redo_stack.is_empty()
     }
 }
 
-// ── Unit tests ────────────────────────────────────────────────────────────────
+impl IWosProjectCore for RawWosProject {
+    fn undo(&mut self) -> Result<(), AuthoringDiagnostic> {
+        let entry = self
+            .history
+            .pop()
+            .ok_or_else(|| error("/", "cannot undo: history is empty"))?;
+        let current = std::mem::replace(&mut self.doc, entry.before);
+        self.redo_stack.push(HistoryEntry {
+            applied: entry.applied,
+            before: current,
+        });
+        Ok(())
+    }
+    fn redo(&mut self) -> Result<(), AuthoringDiagnostic> {
+        let entry = self
+            .redo_stack
+            .pop()
+            .ok_or_else(|| error("/", "cannot redo: redo stack is empty"))?;
+        let current = std::mem::replace(&mut self.doc, entry.before);
+        self.history.push(HistoryEntry {
+            applied: entry.applied,
+            before: current,
+        });
+        Ok(())
+    }
+    fn native_snapshot(&self) -> Value {
+        self.doc.clone()
+    }
+    fn typed_snapshot(&self) -> Result<KernelDocument, AuthoringDiagnostic> {
+        serde_json::from_value(self.doc.clone()).map_err(|cause| {
+            error(
+                "/",
+                format!("native document has no supported runtime typed view: {cause}"),
+            )
+        })
+    }
+    fn diagnostics(&self) -> &[AuthoringDiagnostic] {
+        &self.diagnostics
+    }
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::diagnostics::Severity;
+    use wos_core::model::decision_table::Guard;
 
     fn make_project() -> RawWosProject {
         RawWosProject::new(ImpactLevel::Operational, "Test Project")
@@ -1176,7 +831,7 @@ mod tests {
         })
         .expect("AddState must succeed on an empty project");
 
-        let snap = p.snapshot();
+        let snap = p.typed_snapshot().unwrap();
         assert!(
             snap.lifecycle.states.contains_key("draft"),
             "snapshot must contain the newly added state"
@@ -1243,7 +898,7 @@ mod tests {
         })
         .expect("AddTransition must succeed when both states exist");
 
-        let snap = p.snapshot();
+        let snap = p.typed_snapshot().unwrap();
         let transitions = &snap.lifecycle.states["submitted"].transitions;
         assert_eq!(transitions.len(), 1);
         assert_eq!(transitions[0].target, "approved");
@@ -1390,7 +1045,7 @@ mod tests {
         })
         .expect("typed AddTransition must succeed");
 
-        let t = &p.snapshot().lifecycle.states["submitted"].transitions[0];
+        let t = &p.typed_snapshot().unwrap().lifecycle.states["submitted"].transitions[0];
         assert!(
             matches!(
                 &t.event,
@@ -1411,7 +1066,7 @@ mod tests {
     #[test]
     fn new_project_has_empty_lifecycle() {
         let p = make_project();
-        let snap = p.snapshot();
+        let snap = p.typed_snapshot().unwrap();
         assert_eq!(snap.wos_workflow, "1.0");
         assert!(snap.lifecycle.states.is_empty());
     }
@@ -1447,10 +1102,22 @@ mod tests {
             metadata: None,
         })
         .unwrap();
-        assert!(p.snapshot().lifecycle.states.contains_key("draft"));
+        assert!(
+            p.typed_snapshot()
+                .unwrap()
+                .lifecycle
+                .states
+                .contains_key("draft")
+        );
 
         p.undo().expect("undo must succeed after a dispatch");
-        assert!(!p.snapshot().lifecycle.states.contains_key("draft"));
+        assert!(
+            !p.typed_snapshot()
+                .unwrap()
+                .lifecycle
+                .states
+                .contains_key("draft")
+        );
         assert!(p.can_redo());
     }
 
@@ -1467,7 +1134,13 @@ mod tests {
         .unwrap();
         p.undo().unwrap();
         p.redo().expect("redo must succeed after an undo");
-        assert!(p.snapshot().lifecycle.states.contains_key("draft"));
+        assert!(
+            p.typed_snapshot()
+                .unwrap()
+                .lifecycle
+                .states
+                .contains_key("draft")
+        );
     }
 
     /// A new forward dispatch clears the redo stack (no split-branch replays).
@@ -1499,7 +1172,7 @@ mod tests {
     #[test]
     fn undo_all_returns_to_initial_state() {
         let mut p = make_project();
-        let initial = p.snapshot();
+        let initial = p.typed_snapshot().unwrap();
 
         // Diverse batch covering multiple handler paths.
         p.dispatch(Command::AddState {
@@ -1534,7 +1207,7 @@ mod tests {
             p.undo().unwrap();
         }
 
-        let final_snap = p.snapshot();
+        let final_snap = p.typed_snapshot().unwrap();
         assert_eq!(final_snap.actors.len(), initial.actors.len());
         assert_eq!(
             final_snap.lifecycle.states.len(),
@@ -1564,15 +1237,15 @@ mod tests {
             kind: ActorKind::Human,
         })
         .unwrap();
-        let after_apply_states = p.snapshot().lifecycle.states.len();
-        let after_apply_actors = p.snapshot().actors.len();
+        let after_apply_states = p.typed_snapshot().unwrap().lifecycle.states.len();
+        let after_apply_actors = p.typed_snapshot().unwrap().actors.len();
 
         p.undo().unwrap();
         p.undo().unwrap();
         p.redo().unwrap();
         p.redo().unwrap();
 
-        let snap = p.snapshot();
+        let snap = p.typed_snapshot().unwrap();
         assert_eq!(snap.lifecycle.states.len(), after_apply_states);
         assert_eq!(snap.actors.len(), after_apply_actors);
     }
@@ -1599,7 +1272,7 @@ mod tests {
 
         // Only the first (successful) dispatch counted toward history.
         p.undo().unwrap();
-        assert!(p.snapshot().lifecycle.states.is_empty());
+        assert!(p.typed_snapshot().unwrap().lifecycle.states.is_empty());
         assert!(!p.can_undo());
     }
 
@@ -1615,7 +1288,7 @@ mod tests {
         })
         .expect("AddActor must succeed on empty project");
 
-        let snap = p.snapshot();
+        let snap = p.typed_snapshot().unwrap();
         assert_eq!(snap.actors.len(), 1);
         assert_eq!(snap.actors[0].id, "approver");
         assert_eq!(snap.actors[0].kind, ActorKind::Human);
@@ -1632,7 +1305,7 @@ mod tests {
         })
         .unwrap();
 
-        let snap = p.snapshot();
+        let snap = p.typed_snapshot().unwrap();
         assert_eq!(snap.actors[0].kind, ActorKind::System);
     }
 
@@ -1670,7 +1343,7 @@ mod tests {
         })
         .expect("RemoveActor must succeed");
 
-        assert!(p.snapshot().actors.is_empty());
+        assert!(p.typed_snapshot().unwrap().actors.is_empty());
     }
 
     /// RemoveActor for an unknown id errors.
@@ -1737,7 +1410,7 @@ mod tests {
         .expect("SetImpactLevel must succeed");
 
         assert_eq!(
-            p.snapshot().impact_level,
+            p.typed_snapshot().unwrap().impact_level,
             Some(ImpactLevel::RightsImpacting)
         );
     }
@@ -1754,7 +1427,7 @@ mod tests {
             let mut p = make_project();
             p.dispatch(Command::SetImpactLevel { level })
                 .expect("SetImpactLevel must succeed for every variant");
-            assert_eq!(p.snapshot().impact_level, Some(level));
+            assert_eq!(p.typed_snapshot().unwrap().impact_level, Some(level));
         }
     }
 
@@ -1771,7 +1444,7 @@ mod tests {
         })
         .expect("AddContract must succeed");
 
-        let snap = p.snapshot();
+        let snap = p.typed_snapshot().unwrap();
         let contract = snap
             .contracts
             .get("purchaseOrderForm")
@@ -1790,13 +1463,13 @@ mod tests {
             ref_uri: "urn:form:review".into(),
         })
         .unwrap();
-        let workflow_version = p.snapshot().version.clone();
+        let workflow_version = p.typed_snapshot().unwrap().version.clone();
         p.dispatch(Command::SetContractDefinitionVersion {
             name: "review".into(),
             definition_version: "0.3.2".into(),
         })
         .unwrap();
-        let serialized = serde_json::to_value(p.snapshot()).unwrap();
+        let serialized = serde_json::to_value(p.typed_snapshot().unwrap()).unwrap();
         let restored: KernelDocument = serde_json::from_value(serialized.clone()).unwrap();
         assert_eq!(
             restored.contracts["review"].definition_version.as_deref(),
@@ -1811,7 +1484,10 @@ mod tests {
                 })
                 .is_err()
             );
-            assert_eq!(serde_json::to_value(p.snapshot()).unwrap(), serialized);
+            assert_eq!(
+                serde_json::to_value(p.typed_snapshot().unwrap()).unwrap(),
+                serialized
+            );
         }
     }
 
@@ -1857,7 +1533,7 @@ mod tests {
         })
         .expect("RenameState must succeed");
 
-        let snap = p.snapshot();
+        let snap = p.typed_snapshot().unwrap();
         assert!(!snap.lifecycle.states.contains_key("draft"));
         assert!(snap.lifecycle.states.contains_key("submitted"));
     }
@@ -1895,7 +1571,7 @@ mod tests {
         })
         .unwrap();
 
-        let transitions = &p.snapshot().lifecycle.states["a"].transitions;
+        let transitions = &p.typed_snapshot().unwrap().lifecycle.states["a"].transitions;
         assert_eq!(transitions[0].target, "c");
     }
 
@@ -1910,7 +1586,7 @@ mod tests {
             metadata: None,
         })
         .unwrap();
-        p.doc.lifecycle.initial_state = "start".into();
+        p.doc["lifecycle"]["initialState"] = json!("start");
 
         p.dispatch(Command::RenameState {
             old_id: "start".into(),
@@ -1918,7 +1594,7 @@ mod tests {
         })
         .unwrap();
 
-        assert_eq!(p.snapshot().lifecycle.initial_state, "begin");
+        assert_eq!(p.typed_snapshot().unwrap().lifecycle.initial_state, "begin");
     }
 
     /// RenameState rejects an unknown old id.
@@ -1975,7 +1651,8 @@ mod tests {
         .expect("AddMilestone must succeed");
 
         let ms = p
-            .snapshot()
+            .typed_snapshot()
+            .unwrap()
             .lifecycle
             .milestones
             .get("approved")
@@ -2015,7 +1692,7 @@ mod tests {
             milestone_id: "m1".into(),
         })
         .expect("RemoveMilestone must succeed");
-        assert!(p.snapshot().lifecycle.milestones.is_empty());
+        assert!(p.typed_snapshot().unwrap().lifecycle.milestones.is_empty());
     }
 
     /// RemoveMilestone for an unknown id errors.
@@ -2042,7 +1719,7 @@ mod tests {
         })
         .expect("SetTimer must succeed");
 
-        let ext = &p.snapshot().extensions["x-wos-timers"];
+        let ext = &p.typed_snapshot().unwrap().extensions["x-wos-timers"];
         assert_eq!(ext["approvalDeadline"]["duration"], "P7D");
     }
 
@@ -2061,7 +1738,7 @@ mod tests {
         })
         .unwrap();
 
-        let ext = &p.snapshot().extensions["x-wos-timers"];
+        let ext = &p.typed_snapshot().unwrap().extensions["x-wos-timers"];
         assert_eq!(ext["t1"]["duration"], "P30D");
     }
 
@@ -2069,71 +1746,6 @@ mod tests {
 
     /// AddActorDeontic appends a constraint under `x-wos-ai.deonticConstraints`
     /// and creates the extension scaffolding lazily.
-    #[test]
-    fn add_deontic_creates_extension_scaffolding() {
-        let mut p = make_project();
-        p.dispatch(Command::AddActorDeontic {
-            constraint_id: "noAutoApprove".into(),
-            rule: "humans must review all orders".into(),
-        })
-        .expect("AddActorDeontic must succeed on empty project");
-
-        let snap = p.snapshot();
-        let ext = snap
-            .extensions
-            .get("x-wos-ai")
-            .expect("x-wos-ai must exist");
-        let constraints = ext["deonticConstraints"]
-            .as_array()
-            .expect("deonticConstraints must be an array");
-        assert_eq!(constraints.len(), 1);
-        assert_eq!(constraints[0]["id"], "noAutoApprove");
-        assert_eq!(constraints[0]["rule"], "humans must review all orders");
-    }
-
-    /// Duplicate constraint ids are rejected.
-    #[test]
-    fn add_deontic_duplicate_returns_error() {
-        let mut p = make_project();
-        p.dispatch(Command::AddActorDeontic {
-            constraint_id: "c1".into(),
-            rule: "rule A".into(),
-        })
-        .unwrap();
-
-        let err = p
-            .dispatch(Command::AddActorDeontic {
-                constraint_id: "c1".into(),
-                rule: "rule B".into(),
-            })
-            .expect_err("duplicate constraint id must be rejected");
-
-        assert!(err.message.contains("already exists"));
-    }
-
-    /// Existing `x-wos-ai` entries are preserved across AddActorDeontic.
-    #[test]
-    fn add_deontic_preserves_sibling_keys() {
-        let mut p = make_project();
-        p.dispatch(Command::AddExtensionKey {
-            key: "x-wos-ai".into(),
-            value: serde_json::json!({ "agents": [{ "id": "A1" }] }),
-        })
-        .unwrap();
-        p.dispatch(Command::AddActorDeontic {
-            constraint_id: "c1".into(),
-            rule: "rule".into(),
-        })
-        .unwrap();
-
-        let ext = &p.snapshot().extensions["x-wos-ai"];
-        assert_eq!(ext["agents"].as_array().unwrap().len(), 1);
-        assert_eq!(ext["deonticConstraints"].as_array().unwrap().len(), 1);
-    }
-
-    // ── AddExtensionKey ───────────────────────────────────────────────────
-
-    /// AddExtensionKey stores arbitrary JSON under a compliant key.
     #[test]
     fn add_extension_key_stores_value() {
         let mut p = make_project();
@@ -2143,7 +1755,7 @@ mod tests {
         })
         .expect("x-prefixed extension must be accepted");
 
-        let snap = p.snapshot();
+        let snap = p.typed_snapshot().unwrap();
         assert_eq!(
             snap.extensions["x-custom-meta"]["owner"],
             serde_json::json!("procurement")
@@ -2166,7 +1778,10 @@ mod tests {
         })
         .unwrap();
 
-        assert_eq!(p.snapshot().extensions["x-flag"], serde_json::json!(true));
+        assert_eq!(
+            p.typed_snapshot().unwrap().extensions["x-flag"],
+            serde_json::json!(true)
+        );
     }
 
     /// UNDO_DEPTH eviction: beyond 100 commands, the oldest snapshot drops.
@@ -2195,7 +1810,11 @@ mod tests {
         // evicted when len exceeded UNDO_DEPTH.
         assert_eq!(p.history.len(), depth, "history capped at UNDO_DEPTH");
         assert!(
-            p.snapshot().lifecycle.states.contains_key(&format!("s0")),
+            p.typed_snapshot()
+                .unwrap()
+                .lifecycle
+                .states
+                .contains_key(&format!("s0")),
             "s0 is still in the document (only its history entry is dropped)"
         );
 
@@ -2216,13 +1835,21 @@ mod tests {
         // was evicted. Verifies the intended cap behaviour: s0 remains
         // in the document after full undo-exhaustion.
         assert!(
-            p.snapshot().lifecycle.states.contains_key("s0"),
+            p.typed_snapshot()
+                .unwrap()
+                .lifecycle
+                .states
+                .contains_key("s0"),
             "s0 survives full undo-exhaustion because its history entry was evicted"
         );
         // But all later states s1..=s100 are reverted.
         for i in 1..=depth {
             assert!(
-                !p.snapshot().lifecycle.states.contains_key(&format!("s{i}")),
+                !p.typed_snapshot()
+                    .unwrap()
+                    .lifecycle
+                    .states
+                    .contains_key(&format!("s{i}")),
                 "s{i} reverted by undo"
             );
         }

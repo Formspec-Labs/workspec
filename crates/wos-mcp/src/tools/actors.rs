@@ -93,15 +93,11 @@ fn require_string_arg<'a>(args: &'a Value, key: &str) -> Result<&'a str, ToolErr
 
 /// Parse the optional `kind` argument to `ActorKind`, defaulting to `Human`.
 fn parse_actor_kind(args: &Value) -> Result<ActorKind, ToolError> {
-    match args.get("kind").and_then(Value::as_str) {
-        None | Some("human") => Ok(ActorKind::Human),
-        Some("system") => Ok(ActorKind::System),
-        Some("agent") => Ok(ActorKind::Agent),
-        Some(other) => Err(ToolError::InvalidArguments(format!(
-            "unknown actor kind '{other}'; expected human|system|agent \
-             (agent-typed actors require a matching agents[] declaration per ADR 0064)"
-        ))),
-    }
+    let value = args.get("kind").cloned().unwrap_or_else(|| {
+        crate::catalog::default_argument("wos_add_actor", "kind").expect("declared default")
+    });
+    serde_json::from_value(value)
+        .map_err(|error| ToolError::InvalidArguments(format!("unknown kind: {error}")))
 }
 
 // ── Unit tests ────────────────────────────────────────────────────────────────
@@ -128,7 +124,7 @@ mod tests {
 
         assert_eq!(result["actor_id"], json!("reviewer"));
         let project = registry.get(&pid).unwrap();
-        let actors = &project.snapshot().actors;
+        let actors = &project.typed_snapshot().unwrap().actors;
         assert_eq!(actors.len(), 1);
         assert_eq!(actors[0].id, "reviewer");
         assert_eq!(actors[0].kind, ActorKind::Human);
@@ -148,7 +144,10 @@ mod tests {
         .unwrap();
 
         let project = registry.get(&pid).unwrap();
-        assert_eq!(project.snapshot().actors[0].kind, ActorKind::System);
+        assert_eq!(
+            project.typed_snapshot().unwrap().actors[0].kind,
+            ActorKind::System
+        );
     }
 
     #[tokio::test]
@@ -223,7 +222,7 @@ mod tests {
         assert_eq!(result["key"], json!("x-department"));
 
         let project = registry.get(&pid).unwrap();
-        let actor = &project.snapshot().actors[0];
+        let actor = &project.typed_snapshot().unwrap().actors[0];
         assert_eq!(actor.extensions["x-department"], json!("finance"));
     }
 

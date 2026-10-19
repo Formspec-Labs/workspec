@@ -1,0 +1,151 @@
+{
+  "vectors": [
+    {
+      "id": "string-capability",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:unsupported-canonical-agent",
+        "version": "1.0.0",
+        "title": "Unsupported canonical agent shapes",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "reviewer",
+            "type": "agent"
+          }
+        ],
+        "agents": [
+          {
+            "id": "reviewer",
+            "type": "agent",
+            "agentType": "generative",
+            "modelIdentifier": "fixture-model",
+            "modelVersion": "1.0",
+            "capabilities": [
+              "read_case_file"
+            ]
+          }
+        ],
+        "aiOversight": {
+          "disclosure": {
+            "discloseThatAgentAssisted": true
+          }
+        },
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": "decide",
+                  "target": "done"
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            }
+          }
+        }
+      },
+      "fixture": {
+        "id": "unsupported-agent-native-shape",
+        "rule": "control",
+        "description": "Schema-valid unsupported native AI shapes must refuse without source rewriting",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "decide",
+            "actor": "reviewer"
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "done",
+            "event": "decide"
+          }
+        ]
+      },
+      "expectedStatus": "refused",
+      "expectedReason": "unsupported-runtime-configuration",
+      "expectedDetail": "expected struct Capability"
+    },
+    {
+      "id": "deontic-array",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:unsupported-canonical-agent",
+        "version": "1.0.0",
+        "title": "Unsupported canonical agent shapes",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "reviewer",
+            "type": "agent"
+          }
+        ],
+        "agents": [
+          {
+            "id": "reviewer",
+            "type": "agent",
+            "agentType": "generative",
+            "modelIdentifier": "fixture-model",
+            "modelVersion": "1.0",
+            "deonticConstraints": [
+              {
+                "kind": "prohibition",
+                "expression": "true"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "disclosure": {
+            "discloseThatAgentAssisted": true
+          }
+        },
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": "decide",
+                  "target": "done"
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            }
+          }
+        }
+      },
+      "fixture": {
+        "id": "unsupported-agent-native-shape",
+        "rule": "control",
+        "description": "Schema-valid unsupported native AI shapes must refuse without source rewriting",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "decide",
+            "actor": "reviewer"
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "done",
+            "event": "decide"
+          }
+        ]
+      },
+      "expectedStatus": "refused",
+      "expectedReason": "unsupported-runtime-configuration",
+      "expectedDetail": "AI doc parse error"
+    }
+  ]
+}

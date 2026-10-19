@@ -47,12 +47,12 @@ fn assert_valid(validator: &jsonschema::Validator, value: &Value) {
 #[tokio::test]
 async fn real_mcp_diagnostics_match_native_output_and_both_schema_views() {
     let mut registry = ProjectRegistry::new();
-    let mut document = WosProject::new_kernel().snapshot();
+    let mut document = WosProject::new_kernel().typed_snapshot().unwrap();
     document
         .agents
         .push(json!({"id": "triage", "fallbackChain": ["reviewer"]}));
     let project = WosProject::from_document(document);
-    let snapshot = serde_json::to_string(&project.snapshot()).unwrap();
+    let snapshot = serde_json::to_string(&project.typed_snapshot().unwrap()).unwrap();
     let native = wos_lint::lint_document(&snapshot).unwrap();
     assert!(
         !native.is_empty(),

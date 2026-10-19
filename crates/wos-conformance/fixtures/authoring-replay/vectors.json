@@ -1,0 +1,1235 @@
+{
+  "version": 1,
+  "execution": "in-memory WosRuntime; fixture Formspec/service/access-control ports; no host or durability claim",
+  "vectors": [
+    {
+      "id": "guard-true",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:shared-authoring-replay",
+        "version": "1.0.0",
+        "title": "Shared authoring replay control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "caseFile": {
+          "fields": {
+            "result": {
+              "type": "string"
+            }
+          }
+        },
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": "decide",
+                  "target": "done",
+                  "guard": "true",
+                  "actions": [
+                    {
+                      "action": "setData",
+                      "path": "caseFile.result",
+                      "value": "accepted"
+                    }
+                  ]
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            }
+          }
+        }
+      },
+      "fixture": {
+        "id": "shared-reviewed-success",
+        "rule": "authoring-control",
+        "description": "Independent reviewed transition expectation",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "decide",
+            "actor": "reviewer"
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "done",
+            "event": "decide"
+          }
+        ]
+      },
+      "expected": "pass"
+    },
+    {
+      "id": "guard-false",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:shared-authoring-replay",
+        "version": "1.0.0",
+        "title": "Shared authoring replay control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "caseFile": {
+          "fields": {
+            "result": {
+              "type": "string"
+            }
+          }
+        },
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": "decide",
+                  "target": "done",
+                  "guard": "false",
+                  "actions": [
+                    {
+                      "action": "setData",
+                      "path": "caseFile.result",
+                      "value": "accepted"
+                    }
+                  ]
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            }
+          }
+        }
+      },
+      "fixture": {
+        "id": "shared-reviewed-success",
+        "rule": "authoring-control",
+        "description": "Independent reviewed transition expectation",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "decide",
+            "actor": "reviewer"
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "done",
+            "event": "decide"
+          }
+        ]
+      },
+      "expected": "fail"
+    },
+    {
+      "id": "wrong-state",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:shared-authoring-replay",
+        "version": "1.0.0",
+        "title": "Shared authoring replay control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "caseFile": {
+          "fields": {
+            "result": {
+              "type": "string"
+            }
+          }
+        },
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": "decide",
+                  "target": "done",
+                  "guard": "true",
+                  "actions": [
+                    {
+                      "action": "setData",
+                      "path": "caseFile.result",
+                      "value": "accepted"
+                    }
+                  ]
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            }
+          }
+        }
+      },
+      "fixture": {
+        "id": "shared-reviewed-success",
+        "rule": "authoring-control",
+        "description": "Independent reviewed transition expectation",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "decide",
+            "actor": "reviewer"
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "wrong",
+            "event": "decide"
+          }
+        ]
+      },
+      "expected": "fail"
+    },
+    {
+      "id": "wrong-output",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:shared-authoring-replay",
+        "version": "1.0.0",
+        "title": "Shared authoring replay control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "caseFile": {
+          "fields": {
+            "result": {
+              "type": "string"
+            }
+          }
+        },
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": "decide",
+                  "target": "done",
+                  "guard": "true",
+                  "actions": [
+                    {
+                      "action": "setData",
+                      "path": "caseFile.result",
+                      "value": "accepted"
+                    }
+                  ]
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            }
+          }
+        }
+      },
+      "fixture": {
+        "id": "shared-reviewed-success",
+        "rule": "authoring-control",
+        "description": "Independent reviewed transition expectation",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "decide",
+            "actor": "reviewer"
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "done",
+            "event": "decide"
+          }
+        ]
+      },
+      "expected": "fail",
+      "expectations": [
+        {
+          "pointer": "/finalSnapshot/caseState/result",
+          "expected": "wrong"
+        }
+      ]
+    },
+    {
+      "id": "missing-observation",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:shared-authoring-replay",
+        "version": "1.0.0",
+        "title": "Shared authoring replay control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "caseFile": {
+          "fields": {
+            "result": {
+              "type": "string"
+            }
+          }
+        },
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": "decide",
+                  "target": "done",
+                  "guard": "true",
+                  "actions": [
+                    {
+                      "action": "setData",
+                      "path": "caseFile.result",
+                      "value": "accepted"
+                    }
+                  ]
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            }
+          }
+        }
+      },
+      "fixture": {
+        "id": "shared-reviewed-success",
+        "rule": "authoring-control",
+        "description": "Independent reviewed transition expectation",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "decide",
+            "actor": "reviewer"
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "done",
+            "event": "decide"
+          }
+        ]
+      },
+      "expected": "refused",
+      "expectations": [
+        {
+          "pointer": "/finalSnapshot/caseState/unknown",
+          "expected": "never actual"
+        }
+      ]
+    },
+    {
+      "id": "unsupported-host-observation",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:shared-authoring-replay",
+        "version": "1.0.0",
+        "title": "Shared authoring replay control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "caseFile": {
+          "fields": {
+            "result": {
+              "type": "string"
+            }
+          }
+        },
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": "decide",
+                  "target": "done",
+                  "guard": "true",
+                  "actions": [
+                    {
+                      "action": "setData",
+                      "path": "caseFile.result",
+                      "value": "accepted"
+                    }
+                  ]
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            }
+          }
+        }
+      },
+      "fixture": {
+        "id": "shared-reviewed-success",
+        "rule": "authoring-control",
+        "description": "Independent reviewed transition expectation",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "decide",
+            "actor": "reviewer"
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "done",
+            "event": "decide"
+          }
+        ]
+      },
+      "expected": "refused",
+      "requiredObservations": [
+        "durableRecovery"
+      ]
+    },
+    {
+      "id": "substituted-workflow",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:shared-authoring-replay",
+        "version": "1.0.0",
+        "title": "Shared authoring replay control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "caseFile": {
+          "fields": {
+            "result": {
+              "type": "string"
+            }
+          }
+        },
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": "decide",
+                  "target": "done",
+                  "guard": "true",
+                  "actions": [
+                    {
+                      "action": "setData",
+                      "path": "caseFile.result",
+                      "value": "accepted"
+                    }
+                  ]
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            }
+          }
+        }
+      },
+      "fixture": {
+        "id": "shared-reviewed-success",
+        "rule": "authoring-control",
+        "description": "Independent reviewed transition expectation",
+        "documents": {
+          "kernel": "inline"
+        },
+        "event_sequence": [
+          {
+            "event": "decide",
+            "actor": "reviewer"
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "done",
+            "event": "decide"
+          }
+        ],
+        "inline_documents": {
+          "kernel": {
+            "$wosWorkflow": "1.0",
+            "url": "urn:test:shared-authoring-replay",
+            "version": "1.0.0",
+            "title": "Shared authoring replay control",
+            "impactLevel": "operational",
+            "actors": [
+              {
+                "id": "reviewer",
+                "type": "human"
+              }
+            ],
+            "caseFile": {
+              "fields": {
+                "result": {
+                  "type": "string"
+                }
+              }
+            },
+            "lifecycle": {
+              "initialState": "open",
+              "states": {
+                "open": {
+                  "type": "atomic",
+                  "transitions": [
+                    {
+                      "event": "decide",
+                      "target": "done",
+                      "guard": "false",
+                      "actions": [
+                        {
+                          "action": "setData",
+                          "path": "caseFile.result",
+                          "value": "accepted"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "done": {
+                  "type": "final"
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": "refused"
+    },
+    {
+      "id": "repeated-event-false-then-true",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:shared-authoring-replay",
+        "version": "1.0.0",
+        "title": "Shared authoring replay control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "caseFile": {
+          "fields": {
+            "result": {
+              "type": "string"
+            }
+          }
+        },
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": "decide",
+                  "target": "done",
+                  "guard": "event.allow = true",
+                  "actions": [
+                    {
+                      "action": "setData",
+                      "path": "caseFile.result",
+                      "value": "accepted"
+                    }
+                  ]
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            }
+          }
+        }
+      },
+      "fixture": {
+        "id": "shared-reviewed-success",
+        "rule": "authoring-control",
+        "description": "Independent reviewed transition expectation",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "decide",
+            "actor": "reviewer",
+            "data": {
+              "allow": false
+            }
+          },
+          {
+            "event": "decide",
+            "actor": "reviewer",
+            "data": {
+              "allow": true
+            }
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "done",
+            "event": "decide"
+          }
+        ]
+      },
+      "expected": "pass"
+    },
+    {
+      "id": "timer-before-and-at",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:shared-authoring-replay",
+        "version": "1.0.0",
+        "title": "Shared authoring replay control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "caseFile": {
+          "fields": {
+            "result": {
+              "type": "string"
+            }
+          }
+        },
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "startTimer",
+                  "timerId": "deadline",
+                  "duration": "PT10S",
+                  "event": "expired"
+                }
+              ],
+              "transitions": [
+                {
+                  "event": "expired",
+                  "target": "done"
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            }
+          }
+        }
+      },
+      "fixture": {
+        "id": "shared-reviewed-success",
+        "rule": "authoring-control",
+        "description": "Independent reviewed transition expectation",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "noop",
+            "delay": "PT9S"
+          },
+          {
+            "event": "noop",
+            "delay": "PT1S"
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "done",
+            "event": "expired"
+          }
+        ]
+      },
+      "expected": "pass"
+    },
+    {
+      "id": "task-actor-and-actual-mapped-output",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:shared-authoring-replay",
+        "version": "1.0.0",
+        "title": "Shared authoring replay control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "caseFile": {
+          "fields": {
+            "result": {
+              "type": "string"
+            }
+          }
+        },
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": "start",
+                  "target": "review"
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            },
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "reviewForm",
+                  "assignTo": "reviewer",
+                  "contractRef": "review",
+                  "responseMappingRef": "urn:test:mapping",
+                  "completionEvent": "completed"
+                }
+              ],
+              "transitions": [
+                {
+                  "event": "completed",
+                  "target": "done"
+                }
+              ]
+            }
+          }
+        },
+        "contracts": {
+          "review": {
+            "binding": "formspec",
+            "ref": "urn:test:shared-form",
+            "definitionVersion": "1.0.0"
+          }
+        }
+      },
+      "fixture": {
+        "id": "shared-reviewed-success",
+        "rule": "authoring-control",
+        "description": "Independent reviewed transition expectation",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "start",
+            "actor": "reviewer"
+          },
+          {
+            "event": "submit",
+            "actor": "intruder",
+            "task_submission": {
+              "task_ref": "reviewForm",
+              "response": {
+                "status": "completed",
+                "definitionUrl": "urn:test:shared-form",
+                "definitionVersion": "1.0.0",
+                "data": {
+                  "answer": 42
+                }
+              }
+            }
+          },
+          {
+            "event": "submit",
+            "actor": "reviewer",
+            "task_submission": {
+              "task_ref": "reviewForm",
+              "response": {
+                "status": "completed",
+                "definitionUrl": "urn:test:shared-form",
+                "definitionVersion": "1.0.0",
+                "data": {
+                  "answer": 42
+                }
+              }
+            }
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "review",
+            "event": "start"
+          },
+          {
+            "from": "review",
+            "target": "done",
+            "event": "completed"
+          }
+        ],
+        "expected_errors": [
+          "actor unauthorized"
+        ]
+      },
+      "expected": "pass",
+      "expectations": [
+        {
+          "pointer": "/finalSnapshot/caseState/mapped/answer",
+          "expected": 42
+        }
+      ]
+    },
+    {
+      "id": "selected-calendar-no-holiday",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:shared-authoring-replay",
+        "version": "1.0.0",
+        "title": "Shared authoring replay control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "caseFile": {
+          "fields": {
+            "result": {
+              "type": "string"
+            }
+          }
+        },
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "startTimer",
+                  "timerId": "deadline",
+                  "duration": "P1D",
+                  "event": "expired"
+                }
+              ],
+              "transitions": [
+                {
+                  "event": "expired",
+                  "target": "done"
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            }
+          }
+        }
+      },
+      "fixture": {
+        "id": "shared-reviewed-success",
+        "rule": "authoring-control",
+        "description": "Independent reviewed transition expectation",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "noop",
+            "delay": "P1DT9H"
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "done",
+            "event": "expired"
+          }
+        ]
+      },
+      "expected": "pass",
+      "dependencies": [
+        {
+          "role": "businessCalendar",
+          "url": "urn:test:shared-calendar",
+          "version": "1.0.0",
+          "document": {
+            "$wosDelivery": "1.0",
+            "url": "urn:test:shared-calendar",
+            "version": "1.0.0",
+            "targetWorkflow": "urn:test:shared-authoring-replay",
+            "calendar": {
+              "version": "1.0.0",
+              "timezone": "UTC",
+              "workWeek": [
+                "monday",
+                "tuesday",
+                "wednesday",
+                "thursday",
+                "friday"
+              ],
+              "holidays": [],
+              "operatingHours": {
+                "start": "09:00",
+                "end": "17:00"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "selected-calendar-holiday",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:shared-authoring-replay",
+        "version": "1.0.0",
+        "title": "Shared authoring replay control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "caseFile": {
+          "fields": {
+            "result": {
+              "type": "string"
+            }
+          }
+        },
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "startTimer",
+                  "timerId": "deadline",
+                  "duration": "P1D",
+                  "event": "expired"
+                }
+              ],
+              "transitions": [
+                {
+                  "event": "expired",
+                  "target": "done"
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            }
+          }
+        }
+      },
+      "fixture": {
+        "id": "shared-reviewed-success",
+        "rule": "authoring-control",
+        "description": "Independent reviewed transition expectation",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "noop",
+            "delay": "P1DT9H"
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "done",
+            "event": "expired"
+          }
+        ]
+      },
+      "expected": "fail",
+      "dependencies": [
+        {
+          "role": "businessCalendar",
+          "url": "urn:test:shared-calendar",
+          "version": "1.0.0",
+          "document": {
+            "$wosDelivery": "1.0",
+            "url": "urn:test:shared-calendar",
+            "version": "1.0.0",
+            "targetWorkflow": "urn:test:shared-authoring-replay",
+            "calendar": {
+              "version": "1.0.0",
+              "timezone": "UTC",
+              "workWeek": [
+                "monday",
+                "tuesday",
+                "wednesday",
+                "thursday",
+                "friday"
+              ],
+              "holidays": [
+                {
+                  "name": "Controlled holiday",
+                  "date": "1970-01-02"
+                }
+              ],
+              "operatingHours": {
+                "start": "09:00",
+                "end": "17:00"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "substituted-calendar-dependency",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:shared-authoring-replay",
+        "version": "1.0.0",
+        "title": "Shared authoring replay control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "caseFile": {
+          "fields": {
+            "result": {
+              "type": "string"
+            }
+          }
+        },
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "startTimer",
+                  "timerId": "deadline",
+                  "duration": "P1D",
+                  "event": "expired"
+                }
+              ],
+              "transitions": [
+                {
+                  "event": "expired",
+                  "target": "done"
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            }
+          }
+        }
+      },
+      "fixture": {
+        "id": "shared-reviewed-success",
+        "rule": "authoring-control",
+        "description": "Independent reviewed transition expectation",
+        "documents": {
+          "businessCalendar": "inline"
+        },
+        "event_sequence": [
+          {
+            "event": "noop",
+            "delay": "P1DT9H"
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "done",
+            "event": "expired"
+          }
+        ],
+        "inline_documents": {
+          "businessCalendar": {
+            "$wosDelivery": "1.0",
+            "url": "urn:test:shared-calendar",
+            "version": "1.0.0",
+            "targetWorkflow": "urn:test:shared-authoring-replay",
+            "calendar": {
+              "version": "1.0.0",
+              "timezone": "UTC",
+              "workWeek": [
+                "monday",
+                "tuesday",
+                "wednesday",
+                "thursday",
+                "friday"
+              ],
+              "holidays": [],
+              "operatingHours": {
+                "start": "09:00",
+                "end": "17:00"
+              }
+            }
+          }
+        }
+      },
+      "expected": "refused",
+      "dependencies": [
+        {
+          "role": "businessCalendar",
+          "url": "urn:test:shared-calendar",
+          "version": "1.0.0",
+          "document": {
+            "$wosDelivery": "1.0",
+            "url": "urn:test:shared-calendar",
+            "version": "1.0.0",
+            "targetWorkflow": "urn:test:shared-authoring-replay",
+            "calendar": {
+              "version": "1.0.0",
+              "timezone": "UTC",
+              "workWeek": [
+                "monday",
+                "tuesday",
+                "wednesday",
+                "thursday",
+                "friday"
+              ],
+              "holidays": [
+                {
+                  "name": "Controlled holiday",
+                  "date": "1970-01-02"
+                }
+              ],
+              "operatingHours": {
+                "start": "09:00",
+                "end": "17:00"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "unsupported-governed-output-binding",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:shared-authoring-replay",
+        "version": "1.0.0",
+        "title": "Shared authoring replay control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "caseFile": {
+          "fields": {
+            "result": {
+              "type": "string"
+            }
+          }
+        },
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": "decide",
+                  "target": "done",
+                  "guard": "true",
+                  "actions": [
+                    {
+                      "action": "setData",
+                      "path": "caseFile.result",
+                      "value": "accepted"
+                    }
+                  ]
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            }
+          }
+        },
+        "bindings": [
+          {
+            "on": "state:done",
+            "contractRef": "urn:test:form",
+            "projection": {
+              "answer": "caseFile.answer"
+            },
+            "writeScope": [
+              "caseFile.answer"
+            ],
+            "mutationSource": "system",
+            "verificationLevel": "validated"
+          }
+        ]
+      },
+      "fixture": {
+        "id": "shared-reviewed-success",
+        "rule": "authoring-control",
+        "description": "Independent reviewed transition expectation",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "decide",
+            "actor": "reviewer"
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "done",
+            "event": "decide"
+          }
+        ]
+      },
+      "expected": "refused"
+    }
+  ]
+}

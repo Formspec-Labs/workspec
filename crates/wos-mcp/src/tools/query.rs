@@ -1,7 +1,7 @@
 //! Validation and query tool handlers (Task 6).
 //!
 //! - `wos_lint`              — export project, lint, return diagnostics summary.
-//! - `wos_run_conformance`   — run a conformance fixture, return ConformanceTrace JSON.
+//! - `wos_run_conformance`   — replay the current native snapshot through the shared conformance API.
 //! - `wos_preview_state_graph` — generate Mermaid or DOT state graph string.
 //! - `wos_search`            — linear substring search over states/transitions/actors/constraints.
 //! - `wos_list_projects`     — list all open project UUIDs.
@@ -37,7 +37,7 @@ pub async fn wos_lint(
     let pid = require_string_arg(&args, "project_id")?;
     let project = registry.get(pid)?;
 
-    let doc = project.snapshot();
+    let doc = project.native_snapshot();
     let json = serde_json::to_string(&doc)
         .map_err(|e| ToolError::Internal(format!("serialization failed: {e}")))?;
 
@@ -69,46 +69,74 @@ fn lint_summary(diagnostics: &[wos_lint::LintDiagnostic]) -> Value {
 
 // ── wos_run_conformance ───────────────────────────────────────────────────────
 
-/// Run a conformance fixture and return the ConformanceTrace as JSON.
+/// Replay the selected project's current immutable snapshot through WosRuntime.
 ///
-/// The caller supplies `fixture_json` — an inline conformance fixture document.
-/// Document paths inside the fixture are resolved relative to `base_dir`
-/// (defaults to `"."` when absent).
+/// `fixture_json` supplies reviewed events and expectations. Its document roles
+/// assert the selected snapshot/dependencies; they cannot substitute documents.
+/// Optional `resolved_dependencies` contain role, URL, version and `document_json`.
+/// `required_observations`, `expected_observations` and `clock_start_ms` pass
+/// directly to the shared replay owner. Mutable file paths are unsupported.
 ///
-/// Args:
-/// ```json
-/// {
-///   "project_id":    "...",
-///   "fixture_json":  "<conformance-fixture-json-string>",
-///   "base_dir":      "<optional-path>"
-/// }
-/// ```
+/// # Errors
 ///
-/// Returns the JSON-serialized `ConformanceTrace` plus a `passed` boolean.
+/// Returns invalid arguments for unsupported inputs or replay refusal, and the
+/// native project lookup error when the selected project does not exist.
 pub async fn wos_run_conformance(
-    _registry: &mut ProjectRegistry,
+    registry: &mut ProjectRegistry,
     _project_id: &str,
     args: Value,
 ) -> Result<Value, ToolError> {
-    let fixture_json = require_string_arg(&args, "fixture_json")?;
-    let base_dir = args.get("base_dir").and_then(Value::as_str).unwrap_or(".");
-
-    let (result, trace) =
-        wos_conformance::run_fixture_with_trace(fixture_json, base_dir).map_err(|e| match e {
-            wos_conformance::ConformanceError::Engine(_) => {
-                ToolError::Internal(format!("conformance engine error: {e}"))
-            }
-            _ => ToolError::InvalidArguments(format!("conformance error: {e}")),
-        })?;
-
-    let trace_value = serde_json::to_value(&trace)
-        .map_err(|e| ToolError::Internal(format!("trace serialization failed: {e}")))?;
-
-    Ok(serde_json::json!({
-        "passed": result.passed,
-        "failures": result.failures,
-        "trace": trace_value,
-    }))
+    use wos_conformance::studio_api::{
+        ObservationExpectation, ReplayRequest, ResolvedDependency, prepare_replay, replay,
+    };
+    #[derive(serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct DependencyInput {
+        role: String,
+        url: String,
+        version: Option<String>,
+        document_json: String,
+    }
+    // Direct handler callers and dispatch use the same declaration and defaults.
+    let args = crate::catalog::validate_arguments("wos_run_conformance", &args)?;
+    let project_id = require_string_arg(&args, "project_id")?;
+    let candidate = registry.get(project_id)?.native_snapshot();
+    let candidate_bytes = serde_json::to_vec(&candidate)
+        .map_err(|error| ToolError::Internal(format!("snapshot serialization failed: {error}")))?;
+    let fixture_json = require_string_arg(&args, "fixture_json")?.to_string();
+    let parse_error = |error: serde_json::Error| {
+        ToolError::InvalidArguments(format!("invalid replay input: {error}"))
+    };
+    let dependencies: Vec<DependencyInput> =
+        serde_json::from_value(args["resolved_dependencies"].clone()).map_err(parse_error)?;
+    let required_observations: Vec<String> =
+        serde_json::from_value(args["required_observations"].clone()).map_err(parse_error)?;
+    let expectations: Vec<ObservationExpectation> =
+        serde_json::from_value(args["expected_observations"].clone()).map_err(parse_error)?;
+    let clock_start_ms: u64 =
+        serde_json::from_value(args["clock_start_ms"].clone()).map_err(parse_error)?;
+    let request = ReplayRequest {
+        candidate_bytes,
+        dependencies: dependencies
+            .into_iter()
+            .map(|input| ResolvedDependency {
+                role: input.role,
+                url: input.url,
+                version: input.version,
+                bytes: input.document_json.into_bytes(),
+            })
+            .collect(),
+        fixture_json,
+        clock_start_ms,
+        required_observations,
+        expectations,
+    };
+    let prepared =
+        prepare_replay(request).map_err(|error| ToolError::InvalidArguments(error.to_string()))?;
+    let result = replay(&prepared)
+        .map_err(|error| ToolError::InvalidArguments(format!("replay failed: {error}")))?;
+    serde_json::to_value(result)
+        .map_err(|error| ToolError::Internal(format!("replay serialization failed: {error}")))
 }
 
 // ── wos_preview_state_graph ───────────────────────────────────────────────────
@@ -128,20 +156,14 @@ pub async fn wos_preview_state_graph(
     _project_id: &str,
     args: Value,
 ) -> Result<Value, ToolError> {
+    let args = crate::catalog::validate_arguments("wos_preview_state_graph", &args)?;
     let pid = require_string_arg(&args, "project_id")?;
-    let format = args
-        .get("format")
-        .and_then(Value::as_str)
-        .unwrap_or("mermaid");
-
-    if !matches!(format, "mermaid" | "dot") {
-        return Err(ToolError::InvalidArguments(format!(
-            "unknown format '{format}'; expected mermaid | dot"
-        )));
-    }
+    let format = require_string_arg(&args, "format")?;
 
     let project = registry.get(pid)?;
-    let doc = project.snapshot();
+    let doc = project
+        .typed_snapshot()
+        .map_err(|error| ToolError::ValidationFailed(error.message))?;
 
     let graph = match format {
         "dot" => build_dot_graph(&doc),
@@ -284,7 +306,9 @@ pub async fn wos_search(
     }
 
     let project = registry.get(pid)?;
-    let doc = project.snapshot();
+    let doc = project
+        .typed_snapshot()
+        .map_err(|error| ToolError::ValidationFailed(error.message))?;
     let q = query.to_lowercase();
 
     let matches: Vec<Value> = match kind {

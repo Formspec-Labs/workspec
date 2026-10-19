@@ -202,26 +202,28 @@ fn require_string_arg<'a>(args: &'a Value, key: &str) -> Result<&'a str, ToolErr
 
 /// Parse the optional `kind` argument to `StateKind`, defaulting to `Atomic`.
 fn parse_state_kind(args: &Value) -> Result<StateKind, ToolError> {
-    match args.get("kind").and_then(Value::as_str) {
-        None | Some("atomic") => Ok(StateKind::Atomic),
-        Some("compound") => Ok(StateKind::Compound),
-        Some("parallel") => Ok(StateKind::Parallel),
-        Some("final") => Ok(StateKind::Final),
-        Some(other) => Err(ToolError::InvalidArguments(format!(
-            "unknown state kind '{other}'; expected atomic|compound|parallel|final"
-        ))),
-    }
+    let value = args.get("kind").cloned().unwrap_or_else(|| {
+        crate::catalog::default_argument("wos_add_state", "kind").expect("declared default")
+    });
+    serde_json::from_value(value)
+        .map_err(|error| ToolError::InvalidArguments(format!("unknown kind: {error}")))
 }
 
 /// Sum all transition counts across all states in the project.
 fn count_all_transitions(registry: &ProjectRegistry, pid: &str) -> Result<usize, ToolError> {
     let project = registry.get(pid)?;
-    let doc = project.snapshot();
-    Ok(doc
-        .lifecycle
-        .states
-        .values()
-        .map(|s| s.transitions.len())
+    let document = project.native_snapshot();
+    Ok(document
+        .pointer("/lifecycle/states")
+        .and_then(Value::as_object)
+        .into_iter()
+        .flat_map(|states| states.values())
+        .map(|state| {
+            state
+                .get("transitions")
+                .and_then(Value::as_array)
+                .map_or(0, Vec::len)
+        })
         .sum())
 }
 
@@ -249,7 +251,14 @@ mod tests {
 
         assert_eq!(result["state_id"], json!("draft"));
         let project = registry.get(&pid).unwrap();
-        assert!(project.snapshot().lifecycle.states.contains_key("draft"));
+        assert!(
+            project
+                .typed_snapshot()
+                .unwrap()
+                .lifecycle
+                .states
+                .contains_key("draft")
+        );
     }
 
     #[tokio::test]
@@ -271,7 +280,7 @@ mod tests {
         .unwrap();
 
         let project = registry.get(&pid).unwrap();
-        let doc = project.snapshot();
+        let doc = project.typed_snapshot().unwrap();
         let state = &doc.lifecycle.states["review"];
         assert_eq!(
             state.description.as_ref().and_then(Value::as_str),
@@ -348,7 +357,7 @@ mod tests {
         assert!(result["event"].is_null());
 
         let project = registry.get(&pid).unwrap();
-        let transitions = &project.snapshot().lifecycle.states["draft"].transitions;
+        let transitions = &project.typed_snapshot().unwrap().lifecycle.states["draft"].transitions;
         assert_eq!(transitions.len(), 1);
         assert_eq!(transitions[0].target, "approved");
         assert_eq!(
@@ -397,7 +406,10 @@ mod tests {
 
         assert_eq!(result["state_id"], json!("draft"));
         let project = registry.get(&pid).unwrap();
-        assert_eq!(project.snapshot().lifecycle.initial_state, "draft");
+        assert_eq!(
+            project.typed_snapshot().unwrap().lifecycle.initial_state,
+            "draft"
+        );
     }
 
     #[tokio::test]
@@ -443,7 +455,7 @@ mod tests {
         assert_eq!(result["transitions_removed"], json!(2));
 
         let project = registry.get(&pid).unwrap();
-        let doc = project.snapshot();
+        let doc = project.typed_snapshot().unwrap();
         assert!(!doc.lifecycle.states.contains_key("b"));
         // Inbound transitions pruned from a and c.
         assert!(doc.lifecycle.states["a"].transitions.is_empty());

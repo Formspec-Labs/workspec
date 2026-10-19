@@ -4,7 +4,7 @@
 //!
 //! `wos-authoring` is the single seam every external consumer
 //! (`wos-mcp`, future `wos-synth-core`, integration tests) uses to
-//! mutate a `KernelDocument`. The crate exposes exactly one façade —
+//! edit one native JSON Workflow document. The crate exposes exactly one façade —
 //! [`WosProject`] — plus the types needed to describe results
 //! ([`AuthoringDiagnostic`], [`AuthoringResult`]) and identify common
 //! enumerations from `wos-core` (re-exported for ergonomic call sites).
@@ -16,7 +16,7 @@
 //!      |
 //! RawWosProject + IWosProjectCore + Command  (pub(crate))
 //!      |
-//! KernelDocument (wos-core)
+//! Native JSON authority; fallible KernelDocument read view (wos-core)
 //! ```
 //!
 //! `Command` and `RawWosProject::dispatch` are `pub(crate)` on purpose:
@@ -26,6 +26,7 @@
 
 mod command;
 mod diagnostics;
+pub mod native_schema;
 mod project;
 mod raw;
 
