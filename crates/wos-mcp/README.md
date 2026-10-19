@@ -21,6 +21,23 @@ The coverage file records every canonical root field as incremental or
 import/export. Historical extension values remain intact, while obsolete
 extension-writing tools are retired.
 
+`wos_lint` calls `wos_lint::studio_api::validate` on the current native snapshot.
+Its `scope` defaults to `document`; request `project` with immutable
+`resolved_dependencies` for composed checks. Each selection declares `role`,
+`url`, `version` and complete native `document_json`. A Definition-associated
+Mapping may select its exact `definition: {url, version}` separately from its
+own locator/version and native compatible-version range. Unknown roles are
+refused. Validation never fetches selected documents or schemas.
+
+The `validation` result retains scope, required check groups, pass/fail/not-run
+status and reasons, native WOS diagnostics and native Formspec reports. Existing
+severity counts summarize the unchanged WOS findings. Missing dependencies fail;
+unsupported semantic branches remain not-run. The standard empty JSON Pointer
+identifies the document root. Static pass does not establish replay, scenario
+coverage, readiness or publication. The current import handler can reject native
+AI errors before registration; shared lint acceptance tests set up the same
+native snapshot directly and exercise the actual lint handler and dispatch.
+
 `wos_run_conformance` replays the selected project's current native snapshot. It
 accepts inline fixture JSON, frozen resolved dependencies, controlled clock and
 explicit observation expectations. File-based `base_dir` substitution is

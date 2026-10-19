@@ -1,0 +1,49 @@
+{
+  "$wosWorkflow": "1.0",
+  "url": "urn:test:shared-validation",
+  "version": "1.0.0",
+  "title": "Shared validation fixture",
+  "impactLevel": "informational",
+  "actors": [
+    {
+      "id": "reviewer",
+      "type": "human"
+    },
+    {
+      "id": "assistant",
+      "type": "agent"
+    }
+  ],
+  "lifecycle": {
+    "initialState": "review",
+    "states": {
+      "review": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "event": {
+              "kind": "message",
+              "name": "decide"
+            },
+            "target": "done"
+          }
+        ]
+      },
+      "done": {
+        "type": "final"
+      }
+    }
+  },
+  "agents": [
+    {
+      "id": "assistant",
+      "agentType": "deterministic",
+      "modelIdentifier": "fixture",
+      "modelVersion": "1.0.0",
+      "confidenceDecay": {
+        "enabled": false,
+        "halfLife": "PT0S"
+      }
+    }
+  ]
+}

@@ -492,6 +492,8 @@ Agent outputs become less reliable as underlying case data changes. Confidence d
 | `halfLife` | string (duration) | OPTIONAL | Positive ISO 8601 duration after which effective confidence halves, using the maintained clock/timer operation. |
 | `triggers` | array of DecayTrigger | OPTIONAL | Events causing immediate confidence reduction. |
 
+Supported positive ISO 8601 durations MAY use a fractional final component (for example `PT0.5S` or `PT1.5H`) and omit zero-valued components (`P1Y1D` or `PT1H1S`). A week component stands alone, a time separator requires a time component, and whitespace is invalid. The maintained timer operation still MUST accept the represented positive duration; schema acceptance does not establish clock or monitoring support.
+
 A `DecayTrigger` is a closed object with required `event` (a nonempty native event-name string) and `decayFactor` (a finite number in [0,1]). Enabled decay requires at least one trigger or a positive supported `halfLife`; an absent required clock, history or decay operation is unsupported execution. A trigger binds its event to its multiplicative `decayFactor`. When the trigger fires, the effective confidence of all outputs produced by that agent for the current case is multiplied by the factor. After decay, the processor reevaluates every applicable floor using §7.4 and retains the combined disposition; decay cannot replace a required rejection with escalation.
 
 ### 7.6 Temporal Confidence Thresholds

@@ -164,6 +164,160 @@
     }
   },
   "$defs": {
+    "staticValidationStage": {
+      "type": "object",
+      "description": "One performed or refused static check group; skipped semantic branches remain explicit.",
+      "required": [
+        "name",
+        "document",
+        "document_version",
+        "schema_id",
+        "required",
+        "status",
+        "reasons",
+        "diagnostics"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable name of the performed check group or actual semantic branch that could not run.",
+          "examples": [
+            "candidate-schema"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "document": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Selected source locator for a dependency check; null identifies the candidate document.",
+          "examples": [
+            "urn:test:definition",
+            null
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          }
+        },
+        "document_version": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Exact selected dependency version, distinct from any Mapping compatibility range.",
+          "examples": [
+            "1.2.0",
+            null
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "schema_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Canonical schema identity read from its owning resource; null means this group is not a schema check.",
+          "examples": [
+            "https://wos-spec.org/schemas/wos-workflow.schema.json",
+            null
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          }
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Whether this group must pass for the explicitly requested static validation scope.",
+          "examples": [
+            true,
+            false
+          ]
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "fail",
+            "not-run"
+          ]
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "Concrete reason a check did not run, including the source path and actual failing prerequisite.",
+            "examples": [
+              "document scope does not request project semantic checks"
+            ],
+            "x-wos": {
+              "openStringKind": "prose"
+            }
+          }
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/lintDiagnostic__Root"
+          }
+        },
+        "formspec": {
+          "type": "object",
+          "description": "Complete native Formspec lint report with its owning codes, JSONPath locations and repair metadata.",
+          "examples": [
+            {
+              "documentType": "definition",
+              "valid": true,
+              "diagnostics": []
+            }
+          ]
+        }
+      }
+    },
+    "staticValidation__Root": {
+      "type": "object",
+      "description": "Static validation only; no execution, reviewed scenario, readiness or publication claim. Document scope explicitly omits composed checks.",
+      "required": [
+        "scope",
+        "status",
+        "stages",
+        "diagnostics"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "enum": [
+            "document",
+            "project"
+          ]
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "fail",
+            "not-run"
+          ]
+        },
+        "stages": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/staticValidationStage"
+          }
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/lintDiagnostic__Root"
+          }
+        }
+      }
+    },
     "lintDiagnostic__Root": {
       "title": "WOS Lint Diagnostic",
       "description": "Schema for a single structured diagnostic emitted by wos-lint. Stable JSON serialization consumed by LLM authoring loops, downstream tooling, and CI pipelines. (Absorbed into wos-tooling.schema.json per ADR 0076 D-5; was wos-lint-diagnostic.schema.json.)",
@@ -232,7 +386,7 @@
         },
         "path": {
           "type": "string",
-          "description": "Slash-prefixed JSON-pointer-shaped path to the offending node, matching LintDiagnostic.path. Consumers use one pointer syntax for editor locations and repair prompts.",
+          "description": "RFC 6901 JSON Pointer to the offending node, matching LintDiagnostic.path. The empty string identifies the document root. Consumers use one pointer syntax for editor locations and repair prompts.",
           "examples": [
             "/lifecycle/states/approved",
             "/lifecycle/states/review/transitions/2",
@@ -244,8 +398,10 @@
           "x-wos": {
             "openStringKind": "pathExpression"
           },
-          "minLength": 1,
-          "pattern": "^/"
+          "anyOf": [
+            { "maxLength": 0 },
+            { "pattern": "^/" }
+          ]
         },
         "message": {
           "type": "string",
@@ -289,7 +445,7 @@
             },
             "path": {
               "$ref": "#/$defs/lintDiagnostic__Root/properties/path",
-              "description": "Pointer to the property added, removed, or replaced. Uses the same slash-prefixed syntax as the diagnostic path."
+              "description": "Pointer to the property added, removed, or replaced. Uses the same JSON Pointer syntax as the diagnostic path, including the empty document-root pointer."
             },
             "value": {
               "description": "Replacement or new value to write at the indicated path. Required for add-property and replace-value kinds. The type matches the expected JSON type of the target field.",

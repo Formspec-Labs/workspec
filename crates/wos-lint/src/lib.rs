@@ -13,7 +13,7 @@
 //! # Structured output (§5.2)
 //!
 //! All lint rules emit [`LintDiagnostic`] — a JSON-serializable struct with
-//! stable `camelCase` field names, severity, verification tier, JSONPath
+//! stable `camelCase` field names, severity, verification tier, JSON Pointer
 //! location, and an optional machine-readable [`SuggestedFix`].
 //!
 //! [`lint_document`], [`lint_project`], and [`lint_schema`] return
@@ -24,6 +24,7 @@ mod document;
 pub mod output;
 pub mod rules;
 pub mod studio_api;
+pub mod validation;
 
 pub use diagnostic::{LintDiagnostic, LintSeverity, SourceLocation, SuggestedFix, Tier};
 pub use document::{DocumentKind, WosDocument, WosProject};

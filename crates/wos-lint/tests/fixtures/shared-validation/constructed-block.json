@@ -1,0 +1,47 @@
+{
+  "ruleId": "PUB-LINT-001",
+  "severity": "block",
+  "tier": "T2",
+  "path": "",
+  "message": "Constructed serialization and aggregation control.",
+  "suggestedFix": {
+    "kind": "replace-value",
+    "path": "",
+    "value": {
+      "$wosWorkflow": "1.0",
+      "url": "urn:test:shared-validation",
+      "version": "1.0.0",
+      "title": "Shared validation fixture",
+      "impactLevel": "informational",
+      "actors": [
+        {
+          "id": "reviewer",
+          "type": "human"
+        }
+      ],
+      "lifecycle": {
+        "initialState": "review",
+        "states": {
+          "review": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": {
+                  "kind": "message",
+                  "name": "decide"
+                },
+                "target": "done"
+              }
+            ]
+          },
+          "done": {
+            "type": "final"
+          }
+        }
+      }
+    }
+  },
+  "relatedDocs": [
+    "specs/tooling/authoring.md"
+  ]
+}

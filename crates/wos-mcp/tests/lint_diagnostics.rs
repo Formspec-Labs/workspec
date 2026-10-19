@@ -53,7 +53,13 @@ async fn real_mcp_diagnostics_match_native_output_and_both_schema_views() {
         .push(json!({"id": "triage", "fallbackChain": ["reviewer"]}));
     let project = WosProject::from_document(document);
     let snapshot = serde_json::to_string(&project.typed_snapshot().unwrap()).unwrap();
-    let native = wos_lint::lint_document(&snapshot).unwrap();
+    let candidate = serde_json::from_str(&snapshot).unwrap();
+    let native = wos_lint::studio_api::validate(wos_lint::studio_api::ValidationRequest {
+        candidate: &candidate,
+        dependencies: &[],
+        scope: wos_lint::studio_api::ValidationScope::Document,
+    })
+    .diagnostics;
     assert!(
         !native.is_empty(),
         "negative candidate must emit real findings"

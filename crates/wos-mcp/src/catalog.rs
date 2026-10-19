@@ -264,16 +264,20 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "wos_lint",
-            "Return unchanged native diagnostics and counts for block, error, warning and info.",
-            scoped(json!({}), &[]),
+            "Run canonical static validation in explicit document/project scope, retaining native findings and incomplete coverage. Static success is not replay or readiness.",
+            scoped(
+                json!({"scope":{"enum":["document","project"],"default":"document"},"resolved_dependencies":{"type":"array","default":[],"items":{"type":"object","properties":{"role":{"enum":["definition","mapping","delivery","ontology-alignment"]},"url":string(),"version":string(),"document_json":{},"definition":{"type":"object","properties":{"url":string(),"version":string()},"required":["url","version"],"additionalProperties":false}},"required":["role","url","version","document_json"],"additionalProperties":false}}}),
+                &[],
+            ),
             object(
-                json!({"diagnostics":array(json!({"$ref":"https://wos-spec.org/schemas/tooling/1.0#/$defs/lintDiagnostic__Root"})),"block_count":number(),"error_count":number(),"warning_count":number(),"info_count":number()}),
+                json!({"diagnostics":array(json!({"$ref":"https://wos-spec.org/schemas/tooling/1.0#/$defs/lintDiagnostic__Root"})),"block_count":number(),"error_count":number(),"warning_count":number(),"info_count":number(),"validation":{"$ref":"https://wos-spec.org/schemas/tooling/1.0#/$defs/staticValidation__Root"}}),
                 &[
                     "diagnostics",
                     "block_count",
                     "error_count",
                     "warning_count",
                     "info_count",
+                    "validation",
                 ],
             ),
             handler!(tools::wos_lint),

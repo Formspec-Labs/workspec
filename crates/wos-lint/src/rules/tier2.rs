@@ -226,6 +226,14 @@ fn collect_events_typed(
 /// Delivery (`$wosDelivery`) remains a separate sidecar for calendar,
 /// notification templates, and correspondence.
 pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
+    check_with_coverage(project, diagnostics, &mut Vec::new());
+}
+
+pub(crate) fn check_with_coverage(
+    project: &WosProject,
+    diagnostics: &mut Vec<LintDiagnostic>,
+    skipped: &mut Vec<crate::validation::SemanticSkip>,
+) {
     // K-EXT-002: Reserved `x-wos-*` namespace check runs across every document.
     for doc in project.documents() {
         check_reserved_wos_namespace(&doc.value, "", diagnostics);
@@ -234,8 +242,19 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
     // The `$wosWorkflow` document is the single author-time source. All cross-doc
     // rules now read from its embedded blocks.
     let kernel_doc = project.kernel();
-    let typed_kernel: Option<KernelDocument> =
-        kernel_doc.and_then(|k| serde_json::from_value::<KernelDocument>(k.value.clone()).ok());
+    let typed_kernel: Option<KernelDocument> = kernel_doc.and_then(
+        |k| match serde_json::from_value::<KernelDocument>(k.value.clone()) {
+            Ok(kernel) => Some(kernel),
+            Err(error) => {
+                skipped.push(crate::validation::SemanticSkip::new(
+                    "t2-kernel",
+                    "",
+                    error.to_string(),
+                ));
+                None
+            }
+        },
+    );
 
     let kernel_collections = typed_kernel.as_ref().map(KernelCollections::from_typed);
 
@@ -324,7 +343,17 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
                 }
             }
             let typed_gov =
-                serde_json::from_value::<wos_core::GovernanceDocument>(gov.value.clone()).ok();
+                match serde_json::from_value::<wos_core::GovernanceDocument>(gov.value.clone()) {
+                    Ok(governance) => Some(governance),
+                    Err(error) => {
+                        skipped.push(crate::validation::SemanticSkip::new(
+                            "t2-governance",
+                            "/governance",
+                            error.to_string(),
+                        ));
+                        None
+                    }
+                };
 
             // G-023 / G-060 / G-063 / G-066 need governance + project sidecars.
             check_sla_business_calendar(&gov, project, diagnostics);
@@ -377,36 +406,45 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
         // Native AI semantics have one owner. Missing execution operations do
         // not become invented configuration or a successful readiness check.
         let workflow_url = wf.value.get("url").and_then(Value::as_str).unwrap_or("");
-        if let Ok(Some(policy)) = wos_core::ai_policy::load_native_ai_policy(&wf.value) {
-            check_agent_free_completion_path(&policy, wf, diagnostics);
-            if policy.impact_level() == wos_core::ImpactLevel::RightsImpacting
-                && !policy
-                    .oversight()
-                    .disclosure
-                    .as_ref()
-                    .is_some_and(|value| value.disclose_that_agent_assisted)
-            {
-                diagnostics.push(LintDiagnostic::t2_error(
-                    "AI-046",
-                    "/aiOversight/disclosure",
-                    "rights-impacting agent use requires native assistance disclosure",
-                ));
-            }
-            for (index, agent) in policy.agents().iter().enumerate() {
-                for (action_index, action) in agent.action_overrides.iter().enumerate() {
-                    if action.autonomy == Some(wos_core::model::ai::AutonomyLevel::Autonomous)
-                        && policy.oversight().deontic_constraints.is_empty()
-                        && agent.deontic_constraints.is_empty()
-                        && action.deontic_constraints.is_empty()
-                    {
-                        diagnostics.push(LintDiagnostic::t2_error(
-                            "AI-018",
-                            format!("/agents/{index}/actionOverrides/{action_index}"),
-                            "autonomous action requires associated native constraints",
-                        ));
+        match wos_core::ai_policy::load_native_ai_policy(&wf.value) {
+            Ok(Some(policy)) => {
+                check_agent_free_completion_path(&policy, wf, diagnostics);
+                if policy.impact_level() == wos_core::ImpactLevel::RightsImpacting
+                    && !policy
+                        .oversight()
+                        .disclosure
+                        .as_ref()
+                        .is_some_and(|value| value.disclose_that_agent_assisted)
+                {
+                    diagnostics.push(LintDiagnostic::t2_error(
+                        "AI-046",
+                        "/aiOversight/disclosure",
+                        "rights-impacting agent use requires native assistance disclosure",
+                    ));
+                }
+                for (index, agent) in policy.agents().iter().enumerate() {
+                    for (action_index, action) in agent.action_overrides.iter().enumerate() {
+                        if action.autonomy == Some(wos_core::model::ai::AutonomyLevel::Autonomous)
+                            && policy.oversight().deontic_constraints.is_empty()
+                            && agent.deontic_constraints.is_empty()
+                            && action.deontic_constraints.is_empty()
+                        {
+                            diagnostics.push(LintDiagnostic::t2_error(
+                                "AI-018",
+                                format!("/agents/{index}/actionOverrides/{action_index}"),
+                                "autonomous action requires associated native constraints",
+                            ));
+                        }
                     }
                 }
             }
+
+            Ok(None) => {}
+            Err(error) => skipped.push(crate::validation::SemanticSkip::new(
+                "t2-native-ai",
+                error.pointer(),
+                error.message().to_string(),
+            )),
         }
 
         // Signature rules — read from $wosWorkflow.signature embedded block.

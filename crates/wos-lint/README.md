@@ -1,6 +1,19 @@
 # wos-lint
 
-Static linter for WOS (Workflow Orchestration Standard) documents. Checks 83 normative constraints that JSON Schema cannot enforce.
+Static and selected-project validation for WOS (Workflow Orchestration Standard) documents, using canonical JSON Schema and maintained lint rules.
+
+## Shared static-validation findings
+
+The public `wos_lint::studio_api::validate` operation also emits
+`WOS-SCHEMA-001` for canonical schema failures and `WOS-REF-001` for conflicting
+or missing explicitly selected project references. These operation findings
+retain the existing diagnostic type and use the empty JSON Pointer for a whole
+document. They do not add replay rules or change the individual rule registry.
+Required check groups report `pass`, `fail` or `not-run`; static success does not
+establish runtime readiness. Native Formspec findings retain their owner codes,
+JSONPath locations and repair metadata in the dependency report. Behavioral
+controls live in `crates/wos-lint/tests/shared_validation.rs` and the actual MCP
+adapter tests in `crates/wos-mcp/tests/shared_validation.rs`.
 
 ## What it checks
 
@@ -66,7 +79,7 @@ for d in &diagnostics {
 }
 ```
 
-Each diagnostic includes a rule ID (e.g., `K-001`), a JSONPath to the offending location, a human-readable message, severity (`LintSeverity`), tier, and optional structured fields (`suggestedFix`, `relatedDocs`, `source`).
+Each diagnostic includes a rule ID (e.g., `K-001`), a JSON Pointer to the offending location, a human-readable message, severity (`LintSeverity`), tier, and optional structured fields (`suggestedFix`, `relatedDocs`, `source`).
 
 ## Dependencies
 

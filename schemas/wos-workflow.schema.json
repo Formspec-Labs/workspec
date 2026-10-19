@@ -2346,6 +2346,13 @@
         },
         "holds": {
           "type": "object",
+          "properties": {
+            "policies": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/HoldPolicy" },
+              "description": "Typed hold policies governed by Governance section 12, including required duration and resume behavior."
+            }
+          },
           "description": "Hold policy block describing allowed hold types, resume triggers, timeout behavior, and tagged lifecycle states.",
           "examples": [
             {
@@ -11402,12 +11409,37 @@
     "AgentPositiveDuration": {
       "type": "string",
       "minLength": 1,
-      "description": "Positive ISO 8601 duration; the maintained timer or monitoring operation validates support and finite scheduling.",
+      "description": "Positive supported ISO 8601 duration, including a fractional final component. Weeks stand alone. The maintained timer or monitoring operation validates representability and finite scheduling.",
       "examples": [
-        "PT30S"
+        "PT30S",
+        "PT0.5S"
       ],
-      "format": "duration",
-      "pattern": "^P(?=.*[1-9])(?:[0-9]+(?:\\.[0-9]+)?Y)?(?:[0-9]+(?:\\.[0-9]+)?M)?(?:[0-9]+(?:\\.[0-9]+)?W)?(?:[0-9]+(?:\\.[0-9]+)?D)?(?:T(?:[0-9]+(?:\\.[0-9]+)?H)?(?:[0-9]+(?:\\.[0-9]+)?M)?(?:[0-9]+(?:\\.[0-9]+)?S)?)?$"
+      "pattern": "^P(?=.*[1-9])(?:[0-9]+(?:\\.[0-9]+)?Y)?(?:[0-9]+(?:\\.[0-9]+)?M)?(?:[0-9]+(?:\\.[0-9]+)?W)?(?:[0-9]+(?:\\.[0-9]+)?D)?(?:T(?:[0-9]+(?:\\.[0-9]+)?H)?(?:[0-9]+(?:\\.[0-9]+)?M)?(?:[0-9]+(?:\\.[0-9]+)?S)?)?$",
+      "allOf": [
+        {
+          "not": {
+            "pattern": "\\s"
+          }
+        },
+        {
+          "not": {
+            "pattern": "T$"
+          }
+        },
+        {
+          "if": {
+            "pattern": "W"
+          },
+          "then": {
+            "pattern": "^P[0-9]+(?:\\.[0-9]+)?W$"
+          }
+        },
+        {
+          "not": {
+            "pattern": "\\.[0-9]+[YMWDHS]."
+          }
+        }
+      ]
     },
     "AgentCapability": {
       "type": "object",

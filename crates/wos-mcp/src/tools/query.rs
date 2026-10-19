@@ -16,9 +16,9 @@ use crate::registry::ProjectRegistry;
 
 // ── wos_lint ──────────────────────────────────────────────────────────────────
 
-/// Export the project to JSON and lint it. Returns a diagnostics summary.
+/// Validate the native candidate using canonical schemas and explicit static scope.
 ///
-/// Args: `{"project_id": "..."}`
+/// Args: `{"project_id": "...", "scope": "document", "resolved_dependencies": []}`
 ///
 /// Returns:
 /// ```json
@@ -35,17 +35,25 @@ pub async fn wos_lint(
     _project_id: &str,
     args: Value,
 ) -> Result<Value, ToolError> {
+    let args = crate::catalog::validate_arguments("wos_lint", &args)?;
     let pid = require_string_arg(&args, "project_id")?;
     let project = registry.get(pid)?;
-
-    let doc = project.native_snapshot();
-    let json = serde_json::to_string(&doc)
-        .map_err(|e| ToolError::Internal(format!("serialization failed: {e}")))?;
-
-    let diagnostics = wos_lint::lint_document(&json)
-        .map_err(|e| ToolError::Internal(format!("lint engine error: {e}")))?;
-
-    Ok(lint_summary(&diagnostics))
+    let scope: wos_lint::studio_api::ValidationScope =
+        serde_json::from_value(args["scope"].clone())
+            .map_err(|error| ToolError::InvalidArguments(error.to_string()))?;
+    let dependencies: Vec<wos_lint::studio_api::ResolvedDependency> =
+        serde_json::from_value(args["resolved_dependencies"].clone())
+            .map_err(|error| ToolError::InvalidArguments(error.to_string()))?;
+    let candidate = project.native_snapshot();
+    let validation = wos_lint::studio_api::validate(wos_lint::studio_api::ValidationRequest {
+        candidate: &candidate,
+        dependencies: &dependencies,
+        scope,
+    });
+    let mut result = lint_summary(&validation.diagnostics);
+    result["validation"] =
+        serde_json::to_value(validation).map_err(|error| ToolError::Internal(error.to_string()))?;
+    Ok(result)
 }
 
 /// Serialize native diagnostics and count each severity without rewriting findings.
@@ -495,6 +503,19 @@ mod tests {
         assert!(result["diagnostics"].is_array());
         assert!(result["error_count"].is_number());
         assert!(result["warning_count"].is_number());
+    }
+
+    #[test]
+    fn shared_constructed_block_vector_preserves_metadata_and_count() {
+        let diagnostic: wos_lint::LintDiagnostic = serde_json::from_str(include_str!(
+            "../../../wos-lint/tests/fixtures/shared-validation/constructed-block.json"
+        ))
+        .unwrap();
+        let expected = serde_json::to_value(&diagnostic).unwrap();
+        let result = lint_summary(&[diagnostic]);
+        assert_eq!(result["diagnostics"][0], expected);
+        assert_eq!(result["block_count"], 1);
+        assert_eq!(result["error_count"], 0);
     }
 
     #[test]

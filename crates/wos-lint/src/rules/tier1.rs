@@ -19,10 +19,18 @@ use crate::document::{DocumentKind, WosDocument};
 
 /// Run all Tier 1 checks applicable to the document's kind.
 pub fn check(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
+    check_with_coverage(doc, diagnostics, &mut Vec::new());
+}
+
+pub(crate) fn check_with_coverage(
+    doc: &WosDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+    skipped: &mut Vec<crate::validation::SemanticSkip>,
+) {
     match doc.kind {
         // $wosWorkflow carries lifecycle, governance, agents, signature, bindings,
         // custody, advanced, assurance in one envelope (ADR 0076).
-        DocumentKind::Workflow => check_workflow(doc, diagnostics),
+        DocumentKind::Workflow => check_workflow(doc, diagnostics, skipped),
         // $wosDelivery carries calendar, notification templates, correspondence.
         DocumentKind::Delivery => {
             check_delivery(doc, diagnostics);
@@ -51,33 +59,44 @@ pub fn check(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
 /// embedded blocks: `governance`, `agents`, `aiOversight`, `signature`,
 /// `custody`, `advanced`, `assurance`, and `bindings`. Each block is checked
 /// via the appropriate sub-checker.
-fn check_workflow(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
+fn check_workflow(
+    doc: &WosDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+    skipped: &mut Vec<crate::validation::SemanticSkip>,
+) {
     let root = &doc.value;
 
     // --- Lifecycle / kernel-surface checks ---
-    if let Ok(kernel) = serde_json::from_value::<KernelDocument>(root.clone()) {
-        let all_state_ids = collect_all_state_ids_typed(&kernel.lifecycle.states);
-        let declared_actor_ids: std::collections::HashSet<String> =
-            kernel.actors.iter().map(|a| a.id.clone()).collect();
-        for (name, state) in &kernel.lifecycle.states {
-            let path = format!("/lifecycle/states/{name}");
-            check_state_type_semantics_typed(
-                state,
-                &path,
-                &all_state_ids,
-                &declared_actor_ids,
-                diagnostics,
-            );
-        }
+    match serde_json::from_value::<KernelDocument>(root.clone()) {
+        Ok(kernel) => {
+            let all_state_ids = collect_all_state_ids_typed(&kernel.lifecycle.states);
+            let declared_actor_ids: std::collections::HashSet<String> =
+                kernel.actors.iter().map(|a| a.id.clone()).collect();
+            for (name, state) in &kernel.lifecycle.states {
+                let path = format!("/lifecycle/states/{name}");
+                check_state_type_semantics_typed(
+                    state,
+                    &path,
+                    &all_state_ids,
+                    &declared_actor_ids,
+                    diagnostics,
+                );
+            }
 
-        check_lifecycle_initial_state_resolves_typed(&kernel, diagnostics); // K-032
-        check_initial_state_keys_into_states_typed(&kernel, diagnostics); // K-016
-        check_set_data_paths_typed(&kernel, diagnostics);
-        check_milestone_uniqueness_typed(&kernel, diagnostics);
-        check_timer_exclusivity_typed(&kernel, diagnostics);
-        check_case_relationship_type_prefix_typed(&kernel, diagnostics);
-        check_actor_id_uniqueness_typed(&kernel, diagnostics);
-        check_provenance_actor_ids_typed(&kernel, diagnostics);
+            check_lifecycle_initial_state_resolves_typed(&kernel, diagnostics); // K-032
+            check_initial_state_keys_into_states_typed(&kernel, diagnostics); // K-016
+            check_set_data_paths_typed(&kernel, diagnostics);
+            check_milestone_uniqueness_typed(&kernel, diagnostics);
+            check_timer_exclusivity_typed(&kernel, diagnostics);
+            check_case_relationship_type_prefix_typed(&kernel, diagnostics);
+            check_actor_id_uniqueness_typed(&kernel, diagnostics);
+            check_provenance_actor_ids_typed(&kernel, diagnostics);
+        }
+        Err(error) => skipped.push(crate::validation::SemanticSkip::new(
+            "t1-kernel",
+            "",
+            error.to_string(),
+        )),
     }
 
     check_digest_algorithm(root, diagnostics);
@@ -86,7 +105,7 @@ fn check_workflow(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
 
     // --- governance embedded block ---
     if let Some(gov_block) = root.get("governance") {
-        check_governance_block(gov_block, diagnostics);
+        check_governance_block(gov_block, diagnostics, skipped);
     }
 
     // --- agents / aiOversight embedded blocks ---
@@ -106,16 +125,25 @@ fn check_workflow(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
 ///
 /// Covers rules previously applied to standalone `$wosWorkflowGovernance`,
 /// `$wosPolicyParameters`, `$wosAssertionLibrary`, and `$wosDueProcess` documents.
-fn check_governance_block(gov: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
+fn check_governance_block(
+    gov: &Value,
+    diagnostics: &mut Vec<LintDiagnostic>,
+    skipped: &mut Vec<crate::validation::SemanticSkip>,
+) {
     // --- Hold policies (G-055) ---
-    if let Some(holds) = gov
+    if let Some((holds, base_path)) = gov
         .get("holds")
         .and_then(|h| h.get("policies"))
         .and_then(Value::as_array)
-        .or_else(|| gov.get("holdPolicies").and_then(Value::as_array))
+        .map(|policies| (policies, "/governance/holds/policies"))
+        .or_else(|| {
+            gov.get("holdPolicies")
+                .and_then(Value::as_array)
+                .map(|policies| (policies, "/governance/holdPolicies"))
+        })
     {
         for (i, policy) in holds.iter().enumerate() {
-            let path = format!("/governance/holdPolicies/{i}");
+            let path = format!("{base_path}/{i}");
             check_hold_expected_duration_raw(policy, &path, diagnostics);
         }
     }
@@ -124,11 +152,16 @@ fn check_governance_block(gov: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
     let gov_doc_value = serde_json::json!({
         "$wosWorkflow": "1.0",
         "targetWorkflow": "",
-        "delegations": gov.get("delegation").and_then(|d| d.get("delegations")).cloned().unwrap_or(serde_json::Value::Null),
-        "holdPolicies": gov.get("holds").and_then(|h| h.get("policies")).cloned().unwrap_or(serde_json::Value::Null),
+        "delegations": gov.get("delegation").and_then(|d| d.get("delegations")).cloned().unwrap_or_else(|| serde_json::json!([])),
+        "holdPolicies": gov.get("holds").and_then(|h| h.get("policies")).cloned().unwrap_or_else(|| serde_json::json!([])),
     });
-    if let Ok(typed_gov) = serde_json::from_value::<GovernanceDocument>(gov_doc_value) {
-        check_delegation_dates_typed(&typed_gov, diagnostics);
+    match serde_json::from_value::<GovernanceDocument>(gov_doc_value) {
+        Ok(typed_gov) => check_delegation_dates_typed(&typed_gov, diagnostics),
+        Err(error) => skipped.push(crate::validation::SemanticSkip::new(
+            "t1-governance",
+            "/governance",
+            error.to_string(),
+        )),
     }
 
     // Also check directly at governance.delegations (flat shape)
@@ -138,8 +171,13 @@ fn check_governance_block(gov: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
             "targetWorkflow": "",
             "delegations": delegations,
         });
-        if let Ok(typed_gov) = serde_json::from_value::<GovernanceDocument>(gov_flat) {
-            check_delegation_dates_typed(&typed_gov, diagnostics);
+        match serde_json::from_value::<GovernanceDocument>(gov_flat) {
+            Ok(typed_gov) => check_delegation_dates_typed(&typed_gov, diagnostics),
+            Err(error) => skipped.push(crate::validation::SemanticSkip::new(
+                "t1-governance-flat",
+                "/governance/delegations",
+                error.to_string(),
+            )),
         }
     }
 
@@ -1847,7 +1885,7 @@ mod transition_actor_and_initial_state_tests {
             value,
             source: None,
         };
-        check_workflow(&doc, &mut diags);
+        check_workflow(&doc, &mut diags, &mut Vec::new());
         diags
     }
 

@@ -1,0 +1,43 @@
+{
+  "$wosWorkflow": "1.0",
+  "url": "urn:test:shared-validation",
+  "version": "1.0.0",
+  "title": "Shared validation fixture",
+  "impactLevel": "informational",
+  "actors": [
+    {
+      "id": "reviewer",
+      "type": "human"
+    }
+  ],
+  "lifecycle": {
+    "initialState": "review",
+    "states": {
+      "review": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "event": {
+              "kind": "message",
+              "name": "decide"
+            },
+            "target": "done"
+          }
+        ]
+      },
+      "done": {
+        "type": "final"
+      }
+    }
+  },
+  "governance": {
+    "holds": {
+      "policies": [
+        {
+          "holdType": "legal-hold",
+          "expectedDuration": "PT"
+        }
+      ]
+    }
+  }
+}

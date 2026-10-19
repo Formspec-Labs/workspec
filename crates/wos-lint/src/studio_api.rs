@@ -75,3 +75,9 @@ pub fn lint_workflow_with_project(
 ) -> Result<Vec<LintDiagnostic>, crate::LintError> {
     crate::lint_workflow_with_project(workflow_json)
 }
+
+#[doc(inline)]
+pub use crate::validation::{
+    CheckStatus, DefinitionSelection, DependencyRole, ResolvedDependency, ValidationReport,
+    ValidationRequest, ValidationScope, ValidationStage, validate,
+};

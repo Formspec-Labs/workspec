@@ -2,9 +2,9 @@
 
 //! Lint diagnostics with rule IDs, severity, and JSON paths.
 //!
-//! ## JSONPath shape (rule-author convention, ratified 2026-05-02)
+//! ## JSON Pointer shape (rule-author convention)
 //!
-//! Every [`LintDiagnostic::path`] is **slash-separated, leading-slash-
+//! The empty [`LintDiagnostic::path`] identifies the whole document. Descendant paths are **slash-separated, leading-slash-
 //! prefixed, parallel to RFC 6901 JSON Pointer** — e.g.,
 //! `"/lifecycle/states/approved/transitions/0"`. New rules MUST follow
 //! this convention so:
@@ -133,11 +133,11 @@ pub struct LintDiagnostic {
     /// Verification tier the rule belongs to.
     pub tier: Tier,
 
-    /// JSON-pointer-shaped path to the offending location (e.g.,
+    /// RFC 6901 JSON Pointer, empty for the document root (e.g.,
     /// `"/lifecycle/states/approved/transitions/0"`).
     ///
     /// **Format decision (2026-05-02, Stage 4 Wave 4 review remediation):**
-    /// Slash-separated, leading-slash-prefixed, parallel to RFC-6901 JSON
+    /// Empty for the document root; descendants are slash-separated and leading-slash-prefixed, parallel to RFC-6901 JSON
     /// Pointer. This matches the K-049 implementation in
     /// `rules/continuous_mode.rs:206-209,274` and is what the K-051/K-052/K-053
     /// fixtures' `expected_errors` substrings will match against. Earlier

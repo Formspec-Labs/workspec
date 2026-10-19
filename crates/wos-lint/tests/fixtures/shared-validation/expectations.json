@@ -1,0 +1,29 @@
+{
+  "positive": {
+    "schema": "pass",
+    "project": "pass"
+  },
+  "stored-event": {
+    "schema": "fail",
+    "path": "/lifecycle/states/review/transitions/0/event",
+    "kernelStoredParserAccepts": true
+  },
+  "invalid-pattern": {
+    "schema": "fail",
+    "path": "/agents/0/confidenceDecay/halfLife",
+    "patternOnlyControl": "PT0S is format-valid but violates positive-duration pattern"
+  },
+  "unresolved-reference": {
+    "project": "fail",
+    "path": "/intake/contractRef"
+  },
+  "invalid-hold": {
+    "schema": "fail",
+    "path": "/governance/holds/policies/0/expectedDuration",
+    "originalCanonicalSchemaAccepted": true
+  },
+  "constructed-block": {
+    "aggregation": "fail",
+    "limit": "Constructed serializer/aggregation control, not a production rule source"
+  }
+}
