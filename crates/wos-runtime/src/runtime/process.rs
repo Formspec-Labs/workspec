@@ -375,6 +375,19 @@ impl WosRuntime {
         Ok(self.load_record_by_process_or_case_ref(process_id)?.process)
     }
 
+    /// Read the service outputs saved by completed native operations.
+    ///
+    /// # Errors
+    /// Returns an error when the process cannot be resolved or its record cannot be read.
+    pub fn load_step_results(
+        &self,
+        process_id: &str,
+    ) -> Result<Vec<crate::store::StepResultRecord>, RuntimeError> {
+        Ok(self
+            .load_record_by_process_or_case_ref(process_id)?
+            .step_results)
+    }
+
     /// Return the `process_id` of every workflow process bound to the given
     /// case ledger.
     ///

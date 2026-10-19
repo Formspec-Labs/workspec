@@ -394,6 +394,10 @@ pub enum ConformanceError {
     #[error("engine error: {0}")]
     Engine(String),
 
+    /// A declared or requested native operation is unsupported on this route.
+    #[error("unsupported operation: {0}")]
+    UnsupportedOperation(String),
+
     /// Referenced document file not found.
     #[error("document not found: {0}")]
     DocumentNotFound(String),
@@ -475,23 +479,20 @@ mod runner_trace_tests {
         assert_eq!(trace.outcome, Outcome::Pass);
     }
 
-    /// medicaid-happy-path: multi-step compound-state fixture.
-    /// Verify step count matches expected_transitions length and all pass.
+    /// Original Medicaid bytes require due-process work absent from this route.
     #[test]
-    fn trace_medicaid_happy_path_step_count_matches_expected_transitions() {
-        let (json, base_dir) = read_test_fixture("medicaid-happy-path.json");
-        let fixture: ConformanceFixture = serde_json::from_str(&json).unwrap();
-
-        let (result, trace) =
-            run_fixture_with_trace(&json, &base_dir).expect("run_fixture_with_trace failed");
-
-        assert!(result.passed, "fixture must pass: {:?}", result.failures);
-        assert_eq!(
-            trace.steps.len(),
-            fixture.expected_transitions.len(),
-            "trace step count must match expected_transitions count"
+    fn trace_medicaid_happy_path_refuses_required_due_process() {
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let json = std::fs::read_to_string(
+            root.join("fixtures/historical-provenance/medicaid-happy-path.json"),
+        )
+        .unwrap();
+        let error = run_fixture_with_trace(&json, root.join("tests/fixtures").to_str().unwrap())
+            .unwrap_err();
+        assert!(
+            matches!(error, ConformanceError::UnsupportedOperation(ref reason) if reason.contains("/governance/dueProcess")),
+            "{error}"
         );
-        assert_eq!(trace.outcome, Outcome::Pass);
     }
 
     /// §5.3 policy-application extractor: DeonticEvaluation with a

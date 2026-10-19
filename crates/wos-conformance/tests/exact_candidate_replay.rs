@@ -161,36 +161,23 @@ fn substituted_document_and_unresolved_or_wrong_identity_dependencies_refuse() {
 }
 
 #[test]
-fn embedded_governance_is_selected_from_current_candidate() {
+fn embedded_governance_requirements_are_admitted_from_current_candidate() {
     let mut workflow = candidate("true");
-    workflow["lifecycle"]["states"]["open"]["transitions"][0]["event"] = json!("approved");
-    workflow["governance"] = json!({"dueProcess":{},"qualityControls":{"reviewSampling":{"rate":0.2,"method":"random"}}});
-    let mut scenario = fixture();
-    scenario["event_sequence"][0] = json!({"event":"approved","actor":"reviewer","data":{}});
-    scenario["expected_transitions"][0]["event"] = json!("approved");
-    let first =
-        replay(&prepare_replay(request(workflow.clone(), scenario.clone())).unwrap()).unwrap();
-    workflow["governance"]["qualityControls"]["reviewSampling"]["rate"] = json!(0.8);
-    let second = replay(&prepare_replay(request(workflow, scenario)).unwrap()).unwrap();
-    let rate = |result: &wos_conformance::studio_api::ReplayResult| {
-        result
+    workflow["governance"] = json!({"dueProcess":{}});
+    let first = replay(&prepare_replay(request(workflow.clone(), fixture())).unwrap()).unwrap();
+    assert!(first.passed, "{:?}", first.failures);
+    assert!(
+        !first
             .provenance
-            .as_ref()
             .unwrap()
             .iter()
-            .find_map(|record| {
-                record
-                    .data
-                    .as_ref()
-                    .and_then(|data| data.get("rate"))
-                    .cloned()
-            })
-            .unwrap()
-    };
-    assert!(first.passed && second.passed);
-    assert_eq!(rate(&first), json!(0.2));
-    assert_eq!(rate(&second), json!(0.8));
-    assert_ne!(first.identity, second.identity);
+            .any(|record| record.record_kind == wos_conformance::ProvenanceKind::SamplingDecision)
+    );
+    workflow["governance"]["dueProcess"]["adverseDecisionPolicy"] = json!({"noticeRequired":true});
+    let error = prepare_replay(request(workflow, fixture()))
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("noticeRequired"), "{error}");
 }
 
 fn task_candidate() -> Value {
@@ -438,27 +425,15 @@ fn canonical_top_level_agents_activate_native_ai_policy() {
 }
 
 #[test]
-fn native_notice_provenance_is_observed_and_host_delivery_is_refused() {
+fn required_notice_delivery_refuses_before_initialization() {
     let mut workflow = candidate("true");
     workflow["governance"] = json!({"dueProcess":{"adverseDecisionPolicy":{"noticeRequired":true,"noticeTiming":"beforeEffective","noticeGracePeriod":"P1D"}}});
-    workflow["lifecycle"]["states"]["open"]["transitions"][0]["event"] = json!("denied");
     workflow["lifecycle"]["states"]["open"]["transitions"][0]["tags"] = json!(["adverse-decision"]);
-    let mut scenario = fixture();
-    scenario["event_sequence"][0]["event"] = json!("denied");
-    scenario["expected_transitions"][0]["event"] = json!("denied");
-    let mut input = request(workflow.clone(), scenario.clone());
-    input.required_observations.push("noticeProvenance".into());
-    let result = replay(&prepare_replay(input).unwrap()).unwrap();
-    assert!(result.passed, "{:?}", result.failures);
-    assert!(
-        result
-            .provenance
-            .as_ref()
-            .unwrap()
-            .iter()
-            .any(|record| record.record_kind == wos_conformance::ProvenanceKind::NoticeSent)
-    );
-    let mut input = request(workflow, scenario);
+    let error = prepare_replay(request(workflow.clone(), fixture()))
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("noticeRequired"), "{error}");
+    let mut input = request(workflow, fixture());
     input.required_observations.push("deliveredNotice".into());
     assert!(
         prepare_replay(input)

@@ -17,25 +17,27 @@ fn fixtures_dir() -> PathBuf {
 }
 
 #[test]
-fn governance_basic_profile_passes() {
+fn governance_basic_profile_reports_missing_operation_owners() {
     let (passed, message) = run_profile_against_fixtures(
         &fixtures_dir(),
         "Governance Basic",
         |fixture| GOVERNANCE_BASIC_RULES.contains(&fixture.rule.as_str()),
         Some(GOVERNANCE_BASIC_RULES),
     );
-    assert!(passed, "{message}");
+    assert!(!passed, "{message}");
+    assert!(message.contains("unsupported"), "{message}");
 }
 
 #[test]
-fn governance_complete_profile_passes() {
+fn governance_complete_profile_reports_missing_operation_owners() {
     let (passed, message) = run_profile_against_fixtures(
         &fixtures_dir(),
         "Governance Complete",
         |fixture| fixture.rule.starts_with("G-"),
         None,
     );
-    assert!(passed, "{message}");
+    assert!(!passed, "{message}");
+    assert!(message.contains("unsupported"), "{message}");
 }
 
 #[test]

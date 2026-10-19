@@ -73,7 +73,7 @@ fn minimal_proxy_ai_document() -> NativeAiPolicy {
 }
 
 #[test]
-fn profile_backed_claims_verify_against_current_fixture_inventory() {
+fn incomplete_profiles_fail_against_current_fixture_inventory() {
     let manifest = ProcessorManifest {
         processor_name: "reference-processor".to_string(),
         claims: ProcessorClaims {
@@ -88,8 +88,8 @@ fn profile_backed_claims_verify_against_current_fixture_inventory() {
 
     let report = verify_processor_manifest(&manifest, &fixtures_dir()).expect("verify manifest");
 
-    assert_eq!(status_for(&report, "G-051"), ClaimStatus::Verified);
-    assert_eq!(status_for(&report, "G-052"), ClaimStatus::Verified);
+    assert_eq!(status_for(&report, "G-051"), ClaimStatus::Failed);
+    assert_eq!(status_for(&report, "G-052"), ClaimStatus::Failed);
     assert_eq!(status_for(&report, "AI-001"), ClaimStatus::Failed);
     assert_eq!(status_for(&report, "AI-002"), ClaimStatus::Failed);
 }

@@ -58,6 +58,37 @@ fn assert_retired_fixture_refused(name: &str) {
     );
 }
 
+/// Historical bytes remain evidence of unsupported declarations or absent native effects.
+fn assert_retired_provenance_not_supported(name: &str) {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let source =
+        std::fs::read_to_string(root.join("fixtures/historical-provenance").join(name)).unwrap();
+    match run_fixture(&source, root.join("tests/fixtures").to_str().unwrap()) {
+        Ok(result) => assert!(
+            !result.passed,
+            "retired {name} must not establish positive support"
+        ),
+        Err(error) => assert!(
+            matches!(
+                error,
+                wos_conformance::ConformanceError::UnsupportedOperation(_)
+            ),
+            "{name}: {error}"
+        ),
+    }
+}
+
+fn assert_historical_due_process_refused(name: &str) {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let source =
+        std::fs::read_to_string(root.join("fixtures/historical-provenance").join(name)).unwrap();
+    let error = run_fixture(&source, root.join("tests/fixtures").to_str().unwrap()).unwrap_err();
+    assert!(
+        matches!(error, wos_conformance::ConformanceError::UnsupportedOperation(ref reason) if reason.contains("/governance/dueProcess")),
+        "{name}: {error}"
+    );
+}
+
 // ── Purchase Order Approval (flat lifecycle, guard evaluation) ───
 
 /// Simple approval path: amount under $50k guard passes, order completes.
@@ -83,13 +114,13 @@ fn purchase_order_reject_then_resubmit() {
 /// Both reviewers reach the same decision; $join fires directly to determination.
 #[test]
 fn benefits_parallel_reviewers_agree() {
-    assert_fixture_passes("benefits-parallel-agree.json");
+    assert_historical_due_process_refused("benefits-parallel-agree.json");
 }
 
 /// Reviewers disagree; $join fires to reconciliation before determination.
 #[test]
 fn benefits_parallel_reviewers_disagree() {
-    assert_fixture_passes("benefits-parallel-disagree.json");
+    assert_historical_due_process_refused("benefits-parallel-disagree.json");
 }
 
 // ── Medicaid Redetermination (compound state, timers) ────────────
@@ -97,13 +128,13 @@ fn benefits_parallel_reviewers_disagree() {
 /// Complete intake through compound eligibilityReview to activeBenefits.
 #[test]
 fn medicaid_happy_path() {
-    assert_fixture_passes("medicaid-happy-path.json");
+    assert_historical_due_process_refused("medicaid-happy-path.json");
 }
 
 /// Non-response timer fires after 30 days and routes to deniedForNonResponse.
 #[test]
 fn medicaid_timer_nonresponse() {
-    assert_fixture_passes("medicaid-timer-nonresponse.json");
+    assert_historical_due_process_refused("medicaid-timer-nonresponse.json");
 }
 
 // ── Guard evaluation unit tests ──────────────────────────────────
@@ -200,13 +231,13 @@ fn k045_timer_tolerance_violation() {
 /// G-030: Entering a hold-tagged state starts the hold timer (WG S12.4).
 #[test]
 fn g030_hold_timer_start() {
-    assert_fixture_passes("g-030-hold-timer-start.json");
+    assert_retired_provenance_not_supported("g-030-hold-timer-start.json");
 }
 
 /// G-054: Resume trigger cancels the hold timer before it fires (WG S12.4).
 #[test]
 fn g054_resume_cancels_hold_timer() {
-    assert_fixture_passes("g-054-resume-cancels-hold-timer.json");
+    assert_retired_provenance_not_supported("g-054-resume-cancels-hold-timer.json");
 }
 
 // ── Batch 3: Deontic enforcement ────────────────────────────────
@@ -418,43 +449,43 @@ fn ag016_review_ground_truth_retired_input_refused() {
 /// G-002: Notice before adverse decision takes effect (WG S3.2).
 #[test]
 fn g002_notice_before_adverse() {
-    assert_fixture_passes("g-002-notice-before-adverse.json");
+    assert_retired_provenance_not_supported("g-002-notice-before-adverse.json");
 }
 
 /// G-006: Appeal reviewed by independent adjudicator (WG S3.5).
 #[test]
 fn g006_appeal_independent_reviewer() {
-    assert_fixture_passes("g-006-appeal-independent-reviewer.json");
+    assert_retired_provenance_not_supported("g-006-appeal-independent-reviewer.json");
 }
 
 /// G-007: Appeal filing produces provenance record (WG S3.5).
 #[test]
 fn g007_appeal_provenance() {
-    assert_fixture_passes("g-007-appeal-provenance.json");
+    assert_retired_provenance_not_supported("g-007-appeal-provenance.json");
 }
 
 /// G-010: independentFirst enforces recording before recommendation visible (WG S4.2).
 #[test]
 fn g010_independent_first() {
-    assert_fixture_passes("g-010-independent-first.json");
+    assert_retired_provenance_not_supported("g-010-independent-first.json");
 }
 
 /// G-016: Configurable percentage randomly selected for quality review (WG S7.1).
 #[test]
 fn g016_review_sampling() {
-    assert_fixture_passes("g-016-review-sampling.json");
+    assert_retired_provenance_not_supported("g-016-review-sampling.json");
 }
 
 /// G-017: Reviewer MUST NOT be original decision-maker (WG S7.2).
 #[test]
 fn g017_reviewer_separation() {
-    assert_fixture_passes("g-017-reviewer-separation.json");
+    assert_retired_provenance_not_supported("g-017-reviewer-separation.json");
 }
 
 /// G-018: Override requires structured rationale, authority, evidence (WG S7.3).
 #[test]
 fn g018_override_rationale() {
-    assert_fixture_passes("g-018-override-rationale.json");
+    assert_retired_provenance_not_supported("g-018-override-rationale.json");
 }
 
 /// Historical external-policy input refuses; the original operation remains unsupported.
@@ -468,43 +499,43 @@ fn ai045_independent_first_suppression_retired_input_refused() {
 /// G-012: Pipeline stage records inputs, outputs, gate results in provenance (WG S5.5).
 #[test]
 fn g012_pipeline_stage_provenance() {
-    assert_fixture_passes("g-012-pipeline-stage-provenance.json");
+    assert_retired_provenance_not_supported("g-012-pipeline-stage-provenance.json");
 }
 
 /// G-013: Pipeline risk profile determined by weakest gate (WG S5.5).
 #[test]
 fn g013_weakest_link_risk() {
-    assert_fixture_passes("g-013-weakest-link-risk.json");
+    assert_retired_provenance_not_supported("g-013-weakest-link-risk.json");
 }
 
 /// G-019: Override records are immutable provenance entries (WG S7.3).
 #[test]
 fn g019_override_immutable() {
-    assert_fixture_passes("g-019-override-immutable.json");
+    assert_retired_provenance_not_supported("g-019-override-immutable.json");
 }
 
 /// G-020: Rejection records gate, input, threshold, what would pass (WG S8.2).
 #[test]
 fn g020_rejection_detail() {
-    assert_fixture_passes("g-020-rejection-detail.json");
+    assert_retired_provenance_not_supported("g-020-rejection-detail.json");
 }
 
 /// G-021: All task state transitions recorded in provenance (WG S10.1).
 #[test]
 fn g021_task_provenance() {
-    assert_fixture_passes("g-021-task-provenance.json");
+    assert_retired_provenance_not_supported("g-021-task-provenance.json");
 }
 
 /// G-032: Temporal resolution selects most recent entry before resolution date (WG S13.2).
 #[test]
 fn g032_temporal_resolution() {
-    assert_fixture_passes("g-032-temporal-resolution.json");
+    assert_retired_provenance_not_supported("g-032-temporal-resolution.json");
 }
 
 /// G-049: Processor MUST NOT alter resolution based on bindingType (PP S1.5.4).
 #[test]
 fn g049_binding_type_neutral() {
-    assert_fixture_passes("g-049-binding-type-neutral.json");
+    assert_retired_provenance_not_supported("g-049-binding-type-neutral.json");
 }
 
 // ── Batch 8: Compensation ───────────────────────────────────────
@@ -512,31 +543,31 @@ fn g049_binding_type_neutral() {
 /// K-027: Compensation log is append-only (Kernel S9.5, LCD S5.2).
 #[test]
 fn k027_compensation_log_append_only() {
-    assert_fixture_passes("k-027-compensation-log-append-only.json");
+    assert_retired_provenance_not_supported("k-027-compensation-log-append-only.json");
 }
 
 /// K-039: Compensation in reverse of forward completion order (LCD S5.4).
 #[test]
 fn k039_compensation_reverse_order() {
-    assert_fixture_passes("k-039-compensation-reverse-order.json");
+    assert_retired_provenance_not_supported("k-039-compensation-reverse-order.json");
 }
 
 /// K-040: Pivot step excluded from compensation (LCD S5.5).
 #[test]
 fn k040_pivot_no_compensation() {
-    assert_fixture_passes("k-040-pivot-no-compensation.json");
+    assert_retired_provenance_not_supported("k-040-pivot-no-compensation.json");
 }
 
 /// K-041: Inner scope compensation does not trigger outer (LCD S5.8).
 #[test]
 fn k041_inner_scope_boundary() {
-    assert_fixture_passes("k-041-inner-scope-boundary.json");
+    assert_retired_provenance_not_supported("k-041-inner-scope-boundary.json");
 }
 
 /// K-042: $compensation.complete event processed like any event (LCD S5.9).
 #[test]
 fn k042_compensation_complete_event() {
-    assert_fixture_passes("k-042-compensation-complete-event.json");
+    assert_retired_provenance_not_supported("k-042-compensation-complete-event.json");
 }
 
 // ── Batch 9: Delegation runtime ─────────────────────────────────
@@ -544,13 +575,13 @@ fn k042_compensation_complete_event() {
 /// G-025: Determinations without valid delegation are conformance errors (WG S11.4).
 #[test]
 fn g025_delegation_required() {
-    assert_fixture_passes("g-025-delegation-required.json");
+    assert_retired_provenance_not_supported("g-025-delegation-required.json");
 }
 
 /// G-026: Delegation used referenced in provenance record (WG S11.4).
 #[test]
 fn g026_delegation_in_provenance() {
-    assert_fixture_passes("g-026-delegation-in-provenance.json");
+    assert_retired_provenance_not_supported("g-026-delegation-in-provenance.json");
 }
 
 // ── Batch 10: Agent provenance + fallback ───────────────────────
@@ -632,7 +663,7 @@ fn ai040_terminal_fallback_retired_input_refused() {
 /// K-023: Non-terminal instances resume after crash (Kernel S9.1, G1).
 #[test]
 fn k023_crash_recovery() {
-    assert_fixture_passes("k-023-crash-recovery.json");
+    assert_retired_provenance_not_supported("k-023-crash-recovery.json");
 }
 
 /// K-024: Non-deterministic output persisted before advancing state (Kernel S9.1, G3).
@@ -644,7 +675,7 @@ fn k024_persist_before_advance() {
 /// K-026: IdempotencyKey deduplicates invocations (Kernel S9.3).
 #[test]
 fn k026_idempotency_dedup() {
-    assert_fixture_passes("k-026-idempotency-dedup.json");
+    assert_retired_provenance_not_supported("k-026-idempotency-dedup.json");
 }
 
 /// K-028: Instance migration produces provenance (Kernel S9.6).
@@ -676,19 +707,19 @@ fn k035_history_cleared_on_exit() {
 /// AG-001: Equity guardrails do not block individual actions (AdvGov S3.3).
 #[test]
 fn ag001_equity_no_block_individual() {
-    assert_fixture_passes("ag-001-equity-no-block-individual.json");
+    assert_retired_provenance_not_supported("ag-001-equity-no-block-individual.json");
 }
 
 /// AG-002: Excluding a pending activity raises resolution error (AdvGov S4.4).
 #[test]
 fn ag002_exclude_pending_error() {
-    assert_fixture_passes("ag-002-exclude-pending-error.json");
+    assert_retired_provenance_not_supported("ag-002-exclude-pending-error.json");
 }
 
 /// AG-003: Zone satisfied when all pending executed (AdvGov S4.5).
 #[test]
 fn ag003_zone_satisfaction() {
-    assert_fixture_passes("ag-003-zone-satisfaction.json");
+    assert_retired_provenance_not_supported("ag-003-zone-satisfaction.json");
 }
 
 // ── Batch 13: Provenance completeness ───────────────────────────
@@ -696,7 +727,7 @@ fn ag003_zone_satisfaction() {
 /// K-018: Case relationship changes produce provenance (Kernel S5.5).
 #[test]
 fn k018_relationship_change_provenance() {
-    assert_fixture_passes("k-018-relationship-change-provenance.json");
+    assert_retired_provenance_not_supported("k-018-relationship-change-provenance.json");
 }
 
 /// Historical external-policy input refuses; the original operation remains unsupported.
@@ -710,19 +741,19 @@ fn ai048_narrative_not_dispositive_retired_input_refused() {
 /// VR-001: Verification report is immutable once produced (VerifReport S1).
 #[test]
 fn vr001_report_immutable() {
-    assert_fixture_passes("vr-001-report-immutable.json");
+    assert_retired_provenance_not_supported("vr-001-report-immutable.json");
 }
 
 /// VR-002: Proven-unsafe prevents workflow activation (VerifReport S1).
 #[test]
 fn vr002_proven_unsafe_blocks_activation() {
-    assert_fixture_passes("vr-002-proven-unsafe-blocks-activation.json");
+    assert_retired_provenance_not_supported("vr-002-proven-unsafe-blocks-activation.json");
 }
 
 /// AG-015: Proven-unsafe constraint blocks workflow activation (AdvGov S8.3).
 #[test]
 fn ag015_proven_unsafe_blocks_active() {
-    assert_fixture_passes("ag-015-proven-unsafe-blocks-active.json");
+    assert_retired_provenance_not_supported("ag-015-proven-unsafe-blocks-active.json");
 }
 
 // ── Batch 15: Sidecar runtime ───────────────────────────────────
@@ -730,31 +761,37 @@ fn ag015_proven_unsafe_blocks_active() {
 /// G-061: Processor ignores expired calendar, falls back to wall-clock (BC S8.1).
 #[test]
 fn g061_expired_calendar_ignored() {
-    assert_fixture_passes("g-061-expired-calendar-ignored.json");
+    assert_retired_provenance_not_supported("g-061-expired-calendar-ignored.json");
 }
 
 /// G-064: Processor does not send notification when required variables missing (NT S5.3).
 #[test]
 fn g064_notification_missing_variables() {
-    assert_fixture_passes("g-064-notification-missing-variables.json");
+    assert_retired_provenance_not_supported("g-064-notification-missing-variables.json");
 }
 
 // ── Guard evaluation unit tests ──────────────────────────────────
 
-/// Timer provenance records are emitted when a timer is created.
+/// The original Medicaid scenario requires an unavailable due-process owner.
+#[test]
+fn medicaid_timer_scenario_refuses_required_due_process() {
+    assert_historical_due_process_refused("medicaid-timer-nonresponse.json");
+}
+
+/// A separately identified operational scenario observes the native timer owner.
 #[test]
 fn timer_created_provenance_on_entry() {
-    let path = fixture_path("medicaid-timer-nonresponse.json");
-    let fixture_json = std::fs::read_to_string(&path).unwrap();
-    let base_dir = std::path::Path::new(&path)
-        .parent()
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .to_string();
-
-    let result = run_fixture(&fixture_json, &base_dir).expect("run_fixture failed");
-
+    let fixture = serde_json::json!({
+        "id":"native-operational-timer-owner", "rule":"K-TIMER-001",
+        "description":"Native timer creation and firing without required governance work",
+        "documents":{"kernel":"inline"},
+        "inline_documents":{"kernel":{"$wosWorkflow":"1.0", "url":"urn:test:native-timer-owner", "title":"Native operational timer owner", "version":"1.0.0", "impactLevel":"operational", "actors":[{"id":"operator","type":"human"}],
+            "lifecycle":{"initialState":"waiting","states":{"waiting":{"type":"atomic","onEntry":[{"action":"startTimer","timerId":"real-timer","duration":"PT1H","event":"timeout"}],"transitions":[{"event":{"kind":"message","name":"timeout"},"target":"done"}]},"done":{"type":"final"}}}}},
+        "event_sequence":[{"event":"noop","actor":"operator","delay":"PT2H"}],
+        "expected_transitions":[{"from":"waiting","target":"done","event":"timeout"}]
+    });
+    let result = run_fixture(&fixture.to_string(), ".").expect("native timer fixture");
+    assert!(result.passed, "native timer: {:?}", result.failures);
     let timer_created = result
         .provenance
         .iter()
@@ -819,13 +856,31 @@ fn k043_reentered_timer_reset() {
 /// K-047: Case relationships MUST NOT affect lifecycle evaluation.
 #[test]
 fn k047_relationship_isolation() {
-    assert_fixture_passes("k-047-relationship-isolation.json");
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let source = std::fs::read_to_string(
+        root.join("fixtures/historical-provenance/k-047-relationship-isolation.json"),
+    )
+    .unwrap();
+    let result = run_fixture(&source, root.join("tests/fixtures").to_str().unwrap()).unwrap();
+    assert!(!result.passed);
+    assert!(
+        result
+            .failures
+            .iter()
+            .any(|failure| failure.contains("relationshipChanged"))
+    );
+    assert!(result.transitions.is_empty());
+    assert!(
+        !result.provenance.iter().any(
+            |record| record.record_kind == wos_conformance::ProvenanceKind::RelationshipChanged
+        )
+    );
 }
 
 /// K-DET-001: Determination transitions carry the pre-transition case-file snapshot.
 #[test]
 fn kdet001_determination_snapshot() {
-    assert_fixture_passes("k-det-001-determination-snapshot.json");
+    assert_historical_due_process_refused("k-det-001-determination-snapshot.json");
 }
 
 // ── Fixture parse validation ────────────────────────────────────
@@ -1248,4 +1303,9 @@ fn i002_outputbinding_wildcard_extracts_array() {
             .any(|p| p.as_str() == Some("caseFile.items")),
         "updatedPaths must include 'caseFile.items', got: {updated_paths:?}"
     );
+}
+
+#[test]
+fn native_operational_determination_snapshot_uses_real_runtime_owner() {
+    assert_fixture_passes("native-determination-snapshot.json");
 }

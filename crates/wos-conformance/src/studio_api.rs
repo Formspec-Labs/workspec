@@ -25,6 +25,7 @@ const FIXTURE_ACCESS_POLICY: &str =
 pub const SUPPORTED_OBSERVATIONS: &[&str] = &[
     "configuration",
     "caseState",
+    "stepResults",
     "activeTasks",
     "timers",
     "provenance",
@@ -119,6 +120,8 @@ pub struct RuntimeSnapshot {
     pub configuration: Vec<String>,
     /// Actual current case values.
     pub case_state: Value,
+    /// Service outputs read from the saved native runtime record.
+    pub step_results: Vec<wos_runtime::store::StepResultRecord>,
     /// Native active-task records.
     pub active_tasks: Value,
     /// Native pending-timer records.
@@ -155,6 +158,8 @@ pub struct ReplayAttempt {
     pub submission_result: Option<Value>,
     /// Native migration outcome, retained before any later readback failure.
     pub migration_result: Option<Value>,
+    /// Actual typed unsupported-operation refusals; never inferred from payload fields.
+    pub refusals: Vec<String>,
     /// Native runtime error, when the operation rejected with an error.
     pub error: Option<String>,
     /// Actual native provenance produced during this operation.
@@ -562,8 +567,12 @@ pub fn prepare_replay(request: ReplayRequest) -> Result<PreparedReplay, Conforma
         .collect();
     fixture.inline_documents = selected.into_iter().collect();
     // Construct now to reject unsupported embedded input shapes before execution.
-    WorkflowEngine::from_resolved(&fixture, request.clock_start_ms, true)
-        .map_err(|error| refused(format!("unsupported-runtime-configuration: {error}")))?;
+    WorkflowEngine::from_resolved(&fixture, request.clock_start_ms, true).map_err(|error| {
+        match error {
+            ConformanceError::UnsupportedOperation(_) => error,
+            other => refused(format!("unsupported-runtime-configuration: {other}")),
+        }
+    })?;
     inputs.push(document_identity(
         "fixture",
         &fixture.id,
@@ -579,7 +588,7 @@ pub fn prepare_replay(request: ReplayRequest) -> Result<PreparedReplay, Conforma
         "compiledSource":serde_json::from_str::<Value>(env!("WOS_REPLAY_BUILD_IDENTITY")).map_err(|error| refused(error.to_string()))?,
         "schema":{"id":schema_value["$id"], "rawSha256":digest(schema)},
         "canonicalization":integrity_canonical::CANONICALIZATION_PRIMITIVE,
-        "digestAlgorithm":"sha-256", "fixtureFormspecProcessor":true, "fixtureService":true,
+        "digestAlgorithm":"sha-256", "fixtureFormspecProcessor":true, "fixtureService":true, "fixtureContractValidator":true,
         "taskPresenter":"no-op", "agentOutputs":"fixture event payloads; native policy stage only; no model invocation, definition validation, human review or governed output commit", "accessControl":FIXTURE_ACCESS_POLICY, "clockStartMs":request.clock_start_ms
     });
     let identity = content_digest(&json!({"inputs":inputs,"runtime":runtime_identity,
@@ -630,6 +639,7 @@ pub fn replay(prepared: &PreparedReplay) -> Result<ReplayResult, ConformanceErro
         .map(|error| format!("missing-observation: {error}"))
         .collect();
     for attempt in &result.attempts {
+        refusals.extend(attempt.refusals.iter().cloned());
         for drain in &attempt.drains {
             if let Some(policy) = &drain.policy_evaluation {
                 refusals.extend(
@@ -721,7 +731,7 @@ fn creation_failure(
 
 fn execution_labels() -> Value {
     json!({"runtime":"in-memory WosRuntime","formspec":"FixtureFormspecProcessor (canned definition validation and response mapping)",
-        "services":"fixture-provided canned response", "notifications":"native notice provenance and native template-not-found fallback; canonical template rendering and external delivery unproven", "taskPresentation":"no-op", "agentOutputs":"fixture event payloads; native policy stage only; no model invocation, definition validation, human review or governed output commit", "accessControl":FIXTURE_ACCESS_POLICY, "hosted":false,"durable":false})
+        "services":"fixture-provided canned response", "contractValidator":"fixture-configured port results; no external provider qualification", "notifications":"required notice delivery unsupported; reference admission refuses before process creation (fs-hltb)", "taskPresentation":"no-op", "agentOutputs":"fixture event payloads; native policy stage only; no model invocation, definition validation, human review or governed output commit", "accessControl":FIXTURE_ACCESS_POLICY, "hosted":false,"durable":false})
 }
 
 fn trace_attempts(

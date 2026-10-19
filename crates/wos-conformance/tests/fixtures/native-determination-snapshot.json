@@ -1,0 +1,79 @@
+{
+  "id": "native-operational-determination-snapshot",
+  "rule": "K-DET-001",
+  "description": "Actual native determination transition captures its pre-transition case state; no governance profile claim",
+  "documents": {
+    "kernel": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosWorkflow": "1.0",
+      "url": "urn:test:operational-determination-snapshot",
+      "version": "1.0.0",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "reviewer",
+          "type": "human"
+        }
+      ],
+      "lifecycle": {
+        "initialState": "review",
+        "states": {
+          "review": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": {
+                  "kind": "message",
+                  "name": "decide"
+                },
+                "target": "decided",
+                "tags": [
+                  "determination"
+                ]
+              }
+            ]
+          },
+          "decided": {
+            "type": "final"
+          }
+        }
+      },
+      "title": "Native operational determination snapshot"
+    }
+  },
+  "initial_case_state": {
+    "determination": "pending"
+  },
+  "event_sequence": [
+    {
+      "event": "decide",
+      "actor": "reviewer"
+    }
+  ],
+  "expected_transitions": [
+    {
+      "from": "review",
+      "target": "decided",
+      "event": "decide"
+    }
+  ],
+  "expected_provenance": [
+    {
+      "record_kind": "stateTransition",
+      "fromState": "review",
+      "toState": "decided",
+      "transitionTags": [
+        "determination"
+      ],
+      "caseFileSnapshot": {
+        "value": {
+          "determination": "pending"
+        },
+        "jcsCanonical": "{\"determination\":\"pending\"}",
+        "sha256": "9c84b9f37f292be68d24c9865cb0a93337d3fb8bc6261563e9513ee13a3c9e81"
+      }
+    }
+  ]
+}

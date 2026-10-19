@@ -17,9 +17,7 @@ use wos_core::traits::ContractValidator;
 
 use crate::{ConformanceError, ConformanceFixture, run_fixture};
 
-pub const GOVERNANCE_BASIC_RULES: &[&str] = &[
-    "G-002", "G-006", "G-007", "G-010", "G-016", "G-017", "G-018",
-];
+pub const GOVERNANCE_BASIC_RULES: &[&str] = &["G-002", "G-006", "G-007", "G-010"];
 pub const AI_REGISTRATION_BATCHES: &[u8] = &[3, 4, 5, 10];
 pub const AI_CONFIDENCE_BATCHES: &[u8] = &[5];
 // Complete profiles retain their required operations even when a historical
@@ -350,6 +348,9 @@ pub fn run_profile_against_fixtures<F>(
 where
     F: Fn(&ConformanceFixture) -> bool,
 {
+    if let Some(profile) = unsupported_governance_profile(profile_name) {
+        return (profile.passed, profile.message);
+    }
     let specs = match load_fixture_specs(fixtures_dir) {
         Ok(specs) => specs,
         Err(error) => return (false, error.to_string()),
@@ -482,22 +483,35 @@ pub fn validate_ai_family_batch_coverage(
     Ok(())
 }
 
-fn evaluate_governance_basic(specs: &[FixtureSpec]) -> ProfileCheck {
-    evaluate_profile(
-        specs,
-        "Governance Basic",
-        |spec| GOVERNANCE_BASIC_RULES.contains(&spec.fixture.rule.as_str()),
-        Some(GOVERNANCE_BASIC_RULES),
-    )
+fn unsupported_governance_profile(profile_name: &str) -> Option<ProfileCheck> {
+    let normalized: String = profile_name
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect();
+    if !matches!(
+        normalized.as_str(),
+        "governancebasic"
+            | "governancecomplete"
+            | "workflowgovernancebasic"
+            | "workflowgovernancecomplete"
+    ) {
+        return None;
+    }
+    Some(ProfileCheck {
+        passed: false,
+        message: format!(
+            "profile '{profile_name}' unsupported: Governance §3–§4 require actual notice delivery, appeal filing and independent human-review operations absent from the reference route. Complete additionally requires §5–§8 and §10–§13. Fixture labels, rejection/refusal controls and native operation subsets cannot verify these obligations"
+        ),
+    })
 }
 
-fn evaluate_governance_complete(specs: &[FixtureSpec]) -> ProfileCheck {
-    evaluate_profile(
-        specs,
-        "Governance Complete",
-        |spec| spec.fixture.rule.starts_with("G-"),
-        None,
-    )
+fn evaluate_governance_basic(_specs: &[FixtureSpec]) -> ProfileCheck {
+    unsupported_governance_profile("Governance Basic").expect("known full governance profile")
+}
+
+fn evaluate_governance_complete(_specs: &[FixtureSpec]) -> ProfileCheck {
+    unsupported_governance_profile("Governance Complete").expect("known full governance profile")
 }
 
 fn evaluate_ai_registration(specs: &[FixtureSpec]) -> ProfileCheck {

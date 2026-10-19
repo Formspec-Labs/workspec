@@ -1,0 +1,1490 @@
+{
+  "kind": "Literal native operation controls; required-notice cases refused because delivery owner is unavailable",
+  "vectors": [
+    {
+      "id": "ordinary-hints-stay-inert",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:operation-provenance",
+        "version": "1.0.0",
+        "title": "Operation provenance control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "operator",
+            "type": "human"
+          }
+        ],
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "appealFiled"
+                  },
+                  "guard": "true",
+                  "target": "done",
+                  "actions": [
+                    {
+                      "action": "setData",
+                      "path": "caseFile.accepted",
+                      "value": true
+                    }
+                  ]
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            },
+            "pending": {
+              "type": "atomic"
+            }
+          }
+        }
+      },
+      "fixture": {
+        "id": "ordinary-hints-stay-inert",
+        "rule": "control",
+        "description": "Independently reviewed native operation observations",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "appealFiled",
+            "actor": "operator",
+            "data": {
+              "serviceOutput": {
+                "forged": true
+              },
+              "contractValidation": {
+                "contractRef": "validation",
+                "valid": true,
+                "structured": true
+              },
+              "idempotencyKey": "claimed-key",
+              "historyCleared": {
+                "state": "open"
+              },
+              "sameActorAsDecisionMaker": false,
+              "independentAssessmentRecorded": true,
+              "agentOutputVisible": false,
+              "stageResults": [
+                {
+                  "stage": "claimed",
+                  "risk": "low"
+                }
+              ],
+              "parameterValues": [
+                {
+                  "value": 1,
+                  "effectiveDate": "2020-01-01"
+                }
+              ],
+              "resolutionDate": "2026-01-01",
+              "bindingType": "claimed",
+              "resolvedValue": 1,
+              "rationale": "claim",
+              "evidence": [
+                "claim"
+              ],
+              "delegationId": "claimed",
+              "activity": "claimed",
+              "equityAlert": {
+                "active": true
+              },
+              "reportId": "claimed",
+              "timestamp": "2026-01-01T00:00:00Z",
+              "calendarExpired": true
+            }
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "done",
+            "event": "appealFiled"
+          }
+        ]
+      },
+      "expected": {
+        "status": "pass",
+        "configuration": [
+          "done"
+        ],
+        "caseState": {
+          "accepted": true
+        },
+        "stepResults": [],
+        "taskRefs": [],
+        "provenanceCounts": {
+          "taskCreated": 0,
+          "stepResultPersisted": 0,
+          "contractValidation": 0,
+          "appealFiled": 0,
+          "samplingDecision": 0,
+          "overrideRecorded": 0,
+          "pipelineStageCompleted": 0,
+          "parameterResolved": 0,
+          "historyCleared": 0,
+          "instanceResumed": 0,
+          "instanceMigrated": 0,
+          "dcrActivityExecuted": 0,
+          "dcrZoneSatisfied": 0,
+          "verificationReportProduced": 0,
+          "calendarIgnored": 0
+        }
+      }
+    },
+    {
+      "id": "native-task",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:operation-provenance",
+        "version": "1.0.0",
+        "title": "Operation provenance control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "operator",
+            "type": "human"
+          }
+        ],
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "appealFiled"
+                  },
+                  "guard": "true",
+                  "target": "pending",
+                  "actions": [
+                    {
+                      "action": "createTask",
+                      "taskRef": "review",
+                      "assignTo": "operator"
+                    }
+                  ]
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            },
+            "pending": {
+              "type": "atomic"
+            }
+          }
+        }
+      },
+      "fixture": {
+        "id": "native-task",
+        "rule": "control",
+        "description": "Independently reviewed native operation observations",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "appealFiled",
+            "actor": "operator",
+            "data": {
+              "request": "review"
+            }
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "pending",
+            "event": "appealFiled"
+          }
+        ]
+      },
+      "expected": {
+        "status": "pass",
+        "configuration": [
+          "pending"
+        ],
+        "stepResults": [],
+        "taskRefs": [
+          "review"
+        ],
+        "provenanceCounts": {
+          "taskCreated": 1,
+          "appealFiled": 0
+        }
+      }
+    },
+    {
+      "id": "no-task-action",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:operation-provenance",
+        "version": "1.0.0",
+        "title": "Operation provenance control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "operator",
+            "type": "human"
+          }
+        ],
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "appealFiled"
+                  },
+                  "guard": "true",
+                  "target": "pending",
+                  "actions": []
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            },
+            "pending": {
+              "type": "atomic"
+            }
+          }
+        }
+      },
+      "fixture": {
+        "id": "no-task-action",
+        "rule": "control",
+        "description": "Independently reviewed native operation observations",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "appealFiled",
+            "actor": "operator",
+            "data": {
+              "request": "review"
+            }
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "pending",
+            "event": "appealFiled"
+          }
+        ]
+      },
+      "expected": {
+        "status": "pass",
+        "configuration": [
+          "pending"
+        ],
+        "stepResults": [],
+        "taskRefs": [],
+        "provenanceCounts": {
+          "taskCreated": 0,
+          "appealFiled": 0
+        }
+      }
+    },
+    {
+      "id": "native-validator-valid",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:operation-provenance",
+        "version": "1.0.0",
+        "title": "Operation provenance control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "operator",
+            "type": "human"
+          }
+        ],
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "decide"
+                  },
+                  "guard": "true",
+                  "target": "done",
+                  "actions": [
+                    {
+                      "action": "invokeService",
+                      "serviceRef": "verify",
+                      "idempotencyKey": "native-key",
+                      "contractRef": "validation"
+                    }
+                  ]
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            },
+            "pending": {
+              "type": "atomic"
+            }
+          }
+        },
+        "contracts": {
+          "validation": {
+            "binding": "json-schema",
+            "ref": "urn:test:validation"
+          }
+        }
+      },
+      "fixture": {
+        "id": "native-validator-valid",
+        "rule": "control",
+        "description": "Independently reviewed native operation observations",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "decide",
+            "actor": "operator",
+            "data": {
+              "contractValidation": {
+                "contractRef": "validation",
+                "valid": true,
+                "structured": true
+              }
+            }
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "done",
+            "event": "decide"
+          }
+        ],
+        "service_response": {
+          "actual": "stored"
+        },
+        "contract_outcomes": {
+          "validation": {
+            "valid": true,
+            "errors": []
+          }
+        }
+      },
+      "expected": {
+        "status": "pass",
+        "configuration": [
+          "done"
+        ],
+        "stepOutputs": [
+          {
+            "actual": "stored"
+          }
+        ],
+        "taskRefs": [],
+        "validationResults": [
+          {
+            "valid": true,
+            "errors": []
+          }
+        ],
+        "provenanceCounts": {
+          "stepResultPersisted": 1,
+          "contractValidation": 1
+        }
+      }
+    },
+    {
+      "id": "native-validator-invalid",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:operation-provenance",
+        "version": "1.0.0",
+        "title": "Operation provenance control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "operator",
+            "type": "human"
+          }
+        ],
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "decide"
+                  },
+                  "guard": "true",
+                  "target": "done",
+                  "actions": [
+                    {
+                      "action": "invokeService",
+                      "serviceRef": "verify",
+                      "idempotencyKey": "native-key",
+                      "contractRef": "validation"
+                    }
+                  ]
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            },
+            "pending": {
+              "type": "atomic"
+            }
+          }
+        },
+        "contracts": {
+          "validation": {
+            "binding": "json-schema",
+            "ref": "urn:test:validation"
+          }
+        }
+      },
+      "fixture": {
+        "id": "native-validator-invalid",
+        "rule": "control",
+        "description": "Independently reviewed native operation observations",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "decide",
+            "actor": "operator",
+            "data": {
+              "contractValidation": {
+                "contractRef": "validation",
+                "valid": true,
+                "structured": true
+              },
+              "serviceOutput": {
+                "claimed": "not stored"
+              }
+            }
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "done",
+            "event": "decide"
+          }
+        ],
+        "service_response": {
+          "actual": "stored"
+        },
+        "contract_outcomes": {
+          "validation": {
+            "valid": false,
+            "errors": [
+              "actual validator rejection"
+            ]
+          }
+        }
+      },
+      "expected": {
+        "status": "pass",
+        "configuration": [
+          "done"
+        ],
+        "stepOutputs": [
+          {
+            "actual": "stored"
+          }
+        ],
+        "taskRefs": [],
+        "validationResults": [
+          {
+            "valid": false,
+            "errors": [
+              "actual validator rejection"
+            ]
+          }
+        ],
+        "provenanceCounts": {
+          "stepResultPersisted": 1,
+          "contractValidation": 1
+        }
+      }
+    },
+    {
+      "id": "native-service-dedup",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:operation-provenance",
+        "version": "1.0.0",
+        "title": "Operation provenance control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "operator",
+            "type": "human"
+          }
+        ],
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "decide"
+                  },
+                  "guard": "true",
+                  "target": "open",
+                  "actions": [
+                    {
+                      "action": "invokeService",
+                      "serviceRef": "verify",
+                      "idempotencyKey": "native-key",
+                      "contractRef": "validation"
+                    }
+                  ]
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            },
+            "pending": {
+              "type": "atomic"
+            }
+          }
+        },
+        "contracts": {
+          "validation": {
+            "binding": "json-schema",
+            "ref": "urn:test:validation"
+          }
+        }
+      },
+      "fixture": {
+        "id": "native-service-dedup",
+        "rule": "control",
+        "description": "Independently reviewed native operation observations",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "decide",
+            "actor": "operator"
+          },
+          {
+            "event": "decide",
+            "actor": "operator"
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "open",
+            "event": "decide"
+          },
+          {
+            "from": "open",
+            "target": "open",
+            "event": "decide"
+          }
+        ],
+        "service_response": {
+          "actual": "stored"
+        }
+      },
+      "expected": {
+        "status": "pass",
+        "configuration": [
+          "open"
+        ],
+        "stepOutputs": [
+          {
+            "actual": "stored"
+          }
+        ],
+        "taskRefs": [],
+        "provenanceCounts": {
+          "stepResultPersisted": 1,
+          "idempotencyDedup": 1,
+          "contractValidation": 2
+        }
+      }
+    },
+    {
+      "id": "fired-adverse-notice",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:operation-provenance",
+        "version": "1.0.0",
+        "title": "Operation provenance control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "operator",
+            "type": "human"
+          }
+        ],
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "denied"
+                  },
+                  "guard": "true",
+                  "target": "done",
+                  "actions": [
+                    {
+                      "action": "setData",
+                      "path": "caseFile.evidence",
+                      "value": "after"
+                    }
+                  ],
+                  "tags": [
+                    "adverse-decision"
+                  ]
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            },
+            "pending": {
+              "type": "atomic"
+            }
+          }
+        },
+        "governance": {
+          "dueProcess": {
+            "adverseDecisionPolicy": {
+              "noticeRequired": true,
+              "noticeTiming": "beforeEffective",
+              "noticeGracePeriod": "P1D"
+            }
+          }
+        }
+      },
+      "fixture": {
+        "id": "fired-adverse-notice",
+        "rule": "control",
+        "description": "Independently reviewed native operation observations",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "denied",
+            "actor": "operator"
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "done",
+            "event": "denied"
+          }
+        ],
+        "initial_case_state": {
+          "evidence": "before"
+        }
+      },
+      "expected": {
+        "preparationRefusalContains": "/governance/dueProcess/adverseDecisionPolicy/noticeRequired",
+        "noInitialization": true
+      }
+    },
+    {
+      "id": "false-guard-no-notice",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:operation-provenance",
+        "version": "1.0.0",
+        "title": "Operation provenance control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "operator",
+            "type": "human"
+          }
+        ],
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "denied"
+                  },
+                  "guard": "false",
+                  "target": "done",
+                  "actions": [
+                    {
+                      "action": "setData",
+                      "path": "caseFile.evidence",
+                      "value": "after"
+                    }
+                  ],
+                  "tags": [
+                    "adverse-decision"
+                  ]
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            },
+            "pending": {
+              "type": "atomic"
+            }
+          }
+        },
+        "governance": {
+          "dueProcess": {
+            "adverseDecisionPolicy": {
+              "noticeRequired": true,
+              "noticeTiming": "beforeEffective",
+              "noticeGracePeriod": "P1D"
+            }
+          }
+        }
+      },
+      "fixture": {
+        "id": "false-guard-no-notice",
+        "rule": "control",
+        "description": "Independently reviewed native operation observations",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "denied",
+            "actor": "operator"
+          }
+        ],
+        "expected_transitions": [],
+        "initial_case_state": {
+          "evidence": "before"
+        }
+      },
+      "expected": {
+        "preparationRefusalContains": "/governance/dueProcess/adverseDecisionPolicy/noticeRequired",
+        "noInitialization": true
+      }
+    },
+    {
+      "id": "competing-untagged-transition-no-notice",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:operation-provenance",
+        "version": "1.0.0",
+        "title": "Operation provenance control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "operator",
+            "type": "human"
+          }
+        ],
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "denied"
+                  },
+                  "guard": "true",
+                  "target": "done",
+                  "actions": []
+                },
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "denied"
+                  },
+                  "target": "pending",
+                  "tags": [
+                    "adverse-decision"
+                  ]
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            },
+            "pending": {
+              "type": "atomic"
+            }
+          }
+        },
+        "governance": {
+          "dueProcess": {
+            "adverseDecisionPolicy": {
+              "noticeRequired": true
+            }
+          }
+        }
+      },
+      "fixture": {
+        "id": "competing-untagged-transition-no-notice",
+        "rule": "control",
+        "description": "Independently reviewed native operation observations",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "denied",
+            "actor": "operator"
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "done",
+            "event": "denied"
+          }
+        ]
+      },
+      "expected": {
+        "preparationRefusalContains": "/governance/dueProcess/adverseDecisionPolicy/noticeRequired",
+        "noInitialization": true
+      }
+    },
+    {
+      "id": "restart-unsupported",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:operation-provenance",
+        "version": "1.0.0",
+        "title": "Operation provenance control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "operator",
+            "type": "human"
+          }
+        ],
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "decide"
+                  },
+                  "guard": "true",
+                  "target": "done",
+                  "actions": []
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            },
+            "pending": {
+              "type": "atomic"
+            }
+          }
+        }
+      },
+      "fixture": {
+        "id": "restart-unsupported",
+        "rule": "control",
+        "description": "Independently reviewed native operation observations",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "$restart",
+            "actor": "operator"
+          }
+        ],
+        "expected_transitions": []
+      },
+      "expected": {
+        "status": "refused",
+        "configuration": [
+          "open"
+        ],
+        "stepResults": [],
+        "provenanceCounts": {
+          "instanceResumed": 0
+        }
+      }
+    },
+    {
+      "id": "native-migration",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:operation-provenance",
+        "version": "1.0.0",
+        "title": "Operation provenance control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "operator",
+            "type": "human"
+          }
+        ],
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "decide"
+                  },
+                  "guard": "true",
+                  "target": "done",
+                  "actions": []
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            },
+            "pending": {
+              "type": "atomic"
+            }
+          }
+        }
+      },
+      "fixture": {
+        "id": "native-migration",
+        "rule": "control",
+        "description": "Independently reviewed native operation observations",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "$migrate",
+            "actor": "operator",
+            "data": {
+              "targetDefinitionVersion": "2.0.0",
+              "migrationMap": {
+                "fieldRenames": {
+                  "before": "after"
+                }
+              }
+            }
+          }
+        ],
+        "expected_transitions": [],
+        "initial_case_state": {
+          "before": 42
+        }
+      },
+      "expected": {
+        "status": "pass",
+        "configuration": [
+          "open"
+        ],
+        "definitionVersion": "2.0.0",
+        "caseState": {
+          "after": 42
+        },
+        "provenanceCounts": {
+          "instanceMigrated": 1
+        }
+      },
+      "dependencies": [
+        {
+          "role": "kernel@2.0.0",
+          "url": "urn:test:operation-provenance",
+          "version": "2.0.0",
+          "document": {
+            "$wosWorkflow": "1.0",
+            "url": "urn:test:operation-provenance",
+            "version": "2.0.0",
+            "title": "Operation provenance control",
+            "impactLevel": "operational",
+            "actors": [
+              {
+                "id": "operator",
+                "type": "human"
+              }
+            ],
+            "lifecycle": {
+              "initialState": "open",
+              "states": {
+                "open": {
+                  "type": "atomic",
+                  "transitions": [
+                    {
+                      "event": {
+                        "kind": "message",
+                        "name": "decide"
+                      },
+                      "guard": "true",
+                      "target": "done",
+                      "actions": []
+                    }
+                  ]
+                },
+                "done": {
+                  "type": "final"
+                },
+                "pending": {
+                  "type": "atomic"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "native-migration-missing-state",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:operation-provenance",
+        "version": "1.0.0",
+        "title": "Operation provenance control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "operator",
+            "type": "human"
+          }
+        ],
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "decide"
+                  },
+                  "guard": "true",
+                  "target": "done",
+                  "actions": []
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            },
+            "pending": {
+              "type": "atomic"
+            }
+          }
+        }
+      },
+      "fixture": {
+        "id": "native-migration-missing-state",
+        "rule": "control",
+        "description": "Independently reviewed native operation observations",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "$migrate",
+            "actor": "operator",
+            "data": {
+              "targetDefinitionVersion": "2.0.0",
+              "migrationMap": {
+                "fieldRenames": {
+                  "before": "after"
+                }
+              }
+            }
+          }
+        ],
+        "expected_transitions": [],
+        "initial_case_state": {
+          "before": 42
+        },
+        "expected_errors": [
+          "state not found"
+        ]
+      },
+      "expected": {
+        "status": "pass",
+        "configuration": [
+          "open"
+        ],
+        "definitionVersion": "1.0.0",
+        "caseState": {
+          "before": 42
+        },
+        "provenanceCounts": {
+          "instanceMigrated": 0
+        },
+        "operationErrorContains": "state not found"
+      },
+      "dependencies": [
+        {
+          "role": "kernel@2.0.0",
+          "url": "urn:test:operation-provenance",
+          "version": "2.0.0",
+          "document": {
+            "$wosWorkflow": "1.0",
+            "url": "urn:test:operation-provenance",
+            "version": "2.0.0",
+            "title": "Operation provenance control",
+            "impactLevel": "operational",
+            "actors": [
+              {
+                "id": "operator",
+                "type": "human"
+              }
+            ],
+            "lifecycle": {
+              "initialState": "replacement",
+              "states": {
+                "replacement": {
+                  "type": "atomic"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "ordinary-compensation-names",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:operation-provenance",
+        "version": "1.0.0",
+        "title": "Operation provenance control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "operator",
+            "type": "human"
+          }
+        ],
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "advance"
+                  },
+                  "target": "second"
+                }
+              ]
+            },
+            "second": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "advance"
+                  },
+                  "target": "third"
+                }
+              ]
+            },
+            "third": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "fail"
+                  },
+                  "target": "compensating"
+                }
+              ]
+            },
+            "compensating": {
+              "type": "atomic"
+            }
+          }
+        },
+        "execution": {
+          "compensable": false
+        }
+      },
+      "fixture": {
+        "id": "ordinary-compensation-names",
+        "rule": "control",
+        "description": "Business state names do not execute compensation",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "advance",
+            "actor": "operator"
+          },
+          {
+            "event": "advance",
+            "actor": "operator"
+          },
+          {
+            "event": "fail",
+            "actor": "operator"
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "second",
+            "event": "advance"
+          },
+          {
+            "from": "second",
+            "target": "third",
+            "event": "advance"
+          },
+          {
+            "from": "third",
+            "target": "compensating",
+            "event": "fail"
+          }
+        ]
+      },
+      "expected": {
+        "status": "pass",
+        "configuration": [
+          "compensating"
+        ],
+        "stepResults": [],
+        "taskRefs": [],
+        "provenanceCounts": {
+          "compensationExecuted": 0,
+          "compensationScopeBoundary": 0,
+          "compensationLogEntry": 0
+        }
+      }
+    },
+    {
+      "id": "required-compensation-unsupported",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:operation-provenance",
+        "version": "1.0.0",
+        "title": "Operation provenance control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "operator",
+            "type": "human"
+          }
+        ],
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "advance"
+                  },
+                  "target": "second"
+                }
+              ]
+            },
+            "second": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "advance"
+                  },
+                  "target": "third"
+                }
+              ]
+            },
+            "third": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "fail"
+                  },
+                  "target": "compensating"
+                }
+              ]
+            },
+            "compensating": {
+              "type": "atomic"
+            }
+          }
+        },
+        "execution": {
+          "compensable": true
+        }
+      },
+      "fixture": {
+        "id": "required-compensation-unsupported",
+        "rule": "control",
+        "description": "Business state names do not execute compensation",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "advance",
+            "actor": "operator"
+          },
+          {
+            "event": "advance",
+            "actor": "operator"
+          },
+          {
+            "event": "fail",
+            "actor": "operator"
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "second",
+            "event": "advance"
+          },
+          {
+            "from": "second",
+            "target": "third",
+            "event": "advance"
+          },
+          {
+            "from": "third",
+            "target": "compensating",
+            "event": "fail"
+          }
+        ]
+      },
+      "expected": {
+        "preparationRefusalContains": "/execution/compensable",
+        "noInitialization": true
+      }
+    },
+    {
+      "id": "native-service-without-validation",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:operation-provenance",
+        "version": "1.0.0",
+        "title": "Operation provenance control",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "operator",
+            "type": "human"
+          }
+        ],
+        "lifecycle": {
+          "initialState": "open",
+          "states": {
+            "open": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "decide"
+                  },
+                  "guard": "true",
+                  "target": "done",
+                  "actions": [
+                    {
+                      "action": "invokeService",
+                      "serviceRef": "verify",
+                      "idempotencyKey": "native-key"
+                    }
+                  ]
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
+            },
+            "pending": {
+              "type": "atomic"
+            }
+          }
+        }
+      },
+      "fixture": {
+        "id": "native-service-without-validation",
+        "rule": "control",
+        "description": "Independently reviewed native operation observations",
+        "documents": {},
+        "event_sequence": [
+          {
+            "event": "decide",
+            "actor": "operator",
+            "data": {
+              "contractValidation": {
+                "contractRef": "validation",
+                "valid": true,
+                "structured": true
+              }
+            }
+          }
+        ],
+        "expected_transitions": [
+          {
+            "from": "open",
+            "target": "done",
+            "event": "decide"
+          }
+        ],
+        "service_response": {
+          "actual": "stored"
+        },
+        "contract_outcomes": {
+          "validation": {
+            "valid": true,
+            "errors": []
+          }
+        }
+      },
+      "expected": {
+        "status": "pass",
+        "configuration": [
+          "done"
+        ],
+        "stepOutputs": [
+          {
+            "actual": "stored"
+          }
+        ],
+        "taskRefs": [],
+        "validationResults": [],
+        "provenanceCounts": {
+          "stepResultPersisted": 1,
+          "contractValidation": 0
+        }
+      }
+    }
+  ]
+}

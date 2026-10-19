@@ -60,11 +60,11 @@ pub use custody_trellis::{
     TrellisCustodyAppendFailure, TrellisCustodyAppendHandler, TrellisCustodyAppendOutcome,
     TrellisCustodyAppendStage, TrellisCustodyAppender,
 };
+use provenance::contract_validation_record;
 pub use provenance::{
     CustodyReceiptStampError, populate_provenance_record_fields, stamp_custody_receipt,
     stamp_provenance, stamp_signature_decision_identity,
 };
-use provenance::{compensation_provenance, contract_validation_record};
 pub use signature::{
     AdmissionOutcome, CompletionRequirementKind, HttpPostureResolver, PostureDeclaration,
     PostureResolver, ResolvedPostureDeclaration, SIGNATURE_PROFILE_KEY_EXTENSION,
@@ -789,7 +789,7 @@ mod tests {
     };
     use crate::store::{InMemoryStore, IntakeRecord, RuntimeRecord, RuntimeStore, StoreError};
     use wos_core::instance::{ActiveTask, ActiveTaskStatus, ValidationOutcome};
-    use wos_core::traits::{DocumentResolver, ExternalService, TaskPresenter};
+    use wos_core::traits::{DocumentResolver, ExternalService, TaskPresenter, ValidationResult};
 
     fn test_process_id(label: &str) -> &'static str {
         Box::leak(format!("{label}_process_01hw7rm71vfay8vvw14d2pf2db").into_boxed_str())
@@ -1627,6 +1627,7 @@ mod tests {
     struct RecordingService {
         response: serde_json::Value,
         calls: Arc<AtomicUsize>,
+        fail: bool,
         invocations: Arc<Mutex<Vec<RecordedInvocation>>>,
     }
 
@@ -1642,6 +1643,7 @@ mod tests {
             Self {
                 response,
                 calls: Arc::new(AtomicUsize::new(0)),
+                fail: false,
                 invocations: Arc::new(Mutex::new(Vec::new())),
             }
         }
@@ -1666,6 +1668,9 @@ mod tests {
                 input: input.clone(),
                 idempotency_key: idempotency_key.map(str::to_string),
             });
+            if self.fail {
+                return Err(ServiceError("injected service failure".into()));
+            }
             Ok(self.response.clone())
         }
     }
@@ -2261,6 +2266,7 @@ mod tests {
         fail_on_save_call: usize,
         save_calls: usize,
         observed_save_calls: Arc<AtomicUsize>,
+        fail_reads: Arc<std::sync::atomic::AtomicBool>,
     }
 
     impl FailingStore {
@@ -2270,6 +2276,7 @@ mod tests {
                 fail_on_save_call,
                 save_calls: 0,
                 observed_save_calls: Arc::new(AtomicUsize::new(0)),
+                fail_reads: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             }
         }
     }
@@ -2347,6 +2354,9 @@ mod tests {
         }
 
         fn load_record(&self, process_id: &str) -> Result<RuntimeRecord, StoreError> {
+            if self.fail_reads.load(Ordering::SeqCst) {
+                return Err(StoreError::Failed("injected read failure".into()));
+            }
             self.inner.load_record(process_id)
         }
 
@@ -8683,6 +8693,16 @@ mod tests {
 
         let result = runtime.drain_once(test_process_id("case-service")).unwrap();
         assert_eq!(calls.load(Ordering::SeqCst), 1);
+        let saved = runtime
+            .load_step_results(test_process_id("case-service"))
+            .unwrap();
+        assert_eq!(saved.len(), 1);
+        assert_eq!(
+            saved[0].output,
+            serde_json::json!({"result":"pass","score":92})
+        );
+        assert_eq!(saved[0].service_ref, "verificationSystem");
+        assert_eq!(saved[0].idempotency_key.as_deref(), Some("verify-1"));
         assert!(result.provenance.iter().any(|record| {
             record.record_kind == ProvenanceKind::StepResultPersisted
                 && record.data.as_ref().and_then(|data| data.get("serviceRef"))
@@ -8698,6 +8718,167 @@ mod tests {
                 && record.data.as_ref().and_then(|data| data.get("valid"))
                     == Some(&serde_json::json!(true))
         }));
+    }
+
+    #[derive(Debug)]
+    struct ProvenanceFaultValidator {
+        fail: bool,
+        calls: Arc<AtomicUsize>,
+    }
+    impl ContractValidator for ProvenanceFaultValidator {
+        type Error = ServiceError;
+        fn validate(
+            &self,
+            _contract: &str,
+            _data: &serde_json::Value,
+        ) -> Result<ValidationResult, Self::Error> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            if self.fail {
+                Err(ServiceError("injected validator failure".into()))
+            } else {
+                Ok(ValidationResult {
+                    valid: true,
+                    errors: Vec::new(),
+                })
+            }
+        }
+    }
+
+    fn provenance_fault_kernel(initial_service: bool) -> KernelDocument {
+        let action = serde_json::json!({"action":"invokeService","serviceRef":"verify","contractRef":"validation","idempotencyKey":"real-key"});
+        let mut kernel = serde_json::json!({"$wosWorkflow":"1.0","url":"urn:test:provenance-fault","version":"1.0.0","impactLevel":"operational","actors":[{"id":"operator","type":"human"}],"lifecycle":{"initialState":"open","states":{"open":{"type":"atomic","transitions":[{"event":"decide","target":"done","actions":[action]}]},"done":{"type":"final"}}}});
+        if initial_service {
+            kernel["lifecycle"]["states"]["open"]["onEntry"] = serde_json::json!([action]);
+        }
+        serde_json::from_value(kernel).unwrap()
+    }
+
+    #[test]
+    fn provenance_operation_failures_never_publish_uncommitted_success() {
+        for fault in ["service", "validator", "save"] {
+            let kernel = provenance_fault_kernel(false);
+            let mut service = RecordingService::with_response(serde_json::json!({"real":42}));
+            service.fail = fault == "service";
+            let service_calls = service.calls.clone();
+            let validator_calls = Arc::new(AtomicUsize::new(0));
+            let mut runtime = WosRuntime::new(
+                FailingStore::new(if fault == "save" { 2 } else { usize::MAX }),
+                TestResolver::with_kernel(kernel),
+                RecordingPresenter::default(),
+                wos_core::traits::DefaultRuntime::new(),
+                service,
+                ProvenanceFaultValidator {
+                    fail: fault == "validator",
+                    calls: validator_calls.clone(),
+                },
+                FixedClock { now_ms: 0 },
+                formspec_bindings(),
+            );
+            let id = test_process_id("provenance-fault");
+            runtime
+                .create_process(CreateProcessRequest {
+                    process_id: id.into(),
+                    tenant: None,
+                    definition_url: "urn:test:provenance-fault".into(),
+                    definition_version: "1.0.0".into(),
+                    initial_case_state: Some(serde_json::json!({"retained":true})),
+                })
+                .unwrap();
+            runtime.enqueue_event(id,PendingEvent{origin:None,event:"decide".into(),actor_id:Some("operator".into()),data:Some(serde_json::json!({"serviceOutput":{"forged":true},"contractValidation":{"valid":true}})),timestamp:String::new(),idempotency_token:None}).unwrap();
+            let before = runtime.store.load_record(id).unwrap();
+            let error = runtime.drain_once(id).unwrap_err();
+            match fault {
+                "service" => assert!(matches!(error, RuntimeError::Service(_))),
+                "validator" => assert!(matches!(error, RuntimeError::ContractValidation(_))),
+                _ => assert!(matches!(error, RuntimeError::Store(_))),
+            }
+            assert_eq!(service_calls.load(Ordering::SeqCst), 1);
+            assert_eq!(
+                validator_calls.load(Ordering::SeqCst),
+                usize::from(fault != "service")
+            );
+            let after = runtime.store.load_record(id).unwrap();
+            assert_eq!(after.process.configuration, before.process.configuration);
+            assert_eq!(after.process.case_state, before.process.case_state);
+            assert_eq!(after.provenance_log.len(), before.provenance_log.len());
+            assert!(runtime.load_step_results(id).unwrap().is_empty());
+            assert!(!after.provenance_log.iter().any(|record| matches!(
+                record.record_kind,
+                ProvenanceKind::StepResultPersisted | ProvenanceKind::ContractValidation
+            )));
+        }
+    }
+
+    #[test]
+    fn provenance_saved_result_read_failure_stays_an_error() {
+        let store = FailingStore::new(usize::MAX);
+        let fail_reads = store.fail_reads.clone();
+        let mut runtime = runtime_with_store(store, provenance_fault_kernel(true));
+        let id = test_process_id("provenance-read-fault");
+        runtime
+            .create_process(CreateProcessRequest {
+                process_id: id.into(),
+                tenant: None,
+                definition_url: "urn:test:provenance-fault".into(),
+                definition_version: "1.0.0".into(),
+                initial_case_state: None,
+            })
+            .unwrap();
+        assert_eq!(runtime.load_step_results(id).unwrap().len(), 1);
+        fail_reads.store(true, Ordering::SeqCst);
+        assert!(matches!(
+            runtime.load_step_results(id),
+            Err(RuntimeError::Store(StoreError::Failed(_)))
+        ));
+    }
+
+    #[test]
+    fn provenance_required_notice_admission_precedes_initial_service_and_storage() {
+        let mut kernel = provenance_fault_kernel(true);
+        kernel.governance = Some(
+            serde_json::json!({"dueProcess":{"adverseDecisionPolicy":{"noticeRequired":true}}}),
+        );
+        let service = RecordingService::with_response(serde_json::json!({"real":42}));
+        let service_calls = service.calls.clone();
+        let store = Arc::new(Mutex::new(InMemoryStore::new()));
+        let id = test_process_id("provenance-admission");
+        let admission = crate::ReferenceCompanionPolicy::new(
+            &kernel,
+            None,
+            kernel.governance.clone(),
+            HashMap::new(),
+        );
+        match admission {
+            Err(RuntimeError::UnsupportedAction(reason)) => {
+                assert!(reason.contains("noticeRequired"))
+            }
+            Ok(policy) => {
+                let mut runtime = WosRuntime::new(
+                    SharedStore(store.clone()),
+                    TestResolver::with_kernel(kernel),
+                    RecordingPresenter::default(),
+                    wos_core::traits::DefaultRuntime::new(),
+                    service,
+                    wos_core::traits::DefaultRuntime::new(),
+                    FixedClock { now_ms: 0 },
+                    formspec_bindings(),
+                )
+                .with_companion_policy(policy);
+                runtime
+                    .create_process(CreateProcessRequest {
+                        process_id: id.into(),
+                        tenant: None,
+                        definition_url: "urn:test:provenance-fault".into(),
+                        definition_version: "1.0.0".into(),
+                        initial_case_state: None,
+                    })
+                    .unwrap();
+                panic!("unsupported notice admitted");
+            }
+            Err(error) => panic!("wrong admission category: {error}"),
+        }
+        assert_eq!(service_calls.load(Ordering::SeqCst), 0);
+        assert!(store.lock().unwrap().load_record(id).is_err());
     }
 
     #[test]
@@ -11263,8 +11444,9 @@ mod tests {
             }
             let mut runtime = runtime_with_kernel(serde_json::from_value(actual).unwrap());
             if !mutation.starts_with("default-policy") {
-                runtime =
-                    runtime.with_companion_policy(crate::companion::ReferenceCompanionPolicy::new(
+                runtime = runtime.with_companion_policy(
+                    crate::companion::ReferenceCompanionPolicy::new(
+                        &serde_json::from_value(admitted.clone()).unwrap(),
                         if mutation.starts_with("missing-policy") {
                             None
                         } else {
@@ -11272,7 +11454,9 @@ mod tests {
                         },
                         None,
                         std::collections::HashMap::new(),
-                    ));
+                    )
+                    .expect("admitted reference policy"),
+                );
             }
             let id = test_process_id("native-kernel-substitution");
             runtime

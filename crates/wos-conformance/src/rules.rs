@@ -113,60 +113,26 @@ static ALL_CONFORMANCE_RULES: &[RuleMetadata] = &[
         spec_ref: None,
         suggested_fix: None,
     },
-    // G-051: verified by governance-basic profile execution over G-002, G-006, G-007, G-010,
-    // G-016, G-017, and G-018 fixtures in the conformance test suite.
+    // Governance §3–§4 and Complete's additional sections require native
+    // operation owners absent from this reference route. Refusal regression
+    // tests and historical event-hint records confer no positive support.
     RuleMetadata {
         id: "G-051",
         tier: Tier::T3,
         severity: LintSeverity::Error,
         summary: "Governance Basic processor MUST enforce due process and review protocols.",
-        fixtures: &[
-            "crates/wos-conformance/tests/fixtures/g-002-notice-before-adverse.json",
-            "crates/wos-conformance/tests/fixtures/g-006-appeal-independent-reviewer.json",
-            "crates/wos-conformance/tests/fixtures/g-007-appeal-provenance.json",
-            "crates/wos-conformance/tests/fixtures/g-010-independent-first.json",
-            "crates/wos-conformance/tests/fixtures/g-016-review-sampling.json",
-            "crates/wos-conformance/tests/fixtures/g-017-reviewer-separation.json",
-            "crates/wos-conformance/tests/fixtures/g-018-override-rationale.json",
-        ],
-        graduation: Graduation::Tested,
+        fixtures: &[],
+        graduation: Graduation::Draft,
         spec_ref: None,
         suggested_fix: None,
     },
-    // G-052: verified by governance-complete profile execution over all G-*
-    // fixtures. The runtime selects fixtures via `rule.starts_with("G-")` in
-    // `meta::evaluate_governance_complete`, so every `g-*.json` fixture in
-    // `crates/wos-conformance/tests/fixtures/` participates. Listed exhaustively
-    // below so the registry reflects the full coverage set rather than a
-    // representative sample. (See 2026-04-18 review.)
     RuleMetadata {
         id: "G-052",
         tier: Tier::T3,
         severity: LintSeverity::Error,
         summary: "Governance Complete processor MUST enforce all normative sections.",
-        fixtures: &[
-            "crates/wos-conformance/tests/fixtures/g-002-notice-before-adverse.json",
-            "crates/wos-conformance/tests/fixtures/g-006-appeal-independent-reviewer.json",
-            "crates/wos-conformance/tests/fixtures/g-007-appeal-provenance.json",
-            "crates/wos-conformance/tests/fixtures/g-010-independent-first.json",
-            "crates/wos-conformance/tests/fixtures/g-012-pipeline-stage-provenance.json",
-            "crates/wos-conformance/tests/fixtures/g-013-weakest-link-risk.json",
-            "crates/wos-conformance/tests/fixtures/g-016-review-sampling.json",
-            "crates/wos-conformance/tests/fixtures/g-017-reviewer-separation.json",
-            "crates/wos-conformance/tests/fixtures/g-018-override-rationale.json",
-            "crates/wos-conformance/tests/fixtures/g-019-override-immutable.json",
-            "crates/wos-conformance/tests/fixtures/g-020-rejection-detail.json",
-            "crates/wos-conformance/tests/fixtures/g-021-task-provenance.json",
-            "crates/wos-conformance/tests/fixtures/g-025-delegation-required.json",
-            "crates/wos-conformance/tests/fixtures/g-026-delegation-in-provenance.json",
-            "crates/wos-conformance/tests/fixtures/g-030-hold-timer-start.json",
-            "crates/wos-conformance/tests/fixtures/g-032-temporal-resolution.json",
-            "crates/wos-conformance/tests/fixtures/g-049-binding-type-neutral.json",
-            "crates/wos-conformance/tests/fixtures/g-054-resume-cancels-hold-timer.json",
-            "crates/wos-conformance/tests/fixtures/g-061-expired-calendar-ignored.json",
-            "crates/wos-conformance/tests/fixtures/g-064-notification-missing-variables.json",
-        ],
-        graduation: Graduation::Tested,
+        fixtures: &[],
+        graduation: Graduation::Draft,
         spec_ref: None,
         suggested_fix: None,
     },
@@ -175,7 +141,7 @@ static ALL_CONFORMANCE_RULES: &[RuleMetadata] = &[
         tier: Tier::T3,
         severity: LintSeverity::Error,
         summary: "Determination-tagged transitions MUST emit the pre-transition case-file snapshot in Facts-tier provenance.",
-        fixtures: &["crates/wos-conformance/tests/fixtures/k-det-001-determination-snapshot.json"],
+        fixtures: &["crates/wos-conformance/tests/fixtures/native-determination-snapshot.json"],
         graduation: Graduation::Tested,
         spec_ref: None,
         suggested_fix: None,

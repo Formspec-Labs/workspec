@@ -751,7 +751,8 @@ fn dismissal_witness(
 }
 
 /// Persisted output from an `invokeService` action.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StepResultRecord {
     /// Service reference declared by the kernel action.
     pub service_ref: String,

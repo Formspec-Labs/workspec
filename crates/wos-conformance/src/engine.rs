@@ -60,6 +60,13 @@ fn kernel_version_role(role: &str) -> Option<&str> {
     role.strip_prefix("kernel@")
 }
 
+fn native_runtime_error(error: RuntimeError) -> ConformanceError {
+    match error {
+        RuntimeError::UnsupportedAction(reason) => ConformanceError::UnsupportedOperation(reason),
+        other => ConformanceError::Engine(other.to_string()),
+    }
+}
+
 // ── Public types ─────────────────────────────────────────────────
 
 /// Observed state transition during execution.
@@ -323,6 +330,20 @@ impl WorkflowEngine {
                 )));
             }
         };
+        // Admission precedes native process creation, including initial actions.
+        // Every selected kernel version is checked by the same owner before a
+        // later migration can activate it. No fixture label supplies support.
+        for selected in kernels_by_version.values() {
+            ReferenceCompanionPolicy::validate_configuration(selected, None, &companion_docs)
+                .map_err(native_runtime_error)?;
+        }
+        let companion_policy = ReferenceCompanionPolicy::new(
+            &kernel,
+            ai_doc.clone(),
+            governance_json.clone(),
+            companion_docs.clone(),
+        )
+        .map_err(native_runtime_error)?;
         let mut runtime = WosRuntime::new(
             wos_runtime::InMemoryStore::new(),
             FixtureResolver {
@@ -339,11 +360,7 @@ impl WorkflowEngine {
             clock.clone(),
             bindings,
         )
-        .with_companion_policy(ReferenceCompanionPolicy::new(
-            ai_doc.clone(),
-            governance_json.clone(),
-            companion_docs.clone(),
-        ));
+        .with_companion_policy(companion_policy);
         if let Some(profile) = integration_profile {
             runtime = runtime.with_integration_profile(profile);
         }
@@ -405,7 +422,7 @@ impl WorkflowEngine {
             }
             Err(error) => {
                 self.initialization["error"] = serde_json::Value::String(error.to_string());
-                return Err(ConformanceError::Engine(error.to_string()));
+                return Err(native_runtime_error(error));
             }
         }
 
@@ -654,10 +671,14 @@ impl WorkflowEngine {
         let process = self
             .runtime
             .load_process(CONFORMANCE_INSTANCE_ID)
-            .map_err(|error| ConformanceError::Engine(error.to_string()))?;
+            .map_err(native_runtime_error)?;
         Ok(crate::studio_api::RuntimeSnapshot {
             configuration: process.configuration,
             case_state: process.case_state,
+            step_results: self
+                .runtime
+                .load_step_results(CONFORMANCE_INSTANCE_ID)
+                .map_err(native_runtime_error)?,
             active_tasks: serde_json::to_value(process.active_tasks)
                 .map_err(|error| ConformanceError::Engine(error.to_string()))?,
             timers: serde_json::to_value(process.timers)
@@ -685,9 +706,15 @@ impl WorkflowEngine {
         before: Result<crate::studio_api::RuntimeSnapshot, ConformanceError>,
         operation: Result<(), ConformanceError>,
     ) -> Result<crate::studio_api::ReplayAttempt, ConformanceError> {
+        let mut refusals = Vec::new();
         let error = match operation {
             Ok(()) => None,
-            Err(error) if self.authoring_replay => Some(error.to_string()),
+            Err(error) if self.authoring_replay => {
+                if let ConformanceError::UnsupportedOperation(ref reason) = error {
+                    refusals.push(reason.clone());
+                }
+                Some(error.to_string())
+            }
             Err(error) => return Err(error),
         };
         let provenance = match &before {
@@ -711,6 +738,7 @@ impl WorkflowEngine {
             submission_result: self.submission_result.take(),
             migration_result: self.migration_result.take(),
             error,
+            refusals,
             provenance: None,
             observation_errors: std::mem::take(&mut self.pending_observation_errors),
         };
@@ -787,13 +815,13 @@ impl WorkflowEngine {
                     idempotency_token: Some(fixture_event_token.clone()),
                 },
             )
-            .map_err(|error| ConformanceError::Engine(error.to_string()))?;
+            .map_err(native_runtime_error)?;
 
         loop {
             let result = self
                 .runtime
                 .drain_once(CONFORMANCE_INSTANCE_ID)
-                .map_err(|error| ConformanceError::Engine(error.to_string()))?;
+                .map_err(native_runtime_error)?;
             let processed_event = result.processed_event.clone();
             let processed_event_token = result.processed_event_token.clone();
             self.observed_drains.push(result);
@@ -815,7 +843,7 @@ impl WorkflowEngine {
         let instance = self
             .runtime
             .load_process(CONFORMANCE_INSTANCE_ID)
-            .map_err(|error| ConformanceError::Engine(error.to_string()))?;
+            .map_err(native_runtime_error)?;
         let task = instance
             .active_tasks
             .iter()
@@ -840,7 +868,7 @@ impl WorkflowEngine {
                 &actor_id,
                 submission.idempotency_token.as_deref(),
             )
-            .map_err(|error| ConformanceError::Engine(error.to_string()))?;
+            .map_err(native_runtime_error)?;
 
         self.submission_result = Some(
             serde_json::to_value(&submission_result)
@@ -877,7 +905,7 @@ impl WorkflowEngine {
         let before_instance = self
             .runtime
             .load_process(CONFORMANCE_INSTANCE_ID)
-            .map_err(|error| ConformanceError::Engine(error.to_string()))?;
+            .map_err(native_runtime_error)?;
         let previous_definition_version = before_instance.definition_version.clone();
         let provenance_before = self.load_runtime_provenance_window(0, usize::MAX)?.len();
         let operator_actor_id = event_entry
@@ -980,7 +1008,7 @@ impl WorkflowEngine {
             let result = self
                 .runtime
                 .drain_once(CONFORMANCE_INSTANCE_ID)
-                .map_err(|error| ConformanceError::Engine(error.to_string()))?;
+                .map_err(native_runtime_error)?;
             let idle = result.processed_event.is_none();
             self.observed_drains.push(result);
             if idle {
@@ -1335,12 +1363,14 @@ mod observation_failure_tests {
             submission_result: Some(serde_json::json!({"rejected":{"code":"native-rejection"}})),
             migration_result: None,
             error: Some("original native operation error".into()),
+            refusals: Vec::new(),
             provenance: None,
             observation_errors: Vec::new(),
         };
         let after = crate::studio_api::RuntimeSnapshot {
             configuration: vec!["observed-state".into()],
             case_state: serde_json::json!({"actual":42}),
+            step_results: Vec::new(),
             active_tasks: serde_json::json!([]),
             timers: serde_json::json!([]),
             definition_version: "1.0.0".into(),

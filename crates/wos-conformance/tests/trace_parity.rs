@@ -99,6 +99,20 @@ fn assert_retired_autonomy_refuses(name: &str) {
     );
 }
 
+fn assert_historical_due_process_refuses(name: &str) {
+    let root = workspace_root();
+    let source = std::fs::read_to_string(
+        root.join("crates/wos-conformance/fixtures/historical-provenance")
+            .join(name),
+    )
+    .unwrap();
+    let error = run_fixture_with_trace(&source, root.to_str().unwrap()).unwrap_err();
+    assert!(
+        matches!(error, wos_conformance::ConformanceError::UnsupportedOperation(ref reason) if reason.contains("/governance/dueProcess")),
+        "{name}: {error}"
+    );
+}
+
 // ── Regression tests ─────────────────────────────────────────────────────────
 
 /// K-001: Negative lint fixture — final state with outgoing transition.
@@ -247,9 +261,8 @@ fn teaching_signal_populates_guards_evaluated_on_k011_determinism() {
 
 /// K-011-parallel-join: benefits adjudication parallel regions.
 #[test]
-fn trace_parity_k011_parallel_join() {
-    let trace = run_t3_fixture("K-011-parallel-join.json");
-    assert_trace_matches(&trace, "K-011-parallel-join");
+fn trace_parity_k011_parallel_join_original_required_governance_refuses() {
+    assert_historical_due_process_refuses("K-011-parallel-join.json");
 }
 
 /// K-020-provenance-completeness: full happy path with provenance.
@@ -268,16 +281,14 @@ fn trace_parity_k033_document_order() {
 
 /// K-046-timer-provenance: timer lifecycle provenance records.
 #[test]
-fn trace_parity_k046_timer_provenance() {
-    let trace = run_t3_fixture("K-046-timer-provenance.json");
-    assert_trace_matches(&trace, "K-046-timer-provenance");
+fn trace_parity_k046_timer_provenance_original_required_governance_refuses() {
+    assert_historical_due_process_refuses("K-046-timer-provenance.json");
 }
 
 /// G-030-hold-resume: hold timer started and cancelled on resume.
 #[test]
-fn trace_parity_g030_hold_resume() {
-    let trace = run_t3_fixture("G-030-hold-resume.json");
-    assert_trace_matches(&trace, "G-030-hold-resume");
+fn trace_parity_g030_hold_resume_original_required_governance_refuses() {
+    assert_historical_due_process_refuses("G-030-hold-resume.json");
 }
 
 /// Historical event-hint inputs refuse and do not prove operational execution.
@@ -347,8 +358,8 @@ fn happy_path_k011_determinism_fires_its_transition() {
 }
 
 #[test]
-fn happy_path_k011_parallel_join_fires_all_transitions() {
-    assert_fixture_engages_runtime("K-011-parallel-join.json");
+fn original_k011_parallel_join_cannot_establish_positive_runtime_coverage() {
+    assert_historical_due_process_refuses("K-011-parallel-join.json");
 }
 
 #[test]
@@ -362,13 +373,13 @@ fn happy_path_k033_document_order_fires_first_match() {
 }
 
 #[test]
-fn happy_path_k046_timer_provenance_fires_its_transitions() {
-    assert_fixture_engages_runtime("K-046-timer-provenance.json");
+fn original_k046_timer_provenance_cannot_establish_positive_runtime_coverage() {
+    assert_historical_due_process_refuses("K-046-timer-provenance.json");
 }
 
 #[test]
-fn happy_path_g030_hold_resume_fires_its_transitions() {
-    assert_fixture_engages_runtime("G-030-hold-resume.json");
+fn original_g030_hold_resume_cannot_establish_positive_runtime_coverage() {
+    assert_historical_due_process_refuses("G-030-hold-resume.json");
 }
 
 /// Historical event-hint inputs refuse and do not prove operational execution.

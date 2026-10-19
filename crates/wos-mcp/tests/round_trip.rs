@@ -353,6 +353,7 @@ async fn full_round_trip_with_10_plus_tool_calls() {
     }).to_string();
     // This exercises human lifecycle events; it does not invoke an agent or
     // claim that capability preconditions, review or governed output commit ran.
+    let before_replay = registry.get(replay_id).unwrap().native_snapshot();
     let conformance = dispatch(
         &mut registry,
         "wos_run_conformance",
@@ -360,9 +361,14 @@ async fn full_round_trip_with_10_plus_tool_calls() {
         serde_json::json!({"project_id":replay_id,"fixture_json":fixture_json}),
     )
     .await
-    .expect("native policy declarations must not require a retired AI document");
-    assert_eq!(conformance["passed"], true, "{conformance}");
-    assert!(conformance["trace"].is_object());
+    .expect_err("declared due-process scope requires its unimplemented native owner");
+    let error = conformance.to_string();
+    assert!(error.contains("unsupported operation"), "{error}");
+    assert!(error.contains("/governance/dueProcess/scope"), "{error}");
+    assert_eq!(
+        registry.get(replay_id).unwrap().native_snapshot(),
+        before_replay
+    );
     assert_eq!(
         registry.get(replay_id).unwrap().native_snapshot(),
         replay_document

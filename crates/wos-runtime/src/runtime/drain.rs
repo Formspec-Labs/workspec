@@ -18,8 +18,8 @@ use super::timers::{
     materialize_due_timers, timers_to_state,
 };
 use super::{
-    DrainOnceResult, RuntimeError, RuntimeEventContext, WosRuntime, compensation_provenance,
-    format_timestamp, stamp_provenance,
+    DrainOnceResult, RuntimeError, RuntimeEventContext, WosRuntime, format_timestamp,
+    stamp_provenance,
 };
 
 impl WosRuntime {
@@ -125,11 +125,6 @@ impl WosRuntime {
         if let Some(cal) = &self.business_calendar {
             annotate_timer_created_with_calendar_version(&mut appended_provenance, cal);
         }
-        appended_provenance.extend(compensation_provenance(
-            &kernel,
-            &record.provenance_log,
-            &appended_provenance,
-        ));
         record.process.configuration = evaluator.configuration().active_states().to_vec();
         record.process.case_state = evaluator.case_state_json();
         let (timer_states, convergence_error_ids) =

@@ -1,0 +1,310 @@
+{
+  "sourceBase": "89039bd5e96f21f8e555d6c34a8e17dd30add2cf",
+  "originalDocumentBase": "crates/wos-conformance/tests/fixtures",
+  "entries": [
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/g-002-notice-before-adverse.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/g-002-notice-before-adverse.json",
+      "sha256": "54094282e8452afe98938ce98df5fcf7c3d41517cb0c0e795094ca36cd1f7369",
+      "bytes": 4487,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/g-006-appeal-independent-reviewer.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/g-006-appeal-independent-reviewer.json",
+      "sha256": "070dc7655c7a0f7a268b3bea9c7547faa35b1802e194ebd24f1969efc27e00e4",
+      "bytes": 1185,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/g-007-appeal-provenance.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/g-007-appeal-provenance.json",
+      "sha256": "30f398df6411cb92676430a9fce8f7a76447f1d14e32a1a2ec470f17a7278ea7",
+      "bytes": 879,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/g-010-independent-first.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/g-010-independent-first.json",
+      "sha256": "f48d2ade0a2928fedad65d5bb449b16566660780f30df8d0fd79cb47fe106872",
+      "bytes": 1156,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/g-012-pipeline-stage-provenance.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/g-012-pipeline-stage-provenance.json",
+      "sha256": "648e37d3f53cdd6694fb0de27d30a0720ceba95b39cb4bac5b9487d47aac6e19",
+      "bytes": 1054,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/g-013-weakest-link-risk.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/g-013-weakest-link-risk.json",
+      "sha256": "1e87d1de5304a0535814c9f9c2f84bc63b6000fa2db9a5e99feca059ffb279f6",
+      "bytes": 1440,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/g-016-review-sampling.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/g-016-review-sampling.json",
+      "sha256": "08d1c45497f905ad224e6585eb06c05bc6ed5fec9674a7bbfaa4c89da5b99053",
+      "bytes": 821,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/g-017-reviewer-separation.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/g-017-reviewer-separation.json",
+      "sha256": "fd6dc4b37934e5e3c52d122052867b30f259ee3d02b60f315295fc1d421d618d",
+      "bytes": 1058,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/g-018-override-rationale.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/g-018-override-rationale.json",
+      "sha256": "719b33ed849db826adde05c5cf96d21c7af7b0f5831a33ff7d19a6d7ac293546",
+      "bytes": 984,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/g-019-override-immutable.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/g-019-override-immutable.json",
+      "sha256": "cb29dfd9bc33394ef7cff3b3a423df7148b3fc287558057e6c752eff587974c6",
+      "bytes": 1016,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/g-020-rejection-detail.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/g-020-rejection-detail.json",
+      "sha256": "1d9961ea4e51c69b57d36474aa17081b01e7c9a54071714e915b92bc28c9f28f",
+      "bytes": 1085,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/g-021-task-provenance.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/g-021-task-provenance.json",
+      "sha256": "92fe2475ee1d97aa0489aaf9d3da9d1282c45731fb7f2979ef96e6420e3e2c37",
+      "bytes": 975,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/g-025-delegation-required.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/g-025-delegation-required.json",
+      "sha256": "594cd3d99d9d711c7d98c0a63f0c64c368dc58edd9b232d487c4115974a46631",
+      "bytes": 738,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/g-026-delegation-in-provenance.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/g-026-delegation-in-provenance.json",
+      "sha256": "a3f0b7d3ff935dcca81fb4f48b90a9ab4d82826f5b9e92eda51bcdcb0351f235",
+      "bytes": 911,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/g-030-hold-timer-start.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/g-030-hold-timer-start.json",
+      "sha256": "4a8821f828ba1a00bbbf715ec4e905979f7054f33cfc88de039c0c5631598dbe",
+      "bytes": 1113,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/g-032-temporal-resolution.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/g-032-temporal-resolution.json",
+      "sha256": "5eef74f1e027abb663ce8e51b3340cabdbbd60010488d3f2031ef844b8ab0326",
+      "bytes": 1516,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/g-049-binding-type-neutral.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/g-049-binding-type-neutral.json",
+      "sha256": "121e18b58b9b2ca84d23bd221968fb61e8f0b5c43af2fa7fef6ca92fb8f3d8e9",
+      "bytes": 1120,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/g-054-resume-cancels-hold-timer.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/g-054-resume-cancels-hold-timer.json",
+      "sha256": "7e737eea94e1505e27212484a42fce679b0a78636f4f50859f3299ab489f7064",
+      "bytes": 1105,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/g-061-expired-calendar-ignored.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/g-061-expired-calendar-ignored.json",
+      "sha256": "8e4ad444209071244cc5bbc6b446c2453a095a4fb3038ec034de57a53ab3d5aa",
+      "bytes": 1124,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/g-064-notification-missing-variables.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/g-064-notification-missing-variables.json",
+      "sha256": "b2de05c8a33a2b8e04f1d75626e8134456f413a949c18692c73dd17d2383a8ec",
+      "bytes": 1107,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/k-023-crash-recovery.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/k-023-crash-recovery.json",
+      "sha256": "81fe40b3d2d16039c4575ebf77b5c22d6f02135a22c412def92ece33819401d2",
+      "bytes": 1103,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/k-026-idempotency-dedup.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/k-026-idempotency-dedup.json",
+      "sha256": "4929ce21e225e561508fc9bec68288f14f6cc7e78c79d981f706af522fa352be",
+      "bytes": 1150,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/k-018-relationship-change-provenance.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/k-018-relationship-change-provenance.json",
+      "sha256": "486a9aeac37549fd838dc41b24daa3f085a343a5e74d12622fe153491aca600c",
+      "bytes": 1240,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/ag-001-equity-no-block-individual.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/ag-001-equity-no-block-individual.json",
+      "sha256": "4f4dc3d5edc6193d574234a423f41ef9cd8518c184cf8e049fc659762ce6116d",
+      "bytes": 1619,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/ag-002-exclude-pending-error.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/ag-002-exclude-pending-error.json",
+      "sha256": "34cf81aff13c84199f239fd8493a2a250ebdcd682626350bec1e2cc75f80b272",
+      "bytes": 1495,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/ag-003-zone-satisfaction.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/ag-003-zone-satisfaction.json",
+      "sha256": "b3b805f0abbacbe17e62aef951e47affde8cdbfa0b4f726e1af962e0f1dd1559",
+      "bytes": 1422,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/vr-001-report-immutable.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/vr-001-report-immutable.json",
+      "sha256": "c98b429d56d1f9a58f0be834cbbb538440f5ed1603d9185bc72bb2fbe239b31d",
+      "bytes": 1271,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/vr-002-proven-unsafe-blocks-activation.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/vr-002-proven-unsafe-blocks-activation.json",
+      "sha256": "bb90ed90f17ce386ffd9f942cb0798f6ce55a4c1f3959f0a1271b3fa7833b4fd",
+      "bytes": 1047,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/ag-015-proven-unsafe-blocks-active.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/ag-015-proven-unsafe-blocks-active.json",
+      "sha256": "551c48a749a99f006bc08da792fda661987135f8227956fa9abef5432a298130",
+      "bytes": 967,
+      "reason": "Synthetic event-hint evidence or unsupported mandatory reference declaration; no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/k-027-compensation-log-append-only.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/k-027-compensation-log-append-only.json",
+      "sha256": "3f80537abdeb502c05622384c309ccf9f1a6fba0a009f66cffe115bdda5f2113",
+      "bytes": 983,
+      "reason": "No native compensation executor; execution.compensable declaration explicitly unsupported; state names are not completed actions"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/k-039-compensation-reverse-order.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/k-039-compensation-reverse-order.json",
+      "sha256": "fb3c05a04297701759f024d47a5ea2be992132d9013c2be2194d0ff988b25f12",
+      "bytes": 1024,
+      "reason": "No native compensation executor; execution.compensable declaration explicitly unsupported; state names are not completed actions"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/k-040-pivot-no-compensation.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/k-040-pivot-no-compensation.json",
+      "sha256": "84a14e1557a950bc705b73db364456d0c5cb9775a0806c92844e281e59af3be2",
+      "bytes": 931,
+      "reason": "No native compensation executor; execution.compensable declaration explicitly unsupported; state names are not completed actions"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/k-041-inner-scope-boundary.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/k-041-inner-scope-boundary.json",
+      "sha256": "39dfd752d2b2f05eb7e7c84f98cd728d177400db4ac0dab27368850a748b12e5",
+      "bytes": 970,
+      "reason": "No native compensation executor; execution.compensable declaration explicitly unsupported; state names are not completed actions"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/k-042-compensation-complete-event.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/k-042-compensation-complete-event.json",
+      "sha256": "6fce42a6f2a5b8040a5d5b67bbd1aac257cbc5febc6d485bf72e1e581ec9a60d",
+      "bytes": 903,
+      "reason": "No native compensation executor; execution.compensable declaration explicitly unsupported; state names are not completed actions"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/benefits-parallel-agree.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/benefits-parallel-agree.json",
+      "sha256": "c53eb212e05c0cf866d5c0bb43ebdc3e6a2a304afcf14f1f5b027e63a5e0f1f2",
+      "bytes": 1638,
+      "reason": "Original whole-workflow requires unavailable due process, or event data formerly manufactured a relationship record; no active positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/benefits-parallel-disagree.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/benefits-parallel-disagree.json",
+      "sha256": "9e4edce411cda9796ef5965de76658fc780bde0da832d118893b56a79b14f602",
+      "bytes": 1800,
+      "reason": "Original whole-workflow requires unavailable due process, or event data formerly manufactured a relationship record; no active positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/medicaid-happy-path.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/medicaid-happy-path.json",
+      "sha256": "2a7375f814cfc4e8c70bcac52a713f1796df5dc2f4baf72aaeb8eeb4d9bdd729",
+      "bytes": 1188,
+      "reason": "Original whole-workflow requires unavailable due process, or event data formerly manufactured a relationship record; no active positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/medicaid-timer-nonresponse.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/medicaid-timer-nonresponse.json",
+      "sha256": "f044316281e24f8568ba26ca4dc9d37e59fda6825d9b6bfb3eda0e6d362e8ed7",
+      "bytes": 846,
+      "reason": "Original whole-workflow requires unavailable due process, or event data formerly manufactured a relationship record; no active positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/k-047-relationship-isolation.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/k-047-relationship-isolation.json",
+      "sha256": "17b9263e485f1571f78d8b574b926e64f817148616eaaf5cf6dba25aec719bb3",
+      "bytes": 1551,
+      "reason": "Original whole-workflow requires unavailable due process, or event data formerly manufactured a relationship record; no active positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/tests/fixtures/k-det-001-determination-snapshot.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/k-det-001-determination-snapshot.json",
+      "sha256": "20cc4fe236c7e85ba05a2cdb95074ea39ae892aa353333a6c2e40a8372c3e394",
+      "bytes": 1273,
+      "reason": "Original whole-workflow requires unavailable due process, or event data formerly manufactured a relationship record; no active positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/fixtures/G-030-hold-resume.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/G-030-hold-resume.json",
+      "originalDocumentBase": ".",
+      "sha256": "0503707301b58cf891227d12b02520e69acc0ea2641fb812ea63fa1652fea913",
+      "bytes": 4381,
+      "reason": "Whole rights-impacting adverse workflow requires unavailable due process; original golden trace retained unchanged, no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/fixtures/K-011-parallel-join.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/K-011-parallel-join.json",
+      "originalDocumentBase": ".",
+      "sha256": "b32f16f05cb763fed91b50924eb738c536a0c6c9d6e973016cee854bde0e4a63",
+      "bytes": 2578,
+      "reason": "Whole rights-impacting adverse workflow requires unavailable due process; original golden trace retained unchanged, no positive support claim"
+    },
+    {
+      "originalPath": "crates/wos-conformance/fixtures/K-046-timer-provenance.json",
+      "retainedPath": "crates/wos-conformance/fixtures/historical-provenance/K-046-timer-provenance.json",
+      "originalDocumentBase": ".",
+      "sha256": "a23c7ea21227d71f283fa4bedd22a2e41ebb22328fac77aa6751a694c494ed78",
+      "bytes": 3076,
+      "reason": "Whole rights-impacting adverse workflow requires unavailable due process; original golden trace retained unchanged, no positive support claim"
+    }
+  ]
+}
