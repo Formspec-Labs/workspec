@@ -321,8 +321,8 @@ async fn full_round_trip_with_10_plus_tool_calls() {
     );
     assert_eq!(
         describe["ai_agent_count"],
-        serde_json::json!(1),
-        "must have 1 AI agent"
+        serde_json::json!(0),
+        "legacy extension mutations do not declare native agents"
     );
     assert_eq!(describe["impact_level"], serde_json::json!("operational"));
 
@@ -470,4 +470,89 @@ async fn full_round_trip_with_10_plus_tool_calls() {
         serde_json::json!(0),
         "registry must be empty after wos_close_project"
     );
+}
+
+#[tokio::test]
+async fn native_agents_description_survives_export_and_reopen() {
+    let source = serde_json::json!({
+        "$wosWorkflow": "1.0",
+        "url": "urn:test:native-agents-description",
+        "version": "1.0.0",
+        "title": "Native agents description",
+        "description": "Preserve authored content while describing agents.",
+        "impactLevel": "informational",
+        "actors": [
+            {"id": "summaryBot", "type": "agent", "extensions": {}},
+            {"id": "triageBot", "type": "agent", "extensions": {}},
+            {"id": "reviewer", "type": "human", "extensions": {}}
+        ],
+        "lifecycle": {
+            "initialState": "review",
+            "states": {"review": {"type": "atomic", "transitions": [], "tags": [], "onEntry": [], "onExit": [], "extensions": {}}},
+            "milestones": {}
+        },
+        "agents": [
+            {"id": "summaryBot", "modelIdentifier": "summary-model", "autonomy": "assistive"},
+            {"id": "triageBot", "modelIdentifier": "triage-model", "autonomy": "readOnly"}
+        ],
+        "aiOversight": {},
+        "extensions": {"x-test-context": {"retained": [1, true, "authored"]}}
+    });
+    let schema: serde_json::Value =
+        serde_json::from_str(include_str!("../../../schemas/wos-workflow.schema.json")).unwrap();
+    let validator = jsonschema::validator_for(&schema).unwrap();
+    assert!(
+        validator.is_valid(&source),
+        "canonical source must satisfy workflow schema"
+    );
+    let mut registry = ProjectRegistry::new();
+    let mut current = source.clone();
+    for _ in 0..2 {
+        let loaded = dispatch(
+            &mut registry,
+            "wos_load_document",
+            "",
+            serde_json::json!({"json": current.to_string()}),
+        )
+        .await
+        .unwrap();
+        let pid = loaded["project_id"].as_str().unwrap();
+        let description = dispatch(
+            &mut registry,
+            "wos_describe_document",
+            pid,
+            serde_json::json!({"project_id": pid}),
+        )
+        .await
+        .unwrap();
+        assert_eq!(description["ai_agent_count"], 2);
+        assert_eq!(description["actor_count"], 3);
+        assert_eq!(description["state_count"], 1);
+        let exported = dispatch(
+            &mut registry,
+            "wos_export_document",
+            pid,
+            serde_json::json!({"project_id": pid}),
+        )
+        .await
+        .unwrap();
+        current = serde_json::from_str(exported["document"].as_str().unwrap()).unwrap();
+        assert!(
+            validator.is_valid(&current),
+            "export must satisfy workflow schema"
+        );
+        for key in [
+            "agents",
+            "actors",
+            "lifecycle",
+            "aiOversight",
+            "description",
+            "extensions",
+        ] {
+            assert_eq!(
+                current[key], source[key],
+                "authored {key} must survive export/reopen"
+            );
+        }
+    }
 }

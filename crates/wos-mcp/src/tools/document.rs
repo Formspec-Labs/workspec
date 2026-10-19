@@ -118,7 +118,7 @@ pub async fn wos_export_document(
 /// Return a summary of a registered project's current document state.
 ///
 /// Counts top-level states, outgoing transitions across all states, declared
-/// actors, and AI agents stored under the `x-wos-ai.agents` extension key.
+/// actors, and AI agents in the native `WorkflowDocument::agents` field.
 ///
 /// Returns:
 /// ```json
@@ -162,18 +162,7 @@ pub async fn wos_describe_document(
         })
         .unwrap_or_else(|| "none".to_string());
 
-    // AI agents live under x-wos-ai.agents (an array) when the document was
-    // authored via add_extension_key or a companion AIIntegrationDocument.
-    // Deontic constraints (x-wos-ai.deonticConstraints) are separate and not
-    // counted here.
-    // TODO(wos-mcp): replace with typed AIIntegrationDocument accessor once it lands.
-    let ai_agent_count = doc
-        .extensions
-        .get("x-wos-ai")
-        .and_then(|v| v.get("agents"))
-        .and_then(Value::as_array)
-        .map(|arr| arr.len())
-        .unwrap_or(0);
+    let ai_agent_count = doc.agents.len();
 
     Ok(serde_json::json!({
         "state_count": state_count,
