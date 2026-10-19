@@ -2,23 +2,72 @@
   "id": "AI-034-confidence-report-required",
   "rule": "AI-034",
   "batch": 5,
-  "description": "Every agent output MUST have a ConfidenceReport (AI S7.1). Agent output missing confidence report is rejected.",
+  "description": "Native supplied-output policy stage only. No invocation, definition validation, review, fallback execution or governed commit claim.",
   "documents": {
-    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
-    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+    "kernel": "inline"
   },
-  "initial_case_state": { "income": 50000 },
+  "inline_documents": {
+    "kernel": {
+      "$wosWorkflow": "1.0",
+      "url": "urn:test:native-profile:ai-034",
+      "version": "1.0.0",
+      "title": "Independent native AI replay controls",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "assessor",
+          "type": "agent"
+        }
+      ],
+      "agents": [
+        {
+          "id": "assessor",
+          "agentType": "deterministic",
+          "modelIdentifier": "literal-rules-model",
+          "modelVersion": "7.0.0",
+          "deonticConstraints": []
+        }
+      ],
+      "aiOversight": {},
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": {
+                  "kind": "message",
+                  "name": "decide"
+                },
+                "target": "done"
+              }
+            ]
+          },
+          "done": {
+            "type": "final"
+          }
+        }
+      }
+    }
+  },
+  "initial_case_state": {
+    "retained": 42
+  },
   "event_sequence": [
     {
-      "event": "determined",
-      "actor": "eligibilityAgent",
+      "event": "decide",
+      "actor": "assessor",
       "data": {
-        "output": { "income": 50000, "determination": "eligible" }
+        "output": {
+          "amount": 101
+        }
       }
     }
   ],
   "expected_transitions": [],
-  "expected_provenance": [
-    { "record_kind": "confidenceViolation", "data": { "reason": "missing-confidence-report" } }
+  "expected_provenance": [],
+  "expected_errors": [
+    "missing required canonical confidenceReport"
   ]
 }

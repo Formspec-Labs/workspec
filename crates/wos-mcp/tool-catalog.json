@@ -591,67 +591,6 @@
       ]
     },
     {
-      "name": "wos_add_ai_agent",
-      "description": "Add a native agents declaration with modelIdentifier and capabilities.",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "agent_id": {
-            "type": "string",
-            "minLength": 1
-          },
-          "role": {
-            "type": "string",
-            "minLength": 1
-          },
-          "model": {
-            "type": "string",
-            "minLength": 1
-          },
-          "capabilities": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "default": []
-          },
-          "project_id": {
-            "type": "string",
-            "minLength": 1
-          }
-        },
-        "required": [
-          "agent_id",
-          "role",
-          "model",
-          "project_id"
-        ],
-        "additionalProperties": false
-      },
-      "outputSchema": {
-        "type": "object",
-        "properties": {
-          "agent_id": {
-            "type": "string",
-            "minLength": 1
-          }
-        },
-        "required": [
-          "agent_id"
-        ],
-        "additionalProperties": false
-      },
-      "annotations": {
-        "readOnlyHint": false,
-        "destructiveHint": true,
-        "idempotentHint": false,
-        "openWorldHint": false
-      },
-      "x-wos-capabilities": [
-        "agents"
-      ]
-    },
-    {
       "name": "wos_lint",
       "description": "Return unchanged native diagnostics and counts for block, error, warning and info.",
       "inputSchema": {
@@ -763,7 +702,7 @@
     },
     {
       "name": "wos_search",
-      "description": "Search native states, transitions and actors through the typed read view; historical extension constraints remain searchable.",
+      "description": "Search states, transitions and actors through the typed read view; navigate raw native rule values and locations on drafts.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -961,7 +900,8 @@
                 "noticeProvenance",
                 "guards",
                 "drains",
-                "taskSubmission"
+                "taskSubmission",
+                "aiPolicy"
               ]
             },
             "default": []

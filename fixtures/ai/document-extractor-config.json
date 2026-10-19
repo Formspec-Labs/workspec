@@ -8,6 +8,14 @@
     {
       "id": "system",
       "type": "system"
+    },
+    {
+      "id": "supervisor",
+      "type": "human"
+    },
+    {
+      "id": "documentExtractor",
+      "type": "agent"
     }
   ],
   "lifecycle": {
@@ -19,6 +27,12 @@
           {
             "target": "done"
           }
+        ],
+        "onEntry": [
+          {
+            "action": "invokeService",
+            "serviceRef": "documentExtraction"
+          }
         ]
       },
       "done": {
@@ -29,13 +43,6 @@
   "agents": [
     {
       "id": "documentExtractor",
-      "targetIntegration": "https://agency.gov/ai/benefits-adjudication-ai",
-      "endpoint": {
-        "url": "https://ai.agency.gov/agents/doc-extractor/v2",
-        "credentialRef": "vault://agents/doc-extractor/api-key",
-        "timeout": "PT30S",
-        "healthCheckUrl": "https://ai.agency.gov/agents/doc-extractor/health"
-      },
       "approvedVersions": [
         "2025-05-14"
       ],
@@ -50,7 +57,10 @@
           {
             "condition": "agent.calibration.accuracy >= 0.97",
             "targetLevel": "supervisory",
-            "description": "Escalate to supervisory when accuracy exceeds 97% in calibration"
+            "description": "Escalate to supervisory when accuracy exceeds 97% in calibration",
+            "id": "restoreAfterCalibration",
+            "requiredApproverRef": "supervisor",
+            "escalationExpiry": "P30D"
           }
         ],
         "demotion": [
@@ -73,12 +83,22 @@
       },
       "actionOverrides": [
         {
-          "actionRef": "incomeVerification.invokeDocExtractor",
+          "actionRef": "/lifecycle/states/start/onEntry/0",
           "autonomy": "assistive",
           "reviewWindow": "PT4H",
-          "confidenceFloor": 0.85
+          "confidenceFloor": {
+            "threshold": 0.85,
+            "onViolation": "escalateToHuman"
+          }
         }
-      ]
+      ],
+      "agentType": "generative",
+      "modelIdentifier": "document-extraction",
+      "modelVersion": "2025-05-14",
+      "invoker": {
+        "kind": "http",
+        "endpoint": "https://ai.agency.gov/agents/doc-extractor/v2"
+      }
     }
   ]
 }

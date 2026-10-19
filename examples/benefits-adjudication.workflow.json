@@ -472,79 +472,98 @@
       "id": "eligibilityAgent",
       "modelIdentifier": "gov-eligibility-classifier",
       "modelVersion": "3.2.0",
-      "modelVersionPolicy": "minor-allowed",
-      "autonomy": "assistive",
+      "modelVersionPolicy": "pinned",
       "deonticConstraints": [
         {
+          "id": "noDetermination",
           "kind": "prohibition",
-          "expression": "@transition.tags includes 'determination'",
-          "$comment": "Agent MUST NOT directly determine; only assist."
+          "condition": "@transition.tags includes 'determination'",
+          "onViolation": "reject",
+          "x-explanation": "Agent assists; only human reviewers determine."
         },
         {
+          "id": "noAdverseAction",
           "kind": "prohibition",
-          "expression": "@transition.tags includes 'adverseAction'"
+          "condition": "@transition.tags includes 'adverseAction'",
+          "onViolation": "reject"
         },
         {
+          "id": "requireRationale",
           "kind": "obligation",
-          "expression": "@output.eligibilityRationale != null && size(@output.eligibilityRationale) > 0"
+          "requirement": "@output.eligibilityRationale != null && size(@output.eligibilityRationale) > 0",
+          "onViolation": "reject"
         },
         {
+          "id": "assessmentFields",
           "kind": "permission",
-          "expression": "@transition.tags includes 'preliminaryAssessment'"
+          "allowedFields": [
+            "/eligibilityScore",
+            "/eligibilityRationale"
+          ],
+          "onViolation": "reject"
         }
       ],
-      "confidenceFloor": 0.75,
+      "confidenceFloor": {
+        "threshold": 0.75,
+        "onViolation": "escalateToHuman"
+      },
       "confidenceDecay": {
-        "halfLifeDays": 90
+        "enabled": true,
+        "halfLife": "P90D"
       },
       "fallbackChain": [
-        "reviewer1",
-        "supervisor"
+        {
+          "action": "fail"
+        }
       ],
       "capabilities": [
         {
           "id": "scoreEligibility",
-          "writeScope": [
-            "eligibilityScore",
-            "eligibilityRationale"
-          ],
           "outputContractRef": "https://agency.gov/contracts/eligibility-output.schema.json"
         }
       ],
       "driftMonitoring": {
-        "dimensions": [
-          "acceptanceRate",
-          "denialRationaleEntropy",
-          "demographicParity"
-        ],
-        "alertThresholds": {
-          "demographicParity": 0.08
-        }
+        "monitors": [
+          {
+            "evaluationWindow": "P30D",
+            "metrics": [
+              {
+                "name": "demographicParity",
+                "method": "custom",
+                "threshold": 0.08
+              }
+            ],
+            "alertThresholds": [
+              {
+                "condition": "demographicParity > 0.08",
+                "severity": "warning",
+                "action": "notify",
+                "notifyRoles": [
+                  "supervisor"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "agentType": "statistical",
+      "autonomyPolicy": {
+        "maxAutonomy": "assistive"
       }
     }
   ],
   "aiOversight": {
+    "defaultAutonomy": "assistive",
     "disclosure": {
-      "applicantNotice": true,
-      "noticeTemplateRef": "https://agency.gov/templates/ai-disclosure.json",
-      "complianceRefs": [
+      "discloseThatAgentAssisted": true,
+      "x-noticeTemplateRef": "https://agency.gov/templates/ai-disclosure.json",
+      "x-complianceRefs": [
         "EU-AI-Act-Art-13",
         "OMB-M-24-10"
       ]
     },
-    "driftDetection": {
-      "globalDimensions": [
-        "systemDriftScore",
-        "modelChurn"
-      ],
-      "demotionPolicy": "demoteToReadOnlyOnAlert"
-    },
     "volumeConstraints": {
-      "maxAgentDeterminationsPerDay": 0,
-      "maxAgentAssistsPerDay": 5000
-    },
-    "narrativeTier": {
-      "templateRef": "https://agency.gov/templates/narrative-explanation.json"
+      "maxAutonomousPerDay": 0
     }
   },
   "signature": {

@@ -374,50 +374,39 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
             check_pipeline_assertion_ids(&gov, project, diagnostics);
         }
 
-        // AI integration rules — read from $wosWorkflow top-level `agents` /
-        // `aiOversight` blocks. Existing AI-* rule fns were authored against
-        // a standalone AI integration document; bridge by synthesizing one
-        // in-process. The synthetic doc is internal scaffolding — never
-        // emitted, never validated against any schema.
+        // Native AI semantics have one owner. Missing execution operations do
+        // not become invented configuration or a successful readiness check.
         let workflow_url = wf.value.get("url").and_then(Value::as_str).unwrap_or("");
-        let has_agents = wf.value.get("agents").is_some() || wf.value.get("aiOversight").is_some();
-        if has_agents {
-            let mut ai_value = serde_json::json!({
-                "targetWorkflow": workflow_url,
-            });
-            // Copy agents, aiOversight, fallbackChain, narrativeProvenance, provenance
-            // from the workflow root into the synthetic AI doc.
-            for field in &[
-                "agents",
-                "aiOversight",
-                "fallbackChain",
-                "narrativeProvenance",
-                "provenance",
-                "agentDisclosure",
-            ] {
-                if let Some(v) = wf.value.get(*field) {
-                    ai_value[field] = v.clone();
+        if let Ok(Some(policy)) = wos_core::ai_policy::load_native_ai_policy(&wf.value) {
+            check_agent_free_completion_path(&policy, wf, diagnostics);
+            if policy.impact_level() == wos_core::ImpactLevel::RightsImpacting
+                && !policy
+                    .oversight()
+                    .disclosure
+                    .as_ref()
+                    .is_some_and(|value| value.disclose_that_agent_assisted)
+            {
+                diagnostics.push(LintDiagnostic::t2_error(
+                    "AI-046",
+                    "/aiOversight/disclosure",
+                    "rights-impacting agent use requires native assistance disclosure",
+                ));
+            }
+            for (index, agent) in policy.agents().iter().enumerate() {
+                for (action_index, action) in agent.action_overrides.iter().enumerate() {
+                    if action.autonomy == Some(wos_core::model::ai::AutonomyLevel::Autonomous)
+                        && policy.oversight().deontic_constraints.is_empty()
+                        && agent.deontic_constraints.is_empty()
+                        && action.deontic_constraints.is_empty()
+                    {
+                        diagnostics.push(LintDiagnostic::t2_error(
+                            "AI-018",
+                            format!("/agents/{index}/actionOverrides/{action_index}"),
+                            "autonomous action requires associated native constraints",
+                        ));
+                    }
                 }
             }
-            let ai_doc = crate::document::WosDocument {
-                kind: DocumentKind::Workflow,
-                value: ai_value,
-                source: wf.source.clone(),
-            };
-            if let Some(kernel) = &typed_kernel {
-                check_ai_disclosure_for_impact_typed(&ai_doc, kernel, diagnostics);
-                if let Some(kernel_raw) = kernel_doc {
-                    check_agent_output_contract(&ai_doc, kernel_raw, diagnostics);
-                    check_agent_free_completion_path(&ai_doc, kernel_raw, diagnostics);
-                }
-            }
-            check_cascading_invocations_declared(&ai_doc, diagnostics);
-            check_autonomous_actions_have_deontic(&ai_doc, diagnostics);
-            check_supervisory_actions_review_window(&ai_doc, diagnostics);
-            check_escalation_expiry_present(&ai_doc, diagnostics);
-            check_training_data_disclosure(&ai_doc, diagnostics);
-            check_optimization_objective_disclosure(&ai_doc, diagnostics);
-            check_autonomy_is_action_site_property(&ai_doc, diagnostics);
         }
 
         // Signature rules — read from $wosWorkflow.signature embedded block.
@@ -2275,292 +2264,6 @@ fn check_binding_resolution_date_refs(
 }
 
 // ---------------------------------------------------------------------------
-// Shared helper: iterate agents from both array and object formats
-// ---------------------------------------------------------------------------
-
-/// Extract `(id, &Value)` pairs from an AI Integration document's `agents` field.
-///
-/// The AI Integration schema defines agents as `"type": "array"` with each
-/// element having an `"id"` field. However, some documents may use the legacy
-/// object format (`"agents": {"agentId": {...}}`). This helper normalises both
-/// representations so that all AI rules work with either format.
-fn iter_agents(ai: &crate::document::WosDocument) -> Vec<(String, &serde_json::Value)> {
-    let Some(agents) = ai.value.get("agents") else {
-        return Vec::new();
-    };
-    if let Some(arr) = agents.as_array() {
-        arr.iter()
-            .filter_map(|agent| {
-                agent
-                    .get("id")
-                    .and_then(serde_json::Value::as_str)
-                    .map(|id| (id.to_string(), agent))
-            })
-            .collect()
-    } else if let Some(obj) = agents.as_object() {
-        obj.iter().map(|(k, v)| (k.clone(), v)).collect()
-    } else {
-        Vec::new()
-    }
-}
-
-// ---------------------------------------------------------------------------
-// AI-007: cascadingInvocations declared for autonomous-invoking-autonomous
-// ---------------------------------------------------------------------------
-
-/// AI-007: When any autonomous agent invokes another autonomous agent,
-/// `cascadingInvocations` MUST be declared in the AI document.
-fn check_cascading_invocations_declared(
-    ai: &crate::document::WosDocument,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    let agents = iter_agents(ai);
-    if agents.is_empty() {
-        return;
-    }
-    let autonomous: std::collections::HashSet<&str> = agents
-        .iter()
-        .filter(|(_, a)| a.get("autonomy").and_then(Value::as_str) == Some("autonomous"))
-        .map(|(name, _)| name.as_str())
-        .collect();
-    if autonomous.len() < 2 {
-        return;
-    }
-    let cascades = agents.iter().any(|(_, agent)| {
-        agent
-            .get("invokes")
-            .and_then(Value::as_array)
-            .is_some_and(|invocations| {
-                invocations.iter().any(|inv| {
-                    inv.as_str()
-                        .or_else(|| inv.get("agentId").and_then(Value::as_str))
-                        .map(|id| autonomous.contains(id))
-                        .unwrap_or(false)
-                })
-            })
-    });
-    if cascades && ai.value.get("cascadingInvocations").is_none() {
-        diagnostics.push(LintDiagnostic::t2_error(
-            "AI-007",
-            "/cascadingInvocations",
-            "autonomous agents invoke other autonomous agents; cascadingInvocations MUST be declared",
-        ));
-    }
-}
-
-// ---------------------------------------------------------------------------
-// AI-018: autonomous actions have deontic constraints
-// ---------------------------------------------------------------------------
-
-/// AI-018: `autonomous` agents MUST have associated deontic constraints.
-fn check_autonomous_actions_have_deontic(
-    ai: &crate::document::WosDocument,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    for (name, agent) in iter_agents(ai) {
-        if agent.get("autonomy").and_then(Value::as_str) != Some("autonomous") {
-            continue;
-        }
-        let has_deontic = agent.get("deonticConstraints").is_some()
-            || agent.get("permissions").is_some()
-            || agent.get("prohibitions").is_some()
-            || agent.get("obligations").is_some();
-        if !has_deontic {
-            diagnostics.push(LintDiagnostic::t2_warning(
-                "AI-018",
-                &format!("/agents/{name}"),
-                format!("autonomous agent '{name}' should have deontic constraints (permissions, prohibitions, or obligations)"),
-            ));
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// AI-020: supervisory actions define reviewWindow
-// ---------------------------------------------------------------------------
-
-/// AI-020: `supervisory` agents MUST define `reviewWindow`.
-fn check_supervisory_actions_review_window(
-    ai: &crate::document::WosDocument,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    for (name, agent) in iter_agents(ai) {
-        if agent.get("autonomy").and_then(Value::as_str) != Some("supervisory") {
-            continue;
-        }
-        if agent.get("reviewWindow").is_none() {
-            diagnostics.push(LintDiagnostic::t2_warning(
-                "AI-020",
-                &format!("/agents/{name}"),
-                format!("supervisory agent '{name}' should define reviewWindow"),
-            ));
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// AI-026: escalationExpiry present on escalation rules
-// ---------------------------------------------------------------------------
-
-/// AI-026: Escalation MUST have `escalationExpiry`; agent reverts when expired.
-fn check_escalation_expiry_present(
-    ai: &crate::document::WosDocument,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    for (name, agent) in iter_agents(ai) {
-        let Some(rules) = agent.get("escalationRules").and_then(Value::as_array) else {
-            continue;
-        };
-        for (i, rule) in rules.iter().enumerate() {
-            if rule.get("escalationExpiry").is_none() {
-                diagnostics.push(LintDiagnostic::t2_warning(
-                    "AI-026",
-                    &format!("/agents/{name}/escalationRules/{i}"),
-                    format!("escalation rule in agent '{name}' should declare escalationExpiry"),
-                ));
-            }
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// AI-031: Agent output contract same as human-facing form
-// ---------------------------------------------------------------------------
-
-/// AI-031: The agent `outputContract.formUrl` MUST apply the same rules as
-/// the kernel's human-facing `formUrl`.
-fn check_agent_output_contract(
-    ai: &crate::document::WosDocument,
-    kernel: &crate::document::WosDocument,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    let Some(kernel_form_url) = kernel.value.get("formUrl").and_then(Value::as_str) else {
-        return; // No human-facing form declared; nothing to compare.
-    };
-    for (name, agent) in iter_agents(ai) {
-        let Some(contract) = agent.get("outputContract") else {
-            continue;
-        };
-        let contract_form = contract.get("formUrl").and_then(Value::as_str);
-        if contract_form != Some(kernel_form_url) {
-            diagnostics.push(LintDiagnostic::t2_warning(
-                "AI-031",
-                &format!("/agents/{name}/outputContract/formUrl"),
-                format!(
-                    "agent '{name}' outputContract formUrl '{}' should match kernel formUrl '{kernel_form_url}'",
-                    contract_form.unwrap_or("<missing>")
-                ),
-            ));
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// AI-042 / AI-043: Training data and optimization objective disclosure
-// ---------------------------------------------------------------------------
-
-/// AI-042: Agent config MUST disclose training data characteristics.
-fn check_training_data_disclosure(
-    ai: &crate::document::WosDocument,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    for (name, agent) in iter_agents(ai) {
-        let has_disclosure = agent
-            .get("modelConfig")
-            .and_then(|c| c.get("trainingDataCharacteristics"))
-            .is_some();
-        if !has_disclosure {
-            diagnostics.push(LintDiagnostic::t2_warning(
-                "AI-042",
-                &format!("/agents/{name}/modelConfig/trainingDataCharacteristics"),
-                format!(
-                    "agent '{name}' should disclose training data characteristics in modelConfig"
-                ),
-            ));
-        }
-    }
-}
-
-/// AI-043: Agent config MUST disclose optimization objective.
-fn check_optimization_objective_disclosure(
-    ai: &crate::document::WosDocument,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    for (name, agent) in iter_agents(ai) {
-        let has_objective = agent
-            .get("modelConfig")
-            .and_then(|c| c.get("optimizationObjective"))
-            .is_some();
-        if !has_objective {
-            diagnostics.push(LintDiagnostic::t2_warning(
-                "AI-043",
-                &format!("/agents/{name}/modelConfig/optimizationObjective"),
-                format!("agent '{name}' should disclose optimization objective in modelConfig"),
-            ));
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// AI-046: Disclosure for impact
-// ---------------------------------------------------------------------------
-
-/// AI-046 (typed): Rights-impacting requires discloseThatAgentAssisted.
-fn check_ai_disclosure_for_impact_typed(
-    ai: &crate::document::WosDocument,
-    kernel: &KernelDocument,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    if !is_rights_impacting_typed(kernel) {
-        return;
-    }
-    let disclosed = ai
-        .value
-        .get("agentDisclosure")
-        .and_then(|d| d.get("discloseThatAgentAssisted"))
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
-    if !disclosed {
-        diagnostics.push(LintDiagnostic::t2_error(
-            "AI-046",
-            "/agentDisclosure/discloseThatAgentAssisted",
-            "rights-impacting workflow requires discloseThatAgentAssisted: true",
-        ));
-    }
-}
-
-// ---------------------------------------------------------------------------
-// AI-056: Autonomy is action-site property across document
-// ---------------------------------------------------------------------------
-
-/// AI-056: Autonomy is an action-site property, not an agent-level default.
-///
-/// Warns when an agent declares a global `autonomy` without any per-action
-/// site overrides, which hides site-specific autonomy differences.
-fn check_autonomy_is_action_site_property(
-    ai: &crate::document::WosDocument,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    for (name, agent) in iter_agents(ai) {
-        if agent.get("autonomy").is_none() {
-            continue;
-        }
-        let has_action_sites = agent.get("actionSites").is_some()
-            || agent
-                .get("actions")
-                .and_then(Value::as_array)
-                .is_some_and(|a| a.iter().any(|action| action.get("autonomy").is_some()));
-        if !has_action_sites {
-            diagnostics.push(LintDiagnostic::t2_warning(
-                "AI-056",
-                &format!("/agents/{name}/autonomy"),
-                format!("agent '{name}' sets autonomy at agent level; autonomy should be declared per action site"),
-            ));
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
 // AI-023: Every agent invocation MUST have a reachable agent-free completion path
 // ---------------------------------------------------------------------------
 
@@ -2578,12 +2281,15 @@ fn check_autonomy_is_action_site_property(
 /// no agent-free path exists AT ALL. If the global check passes, there may
 /// still be individual agent states without fallback paths.
 fn check_agent_free_completion_path(
-    ai: &crate::document::WosDocument,
+    policy: &wos_core::ai_policy::NativeAiPolicy,
     kernel: &crate::document::WosDocument,
     diagnostics: &mut Vec<LintDiagnostic>,
 ) {
-    // Collect agent IDs from the AI document. Support both array and object formats.
-    let agent_ids: std::collections::HashSet<String> = collect_ai_agent_ids(ai);
+    let agent_ids: std::collections::HashSet<String> = policy
+        .agents()
+        .iter()
+        .map(|agent| agent.id.clone())
+        .collect();
     if agent_ids.is_empty() {
         return;
     }
@@ -2797,14 +2503,6 @@ fn bfs_reachable_non_agent(
     }
 
     visited
-}
-
-/// Collect agent IDs from an AI Integration document.
-///
-/// Delegates to `iter_agents` which already handles both the array and
-/// object agent formats, eliminating duplicated parsing logic.
-fn collect_ai_agent_ids(ai: &crate::document::WosDocument) -> std::collections::HashSet<String> {
-    iter_agents(ai).into_iter().map(|(id, _)| id).collect()
 }
 
 // ---------------------------------------------------------------------------

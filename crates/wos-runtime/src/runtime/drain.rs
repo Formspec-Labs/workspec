@@ -74,6 +74,7 @@ impl WosRuntime {
             created_task_ids: Vec::new(),
             emitted_events: Vec::new(),
             guard_evaluations: Vec::new(),
+            policy_evaluation: None,
         };
 
         let drained_event_name = event.event.clone();
@@ -85,6 +86,7 @@ impl WosRuntime {
             now_ms,
             now_iso: now_iso.clone(),
         })?;
+        runtime_result.policy_evaluation = decision.policy_evaluation;
         appended_provenance.extend(decision.provenance);
 
         let Some(event) = decision.event else {

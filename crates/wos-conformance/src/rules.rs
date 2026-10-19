@@ -33,43 +33,31 @@ pub fn all_rules() -> &'static [RuleMetadata] {
 /// not yet reified as metadata entries — that tracking is part of the
 /// rule-coverage plan follow-up.
 static ALL_CONFORMANCE_RULES: &[RuleMetadata] = &[
-    // AI-001: Fixture links are indirect — the linked files carry rule IDs
-    // AI-005, AI-009, and AI-034, not AI-001 directly. The conformance verifier
-    // runs by batch number (see AI_REGISTRATION_BATCHES) so the structural
-    // coverage holds. Mirror of the AI-004 / AI-050 inline-evidence pattern.
-    // (See 2026-04-18 review.)
-    // Verified by processor manifest test against fixtures with batches 3, 4, 5, 10.
+    // Full native registration remains incomplete. Local policy-stage checks
+    // and rejection of retired inputs do not prove required operation owners.
     RuleMetadata {
         id: "AI-001",
         tier: Tier::T3,
         severity: LintSeverity::Error,
         summary: "Processor MUST implement agent registration (AI S3).",
-        fixtures: &[
-            "crates/wos-conformance/tests/fixtures/ai-005-no-override-human.json",
-            "crates/wos-conformance/tests/fixtures/ai-009-permission-bounds.json",
-            "crates/wos-conformance/tests/fixtures/ai-034-confidence-report-required.json",
-        ],
-        graduation: Graduation::Tested,
+        // Required invocation/operational owners remain unsupported; retired
+        // synthetic fixtures are historical and confer no positive coverage.
+        fixtures: &[],
+        graduation: Graduation::Draft,
         spec_ref: None,
         suggested_fix: None,
     },
-    // AI-002: Fixture links are indirect — the linked files carry rule IDs
-    // AI-034, AI-035, and AI-036, not AI-002 directly. The conformance verifier
-    // runs by batch number (see AI_CONFIDENCE_BATCHES) so the structural
-    // coverage holds. Mirror of the AI-004 / AI-050 inline-evidence pattern.
-    // (See 2026-04-18 review.)
-    // Verified by processor manifest test against batch 5 (confidence framework) fixtures.
+    // Report parsing/floors work locally; calibration/history/review owners
+    // remain required for a complete confidence-framework claim.
     RuleMetadata {
         id: "AI-002",
         tier: Tier::T3,
         severity: LintSeverity::Error,
         summary: "Processor MUST implement the confidence framework (AI S7).",
-        fixtures: &[
-            "crates/wos-conformance/tests/fixtures/ai-034-confidence-report-required.json",
-            "crates/wos-conformance/tests/fixtures/ai-035-calibrated-confidence.json",
-            "crates/wos-conformance/tests/fixtures/ai-036-confidence-below-floor.json",
-        ],
-        graduation: Graduation::Tested,
+        // Required invocation/operational owners remain unsupported; retired
+        // synthetic fixtures are historical and confer no positive coverage.
+        fixtures: &[],
+        graduation: Graduation::Draft,
         spec_ref: None,
         suggested_fix: None,
     },
@@ -97,36 +85,31 @@ static ALL_CONFORMANCE_RULES: &[RuleMetadata] = &[
         spec_ref: None,
         suggested_fix: None,
     },
-    // AI-AUTO-001: Escalation-expiry revocation emits an autonomyDemotion
-    // provenance record on the next invocation (AI S5.5). Verified by the
-    // trace-parity + happy-path tests in `tests/trace_parity.rs`. Pairs with
-    // AI-028 (humanOverride trigger) and AC-001 (calibration-expiry cap)
-    // to close the autonomy-lifecycle revocation matrix.
+    // Historical event-hint autonomy records are retired; authenticated
+    // operational-state provenance remains unsupported.
     RuleMetadata {
         id: "AI-AUTO-001",
         tier: Tier::T3,
         severity: LintSeverity::Error,
         summary: "Escalation expiry MUST revoke elevated autonomy and emit an autonomyDemotion record (AI S5.5).",
-        fixtures: &[
-            "crates/wos-conformance/fixtures/AI-AUTO-001-escalation-expiry-revocation.json",
-        ],
-        graduation: Graduation::Tested,
+        // Required invocation/operational owners remain unsupported; retired
+        // synthetic fixtures are historical and confer no positive coverage.
+        fixtures: &[],
+        graduation: Graduation::Draft,
         spec_ref: None,
         suggested_fix: None,
     },
-    // AI-AUTO-002: Drift-alert-triggered demotion produces both an
-    // autonomyDemotion record and a driftReclassification record, and the
-    // runtime reroutes the event through `escalated` so the kernel lands on
-    // the human-review state (AI S5.5; DriftMonitor AlertThreshold→DemotionRule
-    // binding). Verified by the trace-parity + happy-path tests in
-    // `tests/trace_parity.rs`.
+    // Drift declarations admit structurally; actual monitoring/demotion
+    // operations are not implemented by supplied-output policy exercise.
     RuleMetadata {
         id: "AI-AUTO-002",
         tier: Tier::T3,
         severity: LintSeverity::Error,
         summary: "Drift-alert thresholds with action=demoteToAssistive MUST emit autonomyDemotion + driftReclassification and reroute the event through escalation (AI S5.5).",
-        fixtures: &["crates/wos-conformance/fixtures/AI-AUTO-002-drift-alert-demotion.json"],
-        graduation: Graduation::Tested,
+        // Required invocation/operational owners remain unsupported; retired
+        // synthetic fixtures are historical and confer no positive coverage.
+        fixtures: &[],
+        graduation: Graduation::Draft,
         spec_ref: None,
         suggested_fix: None,
     },

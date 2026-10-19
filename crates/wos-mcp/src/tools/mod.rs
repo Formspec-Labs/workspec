@@ -1,3 +1,4 @@
+// Rust guideline compliant 2026-02-21
 //! Tool handler modules. Each module exposes one or more `async fn` tool handlers.
 //!
 //! Tool handlers are pure async functions: they accept a `serde_json::Value`
@@ -16,7 +17,8 @@ pub use actors::{wos_add_actor, wos_add_actor_extension};
 pub use document::{
     wos_create_kernel, wos_describe_document, wos_export_document, wos_load_document,
 };
-pub use governance::{wos_add_ai_agent, wos_set_impact_level};
+#[doc(inline)]
+pub use governance::wos_set_impact_level;
 pub use lifecycle::{wos_add_state, wos_add_transition, wos_remove_state, wos_set_initial_state};
 pub use ping::ping;
 pub use query::{

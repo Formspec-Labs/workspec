@@ -1,3 +1,5 @@
+// Rust guideline compliant 2026-02-21
+
 // Tier 2 lint rule tests — cross-document resolution checks.
 //
 // These tests construct a `WosProject` with multiple documents and call
@@ -13,6 +15,10 @@ use serde_json::{Value, json};
 use std::io::Write;
 use std::path::PathBuf;
 use wos_lint::LintSeverity;
+
+fn native_ai_workflow() -> Value {
+    json!({"$wosWorkflow":"1.0","url":"urn:test:native-ai-lint","version":"1.0.0","title":"Native AI static controls","impactLevel":"operational","actors":[{"id":"assessor","type":"agent"},{"id":"reviewer","type":"human"}],"agents":[{"id":"assessor","agentType":"deterministic","modelIdentifier":"literal-model","modelVersion":"1.0.0"}],"aiOversight":{},"lifecycle":{"initialState":"open","states":{"open":{"type":"atomic","onEntry":[{"action":"emitEvent","event":"site"}],"transitions":[{"event":{"kind":"message","name":"done"},"target":"done"}]},"done":{"type":"final"}}}})
+}
 
 // ── Helpers ────────────────────────────────────────────────────
 
@@ -162,30 +168,6 @@ fn merge_legacy_doc_into_workflow(workflow: &mut Value, filename: &str, doc: &Va
         return;
     }
 
-    if filename.contains("ai") || doc.get("agents").is_some() || doc.get("aiOversight").is_some() {
-        if let Some(obj) = workflow.as_object_mut() {
-            for field in [
-                "agents",
-                "aiOversight",
-                "fallbackChain",
-                "narrativeProvenance",
-                "provenance",
-                "agentDisclosure",
-                "cascadingInvocations",
-            ] {
-                if let Some(value) = doc.get(field) {
-                    let value = if field == "agents" {
-                        normalize_legacy_agents(value)
-                    } else {
-                        value.clone()
-                    };
-                    obj.insert(field.to_string(), value);
-                }
-            }
-        }
-        return;
-    }
-
     merge_workflow_object_field(
         workflow,
         "governance",
@@ -206,24 +188,6 @@ fn merge_workflow_object_field(workflow: &mut Value, field: &str, value: Value) 
     };
     for (key, child) in incoming {
         existing.insert(key.clone(), child.clone());
-    }
-}
-
-fn normalize_legacy_agents(value: &Value) -> Value {
-    if let Some(map) = value.as_object() {
-        Value::Array(
-            map.iter()
-                .map(|(id, agent)| {
-                    let mut agent = agent.clone();
-                    if let Some(obj) = agent.as_object_mut() {
-                        obj.entry("id").or_insert_with(|| Value::String(id.clone()));
-                    }
-                    agent
-                })
-                .collect(),
-        )
-    } else {
-        value.clone()
     }
 }
 
@@ -966,53 +930,39 @@ fn g053_no_sub_delegations_skips_check() {
 
 #[test]
 fn ai046_cross_doc_rights_kernel_ai_without_disclosure_flagged() {
-    let mut kernel = base_kernel();
-    kernel["impactLevel"] = json!("rights-impacting");
-    let ai = json!({
-        "$wosWorkflow": "1.0",
-        "targetWorkflow": "https://example.com/workflow/test",
-        "agents": {}
-    });
-
-    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
+    let mut source = native_ai_workflow();
+    source["impactLevel"] = json!("rights-impacting");
+    let diagnostics = lint_project_with_docs(vec![("kernel.json", source)]);
     assert!(
-        has_rule(&diags, "AI-046"),
-        "expected AI-046 cross-doc: {diags:?}"
+        !has_rule(&diagnostics, "WOS-AI-NATIVE-001"),
+        "{diagnostics:?}"
     );
+    assert_eq!(has_rule(&diagnostics, "AI-046"), true, "{diagnostics:?}");
 }
 
 #[test]
 fn ai046_cross_doc_rights_kernel_ai_with_disclosure_clean() {
-    let mut kernel = base_kernel();
-    kernel["impactLevel"] = json!("rights-impacting");
-    let ai = json!({
-        "$wosWorkflow": "1.0",
-        "targetWorkflow": "https://example.com/workflow/test",
-        "agentDisclosure": {
-            "discloseThatAgentAssisted": true
-        },
-        "agents": {}
-    });
-
-    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
-    assert!(!has_rule(&diags, "AI-046"), "unexpected AI-046: {diags:?}");
+    let mut source = native_ai_workflow();
+    source["impactLevel"] = json!("rights-impacting");
+    source["aiOversight"]["disclosure"] = json!({"discloseThatAgentAssisted":true});
+    let diagnostics = lint_project_with_docs(vec![("kernel.json", source)]);
+    assert!(
+        !has_rule(&diagnostics, "WOS-AI-NATIVE-001"),
+        "{diagnostics:?}"
+    );
+    assert_eq!(has_rule(&diagnostics, "AI-046"), false, "{diagnostics:?}");
 }
 
 #[test]
 fn ai046_cross_doc_safety_kernel_skips_disclosure_check() {
-    let mut kernel = base_kernel();
-    kernel["impactLevel"] = json!("safety-impacting");
-    let ai = json!({
-        "$wosWorkflow": "1.0",
-        "targetWorkflow": "https://example.com/workflow/test",
-        "agents": {}
-    });
-
-    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
+    let mut source = native_ai_workflow();
+    source["impactLevel"] = json!("safety-impacting");
+    let diagnostics = lint_project_with_docs(vec![("kernel.json", source)]);
     assert!(
-        !has_rule(&diags, "AI-046"),
-        "unexpected AI-046 for safety-impacting: {diags:?}"
+        !has_rule(&diagnostics, "WOS-AI-NATIVE-001"),
+        "{diagnostics:?}"
     );
+    assert_eq!(has_rule(&diagnostics, "AI-046"), false, "{diagnostics:?}");
 }
 
 // ========================================================================
@@ -1020,26 +970,16 @@ fn ai046_cross_doc_safety_kernel_skips_disclosure_check() {
 // ========================================================================
 
 #[test]
-fn ai007_cascading_invocations_not_declared_flagged() {
-    let kernel = base_kernel();
-    let ai = json!({
-        "$wosWorkflow": "1.0",
-        "targetWorkflow": "https://example.com/workflow/test",
-        "agents": {
-            "agentA": {
-                "autonomy": "autonomous",
-                "invokes": ["agentB"],
-                "deonticConstraints": { "permissions": [] }
-            },
-            "agentB": {
-                "autonomy": "autonomous",
-                "deonticConstraints": { "permissions": [] }
-            }
-        }
-    });
-
-    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
-    assert!(has_rule(&diags, "AI-007"), "expected AI-007: {diags:?}");
+fn ai007_cascading_invocations_not_declared_flagged_retired_property_refused() {
+    let mut source = native_ai_workflow();
+    source["agents"][0]["invokes"] = json!(["unadmitted-agent"]);
+    let diagnostics = lint_project_with_docs(vec![("kernel.json", source)]);
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d.rule_id == "WOS-AI-NATIVE-001" && d.message.contains("invokes")),
+        "{diagnostics:?}"
+    );
 }
 
 // ========================================================================
@@ -1048,38 +988,30 @@ fn ai007_cascading_invocations_not_declared_flagged() {
 
 #[test]
 fn ai018_autonomous_without_deontic_flagged() {
-    let kernel = base_kernel();
-    let ai = json!({
-        "$wosWorkflow": "1.0",
-        "targetWorkflow": "https://example.com/workflow/test",
-        "agents": {
-            "agentA": {
-                "autonomy": "autonomous"
-                // no deonticConstraints, permissions, prohibitions, or obligations
-            }
-        }
-    });
-
-    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
-    assert!(has_rule(&diags, "AI-018"), "expected AI-018: {diags:?}");
+    let mut source = native_ai_workflow();
+    source["agents"][0]["actionOverrides"] =
+        json!([{"actionRef":"/lifecycle/states/open/onEntry/0","autonomy":"autonomous"}]);
+    let diagnostics = lint_project_with_docs(vec![("kernel.json", source)]);
+    assert!(
+        !has_rule(&diagnostics, "WOS-AI-NATIVE-001"),
+        "{diagnostics:?}"
+    );
+    assert_eq!(has_rule(&diagnostics, "AI-018"), true, "{diagnostics:?}");
 }
 
 #[test]
 fn ai018_autonomous_with_deontic_clean() {
-    let kernel = base_kernel();
-    let ai = json!({
-        "$wosWorkflow": "1.0",
-        "targetWorkflow": "https://example.com/workflow/test",
-        "agents": {
-            "agentA": {
-                "autonomy": "autonomous",
-                "permissions": [{ "condition": "true" }]
-            }
-        }
-    });
-
-    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
-    assert!(!has_rule(&diags, "AI-018"), "unexpected AI-018: {diags:?}");
+    let mut source = native_ai_workflow();
+    source["agents"][0]["actionOverrides"] =
+        json!([{"actionRef":"/lifecycle/states/open/onEntry/0","autonomy":"autonomous"}]);
+    source["agents"][0]["deonticConstraints"] =
+        json!([{"id":"scope","kind":"permission","bounds":"true","onViolation":"reject"}]);
+    let diagnostics = lint_project_with_docs(vec![("kernel.json", source)]);
+    assert!(
+        !has_rule(&diagnostics, "WOS-AI-NATIVE-001"),
+        "{diagnostics:?}"
+    );
+    assert_eq!(has_rule(&diagnostics, "AI-018"), false, "{diagnostics:?}");
 }
 
 // ========================================================================
@@ -1088,19 +1020,16 @@ fn ai018_autonomous_with_deontic_clean() {
 
 #[test]
 fn ai020_supervisory_without_review_window_flagged() {
-    let kernel = base_kernel();
-    let ai = json!({
-        "$wosWorkflow": "1.0",
-        "targetWorkflow": "https://example.com/workflow/test",
-        "agents": {
-            "agentA": {
-                "autonomy": "supervisory"
-            }
-        }
-    });
-
-    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
-    assert!(has_rule(&diags, "AI-020"), "expected AI-020: {diags:?}");
+    let mut source = native_ai_workflow();
+    source["agents"][0]["actionOverrides"] =
+        json!([{"actionRef":"/lifecycle/states/open/onEntry/0","autonomy":"supervisory"}]);
+    let diagnostics = lint_project_with_docs(vec![("kernel.json", source)]);
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d.rule_id == "WOS-AI-NATIVE-001" && d.message.contains("reviewWindow")),
+        "{diagnostics:?}"
+    );
 }
 
 // ========================================================================
@@ -1265,20 +1194,16 @@ fn ag008_side_effect_tool_without_policy_flagged() {
 // ========================================================================
 
 #[test]
-fn ai042_missing_training_data_disclosure_flagged() {
-    let kernel = base_kernel();
-    let ai = json!({
-        "$wosWorkflow": "1.0",
-        "targetWorkflow": "https://example.com/workflow/test",
-        "agents": {
-            "agentA": {
-                "modelConfig": {}
-            }
-        }
-    });
-
-    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
-    assert!(has_rule(&diags, "AI-042"), "expected AI-042: {diags:?}");
+fn ai042_missing_training_data_disclosure_flagged_retired_property_refused() {
+    let mut source = native_ai_workflow();
+    source["agents"][0]["modelConfig"] = json!({});
+    let diagnostics = lint_project_with_docs(vec![("kernel.json", source)]);
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d.rule_id == "WOS-AI-NATIVE-001" && d.message.contains("modelConfig")),
+        "{diagnostics:?}"
+    );
 }
 
 // ========================================================================
@@ -1286,22 +1211,16 @@ fn ai042_missing_training_data_disclosure_flagged() {
 // ========================================================================
 
 #[test]
-fn ai043_missing_optimization_objective_flagged() {
-    let kernel = base_kernel();
-    let ai = json!({
-        "$wosWorkflow": "1.0",
-        "targetWorkflow": "https://example.com/workflow/test",
-        "agents": {
-            "agentA": {
-                "modelConfig": {
-                    "trainingDataCharacteristics": "public data"
-                }
-            }
-        }
-    });
-
-    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
-    assert!(has_rule(&diags, "AI-043"), "expected AI-043: {diags:?}");
+fn ai043_missing_optimization_objective_flagged_retired_property_refused() {
+    let mut source = native_ai_workflow();
+    source["agents"][0]["modelConfig"] = json!({"trainingDataCharacteristics":"claimed"});
+    let diagnostics = lint_project_with_docs(vec![("kernel.json", source)]);
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d.rule_id == "WOS-AI-NATIVE-001" && d.message.contains("modelConfig")),
+        "{diagnostics:?}"
+    );
 }
 
 // ========================================================================
@@ -1309,21 +1228,16 @@ fn ai043_missing_optimization_objective_flagged() {
 // ========================================================================
 
 #[test]
-fn ai056_agent_level_autonomy_without_action_sites_flagged() {
-    let kernel = base_kernel();
-    let ai = json!({
-        "$wosWorkflow": "1.0",
-        "targetWorkflow": "https://example.com/workflow/test",
-        "agents": {
-            "agentA": {
-                "autonomy": "autonomous"
-                // no actionSites or per-action autonomy
-            }
-        }
-    });
-
-    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
-    assert!(has_rule(&diags, "AI-056"), "expected AI-056: {diags:?}");
+fn ai056_agent_level_autonomy_without_action_sites_flagged_retired_property_refused() {
+    let mut source = native_ai_workflow();
+    source["agents"][0]["autonomy"] = json!("autonomous");
+    let diagnostics = lint_project_with_docs(vec![("kernel.json", source)]);
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d.rule_id == "WOS-AI-NATIVE-001" && d.message.contains("autonomy")),
+        "{diagnostics:?}"
+    );
 }
 
 // ========================================================================
@@ -2001,70 +1915,36 @@ fn g036_no_review_protocols_skips_check() {
 
 #[test]
 fn ai026_escalation_without_expiry_flagged() {
-    let kernel = base_kernel();
-    let ai = json!({
-        "$wosWorkflow": "1.0",
-        "targetWorkflow": "https://example.com/workflow/test",
-        "agents": {
-            "eligibilityAgent": {
-                "autonomy": "supervised",
-                "escalationRules": [
-                    {
-                        "trigger": "confidence < 0.7",
-                        "action": "escalateToHuman"
-                        // Missing escalationExpiry.
-                    }
-                ]
-            }
-        }
-    });
-
-    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
-    assert!(has_rule(&diags, "AI-026"), "expected AI-026: {diags:?}");
-    assert_eq!(severity_of(&diags, "AI-026"), Some(LintSeverity::Warning));
+    let mut source = native_ai_workflow();
+    source["agents"][0]["autonomyPolicy"] = json!({"escalation":[{"id":"restore","condition":"true","targetLevel":"autonomous","requiredApproverRef":"reviewer"}]});
+    let diagnostics = lint_project_with_docs(vec![("kernel.json", source)]);
+    assert_eq!(
+        has_rule(&diagnostics, "WOS-AI-NATIVE-001"),
+        true,
+        "{diagnostics:?}"
+    );
 }
 
 #[test]
 fn ai026_escalation_with_expiry_clean() {
-    let kernel = base_kernel();
-    let ai = json!({
-        "$wosWorkflow": "1.0",
-        "targetWorkflow": "https://example.com/workflow/test",
-        "agents": {
-            "eligibilityAgent": {
-                "autonomy": "supervised",
-                "escalationRules": [
-                    {
-                        "trigger": "confidence < 0.7",
-                        "action": "escalateToHuman",
-                        "escalationExpiry": "PT24H"
-                    }
-                ]
-            }
-        }
-    });
-
-    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
-    assert!(!has_rule(&diags, "AI-026"), "unexpected AI-026: {diags:?}");
+    let mut source = native_ai_workflow();
+    source["agents"][0]["autonomyPolicy"] = json!({"escalation":[{"id":"restore","condition":"true","targetLevel":"autonomous","requiredApproverRef":"reviewer","escalationExpiry":"PT5M"}]});
+    let diagnostics = lint_project_with_docs(vec![("kernel.json", source)]);
+    assert_eq!(
+        has_rule(&diagnostics, "WOS-AI-NATIVE-001"),
+        false,
+        "{diagnostics:?}"
+    );
 }
 
 #[test]
 fn ai026_no_escalation_rules_skips_check() {
-    let kernel = base_kernel();
-    let ai = json!({
-        "$wosWorkflow": "1.0",
-        "targetWorkflow": "https://example.com/workflow/test",
-        "agents": {
-            "eligibilityAgent": {
-                "autonomy": "supervised"
-            }
-        }
-    });
-
-    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
-    assert!(
-        !has_rule(&diags, "AI-026"),
-        "unexpected AI-026 without escalation rules: {diags:?}"
+    let mut source = native_ai_workflow();
+    let diagnostics = lint_project_with_docs(vec![("kernel.json", source)]);
+    assert_eq!(
+        has_rule(&diagnostics, "WOS-AI-NATIVE-001"),
+        false,
+        "{diagnostics:?}"
     );
 }
 
@@ -2073,69 +1953,42 @@ fn ai026_no_escalation_rules_skips_check() {
 // ========================================================================
 
 #[test]
-fn ai031_output_contract_mismatch_flagged() {
-    let mut kernel = base_kernel();
-    kernel["formUrl"] = json!("https://forms.example.com/intake-form");
-    let ai = json!({
-        "$wosWorkflow": "1.0",
-        "targetWorkflow": "https://example.com/workflow/test",
-        "agents": {
-            "eligibilityAgent": {
-                "autonomy": "supervised",
-                "outputContract": {
-                    "formUrl": "https://forms.example.com/DIFFERENT-form"
-                }
-            }
-        }
-    });
-
-    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
-    assert!(has_rule(&diags, "AI-031"), "expected AI-031: {diags:?}");
-    assert_eq!(severity_of(&diags, "AI-031"), Some(LintSeverity::Warning));
-}
-
-#[test]
-fn ai031_output_contract_matches_kernel_clean() {
-    let mut kernel = base_kernel();
-    kernel["formUrl"] = json!("https://forms.example.com/intake-form");
-    let ai = json!({
-        "$wosWorkflow": "1.0",
-        "targetWorkflow": "https://example.com/workflow/test",
-        "agents": {
-            "eligibilityAgent": {
-                "autonomy": "supervised",
-                "outputContract": {
-                    "formUrl": "https://forms.example.com/intake-form"
-                }
-            }
-        }
-    });
-
-    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
-    assert!(!has_rule(&diags, "AI-031"), "unexpected AI-031: {diags:?}");
-}
-
-#[test]
-fn ai031_no_kernel_form_url_skips_check() {
-    let kernel = base_kernel(); // No formUrl.
-    let ai = json!({
-        "$wosWorkflow": "1.0",
-        "targetWorkflow": "https://example.com/workflow/test",
-        "agents": {
-            "eligibilityAgent": {
-                "autonomy": "supervised",
-                "outputContract": {
-                    "formUrl": "https://forms.example.com/some-form"
-                }
-            }
-        }
-    });
-
-    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
+fn ai031_output_contract_mismatch_flagged_retired_property_refused() {
+    let mut source = native_ai_workflow();
+    source["agents"][0]["outputContract"] = json!({"formUrl":"urn:test:unowned-contract"});
+    let diagnostics = lint_project_with_docs(vec![("kernel.json", source)]);
     assert!(
-        !has_rule(&diags, "AI-031"),
-        "unexpected AI-031 without kernel formUrl: {diags:?}"
+        diagnostics
+            .iter()
+            .any(|d| d.rule_id == "WOS-AI-NATIVE-001" && d.message.contains("outputContract")),
+        "{diagnostics:?}"
     );
+}
+
+#[test]
+fn ai031_output_contract_matches_kernel_clean_native_capability_reference() {
+    let mut source = native_ai_workflow();
+    source["agents"][0]["capabilities"] = json!([{"id":"extract","outputContractRef":"result"}]);
+    source["contracts"] = json!({"result":{"binding":"formspec","ref":"urn:test:result","definitionVersion":"1.0.0"}});
+    let diagnostics = lint_project_with_docs(vec![("kernel.json", source)]);
+    assert!(
+        !has_rule(&diagnostics, "WOS-AI-NATIVE-001"),
+        "{diagnostics:?}"
+    );
+    assert!(!has_rule(&diagnostics, "AI-031"), "{diagnostics:?}");
+}
+
+#[test]
+fn ai031_no_kernel_form_url_skips_check_native_capability_reference() {
+    let mut source = native_ai_workflow();
+    source["agents"][0]["capabilities"] = json!([{"id":"extract","outputContractRef":"result"}]);
+    source["contracts"] = json!({"result":{"binding":"formspec","ref":"urn:test:result","definitionVersion":"1.0.0"}});
+    let diagnostics = lint_project_with_docs(vec![("kernel.json", source)]);
+    assert!(
+        !has_rule(&diagnostics, "WOS-AI-NATIVE-001"),
+        "{diagnostics:?}"
+    );
+    assert!(!has_rule(&diagnostics, "AI-031"), "{diagnostics:?}");
 }
 
 // ========================================================================
@@ -2512,13 +2365,13 @@ fn ag012_some_quantifier_flagged() {
 fn ai023_agent_free_path_exists_clean() {
     // Kernel: intake -> review (agent assigned) -> completed (final)
     // But intake has no agent, so there IS a path through non-agent states.
-    let kernel = json!({
+    let mut kernel = json!({
         "$wosWorkflow": "1.0",
         "url": "https://example.com/workflow/test",
         "impactLevel": "operational",
         "actors": [
             { "id": "caseworker", "type": "human" },
-            { "id": "classifier", "type": "system" }
+            { "id": "classifier", "type": "agent" }
         ],
         "lifecycle": {
             "initialState": "intake",
@@ -2526,8 +2379,8 @@ fn ai023_agent_free_path_exists_clean() {
                 "intake": {
                     "type": "atomic",
                     "transitions": [
-                        { "event": "submit", "target": "review" },
-                        { "event": "manualComplete", "target": "completed" }
+                        { "event": {"kind":"message","name":"submit"}, "target": "review" },
+                        { "event": {"kind":"message","name":"manualComplete"}, "target": "completed" }
                     ]
                 },
                 "review": {
@@ -2536,7 +2389,7 @@ fn ai023_agent_free_path_exists_clean() {
                         { "action": "createTask", "taskRef": "classify", "assignTo": "classifier" }
                     ],
                     "transitions": [
-                        { "event": "classified", "target": "completed" }
+                        { "event": {"kind":"message","name":"classified"}, "target": "completed" }
                     ]
                 },
                 "completed": { "type": "final" }
@@ -2544,14 +2397,12 @@ fn ai023_agent_free_path_exists_clean() {
         },
         "caseFile": { "fields": {} }
     });
-    let ai = json!({
-        "$wosWorkflow": "1.0",
-        "targetWorkflow": "https://example.com/workflow/test",
-        "agents": [
-            { "id": "classifier", "type": "agent", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" }
-        ]
-    });
-    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai.json", ai)]);
+    kernel["agents"] = json!([
+        { "id": "classifier", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" }
+    ]);
+    kernel["version"] = json!("1.0.0");
+    kernel["title"] = json!("Native graph control");
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel)]);
     assert!(
         !has_rule(&diags, "AI-023"),
         "unexpected AI-023: agent-free path exists via intake->completed: {diags:?}"
@@ -2563,13 +2414,13 @@ fn ai023_agent_free_path_exists_clean() {
 fn ai023_no_agent_free_path_flagged() {
     // Kernel: agentOnly -> agentReview -> completed
     // Both non-final states assign tasks exclusively to agents.
-    let kernel = json!({
+    let mut kernel = json!({
         "$wosWorkflow": "1.0",
         "url": "https://example.com/workflow/test",
         "impactLevel": "operational",
         "actors": [
-            { "id": "triageBot", "type": "system" },
-            { "id": "reviewBot", "type": "system" }
+            { "id": "triageBot", "type": "agent" },
+            { "id": "reviewBot", "type": "agent" }
         ],
         "lifecycle": {
             "initialState": "agentOnly",
@@ -2580,7 +2431,7 @@ fn ai023_no_agent_free_path_flagged() {
                         { "action": "createTask", "taskRef": "triage", "assignTo": "triageBot" }
                     ],
                     "transitions": [
-                        { "event": "triaged", "target": "agentReview" }
+                        { "event": {"kind":"message","name":"triaged"}, "target": "agentReview" }
                     ]
                 },
                 "agentReview": {
@@ -2589,7 +2440,7 @@ fn ai023_no_agent_free_path_flagged() {
                         { "action": "createTask", "taskRef": "review", "assignTo": "reviewBot" }
                     ],
                     "transitions": [
-                        { "event": "reviewed", "target": "completed" }
+                        { "event": {"kind":"message","name":"reviewed"}, "target": "completed" }
                     ]
                 },
                 "completed": { "type": "final" }
@@ -2597,15 +2448,13 @@ fn ai023_no_agent_free_path_flagged() {
         },
         "caseFile": { "fields": {} }
     });
-    let ai = json!({
-        "$wosWorkflow": "1.0",
-        "targetWorkflow": "https://example.com/workflow/test",
-        "agents": [
-            { "id": "triageBot", "type": "agent", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" },
-            { "id": "reviewBot", "type": "agent", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" }
-        ]
-    });
-    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai.json", ai)]);
+    kernel["agents"] = json!([
+        { "id": "triageBot", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" },
+        { "id": "reviewBot", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" }
+    ]);
+    kernel["version"] = json!("1.0.0");
+    kernel["title"] = json!("Native graph control");
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel)]);
     assert!(
         has_rule(&diags, "AI-023"),
         "expected AI-023: all non-final states are agent-only: {diags:?}"
@@ -2638,21 +2487,22 @@ fn ai023_compound_substate_agent_free_path() {
     // transition to "done". Additionally, "humanStep" substate is not agent-only
     // and transitions to "done". The initial state "processing" is the compound
     // parent — it is not agent-only, so the BFS can traverse through it.
-    let kernel = json!({
+    let mut kernel = json!({
         "$wosWorkflow": "1.0",
         "url": "https://example.com/workflow/compound",
         "impactLevel": "operational",
         "actors": [
             { "id": "worker", "type": "human" },
-            { "id": "bot", "type": "system" }
+            { "id": "bot", "type": "agent" }
         ],
         "lifecycle": {
             "initialState": "processing",
             "states": {
                 "processing": {
                     "type": "compound",
+                    "initialState": "agentStep",
                     "transitions": [
-                        { "event": "skip", "target": "done" }
+                        { "event": {"kind":"message","name":"skip"}, "target": "done" }
                     ],
                     "states": {
                         "agentStep": {
@@ -2661,7 +2511,7 @@ fn ai023_compound_substate_agent_free_path() {
                                 { "action": "createTask", "taskRef": "classify", "assignTo": "bot" }
                             ],
                             "transitions": [
-                                { "event": "classified", "target": "humanStep" }
+                                { "event": {"kind":"message","name":"classified"}, "target": "humanStep" }
                             ]
                         },
                         "humanStep": {
@@ -2670,7 +2520,7 @@ fn ai023_compound_substate_agent_free_path() {
                                 { "action": "createTask", "taskRef": "review", "assignTo": "worker" }
                             ],
                             "transitions": [
-                                { "event": "reviewed", "target": "done" }
+                                { "event": {"kind":"message","name":"reviewed"}, "target": "done" }
                             ]
                         }
                     }
@@ -2680,14 +2530,12 @@ fn ai023_compound_substate_agent_free_path() {
         },
         "caseFile": { "fields": {} }
     });
-    let ai = json!({
-        "$wosWorkflow": "1.0",
-        "targetWorkflow": "https://example.com/workflow/compound",
-        "agents": [
-            { "id": "bot", "type": "agent", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" }
-        ]
-    });
-    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai.json", ai)]);
+    kernel["agents"] = json!([
+        { "id": "bot", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" }
+    ]);
+    kernel["version"] = json!("1.0.0");
+    kernel["title"] = json!("Native graph control");
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel)]);
     assert!(
         !has_rule(&diags, "AI-023"),
         "unexpected AI-023: compound state has agent-free substate path: {diags:?}"
@@ -2709,13 +2557,13 @@ fn ai023_parallel_region_one_agent_only_still_clean() {
     // The parent "parallel" state is not agent-only. Its parent transitions
     // reach "completed" (final). Also the humanRegion substates are human-only.
     // Global agent-free path: parallel -> completed.
-    let kernel = json!({
+    let mut kernel = json!({
         "$wosWorkflow": "1.0",
         "url": "https://example.com/workflow/parallel",
         "impactLevel": "operational",
         "actors": [
             { "id": "analyst", "type": "human" },
-            { "id": "aiBot", "type": "system" }
+            { "id": "aiBot", "type": "agent" }
         ],
         "lifecycle": {
             "initialState": "parallel",
@@ -2723,7 +2571,7 @@ fn ai023_parallel_region_one_agent_only_still_clean() {
                 "parallel": {
                     "type": "parallel",
                     "transitions": [
-                        { "event": "allDone", "target": "completed" }
+                        { "event": {"kind":"message","name":"allDone"}, "target": "completed" }
                     ],
                     "regions": {
                         "agentRegion": {
@@ -2734,7 +2582,7 @@ fn ai023_parallel_region_one_agent_only_still_clean() {
                                         { "action": "createTask", "taskRef": "autoClassify", "assignTo": "aiBot" }
                                     ],
                                     "transitions": [
-                                        { "event": "classified", "target": "agentDone" }
+                                        { "event": {"kind":"message","name":"classified"}, "target": "agentDone" }
                                     ]
                                 },
                                 "agentDone": { "type": "final" }
@@ -2748,7 +2596,7 @@ fn ai023_parallel_region_one_agent_only_still_clean() {
                                         { "action": "createTask", "taskRef": "manualReview", "assignTo": "analyst" }
                                     ],
                                     "transitions": [
-                                        { "event": "reviewed", "target": "humanDone" }
+                                        { "event": {"kind":"message","name":"reviewed"}, "target": "humanDone" }
                                     ]
                                 },
                                 "humanDone": { "type": "final" }
@@ -2761,14 +2609,12 @@ fn ai023_parallel_region_one_agent_only_still_clean() {
         },
         "caseFile": { "fields": {} }
     });
-    let ai = json!({
-        "$wosWorkflow": "1.0",
-        "targetWorkflow": "https://example.com/workflow/parallel",
-        "agents": [
-            { "id": "aiBot", "type": "agent", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" }
-        ]
-    });
-    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai.json", ai)]);
+    kernel["agents"] = json!([
+        { "id": "aiBot", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" }
+    ]);
+    kernel["version"] = json!("1.0.0");
+    kernel["title"] = json!("Native graph control");
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel)]);
     assert!(
         !has_rule(&diags, "AI-023"),
         "unexpected AI-023: parallel state has agent-free parent transition: {diags:?}"
@@ -2779,13 +2625,13 @@ fn ai023_parallel_region_one_agent_only_still_clean() {
 #[test]
 fn ai023_severity_is_error() {
     // Same setup as ai023_no_agent_free_path_flagged — all non-final states are agent-only.
-    let kernel = json!({
+    let mut kernel = json!({
         "$wosWorkflow": "1.0",
         "url": "https://example.com/workflow/test",
         "impactLevel": "operational",
         "actors": [
-            { "id": "triageBot", "type": "system" },
-            { "id": "reviewBot", "type": "system" }
+            { "id": "triageBot", "type": "agent" },
+            { "id": "reviewBot", "type": "agent" }
         ],
         "lifecycle": {
             "initialState": "agentOnly",
@@ -2796,7 +2642,7 @@ fn ai023_severity_is_error() {
                         { "action": "createTask", "taskRef": "triage", "assignTo": "triageBot" }
                     ],
                     "transitions": [
-                        { "event": "triaged", "target": "agentReview" }
+                        { "event": {"kind":"message","name":"triaged"}, "target": "agentReview" }
                     ]
                 },
                 "agentReview": {
@@ -2805,7 +2651,7 @@ fn ai023_severity_is_error() {
                         { "action": "createTask", "taskRef": "review", "assignTo": "reviewBot" }
                     ],
                     "transitions": [
-                        { "event": "reviewed", "target": "completed" }
+                        { "event": {"kind":"message","name":"reviewed"}, "target": "completed" }
                     ]
                 },
                 "completed": { "type": "final" }
@@ -2813,15 +2659,13 @@ fn ai023_severity_is_error() {
         },
         "caseFile": { "fields": {} }
     });
-    let ai = json!({
-        "$wosWorkflow": "1.0",
-        "targetWorkflow": "https://example.com/workflow/test",
-        "agents": [
-            { "id": "triageBot", "type": "agent", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" },
-            { "id": "reviewBot", "type": "agent", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" }
-        ]
-    });
-    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai.json", ai)]);
+    kernel["agents"] = json!([
+        { "id": "triageBot", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" },
+        { "id": "reviewBot", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" }
+    ]);
+    kernel["version"] = json!("1.0.0");
+    kernel["title"] = json!("Native graph control");
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel)]);
     assert!(has_rule(&diags, "AI-023"), "expected AI-023: {diags:?}");
     assert_eq!(
         severity_of(&diags, "AI-023"),

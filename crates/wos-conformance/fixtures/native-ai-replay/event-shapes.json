@@ -1,0 +1,150 @@
+{
+  "candidate": {
+    "$wosWorkflow": "1.0",
+    "url": "urn:test:shared-native-ai-replay",
+    "version": "1.0.0",
+    "title": "Independent native AI replay controls",
+    "impactLevel": "operational",
+    "actors": [
+      {
+        "id": "assessor",
+        "type": "agent"
+      }
+    ],
+    "agents": [
+      {
+        "id": "assessor",
+        "agentType": "deterministic",
+        "modelIdentifier": "literal-rules-model",
+        "modelVersion": "7.0.0",
+        "deonticConstraints": [
+          {
+            "id": "amount-bound",
+            "kind": "permission",
+            "allowedFields": [
+              "/amount"
+            ],
+            "bounds": "output.amount <= 100",
+            "onViolation": "reject"
+          }
+        ]
+      }
+    ],
+    "aiOversight": {},
+    "x-corpus-source": {
+      "author": "independent literal expectations",
+      "scope": "supplied output policy only"
+    },
+    "lifecycle": {
+      "initialState": "open",
+      "states": {
+        "open": {
+          "type": "atomic",
+          "transitions": [
+            {
+              "event": {
+                "kind": "message",
+                "name": "decide"
+              },
+              "target": "done"
+            }
+          ]
+        },
+        "done": {
+          "type": "final"
+        }
+      }
+    }
+  },
+  "storedCandidate": {
+    "$wosWorkflow": "1.0",
+    "url": "urn:test:shared-native-ai-replay",
+    "version": "1.0.0",
+    "title": "Independent native AI replay controls",
+    "impactLevel": "operational",
+    "actors": [
+      {
+        "id": "assessor",
+        "type": "agent"
+      }
+    ],
+    "agents": [
+      {
+        "id": "assessor",
+        "agentType": "deterministic",
+        "modelIdentifier": "literal-rules-model",
+        "modelVersion": "7.0.0",
+        "deonticConstraints": [
+          {
+            "id": "amount-bound",
+            "kind": "permission",
+            "allowedFields": [
+              "/amount"
+            ],
+            "bounds": "output.amount <= 100",
+            "onViolation": "reject"
+          }
+        ]
+      }
+    ],
+    "aiOversight": {},
+    "x-corpus-source": {
+      "author": "independent literal expectations",
+      "scope": "supplied output policy only"
+    },
+    "lifecycle": {
+      "initialState": "open",
+      "states": {
+        "open": {
+          "type": "atomic",
+          "transitions": [
+            {
+              "event": "decide",
+              "target": "done"
+            }
+          ]
+        },
+        "done": {
+          "type": "final"
+        }
+      }
+    }
+  },
+  "fixture": {
+    "id": "shared-native-pass",
+    "rule": "independent-native-policy",
+    "description": "Literal expectations for native supplied output; no invocation, validation, human review or governed commit claim",
+    "documents": {},
+    "initial_case_state": {
+      "retained": 42
+    },
+    "event_sequence": [
+      {
+        "event": "decide",
+        "actor": "assessor",
+        "data": {
+          "output": {
+            "amount": 100
+          },
+          "confidenceReport": {
+            "overall": 1.0,
+            "method": "declared"
+          }
+        }
+      }
+    ],
+    "expected_transitions": [
+      {
+        "from": "open",
+        "target": "done",
+        "event": "decide"
+      }
+    ]
+  },
+  "expectedConfiguration": [
+    "done"
+  ],
+  "expectedCaseState": {
+    "retained": 42
+  }
+}

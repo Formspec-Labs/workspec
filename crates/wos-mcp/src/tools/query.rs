@@ -1,3 +1,4 @@
+// Rust guideline compliant 2026-02-21
 //! Validation and query tool handlers (Task 6).
 //!
 //! - `wos_lint`              — export project, lint, return diagnostics summary.
@@ -306,11 +307,19 @@ pub async fn wos_search(
     }
 
     let project = registry.get(pid)?;
+    let q = query.to_lowercase();
+    if kind == "constraint" {
+        let document = project.native_snapshot();
+        let matches: Vec<Value> = wos_authoring::native_rule_sources(&document)
+            .into_iter()
+            .filter(|source| source.value.to_string().to_lowercase().contains(&q))
+            .map(|source| serde_json::json!({"path":source.pointer,"value":source.value}))
+            .collect();
+        return Ok(serde_json::json!({"matches":matches,"kind":kind,"query":query}));
+    }
     let doc = project
         .typed_snapshot()
         .map_err(|error| ToolError::ValidationFailed(error.message))?;
-    let q = query.to_lowercase();
-
     let matches: Vec<Value> = match kind {
         "state" => doc
             .lifecycle
@@ -389,30 +398,6 @@ pub async fn wos_search(
                 })
             })
             .collect(),
-
-        "constraint" => {
-            // Search deontic constraints under x-wos-ai.deonticConstraints.
-            let constraints: Vec<Value> = doc
-                .extensions
-                .get("x-wos-ai")
-                .and_then(|v| v.get("deonticConstraints"))
-                .and_then(Value::as_array)
-                .cloned()
-                .unwrap_or_default();
-
-            constraints
-                .iter()
-                .filter(|c| {
-                    let id = c.get("id").and_then(Value::as_str).unwrap_or("");
-                    let action = c.get("action").and_then(Value::as_str).unwrap_or("");
-                    let target = c.get("target").and_then(Value::as_str).unwrap_or("");
-                    id.to_lowercase().contains(&q)
-                        || action.to_lowercase().contains(&q)
-                        || target.to_lowercase().contains(&q)
-                })
-                .cloned()
-                .collect()
-        }
 
         _ => unreachable!(),
     };

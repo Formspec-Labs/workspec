@@ -2,60 +2,98 @@
   "id": "AI-015-multi-level-evaluation",
   "rule": "AI-015",
   "batch": 3,
-  "description": "All constraints at all three composition levels (agent, action-site, workflow) MUST be evaluated (AI S4.7). Provenance must show evaluation at each level.",
+  "description": "Native supplied-output policy stage only. No invocation, definition validation, review, fallback execution or governed commit claim.",
   "documents": {
-    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
-    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+    "kernel": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosWorkflow": "1.0",
+      "url": "urn:test:native-profile:ai-015",
+      "version": "1.0.0",
+      "title": "Independent native AI replay controls",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "assessor",
+          "type": "agent"
+        }
+      ],
+      "agents": [
+        {
+          "id": "assessor",
+          "agentType": "deterministic",
+          "modelIdentifier": "literal-rules-model",
+          "modelVersion": "7.0.0",
+          "deonticConstraints": [
+            {
+              "id": "agent-obligation",
+              "kind": "obligation",
+              "requirement": "true",
+              "onViolation": "reject"
+            }
+          ]
+        }
+      ],
+      "aiOversight": {
+        "deonticConstraints": [
+          {
+            "id": "workflow-permission",
+            "kind": "permission",
+            "bounds": "output.amount <= 100",
+            "onViolation": "reject"
+          }
+        ]
+      },
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": {
+                  "kind": "message",
+                  "name": "decide"
+                },
+                "target": "done"
+              }
+            ]
+          },
+          "done": {
+            "type": "final"
+          }
+        }
+      }
+    }
   },
   "initial_case_state": {
-    "income": 50000
+    "retained": 42
   },
   "event_sequence": [
     {
-      "event": "determined",
-      "actor": "eligibilityAgent",
+      "event": "decide",
+      "actor": "assessor",
       "data": {
         "output": {
-          "income": 50000,
-          "determination": "eligible",
-          "confidenceReport": {
-            "overall": 0.9
-          },
-          "reasonCodes": [
-            "R1"
-          ],
-          "evidenceCitations": [
-            "doc1"
-          ]
+          "amount": 101
+        },
+        "confidenceReport": {
+          "overall": 1.0,
+          "method": "declared"
         }
       }
     }
   ],
-  "expected_transitions": [
-    {
-      "from": "pendingDetermination",
-      "target": "reviewComplete",
-      "event": "determined"
-    }
-  ],
+  "expected_transitions": [],
   "expected_provenance": [
     {
-      "record_kind": "deonticEvaluation",
+      "record_kind": "deonticViolation",
       "data": {
-        "level": "agent"
-      }
-    },
-    {
-      "record_kind": "deonticEvaluation",
-      "data": {
-        "level": "action-site"
-      }
-    },
-    {
-      "record_kind": "deonticEvaluation",
-      "data": {
-        "level": "workflow"
+        "constraintId": "workflow-permission",
+        "action": "reject"
       }
     }
-  ]
+  ],
+  "expected_errors": []
 }

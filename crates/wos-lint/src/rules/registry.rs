@@ -1412,6 +1412,26 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
             "Add an `agents[]` entry whose `id` matches the agent-typed actor, or change the actor `type` to `human`/`system`.",
         ),
     },
+    RuleMetadata {
+        id: "WOS-AI-FEL-001",
+        tier: Tier::T2,
+        severity: LintSeverity::Error,
+        summary: "Every native output-policy predicate must be valid FEL.",
+        fixtures: &[],
+        graduation: Graduation::Draft,
+        spec_ref: Some("AI Integration §4.9"),
+        suggested_fix: None,
+    },
+    RuleMetadata {
+        id: "WOS-AI-NATIVE-001",
+        tier: Tier::T1,
+        severity: LintSeverity::Error,
+        summary: "Native AI declarations must load through the shared owning policy model.",
+        fixtures: &[],
+        graduation: Graduation::Draft,
+        spec_ref: Some("AI Integration §15.1"),
+        suggested_fix: None,
+    },
     // --- WOS-EMBED-* / WOS-SIDECAR-* (identity-boundary rules per ADR 0063) ---
     // WOS-EMBED-IDENTITY-001: Tested via inline JSON in
     // `embed_identity_001_governance_with_url_flagged` and

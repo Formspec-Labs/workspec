@@ -65,7 +65,7 @@ pub fn evaluate_event(
     adverse_notice: Option<&AdverseDecisionNoticeInput>,
 ) -> EventHandlerResult {
     let mut prov = Vec::new();
-    let mut requires_escalation = false;
+    let requires_escalation = false;
     let mut blocked = false;
 
     evaluate_due_process(
@@ -81,9 +81,17 @@ pub fn evaluate_event(
     evaluate_compensation(event, data, &mut prov);
     evaluate_delegation(event, actor, data, &mut prov);
     if is_agent {
-        evaluate_agent_provenance(data, &mut prov, &mut requires_escalation);
+        if let Some(feature) = unsupported_agent_hint(data) {
+            blocked = true;
+            prov.push(mk(
+                ProvenanceKind::ConfigurationWarning,
+                serde_json::json!({
+                    "reason":"unsupported-agent-event-hint", "requestedFeature":feature,
+                    "operationExecuted":false, "actorId":actor
+                }),
+            ));
+        }
     }
-    evaluate_fallback(data, &mut prov, &mut requires_escalation);
     evaluate_durability(event, data, &mut prov, seen_idempotency_keys);
     evaluate_dcr(data, companions, &mut prov);
     evaluate_provenance_completeness(event, data, &mut prov);
@@ -460,186 +468,36 @@ fn evaluate_delegation(
 
 // ── Batch 10: Agent provenance + fallback ────────────────────────────
 
-fn evaluate_agent_provenance(
-    data: &serde_json::Value,
-    prov: &mut Vec<ProvenanceRecord>,
-    requires_escalation: &mut bool,
-) {
-    // Track whether any specialized handler emits provenance. If none do,
-    // we emit the generic AgentOutput provenance as a fallback (AI-006).
-    let prov_count_before = prov.len();
-
-    // AI-008: Actor type immutable — agent tries to override its type.
-    if let Some(attempted) = data.get("actorTypeOverride").and_then(|v| v.as_str()) {
-        prov.push(mk(
-            ProvenanceKind::ActorTypeViolation,
-            serde_json::json!({
-                "declared": "system",
-                "attempted": attempted,
-                "reason": "actor-type-immutable",
-            }),
-        ));
-    }
-
-    // AI-044: Drift reclassification — drift alert triggers reclassification and escalation.
-    if let Some(_drift) = data.get("driftAlert") {
-        *requires_escalation = true;
-        prov.push(mk(
-            ProvenanceKind::DriftReclassification,
-            serde_json::json!({
-                "originalClassification": "assistive",
-                "reclassifiedTo": "determination",
-            }),
-        ));
-    }
-
-    // AI-047: Narrative non-authoritative.
-    if let Some(narrative) = data.get("narrativeTier") {
-        prov.push(mk(
-            ProvenanceKind::NarrativeTierRecorded,
-            serde_json::json!({
-                "authoritative": narrative.get("authoritative"),
-            }),
-        ));
-    }
-
-    // AI-052: Proxy invocation provenance.
-    if let Some(source) = data.get("invocationSource").and_then(|v| v.as_str()) {
-        prov.push(mk(
-            ProvenanceKind::ProxyInvocation,
-            serde_json::json!({
-                "source": source,
-                "provenanceRecorded": true,
-            }),
-        ));
-    }
-
-    // AI-053: Version change provenance.
-    // `target` matches the workflow-schema vocabulary (`Transition.target`)
-    // and the conformance fixtures emitted by ADR 0076 D-1.
-    if let (Some(at_invocation), Some(expected)) = (
-        data.get("modelVersionAtInvocation")
-            .and_then(|v| v.as_str()),
-        data.get("expectedModelVersion").and_then(|v| v.as_str()),
-    ) {
-        prov.push(mk(
-            ProvenanceKind::AgentVersionChange,
-            serde_json::json!({
-                "from": expected,
-                "target": at_invocation,
-            }),
-        ));
-    }
-
-    // AG-009: Agent state transition. Reads `target` from the input payload
-    // (matches schema `Transition.target` shape).
-    if let Some(ast) = data.get("agentStateChange") {
-        prov.push(mk(
-            ProvenanceKind::AgentStateTransition,
-            serde_json::json!({
-                "from": ast.get("from"),
-                "target": ast.get("target"),
-            }),
-        ));
-    }
-
-    // AI-057: Processor blocks constraint modification.
-    if let Some(mod_data) = data.get("constraintModification") {
-        prov.push(mk(
-            ProvenanceKind::ConstraintTamperBlocked,
-            serde_json::json!({
-                "agentId": "eligibilityAgent",
-                "targetConstraint": mod_data.get("targetConstraint"),
-            }),
-        ));
-    }
-
-    // AI-048: Narrative used as dispositive evidence.
-    if data.get("determinationBasis").and_then(|v| v.as_str()) == Some("narrative-only") {
-        prov.push(mk(
-            ProvenanceKind::DispositiveViolation,
-            serde_json::json!({
-                "reason": "narrative-used-as-dispositive-evidence",
-            }),
-        ));
-    }
-
-    // AI-006: Generic agent output provenance — emitted as a fallback when
-    // no specialized handler above produced provenance for this event.
-    // This replaces the previous fragile 10-field negative check.
-    let specialized_emitted = prov.len() > prov_count_before;
-    if !specialized_emitted {
-        if let (Some(_output), Some(cr)) = (data.get("output"), data.get("confidenceReport")) {
-            if let Some(conf) = cr.get("overall").and_then(|v| v.as_f64()) {
-                prov.push(mk(
-                    ProvenanceKind::AgentOutput,
-                    serde_json::json!({
-                        "modelIdentifier": "test-model",
-                        "modelVersion": "1.0",
-                        "confidence": conf,
-                        "inputSummaryPresent": true,
-                    }),
-                ));
-                // AI-033: Every agent output annotates touched fields.
-                prov.push(mk(
-                    ProvenanceKind::AgentProvenanceAnnotation,
-                    serde_json::json!({
-                        "fieldsAnnotated": true,
-                    }),
-                ));
-            }
-        }
-    }
-}
-
-fn evaluate_fallback(
-    data: &serde_json::Value,
-    prov: &mut Vec<ProvenanceRecord>,
-    requires_escalation: &mut bool,
-) {
-    // AI-032: Contract validation failure triggers fallback.
-    if let Some(cv) = data.get("contractValidation") {
-        if cv.get("valid").and_then(|v| v.as_bool()) == Some(false) {
-            prov.push(mk(
-                ProvenanceKind::FallbackTriggered,
-                serde_json::json!({
-                    "reason": "contract-validation-failed",
-                    "silentAcceptance": false,
-                }),
-            ));
-        }
-    }
-
-    // AI-039: Error triggers fallback chain execution.
-    if data.get("error").is_some() && data.get("output").is_some_and(|v| v.is_null()) {
-        // Emit fallback attempts for each level in the chain.
-        prov.push(mk(
-            ProvenanceKind::FallbackAttempt,
-            serde_json::json!({
-                "level": 0,
-                "action": "retry",
-            }),
-        ));
-        prov.push(mk(
-            ProvenanceKind::FallbackAttempt,
-            serde_json::json!({
-                "level": 1,
-                "action": "escalateToHuman",
-            }),
-        ));
-
-        // AI-040: Terminal fallback — the last level is always terminal.
-        if data.get("confidenceReport").is_none() {
-            *requires_escalation = true;
-            prov.push(mk(
-                ProvenanceKind::FallbackTerminal,
-                serde_json::json!({
-                    "action": "escalateToHuman",
-                    "taskCreated": true,
-                }),
-            ));
-        }
-    }
+/// Identify event hints that cannot establish trusted AI operations or facts.
+///
+/// These requests require an owning operation. Ordinary payloads never prove
+/// invocation, contract validation, fallback, model resolution or state changes.
+pub fn unsupported_agent_hint(data: &serde_json::Value) -> Option<&'static str> {
+    [
+        "actorTypeOverride",
+        "driftAlert",
+        "narrativeTier",
+        "invocationSource",
+        "modelVersionAtInvocation",
+        "expectedModelVersion",
+        "agentStateChange",
+        "constraintModification",
+        "determinationBasis",
+        "contractValidation",
+        "error",
+        "decayEvent",
+        "cumulativeConfidence",
+        "groundTruth",
+        "escalationActive",
+        "agentState",
+        "configMaxAutonomy",
+        "dynamicAutonomy",
+        "effectiveAutonomy",
+        "requestedAutonomy",
+        "overridePriorDecision",
+    ]
+    .into_iter()
+    .find(|field| data.get(*field).is_some())
 }
 
 // ── Batch 11: Durability ────────────────────────────────────────────

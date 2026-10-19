@@ -394,22 +394,6 @@ impl WosProject {
 
     // ── AI integration ────────────────────────────────────────────────────
 
-    /// Register a native `agents` declaration with modelIdentifier and capabilities.
-    pub fn add_ai_agent(
-        &mut self,
-        agent_id: impl Into<String>,
-        role: impl Into<String>,
-        model: impl Into<String>,
-        capabilities: Vec<String>,
-    ) -> AuthoringResult {
-        self.core.dispatch(Command::AddAiAgent {
-            agent_id: agent_id.into(),
-            role: role.into(),
-            model: model.into(),
-            capabilities,
-        })
-    }
-
     /// Refuse the retired constraint shape; use [`Self::add_agent_constraint`].
     pub fn add_deontic_constraint(
         &mut self,

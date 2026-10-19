@@ -1,13 +1,11 @@
 // Rust guideline compliant 2026-02-21
 
-//! MCP-server [`AgentInvoker`] adapter (skeleton).
+//! Explicitly unsupported MCP agent invocation adapter.
 //!
-//! Implements [`wos_core::agent::AgentInvoker`] against [`InvokerSpec::Mcp`].
-//! Each agent declaration names a `server` (resolved at deploy time) and a
-//! `tool` on that server; the adapter forwards [`AgentTask`] to the named
-//! tool.
-//!
-//! Body is `unimplemented!()` pending an MCP client crate decision.
+//! The adapter rejects mismatched invoker kinds. Matching declarations return
+//! an unsupported execution/model-mapping error until the provider integration
+//! exists. The admitted agent declaration owns model identity; no duplicate
+//! selector or successful invocation evidence is invented here.
 
 use wos_core::agent::{
     AgentContext, AgentInvocationError, AgentInvoker, AgentResult, AgentTask, InvokerKind,
@@ -37,12 +35,10 @@ impl AgentInvoker for McpInvoker {
         _ctx: &AgentContext<'_>,
     ) -> Result<AgentResult, AgentInvocationError> {
         match decl.invoker.as_ref() {
-            Some(InvokerSpec::Mcp { .. }) => {
-                unimplemented!(
-                    "wos-agent-mcp is a skeleton; the MCP client integration is tracked as a \
-                     follow-up to ADR 0064. See TODO.md."
-                )
-            }
+            Some(InvokerSpec::Mcp { .. }) => Err(AgentInvocationError::Substrate(format!(
+                "unsupported adapter execution/model mapping for admitted {}@{}; owning provider configuration/resolution operation is unavailable",
+                decl.model_identifier, decl.model_version
+            ))),
             other => Err(AgentInvocationError::InvokerMismatch(format!(
                 "McpInvoker bound to agent '{}' but declaration's invoker.kind is {:?}; \
                  deployment routed the wrong kind to this adapter (expected `{}`)",
@@ -62,25 +58,10 @@ mod tests {
     #[test]
     fn refuses_non_mcp_spec() {
         let inv = McpInvoker::new();
-        let decl = AgentDeclaration {
-            id: "a".into(),
-            kind: "agent".into(),
-            agent_type: AgentType::Deterministic,
-            model_identifier: "m".into(),
-            model_version: "1".into(),
-            description: None,
-            capabilities: vec![],
-            model_version_policy: None,
-            confidence_decay: None,
-            fallback_chain: vec![],
-            cascading_invocations: vec![],
-            deontic_constraints: None,
-            invoker: Some(InvokerSpec::Anthropic {
-                model: "x".into(),
+        let decl = serde_json::from_value::<AgentDeclaration>(serde_json::json!({"id":"a","agentType":AgentType::Deterministic,"modelIdentifier":"m","modelVersion":"1","invoker":Some(InvokerSpec::Anthropic {
                 config_ref: None,
-            }),
-            extensions: Default::default(),
-        };
+ metadata:Default::default(),
+})})).unwrap();
         let task = AgentTask {
             capability_id: "c".into(),
             prompt: None,

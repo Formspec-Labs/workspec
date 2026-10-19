@@ -1,3 +1,5 @@
+// Rust guideline compliant 2026-02-21
+
 // Tier 1 lint rule tests — one positive and one negative test per LINT-MATRIX rule.
 //
 // Each test constructs a minimal WOS document inline using `serde_json::json!`,
@@ -76,19 +78,7 @@ fn minimal_kernel() -> serde_json::Value {
 
 /// Schema-valid AI integration base so Tier 1 exercises typed deserialization.
 fn minimal_ai_integration_document() -> serde_json::Value {
-    json!({
-        "$wosWorkflow": "1.0",
-        "targetWorkflow": TEST_WORKFLOW_URL,
-        "agents": [
-            {
-                "id": "reviewAgent",
-                "type": "agent",
-                "agentType": "generative",
-                "modelIdentifier": "gpt-4o",
-                "modelVersion": "2025-03"
-            }
-        ]
-    })
+    json!({"$wosWorkflow":"1.0","url":TEST_WORKFLOW_URL,"version":"1.0.0","title":"Native AI lint control","impactLevel":"operational","actors":[{"id":"reviewAgent","type":"agent"},{"id":"reviewer","type":"human"}],"agents":[{"id":"reviewAgent","agentType":"deterministic","modelIdentifier":"literal-model","modelVersion":"1.0.0"}],"lifecycle":{"initialState":"open","states":{"open":{"type":"atomic","onEntry":[{"action":"createTask","taskRef":"manualReview","assignTo":"reviewer"}],"transitions":[{"event":"done","target":"done"}]},"done":{"type":"final"}}}})
 }
 
 // ========================================================================
@@ -1997,54 +1987,52 @@ fn ai041_doc_with_chain(chain: serde_json::Value) -> serde_json::Value {
 
 #[test]
 fn ai041_fallback_chain_without_terminal_action_flagged() {
-    let doc = ai041_doc_with_chain(json!([
-        { "action": "retry" },
-        { "action": "alternateAgent", "alternateAgentRef": "agent-b" }
-    ]));
-    let diags = lint(doc);
+    let doc = ai041_doc_with_chain(
+        json!([{"action":"retry","maxRetries":2,"backoff":"fixed","initialInterval":"PT1S"}]),
+    );
+    let diagnostics = lint(doc);
     assert!(
-        has_rule(&diags, "AI-041"),
-        "expected AI-041 for non-terminal chain: {diags:?}"
+        diagnostics
+            .iter()
+            .any(|d| d.rule_id == "WOS-AI-NATIVE-001" && d.message.contains("terminal")),
+        "{diagnostics:?}"
     );
 }
 
 #[test]
 fn ai041_fallback_chain_terminates_with_escalate_clean() {
-    let doc = ai041_doc_with_chain(json!([
-        { "action": "retry" },
-        { "action": "escalateToHuman" }
-    ]));
-    let diags = lint(doc);
+    let diagnostics = lint(ai041_doc_with_chain(
+        json!([{"action":"escalateToHuman","taskActionRef":"/lifecycle/states/open/onEntry/0"}]),
+    ));
     assert!(
-        !has_rule(&diags, "AI-041"),
-        "unexpected AI-041 for escalateToHuman: {diags:?}"
+        !has_rule(&diagnostics, "WOS-AI-NATIVE-001"),
+        "{diagnostics:?}"
     );
 }
 
 #[test]
 fn ai041_fallback_chain_terminates_with_fail_clean() {
-    let doc = ai041_doc_with_chain(json!([
-        { "action": "retry" },
-        { "action": "fail" }
-    ]));
-    let diags = lint(doc);
+    let diagnostics = lint(ai041_doc_with_chain(
+        json!([{"action":"retry","maxRetries":2,"backoff":"fixed","initialInterval":"PT1S"},{"action":"fail"}]),
+    ));
     assert!(
-        !has_rule(&diags, "AI-041"),
-        "unexpected AI-041 for fail: {diags:?}"
+        !has_rule(&diagnostics, "WOS-AI-NATIVE-001"),
+        "{diagnostics:?}"
     );
 }
 
 #[test]
 fn ai041_fallback_chain_with_cycle_flagged() {
-    let doc = ai041_doc_with_chain(json!([
-        { "action": "alternateAgent", "alternateAgentRef": "agent-b" },
-        { "action": "alternateAgent", "alternateAgentRef": "agent-b" },
-        { "action": "escalateToHuman" }
-    ]));
-    let diags = lint(doc);
+    let mut doc = ai041_doc_with_chain(
+        json!([{"action":"alternateAgent","alternateAgentRef":"reviewAgent"},{"action":"fail"}]),
+    );
+    doc["agents"][0]["cascadingInvocations"] = json!(["reviewAgent"]);
+    let diagnostics = lint(doc);
     assert!(
-        has_rule(&diags, "AI-041"),
-        "expected AI-041 for cycle: {diags:?}"
+        diagnostics
+            .iter()
+            .any(|d| d.rule_id == "WOS-AI-NATIVE-001" && d.message.contains("cycle")),
+        "{diagnostics:?}"
     );
 }
 
@@ -2053,65 +2041,54 @@ fn ai041_fallback_chain_with_cycle_flagged() {
 // ========================================================================
 
 #[test]
-fn ai049_narrative_authoritative_true_flagged() {
-    let doc = json!({
-        "$wosWorkflow": "1.0",
-        "narrativeProvenance": [
-            { "authoritative": true, "text": "This is a narrative." }
-        ]
-    });
-    let diags = lint(doc);
-    assert!(has_rule(&diags, "AI-049"), "expected AI-049: {diags:?}");
-    assert_eq!(severity_of(&diags, "AI-049"), Some(LintSeverity::Error));
-}
-
-#[test]
-fn ai049_narrative_authoritative_missing_warns() {
-    let doc = json!({
-        "$wosWorkflow": "1.0",
-        "narrativeProvenance": [
-            { "text": "Narrative with no authoritative field." }
-        ]
-    });
-    let diags = lint(doc);
+fn ai049_narrative_authoritative_true_flagged_reserved_setting_refused() {
+    let mut doc = minimal_ai_integration_document();
+    doc["aiOversight"] = json!({"narrativeTier":json!({"authoritative":true})});
+    let diagnostics = lint(doc);
     assert!(
-        has_rule(&diags, "AI-049"),
-        "expected AI-049 warning: {diags:?}"
+        diagnostics
+            .iter()
+            .any(|d| d.rule_id == "WOS-AI-NATIVE-001" && d.message.contains("narrativeTier")),
+        "{diagnostics:?}"
     );
-    assert_eq!(severity_of(&diags, "AI-049"), Some(LintSeverity::Warning));
 }
 
 #[test]
-fn ai049_narrative_authoritative_false_clean() {
-    let doc = json!({
-        "$wosWorkflow": "1.0",
-        "narrativeProvenance": [
-            { "authoritative": false, "text": "This is a narrative." }
-        ]
-    });
-    let diags = lint(doc);
-    assert!(!has_rule(&diags, "AI-049"), "unexpected AI-049: {diags:?}");
-}
-
-#[test]
-fn ai049_aioversight_narrative_provenance_authoritative_true_flagged() {
-    // Per ADR 0076 D-1 the AI Integration document was absorbed into the
-    // merged `$wosWorkflow` envelope; framework-level oversight (including
-    // narrativeProvenance) lives under `aiOversight`. The rule walks both
-    // root `narrativeProvenance` and `aiOversight.narrativeProvenance` so
-    // Tier-1 enforcement reaches authors who place it either spot.
-    let doc = json!({
-        "$wosWorkflow": "1.0",
-        "aiOversight": {
-            "narrativeProvenance": [
-                { "authoritative": true, "text": "Narrative." }
-            ]
-        }
-    });
-    let diags = lint(doc);
+fn ai049_narrative_authoritative_missing_warns_reserved_setting_refused() {
+    let mut doc = minimal_ai_integration_document();
+    doc["aiOversight"] = json!({"narrativeTier":json!({})});
+    let diagnostics = lint(doc);
     assert!(
-        has_rule(&diags, "AI-049"),
-        "expected AI-049 for aiOversight.narrativeProvenance: {diags:?}"
+        diagnostics
+            .iter()
+            .any(|d| d.rule_id == "WOS-AI-NATIVE-001" && d.message.contains("narrativeTier")),
+        "{diagnostics:?}"
+    );
+}
+
+#[test]
+fn ai049_narrative_authoritative_false_clean_reserved_setting_refused() {
+    let mut doc = minimal_ai_integration_document();
+    doc["aiOversight"] = json!({"narrativeTier":json!({"authoritative":false})});
+    let diagnostics = lint(doc);
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d.rule_id == "WOS-AI-NATIVE-001" && d.message.contains("narrativeTier")),
+        "{diagnostics:?}"
+    );
+}
+
+#[test]
+fn ai049_aioversight_narrative_provenance_authoritative_true_flagged_reserved_setting_refused() {
+    let mut doc = minimal_ai_integration_document();
+    doc["aiOversight"] = json!({"narrativeTier":json!({"provenance":[{"authoritative":true}]})});
+    let diagnostics = lint(doc);
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d.rule_id == "WOS-AI-NATIVE-001" && d.message.contains("narrativeTier")),
+        "{diagnostics:?}"
     );
 }
 

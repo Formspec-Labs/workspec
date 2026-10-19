@@ -117,7 +117,6 @@
     "agents": {
       "support": "incremental",
       "editors": [
-        "wos_add_ai_agent",
         "wos_edit_workflow.agent",
         "wos_edit_workflow.remove_agent",
         "wos_edit_workflow.agent_constraint"

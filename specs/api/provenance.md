@@ -58,7 +58,7 @@ Lifecycle-control public literals are `instanceSuspended`, `instanceResumed`, an
 The variants are flattened, not composed: each variant's `required` array enumerates exactly the fields it needs. Cold-read summary:
 
 - **Facts.** `tier`, `id`, `processId`, `recordKind`, `timestamp`, `definitionVersion`, `event`. `actorRef` is optional (kernel S8 leaves the actor optional when the processor cannot name one). `caseFileSnapshot` is REQUIRED when `transitionTags` includes `determination` (kernel S8.2.1) — enforced at the runtime append path; the API schema records this as a `description`-level obligation rather than a conditional `if/then` because the kernel envelope already enforces it on the persisted log shape.
-- **Reasoning.** Adds `rulesApplied` (`min 1`), `evidenceConsulted`, `criteriaChecked`. Required for `determination`-tagged transitions. Optional `assertionGates: AssertionGateResult[]` (governance §5.4 — closed `gateKind: source-grounded | arithmetic | range | consistency | format | cross-document | temporal` + `gatePassed: boolean` + `evidenceRefs: EvidenceReference[]`) and optional `confidenceReport: ConfidenceReport` (ai-integration.md §7.1 — `outputId` + `confidence` + `decayApplied` + `cumulativeConfidenceWindow`).
+- **Reasoning.** Adds `rulesApplied` (`min 1`), `evidenceConsulted`, `criteriaChecked`. Required for `determination`-tagged transitions. Optional `assertionGates: AssertionGateResult[]` (governance §5.4 — closed `gateKind: source-grounded | arithmetic | range | consistency | format | cross-document | temporal` + `gatePassed: boolean` + `evidenceRefs: EvidenceReference[]`) and optional `confidenceReport: ConfidenceReport` ([AI Integration §7.1](../ai/ai-integration.md#71-confidence-report) — required `overall` and `method`; optional `explanation` and `fieldLevel`).
 - **Counterfactual.** Adds `positiveCounterfactuals`, `negativeCounterfactuals`. Required for `adverse-decision`-tagged transitions in `rights-impacting` workflows.
 - **Narrative.** Adds `narrative`, `authoritative` (MUST be the literal `false`), `modelIdentifier`, `modelVersion`. Per AI Integration §13.2, every implementation MUST treat narrative content as non-authoritative; the schema makes this structurally enforced via the `const false` discriminant. Optional `confidenceReport: ConfidenceReport` (ai-integration.md §7.1 applies to narrative output too — every agent output carries one).
 
@@ -70,11 +70,17 @@ Required fields: `processId`, `assembledAt`, `assembledBy: ActorRef`, `narrative
 
 ### Resource shape — `AssertionGateResult` and `ConfidenceReport`
 
-Both shapes embed on tier records and so do not have their own endpoints. `AssertionGateResult` lives on `ReasoningTierRecord.assertionGates`; `ConfidenceReport` lives on `ReasoningTierRecord.confidenceReport` AND on `NarrativeTierRecord.confidenceReport`. The closed `AssertionGateKind` enum carries the seven §5.4 literals verbatim. The `ConfidenceReport.cumulativeConfidenceWindow.below` boolean is the load-bearing observable that triggers the §7.7 multi-step pause-for-human-review MUST.
+Both shapes appear on tier records and have no separate endpoints. `AssertionGateResult` lives on `ReasoningTierRecord.assertionGates`; `ConfidenceReport` lives on both `ReasoningTierRecord.confidenceReport` and `NarrativeTierRecord.confidenceReport`. The closed `AssertionGateKind` enum carries the seven §5.4 literals verbatim.
+
+`ConfidenceReport` references the canonical [Workflow definition](../../schemas/wos-workflow.schema.json#/$defs/ConfidenceReport) from AI Integration §7.1. It requires `overall` and `method`, permits `explanation` and `fieldLevel`, and retains descriptive `x-*` metadata. `overall` and each field-level score must be finite numbers in [0,1]. The API MUST preserve the reported values; it MUST NOT invent a method or accept scalar confidence as an alternative report. Metadata and method labels do not establish authority or calibration.
+
+Processor-computed decay, cumulative confidence and floor decisions are separate evaluation evidence, identified by the observed output and native policy scope. They do not replace report fields. The §7.7 requirement to pause for human review depends on actual cumulative-confidence evaluation; an absent evaluation is not a successful check.
 
 ### Reused kernel/governance shapes
 
-The API layer is a projection. Per ADR 0082 D-14 fourth bullet, kernel and governance record types are referenced rather than reinvented. Because typify and other codegens resolve cross-schema `$ref`s only when given an explicit schema-resolution map, this schema mirrors (rather than cross-`$ref`s) the structurally-stable shapes from `wos-workflow.schema.json`:
+The API reuses kernel and governance record types under ADR 0082 D-14. `ConfidenceReport` directly references `wos-workflow.schema.json#/$defs/ConfidenceReport`; schema consumers must register the canonical Workflow resource with their resolver. The API does not define a second report shape.
+
+The following existing definitions remain structural mirrors of their Workflow sources:
 
 | API definition | Kernel / governance source |
 |---|---|
@@ -115,12 +121,11 @@ The aggregate `GET /api/v1/cases/{case_id}/processes/{process_id}?include=...` (
 
 ## Codegen
 
-Verified against ADR 0082 Notes section (sharp edges around `oneOf` with shared base fields):
+The flat tier variants let Rust and TypeScript generators produce discriminated unions. Earlier dry-runs established tier narrowing for the prior schema; those results do not verify the current canonical `ConfidenceReport` reference.
 
-- **Rust (typify).** Local dry-run produces `pub enum ProvenanceRecord { FactsTierRecord(FactsTierRecord), ReasoningTierRecord(ReasoningTierRecord), CounterfactualTierRecord(CounterfactualTierRecord), NarrativeTierRecord(NarrativeTierRecord) }` with `#[serde(untagged)]`. The `tier` `const` discriminant in each variant guards deserialization deterministically. Rust output compiles with only `serde`, `serde_json`, `regress`, and `chrono` deps. No hand-edits required. The variant-naming difference from the ADR sketch (`FactsTierRecord(...)` vs `Facts(...)`) is a typify naming convention — the named field `tier` on each struct preserves `match record { ProvenanceRecord::FactsTierRecord(f) => f.tier, ... }` semantics.
-- **TypeScript (`json-schema-to-typescript`).** Dry-run produces `export type ProvenanceRecord = FactsTierRecord | ReasoningTierRecord | CounterfactualTierRecord | NarrativeTierRecord` with `tier: "facts"` / `"reasoning"` / `"counterfactual"` / `"narrative"` literal-typed in each interface. `tsc --strict` confirms `if (record.tier === 'reasoning')` narrows to `ReasoningTierRecord` with `rulesApplied` non-optional, and `record.authoritative` narrows to the literal type `false` on the narrative variant.
+The maintained Rust build registers the canonical Workflow schema in its existing resource resolver. For `ConfidenceReport`, it uses typify's supported replacement mechanism with a server-local type that delegates serialization and validation to the native report. API documentation traits stay in the server; report fields and validation stay with their existing owner. Generated Rust is not edited by hand.
 
-Both codegens deliver the contract D-5 promised. The "flattened variants, no shared `allOf` envelope" choice is what makes this work; nesting tier blocks under a shared envelope (the legacy portal shape) breaks both codegens' narrowing.
+Current generation checks must resolve the canonical reference, compile the generated parent record types and preserve reported values through the actual page conversion. Controls include descriptive `x-*` values and the distinction between absent and explicitly empty `fieldLevel`. Invalid reports must produce an explicit error instead of silently removing records from a successful page. A successful generator exit alone does not establish these behaviors. TypeScript consumers must resolve the same canonical reference; historical union-narrowing results are not current consumer qualification.
 
 ## Greenfield discipline
 

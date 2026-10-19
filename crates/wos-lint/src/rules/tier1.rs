@@ -172,27 +172,18 @@ fn check_governance_block(gov: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
 ///
 /// Covers rules previously applied to standalone `$wosAIIntegration` documents.
 fn check_ai_integration_block(root: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
-    // AI-049: narrativeProvenance authoritative
-    if let Some(np) = root.get("narrativeProvenance") {
-        check_narrative_tier_authoritative_in(np, "/narrativeProvenance", diagnostics);
-    }
-    if let Some(ai_oversight) = root.get("aiOversight") {
-        if let Some(np) = ai_oversight.get("narrativeProvenance") {
-            check_narrative_tier_authoritative_in(
-                np,
-                "/aiOversight/narrativeProvenance",
-                diagnostics,
-            );
-        }
-    }
-
-    // AI-041: fallback chain termination
-    if let Some(agents) = root.get("agents").and_then(Value::as_array) {
-        for (i, agent) in agents.iter().enumerate() {
-            if let Some(chain) = agent.get("fallbackChain").and_then(Value::as_array) {
-                let path = format!("/agents/{i}/fallbackChain");
-                check_fallback_chain_termination_raw(chain, &path, diagnostics);
-            }
+    let has_ai = root.get("agents").is_some()
+        || root.get("aiOversight").is_some()
+        || root["actors"]
+            .as_array()
+            .is_some_and(|actors| actors.iter().any(|actor| actor["type"] == "agent"));
+    if has_ai {
+        if let Err(error) = wos_core::ai_policy::load_native_ai_policy(root) {
+            diagnostics.push(LintDiagnostic::t1_error(
+                "WOS-AI-NATIVE-001",
+                error.pointer(),
+                error.message(),
+            ));
         }
     }
 }
@@ -856,26 +847,6 @@ fn check_delegation_dates_typed(gov: &GovernanceDocument, diagnostics: &mut Vec<
 // AI Integration rules
 // ---------------------------------------------------------------------------
 
-fn check_authoritative_false(record: &Value, path: &str, diagnostics: &mut Vec<LintDiagnostic>) {
-    match record.get("authoritative") {
-        Some(Value::Bool(false)) => {}
-        None => {
-            diagnostics.push(LintDiagnostic::t1_warning(
-                "AI-049",
-                path,
-                "narrative tier record missing required 'authoritative' field (must be false)",
-            ));
-        }
-        _ => {
-            diagnostics.push(LintDiagnostic::t1_error(
-                "AI-049",
-                path,
-                "narrative tier provenance record must have 'authoritative' set to false",
-            ));
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Assertion Library rules (no typed model — Value walking)
 // ---------------------------------------------------------------------------
@@ -1058,57 +1029,6 @@ fn check_bindings_block(bindings: &Value, base_path: &str, diagnostics: &mut Vec
 }
 
 /// AI-049 narrative tier check on an array value (path-aware).
-fn check_narrative_tier_authoritative_in(
-    records: &Value,
-    base_path: &str,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    let Some(arr) = records.as_array() else {
-        return;
-    };
-    for (i, record) in arr.iter().enumerate() {
-        check_authoritative_false(record, &format!("{base_path}/{i}"), diagnostics);
-    }
-}
-
-/// AI-041: Fallback chain termination check on a raw JSON array.
-fn check_fallback_chain_termination_raw(
-    chain: &[Value],
-    path: &str,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    if chain.is_empty() {
-        return;
-    }
-    let last_action = chain
-        .last()
-        .and_then(|l| l.get("action").and_then(Value::as_str))
-        .unwrap_or("");
-    if last_action != "escalateToHuman" && last_action != "fail" {
-        diagnostics.push(LintDiagnostic::t1_error(
-            "AI-041",
-            path,
-            format!(
-                "fallback chain must terminate in 'escalateToHuman' or 'fail', found '{last_action}'"
-            ),
-        ));
-    }
-    let mut seen_alternate_agents = std::collections::HashSet::new();
-    for (i, level) in chain.iter().enumerate() {
-        if let Some(agent_ref) = level.get("alternateAgentRef").and_then(Value::as_str) {
-            if !seen_alternate_agents.insert(agent_ref) {
-                diagnostics.push(LintDiagnostic::t1_error(
-                    "AI-041",
-                    &format!("{path}/{i}"),
-                    format!(
-                        "fallback chain cycles: alternateAgent '{agent_ref}' appears more than once"
-                    ),
-                ));
-            }
-        }
-    }
-}
-
 /// Shared helper for G-047 and G-057.
 fn check_values_ascending_effective_date(
     values: &[Value],

@@ -45,7 +45,9 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::model::ai::AgentDeclaration;
+use crate::model::ai::{
+    AgentDeclaration, ConfidenceReport, Metadata, deserialize_optional_present,
+};
 
 /// The substrate-neutral port through which the runtime invokes agents.
 ///
@@ -76,21 +78,30 @@ pub trait AgentInvoker: Send + Sync {
 /// breaking change: declare a new variant, ship a new adapter crate,
 /// deployments opt in by binding the variant.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum InvokerSpec {
     /// Direct Anthropic SDK call. Adapter: `wos-agent-anthropic`.
     Anthropic {
-        /// Anthropic model identifier (e.g., `claude-opus-4-7`).
-        model: String,
         /// Optional opaque adapter-specific configuration.
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(deserialize_with = "deserialize_optional_present")]
         config_ref: Option<String>,
+        /// Descriptive metadata with no authority.
+        #[serde(flatten)]
+        metadata: Metadata,
     },
 
     /// Claude Agent SDK invocation. Adapter: `wos-agent-sdk-claude`.
     ClaudeAgentSdk {
         /// Reference to a Claude Agent SDK config document.
         config_ref: String,
+        /// Descriptive metadata with no authority.
+        #[serde(flatten)]
+        metadata: Metadata,
     },
 
     /// MCP server tool invocation. Adapter: `wos-agent-mcp`.
@@ -99,12 +110,19 @@ pub enum InvokerSpec {
         server: String,
         /// Tool name on the MCP server.
         tool: String,
+        /// Descriptive metadata with no authority.
+        #[serde(flatten)]
+        metadata: Metadata,
     },
 
     /// A2A multi-agent orchestrator invocation. Adapter: `wos-agent-a2a`.
+    #[serde(rename = "a2a")]
     A2A {
         /// Orchestrator identifier (resolved at deploy time).
         orchestrator: String,
+        /// Descriptive metadata with no authority.
+        #[serde(flatten)]
+        metadata: Metadata,
     },
 
     /// Generic HTTP/OpenAPI service invocation. Adapter: `wos-agent-http`.
@@ -113,7 +131,11 @@ pub enum InvokerSpec {
         endpoint: String,
         /// Optional URI to an OpenAPI / JSON Schema describing the contract.
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(deserialize_with = "deserialize_optional_present")]
         schema_ref: Option<String>,
+        /// Descriptive metadata with no authority.
+        #[serde(flatten)]
+        metadata: Metadata,
     },
 
     /// Deterministic in-memory stub. Adapter: `wos-agent-stub`.
@@ -125,6 +147,9 @@ pub enum InvokerSpec {
         /// `(agent_id, capability_id)` pair.
         #[serde(default)]
         responses: Vec<StubResponse>,
+        /// Descriptive metadata with no authority.
+        #[serde(flatten)]
+        metadata: Metadata,
     },
 }
 
@@ -135,18 +160,21 @@ pub struct StubResponse {
     /// Capability id this response satisfies. When omitted, matches any
     /// capability — useful for single-capability fixtures.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "deserialize_optional_present")]
     pub capability_id: Option<String>,
 
     /// Output payload returned by the invoker.
     pub output: serde_json::Value,
 
-    /// Reported confidence. When omitted, defaults to `1.0`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub confidence: Option<f64>,
+    /// Explicit canonical report; missing values or method cannot be invented.
+    pub confidence_report: ConfidenceReport,
 
     /// Optional citation array passed through unchanged.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub citations: Vec<serde_json::Value>,
+    /// Descriptive metadata with no authority.
+    #[serde(flatten)]
+    pub metadata: Metadata,
 }
 
 /// One unit of work handed to an agent.
@@ -209,10 +237,8 @@ pub struct AgentResult {
     /// by the runtime before being projected into case state.
     pub output: serde_json::Value,
 
-    /// Reported confidence in `[0, 1]`. The runtime compares this against the
-    /// agent's `confidence_decay`-adjusted floor (see `wos_core::confidence`)
-    /// to decide whether to commit or fall through to the fallback chain.
-    pub confidence: f64,
+    /// Explicit canonical untrusted report, retained without replacement.
+    pub confidence_report: ConfidenceReport,
 
     /// Optional citation array. Pass-through; the runtime emits them as
     /// provenance evidence on the `CapabilityInvocationRecord`.
@@ -393,23 +419,20 @@ mod tests {
     #[test]
     fn invoker_spec_anthropic_round_trips() {
         let spec = InvokerSpec::Anthropic {
-            model: "claude-opus-4-7".into(),
             config_ref: None,
+            metadata: Default::default(),
         };
         let json = serde_json::to_value(&spec).unwrap();
         assert_eq!(
             json,
             serde_json::json!({
-                "kind": "anthropic",
-                "model": "claude-opus-4-7"
+                "kind": "anthropic"
             }),
             "InvokerSpec::Anthropic MUST tag-serialize as kind='anthropic' \
-             with model passed through"
+             without a duplicate model selector"
         );
         let back: InvokerSpec = serde_json::from_value(json).unwrap();
-        assert!(
-            matches!(back, InvokerSpec::Anthropic { ref model, .. } if model == "claude-opus-4-7")
-        );
+        assert!(matches!(back, InvokerSpec::Anthropic { .. }));
     }
 
     #[test]
@@ -418,19 +441,24 @@ mod tests {
             responses: vec![StubResponse {
                 capability_id: Some("triage".into()),
                 output: serde_json::json!({"category": "benefits"}),
-                confidence: Some(0.92),
+                confidence_report: serde_json::from_value(
+                    serde_json::json!({"overall":0.92,"method":"declared"}),
+                )
+                .unwrap(),
                 citations: vec![],
+                metadata: Default::default(),
             }],
+            metadata: Default::default(),
         };
         let json = serde_json::to_value(&spec).unwrap();
         assert_eq!(json["kind"], "stub");
         assert_eq!(json["responses"][0]["capabilityId"], "triage");
         let back: InvokerSpec = serde_json::from_value(json).unwrap();
         match back {
-            InvokerSpec::Stub { responses } => {
+            InvokerSpec::Stub { responses, .. } => {
                 assert_eq!(responses.len(), 1);
                 assert_eq!(responses[0].capability_id.as_deref(), Some("triage"));
-                assert_eq!(responses[0].confidence, Some(0.92));
+                assert_eq!(responses[0].confidence_report.overall, 0.92);
             }
             other => panic!("expected Stub, got {other:?}"),
         }
@@ -446,7 +474,7 @@ mod tests {
         let spec: InvokerSpec = serde_json::from_value(json).unwrap();
         assert!(matches!(
             spec,
-            InvokerSpec::Mcp { ref server, ref tool }
+            InvokerSpec::Mcp { ref server, ref tool , ..}
                 if server == "agent-router" && tool == "triage"
         ));
     }
@@ -459,14 +487,15 @@ mod tests {
         // the registry can route by kind without ambiguity.
         assert_eq!(
             InvokerKind::from(&InvokerSpec::Anthropic {
-                model: "claude-opus-4-7".into(),
                 config_ref: None,
+                metadata: Default::default(),
             }),
             InvokerKind::Anthropic
         );
         assert_eq!(
             InvokerKind::from(&InvokerSpec::ClaudeAgentSdk {
                 config_ref: "x".into(),
+                metadata: Default::default(),
             }),
             InvokerKind::ClaudeAgentSdk
         );
@@ -474,12 +503,14 @@ mod tests {
             InvokerKind::from(&InvokerSpec::Mcp {
                 server: "s".into(),
                 tool: "t".into(),
+                metadata: Default::default(),
             }),
             InvokerKind::Mcp
         );
         assert_eq!(
             InvokerKind::from(&InvokerSpec::A2A {
                 orchestrator: "o".into(),
+                metadata: Default::default(),
             }),
             InvokerKind::A2A
         );
@@ -487,11 +518,15 @@ mod tests {
             InvokerKind::from(&InvokerSpec::Http {
                 endpoint: "https://example.test".into(),
                 schema_ref: None,
+                metadata: Default::default(),
             }),
             InvokerKind::Http
         );
         assert_eq!(
-            InvokerKind::from(&InvokerSpec::Stub { responses: vec![] }),
+            InvokerKind::from(&InvokerSpec::Stub {
+                responses: vec![],
+                metadata: Default::default(),
+            }),
             InvokerKind::Stub
         );
     }
@@ -530,7 +565,10 @@ mod tests {
                     "agentId": decl.id,
                     "capability": task.capability_id,
                 }),
-                confidence: 1.0,
+                confidence_report: serde_json::from_value(
+                    serde_json::json!({"overall":1.0,"method":"declared"}),
+                )
+                .unwrap(),
                 citations: vec![],
                 telemetry: None,
             })
@@ -549,34 +587,22 @@ mod tests {
             Box::new(RecordingInvoker { label: "anthropic" }),
         );
 
-        let stub_spec = InvokerSpec::Stub { responses: vec![] };
+        let stub_spec = InvokerSpec::Stub {
+            responses: vec![],
+            metadata: Default::default(),
+        };
         let stub_invoker = registry.lookup(&stub_spec).expect("stub bound");
 
         let anthropic_spec = InvokerSpec::Anthropic {
-            model: "claude-opus-4-7".into(),
             config_ref: None,
+            metadata: Default::default(),
         };
         let anth_invoker = registry.lookup(&anthropic_spec).expect("anthropic bound");
 
         // Confirm they are different adapters by inspecting the recording
         // invoker's label through a fake invocation.
         use crate::model::ai::{AgentDeclaration, AgentType};
-        let decl = AgentDeclaration {
-            id: "a".into(),
-            kind: "agent".into(),
-            agent_type: AgentType::Generative,
-            model_identifier: "m".into(),
-            model_version: "1".into(),
-            description: None,
-            capabilities: vec![],
-            model_version_policy: None,
-            confidence_decay: None,
-            fallback_chain: vec![],
-            cascading_invocations: vec![],
-            deontic_constraints: None,
-            invoker: None,
-            extensions: Default::default(),
-        };
+        let decl = serde_json::from_value::<AgentDeclaration>(serde_json::json!({"id":"a","agentType":AgentType::Generative,"modelIdentifier":"m","modelVersion":"1"})).unwrap();
         let task = AgentTask {
             capability_id: "c".into(),
             prompt: None,
@@ -598,7 +624,10 @@ mod tests {
     #[test]
     fn registry_lookup_returns_none_for_unregistered_kind() {
         let registry = AgentInvokerRegistry::new();
-        let spec = InvokerSpec::Stub { responses: vec![] };
+        let spec = InvokerSpec::Stub {
+            responses: vec![],
+            metadata: Default::default(),
+        };
         assert!(registry.lookup(&spec).is_none());
         assert!(registry.is_empty());
     }
@@ -634,26 +663,14 @@ mod tests {
             InvokerKind::Stub,
             Box::new(RecordingInvoker { label: "second" }),
         );
-        let spec = InvokerSpec::Stub { responses: vec![] };
+        let spec = InvokerSpec::Stub {
+            responses: vec![],
+            metadata: Default::default(),
+        };
         let invoker = registry.lookup(&spec).unwrap();
         // Smoke-test the second binding is the one that survived.
         use crate::model::ai::{AgentDeclaration, AgentType};
-        let decl = AgentDeclaration {
-            id: "a".into(),
-            kind: "agent".into(),
-            agent_type: AgentType::Generative,
-            model_identifier: "m".into(),
-            model_version: "1".into(),
-            description: None,
-            capabilities: vec![],
-            model_version_policy: None,
-            confidence_decay: None,
-            fallback_chain: vec![],
-            cascading_invocations: vec![],
-            deontic_constraints: None,
-            invoker: None,
-            extensions: Default::default(),
-        };
+        let decl = serde_json::from_value::<AgentDeclaration>(serde_json::json!({"id":"a","agentType":AgentType::Generative,"modelIdentifier":"m","modelVersion":"1"})).unwrap();
         let task = AgentTask {
             capability_id: "c".into(),
             prompt: None,

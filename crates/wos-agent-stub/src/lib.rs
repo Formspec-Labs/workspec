@@ -66,7 +66,7 @@ impl AgentInvoker for StubInvoker {
         _ctx: &AgentContext<'_>,
     ) -> Result<AgentResult, AgentInvocationError> {
         let responses = match decl.invoker.as_ref() {
-            Some(InvokerSpec::Stub { responses }) => responses,
+            Some(InvokerSpec::Stub { responses, .. }) => responses,
             Some(other) => {
                 return Err(AgentInvocationError::InvokerMismatch(format!(
                     "StubInvoker bound but agent '{}' declares invoker.kind != 'stub' \
@@ -98,9 +98,13 @@ impl AgentInvoker for StubInvoker {
                 }
             })?;
 
+        response
+            .confidence_report
+            .validate()
+            .map_err(AgentInvocationError::ContractViolation)?;
         Ok(AgentResult {
             output: response.output.clone(),
-            confidence: response.confidence.unwrap_or(1.0),
+            confidence_report: response.confidence_report.clone(),
             citations: response.citations.clone(),
             telemetry: None,
         })
@@ -134,22 +138,7 @@ mod tests {
     use wos_core::model::ai::{AgentDeclaration, AgentType};
 
     fn agent_with_stub(invoker: InvokerSpec) -> AgentDeclaration {
-        AgentDeclaration {
-            id: "triageAgent".into(),
-            kind: "agent".into(),
-            agent_type: AgentType::Generative,
-            model_identifier: "test-model".into(),
-            model_version: "1.0".into(),
-            description: None,
-            capabilities: vec![],
-            model_version_policy: None,
-            confidence_decay: None,
-            fallback_chain: vec![],
-            cascading_invocations: vec![],
-            deontic_constraints: None,
-            invoker: Some(invoker),
-            extensions: Default::default(),
-        }
+        serde_json::from_value::<AgentDeclaration>(serde_json::json!({"id":"triageAgent","agentType":AgentType::Generative,"modelIdentifier":"test-model","modelVersion":"1.0","invoker":Some(invoker)})).unwrap()
     }
 
     fn task(capability: &str) -> AgentTask {
@@ -175,9 +164,14 @@ mod tests {
             responses: vec![StubResponse {
                 capability_id: Some("triage".into()),
                 output: serde_json::json!({"category": "benefits"}),
-                confidence: Some(0.92),
+                confidence_report: serde_json::from_value(
+                    serde_json::json!({"overall":0.92,"method":"declared"}),
+                )
+                .unwrap(),
                 citations: vec![],
+                metadata: Default::default(),
             }],
+            metadata: Default::default(),
         });
         let invoker = StubInvoker::new();
         let case_state = serde_json::json!({});
@@ -185,7 +179,7 @@ mod tests {
             .invoke(&agent, &task("triage"), &ctx(&case_state))
             .unwrap();
         assert_eq!(result.output["category"], "benefits");
-        assert_eq!(result.confidence, 0.92);
+        assert_eq!(result.confidence_report.overall, 0.92);
     }
 
     #[test]
@@ -195,16 +189,25 @@ mod tests {
                 StubResponse {
                     capability_id: Some("triage".into()),
                     output: serde_json::json!({"category": "benefits"}),
-                    confidence: Some(0.9),
+                    confidence_report: serde_json::from_value(
+                        serde_json::json!({"overall":0.9,"method":"declared"}),
+                    )
+                    .unwrap(),
                     citations: vec![],
+                    metadata: Default::default(),
                 },
                 StubResponse {
                     capability_id: Some("triage".into()),
                     output: serde_json::json!({"category": "appeals"}),
-                    confidence: Some(0.7),
+                    confidence_report: serde_json::from_value(
+                        serde_json::json!({"overall":0.7,"method":"declared"}),
+                    )
+                    .unwrap(),
                     citations: vec![],
+                    metadata: Default::default(),
                 },
             ],
+            metadata: Default::default(),
         });
         let invoker = StubInvoker::new();
         let case_state = serde_json::json!({});
@@ -224,9 +227,14 @@ mod tests {
             responses: vec![StubResponse {
                 capability_id: None,
                 output: serde_json::json!({"any": true}),
-                confidence: None,
+                confidence_report: serde_json::from_value(
+                    serde_json::json!({"overall":1.0,"method":"declared"}),
+                )
+                .unwrap(),
                 citations: vec![],
+                metadata: Default::default(),
             }],
+            metadata: Default::default(),
         });
         let invoker = StubInvoker::new();
         let case_state = serde_json::json!({});
@@ -235,8 +243,8 @@ mod tests {
             .unwrap();
         assert_eq!(result.output["any"], true);
         assert_eq!(
-            result.confidence, 1.0,
-            "missing confidence in StubResponse MUST default to 1.0"
+            result.confidence_report.overall, 1.0,
+            "the explicitly authored canonical report must be returned unchanged"
         );
     }
 
@@ -246,9 +254,14 @@ mod tests {
             responses: vec![StubResponse {
                 capability_id: Some("triage".into()),
                 output: serde_json::json!({"ok": true}),
-                confidence: None,
+                confidence_report: serde_json::from_value(
+                    serde_json::json!({"overall":1.0,"method":"declared"}),
+                )
+                .unwrap(),
                 citations: vec![],
+                metadata: Default::default(),
             }],
+            metadata: Default::default(),
         });
         let invoker = StubInvoker::new();
         let case_state = serde_json::json!({});
@@ -273,8 +286,8 @@ mod tests {
     #[test]
     fn stub_invoker_mismatch_when_agent_uses_different_invoker_spec() {
         let agent = agent_with_stub(InvokerSpec::Anthropic {
-            model: "claude-opus-4-7".into(),
             config_ref: None,
+            metadata: Default::default(),
         });
         let invoker = StubInvoker::new();
         let case_state = serde_json::json!({});
@@ -286,7 +299,10 @@ mod tests {
 
     #[test]
     fn stub_invoker_mismatch_when_agent_has_no_invoker() {
-        let mut agent = agent_with_stub(InvokerSpec::Stub { responses: vec![] });
+        let mut agent = agent_with_stub(InvokerSpec::Stub {
+            responses: vec![],
+            metadata: Default::default(),
+        });
         agent.invoker = None;
         let invoker = StubInvoker::new();
         let case_state = serde_json::json!({});
@@ -303,16 +319,25 @@ mod tests {
                 StubResponse {
                     capability_id: Some("triage".into()),
                     output: serde_json::json!({"who": "triage-0"}),
-                    confidence: None,
+                    confidence_report: serde_json::from_value(
+                        serde_json::json!({"overall":1.0,"method":"declared"}),
+                    )
+                    .unwrap(),
                     citations: vec![],
+                    metadata: Default::default(),
                 },
                 StubResponse {
                     capability_id: Some("classify".into()),
                     output: serde_json::json!({"who": "classify-0"}),
-                    confidence: None,
+                    confidence_report: serde_json::from_value(
+                        serde_json::json!({"overall":1.0,"method":"declared"}),
+                    )
+                    .unwrap(),
                     citations: vec![],
+                    metadata: Default::default(),
                 },
             ],
+            metadata: Default::default(),
         });
         let invoker = StubInvoker::new();
         let case_state = serde_json::json!({});

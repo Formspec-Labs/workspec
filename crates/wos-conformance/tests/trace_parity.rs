@@ -85,6 +85,20 @@ fn assert_trace_matches(actual: &ConformanceTrace, fixture_id: &str) {
     );
 }
 
+fn assert_retired_autonomy_refuses(name: &str) {
+    let root = workspace_root();
+    let source = std::fs::read_to_string(
+        root.join("crates/wos-conformance/fixtures/historical-ai")
+            .join(name),
+    )
+    .unwrap();
+    let error = wos_conformance::run_fixture(&source, root.to_str().unwrap()).unwrap_err();
+    assert!(
+        error.to_string().contains("substituted legacy AI document"),
+        "{error}"
+    );
+}
+
 // ── Regression tests ─────────────────────────────────────────────────────────
 
 /// K-001: Negative lint fixture — final state with outgoing transition.
@@ -104,56 +118,31 @@ fn trace_parity_k011_determinism() {
     assert_trace_matches(&trace, "K-011-determinism");
 }
 
-/// §5.3 teaching signal: on a fixture that exercises governance, the
-/// trace's `policies_applied` must populate end-to-end. Prior to the
-/// event-stamping fix this was silently empty on every real fixture
-/// because governance provenance constructors set `event = None`.
-///
-/// AI-014 fires two `deonticViolation` records (filtered out — violations
-/// are not applications) plus one `deonticResolution` record which IS a
-/// policy application in the teaching-signal sense. The resolution has
-/// no `ruleId` / `constraintId`, so it falls back to the record_kind
-/// name `deonticResolution` as its synthesized `policy_id`.
+/// Native policy summaries remain observable when rejection prevents transition.
 #[test]
-fn teaching_signal_populates_policies_applied_on_governance_fixture() {
-    use wos_conformance::run_fixture_with_trace;
-    let workspace = workspace_root();
-    let fixture_path =
-        workspace.join("crates/wos-conformance/tests/fixtures/ai-014-most-restrictive-wins.json");
-    let fixture_json = std::fs::read_to_string(&fixture_path)
-        .unwrap_or_else(|e| panic!("could not read ai-014 fixture: {e}"));
-    let fixture_dir = fixture_path.parent().unwrap().to_str().unwrap();
-    let (_result, trace) =
-        run_fixture_with_trace(&fixture_json, fixture_dir).expect("engine ran ai-014 fixture");
-
-    // ai-014 produces 0 expected transitions (all guards block through
-    // violations); the trace walks observed transitions. If the runtime
-    // records any observed step, its policies_applied should include
-    // the resolution. If there are no observed steps, we still want to
-    // verify the end-to-end stamping path isn't broken — assert through
-    // the trace-disk emission pathway instead.
-    let has_resolution = trace.steps.iter().any(|step| {
-        step.policies_applied
-            .iter()
-            .any(|p| p.policy_id == "deonticResolution")
-    });
-
-    // Either a transition step carries the resolution, OR the trace has
-    // no steps at all (when all violations block). In the latter case
-    // this test degrades to a smoke-signal that the governance path
-    // didn't crash — which is still meaningful coverage for the
-    // event-stamping change in wos-runtime.
-    if !trace.steps.is_empty() {
-        assert!(
-            has_resolution,
-            "ai-014 trace step(s) should carry deonticResolution in policies_applied; got: {:?}",
-            trace
-                .steps
-                .iter()
-                .map(|s| &s.policies_applied)
-                .collect::<Vec<_>>()
-        );
-    }
+fn native_policy_summary_is_retained_on_a_rejected_attempt() {
+    let path = workspace_root()
+        .join("crates/wos-conformance/tests/fixtures/ai-014-most-restrictive-wins.json");
+    let source = std::fs::read_to_string(&path).unwrap();
+    let (observed, trace) =
+        wos_conformance::run_fixture_with_trace(&source, path.parent().unwrap().to_str().unwrap())
+            .unwrap();
+    assert!(observed.passed, "{:?}", observed.failures);
+    assert!(observed.transitions.is_empty());
+    assert!(observed.attempts[0].drains[0].transitions.is_empty());
+    assert_eq!(
+        observed.final_snapshot.as_ref().unwrap().configuration,
+        vec!["open"]
+    );
+    assert!(
+        trace.steps.is_empty(),
+        "legacy trace includes transitions only; attempt evidence retains rejection"
+    );
+    assert!(observed.provenance.iter().any(|record| {
+        record.data.as_ref().is_some_and(|data| {
+            data["exercise"] == "suppliedOutput" && data["disposition"] == "reject"
+        })
+    }));
 }
 
 /// §5.3 teaching signal: when a guarded transition's guard evaluates false
@@ -291,21 +280,16 @@ fn trace_parity_g030_hold_resume() {
     assert_trace_matches(&trace, "G-030-hold-resume");
 }
 
-/// AI-AUTO-001: escalation-expiry revocation emits autonomyDemotion provenance
-/// while the kernel still routes the `triaged` event to `review`.
+/// Historical event-hint inputs refuse and do not prove operational execution.
 #[test]
-fn trace_parity_ai_auto_001_escalation_expiry_revocation() {
-    let trace = run_t3_fixture("AI-AUTO-001-escalation-expiry-revocation.json");
-    assert_trace_matches(&trace, "AI-AUTO-001-escalation-expiry-revocation");
+fn trace_parity_ai_auto_001_escalation_expiry_revocation_retired_input_refused() {
+    assert_retired_autonomy_refuses("AI-AUTO-001-escalation-expiry-revocation.json");
 }
 
-/// AI-AUTO-002: drift-alert-triggered demotion reroutes the event through
-/// `escalated` (so the kernel routes to `humanTriage`) and pairs an
-/// autonomyDemotion record with a driftReclassification record.
+/// Historical event-hint inputs refuse and do not prove operational execution.
 #[test]
-fn trace_parity_ai_auto_002_drift_alert_demotion() {
-    let trace = run_t3_fixture("AI-AUTO-002-drift-alert-demotion.json");
-    assert_trace_matches(&trace, "AI-AUTO-002-drift-alert-demotion");
+fn trace_parity_ai_auto_002_drift_alert_demotion_retired_input_refused() {
+    assert_retired_autonomy_refuses("AI-AUTO-002-drift-alert-demotion.json");
 }
 
 // ── Honest-behavior assertions ──────────────────────────────────────────────
@@ -387,12 +371,15 @@ fn happy_path_g030_hold_resume_fires_its_transitions() {
     assert_fixture_engages_runtime("G-030-hold-resume.json");
 }
 
+/// Historical event-hint inputs refuse and do not prove operational execution.
 #[test]
-fn happy_path_ai_auto_001_escalation_expiry_revocation_fires_its_transition() {
-    assert_fixture_engages_runtime("AI-AUTO-001-escalation-expiry-revocation.json");
+fn happy_path_ai_auto_001_escalation_expiry_revocation_fires_its_transition_retired_input_refused()
+{
+    assert_retired_autonomy_refuses("AI-AUTO-001-escalation-expiry-revocation.json");
 }
 
+/// Historical event-hint inputs refuse and do not prove operational execution.
 #[test]
-fn happy_path_ai_auto_002_drift_alert_demotion_fires_its_transition() {
-    assert_fixture_engages_runtime("AI-AUTO-002-drift-alert-demotion.json");
+fn happy_path_ai_auto_002_drift_alert_demotion_fires_its_transition_retired_input_refused() {
+    assert_retired_autonomy_refuses("AI-AUTO-002-drift-alert-demotion.json");
 }

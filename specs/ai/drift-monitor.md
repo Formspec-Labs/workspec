@@ -1,36 +1,36 @@
 ---
 title: WOS Drift Monitor Config
-version: 1.0.0-draft.1
-date: 2026-04-09
+version: 1.0.0-draft.2
+date: 2026-10-19
 status: draft
 ---
 
-> **Absorbed (ADR 0076 D-1).** Drift monitoring content lives in two slots of the merged `$wosWorkflow` envelope: per-agent monitoring at [`AgentDeclaration.driftMonitoring`](../../schemas/wos-workflow.schema.json) and workflow-wide oversight at [`AIOversight.driftDetection`](../../schemas/wos-workflow.schema.json). Standalone `wos-drift-monitor` schema and `$wosDriftMonitor` marker are retired; this prose remains as normative reference for drift detection semantics.
+> Drift monitoring is authored inside the native `$wosWorkflow`: per-agent monitoring uses `agents[].driftMonitoring`, while the undefined workflow-wide `aiOversight.driftDetection` setting is reserved and rejected at admission (AI Integration §9.3). The owning definitions are in [`wos-workflow.schema.json`](../../schemas/wos-workflow.schema.json). There is no standalone monitor document or alternate accepted identity.
 
 # WOS Drift Monitor Config v1.0
 
-**Version:** 1.0.0-draft.1
-**Date:** 2026-04-09
+**Version:** 1.0.0-draft.2
+**Date:** 2026-10-19
 **Editors:** Formspec Working Group
-**Sidecar to:** WOS AI Integration Specification v1.0
+**Embedded settings for:** WOS AI Integration Specification v1.0
 
 ---
 
 ## Abstract
 
-The WOS Drift Monitor Config is a sidecar document that provides detailed drift detection and monitoring configuration for agents in a WOS workflow. It separates monitoring parameters -- drift detection methods, evaluation windows, alert thresholds, rubber-stamp monitoring, and deployment sequence policies -- from the AI Integration Document's governance declarations. This separation allows monitoring parameters to be tuned independently of governance structure.
+This specification defines native agent monitoring parameters: evaluation windows, metrics, alert thresholds, review monitoring and deployment sequence settings. They share the enclosing Workflow's revision and verification identity. A monitoring change cannot silently change an admitted agent's autonomy or bypass its authored limits.
 
 ---
 
 ## Status of This Document
 
-This document is a **draft specification**. It is a sidecar to the WOS AI Integration Specification v1.0 and does not modify AI integration processing semantics.
+This document is a **draft specification**. It elaborates the native settings used by the WOS AI Integration Specification v1.0. AI Integration §15 defines their behavior, composition and conformance requirements.
 
 ---
 
 ## 1. Document Structure
 
-The drift monitoring configuration is expressed as the `driftMonitoring` property on each `agents[*]` entry of a `$wosWorkflow` document. All properties described in this section appear under `agents[*].driftMonitoring`.
+The drift monitoring configuration is expressed as the `driftMonitoring` property on each `agents[*]` entry of a `$wosWorkflow` document. All properties described in this section appear under `agents[*].driftMonitoring`. The enclosing agent determines who is monitored; there is no second `agentRef`, `targetAgent`, `targetIntegration` or `targetWorkflow` selector. `$wosDriftMonitor` and standalone document identity fields are invalid.
 
 ### 1.1 Properties
 
@@ -44,11 +44,14 @@ The drift monitoring configuration is expressed as the `driftMonitoring` propert
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `agentRef` | string | REQUIRED | Agent identifier to monitor. |
 | `evaluationWindow` | string (duration) | REQUIRED | ISO 8601 duration of the evaluation window. |
 | `metrics` | array of MonitorMetric | REQUIRED | Metrics to track. |
 | `rubberStamp` | RubberStampConfig | OPTIONAL | Rubber-stamp detection configuration. |
 | `alertThresholds` | array of AlertThreshold | OPTIONAL | Conditions that generate alerts. |
+
+#### 1.2.1 Rubber-Stamp Configuration
+
+`RubberStampConfig` is a closed object using the enclosing monitor's `evaluationWindow`. It has required boolean `enabled`, optional positive duration `minReviewTime`, and optional finite `maxAgreementRate` in [0,1]. When enabled, at least one threshold is required. A review below the minimum duration or an aggregate agreement rate strictly above the maximum is a monitoring signal, not proof of reviewer misconduct or authority to change an outcome. The maintained review-measurement operation supplies the observations. A processor without that operation must report enabled monitoring as unsupported; emitted sample data is not measured reviewer behavior.
 
 ### 1.3 Monitor Metrics
 
@@ -64,22 +67,25 @@ The drift monitoring configuration is expressed as the `driftMonitoring` propert
 |----------|------|----------|-------------|
 | `condition` | string | REQUIRED | FEL expression that triggers the alert. |
 | `severity` | enum | REQUIRED | `info`, `warning`, or `critical`. |
-| `action` | enum | OPTIONAL | `notify`, `demoteToAssistive`, `demoteToManual`, or `suspend`. Implementation-defined when no `policyRef` is given. |
-| `policyRef` | string | OPTIONAL | Reference to a `DemotionRule.id` declared in an Agent Config sidecar (see WOS Agent Config §1.4). |
+| `action` | enum | CONDITIONAL | `notify`, `demoteToAssistive`, `demoteToManual` or `suspend`, defined below. Required when `policyRef` is absent. |
+| `policyRef` | string | CONDITIONAL | A `DemotionRule.id` in the enclosing agent's native `autonomyPolicy.demotion` (Agent Config §1.4). Excludes `action`. |
 | `notifyRoles` | array of string | OPTIONAL | Roles to notify when this threshold is crossed. |
 
 #### 1.4.1 `policyRef` resolution semantics
 
-When `policyRef` is present, processors MUST resolve it as follows:
+Exactly one of `policyRef` and `action` MUST be declared. When `policyRef` is present, processors MUST:
 
-1. Locate the Agent Config sidecar whose `targetAgent` matches the parent `AgentMonitor.agentRef` and whose `targetIntegration` (or co-located AI Integration Document) targets the same workflow as this monitor's `targetWorkflow`.
-2. Find the `DemotionRule` whose `id` equals `policyRef` within that sidecar's `autonomyPolicy.demotion` array.
-3. When the alert fires, the named DemotionRule's structured semantics (`condition` / `targetLevel` / `pendingRecalibration` / `description`) take precedence over the `action` enum. The provenance record (`autonomyDemotion`, see AI Integration §5.5) MUST cite the resolved `DemotionRule.id` so audit consumers know exactly which named rule fired, not merely that *some* demotion occurred.
-4. If the `policyRef` cannot be resolved (no matching sidecar or no matching `DemotionRule.id`), processors MUST emit a configuration warning in provenance and fall back to the implementation-defined `action` enum behavior. An unresolvable `policyRef` is a misconfiguration, not a runtime error — the alert still fires.
+1. Select the enclosing native agent in the admitted Workflow revision.
+2. Resolve exactly one rule with that `id` in the same agent's `autonomyPolicy.demotion`. An identically named rule belonging to another agent is not a match. Duplicate ids are configuration errors.
+3. When the alert condition is true, evaluate the selected rule's condition against processor-owned operational state and admitted case data. Apply its `targetLevel` and `pendingRecalibration` behavior only if that condition is true. A false condition records that the alert fired without applying the demotion; null, non-boolean and evaluation failures are errors and prevent automatic invocation until resolved.
+4. Record the agent, Workflow revision, exact native rule locator and readable rule id in the resulting `autonomyDemotion` provenance. Maintain the operational reduction under AI Integration §5.
+5. Refuse invalid configuration or execution with an unresolved required reference. Do not fall back to another agent, a default action or a retired sidecar.
 
-When `policyRef` is absent, the existing `action` enum behavior (`notify` / `demoteToAssistive` / `demoteToManual` / `suspend`) is implementation-defined as before.
+Without `policyRef`, `notify` records the alert and sends any declared role notifications through the maintained notification operation; it does not change autonomy. `demoteToAssistive` and `demoteToManual` add a processor-owned operational ceiling of the named level. `suspend` prevents further invocations of the enclosing agent until an authenticated operational action clears the suspension. These actions cannot increase effective autonomy or erase other active reductions. Required notification, demotion, suspension and later restoration operations must be supported; otherwise execution is explicitly unsupported. Emitting provenance alone does not execute the action.
 
 ### 1.5 Deployment Sequence
+
+`DeploymentSequence` is a closed object with required boolean `enabled` and optional `shadowDuration`, `canaryPercentage` and `canaryDuration`. When enabled, both durations MUST be positive ISO 8601 durations supported by the maintained deployment/timer operations, and the finite canary percentage MUST be greater than zero and less than one (a fraction, not a number out of 100). These fields declare requirements; they do not perform deployment. Missing deployment, measurement or selection operations make enabled execution unsupported.
 
 For `rights-impacting` and `safety-impacting` workflows, model version changes SHOULD follow a three-phase deployment sequence:
 
@@ -91,7 +97,7 @@ For `rights-impacting` and `safety-impacting` workflows, model version changes S
 
 ### 1.6 Example
 
-The `agents[*].driftMonitoring` block embedded in a `$wosWorkflow` document:
+The `agents[*].driftMonitoring` block embedded in a `$wosWorkflow` document. This example demonstrates configuration; it does not claim that an invoker, metric collector or demotion operation ran:
 
 ```json
 {
@@ -101,7 +107,7 @@ The `agents[*].driftMonitoring` block embedded in a `$wosWorkflow` document:
   "title": "Document Extraction Drift Monitor",
   "impactLevel": "operational",
   "actors": [
-    { "id": "system", "type": "system" }
+    { "id": "documentExtractor", "type": "agent" }
   ],
   "lifecycle": {
     "initialState": "start",
@@ -113,10 +119,20 @@ The `agents[*].driftMonitoring` block embedded in a `$wosWorkflow` document:
   "agents": [
     {
       "id": "documentExtractor",
+      "agentType": "statistical",
+      "modelIdentifier": "document-extraction",
+      "modelVersion": "1.0.0",
+      "autonomyPolicy": {
+        "demotion": [{
+          "id": "demoteToAssistiveOnDegradedAccuracy",
+          "condition": "agent.metrics.accuracy < 0.90",
+          "targetLevel": "assistive",
+          "pendingRecalibration": true
+        }]
+      },
       "driftMonitoring": {
         "monitors": [
           {
-            "agentRef": "documentExtractor",
             "evaluationWindow": "P30D",
             "metrics": [
               { "name": "accuracy", "method": "accuracy", "threshold": 0.92 },
@@ -131,7 +147,6 @@ The `agents[*].driftMonitoring` block embedded in a `$wosWorkflow` document:
               {
                 "condition": "accuracy < 0.90",
                 "severity": "critical",
-                "action": "demoteToAssistive",
                 "policyRef": "demoteToAssistiveOnDegradedAccuracy"
               }
             ]

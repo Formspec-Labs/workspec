@@ -5397,150 +5397,7 @@
         "description": "Retained request identity as 32 lowercase hexadecimal characters.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Retained request identity as 32 lowercase hexadecimal characters.\",\n  \"type\": \"string\",\n  \"pattern\": \"^[0-9a-f]{32}$\"\n}\n ```\n </details>"
       },
       "ConfidenceReport": {
-        "type": "object",
-        "description": "Per-output confidence record (ai-integration.md §7.1; ai-integration.md:419-431 — \"Every agent output MUST be accompanied by a ConfidenceReport\"). Closed structural shape carrying the agent's calibrated probability that the output is correct, decay state, and the cumulative-confidence rolling window for multi-step interactions (ai-integration.md §7.7). Embedded as an optional field on Reasoning-tier and Narrative-tier records when an agent produced the output the record describes.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Per-output confidence record (ai-integration.md §7.1; ai-integration.md:419-431 — \\\"Every agent output MUST be accompanied by a ConfidenceReport\\\"). Closed structural shape carrying the agent's calibrated probability that the output is correct, decay state, and the cumulative-confidence rolling window for multi-step interactions (ai-integration.md §7.7). Embedded as an optional field on Reasoning-tier and Narrative-tier records when an agent produced the output the record describes.\",\n  \"type\": \"object\",\n  \"required\": [\n    \"confidence\",\n    \"decayApplied\",\n    \"outputId\"\n  ],\n  \"properties\": {\n    \"confidence\": {\n      \"description\": \"Calibrated probability in [0,1] that this output would be accepted without modification by a competent human reviewer (ai-integration.md:430). Floor enforcement compares against `AgentView.confidenceFloor`.\",\n      \"type\": \"number\",\n      \"maximum\": 1.0,\n      \"minimum\": 0.0\n    },\n    \"cumulativeConfidenceWindow\": {\n      \"description\": \"Rolling cumulative-confidence state (ai-integration.md §7.7; ai-integration.md:475-477 — \\\"the cumulative confidence after step n is the product of individual step confidences by default\\\"). Lets a reviewer query \\\"is this multi-step session below the confidence floor?\\\" without re-deriving the product.\",\n      \"type\": \"object\",\n      \"properties\": {\n        \"below\": {\n          \"description\": \"True when `cumulativeConfidence < floor` — the load-bearing observable that triggers the §7.7 pause-for-human-review MUST.\",\n          \"type\": \"boolean\"\n        },\n        \"cumulativeConfidence\": {\n          \"description\": \"Product of per-step confidences in [0,1]. When this falls below the workflow's `confidenceFloor`, the §7.7 MUST requires the interaction to pause for human review.\",\n          \"type\": \"number\",\n          \"maximum\": 1.0,\n          \"minimum\": 0.0\n        },\n        \"floor\": {\n          \"description\": \"Confidence floor in [0,1] this window is checked against (ai-integration.md §7.4). Surfaced inline so consumers do not need to resolve `AgentView.confidenceFloor` separately.\",\n          \"type\": \"number\",\n          \"maximum\": 1.0,\n          \"minimum\": 0.0\n        },\n        \"stepCount\": {\n          \"description\": \"Number of steps included in the cumulative product.\",\n          \"type\": \"integer\",\n          \"minimum\": 1.0\n        }\n      },\n      \"additionalProperties\": false\n    },\n    \"decayApplied\": {\n      \"description\": \"True when confidence decay has reduced the effective confidence below the agent's reported confidence (ai-integration.md §7.5). Distinguishes \\\"agent reported 0.9 and that's the live value\\\" from \\\"agent reported 0.95 and decay halved it to 0.475\\\".\",\n      \"type\": \"boolean\"\n    },\n    \"fieldLevel\": {\n      \"description\": \"Optional per-field confidence breakdown (ai-integration.md §7.3 Per-Field Confidence; ai-integration.md:443-444). Lets routing logic reference individual output fields rather than the rolled-up `confidence` value.\",\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"required\": [\n          \"confidence\",\n          \"fieldName\"\n        ],\n        \"properties\": {\n          \"confidence\": {\n            \"description\": \"Per-field calibrated confidence in [0,1].\",\n            \"type\": \"number\",\n            \"maximum\": 1.0,\n            \"minimum\": 0.0\n          },\n          \"fieldName\": {\n            \"description\": \"Output field name this entry covers.\",\n            \"type\": \"string\",\n            \"minLength\": 1,\n            \"x-wos\": {\n              \"openStringKind\": \"identifier\"\n            }\n          }\n        },\n        \"additionalProperties\": false\n      }\n    },\n    \"method\": {\n      \"description\": \"Closed-with-vendor-extension confidence-derivation method (ai-integration.md §7.2; ai-integration.md:434-440). Reserved literals: `modelNative` (model probability estimate), `calibrated` (post-hoc calibration on historical accuracy), `heuristic` (output-structure properties), `conformal` (conformal prediction sets), `declared` (developer-assigned). Vendor extensions MUST use an `^x-[a-z][a-z0-9-]*$` prefix per ADR 0082 D-12.\",\n      \"oneOf\": [\n        {\n          \"enum\": [\n            \"modelNative\",\n            \"calibrated\",\n            \"heuristic\",\n            \"conformal\",\n            \"declared\"\n          ]\n        },\n        {\n          \"type\": \"string\",\n          \"pattern\": \"^x-[a-z][a-z0-9-]*$\"\n        }\n      ]\n    },\n    \"outputId\": {\n      \"description\": \"Stable identifier of the agent output this report covers. Lets a single record carry multiple `ConfidenceReport` instances when an agent emits multiple outputs in one invocation.\",\n      \"examples\": [\n        \"extraction-1\",\n        \"classification-doc-type\"\n      ],\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"identifier\"\n      }\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
-        "required": [
-          "confidence",
-          "decayApplied",
-          "outputId"
-        ],
-        "properties": {
-          "confidence": {
-            "type": "number",
-            "format": "double",
-            "description": "Calibrated probability in [0,1] that this output would be accepted without modification by a competent human reviewer (ai-integration.md:430). Floor enforcement compares against `AgentView.confidenceFloor`."
-          },
-          "cumulativeConfidenceWindow": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ConfidenceReportCumulativeConfidenceWindow"
-              }
-            ]
-          },
-          "decayApplied": {
-            "type": "boolean",
-            "description": "True when confidence decay has reduced the effective confidence below the agent's reported confidence (ai-integration.md §7.5). Distinguishes \"agent reported 0.9 and that's the live value\" from \"agent reported 0.95 and decay halved it to 0.475\"."
-          },
-          "fieldLevel": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ConfidenceReportFieldLevelItem"
-            },
-            "description": "Optional per-field confidence breakdown (ai-integration.md §7.3 Per-Field Confidence; ai-integration.md:443-444). Lets routing logic reference individual output fields rather than the rolled-up `confidence` value."
-          },
-          "method": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ConfidenceReportMethod",
-                "description": "Closed-with-vendor-extension confidence-derivation method (ai-integration.md §7.2; ai-integration.md:434-440). Reserved literals: `modelNative` (model probability estimate), `calibrated` (post-hoc calibration on historical accuracy), `heuristic` (output-structure properties), `conformal` (conformal prediction sets), `declared` (developer-assigned). Vendor extensions MUST use an `^x-[a-z][a-z0-9-]*$` prefix per ADR 0082 D-12."
-              }
-            ]
-          },
-          "outputId": {
-            "$ref": "#/components/schemas/ConfidenceReportOutputId",
-            "description": "Stable identifier of the agent output this report covers. Lets a single record carry multiple `ConfidenceReport` instances when an agent emits multiple outputs in one invocation."
-          }
-        },
-        "additionalProperties": false
-      },
-      "ConfidenceReportCumulativeConfidenceWindow": {
-        "type": "object",
-        "description": "Rolling cumulative-confidence state (ai-integration.md §7.7; ai-integration.md:475-477 — \"the cumulative confidence after step n is the product of individual step confidences by default\"). Lets a reviewer query \"is this multi-step session below the confidence floor?\" without re-deriving the product.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Rolling cumulative-confidence state (ai-integration.md §7.7; ai-integration.md:475-477 — \\\"the cumulative confidence after step n is the product of individual step confidences by default\\\"). Lets a reviewer query \\\"is this multi-step session below the confidence floor?\\\" without re-deriving the product.\",\n  \"type\": \"object\",\n  \"properties\": {\n    \"below\": {\n      \"description\": \"True when `cumulativeConfidence < floor` — the load-bearing observable that triggers the §7.7 pause-for-human-review MUST.\",\n      \"type\": \"boolean\"\n    },\n    \"cumulativeConfidence\": {\n      \"description\": \"Product of per-step confidences in [0,1]. When this falls below the workflow's `confidenceFloor`, the §7.7 MUST requires the interaction to pause for human review.\",\n      \"type\": \"number\",\n      \"maximum\": 1.0,\n      \"minimum\": 0.0\n    },\n    \"floor\": {\n      \"description\": \"Confidence floor in [0,1] this window is checked against (ai-integration.md §7.4). Surfaced inline so consumers do not need to resolve `AgentView.confidenceFloor` separately.\",\n      \"type\": \"number\",\n      \"maximum\": 1.0,\n      \"minimum\": 0.0\n    },\n    \"stepCount\": {\n      \"description\": \"Number of steps included in the cumulative product.\",\n      \"type\": \"integer\",\n      \"minimum\": 1.0\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
-        "properties": {
-          "below": {
-            "type": [
-              "boolean",
-              "null"
-            ],
-            "description": "True when `cumulativeConfidence < floor` — the load-bearing observable that triggers the §7.7 pause-for-human-review MUST."
-          },
-          "cumulativeConfidence": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double",
-            "description": "Product of per-step confidences in [0,1]. When this falls below the workflow's `confidenceFloor`, the §7.7 MUST requires the interaction to pause for human review."
-          },
-          "floor": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double",
-            "description": "Confidence floor in [0,1] this window is checked against (ai-integration.md §7.4). Surfaced inline so consumers do not need to resolve `AgentView.confidenceFloor` separately."
-          },
-          "stepCount": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64",
-            "description": "Number of steps included in the cumulative product.",
-            "minimum": 0
-          }
-        },
-        "additionalProperties": false
-      },
-      "ConfidenceReportFieldLevelItem": {
-        "type": "object",
-        "description": "`ConfidenceReportFieldLevelItem`\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"confidence\",\n    \"fieldName\"\n  ],\n  \"properties\": {\n    \"confidence\": {\n      \"description\": \"Per-field calibrated confidence in [0,1].\",\n      \"type\": \"number\",\n      \"maximum\": 1.0,\n      \"minimum\": 0.0\n    },\n    \"fieldName\": {\n      \"description\": \"Output field name this entry covers.\",\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"x-wos\": {\n        \"openStringKind\": \"identifier\"\n      }\n    }\n  },\n  \"additionalProperties\": false\n}\n ```\n </details>",
-        "required": [
-          "confidence",
-          "fieldName"
-        ],
-        "properties": {
-          "confidence": {
-            "type": "number",
-            "format": "double",
-            "description": "Per-field calibrated confidence in [0,1]."
-          },
-          "fieldName": {
-            "$ref": "#/components/schemas/ConfidenceReportFieldLevelItemFieldName",
-            "description": "Output field name this entry covers."
-          }
-        },
-        "additionalProperties": false
-      },
-      "ConfidenceReportFieldLevelItemFieldName": {
-        "type": "string",
-        "description": "Output field name this entry covers.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Output field name this entry covers.\",\n  \"type\": \"string\",\n  \"minLength\": 1,\n  \"x-wos\": {\n    \"openStringKind\": \"identifier\"\n  }\n}\n ```\n </details>"
-      },
-      "ConfidenceReportMethod": {
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/ConfidenceReportMethodVariant0"
-          },
-          {
-            "$ref": "#/components/schemas/ConfidenceReportMethodVariant1"
-          }
-        ],
-        "description": "Closed-with-vendor-extension confidence-derivation method (ai-integration.md §7.2; ai-integration.md:434-440). Reserved literals: `modelNative` (model probability estimate), `calibrated` (post-hoc calibration on historical accuracy), `heuristic` (output-structure properties), `conformal` (conformal prediction sets), `declared` (developer-assigned). Vendor extensions MUST use an `^x-[a-z][a-z0-9-]*$` prefix per ADR 0082 D-12.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Closed-with-vendor-extension confidence-derivation method (ai-integration.md §7.2; ai-integration.md:434-440). Reserved literals: `modelNative` (model probability estimate), `calibrated` (post-hoc calibration on historical accuracy), `heuristic` (output-structure properties), `conformal` (conformal prediction sets), `declared` (developer-assigned). Vendor extensions MUST use an `^x-[a-z][a-z0-9-]*$` prefix per ADR 0082 D-12.\",\n  \"oneOf\": [\n    {\n      \"enum\": [\n        \"modelNative\",\n        \"calibrated\",\n        \"heuristic\",\n        \"conformal\",\n        \"declared\"\n      ]\n    },\n    {\n      \"type\": \"string\",\n      \"pattern\": \"^x-[a-z][a-z0-9-]*$\"\n    }\n  ]\n}\n ```\n </details>"
-      },
-      "ConfidenceReportMethodVariant0": {
-        "type": "string",
-        "description": "`ConfidenceReportMethodVariant0`\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"enum\": [\n    \"modelNative\",\n    \"calibrated\",\n    \"heuristic\",\n    \"conformal\",\n    \"declared\"\n  ]\n}\n ```\n </details>",
-        "enum": [
-          "modelNative",
-          "calibrated",
-          "heuristic",
-          "conformal",
-          "declared"
-        ]
-      },
-      "ConfidenceReportMethodVariant1": {
-        "type": "string",
-        "description": "`ConfidenceReportMethodVariant1`\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"type\": \"string\",\n  \"pattern\": \"^x-[a-z][a-z0-9-]*$\"\n}\n ```\n </details>"
-      },
-      "ConfidenceReportOutputId": {
-        "type": "string",
-        "description": "Stable identifier of the agent output this report covers. Lets a single record carry multiple `ConfidenceReport` instances when an agent emits multiple outputs in one invocation.\n\n <details><summary>JSON schema</summary>\n\n ```json\n{\n  \"description\": \"Stable identifier of the agent output this report covers. Lets a single record carry multiple `ConfidenceReport` instances when an agent emits multiple outputs in one invocation.\",\n  \"examples\": [\n    \"extraction-1\",\n    \"classification-doc-type\"\n  ],\n  \"type\": \"string\",\n  \"minLength\": 1,\n  \"x-wos\": {\n    \"openStringKind\": \"identifier\"\n  }\n}\n ```\n </details>"
+        "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/ConfidenceReport"
       },
       "ContentRef": {
         "type": "string",
@@ -8517,15 +8374,8 @@
             "description": "MUST be `false`. Explicitly marks this content as non-authoritative (S13.2)."
           },
           "confidenceReport": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ConfidenceReport",
-                "description": "Per-output confidence record for the model that generated this narrative (ai-integration.md §7.1 — \"every agent output MUST be accompanied by a ConfidenceReport\"; the narrative IS an agent output even though it is non-authoritative). Surfaced so consumers can gate narrative display on confidence (low-confidence narratives can be suppressed or annotated)."
-              }
-            ]
+            "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/ConfidenceReport",
+            "description": "Per-output confidence record for the model that generated this narrative (ai-integration.md §7.1 — \"every agent output MUST be accompanied by a ConfidenceReport\"; the narrative IS an agent output even though it is non-authoritative). Surfaced so consumers can gate narrative display on confidence (low-confidence narratives can be suppressed or annotated)."
           },
           "definitionVersion": {
             "$ref": "#/components/schemas/NarrativeTierRecordDefinitionVersion",
@@ -9060,15 +8910,8 @@
             "description": "Per-gate assertion results that fired during this reasoning step (governance §5.4 + §5.5; workflow-governance.md:293-309). Empty when the reasoning record did not run through a validation pipeline; populated when one or more gates evaluated. The pipeline's risk profile is determined by the weakest gate that passed (workflow-governance.md:309) — auditors read this array directly."
           },
           "confidenceReport": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ConfidenceReport",
-                "description": "Per-output confidence record (ai-integration.md §7.1). Present iff an agent produced the output this reasoning record interprets; absent for human-only reasoning steps."
-              }
-            ]
+            "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/ConfidenceReport",
+            "description": "Per-output confidence record (ai-integration.md §7.1). Present iff an agent produced the output this reasoning record interprets; absent for human-only reasoning steps."
           },
           "criteriaChecked": {
             "type": "array",

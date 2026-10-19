@@ -2,13 +2,17 @@
   "$wosWorkflow": "1.0",
   "version": "1.0.0",
   "title": "Triage Agent Configuration Overlay",
-  "description": "Per-agent configuration overlay (autonomy policy + calibration). Conformance-fixture transport wrapper: the conformance engine extracts the `agents` block and embeds it under the kernel workflow at runtime. Per ADR 0063 \u00a72.1, embedded agent declarations govern the enclosing envelope and carry no independent identity.",
+  "description": "Per-agent configuration overlay (autonomy policy + calibration). Conformance-fixture transport wrapper: the conformance engine extracts the `agents` block and embeds it under the kernel workflow at runtime. Per ADR 0063 §2.1, embedded agent declarations govern the enclosing envelope and carry no independent identity.",
   "url": "https://test.wos-spec.org/workflows/autonomy-caps",
   "impactLevel": "rights-impacting",
   "actors": [
     {
       "id": "triageAgent",
       "type": "agent"
+    },
+    {
+      "id": "supervisor",
+      "type": "human"
     }
   ],
   "lifecycle": {
@@ -42,7 +46,9 @@
             "condition": "agent.consecutiveSuccesses >= 50 and agent.calibration.recency < 30",
             "targetLevel": "autonomous",
             "escalationExpiry": "P30D",
-            "description": "Promote to autonomous after consistent performance"
+            "description": "Promote to autonomous after consistent performance",
+            "id": "restoreAfterCalibration",
+            "requiredApproverRef": "supervisor"
           }
         ],
         "demotion": [
@@ -55,7 +61,10 @@
           }
         ],
         "maxAutonomy": "autonomous"
-      }
+      },
+      "agentType": "generative",
+      "modelIdentifier": "test-model",
+      "modelVersion": "1.0"
     }
   ],
   "governance": {

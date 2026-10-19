@@ -1,3 +1,5 @@
+// Rust guideline compliant 2026-02-21
+
 //! Independently authored controls for the shared authoring replay API.
 
 use serde_json::{Value, json};
@@ -7,7 +9,7 @@ fn candidate(guard: &str) -> Value {
     json!({"$wosWorkflow":"1.0","url":"urn:test:exact-replay","version":"1.0.0",
       "title":"Exact replay control","impactLevel":"operational","actors":[{"id":"reviewer","type":"human"}],
       "lifecycle":{"initialState":"open","states":{
-        "open":{"type":"atomic","transitions":[{"event":"decide","target":"done","guard":guard,
+        "open":{"type":"atomic","transitions":[{"event":{"kind":"message","name":"decide"},"target":"done","guard":guard,
           "actions":[{"action":"setData","path":"caseFile.result","value":"accepted"}]}]},
         "done":{"type":"final"}}}})
 }
@@ -408,11 +410,16 @@ fn selected_calendar_bytes_change_timer_behavior_without_candidate_changes() {
 fn canonical_top_level_agents_activate_native_ai_policy() {
     let mut workflow = candidate("true");
     workflow["actors"] = json!([{"id":"reviewer","type":"agent"}]);
-    workflow["agents"] = json!([{"id":"reviewer","type":"agent","agentType":"generative","modelIdentifier":"fixture-model","modelVersion":"1.0",
-      "deonticConstraints":{"permissions":[{"id":"positive-answer","bounds":"output.answer > 0","onViolation":"reject"}]}}]);
+    workflow["agents"] = json!([{"id":"reviewer","agentType":"generative","modelIdentifier":"fixture-model","modelVersion":"1.0",
+      "deonticConstraints":[{"id":"positive-answer","kind":"permission","bounds":"output.answer > 0","onViolation":"reject"}]}]);
     workflow["aiOversight"] = json!({"defaultAutonomy":"assistive"});
+    workflow["lifecycle"]["states"]["open"]["transitions"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("actions");
     let mut scenario = fixture();
-    scenario["event_sequence"][0]["data"] = json!({"output":{"answer":-1}});
+    scenario["event_sequence"][0]["data"] =
+        json!({"output":{"answer":-1},"confidenceReport":{"overall":1.0,"method":"declared"}});
     let rejected =
         replay(&prepare_replay(request(workflow.clone(), scenario.clone())).unwrap()).unwrap();
     assert!(!rejected.passed);
@@ -424,8 +431,7 @@ fn canonical_top_level_agents_activate_native_ai_policy() {
             .and_then(Value::as_str)
             == Some("positive-answer")
     }));
-    workflow["agents"][0]["deonticConstraints"]["permissions"][0]["bounds"] =
-        json!("output.answer >= -1");
+    workflow["agents"][0]["deonticConstraints"][0]["bounds"] = json!("output.answer >= -1");
     let accepted = replay(&prepare_replay(request(workflow, scenario)).unwrap()).unwrap();
     assert!(accepted.passed, "{:?}", accepted.failures);
     assert_ne!(rejected.identity, accepted.identity);
@@ -654,7 +660,7 @@ fn deployment_posture_binds_native_signature_policy_without_workflow_target() {
 }
 
 #[test]
-fn schema_valid_unsupported_agent_shapes_refuse_without_rewriting_source() {
+fn retired_agent_shapes_refuse_without_rewriting_source() {
     let corpus: Value = serde_json::from_str(include_str!(
         "../fixtures/authoring-replay/unsupported-agent-shapes.json"
     ))
@@ -670,7 +676,7 @@ fn schema_valid_unsupported_agent_shapes_refuse_without_rewriting_source() {
             vector["id"]
         );
         assert!(
-            error.contains(vector["expectedDetail"].as_str().unwrap()),
+            error.contains("native AI policy"),
             "{}: {error}",
             vector["id"]
         );

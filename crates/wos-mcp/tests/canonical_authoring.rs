@@ -1,3 +1,4 @@
+// Rust guideline compliant 2026-02-21
 //! Canonical authoring preserves the complete workflow outside an explicit edit.
 
 use serde_json::{Value, json};
@@ -13,10 +14,10 @@ fn authored_workflow() -> Value {
     json!({
         "$wosWorkflow":"1.0", "url":"urn:test:canonical-authoring", "version":"1.0.0",
         "title":"Preserve the complete native workflow", "impactLevel":"informational",
-        "actors":[{"id":"reviewer", "type":"human", "role":"caseReviewer", "x-owner":{"id":"human-A"}}],
+        "actors":[{"id":"reviewer", "type":"human", "role":"caseReviewer", "x-owner":{"id":"human-A"}},{"id":"summaryBot","type":"agent"}],
         "caseFile":{"fields":{"income":{"type":"number", "required":true, "canonicalTermRef":"urn:term:income", "dpvSensitivity":"dpv:FinancialData", "x-field":{"source":"authored"}}}},
         "lifecycle":{"initialState":"review", "states":{"review":{"type":"atomic", "stateTimeout":"P1D", "x-state":{"retained":true}}}},
-        "agents":[{"id":"summaryBot", "modelIdentifier":"test-model", "autonomy":"assistive", "x-agent":{"retained":true}}],
+        "agents":[{"id":"summaryBot", "agentType":"deterministic", "modelIdentifier":"test-model", "modelVersion":"1.0.0", "x-agent":{"retained":true}}],
         "aiOversight":{"x-policy":{"retained":true}},
         "extensions":{"x-historical":{"retained":true},"x-wos-governance":{"old":true},"x-wos-ai":{"agents":[{"id":"historicalAgent"}]}},
         "x-test-context":{"retained":[1,true,"authored"]}
@@ -101,6 +102,14 @@ async fn create_complete_native_workflow_export_and_reopen() {
     )
     .await
     .unwrap();
+    dispatch(
+        &mut registry,
+        "wos_add_actor",
+        pid,
+        json!({"project_id":pid,"actor_id":"summaryBot","kind":"agent"}),
+    )
+    .await
+    .unwrap();
     let edits = [
         json!({"fields":{"url":"urn:test:incremental-workflow","version":"1.0.0","title":"Native review workflow","wosVersionPin":{"envelopeVersion":"1.0"}}}),
         json!({"action":"case_field","name":"income","definition":{"type":"number","canonicalTermRef":"urn:term:income","x-authored":{"keep":true}}}),
@@ -108,8 +117,8 @@ async fn create_complete_native_workflow_export_and_reopen() {
         json!({"action":"state","pointer":"/lifecycle/states/review","state":{"type":"compound","initialState":"pending","states":{"pending":{"type":"atomic","x-authored":{"keep":true}},"done":{"type":"final"}}}}),
         json!({"action":"state_action","pointer":"/lifecycle/states/review/states/pending","phase":"onEntry","value":{"action":"createTask","taskRef":"reviewForm","x-task":{"keep":true}}}),
         json!({"action":"governance","value":{"dueProcess":{"scope":"true"},"reviewProtocols":[{"tags":["review"],"protocols":["independentFirst"]}],"taskCatalog":[{"id":"reviewForm","title":"Review"}]}}),
-        json!({"action":"agent","value":{"id":"summaryBot","modelIdentifier":"native-model","autonomy":"assistive","x-authored":{"keep":true}}}),
-        json!({"action":"agent_constraint","agent_id":"summaryBot","constraint":{"kind":"prohibition","expression":"true"}}),
+        json!({"action":"agent","value":{"id":"summaryBot","agentType":"deterministic","modelIdentifier":"native-model","modelVersion":"1.0.0","x-authored":{"keep":true}}}),
+        json!({"action":"agent_constraint","agent_id":"summaryBot","constraint":{"id":"no-automatic-decision","kind":"prohibition","condition":"true","onViolation":"reject"}}),
         json!({"action":"ai_oversight","value":{"disclosure":{"discloseThatAgentAssisted":true},"x-authored":{"keep":true}}}),
     ];
     for mut edit in edits {

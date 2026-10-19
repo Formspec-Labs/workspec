@@ -20,10 +20,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use serde::Deserialize;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
+use wos_core::ai_policy::load_native_ai_policy;
 use wos_core::eval::GuardEvaluation;
 use wos_core::eval::parse_iso_duration_to_ms;
 use wos_core::instance::{FormspecTaskContext, PendingEvent};
-use wos_core::model::ai::AIIntegrationDocument;
 use wos_core::model::governance::GovernanceDocument;
 use wos_core::model::kernel::KernelDocument;
 use wos_core::traits::{DocumentResolver, TaskPresenter};
@@ -143,7 +143,7 @@ impl WorkflowEngine {
             ));
         }
         let kernel_json = fixture_document_json(fixture, "kernel")?;
-        let kernel: KernelDocument = serde_json::from_value(kernel_json)
+        let kernel: KernelDocument = serde_json::from_value(kernel_json.clone())
             .map_err(|e| ConformanceError::Parse(format!("kernel parse error: {e}")))?;
         let definition_url = kernel
             .url
@@ -173,25 +173,18 @@ impl WorkflowEngine {
             }
         }
 
-        // Load AI integration content (the embedded `aiOversight` block of a
-        // $wosWorkflow document, per ADR 0076 D-1). Conformance fixtures express
-        // this as an inline `$wosWorkflow` doc whose `aiOversight` field is the
-        // AI content; extract that block before parsing into the typed shape.
-        let ai_doc = if fixture.documents.contains_key("ai") {
-            let ai_json = fixture_document_json(fixture, "ai")?;
-            let block = extract_embedded_block(&ai_json, "aiOversight").ok_or_else(|| {
-                ConformanceError::Parse(
-                    "AI document is missing the `aiOversight` embedded block (ADR 0076 D-1)"
-                        .to_string(),
-                )
-            })?;
-            let block = normalize_ai_oversight_block(&ai_json, block);
-            let doc: AIIntegrationDocument = serde_json::from_value(block)
-                .map_err(|e| ConformanceError::Parse(format!("AI doc parse error: {e}")))?;
-            Some(doc)
-        } else {
-            None
-        };
+        // One native owner reads the actual selected workflow without injecting
+        // agent identities or constructing another authored AI document.
+        if fixture.documents.contains_key("ai") {
+            let asserted = fixture_document_json(fixture, "ai")?;
+            if asserted != kernel_json {
+                return Err(ConformanceError::Parse(
+                    "substituted legacy AI document: policy must belong to selected kernel".into(),
+                ));
+            }
+        }
+        let ai_doc = load_native_ai_policy(&kernel_json)
+            .map_err(|error| ConformanceError::Parse(format!("native AI policy: {error}")))?;
 
         // Load governance content (the `governance` block of a $wosWorkflow
         // document per ADR 0076 D-1). Existing consumers expect a raw JSON
@@ -622,6 +615,21 @@ impl WorkflowEngine {
             }
         }
 
+        // Unsupported native policy is never a successful skipped stage,
+        // even if a fixture expects no lifecycle transition.
+        for attempt in &attempts {
+            for drain in &attempt.drains {
+                if let Some(policy) = &drain.policy_evaluation {
+                    failures.extend(
+                        policy
+                            .refusals
+                            .iter()
+                            .map(|refusal| format!("unsupported native AI policy: {refusal}")),
+                    );
+                }
+            }
+        }
+
         Ok(crate::ConformanceResult {
             passed: failures.is_empty() && observation_errors.is_empty(),
             failures,
@@ -741,6 +749,14 @@ impl WorkflowEngine {
             }
         }
         for drain in &attempt.drains {
+            if let Some(policy) = &drain.policy_evaluation {
+                errors.extend(
+                    policy
+                        .errors
+                        .iter()
+                        .map(|error| format!("native AI policy: {error}")),
+                );
+            }
             transitions.extend(drain.transitions.iter().map(|transition| Transition {
                 from: transition.from.clone(),
                 to: transition.to.clone(),
@@ -1098,29 +1114,6 @@ fn extract_embedded_block(
         .as_object()
         .and_then(|obj| obj.get(block_key))
         .cloned()
-}
-
-fn normalize_ai_oversight_block(
-    envelope: &serde_json::Value,
-    mut block: serde_json::Value,
-) -> serde_json::Value {
-    let Some(obj) = block.as_object_mut() else {
-        return block;
-    };
-    if !obj.contains_key("targetWorkflow") {
-        if let Some(url) = envelope.get("url").and_then(serde_json::Value::as_str) {
-            obj.insert(
-                "targetWorkflow".to_string(),
-                serde_json::Value::String(url.to_string()),
-            );
-        }
-    }
-    if !obj.contains_key("agents") {
-        if let Some(agents) = obj.get("x-transportAgentDetails").cloned() {
-            obj.insert("agents".to_string(), agents);
-        }
-    }
-    block
 }
 
 /// Map a fixture document role to its embedded-block key per ADR 0076 D-1/D-3.

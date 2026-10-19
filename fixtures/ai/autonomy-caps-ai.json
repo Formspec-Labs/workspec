@@ -2,13 +2,17 @@
   "$wosWorkflow": "1.0",
   "version": "1.0.0",
   "title": "Autonomy Caps AI Integration Overlay",
-  "description": "AI integration overlay for testing autonomy level caps, escalation/demotion, and calibration expiry. Conformance-fixture transport wrapper: the conformance engine extracts the `aiOversight` block and embeds it under the kernel workflow at runtime. Per ADR 0063 \u00a72.1, embedded blocks govern the enclosing envelope; the engine wires aiOversight.agents into the kernel's agents[]. Rich per-agent transport payload (capabilities, fallbackChain, legacy deontic shape) is preserved under `x-transportAgentDetails` for tests that merge this overlay into a host workflow.",
+  "description": "AI integration overlay for testing autonomy level caps, escalation/demotion, and calibration expiry. Conformance-fixture transport wrapper: the conformance engine extracts the `aiOversight` block and embeds it under the kernel workflow at runtime. Per ADR 0063 §2.1, embedded blocks govern the enclosing envelope; the engine wires aiOversight.agents into the kernel's agents[]. Rich per-agent transport payload (capabilities, fallbackChain, legacy deontic shape) is preserved under `x-transportAgentDetails` for tests that merge this overlay into a host workflow.",
   "url": "https://test.wos-spec.org/workflows/autonomy-caps",
   "impactLevel": "rights-impacting",
   "actors": [
     {
       "id": "triageAgent",
       "type": "agent"
+    },
+    {
+      "id": "caseworker",
+      "type": "human"
     }
   ],
   "lifecycle": {
@@ -24,6 +28,16 @@
       },
       "done": {
         "type": "final"
+      },
+      "manualReview": {
+        "type": "atomic",
+        "onEntry": [
+          {
+            "action": "createTask",
+            "taskRef": "manualTriage",
+            "assignTo": "caseworker"
+          }
+        ]
       }
     }
   },
@@ -36,59 +50,46 @@
   "agents": [
     {
       "id": "triageAgent",
+      "agentType": "generative",
       "modelIdentifier": "test-model",
       "modelVersion": "1.0",
-      "autonomy": "assistive",
+      "description": "Triage agent with escalation and demotion rules",
+      "capabilities": [
+        {
+          "id": "triage",
+          "description": "Categorize and prioritize cases",
+          "outputContractRef": "urn:formspec:test:triage:1.0.0"
+        }
+      ],
       "deonticConstraints": [
         {
-          "kind": "permission",
-          "expression": "output.action = 'categorize' or output.action = 'prioritize'"
+          "id": "perm-triage-only",
+          "bounds": "output.action = 'categorize' or output.action = 'prioritize'",
+          "onViolation": "escalateToHuman",
+          "kind": "permission"
         }
-      ]
+      ],
+      "fallbackChain": [
+        {
+          "action": "retry",
+          "maxRetries": 1,
+          "backoff": "fixed",
+          "initialInterval": "PT1S"
+        },
+        {
+          "action": "escalateToHuman",
+          "taskActionRef": "/lifecycle/states/manualReview/onEntry/0"
+        }
+      ],
+      "autonomyPolicy": {
+        "maxAutonomy": "assistive"
+      }
     }
   ],
   "aiOversight": {
     "defaultAutonomy": "assistive",
-    "disclosure": {},
-    "driftDetection": {},
-    "x-transportAgentDetails": [
-      {
-        "id": "triageAgent",
-        "type": "agent",
-        "agentType": "generative",
-        "modelIdentifier": "test-model",
-        "modelVersion": "1.0",
-        "description": "Triage agent with escalation and demotion rules",
-        "capabilities": [
-          {
-            "id": "triage",
-            "description": "Categorize and prioritize cases",
-            "outputContractRef": "urn:formspec:test:triage:1.0.0"
-          }
-        ],
-        "deonticConstraints": {
-          "permissions": [
-            {
-              "id": "perm-triage-only",
-              "bounds": "output.action = 'categorize' or output.action = 'prioritize'",
-              "onViolation": "escalateToHuman"
-            }
-          ]
-        },
-        "fallbackChain": [
-          {
-            "action": "retry",
-            "maxRetries": 1,
-            "backoff": "fixed",
-            "initialInterval": "PT1S"
-          },
-          {
-            "action": "escalateToHuman",
-            "taskRef": "manualTriage",
-            "assignTo": "caseworker"
-          }
-        ]
-      }
-    ]
+    "disclosure": {
+      "discloseThatAgentAssisted": true
+    }
   }
 }

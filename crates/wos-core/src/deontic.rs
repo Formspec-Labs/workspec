@@ -1,829 +1,293 @@
-// Rust guideline compliant 2026-04-11
+// Rust guideline compliant 2026-02-21
 
-//! Deontic constraint evaluation for agent outputs (AI S4).
+//! Kind-specific native rule evaluation over explicitly supplied context.
 //!
-//! Evaluates permissions, prohibitions, obligations, and rights against
-//! agent output using FEL expressions. Produces provenance records for
-//! violations and resolution of conflicting enforcement actions.
-//!
-//! Evaluation order per AI S4.6:
-//! 1. Permissions (bounds check)
-//! 2. Prohibitions (condition check)
-//! 3. Obligations (requirement check)
-//! 4. Confidence floor
-//! 5. Volume constraints
-//! 6. Review sampling
+//! This module reuses FEL and the native loader. Rule truth, null dispositions,
+//! processor input obligations and evaluation failures remain distinct. It
+//! authorizes neither invocation, review completion nor case-file writes.
 
+use crate::ai_policy::{
+    NativeAiPolicy, PolicyEvaluation, PolicyExerciseContext, PolicyPhase, RuleObservation,
+    pointer_segments,
+};
+use crate::model::ai::{DeonticConstraint, NullBehavior, ViolationAction};
+use crate::model::kernel::ImpactLevel;
+use fel_core::{MapEnvironment, evaluate, json_to_fel, parse, types::Value as FelValue};
+use serde_json::Value;
 use std::collections::HashMap;
 
-use fel_core::{MapEnvironment, evaluate, json_to_fel, parse, types::Value};
-
-use crate::model::ai::{AIIntegrationDocument, DeonticConstraints, NullBehavior, ViolationAction};
-use crate::model::kernel::ImpactLevel;
-use wos_events::provenance::{ProvenanceKind, ProvenanceRecord};
-
-/// Result of evaluating all deontic constraints for a single agent invocation.
-#[derive(Debug, Clone)]
-pub struct DeonticResult {
-    /// Provenance records generated during evaluation.
-    pub provenance: Vec<ProvenanceRecord>,
-
-    /// The effective enforcement action (most restrictive).
-    pub effective_action: Option<ViolationAction>,
-}
-
-/// Evaluate deontic constraints against an agent's output.
+/// Evaluate the declared phase using the sole native policy interpretation.
 ///
-/// Processes the constraint hierarchy at three composition levels:
-/// workflow-level, action-site-level, and agent-level (AI S4.7).
-/// Returns provenance records documenting the evaluation.
-pub fn evaluate_deontic_constraints(
-    ai_doc: &AIIntegrationDocument,
-    agent_id: &str,
-    output: &serde_json::Value,
-    case_state: &HashMap<String, serde_json::Value>,
-    impact_level: &ImpactLevel,
-    bypass: Option<&str>,
-    escalation_active: bool,
-    invocation_source: Option<&str>,
-) -> DeonticResult {
-    let mut provenance = Vec::new();
-    let mut violations: Vec<(String, ViolationAction)> = Vec::new();
-
-    let agent = ai_doc.agents.iter().find(|a| a.id == agent_id);
-
-    // Record evaluation order (AI S4.6).
-    provenance.push(ProvenanceRecord {
-        id: ProvenanceRecord::mint_id(),
-        record_kind: ProvenanceKind::DeonticEvaluation,
-        timestamp: String::new(),
-        actor_id: None,
-        from_state: None,
-        to_state: None,
-        event: None,
-        data: Some(serde_json::json!({
-            "order": ["permissions", "prohibitions", "obligations", "confidence", "volume", "sampling"]
-        })),
-        audit_layer: None,
-        actor_type: None,
-        lifecycle_state: None,
-        definition_version: None,
-        inputs: Vec::new(),
-        outputs: Vec::new(),
-        input_digest: None,
-        output_digest: None,
-        canonical_event_hash: None,
-        transition_tags: Vec::new(),
-        case_file_snapshot: None,
-        outcome: None,
-    });
-
-    // Evaluate at three composition levels (AI S4.7).
-    // Track violation counts per level to determine cross-level resolution.
-    let mut agent_violation_count = 0;
-    let mut workflow_violation_count = 0;
-
-    // Level 1: Agent-level constraints
-    if let Some(agent_decl) = agent {
-        if let Some(ref constraints) = agent_decl.deontic_constraints {
-            let before = violations.len();
-            evaluate_constraint_set(
-                constraints,
-                output,
-                case_state,
-                impact_level,
-                bypass,
-                escalation_active,
-                invocation_source,
-                &mut provenance,
-                &mut violations,
-            );
-            agent_violation_count = violations.len() - before;
+/// Context identity and inputs come from the processor or explicit harness,
+/// never from proposed output. Results are stage evidence, not readiness.
+pub fn evaluate_native_policy(
+    policy: &NativeAiPolicy,
+    context: &PolicyExerciseContext<'_>,
+) -> PolicyEvaluation {
+    let mut result = PolicyEvaluation::default();
+    let Some(agent) = policy.agent(context.agent_id) else {
+        result.errors.push("unknown admitted agent actor".into());
+        return result;
+    };
+    if context.waiver.is_some() {
+        result.waiver_refused = true;
+        result
+            .refusals
+            .push("authenticated scoped waiver operation is unavailable".into());
+    }
+    let mut scopes = vec![(
+        "/aiOversight/deonticConstraints".to_string(),
+        policy.oversight().deontic_constraints.as_slice(),
+    )];
+    let agent_index = policy
+        .agents()
+        .iter()
+        .position(|v| v.id == agent.id)
+        .expect("agent came from this policy");
+    scopes.push((
+        format!("/agents/{agent_index}/deonticConstraints"),
+        agent.deontic_constraints.as_slice(),
+    ));
+    let action = match context.action_ref {
+        Some(pointer) => {
+            if let Err(error) = policy.action(pointer) {
+                result.refusals.push(error.to_string());
+                return result;
+            }
+            agent
+                .action_overrides
+                .iter()
+                .enumerate()
+                .find(|(_, a)| a.action_ref == pointer)
         }
+        None => {
+            if !agent.action_overrides.is_empty() {
+                result.refusals.push(
+                    "declared action policy requires an admitted lifecycle action context".into(),
+                );
+            }
+            None
+        }
+    };
+    if let Some((index, action)) = action {
+        scopes.push((
+            format!("/agents/{agent_index}/actionOverrides/{index}/deonticConstraints"),
+            action.deontic_constraints.as_slice(),
+        ));
     }
-
-    // Level 2: Action-site-level (capability-specific constraints, if any)
-    // Currently defers to agent-level constraints.
-
-    // Level 3: Workflow-level constraints
-    if let Some(ref constraints) = ai_doc.deontic_constraints {
-        let before = violations.len();
-        evaluate_constraint_set(
-            constraints,
-            output,
-            case_state,
-            impact_level,
-            bypass,
-            escalation_active,
-            invocation_source,
-            &mut provenance,
-            &mut violations,
-        );
-        workflow_violation_count = violations.len() - before;
-    }
-
-    // Record evaluation at all three composition levels (AI S4.7).
-    for level in &["agent", "action-site", "workflow"] {
-        provenance.push(ProvenanceRecord {
-            id: ProvenanceRecord::mint_id(),
-            record_kind: ProvenanceKind::DeonticEvaluation,
-            timestamp: String::new(),
-            actor_id: None,
-            from_state: None,
-            to_state: None,
-            event: None,
-            data: Some(serde_json::json!({ "level": level })),
-            audit_layer: None,
-            actor_type: None,
-            lifecycle_state: None,
-            definition_version: None,
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            input_digest: None,
-            output_digest: None,
-            canonical_event_hash: None,
-            transition_tags: Vec::new(),
-            case_file_snapshot: None,
-            outcome: None,
-        });
-    }
-
-    // Check rights (AI S4.5).
-    // Rights entitlements are data references — the value must be present
-    // and non-null for the right to be satisfied (AI S4.5). If the
-    // entitlement evaluates to null or false, the right is violated.
-    // Rights violations are NEVER attributed to the agent.
-    if let Some(agent_decl) = agent {
-        if let Some(ref constraints) = agent_decl.deontic_constraints {
-            for right in &constraints.rights {
-                let entitled_expr = &right.entitlement;
-                let result = evaluate_fel_expression(entitled_expr, output, case_state);
-                if matches!(result, FelResult::False | FelResult::Null) {
-                    provenance.push(ProvenanceRecord {
-                        id: ProvenanceRecord::mint_id(),
-                        record_kind: ProvenanceKind::RightsViolation,
-                        timestamp: String::new(),
-                        actor_id: None,
-                        from_state: None,
-                        to_state: None,
-                        event: None,
-                        data: Some(serde_json::json!({
-                            "rightId": right.id,
-                            "attributedToAgent": false,
-                        })),
-                        audit_layer: None,
-                        actor_type: None,
-                        lifecycle_state: None,
-                        definition_version: None,
-                        inputs: Vec::new(),
-                        outputs: Vec::new(),
-                        input_digest: None,
-                        output_digest: None,
-                        canonical_event_hash: None,
-                        transition_tags: Vec::new(),
-                        case_file_snapshot: None,
-                        outcome: None,
+    if context.phase == PolicyPhase::InputRights {
+        for (scope, rules) in &scopes {
+            for (index, rule) in rules.iter().enumerate() {
+                if let DeonticConstraint::Right(right) = rule {
+                    let pointer = format!("{scope}/{index}");
+                    let segments = pointer_segments(&right.entitlement)
+                        .expect("loader admitted entitlement pointer");
+                    if segments.first().map(String::as_str) == Some("input")
+                        && context.input.is_none()
+                    {
+                        result
+                            .refusals
+                            .push(format!("{pointer}: resolved input context unavailable"));
+                        continue;
+                    }
+                    let inputs =
+                        serde_json::json!({"input":context.input,"caseFile":context.case_file});
+                    let present = inputs
+                        .pointer(&right.entitlement)
+                        .is_some_and(|value| !value.is_null());
+                    result.observations.push(RuleObservation {
+                        pointer,
+                        rule_id: right.id.clone(),
+                        outcome: if present {
+                            "present"
+                        } else {
+                            "missing-entitlement"
+                        }
+                        .into(),
+                        action: None,
+                        attribution: "processor".into(),
+                        kind: "right".into(),
                     });
-                }
-            }
-        }
-    }
-
-    // Consistency check (AI S4.7): detect contradictions between output and case state.
-    check_consistency(output, case_state, &mut provenance);
-
-    // Resolve effective action: most restrictive wins (AI S4.6).
-    let effective_action = resolve_most_restrictive(&violations);
-
-    if violations.len() > 1 {
-        if let Some(action) = effective_action {
-            // Use "cross-level-most-restrictive" when violations came from both
-            // agent-level and workflow-level constraints. Otherwise "most-restrictive".
-            let reason = if agent_violation_count > 0 && workflow_violation_count > 0 {
-                "cross-level-most-restrictive"
-            } else {
-                "most-restrictive"
-            };
-            provenance.push(ProvenanceRecord {
-                id: ProvenanceRecord::mint_id(),
-                record_kind: ProvenanceKind::DeonticResolution,
-                timestamp: String::new(),
-                actor_id: None,
-                from_state: None,
-                to_state: None,
-                event: None,
-                data: Some(serde_json::json!({
-                    "effectiveAction": violation_action_str(action),
-                    "reason": reason,
-                })),
-                audit_layer: None,
-                actor_type: None,
-                lifecycle_state: None,
-                definition_version: None,
-                inputs: Vec::new(),
-                outputs: Vec::new(),
-                input_digest: None,
-                output_digest: None,
-                canonical_event_hash: None,
-                transition_tags: Vec::new(),
-                case_file_snapshot: None,
-                outcome: None,
-            });
-        }
-    }
-
-    DeonticResult {
-        provenance,
-        effective_action,
-    }
-}
-
-/// Evaluate a single constraint set (permissions + prohibitions + obligations).
-#[expect(
-    clippy::too_many_arguments,
-    reason = "constraint evaluation requires context from multiple sources"
-)]
-fn evaluate_constraint_set(
-    constraints: &DeonticConstraints,
-    output: &serde_json::Value,
-    case_state: &HashMap<String, serde_json::Value>,
-    impact_level: &ImpactLevel,
-    bypass: Option<&str>,
-    escalation_active: bool,
-    invocation_source: Option<&str>,
-    provenance: &mut Vec<ProvenanceRecord>,
-    violations: &mut Vec<(String, ViolationAction)>,
-) {
-    // Emergency bypass: when explicitly provided in event data, bypasses
-    // all constraints with provenance recording (AI S4.7).
-    // Every bypassed constraint — permissions, prohibitions, and obligations —
-    // gets an individual provenance record for full audit trail.
-    if let Some(rationale) = bypass {
-        for perm in &constraints.permissions {
-            provenance.push(ProvenanceRecord {
-                id: ProvenanceRecord::mint_id(),
-                record_kind: ProvenanceKind::DeonticBypass,
-                timestamp: String::new(),
-                actor_id: None,
-                from_state: None,
-                to_state: None,
-                event: None,
-                data: Some(serde_json::json!({
-                    "constraintId": perm.id,
-                    "constraintType": "permission",
-                    "rationale": rationale,
-                })),
-                audit_layer: None,
-                actor_type: None,
-                lifecycle_state: None,
-                definition_version: None,
-                inputs: Vec::new(),
-                outputs: Vec::new(),
-                input_digest: None,
-                output_digest: None,
-                canonical_event_hash: None,
-                transition_tags: Vec::new(),
-                case_file_snapshot: None,
-                outcome: None,
-            });
-        }
-        for prohib in &constraints.prohibitions {
-            provenance.push(ProvenanceRecord {
-                id: ProvenanceRecord::mint_id(),
-                record_kind: ProvenanceKind::DeonticBypass,
-                timestamp: String::new(),
-                actor_id: None,
-                from_state: None,
-                to_state: None,
-                event: None,
-                data: Some(serde_json::json!({
-                    "constraintId": prohib.id,
-                    "constraintType": "prohibition",
-                    "rationale": rationale,
-                })),
-                audit_layer: None,
-                actor_type: None,
-                lifecycle_state: None,
-                definition_version: None,
-                inputs: Vec::new(),
-                outputs: Vec::new(),
-                input_digest: None,
-                output_digest: None,
-                canonical_event_hash: None,
-                transition_tags: Vec::new(),
-                case_file_snapshot: None,
-                outcome: None,
-            });
-        }
-        for oblig in &constraints.obligations {
-            provenance.push(ProvenanceRecord {
-                id: ProvenanceRecord::mint_id(),
-                record_kind: ProvenanceKind::DeonticBypass,
-                timestamp: String::new(),
-                actor_id: None,
-                from_state: None,
-                to_state: None,
-                event: None,
-                data: Some(serde_json::json!({
-                    "constraintId": oblig.id,
-                    "constraintType": "obligation",
-                    "rationale": rationale,
-                })),
-                audit_layer: None,
-                actor_type: None,
-                lifecycle_state: None,
-                definition_version: None,
-                inputs: Vec::new(),
-                outputs: Vec::new(),
-                input_digest: None,
-                output_digest: None,
-                canonical_event_hash: None,
-                transition_tags: Vec::new(),
-                case_file_snapshot: None,
-                outcome: None,
-            });
-        }
-        return;
-    }
-
-    // Permissions (AI S4.2): bounds must be satisfied.
-    for perm in &constraints.permissions {
-        if let Some(ref bounds_expr) = perm.bounds {
-            let result = evaluate_fel_expression(bounds_expr, output, case_state);
-            let (violated, null_escalation) = match result {
-                FelResult::True => (false, false),
-                FelResult::False => (true, false),
-                FelResult::Null => {
-                    let escalate = handle_null_propagation(
-                        perm.null_behavior.as_ref(),
-                        impact_level,
-                        &perm.id,
-                        provenance,
-                    );
-                    (escalate, escalate)
-                }
-                FelResult::Error => (true, false),
-            };
-
-            if violated {
-                // Null propagation overrides the onViolation action to
-                // escalateToHuman (AI S4.9).
-                let effective_action = if null_escalation {
-                    ViolationAction::EscalateToHuman
-                } else {
-                    perm.on_violation
-                };
-
-                let mut data = serde_json::json!({
-                    "constraintId": perm.id,
-                    "action": violation_action_str(effective_action),
-                });
-                if escalation_active {
-                    data["escalationActive"] = serde_json::json!(true);
-                }
-                if let Some(source) = invocation_source {
-                    data["invocationSource"] = serde_json::json!(source);
-                }
-                provenance.push(ProvenanceRecord {
-                    id: ProvenanceRecord::mint_id(),
-                    record_kind: ProvenanceKind::DeonticViolation,
-                    timestamp: String::new(),
-                    actor_id: None,
-                    from_state: None,
-                    to_state: None,
-                    event: None,
-                    data: Some(data),
-                    audit_layer: None,
-                    actor_type: None,
-                    lifecycle_state: None,
-                    definition_version: None,
-                    inputs: Vec::new(),
-                    outputs: Vec::new(),
-                    input_digest: None,
-                    output_digest: None,
-                    canonical_event_hash: None,
-                    transition_tags: Vec::new(),
-                    case_file_snapshot: None,
-                    outcome: None,
-                });
-                violations.push((perm.id.clone(), effective_action));
-            }
-        }
-    }
-
-    // Prohibitions (AI S4.3): condition must NOT be true.
-    // Null means "prohibited condition is not detectable" — default is pass
-    // (absence of evidence is not evidence of violation). Explicit null_behavior
-    // overrides this default.
-    for prohib in &constraints.prohibitions {
-        let result = evaluate_fel_expression(&prohib.condition, output, case_state);
-        let violated = match result {
-            FelResult::True => true,
-            FelResult::False | FelResult::Error => false,
-            FelResult::Null => {
-                // Prohibitions default to pass on null unless explicitly configured.
-                match prohib.null_behavior.as_ref() {
-                    Some(NullBehavior::Deny) => true,
-                    Some(NullBehavior::Escalate) => true,
-                    _ => false,
-                }
-            }
-        };
-
-        if violated {
-            provenance.push(ProvenanceRecord {
-                id: ProvenanceRecord::mint_id(),
-                record_kind: ProvenanceKind::DeonticViolation,
-                timestamp: String::new(),
-                actor_id: None,
-                from_state: None,
-                to_state: None,
-                event: None,
-                data: Some(serde_json::json!({
-                    "constraintId": prohib.id,
-                    "action": violation_action_str(prohib.on_violation),
-                })),
-                audit_layer: None,
-                actor_type: None,
-                lifecycle_state: None,
-                definition_version: None,
-                inputs: Vec::new(),
-                outputs: Vec::new(),
-                input_digest: None,
-                output_digest: None,
-                canonical_event_hash: None,
-                transition_tags: Vec::new(),
-                case_file_snapshot: None,
-                outcome: None,
-            });
-            violations.push((prohib.id.clone(), prohib.on_violation));
-        }
-    }
-
-    // Obligations (AI S4.4): requirement must be true.
-    // Null means "requirement not verifiable" — treated as violated, because
-    // the obligation imposes an affirmative duty. The constraint's onViolation
-    // action applies (not null propagation escalation).
-    for oblig in &constraints.obligations {
-        let result = evaluate_fel_expression(&oblig.requirement, output, case_state);
-        let violated = match result {
-            FelResult::True => false,
-            FelResult::False | FelResult::Null | FelResult::Error => true,
-        };
-
-        if violated {
-            provenance.push(ProvenanceRecord {
-                id: ProvenanceRecord::mint_id(),
-                record_kind: ProvenanceKind::DeonticViolation,
-                timestamp: String::new(),
-                actor_id: None,
-                from_state: None,
-                to_state: None,
-                event: None,
-                data: Some(serde_json::json!({
-                    "constraintId": oblig.id,
-                    "action": violation_action_str(oblig.on_violation),
-                })),
-                audit_layer: None,
-                actor_type: None,
-                lifecycle_state: None,
-                definition_version: None,
-                inputs: Vec::new(),
-                outputs: Vec::new(),
-                input_digest: None,
-                output_digest: None,
-                canonical_event_hash: None,
-                transition_tags: Vec::new(),
-                case_file_snapshot: None,
-                outcome: None,
-            });
-            violations.push((oblig.id.clone(), oblig.on_violation));
-        }
-    }
-}
-
-/// Handle null propagation for deontic constraints (AI S4.9).
-///
-/// Impact-dependent behavior:
-/// - Rights/safety impacting: escalate to human (null = danger)
-/// - Operational/informational: pass (null = no data, not a violation)
-fn handle_null_propagation(
-    behavior: Option<&NullBehavior>,
-    impact_level: &ImpactLevel,
-    constraint_id: &str,
-    provenance: &mut Vec<ProvenanceRecord>,
-) -> bool {
-    if let Some(behavior) = behavior {
-        return match behavior {
-            NullBehavior::Pass => false,
-            NullBehavior::Deny => true,
-            NullBehavior::Escalate => {
-                provenance.push(ProvenanceRecord {
-                    id: ProvenanceRecord::mint_id(),
-                    record_kind: ProvenanceKind::DeonticViolation,
-                    timestamp: String::new(),
-                    actor_id: None,
-                    from_state: None,
-                    to_state: None,
-                    event: None,
-                    data: Some(serde_json::json!({
-                        "reason": "null-expression-escalation",
-                        "constraintId": constraint_id,
-                        "impactLevel": impact_level_str(impact_level),
-                    })),
-                    audit_layer: None,
-                    actor_type: None,
-                    lifecycle_state: None,
-                    definition_version: None,
-                    inputs: Vec::new(),
-                    outputs: Vec::new(),
-                    input_digest: None,
-                    output_digest: None,
-                    canonical_event_hash: None,
-                    transition_tags: Vec::new(),
-                    case_file_snapshot: None,
-                    outcome: None,
-                });
-                true
-            }
-        };
-    }
-
-    // Default: impact-dependent.
-    match impact_level {
-        ImpactLevel::RightsImpacting | ImpactLevel::SafetyImpacting => {
-            provenance.push(ProvenanceRecord {
-                id: ProvenanceRecord::mint_id(),
-                record_kind: ProvenanceKind::DeonticViolation,
-                timestamp: String::new(),
-                actor_id: None,
-                from_state: None,
-                to_state: None,
-                event: None,
-                data: Some(serde_json::json!({
-                    "reason": "null-expression-escalation",
-                    "impactLevel": impact_level_str(impact_level),
-                })),
-                audit_layer: None,
-                actor_type: None,
-                lifecycle_state: None,
-                definition_version: None,
-                inputs: Vec::new(),
-                outputs: Vec::new(),
-                input_digest: None,
-                output_digest: None,
-                canonical_event_hash: None,
-                transition_tags: Vec::new(),
-                case_file_snapshot: None,
-                outcome: None,
-            });
-            true
-        }
-        ImpactLevel::Operational | ImpactLevel::Informational => false,
-    }
-}
-
-/// Check consistency between agent output and case state (AI S4.7).
-///
-/// Implementation-defined thresholds per AI S4.7 consistency requirement:
-/// - Relative threshold (50%): catches meaningful discrepancies proportional
-///   to the case value.
-/// - Absolute threshold ($1): prevents false positives on small values where
-///   a 50% difference is trivial (e.g., $0.50 vs $0.30).
-///
-/// Both thresholds must be exceeded for a violation. These are conservative
-/// defaults suitable for benefits adjudication. Production deployments may
-/// configure tighter thresholds via workflow-specific parameters.
-const CONSISTENCY_RELATIVE_THRESHOLD: f64 = 0.5;
-const CONSISTENCY_ABSOLUTE_THRESHOLD: f64 = 1.0;
-
-fn check_consistency(
-    output: &serde_json::Value,
-    case_state: &HashMap<String, serde_json::Value>,
-    provenance: &mut Vec<ProvenanceRecord>,
-) {
-    if let serde_json::Value::Object(output_map) = output {
-        for (field, agent_value) in output_map {
-            if let Some(case_value) = case_state.get(field) {
-                // Only flag numeric contradictions with significant difference.
-                if let (Some(agent_num), Some(case_num)) =
-                    (agent_value.as_f64(), case_value.as_f64())
-                {
-                    let diff = (agent_num - case_num).abs();
-                    let threshold = case_num.abs() * CONSISTENCY_RELATIVE_THRESHOLD;
-                    if diff > threshold && diff > CONSISTENCY_ABSOLUTE_THRESHOLD {
-                        provenance.push(ProvenanceRecord {
-                            id: ProvenanceRecord::mint_id(),
-                            record_kind: ProvenanceKind::ConsistencyViolation,
-                            timestamp: String::new(),
-                            actor_id: None,
-                            from_state: None,
-                            to_state: None,
-                            event: None,
-                            data: Some(serde_json::json!({
-                                "field": field,
-                                "agentValue": agent_value,
-                                "caseValue": case_value,
-                            })),
-                            audit_layer: None,
-                            actor_type: None,
-                            lifecycle_state: None,
-                            definition_version: None,
-                            inputs: Vec::new(),
-                            outputs: Vec::new(),
-                            input_digest: None,
-                            output_digest: None,
-                            canonical_event_hash: None,
-                            transition_tags: Vec::new(),
-                            case_file_snapshot: None,
-                            outcome: None,
-                        });
+                    if !present {
+                        result.processor_error = true;
+                        result.errors.push(format!(
+                            "right {} missing required nonnull input {}",
+                            right.id, right.entitlement
+                        ));
                     }
                 }
             }
         }
+        return result;
     }
-}
-
-// ── FEL evaluation helpers ──────────────────────────────────────
-
-/// Simplified FEL result for deontic evaluation.
-enum FelResult {
-    True,
-    False,
-    Null,
-    Error,
-}
-
-/// Evaluate a FEL expression in the context of agent output and case state.
-///
-/// The expression can reference `output.*` and `caseFile.*` variables.
-fn evaluate_fel_expression(
-    expression: &str,
-    output: &serde_json::Value,
-    case_state: &HashMap<String, serde_json::Value>,
-) -> FelResult {
-    let parsed = match parse(expression) {
-        Ok(ast) => ast,
-        Err(_) => return FelResult::Error,
-    };
-
-    let mut fields = HashMap::new();
-
-    // Flatten output into `output.field` variables.
-    if let serde_json::Value::Object(output_map) = output {
-        for (key, value) in output_map {
-            fields.insert(format!("output.{key}"), json_to_fel(value));
+    // Kind order does not change restriction composition or skip other scopes.
+    for rank in 0..3 {
+        for (scope, rules) in &scopes {
+            for (index, rule) in rules.iter().enumerate() {
+                let (kind, expression, action, null_behavior, fields) = match rule {
+                    DeonticConstraint::Permission(v) if rank == 0 => (
+                        "permission",
+                        v.bounds.as_deref(),
+                        v.on_violation,
+                        v.null_behavior,
+                        v.allowed_fields.as_deref(),
+                    ),
+                    DeonticConstraint::Prohibition(v) if rank == 1 => (
+                        "prohibition",
+                        Some(v.condition.as_str()),
+                        v.on_violation,
+                        v.null_behavior,
+                        None,
+                    ),
+                    DeonticConstraint::Obligation(v) if rank == 2 => (
+                        "obligation",
+                        Some(v.requirement.as_str()),
+                        v.on_violation,
+                        v.null_behavior,
+                        None,
+                    ),
+                    _ => continue,
+                };
+                let pointer = format!("{scope}/{index}");
+                let mut selected = None;
+                let mut outcomes = Vec::new();
+                if let Some(allowed) = fields {
+                    let mut terminals = Vec::new();
+                    output_terminals(context.output, &mut Vec::new(), &mut terminals);
+                    let allowed: Vec<Vec<String>> = allowed
+                        .iter()
+                        .map(|v| pointer_segments(v).expect("loader admitted output pointer"))
+                        .collect();
+                    if terminals
+                        .iter()
+                        .any(|terminal| !allowed.iter().any(|path| terminal.starts_with(path)))
+                    {
+                        selected = Some(action);
+                        outcomes.push("output-field-out-of-scope".to_string());
+                    } else {
+                        outcomes.push("output-fields-in-scope".into());
+                    }
+                }
+                if let Some(expression) = expression {
+                    match predicate(expression, context, policy) {
+                        Ok(Some(truth)) => {
+                            let violates = if kind == "prohibition" { truth } else { !truth };
+                            outcomes.push(
+                                if violates {
+                                    "predicate-violation"
+                                } else {
+                                    "predicate-satisfied"
+                                }
+                                .into(),
+                            );
+                            if violates {
+                                selected = Some(
+                                    selected.map_or(action, |old: ViolationAction| old.max(action)),
+                                );
+                            }
+                        }
+                        Ok(None) => {
+                            let behavior = null_behavior.unwrap_or(
+                                if matches!(
+                                    policy.impact_level(),
+                                    ImpactLevel::RightsImpacting | ImpactLevel::SafetyImpacting
+                                ) {
+                                    NullBehavior::Escalate
+                                } else {
+                                    NullBehavior::Pass
+                                },
+                            );
+                            outcomes.push(format!("null-{behavior:?}"));
+                            let effect = match behavior {
+                                NullBehavior::Pass => None,
+                                NullBehavior::Deny => Some(action),
+                                NullBehavior::Escalate => Some(ViolationAction::EscalateToHuman),
+                            };
+                            if let Some(effect) = effect {
+                                selected = Some(selected.map_or(effect, |old| old.max(effect)));
+                            }
+                        }
+                        Err(error) => {
+                            outcomes.push("evaluation-error".into());
+                            result.errors.push(format!("{pointer}: {error}"));
+                        }
+                    }
+                }
+                if let Some(effect) = selected {
+                    result.restrict(effect);
+                }
+                result.observations.push(RuleObservation {
+                    pointer,
+                    rule_id: rule.id().to_string(),
+                    outcome: outcomes.join(";"),
+                    action: selected,
+                    attribution: "agent".into(),
+                    kind: kind.into(),
+                });
+            }
         }
     }
-
-    // Flatten case state into `caseFile.field` variables.
-    for (key, value) in case_state {
-        fields.insert(format!("caseFile.{key}"), json_to_fel(value));
-    }
-
-    let env = MapEnvironment::with_fields(fields);
-    let result = evaluate(&parsed, &env);
-    match result.value {
-        Value::Boolean(true) => FelResult::True,
-        Value::Boolean(false) => FelResult::False,
-        Value::Null => FelResult::Null,
-        _ => FelResult::False,
+    crate::confidence::evaluate_report_and_floors(
+        policy,
+        agent,
+        action.map(|(index, action)| (index, action)),
+        context,
+        &mut result,
+    );
+    result
+}
+fn output_terminals(value: &Value, path: &mut Vec<String>, out: &mut Vec<Vec<String>>) {
+    match value {
+        Value::Object(map) if !map.is_empty() => {
+            for (key, value) in map {
+                path.push(key.clone());
+                output_terminals(value, path, out);
+                path.pop();
+            }
+        }
+        Value::Array(array) if !array.is_empty() => {
+            for (index, value) in array.iter().enumerate() {
+                path.push(index.to_string());
+                output_terminals(value, path, out);
+                path.pop();
+            }
+        }
+        _ => out.push(path.clone()),
     }
 }
-
-/// Determine the most restrictive enforcement action.
+/// Evaluate FEL as boolean-or-null; retain syntax, evaluator and type errors.
 ///
-/// Severity order (most to least restrictive):
-/// reject > escalateToHuman > switchToAssistive > flag
-fn resolve_most_restrictive(violations: &[(String, ViolationAction)]) -> Option<ViolationAction> {
-    violations
-        .iter()
-        .map(|(_, action)| *action)
-        .max_by_key(|action| match action {
-            ViolationAction::Reject => 4,
-            ViolationAction::EscalateToHuman => 3,
-            ViolationAction::SwitchToAssistive => 2,
-            ViolationAction::Flag => 1,
-        })
-}
-
-/// Serialize an impact level to its canonical JSON string form.
-fn impact_level_str(level: &ImpactLevel) -> &'static str {
-    match level {
-        ImpactLevel::RightsImpacting => "rights-impacting",
-        ImpactLevel::SafetyImpacting => "safety-impacting",
-        ImpactLevel::Operational => "operational",
-        ImpactLevel::Informational => "informational",
+/// # Errors
+/// Returns exact failures instead of converting them to false or null.
+pub fn predicate(
+    expression: &str,
+    context: &PolicyExerciseContext<'_>,
+    policy: &NativeAiPolicy,
+) -> Result<Option<bool>, String> {
+    let ast = parse(expression).map_err(|error| format!("FEL parse error: {error}"))?;
+    let mut fields = HashMap::from([
+        ("output".into(), json_to_fel(context.output)),
+        ("caseFile".into(), json_to_fel(context.case_file)),
+        (
+            "instance".into(),
+            json_to_fel(&serde_json::json!({"impactLevel":policy.impact_level()})),
+        ),
+    ]);
+    if let Some(input) = context.input {
+        fields.insert("input".into(), json_to_fel(input));
     }
-}
-
-/// Serialize a violation action to its JSON string form.
-fn violation_action_str(action: ViolationAction) -> &'static str {
-    match action {
-        ViolationAction::Reject => "reject",
-        ViolationAction::EscalateToHuman => "escalateToHuman",
-        ViolationAction::SwitchToAssistive => "switchToAssistive",
-        ViolationAction::Flag => "flag",
+    let value = evaluate(&ast, &MapEnvironment::with_fields(fields));
+    if !value.diagnostics.is_empty() {
+        return Err(format!(
+            "FEL evaluation diagnostics: {:?}",
+            value.diagnostics
+        ));
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn most_restrictive_reject_wins_over_escalate() {
-        let violations = vec![
-            ("a".into(), ViolationAction::EscalateToHuman),
-            ("b".into(), ViolationAction::Reject),
-        ];
-        assert_eq!(
-            resolve_most_restrictive(&violations),
-            Some(ViolationAction::Reject)
-        );
-    }
-
-    #[test]
-    fn empty_violations_returns_none() {
-        let violations: Vec<(String, ViolationAction)> = vec![];
-        assert_eq!(resolve_most_restrictive(&violations), None);
-    }
-
-    #[test]
-    fn fel_expression_evaluates_output_bounds() {
-        let output = serde_json::json!({ "income": 50000 });
-        let case_state = HashMap::new();
-        let result = super::evaluate_fel_expression(
-            "output.income >= 0 and output.income <= 500000",
-            &output,
-            &case_state,
-        );
-        assert!(matches!(result, super::FelResult::True));
-    }
-
-    #[test]
-    fn fel_expression_negative_income_violates_bounds() {
-        let output = serde_json::json!({ "income": -1000 });
-        let case_state = HashMap::new();
-        let result = super::evaluate_fel_expression(
-            "output.income >= 0 and output.income <= 500000",
-            &output,
-            &case_state,
-        );
-        assert!(matches!(result, super::FelResult::False));
-    }
-
-    #[test]
-    fn clean_output_no_violations() {
-        use crate::model::ai::AIIntegrationDocument;
-        use crate::model::kernel::ImpactLevel;
-
-        let ai_json = r#"{
-            "targetWorkflow": "test",
-            "agents": [{
-                "id": "agent1",
-                "type": "agent",
-                "agentType": "generative",
-                "modelIdentifier": "test",
-                "modelVersion": "1.0",
-                "deonticConstraints": {
-                    "permissions": [{
-                        "id": "perm-1",
-                        "bounds": "output.income >= 0 and output.income <= 500000",
-                        "onViolation": "reject"
-                    }],
-                    "obligations": [{
-                        "id": "oblig-1",
-                        "requirement": "output.confidenceReport != null",
-                        "onViolation": "reject"
-                    }]
-                }
-            }]
-        }"#;
-        let ai_doc: AIIntegrationDocument = serde_json::from_str(ai_json).unwrap();
-
-        let output = serde_json::json!({
-            "income": 50000,
-            "confidenceReport": { "overall": 0.90 }
-        });
-        let mut case_state = HashMap::new();
-        case_state.insert("income".into(), serde_json::json!(50000));
-
-        let result = evaluate_deontic_constraints(
-            &ai_doc,
-            "agent1",
-            &output,
-            &case_state,
-            &ImpactLevel::RightsImpacting,
-            None,
-            false,
-            None,
-        );
-
-        assert!(
-            result.effective_action.is_none(),
-            "expected no violations with clean output"
-        );
+    match value.value {
+        FelValue::Boolean(value) => Ok(Some(value)),
+        FelValue::Null => Ok(None),
+        other => Err(format!(
+            "FEL predicate requires boolean or null, observed {other:?}"
+        )),
     }
 }

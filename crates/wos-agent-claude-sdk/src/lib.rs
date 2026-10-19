@@ -1,15 +1,11 @@
 // Rust guideline compliant 2026-02-21
 
-//! Claude Agent SDK [`AgentInvoker`] adapter (skeleton).
+//! Explicitly unsupported Claude Agent SDK agent invocation adapter.
 //!
-//! Implements [`wos_core::agent::AgentInvoker`] against
-//! [`InvokerSpec::ClaudeAgentSdk`]. The body is `unimplemented!()` until the
-//! Claude Agent SDK integration lands; the crate exists now so deployments
-//! can declare the dependency and the workspace declares the adapter
-//! surface (ADR 0064 §5).
-//!
-//! Routing contract mirrors `wos-agent-anthropic`: refuse non-matching
-//! `InvokerSpec` with [`AgentInvocationError::InvokerMismatch`].
+//! The adapter rejects mismatched invoker kinds. Matching declarations return
+//! an unsupported execution/model-mapping error until the provider integration
+//! exists. The admitted agent declaration owns model identity; no duplicate
+//! selector or successful invocation evidence is invented here.
 
 use wos_core::agent::{
     AgentContext, AgentInvocationError, AgentInvoker, AgentResult, AgentTask, InvokerKind,
@@ -40,10 +36,10 @@ impl AgentInvoker for ClaudeAgentSdkInvoker {
     ) -> Result<AgentResult, AgentInvocationError> {
         match decl.invoker.as_ref() {
             Some(InvokerSpec::ClaudeAgentSdk { .. }) => {
-                unimplemented!(
-                    "wos-agent-claude-sdk is a skeleton; the Claude Agent SDK integration is \
-                     tracked as a follow-up to ADR 0064. See TODO.md."
-                )
+                Err(AgentInvocationError::Substrate(format!(
+                    "unsupported adapter execution/model mapping for admitted {}@{}; owning provider configuration/resolution operation is unavailable",
+                    decl.model_identifier, decl.model_version
+                )))
             }
             other => Err(AgentInvocationError::InvokerMismatch(format!(
                 "ClaudeAgentSdkInvoker bound to agent '{}' but declaration's invoker.kind is \
@@ -64,22 +60,9 @@ mod tests {
     #[test]
     fn refuses_non_claude_sdk_spec() {
         let inv = ClaudeAgentSdkInvoker::new();
-        let decl = AgentDeclaration {
-            id: "a".into(),
-            kind: "agent".into(),
-            agent_type: AgentType::Generative,
-            model_identifier: "m".into(),
-            model_version: "1".into(),
-            description: None,
-            capabilities: vec![],
-            model_version_policy: None,
-            confidence_decay: None,
-            fallback_chain: vec![],
-            cascading_invocations: vec![],
-            deontic_constraints: None,
-            invoker: Some(InvokerSpec::Stub { responses: vec![] }),
-            extensions: Default::default(),
-        };
+        let decl = serde_json::from_value::<AgentDeclaration>(serde_json::json!({"id":"a","agentType":AgentType::Generative,"modelIdentifier":"m","modelVersion":"1","invoker":Some(InvokerSpec::Stub { responses: vec![],
+ metadata:Default::default(),
+})})).unwrap();
         let task = AgentTask {
             capability_id: "c".into(),
             prompt: None,

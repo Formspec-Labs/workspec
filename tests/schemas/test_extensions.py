@@ -215,48 +215,21 @@ class TestWosVersionPin:
 # --- F1.4 DeonticConstraint expansion -------------------------------------
 
 class TestDeonticConstraint:
-    def test_minimal_legacy_shape_still_validates(self):
-        # The pre-F1 shape was {kind, expression}. The new shape MUST
-        # remain backward-compatible.
+    def test_native_tagged_rule_and_descriptive_extension_validate(self):
         validator = validator_for_def("DeonticConstraint")
-        doc = {"kind": "prohibition", "expression": "true"}
-        errors = list(validator.iter_errors(doc))
-        assert errors == [], f"legacy shape must round-trip: {errors}"
+        rule = {"id": "notice", "kind": "prohibition", "condition": "output.denied", "onViolation": "reject", "citationRefs": ["42 CFR 431.211"], "x-legalruleml-iri": "urn:legalruleml:notice"}
+        assert list(validator.iter_errors(rule)) == []
 
-    def test_full_legalruleml_shape_validates(self):
+    def test_retired_generic_rule_is_rejected(self):
         validator = validator_for_def("DeonticConstraint")
-        doc = {
-            "id": "no-deny-without-notice",
-            "kind": "prohibition",
-            "actor": "caseworker",
-            "expression": "outcome == 'denied' && notice == null",
-            "condition": "outcome.adverse == true",
-            "defeasible": False,
-            "citationRefs": ["42 CFR § 431.211"],
-            "x-legalruleml-iri": "urn:legalruleml:42cfr.431.211",
-        }
-        errors = list(validator.iter_errors(doc))
-        assert errors == [], f"full LegalRuleML shape must validate: {errors}"
+        assert list(validator.iter_errors({"kind": "prohibition", "expression": "true"}))
 
-    def test_unknown_kind_rejected(self):
+    def test_cross_kind_fields_and_unknown_fields_are_rejected(self):
         validator = validator_for_def("DeonticConstraint")
-        doc = {"kind": "wish", "expression": "true"}
-        errors = list(validator.iter_errors(doc))
-        assert errors, "kind enum MUST reject unknown values"
-
-    def test_missing_expression_rejected(self):
-        validator = validator_for_def("DeonticConstraint")
-        doc = {"kind": "obligation"}
-        errors = list(validator.iter_errors(doc))
-        assert errors, "expression is required"
-
-    def test_unknown_property_rejected_but_x_extensions_pass(self):
-        # patternProperties ^x- allows extension keys; bare unknown keys fail.
-        validator = validator_for_def("DeonticConstraint")
-        bad = {"kind": "right", "expression": "true", "garbage": 1}
-        good = {"kind": "right", "expression": "true", "x-vendor-extra": 1}
-        assert list(validator.iter_errors(bad)), "unknown keys MUST be rejected"
-        assert list(validator.iter_errors(good)) == [], "x- keys MUST be accepted"
+        right = {"id": "input", "kind": "right", "entitlement": "/input"}
+        assert list(validator.iter_errors(right)) == []
+        for field, value in [("onViolation", "reject"), ("condition", "true"), ("garbage", 1)]:
+            assert list(validator.iter_errors({**right, field: value}))
 
 
 # --- F1.5 FieldDeclaration extensions --------------------------------------

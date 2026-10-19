@@ -32,6 +32,7 @@ pub const SUPPORTED_OBSERVATIONS: &[&str] = &[
     "guards",
     "drains",
     "taskSubmission",
+    "aiPolicy",
 ];
 
 /// Explicitly selected dependency bytes and their resolution identity.
@@ -281,11 +282,6 @@ fn check_supported_workflow(value: &Value, role: &str) -> Result<(), Conformance
             )));
         }
     }
-    if !kernel.agents.is_empty() && kernel.ai_oversight.is_none() {
-        return Err(refused(
-            "unsupported-embedded-behavior agents require aiOversight for native policy preparation",
-        ));
-    }
     Ok(())
 }
 
@@ -403,24 +399,7 @@ pub fn prepare_replay(request: ReplayRequest) -> Result<PreparedReplay, Conforma
         ("advanced", "advanced"),
     ] {
         if candidate.get(block).is_some_and(|value| !value.is_null()) {
-            let mut value = candidate.clone();
-            if role == "ai" {
-                // Canonical agents belong to the selected enclosing workflow.
-                let agents = candidate
-                    .get("agents")
-                    .cloned()
-                    .unwrap_or_else(|| json!([]));
-                let block = value
-                    .get_mut("aiOversight")
-                    .and_then(Value::as_object_mut)
-                    .ok_or_else(|| refused("invalid-aiOversight-block"))?;
-                if block.contains_key("agents") || block.contains_key("x-transportAgentDetails") {
-                    return Err(refused(
-                        "unsupported-noncanonical-agent-location: use top-level agents",
-                    ));
-                }
-                block.insert("agents".into(), agents);
-            }
+            let value = candidate.clone();
             selected.insert(role.into(), value);
         }
     }
@@ -601,7 +580,7 @@ pub fn prepare_replay(request: ReplayRequest) -> Result<PreparedReplay, Conforma
         "schema":{"id":schema_value["$id"], "rawSha256":digest(schema)},
         "canonicalization":integrity_canonical::CANONICALIZATION_PRIMITIVE,
         "digestAlgorithm":"sha-256", "fixtureFormspecProcessor":true, "fixtureService":true,
-        "taskPresenter":"no-op", "agentOutputs":"fixture event payloads; no model invocation", "accessControl":FIXTURE_ACCESS_POLICY, "clockStartMs":request.clock_start_ms
+        "taskPresenter":"no-op", "agentOutputs":"fixture event payloads; native policy stage only; no model invocation, definition validation, human review or governed output commit", "accessControl":FIXTURE_ACCESS_POLICY, "clockStartMs":request.clock_start_ms
     });
     let identity = content_digest(&json!({"inputs":inputs,"runtime":runtime_identity,
         "requiredObservations":request.required_observations,"expectations":request.expectations}))?;
@@ -650,6 +629,18 @@ pub fn replay(prepared: &PreparedReplay) -> Result<ReplayResult, ConformanceErro
         .iter()
         .map(|error| format!("missing-observation: {error}"))
         .collect();
+    for attempt in &result.attempts {
+        for drain in &attempt.drains {
+            if let Some(policy) = &drain.policy_evaluation {
+                refusals.extend(
+                    policy
+                        .refusals
+                        .iter()
+                        .map(|refusal| format!("unsupported-native-ai-policy: {refusal}")),
+                );
+            }
+        }
+    }
     for expected in &prepared.expectations {
         let actual = observations.pointer(&expected.pointer).cloned();
         if actual.is_none() {
@@ -730,7 +721,7 @@ fn creation_failure(
 
 fn execution_labels() -> Value {
     json!({"runtime":"in-memory WosRuntime","formspec":"FixtureFormspecProcessor (canned definition validation and response mapping)",
-        "services":"fixture-provided canned response", "notifications":"native notice provenance and native template-not-found fallback; canonical template rendering and external delivery unproven", "taskPresentation":"no-op", "agentOutputs":"fixture event payloads; no model invocation", "accessControl":FIXTURE_ACCESS_POLICY, "hosted":false,"durable":false})
+        "services":"fixture-provided canned response", "notifications":"native notice provenance and native template-not-found fallback; canonical template rendering and external delivery unproven", "taskPresentation":"no-op", "agentOutputs":"fixture event payloads; native policy stage only; no model invocation, definition validation, human review or governed output commit", "accessControl":FIXTURE_ACCESS_POLICY, "hosted":false,"durable":false})
 }
 
 fn trace_attempts(

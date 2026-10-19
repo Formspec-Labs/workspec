@@ -2,7 +2,6 @@
 
 //! Processor-level conformance claim verification tests.
 
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use wos_conformance::{
@@ -10,8 +9,9 @@ use wos_conformance::{
     ProcessorManifest, observe_assist_governance_proxy, observe_delegated_formspec_evaluation,
     verify_processor_manifest,
 };
-use wos_core::model::ai::AIIntegrationDocument;
-use wos_core::model::kernel::ImpactLevel;
+use wos_core::ai_policy::{
+    NativeAiPolicy, PolicyExerciseContext, PolicyPhase, load_native_ai_policy,
+};
 use wos_core::traits::{ContractValidator, ValidationResult};
 
 fn fixtures_dir() -> PathBuf {
@@ -68,31 +68,8 @@ impl ContractValidator for RecordingValidator {
     }
 }
 
-fn minimal_proxy_ai_document() -> AIIntegrationDocument {
-    // `AIIntegrationDocument` represents the embedded `aiOversight` block per
-    // ADR 0076 D-1 — no longer a standalone document, no top-level marker.
-    serde_json::from_value(serde_json::json!({
-        "targetWorkflow": "https://example.test/workflows/intake",
-        "agents": [
-            {
-                "id": "eligibilityAgent",
-                "type": "agent",
-                "agentType": "generative",
-                "modelIdentifier": "test-model",
-                "modelVersion": "1.0",
-                "deonticConstraints": {
-                    "permissions": [
-                        {
-                            "id": "perm-income-range",
-                            "bounds": "output.income >= 0 and output.income <= 500000",
-                            "onViolation": "reject"
-                        }
-                    ]
-                }
-            }
-        ]
-    }))
-    .expect("parse inline AI document")
+fn minimal_proxy_ai_document() -> NativeAiPolicy {
+    load_native_ai_policy(&serde_json::json!({"$wosWorkflow":"1.0","url":"urn:test:proxy","version":"1.0.0","title":"Local proxy evidence control","impactLevel":"operational","actors":[{"id":"eligibilityAgent","type":"agent"}],"agents":[{"id":"eligibilityAgent","agentType":"generative","modelIdentifier":"admitted-model","modelVersion":"1.0.0","deonticConstraints":[{"id":"income-range","kind":"permission","bounds":"output.income >= 0 and output.income <= 500000","onViolation":"reject"}]}],"lifecycle":{"initialState":"open","states":{"open":{"type":"atomic"}}}})).unwrap().unwrap()
 }
 
 #[test]
@@ -113,8 +90,8 @@ fn profile_backed_claims_verify_against_current_fixture_inventory() {
 
     assert_eq!(status_for(&report, "G-051"), ClaimStatus::Verified);
     assert_eq!(status_for(&report, "G-052"), ClaimStatus::Verified);
-    assert_eq!(status_for(&report, "AI-001"), ClaimStatus::Verified);
-    assert_eq!(status_for(&report, "AI-002"), ClaimStatus::Verified);
+    assert_eq!(status_for(&report, "AI-001"), ClaimStatus::Failed);
+    assert_eq!(status_for(&report, "AI-002"), ClaimStatus::Failed);
 }
 
 #[test]
@@ -194,28 +171,27 @@ fn ai050_claim_without_proxy_evidence_fails() {
 }
 
 #[test]
-fn ai050_claim_with_proxy_evidence_verifies() {
+fn local_policy_evidence_cannot_verify_an_unexecuted_proxy() {
     let ai_doc = minimal_proxy_ai_document();
-    let mut case_state = HashMap::new();
-    case_state.insert("income".to_string(), serde_json::json!(50000));
-    let event_data = serde_json::json!({
-        "output": {
-            "income": -500,
-            "determination": "eligible"
-        }
-    });
+    let case_state = serde_json::json!({"income":50000});
+    let output = serde_json::json!({"income":-500,"determination":"eligible"});
+    let report = serde_json::json!({"overall":1.0,"method":"declared"});
     let evidence = observe_assist_governance_proxy(
         &ai_doc,
-        "eligibilityAgent",
-        "determined",
-        &event_data,
-        &case_state,
-        ImpactLevel::Operational,
+        &PolicyExerciseContext {
+            agent_id: "eligibilityAgent",
+            action_ref: None,
+            input: None,
+            case_file: &case_state,
+            output: &output,
+            confidence_report: Some(&report),
+            waiver: None,
+            phase: PolicyPhase::Output,
+        },
     );
-
-    assert!(evidence.differential_check_passed);
+    assert!(!evidence.differential_check_passed);
     assert!(evidence.strictness_preserved);
-    assert!(evidence.provenance_preserved);
+    assert!(!evidence.provenance_preserved);
 
     let manifest = ProcessorManifest {
         processor_name: "reference-processor".to_string(),
@@ -230,7 +206,7 @@ fn ai050_claim_with_proxy_evidence_verifies() {
     };
 
     let report = verify_processor_manifest(&manifest, &fixtures_dir()).expect("verify manifest");
-    assert_eq!(status_for(&report, "AI-050"), ClaimStatus::Verified);
+    assert_eq!(status_for(&report, "AI-050"), ClaimStatus::Failed);
 }
 
 #[test]

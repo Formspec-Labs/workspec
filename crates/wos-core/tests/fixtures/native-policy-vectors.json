@@ -1,0 +1,1186 @@
+{
+  "purpose": "Root-authored expected semantics independent of schema/catalog/implementation. Spec-expert review pending. Explicit ConfidenceReport values are authored fixture input, not a scalar-to-report adapter. Policy-stage outcomes; escalation/assistive require actual review or unsupported execution. These do not claim invoker, Formspec, review completion or governed write.",
+  "cases": [
+    {
+      "id": "permission-bound-equal",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "scope",
+          "kind": "permission",
+          "onViolation": "reject",
+          "bounds": "output.amount <= 100"
+        }
+      ],
+      "output": {
+        "amount": 100
+      },
+      "expected": "pass",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "permission-bound-exceeded",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "scope",
+          "kind": "permission",
+          "onViolation": "reject",
+          "bounds": "output.amount <= 100"
+        }
+      ],
+      "output": {
+        "amount": 101
+      },
+      "expected": "reject",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "prohibition-false",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "forbidden",
+          "kind": "prohibition",
+          "condition": "output.denied = true",
+          "onViolation": "reject"
+        }
+      ],
+      "output": {
+        "denied": false
+      },
+      "expected": "pass",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "prohibition-true",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "forbidden",
+          "kind": "prohibition",
+          "condition": "output.denied = true",
+          "onViolation": "reject"
+        }
+      ],
+      "output": {
+        "denied": true
+      },
+      "expected": "reject",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "obligation-true",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "required",
+          "kind": "obligation",
+          "requirement": "output.reason != null",
+          "onViolation": "reject"
+        }
+      ],
+      "output": {
+        "reason": "evidence"
+      },
+      "expected": "pass",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "obligation-false",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "required",
+          "kind": "obligation",
+          "requirement": "output.reason != null",
+          "onViolation": "reject"
+        }
+      ],
+      "output": {
+        "reason": null
+      },
+      "expected": "reject",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "field-child",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "scope",
+          "kind": "permission",
+          "onViolation": "reject",
+          "allowedFields": [
+            "/a"
+          ]
+        }
+      ],
+      "output": {
+        "a": {
+          "value": 1
+        }
+      },
+      "expected": "pass",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "field-prefix",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "scope",
+          "kind": "permission",
+          "onViolation": "reject",
+          "allowedFields": [
+            "/a"
+          ]
+        }
+      ],
+      "output": {
+        "ab": 1
+      },
+      "expected": "reject",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "nested-empty-object",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "scope",
+          "kind": "permission",
+          "onViolation": "reject",
+          "allowedFields": []
+        }
+      ],
+      "output": {
+        "forbidden": {}
+      },
+      "expected": "reject",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "nested-empty-array",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "scope",
+          "kind": "permission",
+          "onViolation": "reject",
+          "allowedFields": []
+        }
+      ],
+      "output": {
+        "forbidden": []
+      },
+      "expected": "reject",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "nested-null",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "scope",
+          "kind": "permission",
+          "onViolation": "reject",
+          "allowedFields": [
+            "/a"
+          ]
+        }
+      ],
+      "output": {
+        "a": null
+      },
+      "expected": "pass",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "root-empty-object",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "scope",
+          "kind": "permission",
+          "onViolation": "reject",
+          "allowedFields": []
+        }
+      ],
+      "output": {},
+      "expected": "reject",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "root-empty-array",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "scope",
+          "kind": "permission",
+          "onViolation": "reject",
+          "allowedFields": []
+        }
+      ],
+      "output": [],
+      "expected": "reject",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "root-scalar-denied",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "scope",
+          "kind": "permission",
+          "onViolation": "reject",
+          "allowedFields": [
+            "/a"
+          ]
+        }
+      ],
+      "output": 5,
+      "expected": "reject",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "root-scalar-permitted",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "scope",
+          "kind": "permission",
+          "onViolation": "reject",
+          "allowedFields": [
+            ""
+          ]
+        }
+      ],
+      "output": 5,
+      "expected": "pass",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "root-empty-permitted",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "scope",
+          "kind": "permission",
+          "onViolation": "reject",
+          "allowedFields": [
+            ""
+          ]
+        }
+      ],
+      "output": {},
+      "expected": "pass",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "escaped-slash",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "scope",
+          "kind": "permission",
+          "onViolation": "reject",
+          "allowedFields": [
+            "/a~1b"
+          ]
+        }
+      ],
+      "output": {
+        "a/b": 1
+      },
+      "expected": "pass",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "escaped-slash-distinct",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "scope",
+          "kind": "permission",
+          "onViolation": "reject",
+          "allowedFields": [
+            "/a~1b"
+          ]
+        }
+      ],
+      "output": {
+        "a": {
+          "b": 1
+        }
+      },
+      "expected": "reject",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "escaped-tilde",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "scope",
+          "kind": "permission",
+          "onViolation": "reject",
+          "allowedFields": [
+            "/a~0b"
+          ]
+        }
+      ],
+      "output": {
+        "a~b": 1
+      },
+      "expected": "pass",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "array-index",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "scope",
+          "kind": "permission",
+          "onViolation": "reject",
+          "allowedFields": [
+            "/a/0"
+          ]
+        }
+      ],
+      "output": {
+        "a": [
+          1
+        ]
+      },
+      "expected": "pass",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "array-extra-index",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "scope",
+          "kind": "permission",
+          "onViolation": "reject",
+          "allowedFields": [
+            "/a/0"
+          ]
+        }
+      ],
+      "output": {
+        "a": [
+          1,
+          2
+        ]
+      },
+      "expected": "reject",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "permission-null-operational",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "scope",
+          "kind": "permission",
+          "onViolation": "reject",
+          "bounds": "null"
+        }
+      ],
+      "output": {},
+      "expected": "pass",
+      "impactLevel": "operational",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "permission-null-rights",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "scope",
+          "kind": "permission",
+          "onViolation": "reject",
+          "bounds": "null"
+        }
+      ],
+      "output": {},
+      "expected": "escalateToHuman",
+      "impactLevel": "rights-impacting",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "permission-null-pass",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "scope",
+          "kind": "permission",
+          "onViolation": "reject",
+          "bounds": "null",
+          "nullBehavior": "pass"
+        }
+      ],
+      "output": {},
+      "expected": "pass",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "permission-null-deny",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "scope",
+          "kind": "permission",
+          "onViolation": "reject",
+          "bounds": "null",
+          "nullBehavior": "deny"
+        }
+      ],
+      "output": {},
+      "expected": "reject",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "permission-null-escalate",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "scope",
+          "kind": "permission",
+          "onViolation": "reject",
+          "bounds": "null",
+          "nullBehavior": "escalate"
+        }
+      ],
+      "output": {},
+      "expected": "escalateToHuman",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "permission-nonboolean",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "scope",
+          "kind": "permission",
+          "onViolation": "reject",
+          "bounds": "42"
+        }
+      ],
+      "output": {},
+      "expected": "evaluationError",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "permission-malformed",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "scope",
+          "kind": "permission",
+          "onViolation": "reject",
+          "bounds": "1 +"
+        }
+      ],
+      "output": {},
+      "expected": "evaluationError",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "prohibition-null-operational",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "forbidden",
+          "kind": "prohibition",
+          "condition": "null",
+          "onViolation": "reject"
+        }
+      ],
+      "output": {},
+      "expected": "pass",
+      "impactLevel": "operational",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "prohibition-null-rights",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "forbidden",
+          "kind": "prohibition",
+          "condition": "null",
+          "onViolation": "reject"
+        }
+      ],
+      "output": {},
+      "expected": "escalateToHuman",
+      "impactLevel": "rights-impacting",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "prohibition-null-pass",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "forbidden",
+          "kind": "prohibition",
+          "condition": "null",
+          "onViolation": "reject",
+          "nullBehavior": "pass"
+        }
+      ],
+      "output": {},
+      "expected": "pass",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "prohibition-null-deny",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "forbidden",
+          "kind": "prohibition",
+          "condition": "null",
+          "onViolation": "reject",
+          "nullBehavior": "deny"
+        }
+      ],
+      "output": {},
+      "expected": "reject",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "prohibition-null-escalate",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "forbidden",
+          "kind": "prohibition",
+          "condition": "null",
+          "onViolation": "reject",
+          "nullBehavior": "escalate"
+        }
+      ],
+      "output": {},
+      "expected": "escalateToHuman",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "prohibition-nonboolean",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "forbidden",
+          "kind": "prohibition",
+          "condition": "42",
+          "onViolation": "reject"
+        }
+      ],
+      "output": {},
+      "expected": "evaluationError",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "prohibition-malformed",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "forbidden",
+          "kind": "prohibition",
+          "condition": "1 +",
+          "onViolation": "reject"
+        }
+      ],
+      "output": {},
+      "expected": "evaluationError",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "obligation-null-operational",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "required",
+          "kind": "obligation",
+          "requirement": "null",
+          "onViolation": "reject"
+        }
+      ],
+      "output": {},
+      "expected": "pass",
+      "impactLevel": "operational",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "obligation-null-rights",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "required",
+          "kind": "obligation",
+          "requirement": "null",
+          "onViolation": "reject"
+        }
+      ],
+      "output": {},
+      "expected": "escalateToHuman",
+      "impactLevel": "rights-impacting",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "obligation-null-pass",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "required",
+          "kind": "obligation",
+          "requirement": "null",
+          "onViolation": "reject",
+          "nullBehavior": "pass"
+        }
+      ],
+      "output": {},
+      "expected": "pass",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "obligation-null-deny",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "required",
+          "kind": "obligation",
+          "requirement": "null",
+          "onViolation": "reject",
+          "nullBehavior": "deny"
+        }
+      ],
+      "output": {},
+      "expected": "reject",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "obligation-null-escalate",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "required",
+          "kind": "obligation",
+          "requirement": "null",
+          "onViolation": "reject",
+          "nullBehavior": "escalate"
+        }
+      ],
+      "output": {},
+      "expected": "escalateToHuman",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "obligation-nonboolean",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "required",
+          "kind": "obligation",
+          "requirement": "42",
+          "onViolation": "reject"
+        }
+      ],
+      "output": {},
+      "expected": "evaluationError",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "obligation-malformed",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "required",
+          "kind": "obligation",
+          "requirement": "1 +",
+          "onViolation": "reject"
+        }
+      ],
+      "output": {},
+      "expected": "evaluationError",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "right-false",
+      "phase": "input",
+      "rules": [
+        {
+          "id": "owed",
+          "kind": "right",
+          "entitlement": "/input/value"
+        }
+      ],
+      "output": null,
+      "expected": "pass",
+      "input": {
+        "value": false
+      }
+    },
+    {
+      "id": "right-zero",
+      "phase": "input",
+      "rules": [
+        {
+          "id": "owed",
+          "kind": "right",
+          "entitlement": "/input/value"
+        }
+      ],
+      "output": null,
+      "expected": "pass",
+      "input": {
+        "value": 0
+      }
+    },
+    {
+      "id": "right-empty-string",
+      "phase": "input",
+      "rules": [
+        {
+          "id": "owed",
+          "kind": "right",
+          "entitlement": "/input/value"
+        }
+      ],
+      "output": null,
+      "expected": "pass",
+      "input": {
+        "value": ""
+      }
+    },
+    {
+      "id": "right-null",
+      "phase": "input",
+      "rules": [
+        {
+          "id": "owed",
+          "kind": "right",
+          "entitlement": "/input/value"
+        }
+      ],
+      "output": null,
+      "expected": "processorError",
+      "input": {
+        "value": null
+      }
+    },
+    {
+      "id": "right-missing",
+      "phase": "input",
+      "rules": [
+        {
+          "id": "owed",
+          "kind": "right",
+          "entitlement": "/input/value"
+        }
+      ],
+      "output": null,
+      "expected": "processorError",
+      "input": {}
+    },
+    {
+      "id": "rationale-is-not-waiver",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "forbidden",
+          "kind": "prohibition",
+          "condition": "true",
+          "onViolation": "reject",
+          "bypassable": true
+        }
+      ],
+      "output": {},
+      "expected": "waiverRefused",
+      "waiver": {
+        "rationale": "please approve"
+      },
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "purported-approval-is-not-waiver",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "forbidden",
+          "kind": "prohibition",
+          "condition": "true",
+          "onViolation": "reject",
+          "bypassable": true
+        }
+      ],
+      "output": {},
+      "expected": "waiverRefused",
+      "waiver": {
+        "rationale": "approved",
+        "authorizedActor": "admin",
+        "ruleId": "forbidden",
+        "approved": true
+      },
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "confidence-0.7",
+      "phase": "output",
+      "rules": [],
+      "output": {},
+      "expected": "reject",
+      "workflowFloor": {
+        "threshold": 0.8,
+        "onViolation": "reject"
+      },
+      "actionFloor": {
+        "threshold": 0.9,
+        "onViolation": "escalateToHuman"
+      },
+      "trustedActionContext": true,
+      "confidenceReport": {
+        "overall": 0.7,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "confidence-0.8",
+      "phase": "output",
+      "rules": [],
+      "output": {},
+      "expected": "escalateToHuman",
+      "workflowFloor": {
+        "threshold": 0.8,
+        "onViolation": "reject"
+      },
+      "actionFloor": {
+        "threshold": 0.9,
+        "onViolation": "escalateToHuman"
+      },
+      "trustedActionContext": true,
+      "confidenceReport": {
+        "overall": 0.8,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "confidence-0.85",
+      "phase": "output",
+      "rules": [],
+      "output": {},
+      "expected": "escalateToHuman",
+      "workflowFloor": {
+        "threshold": 0.8,
+        "onViolation": "reject"
+      },
+      "actionFloor": {
+        "threshold": 0.9,
+        "onViolation": "escalateToHuman"
+      },
+      "trustedActionContext": true,
+      "confidenceReport": {
+        "overall": 0.85,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "confidence-0.9",
+      "phase": "output",
+      "rules": [],
+      "output": {},
+      "expected": "pass",
+      "workflowFloor": {
+        "threshold": 0.8,
+        "onViolation": "reject"
+      },
+      "actionFloor": {
+        "threshold": 0.9,
+        "onViolation": "escalateToHuman"
+      },
+      "trustedActionContext": true,
+      "confidenceReport": {
+        "overall": 0.9,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "confidence-missing",
+      "phase": "output",
+      "rules": [],
+      "output": {},
+      "expected": "evaluationError",
+      "workflowFloor": {
+        "threshold": 0.8,
+        "onViolation": "reject"
+      }
+    },
+    {
+      "id": "same-id-independent-scopes",
+      "phase": "output",
+      "rules": [],
+      "output": {},
+      "expected": "reject",
+      "workflowRules": [
+        {
+          "id": "limit",
+          "kind": "prohibition",
+          "condition": "false",
+          "onViolation": "flag",
+          "bypassable": true
+        }
+      ],
+      "agentRules": [
+        {
+          "id": "limit",
+          "kind": "prohibition",
+          "condition": "true",
+          "onViolation": "reject",
+          "bypassable": true
+        }
+      ],
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "all-effects-reject-wins",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "flag",
+          "kind": "prohibition",
+          "condition": "true",
+          "onViolation": "flag"
+        },
+        {
+          "id": "switchToAssistive",
+          "kind": "prohibition",
+          "condition": "true",
+          "onViolation": "switchToAssistive"
+        },
+        {
+          "id": "escalateToHuman",
+          "kind": "prohibition",
+          "condition": "true",
+          "onViolation": "escalateToHuman"
+        },
+        {
+          "id": "reject",
+          "kind": "prohibition",
+          "condition": "true",
+          "onViolation": "reject"
+        }
+      ],
+      "output": {},
+      "expected": "reject",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "bounds-does-not-widen-fields",
+      "phase": "output",
+      "rules": [
+        {
+          "id": "scope",
+          "kind": "permission",
+          "onViolation": "reject",
+          "allowedFields": [
+            "/a"
+          ],
+          "bounds": "true"
+        }
+      ],
+      "output": {
+        "outside": 1
+      },
+      "expected": "reject",
+      "confidenceReport": {
+        "overall": 1.0,
+        "method": "declared"
+      }
+    },
+    {
+      "id": "confidence-scalar-invalid",
+      "phase": "output",
+      "rules": [],
+      "output": {},
+      "expected": "evaluationError",
+      "confidence": 0.9
+    },
+    {
+      "id": "confidence-method-missing",
+      "phase": "output",
+      "rules": [],
+      "output": {},
+      "expected": "evaluationError",
+      "confidenceReport": {
+        "overall": 0.9
+      }
+    },
+    {
+      "id": "confidence-method-unknown",
+      "phase": "output",
+      "rules": [],
+      "output": {},
+      "expected": "evaluationError",
+      "confidenceReport": {
+        "overall": 0.9,
+        "method": "invented"
+      }
+    },
+    {
+      "id": "confidence-field-out-of-range",
+      "phase": "output",
+      "rules": [],
+      "output": {},
+      "expected": "evaluationError",
+      "confidenceReport": {
+        "overall": 0.9,
+        "method": "declared",
+        "fieldLevel": {
+          "amount": 1.1
+        }
+      }
+    }
+  ]
+}

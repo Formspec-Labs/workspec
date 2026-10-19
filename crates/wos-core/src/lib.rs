@@ -20,6 +20,7 @@
 //! - A future `wos-runtime` adapts the algorithm to Temporal, Step Functions, etc.
 
 pub mod agent;
+pub mod ai_policy;
 pub mod autonomy;
 pub mod business_calendar;
 pub mod confidence;
@@ -44,12 +45,13 @@ pub use agent::{
     AgentContext, AgentInvocationError, AgentInvoker, AgentInvokerRegistry, AgentResult, AgentTask,
     InvokerKind, InvokerSpec, StubResponse,
 };
+#[doc(inline)]
+pub use ai_policy::{AiPolicyError, NativeAiPolicy, load_native_ai_policy};
 pub use context::EvalContext;
 pub use eval::{
     Configuration, EvalError, Evaluator, IndexedState, ObservedAction, ObservedTransition,
     parse_iso_duration_to_ms,
 };
-pub use model::ai::AIIntegrationDocument;
 pub use model::business_calendar::BusinessCalendarDocument;
 pub use model::governance::{GovernanceDocument, HoldType};
 pub use model::kernel::{

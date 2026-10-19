@@ -1,14 +1,14 @@
 ---
 title: WOS AI Integration Specification
-version: 1.0.0-draft.1
-date: 2026-04-09
+version: 1.0.0-draft.2
+date: 2026-10-19
 status: draft
 ---
 
 # WOS AI Integration Specification v1.0
 
-**Version:** 1.0.0-draft.1
-**Date:** 2026-04-09
+**Version:** 1.0.0-draft.2
+**Date:** 2026-10-19
 **Editors:** Formspec Working Group
 **Companion to:** WOS Kernel Specification v1.0
 
@@ -18,7 +18,7 @@ status: draft
 
 The WOS AI Integration Specification defines Layer 2 of the Workflow Orchestration Standard: the governance structures for AI agent participation in WOS workflows. The `agents[]` and `aiOversight` embedded blocks of a `$wosWorkflow` document declare agent registration, deontic constraints on agent behavior, autonomy levels with impact-level caps, the Formspec-as-validator pattern, a confidence framework with decay and calibration, fallback chains guaranteeing graceful degradation, decision drift detection, AI-specific oversight extensions, volume constraints, agent-specific review sampling, agent disclosure for due process, the Narrative provenance tier, and the Assist Governance Proxy.
 
-**ADR 0063 framing.** Per ADR 0063 §2.1, `agents[]` and `aiOversight` are *part of* the enclosing `$wosWorkflow` envelope; they are no longer standalone AI Integration Documents. The blocks govern the enclosing workflow and MUST NOT declare `targetWorkflow`, `url`, or `version`. Pre-merge prose in this spec that referenced "the AI Integration Document" or "targets a WOS Kernel Document via `targetWorkflow`" should be read in that light: the same content now lives under `$wosWorkflow.agents[]` + `$wosWorkflow.aiOversight`, joined to lifecycle, actors, governance, and case file in a single envelope.
+**Native ownership.** `agents[]` and `aiOversight` are part of the enclosing `$wosWorkflow`. They govern that workflow and MUST NOT declare independent `targetWorkflow`, `url`, or `version` fields. `actors[]` owns actor identity and kind; `agents[]` supplies policy and invocation settings for matching agent actors; `aiOversight` owns shared AI policy. This document defines their behavior; the Workflow schema defines their authored shape. A conforming processor MUST satisfy both. ADRs record the decision history and are not needed to interpret this document.
 
 **ADR 0064 framing.** Per ADR 0064, agents are first-class actors (`ActorKind::Agent` in the Rust runtime) and invocation goes through a substrate-neutral `AgentInvoker` port. The `agents[].invoker` discriminator selects which adapter (`wos-agent-anthropic`, `wos-agent-claude-sdk`, `wos-agent-mcp`, `wos-agent-a2a`, `wos-agent-http`, `wos-agent-stub`) handles a given agent's invocations. WOS specifies the *governance contract* the runtime enforces — deontic constraints, confidence floor, autonomy caps, fallback chain — and treats the substrate as adapter-tier. Multi-agent orchestrators are *one kind* of `AgentInvoker`, not a special spec concept. See `crates/wos-core/src/agent/mod.rs` for the port definition.
 
@@ -125,13 +125,16 @@ Layer 2 registers `agent` as an actor type via the kernel's `actorExtension` sea
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
 | `id` | string | REQUIRED | Unique agent identifier within the workflow. |
-| `type` | string | REQUIRED | MUST be `"agent"`. |
 | `agentType` | enum | REQUIRED | `deterministic`, `statistical`, or `generative`. |
 | `modelIdentifier` | string | REQUIRED | Identifier of the model powering this agent. |
 | `modelVersion` | string | REQUIRED | Version of the model. |
 | `description` | string | OPTIONAL | Human-readable description of the agent's role. |
 | `capabilities` | array of Capability | OPTIONAL | Declared capabilities with I/O contracts. |
 | `modelVersionPolicy` | enum | OPTIONAL | `pinned`, `approved`, or `latest`. Default: `pinned`. |
+
+Each declaration MUST join exactly one `actors[]` entry by `id`, and that actor's `type` MUST be `agent`. Conversely, every actor of type `agent` MUST have exactly one native declaration before admission. The declaration does not repeat `type`. Duplicate ids, missing matches, and matches to human or system actors are errors. The identity requirements above apply to every declared agent; a processor MUST NOT invent a model version or agent type to admit an incomplete declaration.
+
+The declaration MAY also contain `invoker`, `deonticConstraints`, `confidenceFloor`, `confidenceDecay`, `fallbackChain`, `driftMonitoring`, `approvedVersions`, `calibration`, `autonomyPolicy`, `actionOverrides`, and `cascadingInvocations` as defined in this specification and the embedded [Agent Config specification](agent-config.md). Direct `agents[].autonomy` is invalid; §5.3 defines the single route for workflow, agent and action limits. Missing invocation configuration may remain an authoring draft; it cannot pass execution readiness for an action requiring that agent.
 
 ### 3.2 Agent Type Taxonomy
 
@@ -155,12 +158,14 @@ Each capability declares what the agent can do, with Formspec Definition referen
 | `outputContractRef` | string (URI) | OPTIONAL | Formspec Definition or JSON Schema for output. |
 | `preconditions` | array of string (FEL) | OPTIONAL | Boolean FEL expressions evaluated before invocation; see §3.3.1. |
 
+Capabilities MUST be objects conforming to this table, with ids unique within the agent. Bare strings are not capabilities. Input and output references MUST resolve to the selected definitions before invocation; unresolved references are errors, not permission to skip validation. A capability declaration does not itself grant access to data, permission to write case fields, or authority to bypass human review.
+
 ### 3.3.1 Capability Preconditions
 
 A capability MAY declare a `preconditions` array of FEL expressions (Kernel §7). Before the processor invokes the capability, every expression is evaluated against the current evaluation context -- `caseFile`, `@event`, `@agent`, and any other context a guard may reference (Kernel §7.4). Semantics:
 
 1. All entries MUST evaluate to boolean `true` for the capability to be invocable.
-2. If any entry evaluates to `false`, or fails to evaluate to a boolean, the capability is **skipped**: the processor does NOT invoke the agent and instead falls through to the fallback chain defined for this capability (§8).
+2. If any entry evaluates to `false`, or fails to evaluate to a boolean, the capability is **skipped**: the processor does NOT invoke the agent and instead falls through to the selected agent fallback chain (§8).
 3. Absent or empty `preconditions` (the default) means the capability is always invocable.
 4. Every precondition evaluation MUST produce a provenance record with `recordKind: "capabilityInvocation"`. The record's `data.invocationBlocked` flag MUST be `true` when a precondition caused the processor to skip the agent, and the record's `outcome` MUST then be `preconditionNotSatisfied` (Kernel §8.2.2 reserved outcome literal) so that audit tooling can distinguish a declarative gate from an agent failure. This shape is enforced at schema-validation time by `$defs/CapabilityInvocationRecord` in `schemas/wos-workflow.schema.json` (promoted Facts-tier $defs per ADR 0076 step 5); persisted append-only logs validate against `schemas/wos-provenance-log.schema.json`, where `FactsTierRecord` composes `CapabilityInvocationRecord` via `allOf` so every conformant provenance log participates in the MUST.
 5. Preconditions are evaluated **before** the agent input contract is rendered and before any guardrails run. They are the cheapest gate in the capability pipeline; use them to keep agents from being called against cases that are structurally wrong for them.
@@ -177,6 +182,8 @@ Preconditions are declarative: they say "only invoke this capability when the wo
 
 When a version change is detected (for `approved` and `latest` policies), the processor MUST emit a provenance record of type `agentVersionChange`.
 
+These are model-selection policies, not semantic-version compatibility ranges. The spellings `minor-allowed` and `major-allowed` are not accepted. A processor without the version-selection service required by `approved` or `latest` MUST report that configuration as unsupported; it MUST NOT silently substitute `pinned` or invent a resolved version.
+
 ### 3.5 Trust Boundary
 
 The agent is outside the trust boundary of the governance envelope. The WOS Processor -- not the agent -- enforces constraints, validates outputs, and controls workflow progression. This separation ensures governance survives agent changes, prompt injection, and behavioral drift.
@@ -191,7 +198,7 @@ The trust boundary model is compatible with the CaMeL (Capability-Limited Model)
 
 1. Agents MUST NOT override human decisions.
 2. Provenance records for `agent` actors MUST include model identifier, model version, confidence, and input summary.
-3. Cascading autonomous agents (an agent at `autonomous` level invoking another agent at `autonomous` level) MUST be explicitly declared in the AI Integration Document via the `cascadingInvocations` property on the invoking agent's declaration. Each entry names a target agent that this agent may invoke at `autonomous` level.
+3. Cascading autonomous agents (an agent at `autonomous` level invoking another agent at `autonomous` level) MUST be explicitly declared in the invoking agent's `cascadingInvocations` property. Each entry is a nonempty native agent id, unique within the array, and MUST resolve in the same Workflow revision. The list names targets this agent may invoke at `autonomous` level; it does not grant the target additional permissions or replace invocation checks.
 4. An actor's type is immutable for a given action. A human using an AI tool remains a `human` actor if the human reviews and commits the output.
 
 ---
@@ -202,7 +209,11 @@ This section is normative.
 
 ### 4.1 Overview
 
-Agent constraints use four deontic types adopted from OASIS LegalRuleML. Deontic constraints are evaluated after interface contract validation and before output is committed to workflow state. The WOS Processor is the Policy Enforcement Point.
+Agent constraints use four deontic types adopted from OASIS LegalRuleML. Rights are checked before invocation; output constraints are checked after interface validation and before output is committed to workflow state. The WOS Processor enforces both phases.
+
+At each scope, `deonticConstraints` is one array of tagged objects. Every entry has a required, scope-unique `id` and `kind`, whose value is `permission`, `prohibition`, `obligation`, or `right`. The kind selects exactly one of the payloads in §4.2–§4.5; fields from another kind are invalid. The grouped object with `permissions`/`prohibitions`/`obligations`/`rights` arrays and an untyped common `expression` property are not alternative formats.
+
+An entry MAY carry `citationRefs`, an array of nonempty descriptive strings naming supporting sources, and `x-*` metadata. A citation may be a URI or a conventional source citation; it is not an executable rule or an automatic resolver request. These preserve the legal basis and other author annotations; they do not change execution. Permission, prohibition and obligation entries MAY declare `bypassable` under §4.7; rights cannot be bypassed. A processor MUST NOT infer defeasibility, precedence or waiver authority from metadata. The former `defeasible` flag has no defined execution semantics and is not accepted. Constraints are combined by §4.6–§4.7, not array order. Shared schema definitions and a single native policy model MUST describe the same representation at every scope.
 
 ### 4.2 Permission
 
@@ -211,11 +222,12 @@ A Permission bounds what the agent is allowed to produce. Agent outputs within p
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
 | `id` | string | REQUIRED | Unique permission identifier. |
-| `allowedFields` | array of string | OPTIONAL | Fields the agent is permitted to produce. |
-| `field` | string | OPTIONAL | Specific field this permission constrains. |
+| `allowedFields` | array of JSON Pointer | OPTIONAL | Permitted paths in the proposed output, as defined below. |
 | `bounds` | string (FEL) | OPTIONAL | FEL expression defining value bounds. |
 | `onViolation` | enum | REQUIRED | `reject`, `escalateToHuman`, `switchToAssistive`, or `flag`. |
 | `nullBehavior` | enum | OPTIONAL | Override for null propagation: `pass`, `deny`, or `escalate`. |
+
+A permission MUST declare `allowedFields`, `bounds`, or both. `allowedFields` uses RFC 6901 pointers into the proposed output: `/assessment` permits that property and its descendants, but not `/assessmentOther`; `""` permits the whole output. Every terminal value in the proposed output MUST be covered by a permitted path. A terminal value is a scalar (including null) or an empty object or array. A scalar root or an empty root object or array has pointer `""` and counts as a root value, not an empty proposal. Thus an empty list permits no output, including `{}` or `[]`. Path coverage compares decoded RFC 6901 segments, not string prefixes: escaped slash and tilde characters remain part of their property names, and array indices are individual segments. Omission adds no field restriction. All applicable permission lists and bounds apply together; one permission cannot widen another. `bounds` evaluates against the full output and case context and is satisfied only by boolean `true`, subject to §4.9.
 
 ### 4.3 Prohibition
 
@@ -248,12 +260,16 @@ A Right specifies what the agent is entitled to receive as input context. The WO
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
 | `id` | string | REQUIRED | Unique right identifier. |
-| `entitlement` | string | REQUIRED | Path or reference specifying the entitled data. |
+| `entitlement` | JSON Pointer | REQUIRED | Path into the resolved input context, rooted at `/input` or `/caseFile`. |
 | `description` | string | OPTIONAL | Human-readable description. |
+
+Rights are input checks, performed before handing data to an invoker. An entitlement is satisfied when its selected value exists and is not null; `false`, `0`, and an empty string are present values. A missing or null entitlement prevents invocation and produces a processor-attributed failure and provenance identifying the right. It MUST NOT become an ordinary agent policy violation. A right does not use `onViolation` or `nullBehavior`, and its entitlement is a data locator, not a boolean FEL predicate.
 
 ### 4.6 Enforcement Ordering
 
-Deontic constraints MUST be evaluated by the WOS Processor (the Policy Enforcement Point, S4.1) in the following order. This is the runtime enforcement contract: a conformant processor that activates the AI Integration layer MUST execute these stages in this sequence for every agent invocation.
+Before invocation, the processor resolves the selected actor, capability, action context and inputs, evaluates capability preconditions, checks required input rights, and validates the input definition. A failure in these stages MUST NOT call the invoker. Rights failures are processor errors; failed preconditions follow §3.3.1.
+
+After invocation, the processor validates the untrusted output against its selected definition. It then evaluates output policy in the following order before any case-file write. Validation failure MUST NOT be treated as a policy pass. A fixture-provided output can exercise these policy stages, but it does not prove invocation or input/output validation.
 
 1. **Permissions** -- Is the agent permitted to perform this action? Structural bounds on allowed outputs (S4.2).
 2. **Prohibitions** -- Is the agent prohibited from this action? Forbidden output patterns (S4.3).
@@ -264,6 +280,10 @@ Deontic constraints MUST be evaluated by the WOS Processor (the Policy Enforceme
 
 When multiple constraints are violated simultaneously, the processor MUST apply the most restrictive enforcement action. Restriction ordering, from least to most restrictive: `flag` < `switchToAssistive` < `escalateToHuman` < `reject`. The `requireReview` and `log` actions exposed by external policy-engine bridges (see below) compose at the same precedence as `escalateToHuman` and `flag` respectively.
 
+Rule truth is kind-specific: permission bounds `false` violates a permission; prohibition condition `true` violates a prohibition; obligation requirement `false` violates an obligation. Null handling is a disposition under §4.9, never a substituted boolean. Rule results MUST identify the scope, rule id, observed outcome, and selected enforcement action. A required evaluation error or unsupported enforcement action prevents acceptance; it cannot fall through as success.
+
+`flag` records the violation and permits further checks; it never grants a write. `switchToAssistive` requires human confirmation before committing the proposal. `escalateToHuman` holds the proposal for human resolution. `reject` prevents its commit. If the selected processor cannot create or resume the required review, it MUST report unsupported execution and preserve the proposal without committing it. Subsequent review and commit use the maintained task and governed-output operations; policy evaluation is not a second case-file writer.
+
 > **Editorial note (ADR 0076 absorption, 2026-04-28):** prior to this absorption, the Runtime Companion's §8.3 specified `log < flag < requireReview < reject < escalateToHuman` (with `escalateToHuman` most restrictive). The two documents disagreed on whether `reject` or `escalateToHuman` was the strictest action. Reconciliation here adopts the AI Integration spec's local ordering (`reject` strictest), bridges `requireReview`→`escalateToHuman` and `log`→`flag` for cross-doc compatibility, and treats the resulting four-action ordering as canonical. The decision rationale: `reject` is a final answer that terminates the agent invocation; `escalateToHuman` is recoverable (the human may approve), so it cannot logically dominate `reject`.
 
 **Composition with external policy engines (deny-overrides-permit).** When a workflow integrates an external policy engine (XACML, OPA, Cedar, or equivalent) via the integration binding mechanism (Workflow §3, §8), the engine's decision composes with this deontic pipeline as a strict restrictor: a `deny` decision from a policy engine overrides any `permit` produced by S4.2-S4.4 evaluation. **External policy engines are more restrictive, never more permissive.** A policy-engine `permit` does not override a deontic `prohibition`, an unmet `obligation`, a confidence-floor failure, a volume-constraint violation, or a sampling selection. The engine's decision is recorded as a Facts-tier provenance record (Kernel §8) and made available under the binding's `outputBinding` path so guard expressions on subsequent transitions (Kernel §4.5) can reference it.
@@ -272,17 +292,19 @@ When multiple constraints are violated simultaneously, the processor MUST apply 
 
 Deontic constraints compose across three levels. All applicable constraints at all levels are evaluated for every agent invocation:
 
-1. **Workflow-level** -- constraints in the AI Integration Document's `deonticConstraints`. Apply to all agent invocations in the workflow.
+1. **Workflow-level** -- constraints in `aiOversight.deonticConstraints`. Apply to all agent invocations in the workflow.
 2. **Agent-level** -- constraints declared on a specific `AgentDeclaration`. Apply to all invocations of that agent.
-3. **Action-level** -- constraints on a specific action override in the Agent Config sidecar. Apply to a single invocation point.
+3. **Action-level** -- constraints in `agents[].actionOverrides[].deonticConstraints`, selected by the executing lifecycle action's `actionRef`. Apply to that invocation point.
 
 When constraints at different levels conflict, the most restrictive enforcement action wins (same restriction ordering as S4.6).
+
+The processor obtains actor and action identity from the admitted execution context, not from an agent output or an untrusted event's claimed action id. An action override adds restrictions and MUST NOT replace or remove workflow or agent constraints. A processor unable to evaluate a declared action-level policy MUST refuse execution requiring it; it MUST NOT claim the action scope passed after checking only the agent scope.
 
 **Consistency constraints** detect contradictions between agent output and case data or prior outputs (e.g., `not (output.eligible = true and output.riskScore > 90)`).
 
 **Scope constraints** ensure output stays within declared capability boundaries by restricting which fields the agent may produce (Permission with `allowedFields`).
 
-**Guardrail bypass:** An authorized actor with the required role MAY bypass a constraint marked `bypassable: true` with a structured rationale. Bypass applies to a single invocation only and produces a provenance record including the rationale and the bypassed constraint id.
+**Guardrail bypass:** A rationale is not authority. A processor MAY support an explicit, authenticated waiver for a named rule marked `bypassable: true`. The waiver MUST bind the authorized actor, admitted Workflow revision, one invocation, selected agent and action, and the exact native JSON Pointer of the rule occurrence. The authenticated authorization operation MUST resolve that occurrence; a readable rule id alone is insufficient because ids are unique only within a scope. Provenance MUST retain that locator, rule id, authorization decision and rationale. It skips only that occurrence; same-named rules in other scopes remain active. It MUST NOT bypass rights, input/output definition validation, human review requirements, or other rules. A processor without that authorization operation MUST reject every waiver request, including one containing purported approval metadata; event fields such as `bypass`, `deonticBypass`, or `rationale` alone MUST NOT suppress policy evaluation. The default for `bypassable` is false.
 
 ### 4.8 Examples (non-normative)
 
@@ -322,10 +344,12 @@ When a deontic constraint expression evaluates to `null` (due to missing data or
 |---|---|---|
 | `rights-impacting` | `escalateToHuman` | Unknown constraint state on a rights-affecting decision requires human review. |
 | `safety-impacting` | `escalateToHuman` | Safety constraints that cannot be evaluated must not silently pass. |
-| `operational` | `true` (pass) | Operational constraints failing to evaluate should not block workflow. |
-| `informational` | `true` (pass) | Low stakes; passing is reasonable. |
+| `operational` | `pass` | A null result adds no violation under this default. |
+| `informational` | `pass` | A null result adds no violation under this default. |
 
 A constraint MAY override the default with an explicit `nullBehavior` property.
+
+`pass` means this rule adds no violation, independently of its predicate polarity. `deny` applies the rule's `onViolation`; `escalate` requires human resolution. A malformed expression, evaluator failure or non-boolean predicate result is an evaluation error, not null or boolean false. The processor MUST retain the error and prevent acceptance. This section does not apply to a right's missing entitlement, whose behavior is fixed by §4.5.
 
 ---
 
@@ -336,6 +360,8 @@ This section is normative.
 ### 5.1 Overview
 
 Every agent action operates at a declared autonomy level. Autonomy is a property of the **action site** -- the point in the workflow where an agent is invoked -- not a property of the agent itself. The same agent MAY operate at different autonomy levels in different contexts.
+
+Human review and write permission are separate: an autonomous action still cannot write outside its permissions, and an assistive action cannot commit before confirmation even when its proposed fields are permitted. `readOnly` is a permission restriction, not an autonomy level. `supervised` is not an alias for `supervisory`.
 
 ### 5.2 Level Definitions
 
@@ -351,36 +377,36 @@ Every agent action operates at a declared autonomy level. Autonomy is a property
 1. An action with `autonomous` autonomy MUST have associated deontic constraints (S4). Autonomous actions without deontic constraints are a structural error.
 2. An action with `assistive` autonomy MUST create a human task for confirmation.
 3. An action with `supervisory` autonomy MUST define a `reviewWindow` (ISO 8601 duration).
-4. The effective autonomy MUST NOT exceed the workflow's impact-level cap. For `rights-impacting` and `safety-impacting` workflows, the default cap is `assistive`.
-5. The effective autonomy for any agent action is the **minimum** of: the AI Integration Document's `defaultAutonomy`, the Agent Config sidecar's `maxAutonomy` (if present), the per-action override's autonomy (if present), and the impact-level cap from constraint 4.
+4. The effective autonomy MUST NOT exceed the workflow's impact-level cap. For `rights-impacting` and `safety-impacting` workflows, the cap is `assistive`; for `operational` and `informational` workflows it is `autonomous`. This specification defines no field or approval that raises the impact cap.
+5. The **authored autonomy ceiling** is the minimum of `aiOversight.defaultAutonomy` (default `assistive`), `agents[].autonomyPolicy.maxAutonomy` (if present), the selected `agents[].actionOverrides[].autonomy` (if present), and the impact-level cap from constraint 4. The order from most to least human control is `manual`, `assistive`, `supervisory`, `autonomous`. Omitted agent or action limits add no further restriction. The **effective autonomy** is the minimum of the processor-owned current or requested level, the authored ceiling, and every active operational reduction, including expired or missing required calibration and pending recalibration. At first invocation without prior operational state, the processor initializes the retained agent operational level from the minimum of workflow, agent and impact limits and active operational reductions; a particular action's ceiling is excluded from that initialization. New operational demotion or calibration reductions lower the retained agent level. A lower action-site ceiling or a request for lower autonomy limits that invocation only and MUST NOT persistently demote the agent at other action sites. Removing an operational reduction never raises the retained level; restoring a higher level requires a fresh applicable approval under §5.4, even after successful recalibration. Raising an authored `assistive` ceiling requires a Workflow revision; human approval cannot change it.
 6. Every agent invocation MUST have a reachable path to workflow completion that does not require any agent to succeed.
 
 ### 5.4 Autonomy Escalation
 
 Escalation (raising an agent's effective autonomy level) requires human approval:
 
-1. The Agent Config sidecar's `autonomyPolicy` MUST define escalation conditions as FEL expressions evaluated against the `agent` context variable (e.g., `agent.calibration.accuracy >= 0.97 and agent.recentViolations('P30D') = 0`).
-2. A human with the required role MUST review and approve the escalation.
-3. The approval MUST have a defined expiration period (`escalationExpiry`, ISO 8601 duration). The agent reverts to its prior autonomy level when the period expires unless re-approved.
+1. The agent's `autonomyPolicy.escalation` MUST define the selected `EscalationRule` using Agent Config §1.4.2. Its condition is evaluated against processor-owned operational state and admitted case data.
+2. The human bound to the rule's `requiredApproverRef` actor slot MUST review and approve the escalation through the maintained authenticated actor-binding and authorization operation. A descriptive actor role label is not authority.
+3. The rule's positive `escalationExpiry` duration bounds the approval. The processor records approval time, expiry, actor, selected rule and prior level using its maintained clock and authorization operation. At or after expiry the approval no longer elevates the level; all active reductions still apply. A replacement approval requires a new authorization decision.
 4. Escalation produces a provenance record of type `autonomyEscalation` including the approving actor, the escalation conditions that were met, and the expiry.
-5. Escalation does NOT bypass deontic constraints (S4) or any other governance mechanism. An agent escalated to `autonomous` still has all its constraints evaluated.
+5. Escalation can restore a level only within the authored ceiling and cannot override an active reduction. It does NOT bypass deontic constraints (S4) or any other governance mechanism. An agent escalated to `autonomous` still has all its constraints evaluated. A processor without the required approval, state or expiry operation MUST report this execution as unsupported; `escalationActive` or similar claims in an ordinary event or model output are not approval.
 
 ### 5.5 Autonomy Demotion
 
 Demotion (lowering an agent's effective autonomy level) MAY be automatic:
 
-1. The Agent Config sidecar's `autonomyPolicy` MUST define demotion triggers. Standard triggers:
+1. The agent's `autonomyPolicy` MUST define demotion triggers. Standard triggers:
    - Calibration accuracy falls below threshold.
    - Guardrail violation rate exceeds threshold within evaluation window.
    - Model version change (pending recalibration).
    - Drift detection alert (S9).
 2. When a demotion trigger fires, the demotion takes effect for the next invocation. In-flight sessions are not retroactively affected but are annotated with the demotion event in provenance.
-3. When `pendingRecalibration` is true, the agent operates at the demoted level until recalibration meets the escalation conditions defined in S5.4.
+3. When `pendingRecalibration` is true, the processor retains that reduction until its calibration operation records successful recalibration. Removing that reduction does not erase another active reduction, revive an expired approval, or authorize a rise above the authored ceiling. An elevation requiring approval still follows §5.4.
 4. Demotion produces a provenance record of type `autonomyDemotion` including the trigger that fired and the new effective level.
 
 ### 5.6 Dynamic Autonomy Selection
 
-A workflow MAY compute the effective autonomy level from case data and agent state using a FEL expression evaluated pre-invocation. The expression is evaluated in the standard evaluation context (Kernel S7.2) enriched with the `agent` variable (operational state, calibration metrics). The computed level MUST NOT exceed the effective cap defined in constraint 5 of S5.3.
+The processor resolves the current or requested level, active approvals, demotions and calibration state before each invocation, using its maintained state and clock. An action may request a lower level; a request cannot remove an applicable limit or elevate the retained current level without §5.4 approval. The calculation in §5.3 then determines effective autonomy. This section introduces no additional authored FEL selector or second autonomy property. Ordinary event and model-output fields cannot supply trusted approval, calibration or demotion state. A processor unable to resolve required operational state MUST refuse execution rather than assume a favorable state.
 
 ---
 
@@ -427,7 +453,9 @@ Every agent output MUST be accompanied by a ConfidenceReport.
 | `explanation` | string | OPTIONAL | Human-readable explanation of confidence factors. |
 | `fieldLevel` | object | OPTIONAL | Per-output-field confidence values, keyed by field name. |
 
-The `overall` value represents the agent's estimated probability that its output would be accepted without modification by a competent human reviewer performing the same task.
+The `overall` value represents the agent's estimated probability that its output would be accepted without modification by a competent human reviewer performing the same task. `ConfidenceReport` is one closed object, also used by the maintained invoker result as `AgentResult.confidenceReport`, explicit stub-adapter responses and supplied-output policy checks. A scalar `confidence` is not an alternative report, and a processor MUST NOT invent a missing `method`. `overall` and every `fieldLevel` value MUST be finite numbers in [0,1]. Descriptive `x-*` metadata conveys no authority. A claimed calibration method describes the report; it does not establish trusted calibration evidence or alter the operational limits in §5. Missing required calibration operations remain unsupported.
+
+API and provenance fields named `confidenceReport` MUST reference this same report definition and retain the reported values. Processor-computed decay, cumulative confidence and floor decisions are separate evaluation evidence, identified by their observed output and native policy scope; they MUST NOT replace report fields or masquerade as another input report. Absent evaluation evidence means that stage was not observed, never an invented successful check.
 
 ### 7.2 Confidence Methods
 
@@ -445,14 +473,14 @@ When per-field confidence is available, guard expressions and routing logic MAY 
 
 ### 7.4 Confidence Floor
 
-The confidence floor is a workflow-level minimum confidence threshold. When an agent's output confidence falls below the floor, the output is invalidated.
+A `ConfidenceFloor` is the same closed object at workflow (`aiOversight.confidenceFloor`), agent (`agents[].confidenceFloor`) and selected action (`agents[].actionOverrides[].confidenceFloor`) scopes. It adds a restriction; omission adds no floor at that scope. Scalar floors are invalid.
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
 | `threshold` | number (0.0-1.0) | REQUIRED | Minimum acceptable confidence. |
 | `onViolation` | enum | REQUIRED | Action when confidence is below threshold: `reject` (discard output and trigger fallback) or `escalateToHuman` (route to human review with full context). |
 
-The confidence floor participates in the enforcement ordering (S4.6) at step 4 -- after permissions, prohibitions, and obligations, but before volume constraints.
+Thresholds and reported confidence MUST be finite numbers in [0,1]. A floor is violated only when confidence is strictly below its threshold; equality passes. The processor MUST evaluate every applicable floor and combine all violated effects using §4.6. It MUST NOT select only the highest threshold and discard a lower floor's stricter effect. For example, a workflow floor of 0.8 with `reject` and an action floor of 0.9 with `escalateToHuman` reject confidence 0.7, require human resolution at 0.85, and pass both floors at 0.9. Missing or invalid required confidence is an error, not an implicit score. Each result identifies its native scope. Confidence floors participate at step 4 of §4.6, after output rules and before volume constraints.
 
 ### 7.5 Confidence Decay
 
@@ -461,20 +489,20 @@ Agent outputs become less reliable as underlying case data changes. Confidence d
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
 | `enabled` | boolean | REQUIRED | Whether confidence decay is active. |
-| `halfLife` | string (duration) | OPTIONAL | Duration after which effective confidence halves, absent triggering events. |
+| `halfLife` | string (duration) | OPTIONAL | Positive ISO 8601 duration after which effective confidence halves, using the maintained clock/timer operation. |
 | `triggers` | array of DecayTrigger | OPTIONAL | Events causing immediate confidence reduction. |
 
-A DecayTrigger binds an event to a multiplicative `decayFactor` (0-1). When the trigger fires, the effective confidence of all outputs produced by that agent for the current case is multiplied by the factor. When confidence falls below the confidence floor, the output is invalidated and the action is escalated.
+A `DecayTrigger` is a closed object with required `event` (a nonempty native event-name string) and `decayFactor` (a finite number in [0,1]). Enabled decay requires at least one trigger or a positive supported `halfLife`; an absent required clock, history or decay operation is unsupported execution. A trigger binds its event to its multiplicative `decayFactor`. When the trigger fires, the effective confidence of all outputs produced by that agent for the current case is multiplied by the factor. After decay, the processor reevaluates every applicable floor using §7.4 and retains the combined disposition; decay cannot replace a required rejection with escalation.
 
 ### 7.6 Temporal Confidence Thresholds
 
-Confidence thresholds used in autonomy decisions and routing SHOULD be modeled as temporal parameters (Governance S13, Policy Parameter Config sidecar) so they can be adjusted based on operational experience.
+Confidence thresholds used in autonomy decisions and routing SHOULD reference `governance.policyParameters` (Governance S13) so they can be adjusted based on operational experience.
 
 ### 7.7 Cumulative Confidence
 
 In multi-step agent interactions, errors compound. The cumulative confidence after step *n* is the product of individual step confidences by default. A four-step process where each step has 0.9 confidence yields cumulative confidence of approximately 0.66.
 
-A conformant processor MUST track cumulative confidence. When cumulative confidence falls below the confidence floor, the interaction MUST pause for human review.
+A conformant processor MUST track cumulative confidence. It evaluates that confidence against every applicable floor using §7.4; a rejected result remains rejected, and an escalation holds the interaction for human resolution. Missing tracking for a required multi-step interaction is unsupported execution.
 
 ---
 
@@ -484,7 +512,7 @@ This section is normative.
 
 ### 8.1 Principle
 
-Every workflow that uses agents MUST function correctly when agents are unavailable (Kernel S1.2). Agent unavailability is a regular operating condition, not an edge case.
+Every workflow that uses agents MUST function correctly when agents are unavailable (Kernel S1.2). Agent unavailability is a regular operating condition, not an edge case. A rejected proposal is never committed by fallback. Human fallback receives unresolved work and refusal evidence and must create its own authorized resolution; it does not relabel rejected output as accepted.
 
 ### 8.2 Fallback Chain Execution
 
@@ -494,20 +522,30 @@ When an agent invocation fails (error, timeout, guardrail rejection, or unavaila
 2. A successful level stops the chain.
 3. A failed level advances to the next.
 4. Every attempt MUST produce a provenance record.
-5. The terminal level MUST produce a result or transition to a human task.
+5. A terminal human step hands the unresolved work to its declared task; a terminal `fail` records failure and does not produce or commit agent output. Neither is a successful agent invocation.
 
-### 8.3 Fallback Options
+### 8.3 Fallback Steps
 
-| Option | Description | Key Properties |
-|--------|-------------|----------------|
-| `escalateToHuman` | Create a human task. | `taskRef` |
-| `retry` | Retry with backoff. | `maxRetries`, `backoff`, `initialInterval` |
-| `alternateAgent` | Try a different agent. | `alternateAgentRef` |
-| `fail` | Fail the action. | -- |
+Both `aiOversight.fallbackChain` and `agents[].fallbackChain` use the same array of closed, tagged `FallbackStep` objects. Each step has required `action`; its value selects exactly the fields below. Strings, cross-kind fields and undeclared operational fields are invalid. Descriptive `x-*` metadata is permitted and carries no authority.
 
-### 8.4 Chain Constraints
+| `action` | Required fields | Meaning |
+|----------|-----------------|---------|
+| `retry` | `maxRetries`, `backoff`, `initialInterval` | Retry the same selected capability with the same admitted input. `maxRetries` is an integer from 1 through 4294967295, excluding the initial invocation; this finite bound is shared by the native type and schema. `backoff` is `fixed`, `linear` or `exponential`; `initialInterval` is a positive ISO 8601 duration supported by the maintained timer operation. |
+| `alternateAgent` | `alternateAgentRef` | Invoke the same capability id on the referenced native agent. That agent must declare the capability; its own input, policy, review and output checks apply. |
+| `escalateToHuman` | `taskActionRef` | RFC 6901 pointer to an exact native lifecycle `createTask` action in the admitted Workflow revision. Use its task configuration and maintained assignment rules. |
+| `fail` | none | Terminate the failed action with recorded failure. |
 
-A fallback chain MUST terminate in either `escalateToHuman` or `fail`. A chain MUST NOT cycle. A conformant processor MUST validate chains at document load time and reject chains that cycle or lack a terminal action.
+A human fallback pointer MUST select an actual native lifecycle action occurrence, not an action-shaped object in metadata. The selected action's `assignTo` MUST resolve to a declared human actor through the maintained assignment and authenticated binding operation. Its contract, mappings, completion/failure events and lifetime settings remain intact. This reference selects task configuration only: it does not enter the containing state, fire its transition, execute sibling actions or establish that the containing guards ran. Creation uses the admitted current context and maintained task operation, including its timer capture and contract checks. Missing operations or context make execution unsupported; resolving a pointer or emitting provenance does not create a task. Repeated `createTask.taskRef` labels are permitted and disambiguated by the pointer; the fallback step does not accept a `taskRef` alias or invent a task-definition registry.
+
+For retry number `n` starting at one, the delay is `initialInterval` for fixed backoff, `n × initialInterval` for linear backoff, and `2^(n−1) × initialInterval` for exponential backoff. Invalid or unrepresentable schedules are configuration errors. Exhausting the retry count advances to the next step. A successful retry stops the chain and follows the ordinary validation, policy, review and commit path.
+
+### 8.4 Selection and Chain Constraints
+
+A declared agent chain selects the complete chain for that agent; an omitted agent chain inherits the workflow chain. Chains are never concatenated. An explicit empty chain is invalid, rather than a request to inherit or suppress fallback. If both scopes omit the chain, the document may remain an authoring draft, but execution readiness for that agent fails. There is no capability-specific fallback field.
+
+Every selected chain MUST end in `escalateToHuman` or `fail`, with no earlier terminal step. An alternate-agent step invokes the target through its maintained invocation route; if that target's invocation and selected fallback chain fail, the caller advances to its next step. A successful target output is still subject to the caller's applicable output validation and restrictions. A target's handoff to human review remains a held result, never a completed agent output. Every reference MUST resolve in the same admitted Workflow revision. Processors MUST validate the actual graph of selected chains for direct and indirect alternate-agent cycles and reject cycles at load time.
+
+Every chain intended for `assistive`, `supervisory` or `autonomous` work MUST include a reachable human handoff as required by §5.2; a failure-only terminal does not satisfy that separate requirement. A processor without a required retry, invoker, task, validation or continuation operation MUST identify the unsupported operation and refuse execution readiness. It MUST NOT translate an actor string into an invented task or treat emitted task provenance as an actual created task.
 
 ---
 
@@ -530,6 +568,8 @@ Structural guards against patterns where agent behavior silently drifts from its
 ### 9.3 Governance Implications
 
 When training data contamination is detected, the agent's task MUST be reclassified from preparation to determination, and appropriate governance (deontic constraints, autonomy caps) MUST be applied.
+
+Per-agent monitoring has the closed authored shape defined in [Drift Monitor](drift-monitor.md). The shared `aiOversight.driftDetection` setting and the training-data/optimization disclosure input shape are not defined by this revision. `driftDetection` is reserved and MUST be rejected at native admission; `agents[].modelConfig` is not an alternate location. Implementations MUST report the required disclosure or monitoring operation as unsupported when it lacks defined inputs and an owning operation. They MUST NOT invent configuration from runtime examples or claim complete AI conformance from declaration parsing. A lossless editor may retain such raw drafts, but they cannot pass admission or readiness.
 
 ---
 
@@ -569,7 +609,7 @@ Rate limits on autonomous agent actions prevent runaway automation:
 | `maxAutonomousPerHour` | integer | OPTIONAL | Maximum autonomous actions per hour. |
 | `maxAutonomousPerDay` | integer | OPTIONAL | Maximum autonomous actions per day. |
 
-When volume limits are reached, subsequent agent invocations are escalated to human review regardless of confidence.
+Each declared limit is a nonnegative integer; zero permits no autonomous actions within that window. When volume limits are reached, subsequent agent invocations are escalated to human review regardless of confidence. Counts and window boundaries come from maintained processor state and time; event/model assertions cannot supply them. Required counters, clock or review operations that are absent make execution unsupported.
 
 ### 11.2 Agent-Specific Review Sampling
 
@@ -656,17 +696,82 @@ The proxy is NOT a Formspec concept. It is a WOS construct that wraps Assist pro
 
 ## 15. AI Governance in the Workflow Envelope
 
-AI governance is declared as embedded blocks (`agents`, `aiOversight`) within a `$wosWorkflow` document. The same `url` that a Workflow Governance document targets via `targetWorkflow` is the `url` of the `$wosWorkflow` envelope.
+AI governance has one authored identity: the enclosing Workflow's `url` and `version`. Agent settings and shared oversight do not have independent document identities. The following fields have one owner:
+
+| Native path | Meaning |
+|---|---|
+| `actors[].id/type` | Identity and kind of the actor performing work. |
+| `agents[]` | Matching agent declarations, structured capabilities, per-agent rules and operational settings. |
+| `aiOversight.defaultAutonomy` | Shared action autonomy limit, defaulting to `assistive`. |
+| `aiOversight.deonticConstraints` | Workflow-wide rules, using the same tagged rule definition as agent and action scopes. |
+| `aiOversight.confidenceFloor/fallbackChain` | Shared confidence and fallback policy defined in §7–§8. |
+| `aiOversight.volumeConstraints` | Shared count limits defined in §11.1. |
+| `aiOversight.disclosure` | Shared disclosure settings defined in §12.2. |
+
+The settings `aiOversight.oversightExtensions`, `reviewSampling`, `narrativeTier`, `driftDetection` and `assistGovernanceProxy` are reserved: their behavioral requirements are retained in §9–§14, but this revision does not define complete authored configuration shapes. Their presence MUST fail native admission; their canonical schema properties MUST reject configuration rather than accept an untyped object. An implementation cannot infer accepted fields from earlier runtime structs or samples. This does not relax required independent-first review, sampling, narrative labeling, drift disclosure or proxy behavior: required behavior without a supported owning operation prevents readiness and complete AI conformance. Raw draft storage is distinct from admission.
+
+The names `agentDisclosure` and `x-transportAgentDetails` are not alternate authored locations for `disclosure` and `agents`. Unknown non-extension properties are invalid, including retired standalone-document identity fields. Implementations MAY create an internal read-only view of these native fields; that view is not another authored or serializable AI document. All consumers MUST use the same native loading and policy interpretation.
+
+This example shows the policy-bearing native structure. Execution additionally requires resolution of referenced definitions and a bound invoker; the example alone is not execution readiness evidence.
 
 ```json
 {
   "$wosWorkflow": "1.0",
-  "url": "https://agency.gov/workflows/benefits-adjudication",
-  "...": "..."
+  "url": "urn:example:assessment-review",
+  "version": "1.0.0",
+  "title": "Review an agent assessment",
+  "impactLevel": "operational",
+  "actors": [
+    {"id": "reviewer", "type": "human"},
+    {"id": "assessor", "type": "agent"}
+  ],
+  "agents": [{
+    "id": "assessor",
+    "agentType": "deterministic",
+    "modelIdentifier": "assessment-rules",
+    "modelVersion": "1.0.0",
+    "capabilities": [{
+      "id": "assess",
+      "inputContractRef": "urn:example:assessment-input",
+      "outputContractRef": "urn:example:assessment-output"
+    }],
+    "deonticConstraints": [
+      {"id": "input-required", "kind": "right", "entitlement": "/input/application"},
+      {"id": "assessment-only", "kind": "permission", "allowedFields": ["/assessment"], "onViolation": "reject"},
+      {"id": "reason-required", "kind": "obligation", "requirement": "output.assessment.reason != null", "onViolation": "reject"}
+    ]
+  }],
+  "aiOversight": {"defaultAutonomy": "assistive"},
+  "lifecycle": {
+    "initialState": "review",
+    "states": {"review": {"type": "atomic"}}
+  }
 }
 ```
 
-When a `$wosWorkflow` document carries both `governance` and `agents`/`aiOversight` blocks, AI governance extends the governance structures within the same envelope. Each embedded block is independently optional; adding `agents` does not require `governance` to be present, and vice versa.
+When the Workflow carries both `governance` and AI blocks, their restrictions compose. Impact-level and behavior-specific presence requirements still apply. Absence of a block does not excuse a check required by the selected behavior.
+
+### 15.1 Normative Contract
+
+The authored schema, typed loading, semantic validation and runtime MUST agree on these fields and meanings. Schema success establishes structural validity only. Execution readiness additionally requires supported semantics, resolved inputs and services, and all required behavioral checks. A processor MUST identify each unsupported required feature and MUST NOT report readiness or a successful skipped check. It MUST preserve the authored input and the exact refusal or failure evidence.
+
+The processor owns invocation, output validation, policy, review and commit. The invoker returns untrusted output; it does not authorize its own writes. MCP, CLI, synthesis and Studio consumers MUST call maintained owner operations rather than implement their own parser, policy evaluator or readiness rule. No compatibility format, synthetic missing field or fixture-only conversion may change the candidate being checked.
+
+### 15.2 Composition
+
+The actor join uses the Kernel actor model. Input and output definitions use the maintained contract-validation operation, delegating Formspec evaluation to a Formspec-conformant processor. Agent invocation uses `AgentInvoker`. A supplied-output policy exercise obtains its admitted actor, action, input and case context through the test harness or processor interface, never from the output being evaluated. An operation that cannot establish a required context must refuse that operation and report the unchecked stage; policy-only output checks do not establish that rights or input validation ran before an invocation. Policy uses one native evaluator across workflow, agent and action scopes. Human confirmation uses maintained tasks and reviews. Case-file changes use the governed output-commit operation, which checks the actual write effects, including deletions; a permitted output field is not by itself authority for a case-file write. Provenance records the observed stages and dispositions.
+
+Policy and review decisions MUST bind the exact proposal, actor, action, Workflow revision and relevant case state. If those inputs change before commit, the governed commit operation MUST recheck them or refuse the stale decision. These operations may be separate modules, but they form one execution route. A caller may not omit a required stage, replace a missing result with an expectation, or build an alternate route to obtain a pass.
+
+### 15.3 Conformance
+
+Schema tests MUST cover every rule variant, structured capabilities, identity requirements and native scope. They MUST reject bare capability strings, grouped legacy constraints, cross-kind fields, retired enum spellings and transport-only agent injection. Maintained examples MUST validate against their owning definitions.
+
+Independent runtime controls MUST demonstrate permission bounds and field scope; prohibition and obligation polarity; present, absent, null, false and zero-valued rights; all null dispositions; errors distinct from null; root scalars and empty containers; decoded pointer boundaries; composition across scopes; enforcement precedence; and refusal of unauthorized bypass. Each test MUST assert observed decisions, unchanged state when blocked, and rule-specific provenance. Tests generated solely from the same schema or catalog are insufficient.
+
+Autonomy controls MUST pair fresh and expired calibration, active and expired approval, and pending and completed recalibration without exceeding authored limits. Confidence controls MUST exercise every scope and mixed effects below, between and at thresholds. Fallback controls MUST exercise variant validation, selection, reference resolution, cycle refusal and terminal requirements. Where the owning execution operation is absent, the expected result is explicit unsupported execution, not a simulated pass.
+
+Invocation conformance additionally proves the invoker is called only after required preconditions, rights and input validation pass. Commit conformance additionally proves output validation, permissions and human review cannot be bypassed, and observes the actual case-file change. A deterministic invoker adapter is sufficient for local behavioral proof when the rest of this path is real. Tests supplying output directly MUST identify that fixture boundary and cannot claim invocation, Formspec validation, human review or governed commit was executed. Hosted qualification separately proves deployment services and durable behavior.
 
 ---
 

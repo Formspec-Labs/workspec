@@ -190,6 +190,9 @@ pub struct DrainOnceResult {
     /// fire are included so conformance traces can surface "this guard
     /// evaluated false" as the reason an expected transition didn't happen.
     pub guard_evaluations: Vec<GuardEvaluation>,
+    /// Observed native AI policy stage, including unsupported operations/errors.
+    #[serde(default)]
+    pub policy_evaluation: Option<wos_core::ai_policy::PolicyEvaluation>,
 }
 
 /// Draft persistence result.
@@ -268,6 +271,8 @@ pub struct RuntimeEventDecision {
     pub event: Option<PendingEvent>,
     /// Provenance emitted by companion policy evaluation.
     pub provenance: Vec<ProvenanceRecord>,
+    /// Observed policy stage; never readiness or human-review completion.
+    pub policy_evaluation: Option<wos_core::ai_policy::PolicyEvaluation>,
 }
 
 impl RuntimeEventDecision {
@@ -276,6 +281,7 @@ impl RuntimeEventDecision {
         Self {
             event: Some(event),
             provenance: Vec::new(),
+            policy_evaluation: None,
         }
     }
 }
@@ -297,6 +303,12 @@ impl CompanionPolicy for NoopCompanionPolicy {
         &mut self,
         context: RuntimeEventContext,
     ) -> Result<RuntimeEventDecision, RuntimeError> {
+        if context.kernel.actors.iter().any(|actor| {
+            Some(actor.id.as_str()) == context.event.actor_id.as_deref()
+                && actor.kind == wos_core::ActorKind::Agent
+        }) {
+            return crate::ReferenceCompanionPolicy::default().evaluate_event(context);
+        }
         Ok(RuntimeEventDecision::proceed(context.event))
     }
 }
@@ -2620,7 +2632,7 @@ mod tests {
                 "processedEventToken":original.processed_event_token,
                 "transitions":original.transitions,"provenance":original.provenance,
                 "createdTaskIds":original.created_task_ids,"emittedEvents":original.emitted_events,
-                "guardEvaluations":original.guard_evaluations,
+                "guardEvaluations":original.guard_evaluations,"policyEvaluation":original.policy_evaluation,
             })
         );
         let decoded: DrainOnceResult = serde_json::from_value(encoded).unwrap();
@@ -2767,7 +2779,7 @@ mod tests {
             serde_json::to_value(&idle).unwrap(),
             serde_json::json!({
                 "processedEvent":null,"processedEventToken":null,"transitions":[],"provenance":[],
-                "createdTaskIds":[],"emittedEvents":[],"guardEvaluations":[],
+                "createdTaskIds":[],"emittedEvents":[],"guardEvaluations":[],"policyEvaluation":null,
             })
         );
         let options = DrainOnceResult {
@@ -9399,7 +9411,10 @@ mod tests {
                     "agent": decl.id,
                     "capability": task.capability_id,
                 }),
-                confidence: 1.0,
+                confidence_report: serde_json::from_value(
+                    serde_json::json!({"overall":1.0,"method":"declared"}),
+                )
+                .unwrap(),
                 citations: vec![],
                 telemetry: None,
             })
@@ -9440,7 +9455,10 @@ mod tests {
         );
         assert!(!runtime.agent_invokers().is_empty());
 
-        let stub_spec = InvokerSpec::Stub { responses: vec![] };
+        let stub_spec = InvokerSpec::Stub {
+            responses: vec![],
+            metadata: Default::default(),
+        };
         assert!(
             runtime.agent_invokers().lookup(&stub_spec).is_some(),
             "stub adapter MUST be discoverable through the registry by its InvokerSpec discriminator"
@@ -9448,8 +9466,8 @@ mod tests {
 
         // No other kinds registered.
         let anth_spec = InvokerSpec::Anthropic {
-            model: "claude-opus-4-7".into(),
             config_ref: None,
+            metadata: Default::default(),
         };
         assert!(runtime.agent_invokers().lookup(&anth_spec).is_none());
     }
@@ -9490,25 +9508,10 @@ mod tests {
 
         // Build an agent declaration with an Anthropic invoker spec.
         use wos_core::model::ai::{AgentDeclaration, AgentType};
-        let decl = AgentDeclaration {
-            id: "extractor".into(),
-            kind: "agent".into(),
-            agent_type: AgentType::Generative,
-            model_identifier: "claude-opus-4-7".into(),
-            model_version: "4.7".into(),
-            description: None,
-            capabilities: vec![],
-            model_version_policy: None,
-            confidence_decay: None,
-            fallback_chain: vec![],
-            cascading_invocations: vec![],
-            deontic_constraints: None,
-            invoker: Some(InvokerSpec::Anthropic {
-                model: "claude-opus-4-7".into(),
+        let decl = serde_json::from_value::<AgentDeclaration>(serde_json::json!({"id":"extractor","agentType":AgentType::Generative,"modelIdentifier":"claude-opus-4-7","modelVersion":"4.7","invoker":Some(InvokerSpec::Anthropic {
                 config_ref: None,
-            }),
-            extensions: Default::default(),
-        };
+ metadata:Default::default(),
+})})).unwrap();
 
         let invoker = runtime
             .agent_invokers()
@@ -11227,6 +11230,127 @@ mod tests {
                 Err(RuntimeError::Evaluator(message)) if message.contains("absent timer")
             ));
             assert!(runtime.store.load_record(&id).is_err());
+        }
+    }
+    #[test]
+    fn supplied_output_refuses_an_actual_kernel_substituted_after_policy_admission() {
+        let admitted = serde_json::json!({"$wosWorkflow":"1.0","url":"urn:test:native-kernel-binding","version":"1.0.0","title":"Kernel binding control","impactLevel":"operational","actors":[{"id":"assessor","type":"agent"},{"id":"reviewer","type":"human"}],"agents":[{"id":"assessor","agentType":"deterministic","modelIdentifier":"admitted-model","modelVersion":"1.0.0"}],"aiOversight":{},"lifecycle":{"initialState":"open","states":{"open":{"type":"atomic","transitions":[{"event":{"kind":"message","name":"decide"},"target":"done"}]},"done":{"type":"final"}}}});
+        for mutation in [
+            "write",
+            "task",
+            "impact",
+            "actor",
+            "missing-policy",
+            "missing-policy-service",
+            "missing-policy-validation",
+            "default-policy-output",
+            "default-policy-service",
+        ] {
+            let policy = wos_core::ai_policy::load_native_ai_policy(&admitted)
+                .unwrap()
+                .unwrap();
+            let mut actual = admitted.clone();
+            match mutation {
+                "write" => {
+                    actual["lifecycle"]["states"]["open"]["transitions"][0]["actions"] = serde_json::json!([{"action":"setData","path":"caseFile.changed","value":true}])
+                }
+                "task" => {
+                    actual["lifecycle"]["states"]["open"]["transitions"][0]["actions"] = serde_json::json!([{"action":"createTask","taskRef":"injected","assignTo":"reviewer"}])
+                }
+                "impact" => actual["impactLevel"] = serde_json::json!("rights-impacting"),
+                "actor" => actual["actors"][1]["type"] = serde_json::json!("system"),
+                _ => {}
+            }
+            let mut runtime = runtime_with_kernel(serde_json::from_value(actual).unwrap());
+            if !mutation.starts_with("default-policy") {
+                runtime =
+                    runtime.with_companion_policy(crate::companion::ReferenceCompanionPolicy::new(
+                        if mutation.starts_with("missing-policy") {
+                            None
+                        } else {
+                            Some(policy)
+                        },
+                        None,
+                        std::collections::HashMap::new(),
+                    ));
+            }
+            let id = test_process_id("native-kernel-substitution");
+            runtime
+                .create_process(CreateProcessRequest {
+                    process_id: id.into(),
+                    tenant: None,
+                    definition_url: "urn:test:native-kernel-binding".into(),
+                    definition_version: "1.0.0".into(),
+                    initial_case_state: Some(serde_json::json!({"retained":42})),
+                })
+                .unwrap();
+            runtime.enqueue_event(id, PendingEvent {origin:None, event:"decide".into(), actor_id:Some("assessor".into()), data:Some(match mutation {"missing-policy-service" | "default-policy-service" => serde_json::json!({"serviceOutput":{"claimed":"persisted"}}),"missing-policy-validation" => serde_json::json!({"contractValidation":{"valid":true}}), _ => serde_json::json!({"output":{"decision":"approve"},"confidenceReport":{"overall":1.0,"method":"declared"}})}),timestamp:String::new(),idempotency_token:None}).unwrap();
+            let result = runtime.drain_once(id).unwrap();
+            let observed = result.policy_evaluation.as_ref().unwrap();
+            let after = runtime.store.load_record(id).unwrap();
+            assert!(
+                observed.refusals.iter().any(|r| r.contains(
+                    if mutation.starts_with("missing-policy")
+                        || mutation.starts_with("default-policy")
+                    {
+                        "admitted native policy"
+                    } else {
+                        "admitted kernel"
+                    }
+                )),
+                "{mutation}: {observed:?}; actualCase={:?}; actualConfiguration={:?}; tasks={:?}",
+                after.process.case_state,
+                after.process.configuration,
+                result.created_task_ids
+            );
+            assert!(result.transitions.is_empty(), "{mutation}");
+            assert!(result.created_task_ids.is_empty(), "{mutation}");
+            let stored = runtime.store.load_record(id).unwrap();
+            assert_eq!(
+                stored.process.case_state,
+                serde_json::json!({"retained":42}),
+                "{mutation}"
+            );
+            assert!(stored.process.active_tasks.is_empty(), "{mutation}");
+        }
+    }
+    #[test]
+    fn default_policy_preserves_ordinary_human_and_system_event_behavior() {
+        for actor in ["human", "system"] {
+            let kernel = serde_json::from_value(serde_json::json!({"$wosWorkflow":"1.0","url":"urn:test:ordinary-default-policy","version":"1.0.0","title":"Ordinary default control","impactLevel":"operational","actors":[{"id":"caller","type":actor}],"lifecycle":{"initialState":"open","states":{"open":{"type":"atomic","transitions":[{"event":{"kind":"message","name":"decide"},"target":"done"}]},"done":{"type":"final"}}}})).unwrap();
+            let mut runtime = runtime_with_kernel(kernel);
+            let id = test_process_id("ordinary-default-policy");
+            runtime
+                .create_process(CreateProcessRequest {
+                    process_id: id.into(),
+                    tenant: None,
+                    definition_url: "urn:test:ordinary-default-policy".into(),
+                    definition_version: "1.0.0".into(),
+                    initial_case_state: Some(serde_json::json!({"retained":42})),
+                })
+                .unwrap();
+            runtime
+                .enqueue_event(
+                    id,
+                    PendingEvent {
+                        origin: None,
+                        event: "decide".into(),
+                        actor_id: Some("caller".into()),
+                        data: Some(
+                            serde_json::json!({"serviceOutput":{"opaque":"ordinary-event-data"}}),
+                        ),
+                        timestamp: String::new(),
+                        idempotency_token: None,
+                    },
+                )
+                .unwrap();
+            let observed = runtime.drain_once(id).unwrap();
+            assert_eq!(observed.transitions.len(), 1, "{actor}");
+            assert!(observed.policy_evaluation.is_none(), "{actor}");
+            assert_eq!(
+                runtime.store.load_record(id).unwrap().process.case_state,
+                serde_json::json!({"retained":42})
+            );
         }
     }
     include!("deferred_callback_tests.rs");

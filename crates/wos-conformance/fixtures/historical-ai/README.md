@@ -1,0 +1,1 @@
+Historical event-hint autonomy/drift fixtures. These do not prove actual authenticated operational state, monitoring, human review or invocation. Their unchanged bytes remain available for explicit refusal controls; positive profile metadata is Draft. Required owners remain fs-w9dv and fs-pzju.

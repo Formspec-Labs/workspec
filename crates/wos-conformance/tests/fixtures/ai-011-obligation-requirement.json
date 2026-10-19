@@ -2,23 +2,89 @@
   "id": "AI-011-obligation-requirement",
   "rule": "AI-011",
   "batch": 3,
-  "description": "Obligation requirement evaluated against live output (AI S4.4). Agent output missing confidence report triggers rejection.",
+  "description": "Native supplied-output policy stage only. No invocation, definition validation, review, fallback execution or governed commit claim.",
   "documents": {
-    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
-    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+    "kernel": "inline"
   },
-  "initial_case_state": { "income": 50000 },
+  "inline_documents": {
+    "kernel": {
+      "$wosWorkflow": "1.0",
+      "url": "urn:test:native-profile:ai-011",
+      "version": "1.0.0",
+      "title": "Independent native AI replay controls",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "assessor",
+          "type": "agent"
+        }
+      ],
+      "agents": [
+        {
+          "id": "assessor",
+          "agentType": "deterministic",
+          "modelIdentifier": "literal-rules-model",
+          "modelVersion": "7.0.0",
+          "deonticConstraints": [
+            {
+              "id": "amount-required",
+              "kind": "obligation",
+              "requirement": "output.amount <= 100",
+              "onViolation": "reject"
+            }
+          ]
+        }
+      ],
+      "aiOversight": {},
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": {
+                  "kind": "message",
+                  "name": "decide"
+                },
+                "target": "done"
+              }
+            ]
+          },
+          "done": {
+            "type": "final"
+          }
+        }
+      }
+    }
+  },
+  "initial_case_state": {
+    "retained": 42
+  },
   "event_sequence": [
     {
-      "event": "determined",
-      "actor": "eligibilityAgent",
+      "event": "decide",
+      "actor": "assessor",
       "data": {
-        "output": { "income": 50000, "determination": "eligible", "confidenceReport": null }
+        "output": {
+          "amount": 101
+        },
+        "confidenceReport": {
+          "overall": 1.0,
+          "method": "declared"
+        }
       }
     }
   ],
   "expected_transitions": [],
   "expected_provenance": [
-    { "record_kind": "deonticViolation", "data": { "constraintId": "oblig-confidence-report", "action": "reject" } }
-  ]
+    {
+      "record_kind": "deonticViolation",
+      "data": {
+        "constraintId": "amount-required",
+        "action": "reject"
+      }
+    }
+  ],
+  "expected_errors": []
 }

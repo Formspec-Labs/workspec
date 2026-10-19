@@ -47,6 +47,17 @@ fn assert_fixture_passes(fixture_filename: &str) {
     }
 }
 
+/// Retired external policy/hint fixtures must refuse, never count as implementation proof.
+fn assert_retired_fixture_refused(name: &str) {
+    let original_base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let source = std::fs::read_to_string(original_base.join("historical-ai").join(name)).unwrap();
+    let error = run_fixture(&source, original_base.to_str().unwrap()).unwrap_err();
+    assert!(
+        error.to_string().contains("substituted legacy AI document"),
+        "{name}: {error}"
+    );
+}
+
 // ── Purchase Order Approval (flat lifecycle, guard evaluation) ───
 
 /// Simple approval path: amount under $50k guard passes, order completes.
@@ -248,114 +259,114 @@ fn ai016_cross_level_most_restrictive() {
     assert_fixture_passes("ai-016-cross-level-most-restrictive.json");
 }
 
-/// AI-017: Null deontic expression in rights-impacting workflow escalates to human (AI S4.9).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai017_null_escalation() {
-    assert_fixture_passes("ai-017-null-escalation.json");
+fn ai017_null_escalation_retired_input_refused() {
+    assert_retired_fixture_refused("ai-017-null-escalation.json");
 }
 
-/// AI-027: Escalation does NOT bypass deontic constraints (AI S5.4).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai027_escalation_deontic_not_bypassed() {
-    assert_fixture_passes("ai-027-escalation-deontic-not-bypassed.json");
+fn ai027_escalation_deontic_not_bypassed_retired_input_refused() {
+    assert_retired_fixture_refused("ai-027-escalation-deontic-not-bypassed.json");
 }
 
-/// AI-051: Assist Governance Proxy applies deontic constraints to tool invocations (AI S14.2).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai051_proxy_deontic() {
-    assert_fixture_passes("ai-051-proxy-deontic.json");
+fn ai051_proxy_deontic_retired_input_refused() {
+    assert_retired_fixture_refused("ai-051-proxy-deontic.json");
 }
 
-/// AI-054: Deontic bypass applies to single invocation only (AI S4.7).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai054_bypass_single_invocation() {
-    assert_fixture_passes("ai-054-bypass-single-invocation.json");
+fn ai054_bypass_single_invocation_retired_input_refused() {
+    assert_retired_fixture_refused("ai-054-bypass-single-invocation.json");
 }
 
-/// AI-055: Consistency constraints detect contradictions between output and case data (AI S4.7).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai055_consistency_contradiction() {
-    assert_fixture_passes("ai-055-consistency-contradiction.json");
+fn ai055_consistency_contradiction_retired_input_refused() {
+    assert_retired_fixture_refused("ai-055-consistency-contradiction.json");
 }
 
 // ── Batch 4: Autonomy caps ──────────────────────────────────────
 
-/// AI-005: Agents MUST NOT override human decisions (AI S3.7).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai005_no_override_human() {
-    assert_fixture_passes("ai-005-no-override-human.json");
+fn ai005_no_override_human_retired_input_refused() {
+    assert_retired_fixture_refused("ai-005-no-override-human.json");
 }
 
-/// AI-019: Assistive actions MUST create a human task for confirmation (AI S5.3).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai019_assistive_creates_human_task() {
-    assert_fixture_passes("ai-019-assistive-creates-human-task.json");
+fn ai019_assistive_creates_human_task_retired_input_refused() {
+    assert_retired_fixture_refused("ai-019-assistive-creates-human-task.json");
 }
 
-/// AI-021: Effective autonomy MUST NOT exceed impact-level cap (AI S5.3).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai021_impact_level_cap() {
-    assert_fixture_passes("ai-021-impact-level-cap.json");
+fn ai021_impact_level_cap_retired_input_refused() {
+    assert_retired_fixture_refused("ai-021-impact-level-cap.json");
 }
 
-/// AI-022: Effective autonomy = minimum of 4 sources (AI S5.3).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai022_effective_autonomy_minimum() {
-    assert_fixture_passes("ai-022-effective-autonomy-minimum.json");
+fn ai022_effective_autonomy_minimum_retired_input_refused() {
+    assert_retired_fixture_refused("ai-022-effective-autonomy-minimum.json");
 }
 
-/// AI-025: Human approval required for escalation (AI S5.4).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai025_escalation_requires_approval() {
-    assert_fixture_passes("ai-025-escalation-requires-approval.json");
+fn ai025_escalation_requires_approval_retired_input_refused() {
+    assert_retired_fixture_refused("ai-025-escalation-requires-approval.json");
 }
 
-/// AI-028: Demotion takes effect for next invocation (AI S5.5).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai028_demotion_next_invocation() {
-    assert_fixture_passes("ai-028-demotion-next-invocation.json");
+fn ai028_demotion_next_invocation_retired_input_refused() {
+    assert_retired_fixture_refused("ai-028-demotion-next-invocation.json");
 }
 
-/// AI-029: pendingRecalibration keeps demoted level (AI S5.5).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai029_pending_recalibration() {
-    assert_fixture_passes("ai-029-pending-recalibration.json");
+fn ai029_pending_recalibration_retired_input_refused() {
+    assert_retired_fixture_refused("ai-029-pending-recalibration.json");
 }
 
-/// AI-030: Dynamic autonomy MUST NOT exceed effective cap (AI S5.6).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai030_dynamic_autonomy_cap() {
-    assert_fixture_passes("ai-030-dynamic-autonomy-cap.json");
+fn ai030_dynamic_autonomy_cap_retired_input_refused() {
+    assert_retired_fixture_refused("ai-030-dynamic-autonomy-cap.json");
 }
 
-/// AC-001: Expired calibration caps autonomy at assistive (AgentConfig S1.3).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ac001_expired_calibration_cap() {
-    assert_fixture_passes("ac-001-expired-calibration-cap.json");
+fn ac001_expired_calibration_cap_retired_input_refused() {
+    assert_retired_fixture_refused("ac-001-expired-calibration-cap.json");
 }
 
-/// AC-002: maxAutonomy participates in cross-document minimum (AgentConfig S1.4).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ac002_max_autonomy_minimum() {
-    assert_fixture_passes("ac-002-max-autonomy-minimum.json");
+fn ac002_max_autonomy_minimum_retired_input_refused() {
+    assert_retired_fixture_refused("ac-002-max-autonomy-minimum.json");
 }
 
-/// AG-005: Agent MUST NOT invoke tools not in permitted list (AdvGov S6.1).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ag005_tool_not_permitted() {
-    assert_fixture_passes("ag-005-tool-not-permitted.json");
+fn ag005_tool_not_permitted_retired_input_refused() {
+    assert_retired_fixture_refused("ag-005-tool-not-permitted.json");
 }
 
-/// AG-006: Agent MUST NOT write to case file directly (AdvGov S6.1).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ag006_no_direct_case_write() {
-    assert_fixture_passes("ag-006-no-direct-case-write.json");
+fn ag006_no_direct_case_write_retired_input_refused() {
+    assert_retired_fixture_refused("ag-006-no-direct-case-write.json");
 }
 
-/// AG-007: Tool invocations MUST respect rate limits (AdvGov S6.1).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ag007_tool_rate_limit() {
-    assert_fixture_passes("ag-007-tool-rate-limit.json");
+fn ag007_tool_rate_limit_retired_input_refused() {
+    assert_retired_fixture_refused("ag-007-tool-rate-limit.json");
 }
 
 // ── Batch 5: Confidence framework ───────────────────────────────
@@ -366,10 +377,10 @@ fn ai034_confidence_report_required() {
     assert_fixture_passes("ai-034-confidence-report-required.json");
 }
 
-/// AI-035: modelNative confidence MUST be calibrated (AI S7.2).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai035_calibrated_confidence() {
-    assert_fixture_passes("ai-035-calibrated-confidence.json");
+fn ai035_calibrated_confidence_retired_input_refused() {
+    assert_retired_fixture_refused("ai-035-calibrated-confidence.json");
 }
 
 /// AI-036: Confidence below floor invalidates output (AI S7.4).
@@ -378,28 +389,28 @@ fn ai036_confidence_below_floor() {
     assert_fixture_passes("ai-036-confidence-below-floor.json");
 }
 
-/// AI-037: DecayTrigger multiplies confidence; below floor triggers escalation (AI S7.5).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai037_decay_trigger() {
-    assert_fixture_passes("ai-037-decay-trigger.json");
+fn ai037_decay_trigger_retired_input_refused() {
+    assert_retired_fixture_refused("ai-037-decay-trigger.json");
 }
 
-/// AI-038: Cumulative confidence below floor pauses for human review (AI S7.7).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai038_cumulative_confidence_pause() {
-    assert_fixture_passes("ai-038-cumulative-confidence-pause.json");
+fn ai038_cumulative_confidence_pause_retired_input_refused() {
+    assert_retired_fixture_refused("ai-038-cumulative-confidence-pause.json");
 }
 
-/// AG-004: Session pause at checkpoint when cumulative confidence drops (AdvGov S5.4).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ag004_session_pause() {
-    assert_fixture_passes("ag-004-session-pause.json");
+fn ag004_session_pause_retired_input_refused() {
+    assert_retired_fixture_refused("ag-004-session-pause.json");
 }
 
-/// AG-016: Every review provides ground-truth label (AdvGov S9.3).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ag016_review_ground_truth() {
-    assert_fixture_passes("ag-016-review-ground-truth.json");
+fn ag016_review_ground_truth_retired_input_refused() {
+    assert_retired_fixture_refused("ag-016-review-ground-truth.json");
 }
 
 // ── Batch 6: Due process runtime ────────────────────────────────
@@ -446,10 +457,10 @@ fn g018_override_rationale() {
     assert_fixture_passes("g-018-override-rationale.json");
 }
 
-/// AI-045: independentFirst suppression hides agent output until independent assessment (AI S10.2).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai045_independent_first_suppression() {
-    assert_fixture_passes("ai-045-independent-first-suppression.json");
+fn ai045_independent_first_suppression_retired_input_refused() {
+    assert_retired_fixture_refused("ai-045-independent-first-suppression.json");
 }
 
 // ── Batch 7: Pipeline execution ─────────────────────────────────
@@ -544,76 +555,76 @@ fn g026_delegation_in_provenance() {
 
 // ── Batch 10: Agent provenance + fallback ───────────────────────
 
-/// AI-006: Agent provenance includes model ID, version, confidence, input summary (AI S3.7).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai006_agent_provenance_fields() {
-    assert_fixture_passes("ai-006-agent-provenance-fields.json");
+fn ai006_agent_provenance_fields_retired_input_refused() {
+    assert_retired_fixture_refused("ai-006-agent-provenance-fields.json");
 }
 
-/// AI-008: Actor type is immutable for a given action (AI S3.7).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai008_actor_type_immutable() {
-    assert_fixture_passes("ai-008-actor-type-immutable.json");
+fn ai008_actor_type_immutable_retired_input_refused() {
+    assert_retired_fixture_refused("ai-008-actor-type-immutable.json");
 }
 
-/// AI-033: Agent-touched fields annotated with agentProvenance (AI S6.2).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai033_agent_touched_annotation() {
-    assert_fixture_passes("ai-033-agent-touched-annotation.json");
+fn ai033_agent_touched_annotation_retired_input_refused() {
+    assert_retired_fixture_refused("ai-033-agent-touched-annotation.json");
 }
 
-/// AI-044: Training data contamination triggers reclassification (AI S9.3).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai044_drift_reclassification() {
-    assert_fixture_passes("ai-044-drift-reclassification.json");
+fn ai044_drift_reclassification_retired_input_refused() {
+    assert_retired_fixture_refused("ai-044-drift-reclassification.json");
 }
 
-/// AI-047: Narrative tier provenance labeled non-authoritative (AI S13.2).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai047_narrative_non_authoritative() {
-    assert_fixture_passes("ai-047-narrative-non-authoritative.json");
+fn ai047_narrative_non_authoritative_retired_input_refused() {
+    assert_retired_fixture_refused("ai-047-narrative-non-authoritative.json");
 }
 
-/// AI-052: Proxy produces provenance per governed invocation (AI S14.2).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai052_proxy_provenance() {
-    assert_fixture_passes("ai-052-proxy-provenance.json");
+fn ai052_proxy_provenance_retired_input_refused() {
+    assert_retired_fixture_refused("ai-052-proxy-provenance.json");
 }
 
-/// AI-053: Version change emits agentVersionChange provenance (AI S3.4).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai053_version_change_provenance() {
-    assert_fixture_passes("ai-053-version-change-provenance.json");
+fn ai053_version_change_provenance_retired_input_refused() {
+    assert_retired_fixture_refused("ai-053-version-change-provenance.json");
 }
 
-/// AG-009: Agent state transitions produce provenance (AdvGov S7.2).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ag009_agent_state_provenance() {
-    assert_fixture_passes("ag-009-agent-state-provenance.json");
+fn ag009_agent_state_provenance_retired_input_refused() {
+    assert_retired_fixture_refused("ag-009-agent-state-provenance.json");
 }
 
-/// AI-057: Processor enforces constraints; agent cannot weaken its own (AI S3.5).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai057_processor_enforces_constraints() {
-    assert_fixture_passes("ai-057-processor-enforces-constraints.json");
+fn ai057_processor_enforces_constraints_retired_input_refused() {
+    assert_retired_fixture_refused("ai-057-processor-enforces-constraints.json");
 }
 
-/// AI-032: Validation failures trigger fallback, not silent acceptance (AI S6.2).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai032_validation_triggers_fallback() {
-    assert_fixture_passes("ai-032-validation-triggers-fallback.json");
+fn ai032_validation_triggers_fallback_retired_input_refused() {
+    assert_retired_fixture_refused("ai-032-validation-triggers-fallback.json");
 }
 
-/// AI-039: Every fallback attempt produces provenance (AI S8.2).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai039_fallback_provenance() {
-    assert_fixture_passes("ai-039-fallback-provenance.json");
+fn ai039_fallback_provenance_retired_input_refused() {
+    assert_retired_fixture_refused("ai-039-fallback-provenance.json");
 }
 
-/// AI-040: Terminal fallback produces result or human task (AI S8.2).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai040_terminal_fallback() {
-    assert_fixture_passes("ai-040-terminal-fallback.json");
+fn ai040_terminal_fallback_retired_input_refused() {
+    assert_retired_fixture_refused("ai-040-terminal-fallback.json");
 }
 
 // ── Batch 11: Crash recovery / durability ────────────────────────
@@ -688,10 +699,10 @@ fn k018_relationship_change_provenance() {
     assert_fixture_passes("k-018-relationship-change-provenance.json");
 }
 
-/// AI-048: Narrative tier not treated as dispositive evidence (AI S13.2).
+/// Historical external-policy input refuses; the original operation remains unsupported.
 #[test]
-fn ai048_narrative_not_dispositive() {
-    assert_fixture_passes("ai-048-narrative-not-dispositive.json");
+fn ai048_narrative_not_dispositive_retired_input_refused() {
+    assert_retired_fixture_refused("ai-048-narrative-not-dispositive.json");
 }
 
 // ── Batch 14: Verification reports ──────────────────────────────

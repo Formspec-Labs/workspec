@@ -225,21 +225,7 @@ pub(crate) enum Command {
     },
 
     // ── AI integration ─────────────────────────────────────────────────────
-    /// Register an AI agent under `x-wos-ai.agents`.
-    AddAiAgent {
-        /// Unique agent identifier.
-        agent_id: String,
-        /// Role description.
-        role: String,
-        /// Model identifier string (e.g. "claude-3-5-sonnet").
-        model: String,
-        /// Capability strings (e.g. ["read_case_file", "submit_review"]).
-        capabilities: Vec<String>,
-    },
-
-    /// Append a structured deontic constraint under `x-wos-ai.deonticConstraints`.
-    ///
-    /// Replaces `AddActorDeontic` for new MCP tooling. `modality` ∈ `must | must_not | may`.
+    /// Refuse the retired extension constraint shape; use `AddAgentConstraint`.
     AddDeonticConstraint {
         /// Constraint identifier.
         constraint_id: String,
@@ -392,11 +378,8 @@ mod tests {
             transition: "approve".into(),
         };
 
-        let _add_ai_agent = Command::AddAiAgent {
-            agent_id: "reviewBot".into(),
-            role: "Automated reviewer".into(),
-            model: "claude-3-5-sonnet".into(),
-            capabilities: vec!["read_case_file".into()],
+        let _put_agent = Command::PutAgent {
+            agent: serde_json::json!({"id":"reviewBot","agentType":"deterministic","modelIdentifier":"review-model","modelVersion":"1.0.0","capabilities":[{"id":"review"}]}),
         };
 
         let _add_deontic = Command::AddDeonticConstraint {

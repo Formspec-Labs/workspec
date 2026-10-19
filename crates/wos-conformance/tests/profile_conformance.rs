@@ -39,43 +39,43 @@ fn governance_complete_profile_passes() {
 }
 
 #[test]
-fn ai_family_fixtures_declare_batch_metadata() {
-    validate_ai_family_batch_coverage(&fixtures_dir(), AI_REGISTRATION_BATCHES)
-        .expect("AI-family batch metadata and coverage");
+fn native_stage_inventory_reports_missing_complete_registration_batches() {
+    let missing =
+        validate_ai_family_batch_coverage(&fixtures_dir(), AI_REGISTRATION_BATCHES).unwrap_err();
+    assert!(
+        missing.contains("missing fixture coverage for batches"),
+        "{missing}"
+    );
 }
 
 #[test]
-fn ai_registration_profile_passes() {
-    validate_ai_family_batch_coverage(&fixtures_dir(), AI_REGISTRATION_BATCHES)
-        .expect("AI Registration batch coverage");
-
+fn native_policy_subset_cannot_verify_complete_registration() {
     let (passed, message) = run_profile_against_fixtures(
         &fixtures_dir(),
         "AI Registration",
-        |fixture| {
-            fixture
-                .batch
-                .is_some_and(|batch| AI_REGISTRATION_BATCHES.contains(&batch))
-        },
-        None,
+        |fixture| fixture.rule.starts_with("AI-"),
+        Some(&["AI-005", "AI-006", "AI-008", "AI-009", "AI-019", "AI-034"]),
     );
-    assert!(passed, "{message}");
+    assert!(!passed);
+    assert!(message.contains("missing fixture coverage"), "{message}");
 }
 
 #[test]
-fn ai_confidence_framework_profile_passes() {
-    validate_ai_family_batch_coverage(&fixtures_dir(), AI_CONFIDENCE_BATCHES)
-        .expect("AI Confidence batch coverage");
-
+fn native_report_and_floor_cases_pass_without_claiming_full_confidence_framework() {
+    validate_ai_family_batch_coverage(&fixtures_dir(), AI_CONFIDENCE_BATCHES).unwrap();
     let (passed, message) = run_profile_against_fixtures(
         &fixtures_dir(),
-        "AI Confidence Framework",
-        |fixture| {
-            fixture
-                .batch
-                .is_some_and(|batch| AI_CONFIDENCE_BATCHES.contains(&batch))
-        },
-        None,
+        "Native report/floor stages",
+        |fixture| matches!(fixture.rule.as_str(), "AI-034" | "AI-036"),
+        Some(&["AI-034", "AI-036"]),
     );
     assert!(passed, "{message}");
+    let (passed, message) = run_profile_against_fixtures(
+        &fixtures_dir(),
+        "Complete confidence framework",
+        |fixture| fixture.batch == Some(5),
+        Some(&["AI-034", "AI-035", "AI-036", "AI-037", "AI-038"]),
+    );
+    assert!(!passed);
+    assert!(message.contains("missing fixture coverage"), "{message}");
 }

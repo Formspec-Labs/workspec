@@ -2,55 +2,121 @@
   "id": "AI-013-evaluation-order",
   "rule": "AI-013",
   "batch": 3,
-  "description": "Deontic constraints MUST be evaluated in order: Permissions, Prohibitions, Obligations, Confidence, Volume, Sampling (AI S4.6). Provenance must reflect this ordering.",
+  "description": "Native supplied-output policy stage only. No invocation, definition validation, review, fallback execution or governed commit claim.",
   "documents": {
-    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
-    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+    "kernel": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosWorkflow": "1.0",
+      "url": "urn:test:native-profile:ai-013",
+      "version": "1.0.0",
+      "title": "Independent native AI replay controls",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "assessor",
+          "type": "agent"
+        }
+      ],
+      "agents": [
+        {
+          "id": "assessor",
+          "agentType": "deterministic",
+          "modelIdentifier": "literal-rules-model",
+          "modelVersion": "7.0.0",
+          "deonticConstraints": [
+            {
+              "id": "permission",
+              "kind": "permission",
+              "bounds": "true",
+              "onViolation": "reject"
+            },
+            {
+              "id": "prohibition",
+              "kind": "prohibition",
+              "condition": "false",
+              "onViolation": "reject"
+            },
+            {
+              "id": "obligation",
+              "kind": "obligation",
+              "requirement": "true",
+              "onViolation": "reject"
+            }
+          ]
+        }
+      ],
+      "aiOversight": {},
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": {
+                  "kind": "message",
+                  "name": "decide"
+                },
+                "target": "done"
+              }
+            ]
+          },
+          "done": {
+            "type": "final"
+          }
+        }
+      }
+    }
   },
   "initial_case_state": {
-    "income": 50000
+    "retained": 42
   },
   "event_sequence": [
     {
-      "event": "determined",
-      "actor": "eligibilityAgent",
+      "event": "decide",
+      "actor": "assessor",
       "data": {
         "output": {
-          "income": 50000,
-          "determination": "eligible",
-          "confidenceReport": {
-            "overall": 0.9
-          },
-          "reasonCodes": [
-            "R1"
-          ],
-          "evidenceCitations": [
-            "doc1"
-          ]
+          "amount": 101
+        },
+        "confidenceReport": {
+          "overall": 1.0,
+          "method": "declared"
         }
       }
     }
   ],
   "expected_transitions": [
     {
-      "from": "pendingDetermination",
-      "target": "reviewComplete",
-      "event": "determined"
+      "from": "open",
+      "target": "done",
+      "event": "decide"
     }
   ],
   "expected_provenance": [
     {
       "record_kind": "deonticEvaluation",
       "data": {
-        "order": [
-          "permissions",
-          "prohibitions",
-          "obligations",
-          "confidence",
-          "volume",
-          "sampling"
-        ]
+        "constraintId": "permission",
+        "kind": "permission"
+      }
+    },
+    {
+      "record_kind": "deonticEvaluation",
+      "data": {
+        "constraintId": "prohibition",
+        "kind": "prohibition"
+      }
+    },
+    {
+      "record_kind": "deonticEvaluation",
+      "data": {
+        "constraintId": "obligation",
+        "kind": "obligation"
       }
     }
-  ]
+  ],
+  "expected_errors": []
 }

@@ -8,6 +8,14 @@
     {
       "id": "system",
       "type": "system"
+    },
+    {
+      "id": "documentExtractor",
+      "type": "agent"
+    },
+    {
+      "id": "eligibilityScreener",
+      "type": "agent"
     }
   ],
   "lifecycle": {
@@ -28,111 +36,130 @@
   },
   "agents": [
     {
-      "id": "agent",
-      "monitors": [
-        {
-          "agentRef": "documentExtractor",
-          "evaluationWindow": "P30D",
-          "metrics": [
-            {
-              "name": "extractionAccuracy",
-              "method": "accuracy",
-              "threshold": 0.92
+      "id": "documentExtractor",
+      "agentType": "statistical",
+      "modelIdentifier": "document-extraction",
+      "modelVersion": "1.0.0",
+      "driftMonitoring": {
+        "monitors": [
+          {
+            "evaluationWindow": "P30D",
+            "metrics": [
+              {
+                "name": "extractionAccuracy",
+                "method": "accuracy",
+                "threshold": 0.92
+              },
+              {
+                "name": "confidenceDistribution",
+                "method": "psi",
+                "threshold": 0.2
+              },
+              {
+                "name": "modificationRate",
+                "method": "accuracy",
+                "threshold": 0.3
+              }
+            ],
+            "rubberStamp": {
+              "enabled": true,
+              "minReviewTime": "PT30S",
+              "maxAgreementRate": 0.95
             },
-            {
-              "name": "confidenceDistribution",
-              "method": "psi",
-              "threshold": 0.2
-            },
-            {
-              "name": "modificationRate",
-              "method": "accuracy",
-              "threshold": 0.3
-            }
-          ],
-          "rubberStamp": {
-            "enabled": true,
-            "minReviewTime": "PT30S",
-            "maxAgreementRate": 0.95,
-            "evaluationWindow": "P14D"
-          },
-          "alertThresholds": [
-            {
-              "condition": "extractionAccuracy < 0.90",
-              "severity": "critical",
-              "action": "demoteToAssistive",
-              "policyRef": "demoteToAssistiveOnDegradedAccuracy",
-              "notifyRoles": [
-                "systemAdministrator",
-                "programDirector"
-              ]
-            },
-            {
-              "condition": "confidenceDistribution > 0.25",
-              "severity": "warning",
-              "action": "notify",
-              "notifyRoles": [
-                "systemAdministrator"
-              ]
-            },
-            {
-              "condition": "modificationRate > 0.40",
-              "severity": "warning",
-              "action": "notify",
-              "notifyRoles": [
-                "programDirector"
-              ]
-            }
-          ]
-        },
-        {
-          "agentRef": "eligibilityScreener",
-          "evaluationWindow": "P30D",
-          "metrics": [
-            {
-              "name": "agreementRate",
-              "method": "accuracy",
-              "threshold": 0.85
-            },
-            {
-              "name": "outputDistribution",
-              "method": "chi2",
-              "threshold": 0.05
-            }
-          ],
-          "rubberStamp": {
-            "enabled": true,
-            "minReviewTime": "PT60S",
-            "maxAgreementRate": 0.93,
-            "evaluationWindow": "P30D"
-          },
-          "alertThresholds": [
-            {
-              "condition": "agreementRate < 0.80",
-              "severity": "critical",
-              "action": "demoteToManual",
-              "notifyRoles": [
-                "systemAdministrator",
-                "programDirector"
-              ]
-            },
-            {
-              "condition": "outputDistribution > 0.1",
-              "severity": "warning",
-              "action": "notify",
-              "notifyRoles": [
-                "systemAdministrator"
-              ]
-            }
-          ]
+            "alertThresholds": [
+              {
+                "condition": "extractionAccuracy < 0.90",
+                "severity": "critical",
+                "policyRef": "demoteToAssistiveOnDegradedAccuracy",
+                "notifyRoles": [
+                  "systemAdministrator",
+                  "programDirector"
+                ]
+              },
+              {
+                "condition": "confidenceDistribution > 0.25",
+                "severity": "warning",
+                "action": "notify",
+                "notifyRoles": [
+                  "systemAdministrator"
+                ]
+              },
+              {
+                "condition": "modificationRate > 0.40",
+                "severity": "warning",
+                "action": "notify",
+                "notifyRoles": [
+                  "programDirector"
+                ]
+              }
+            ]
+          }
+        ],
+        "deploymentSequence": {
+          "enabled": true,
+          "shadowDuration": "P14D",
+          "canaryPercentage": 0.05,
+          "canaryDuration": "P7D"
         }
-      ],
-      "deploymentSequence": {
-        "enabled": true,
-        "shadowDuration": "P14D",
-        "canaryPercentage": 0.05,
-        "canaryDuration": "P7D",
-        "canaryReviewSamplingRate": 1.0
+      },
+      "autonomyPolicy": {
+        "demotion": [
+          {
+            "id": "demoteToAssistiveOnDegradedAccuracy",
+            "condition": "extractionAccuracy < 0.90",
+            "targetLevel": "assistive",
+            "pendingRecalibration": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "eligibilityScreener",
+      "agentType": "statistical",
+      "modelIdentifier": "eligibility-screening",
+      "modelVersion": "1.0.0",
+      "driftMonitoring": {
+        "monitors": [
+          {
+            "evaluationWindow": "P30D",
+            "metrics": [
+              {
+                "name": "agreementRate",
+                "method": "accuracy",
+                "threshold": 0.85
+              },
+              {
+                "name": "outputDistribution",
+                "method": "chi2",
+                "threshold": 0.05
+              }
+            ],
+            "rubberStamp": {
+              "enabled": true,
+              "minReviewTime": "PT60S",
+              "maxAgreementRate": 0.93
+            },
+            "alertThresholds": [
+              {
+                "condition": "agreementRate < 0.80",
+                "severity": "critical",
+                "action": "demoteToManual",
+                "notifyRoles": [
+                  "systemAdministrator",
+                  "programDirector"
+                ]
+              },
+              {
+                "condition": "outputDistribution > 0.1",
+                "severity": "warning",
+                "action": "notify",
+                "notifyRoles": [
+                  "systemAdministrator"
+                ]
+              }
+            ]
+          }
+        ]
       }
     }
   ]

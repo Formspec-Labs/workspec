@@ -1,3 +1,4 @@
+// Rust guideline compliant 2026-02-21
 //! Lossless native edits preserve authored values and collection identity.
 
 use serde_json::{Value, json};
@@ -5,9 +6,9 @@ use wos_authoring::{ActorKind, ImpactLevel, WosProject};
 
 fn source() -> Value {
     json!({"$wosWorkflow":"1.0","url":"urn:test:native","version":"1.0.0","title":"Native fidelity","impactLevel":"informational",
-        "actors":[{"id":"A","type":"human","x-owner":"A"},{"id":"B","type":"human","x-owner":"B"}],
+        "actors":[{"id":"A","type":"agent","x-owner":"A"},{"id":"B","type":"agent","x-owner":"B"}],
         "lifecycle":{"initialState":"root","states":{"root":{"type":"compound","initialState":"child","states":{"child":{"type":"atomic","stateTimeout":"P1D","x-state":"child"}},"x-state":"root"}}},
-        "agents":[{"id":"A","x-owner":"agent-A"},{"id":"B","x-owner":"agent-B"}],
+        "agents":[{"id":"A","agentType":"deterministic","modelIdentifier":"model-A","modelVersion":"1.0.0","x-owner":"agent-A"},{"id":"B","agentType":"deterministic","modelIdentifier":"model-B","modelVersion":"1.0.0","x-owner":"agent-B"}],
         "caseFile":{"fields":{"income":{"type":"number","canonicalTermRef":"urn:term:income","dpvSensitivity":"dpv:FinancialData"}}},
         "extensions":{"x-wos-ai":{"historical":"retain verbatim"}},"x-root":{"source":"authored"}})
 }
@@ -20,12 +21,12 @@ fn native_edit_and_undo_preserve_complete_source_and_array_identity() {
     project.remove_actor("A").unwrap();
     assert_eq!(
         project.native_snapshot()["actors"],
-        json!([{"id":"B","type":"human","x-owner":"B"}])
+        json!([{"id":"B","type":"agent","x-owner":"B"}])
     );
     project.remove_agent("A".into()).unwrap();
     assert_eq!(
         project.native_snapshot()["agents"],
-        json!([{"id":"B","x-owner":"agent-B"}])
+        json!([{"id":"B","agentType":"deterministic","modelIdentifier":"model-B","modelVersion":"1.0.0","x-owner":"agent-B"}])
     );
     project.undo().unwrap();
     project.undo().unwrap();
@@ -86,12 +87,12 @@ fn native_source_remains_editable_when_runtime_model_cannot_represent_it() {
 fn canonical_agents_constraints_and_governance_do_not_write_obsolete_extensions() {
     let mut project = WosProject::from_native_document(source()).unwrap();
     project
-        .put_agent(json!({"id":"newAgent","modelIdentifier":"model","autonomy":"assistive"}))
+        .put_agent(json!({"id":"newAgent","agentType":"deterministic","modelIdentifier":"model","modelVersion":"1.0.0"}))
         .unwrap();
     project
         .add_agent_constraint(
             "newAgent".into(),
-            json!({"kind":"prohibition","expression":"@transition.tags includes 'adverseAction'"}),
+            json!({"id":"no-adverse-action","kind":"prohibition","condition":"@transition.tags includes 'adverseAction'","onViolation":"reject"}),
         )
         .unwrap();
     project.set_native_fields(json!({"governance":{"dueProcess":{"scope":"true"}},"aiOversight":{"x-disclosure":"authored"}}).as_object().unwrap().clone()).unwrap();

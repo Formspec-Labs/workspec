@@ -22,6 +22,11 @@ pub const GOVERNANCE_BASIC_RULES: &[&str] = &[
 ];
 pub const AI_REGISTRATION_BATCHES: &[u8] = &[3, 4, 5, 10];
 pub const AI_CONFIDENCE_BATCHES: &[u8] = &[5];
+// Complete profiles retain their required operations even when a historical
+// synthetic fixture retires. A subset of policy-stage cases cannot verify them.
+const AI_REGISTRATION_RULES: &[&str] =
+    &["AI-005", "AI-006", "AI-008", "AI-009", "AI-019", "AI-034"];
+const AI_CONFIDENCE_RULES: &[&str] = &["AI-034", "AI-035", "AI-036", "AI-037", "AI-038"];
 
 #[derive(Debug)]
 struct FixtureSpec {
@@ -520,7 +525,7 @@ fn evaluate_ai_registration(specs: &[FixtureSpec]) -> ProfileCheck {
                 .batch
                 .is_some_and(|batch| AI_REGISTRATION_BATCHES.contains(&batch))
         },
-        None,
+        Some(AI_REGISTRATION_RULES),
     )
 }
 
@@ -549,7 +554,7 @@ fn evaluate_ai_confidence(specs: &[FixtureSpec]) -> ProfileCheck {
                 .batch
                 .is_some_and(|batch| AI_CONFIDENCE_BATCHES.contains(&batch))
         },
-        None,
+        Some(AI_CONFIDENCE_RULES),
     )
 }
 

@@ -1,0 +1,121 @@
+{
+  "candidate": {
+    "$wosWorkflow": "1.0",
+    "url": "urn:test:native-task-selection",
+    "version": "1.0.0",
+    "title": "Literal native task selection controls",
+    "impactLevel": "operational",
+    "actors": [
+      {
+        "id": "assessor",
+        "type": "agent"
+      },
+      {
+        "id": "firstReviewer",
+        "type": "human"
+      },
+      {
+        "id": "secondReviewer",
+        "type": "human"
+      }
+    ],
+    "agents": [
+      {
+        "id": "assessor",
+        "agentType": "deterministic",
+        "modelIdentifier": "literal-policy-model",
+        "modelVersion": "1.0.0"
+      }
+    ],
+    "contracts": {
+      "firstContract": {
+        "binding": "formspec",
+        "ref": "urn:test:first-form",
+        "definitionVersion": "1.0.0"
+      },
+      "secondContract": {
+        "binding": "formspec",
+        "ref": "urn:test:second-form",
+        "definitionVersion": "2.0.0"
+      }
+    },
+    "lifecycle": {
+      "initialState": "review",
+      "states": {
+        "review": {
+          "type": "atomic",
+          "onEntry": [
+            {
+              "action": "startTimer",
+              "timerId": "firstDeadline",
+              "duration": "PT1H",
+              "event": "first.expired"
+            },
+            {
+              "action": "startTimer",
+              "timerId": "secondDeadline",
+              "duration": "PT2H",
+              "event": "second.expired"
+            },
+            {
+              "action": "createTask",
+              "taskRef": "same-label",
+              "assignTo": "firstReviewer",
+              "contractRef": "firstContract",
+              "responseMappingRef": "urn:test:first-mapping",
+              "completionEvent": "first.completed",
+              "expiresWithTimer": "firstDeadline"
+            },
+            {
+              "action": "createTask",
+              "taskRef": "same-label",
+              "assignTo": "secondReviewer",
+              "contractRef": "secondContract",
+              "responseMappingRef": "urn:test:second-mapping",
+              "completionEvent": "second.completed",
+              "expiresWithTimer": "secondDeadline"
+            }
+          ],
+          "transitions": [
+            {
+              "event": {
+                "kind": "message",
+                "name": "review.decided"
+              },
+              "target": "done"
+            }
+          ]
+        },
+        "done": {
+          "type": "final"
+        }
+      }
+    }
+  },
+  "choices": [
+    {
+      "pointer": "/lifecycle/states/review/onEntry/2",
+      "expectedAction": {
+        "action": "createTask",
+        "taskRef": "same-label",
+        "assignTo": "firstReviewer",
+        "contractRef": "firstContract",
+        "responseMappingRef": "urn:test:first-mapping",
+        "completionEvent": "first.completed",
+        "expiresWithTimer": "firstDeadline"
+      }
+    },
+    {
+      "pointer": "/lifecycle/states/review/onEntry/3",
+      "expectedAction": {
+        "action": "createTask",
+        "taskRef": "same-label",
+        "assignTo": "secondReviewer",
+        "contractRef": "secondContract",
+        "responseMappingRef": "urn:test:second-mapping",
+        "completionEvent": "second.completed",
+        "expiresWithTimer": "secondDeadline"
+      }
+    }
+  ]
+}

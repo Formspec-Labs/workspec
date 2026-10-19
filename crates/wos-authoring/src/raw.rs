@@ -1,3 +1,4 @@
+// Rust guideline compliant 2026-02-21
 //! Complete native workflow storage and atomic intent-driven edits.
 
 use serde_json::{Map, Value, json};
@@ -482,38 +483,6 @@ impl RawWosProject {
         )))
     }
 
-    fn apply_add_ai_agent(
-        &mut self,
-        agent_id: String,
-        role: String,
-        model: String,
-        capabilities: Vec<String>,
-    ) -> CommandResult {
-        let agent =
-            json!({"id":agent_id,"role":role,"modelIdentifier":model,"capabilities":capabilities});
-        let agents = self
-            .doc
-            .as_object_mut()
-            .expect("document is an object")
-            .entry("agents")
-            .or_insert_with(|| json!([]))
-            .as_array_mut()
-            .ok_or_else(|| error("/agents", "agents must be an array"))?;
-        if agents
-            .iter()
-            .any(|agent| agent.get("id").and_then(Value::as_str) == Some(agent_id.as_str()))
-        {
-            return Err(error(
-                "/agents",
-                format!("agent '{agent_id}' already exists"),
-            ));
-        }
-        agents.push(agent);
-        Ok(AppliedCommand::without_inverse(format!(
-            "AddAiAgent({agent_id})"
-        )))
-    }
-
     fn apply_add_extension_key(&mut self, key: String, value: Value) -> CommandResult {
         if !key.starts_with("x-") {
             return Err(error(
@@ -710,12 +679,6 @@ impl RawWosProject {
             } => self.apply_add_milestone(milestone_id, condition),
             Command::RemoveMilestone { milestone_id } => self.apply_remove_milestone(milestone_id),
             Command::SetTimer { timer_id, duration } => self.apply_set_timer(timer_id, duration),
-            Command::AddAiAgent {
-                agent_id,
-                role,
-                model,
-                capabilities,
-            } => self.apply_add_ai_agent(agent_id, role, model, capabilities),
             Command::AddExtensionKey { key, value } => self.apply_add_extension_key(key, value),
             Command::SetNativeFields { fields } => self.apply_set_native_fields(fields),
             Command::PutCaseField { name, definition } => {

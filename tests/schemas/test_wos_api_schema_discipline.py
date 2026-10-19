@@ -76,6 +76,8 @@ def api_referencing_registry() -> Registry:
         (schema_id, DRAFT202012.create_resource(schema))
         for schema_id, schema in api_schema_registry().items()
     ]
+    workflow = load_schema(SCHEMA_DIR / "wos-workflow.schema.json")
+    resources.append((workflow["$id"], DRAFT202012.create_resource(workflow)))
     return Registry().with_resources(resources)
 
 

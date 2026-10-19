@@ -2,24 +2,92 @@
   "id": "AI-009-permission-bounds",
   "rule": "AI-009",
   "batch": 3,
-  "description": "Permission bounds evaluated against live agent output (AI S4.2). Agent output with income outside permitted range triggers rejection.",
+  "description": "Native supplied-output policy stage only. No invocation, definition validation, review, fallback execution or governed commit claim.",
   "documents": {
-    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
-    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+    "kernel": "inline"
   },
-  "initial_case_state": { "income": 50000 },
+  "inline_documents": {
+    "kernel": {
+      "$wosWorkflow": "1.0",
+      "url": "urn:test:native-profile:ai-009",
+      "version": "1.0.0",
+      "title": "Independent native AI replay controls",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "assessor",
+          "type": "agent"
+        }
+      ],
+      "agents": [
+        {
+          "id": "assessor",
+          "agentType": "deterministic",
+          "modelIdentifier": "literal-rules-model",
+          "modelVersion": "7.0.0",
+          "deonticConstraints": [
+            {
+              "id": "amount-bound",
+              "kind": "permission",
+              "allowedFields": [
+                "/amount"
+              ],
+              "bounds": "output.amount <= 100",
+              "onViolation": "reject"
+            }
+          ]
+        }
+      ],
+      "aiOversight": {},
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": {
+                  "kind": "message",
+                  "name": "decide"
+                },
+                "target": "done"
+              }
+            ]
+          },
+          "done": {
+            "type": "final"
+          }
+        }
+      }
+    }
+  },
+  "initial_case_state": {
+    "retained": 42
+  },
   "event_sequence": [
     {
-      "event": "determined",
-      "actor": "eligibilityAgent",
+      "event": "decide",
+      "actor": "assessor",
       "data": {
-        "output": { "income": -1000, "determination": "eligible" },
-        "confidenceReport": { "overall": 0.92 }
+        "output": {
+          "amount": 101
+        },
+        "confidenceReport": {
+          "overall": 1.0,
+          "method": "declared"
+        }
       }
     }
   ],
   "expected_transitions": [],
   "expected_provenance": [
-    { "record_kind": "deonticViolation", "data": { "constraintId": "perm-income-range", "action": "reject" } }
-  ]
+    {
+      "record_kind": "deonticViolation",
+      "data": {
+        "constraintId": "amount-bound",
+        "action": "reject"
+      }
+    }
+  ],
+  "expected_errors": []
 }

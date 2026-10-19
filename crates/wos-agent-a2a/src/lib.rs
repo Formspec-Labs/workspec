@@ -1,13 +1,11 @@
 // Rust guideline compliant 2026-02-21
 
-//! A2A multi-agent orchestrator [`AgentInvoker`] adapter (skeleton).
+//! Explicitly unsupported A2A agent invocation adapter.
 //!
-//! Implements [`wos_core::agent::AgentInvoker`] against [`InvokerSpec::A2A`].
-//! Multi-agent orchestrators are *one kind* of `AgentInvoker`, not a special
-//! WOS concept (ADR 0064 §2.2): the orchestrator is the substrate; WOS sees a
-//! single declaration and the orchestrator handles its own internal fan-out.
-//!
-//! Body is `unimplemented!()` pending the A2A client crate decision.
+//! The adapter rejects mismatched invoker kinds. Matching declarations return
+//! an unsupported execution/model-mapping error until the provider integration
+//! exists. The admitted agent declaration owns model identity; no duplicate
+//! selector or successful invocation evidence is invented here.
 
 use wos_core::agent::{
     AgentContext, AgentInvocationError, AgentInvoker, AgentResult, AgentTask, InvokerKind,
@@ -37,12 +35,10 @@ impl AgentInvoker for A2AInvoker {
         _ctx: &AgentContext<'_>,
     ) -> Result<AgentResult, AgentInvocationError> {
         match decl.invoker.as_ref() {
-            Some(InvokerSpec::A2A { .. }) => {
-                unimplemented!(
-                    "wos-agent-a2a is a skeleton; the A2A orchestrator integration is tracked as \
-                     a follow-up to ADR 0064. See TODO.md."
-                )
-            }
+            Some(InvokerSpec::A2A { .. }) => Err(AgentInvocationError::Substrate(format!(
+                "unsupported adapter execution/model mapping for admitted {}@{}; owning provider configuration/resolution operation is unavailable",
+                decl.model_identifier, decl.model_version
+            ))),
             other => Err(AgentInvocationError::InvokerMismatch(format!(
                 "A2AInvoker bound to agent '{}' but declaration's invoker.kind is {:?}; \
                  deployment routed the wrong kind to this adapter (expected `{}`)",
@@ -62,25 +58,11 @@ mod tests {
     #[test]
     fn refuses_non_a2a_spec() {
         let inv = A2AInvoker::new();
-        let decl = AgentDeclaration {
-            id: "a".into(),
-            kind: "agent".into(),
-            agent_type: AgentType::Generative,
-            model_identifier: "m".into(),
-            model_version: "1".into(),
-            description: None,
-            capabilities: vec![],
-            model_version_policy: None,
-            confidence_decay: None,
-            fallback_chain: vec![],
-            cascading_invocations: vec![],
-            deontic_constraints: None,
-            invoker: Some(InvokerSpec::Mcp {
+        let decl = serde_json::from_value::<AgentDeclaration>(serde_json::json!({"id":"a","agentType":AgentType::Generative,"modelIdentifier":"m","modelVersion":"1","invoker":Some(InvokerSpec::Mcp {
                 server: "s".into(),
                 tool: "t".into(),
-            }),
-            extensions: Default::default(),
-        };
+ metadata:Default::default(),
+})})).unwrap();
         let task = AgentTask {
             capability_id: "c".into(),
             prompt: None,

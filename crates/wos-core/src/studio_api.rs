@@ -46,3 +46,9 @@ pub use crate::model::kernel::{
     Milestone, Region, SignalScope, State, StateKind, TimerEventSource, Transition,
     TransitionEvent,
 };
+
+/// Shared native policy admission and draft rule navigation.
+#[doc(inline)]
+pub use crate::ai_policy::{
+    AiPolicyError, NativeAiPolicy, NativeRuleSource, load_native_ai_policy, native_rule_sources,
+};

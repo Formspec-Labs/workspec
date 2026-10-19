@@ -1,0 +1,9 @@
+# Shared native AI policy replay controls
+
+The seven literal vectors have independently reviewed expected status, state, unchanged case values and policy disposition. Root froze the canonical authored-event revision at SHA-256 `b517c18aebcac1c7411d884c06602b94cbdb7d2a27bf430d70fbd512f82345f5`. Its only semantic changes from the retained prior revision are seven authored transition event values: `"decide"` becomes `{"kind":"message","name":"decide"}`. All delivery and expectations remain unchanged. The owner API and actual MCP dispatch execute the same candidates, fixture bytes and declared empty dependency list; tests compare identity, input digests, native state, trace and policy observations while retaining real provenance identifiers.
+
+A scenario may pass because the expected rejection occurred. This means its assertions passed. It does not establish agent invocation, input/output definition validation, human confirmation/review, governed commitment, hosted access control or durable execution. Required absent review/calibration operations explicitly refuse. Wrong expected state/value cases fail without replacing actual observations.
+
+Current native stage controls replace the retired grouped-rule policy language. Full invocation/preconditions remain fs-w9dv, governed output commitment fs-t9h8, and general synthetic operation evidence fs-pzju. Historical scenarios and original expectations remain in the adjacent historical fixture inventories and baseline Git history.
+
+The paired `event-shapes.json` control distinguishes canonical authored typed events from the stored bare-string form expressly permitted by Kernel §4.5. Canonical schema validation accepts the typed candidate and rejects the stored string candidate; native policy loading and actual API/MCP dispatch retain each source and dispatch both to the same literal expected outcome. Policy loading does not claim complete Workflow schema validation (fs-h9gq).

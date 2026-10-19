@@ -1,0 +1,287 @@
+{
+  "baseline": "b40dcbaafff7b30ba1ba3bcfa85cc73ca6492684",
+  "entries": [
+    {
+      "path": "ac-001-expired-calibration-cap.json",
+      "sha256": "89940beff980f93220b9e80665f9e9f6dbab3482743a2f2df2d0725839a9a5d7",
+      "rule": "AC-001",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ac-002-max-autonomy-minimum.json",
+      "sha256": "ec6ead138c83fc2babdf9e3796fa94c8eabbd73e4bcb0c43b323085023bc2149",
+      "rule": "AC-002",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ag-004-session-pause.json",
+      "sha256": "b65cd8783e0a0bbc6479dadb5ef8901fdeb0d09cd749efec039b7fb37af1a9c1",
+      "rule": "AG-004",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ag-005-tool-not-permitted.json",
+      "sha256": "552aa4cba8ae75a3c29714cf10db68cf4438aaf44b3bca7746da281a0201d15d",
+      "rule": "AG-005",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ag-006-no-direct-case-write.json",
+      "sha256": "339239706f3e4562206e0f13ddd8dfb37d82090dde6db4551d5340047cd4f8b5",
+      "rule": "AG-006",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ag-007-tool-rate-limit.json",
+      "sha256": "0a0ce156f35441e247b7d5e4dacf0f6c2f9fde2d43c11d65120bfb208dea58c1",
+      "rule": "AG-007",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ag-009-agent-state-provenance.json",
+      "sha256": "4cc2518e8bbbb78c9f291e608a3c8070b935b6ba313de8c9d35ec06bd38098be",
+      "rule": "AG-009",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ag-016-review-ground-truth.json",
+      "sha256": "7c0fcddc470b63958be0d073526458f1d818d003e7e70f67d5cb072fbe7b06d9",
+      "rule": "AG-016",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-005-no-override-human.json",
+      "sha256": "bbe5d14e0612ad5e58ea41fb5fe3fc72d6c4d241f38547a6b678f5239db36f86",
+      "rule": "AI-005",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-006-agent-provenance-fields.json",
+      "sha256": "82f397b2fcdb5f4d056003497cfd60030caaf99caa4f959d51e91c4dc1518368",
+      "rule": "AI-006",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-008-actor-type-immutable.json",
+      "sha256": "7716fc6a321f82657a209f960be91d42e5eaa5eab89bad2f5bd90ef95fb7b0c7",
+      "rule": "AI-008",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-009-permission-bounds.json",
+      "sha256": "7208d047a6fc159903a64e614875ea716ebfd89b75a26df5cde6d807464d2c2e",
+      "rule": "AI-009",
+      "disposition": "native-stage"
+    },
+    {
+      "path": "ai-010-prohibition-condition.json",
+      "sha256": "56526e2af9d59e2cf9ed60b20885f46ab89f6ad698c8cd7329a2f9c59516e9e3",
+      "rule": "AI-010",
+      "disposition": "native-stage"
+    },
+    {
+      "path": "ai-011-obligation-requirement.json",
+      "sha256": "8d9a04cee33ad6e39116906ed0144fb917e600bef98299ac9f8bd1c1eaa216df",
+      "rule": "AI-011",
+      "disposition": "native-stage"
+    },
+    {
+      "path": "ai-012-rights-violation-not-attributed.json",
+      "sha256": "113fcd25bd17a1814b46f88091f80735e1514ee7b53d85c71bdad37dc39d9a49",
+      "rule": "AI-012",
+      "disposition": "native-stage"
+    },
+    {
+      "path": "ai-013-evaluation-order.json",
+      "sha256": "8f3444c7e4d8ed927110d0a2717849698c33395bf7ecf8110d28a96796de340b",
+      "rule": "AI-013",
+      "disposition": "native-stage"
+    },
+    {
+      "path": "ai-014-most-restrictive-wins.json",
+      "sha256": "01e3bad72e57705a11afa0c6faf6b66605f9a1e7e449a4e3885a1a917567f124",
+      "rule": "AI-014",
+      "disposition": "native-stage"
+    },
+    {
+      "path": "ai-015-multi-level-evaluation.json",
+      "sha256": "960871880a54969a62dd9d8e9d3df36b4a80befd849c1b9639020ce1b0c210da",
+      "rule": "AI-015",
+      "disposition": "native-stage"
+    },
+    {
+      "path": "ai-016-cross-level-most-restrictive.json",
+      "sha256": "4c01d128a7e021ce5d98483cc742534ad981436b6c805da16a32943449c24322",
+      "rule": "AI-016",
+      "disposition": "native-stage"
+    },
+    {
+      "path": "ai-017-null-escalation.json",
+      "sha256": "047f06546fbd7345e732573e83076b916fb793650bf3fe99ec9d4d1c49464a36",
+      "rule": "AI-017",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-019-assistive-creates-human-task.json",
+      "sha256": "9deeb190ec32f7fa78593a77e614f3df7ffea0d0838b9d258597322e45a27dd5",
+      "rule": "AI-019",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-021-impact-level-cap.json",
+      "sha256": "3b97a59bb52cb4a0bce6ad1a5dd95622ae0e9798c19961147499027b88452ea5",
+      "rule": "AI-021",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-022-effective-autonomy-minimum.json",
+      "sha256": "8ef37e502f674de188fd5f5c1593d471c7499afe9892bf3ffd3893ea9ffa8414",
+      "rule": "AI-022",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-025-escalation-requires-approval.json",
+      "sha256": "69199d09d38212d6dcadea90ee70c4e2c0a0527860d438cfa26b0f3be0663804",
+      "rule": "AI-025",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-027-escalation-deontic-not-bypassed.json",
+      "sha256": "dd1f546fbcf85bd0abe7e499384765458f7e76d4830e85510862d5b21a252c1c",
+      "rule": "AI-027",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-028-demotion-next-invocation.json",
+      "sha256": "2a7850bbb7eed4e188400457c3cf971edb2898001810489112b6bdab84bec937",
+      "rule": "AI-028",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-029-pending-recalibration.json",
+      "sha256": "c51796247a27aac59c60deaa4f1745eecf3d455a466482aa3c5558e9589f2828",
+      "rule": "AI-029",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-030-dynamic-autonomy-cap.json",
+      "sha256": "2600609c413e5187fe43ae8443f3872a105ede00447a67a3f0fcb382b5ec320a",
+      "rule": "AI-030",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-032-validation-triggers-fallback.json",
+      "sha256": "71bc39447bbc01a0c8c4dddbf66ccd51f0c5756433b4652254d2bbf4648b021a",
+      "rule": "AI-032",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-033-agent-touched-annotation.json",
+      "sha256": "7f60ef9583a8b136019bfaa64c42348b0274ca7100434d9bdfe5ceca585954d6",
+      "rule": "AI-033",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-034-confidence-report-required.json",
+      "sha256": "584309a3aae6ca9b4c785c11fa43b849f001c8675bf00d746bfd6c9a92057fc2",
+      "rule": "AI-034",
+      "disposition": "native-stage"
+    },
+    {
+      "path": "ai-035-calibrated-confidence.json",
+      "sha256": "f86eabd739f5f50f9babd68655dfada516c75266beb31d40c8892177279f95b0",
+      "rule": "AI-035",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-036-confidence-below-floor.json",
+      "sha256": "f24b2bb63731f1d04dece6532ed8d22412855f6a0c7bfcdb04d9cd356fb76b85",
+      "rule": "AI-036",
+      "disposition": "native-stage"
+    },
+    {
+      "path": "ai-037-decay-trigger.json",
+      "sha256": "5de7b525f8195b5180e79824f17797c9e1a37f86e70ed742b531dcc6e1585824",
+      "rule": "AI-037",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-038-cumulative-confidence-pause.json",
+      "sha256": "065d21fcf2d3e6c5c49143d46d7f6841fc12b8b7f35ee42c131d38ebcc434d4c",
+      "rule": "AI-038",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-039-fallback-provenance.json",
+      "sha256": "a945d7d45d30cdb6696b5a4a5d105732987dff9ffe1638627a065ee198d81830",
+      "rule": "AI-039",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-040-terminal-fallback.json",
+      "sha256": "452cfcac01a457411d4a8def863e6fdf19983f9d70c3a061b7b50a797fe149fa",
+      "rule": "AI-040",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-044-drift-reclassification.json",
+      "sha256": "c7d5fbbd4ec0fcbaad2f39002faf7778d57394e31f28a0eee495b8c1571d7b66",
+      "rule": "AI-044",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-045-independent-first-suppression.json",
+      "sha256": "c026950742d3610fa22d1cb92613fee19bb6b86a30d74b27948c4b499fa1f46d",
+      "rule": "AI-045",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-047-narrative-non-authoritative.json",
+      "sha256": "f7172c65b2349b480b6843c7e7b99a64002023bf5ba22bf25d485727c42b9491",
+      "rule": "AI-047",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-048-narrative-not-dispositive.json",
+      "sha256": "28c04b7bf9681d358a8d4583119380caa09375d7730c24fbb447da7e749a0204",
+      "rule": "AI-048",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-051-proxy-deontic.json",
+      "sha256": "974a1ae2179a795ff0ea8316102035b93c7e55d9a6b39e1f3b0ba1197cce502d",
+      "rule": "AI-051",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-052-proxy-provenance.json",
+      "sha256": "b10258ab225e9d963798db94bac5bf7b5b7d1802f22eb4eb9fb6093162514d1e",
+      "rule": "AI-052",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-053-version-change-provenance.json",
+      "sha256": "49977a7b26c70f21b90fd923ff5eacd573404e819e773e3f03291cf92f070234",
+      "rule": "AI-053",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-054-bypass-single-invocation.json",
+      "sha256": "7d659340c9162ba89472b2c1848d44c4de76aa9d6210316ea0e4ceb61381f090",
+      "rule": "AI-054",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-055-consistency-contradiction.json",
+      "sha256": "97d9dd36e93f332db41e836054cf92e44952a18e0bac0530e0b4316b6feac6f3",
+      "rule": "AI-055",
+      "disposition": "retired-unsupported-operation"
+    },
+    {
+      "path": "ai-057-processor-enforces-constraints.json",
+      "sha256": "e6d9c8e2d8f386e9d1774d271553f807ffb99cbdc86fd122efcc79b08f644486",
+      "rule": "AI-057",
+      "disposition": "retired-unsupported-operation"
+    }
+  ]
+}

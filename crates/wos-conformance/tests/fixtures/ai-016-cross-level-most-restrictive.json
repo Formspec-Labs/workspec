@@ -2,29 +2,98 @@
   "id": "AI-016-cross-level-most-restrictive",
   "rule": "AI-016",
   "batch": 3,
-  "description": "Same-level most-restrictive resolution: two obligation violations with different enforcement actions at agent level — reject wins over escalateToHuman (AI S4.6).",
+  "description": "Native supplied-output policy stage only. No invocation, definition validation, review, fallback execution or governed commit claim.",
   "documents": {
-    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
-    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+    "kernel": "inline"
   },
-  "initial_case_state": { "income": 50000 },
+  "inline_documents": {
+    "kernel": {
+      "$wosWorkflow": "1.0",
+      "url": "urn:test:native-profile:ai-016",
+      "version": "1.0.0",
+      "title": "Independent native AI replay controls",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "assessor",
+          "type": "agent"
+        }
+      ],
+      "agents": [
+        {
+          "id": "assessor",
+          "agentType": "deterministic",
+          "modelIdentifier": "literal-rules-model",
+          "modelVersion": "7.0.0",
+          "deonticConstraints": [
+            {
+              "id": "local-flag",
+              "kind": "prohibition",
+              "condition": "true",
+              "onViolation": "flag"
+            }
+          ]
+        }
+      ],
+      "aiOversight": {
+        "deonticConstraints": [
+          {
+            "id": "shared-reject",
+            "kind": "permission",
+            "bounds": "false",
+            "onViolation": "reject"
+          }
+        ]
+      },
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": {
+                  "kind": "message",
+                  "name": "decide"
+                },
+                "target": "done"
+              }
+            ]
+          },
+          "done": {
+            "type": "final"
+          }
+        }
+      }
+    }
+  },
+  "initial_case_state": {
+    "retained": 42
+  },
   "event_sequence": [
     {
-      "event": "determined",
-      "actor": "eligibilityAgent",
+      "event": "decide",
+      "actor": "assessor",
       "data": {
         "output": {
-          "income": 50000,
-          "determination": "eligible",
-          "confidenceReport": null,
-          "reasonCodes": ["R1"],
-          "evidenceCitations": null
+          "amount": 101
+        },
+        "confidenceReport": {
+          "overall": 1.0,
+          "method": "declared"
         }
       }
     }
   ],
   "expected_transitions": [],
   "expected_provenance": [
-    { "record_kind": "deonticResolution", "data": { "effectiveAction": "reject", "reason": "most-restrictive" } }
-  ]
+    {
+      "record_kind": "deonticViolation",
+      "data": {
+        "constraintId": "shared-reject",
+        "action": "reject"
+      }
+    }
+  ],
+  "expected_errors": []
 }

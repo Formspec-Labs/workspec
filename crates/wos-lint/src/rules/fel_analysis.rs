@@ -141,11 +141,37 @@ fn check_governance_fel(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>
 
 /// Check FEL in an AI Integration document (AI-024, AI-057).
 fn check_ai_integration_fel(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
-    if let Some(agents) = doc.value.get("agents").and_then(Value::as_object) {
-        for (agent_name, agent) in agents {
-            let base_path = format!("/agents/{agent_name}");
+    if let Some(agents) = doc.value.get("agents").and_then(Value::as_array) {
+        for (agent_index, agent) in agents.iter().enumerate() {
+            let base_path = format!("/agents/{agent_index}");
             check_escalation_conditions(agent, &base_path, diagnostics);
             check_capability_preconditions(agent, &base_path, diagnostics);
+        }
+    }
+    if let Ok(Some(policy)) = wos_core::ai_policy::load_native_ai_policy(&doc.value) {
+        for (pointer, rule) in policy.rule_definitions() {
+            let expression = match rule {
+                wos_core::model::ai::DeonticConstraint::Permission(rule) => rule.bounds.as_deref(),
+                wos_core::model::ai::DeonticConstraint::Prohibition(rule) => {
+                    Some(rule.condition.as_str())
+                }
+                wos_core::model::ai::DeonticConstraint::Obligation(rule) => {
+                    Some(rule.requirement.as_str())
+                }
+                wos_core::model::ai::DeonticConstraint::Right(_) => None,
+            };
+            if let Some(expression) = expression {
+                if let Err(error) = parse(expression) {
+                    diagnostics.push(LintDiagnostic::t2_error(
+                        "WOS-AI-FEL-001",
+                        pointer,
+                        fel_parse_failure_message(
+                            "native policy predicate is not valid FEL",
+                            &error,
+                        ),
+                    ));
+                }
+            }
         }
     }
 }
@@ -428,17 +454,16 @@ fn check_escalation_conditions(
     base_path: &str,
     diagnostics: &mut Vec<LintDiagnostic>,
 ) {
-    let Some(escalation) = agent.get("escalation") else {
-        return;
-    };
-
-    let Some(conditions) = escalation.get("conditions").and_then(Value::as_array) else {
+    let Some(conditions) = agent
+        .pointer("/autonomyPolicy/escalation")
+        .and_then(Value::as_array)
+    else {
         return;
     };
 
     for (i, condition) in conditions.iter().enumerate() {
-        let path = format!("{base_path}/escalation/conditions/{i}");
-        if let Some(expr_str) = condition.as_str() {
+        let path = format!("{base_path}/autonomyPolicy/escalation/{i}/condition");
+        if let Some(expr_str) = condition.get("condition").and_then(Value::as_str) {
             let expr = match parse(expr_str) {
                 Ok(e) => e,
                 Err(err) => {
@@ -1375,13 +1400,9 @@ mod tests {
             DocumentKind::Workflow,
             json!({
                 "$wosWorkflow": "1.0",
-                "agents": {
-                    "classifier": {
-                        "escalation": {
-                            "conditions": ["$score > 0.9"]
-                        }
-                    }
-                }
+                "agents": [{"id":"classifier",
+                        "autonomyPolicy": {"escalation":[{"condition":"$score > 0.9"}]}
+                    }]
             }),
         );
         let mut diag = Vec::new();
@@ -1399,13 +1420,9 @@ mod tests {
             DocumentKind::Workflow,
             json!({
                 "$wosWorkflow": "1.0",
-                "agents": {
-                    "classifier": {
-                        "escalation": {
-                            "conditions": ["@agent.confidence < 0.7"]
-                        }
-                    }
-                }
+                "agents": [{"id":"classifier",
+                        "autonomyPolicy": {"escalation":[{"condition":"@agent.confidence < 0.7"}]}
+                    }]
             }),
         );
         let mut diag = Vec::new();
@@ -1424,14 +1441,12 @@ mod tests {
             DocumentKind::Workflow,
             json!({
                 "$wosWorkflow": "1.0",
-                "agents": {
-                    "extractor": {
+                "agents": [{"id":"extractor",
                         "capabilities": [{
                             "id": "extract",
                             "preconditions": ["caseFile.documentsReceived = true"]
                         }]
-                    }
-                }
+                    }]
             }),
         );
         let mut diag = Vec::new();
@@ -1448,14 +1463,12 @@ mod tests {
             DocumentKind::Workflow,
             json!({
                 "$wosWorkflow": "1.0",
-                "agents": {
-                    "extractor": {
+                "agents": [{"id":"extractor",
                         "capabilities": [{
                             "id": "extract",
                             "preconditions": ["!!! not FEL !!!"]
                         }]
-                    }
-                }
+                    }]
             }),
         );
         let mut diag = Vec::new();
@@ -1476,14 +1489,12 @@ mod tests {
             DocumentKind::Workflow,
             json!({
                 "$wosWorkflow": "1.0",
-                "agents": {
-                    "extractor": {
+                "agents": [{"id":"extractor",
                         "capabilities": [{
                             "id": "extract",
                             "preconditions": ["caseFile.amount > 0"]
                         }]
-                    }
-                }
+                    }]
             }),
         );
         let mut diag = Vec::new();
@@ -1501,14 +1512,12 @@ mod tests {
             DocumentKind::Workflow,
             json!({
                 "$wosWorkflow": "1.0",
-                "agents": {
-                    "extractor": {
+                "agents": [{"id":"extractor",
                         "capabilities": [{
                             "id": "extract",
                             "preconditions": ["caseFile.amount"]
                         }]
-                    }
-                }
+                    }]
             }),
         );
         let mut diag = Vec::new();
@@ -1527,14 +1536,12 @@ mod tests {
             DocumentKind::Workflow,
             json!({
                 "$wosWorkflow": "1.0",
-                "agents": {
-                    "extractor": {
+                "agents": [{"id":"extractor",
                         "capabilities": [{
                             "id": "extract",
                             "preconditions": ["\"open\""]
                         }]
-                    }
-                }
+                    }]
             }),
         );
         let mut diag = Vec::new();
@@ -1553,14 +1560,12 @@ mod tests {
             DocumentKind::Workflow,
             json!({
                 "$wosWorkflow": "1.0",
-                "agents": {
-                    "extractor": {
+                "agents": [{"id":"extractor",
                         "capabilities": [{
                             "id": "extract",
                             "preconditions": [precondition]
                         }]
-                    }
-                }
+                    }]
             }),
         );
         let mut diag = Vec::new();
@@ -1628,14 +1633,12 @@ mod tests {
             DocumentKind::Workflow,
             json!({
                 "$wosWorkflow": "1.0",
-                "agents": {
-                    "extractor": {
+                "agents": [{"id":"extractor",
                         "capabilities": [{
                             "id": "extract",
                             "preconditions": ["present(caseFile.documentsReceived)"]
                         }]
-                    }
-                }
+                    }]
             }),
         );
         let mut diag = Vec::new();
@@ -1681,11 +1684,9 @@ mod tests {
             DocumentKind::Workflow,
             json!({
                 "$wosWorkflow": "1.0",
-                "agents": {
-                    "extractor": {
+                "agents": [{"id":"extractor",
                         "capabilities": [{ "id": "extract" }]
-                    }
-                }
+                    }]
             }),
         );
         let mut diag = Vec::new();

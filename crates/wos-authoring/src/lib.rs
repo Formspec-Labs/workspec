@@ -39,3 +39,7 @@ pub use wos_core::{ActorKind, ImpactLevel, KernelDocument, StateKind};
 
 // Re-export model types needed by wos-mcp's query tools for graph generation.
 pub use wos_core::model::kernel::{Actor, State, Transition, TransitionEvent};
+
+// Source navigation stays available for drafts without policy admission.
+#[doc(inline)]
+pub use wos_core::ai_policy::{NativeRuleSource, native_rule_sources};

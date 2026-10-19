@@ -1,3 +1,4 @@
+// Rust guideline compliant 2026-02-21
 //! Native authoring, query, export and exact selected-project replay integration.
 
 use wos_mcp::{dispatch::dispatch, registry::ProjectRegistry};
@@ -20,6 +21,8 @@ async fn full_round_trip_with_10_plus_tool_calls() {
         .as_str()
         .expect("must have project_id")
         .to_string();
+
+    dispatch(&mut registry,"wos_edit_workflow",&pid,serde_json::json!({"project_id":pid,"fields":{"url":"urn:test:round-trip-replay","version":"1.0.0"}})).await.unwrap();
 
     // ── 2. Set impact level ───────────────────────────────────────────────
 
@@ -112,22 +115,21 @@ async fn full_round_trip_with_10_plus_tool_calls() {
     .await
     .unwrap();
 
-    // ── 9. Register an AI agent ───────────────────────────────────────────
-
+    // Native actor identity and declaration are separate draft edits.
     dispatch(
         &mut registry,
-        "wos_add_ai_agent",
+        "wos_add_actor",
         &pid,
-        serde_json::json!({
-            "project_id":   pid,
-            "agent_id":     "summaryBot",
-            "role":         "Summarise case documents",
-            "model":        "claude-3-5-sonnet",
-            "capabilities": ["read_case_file", "submit_summary"]
-        }),
+        serde_json::json!({"project_id":pid,"actor_id":"summaryBot","kind":"agent"}),
     )
     .await
-    .expect("wos_add_ai_agent must succeed");
+    .unwrap();
+    dispatch(&mut registry,"wos_edit_workflow",&pid,serde_json::json!({
+        "project_id":pid,"action":"agent","value":{
+            "id":"summaryBot","agentType":"generative","modelIdentifier":"summary-model","modelVersion":"1.0.0",
+            "description":"Summarise case documents","capabilities":[{"id":"read_case_file"},{"id":"submit_summary"}]
+        }
+    })).await.unwrap();
 
     dispatch(
         &mut registry,
@@ -135,7 +137,7 @@ async fn full_round_trip_with_10_plus_tool_calls() {
         &pid,
         serde_json::json!({
             "project_id":pid,"action":"agent_constraint","agent_id":"summaryBot",
-            "constraint":{"kind":"prohibition","expression":"true"}
+            "constraint":{"id":"no-automatic-close","kind":"prohibition","condition":"true","onViolation":"reject"}
         }),
     )
     .await
@@ -232,7 +234,15 @@ async fn full_round_trip_with_10_plus_tool_calls() {
     .await
     .expect("wos_search(constraint) must succeed");
 
-    assert_eq!(constraint_search["matches"].as_array().unwrap().len(), 0); // Historical extension-only search.
+    assert_eq!(constraint_search["matches"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        constraint_search["matches"][0]["path"],
+        "/agents/0/deonticConstraints/0"
+    );
+    assert_eq!(
+        constraint_search["matches"][0]["value"]["id"],
+        "no-automatic-close"
+    );
 
     // ── 13. Describe document — verify final counts ───────────────────────
 
@@ -257,8 +267,8 @@ async fn full_round_trip_with_10_plus_tool_calls() {
     );
     assert_eq!(
         describe["actor_count"],
-        serde_json::json!(1),
-        "must have 1 actor"
+        serde_json::json!(2),
+        "must have the reviewer and matching agent actor"
     );
     assert_eq!(
         describe["ai_agent_count"],
@@ -319,12 +329,10 @@ async fn full_round_trip_with_10_plus_tool_calls() {
 
     // ── 16. Run conformance fixture ───────────────────────────────────────
 
-    // Replay this exported workflow after assigning its required document identity.
+    // Replay the exact exported workflow with its authored document identity.
     // The scenario expectations are independent. Native agent declarations remain
     // complete even though their canonical AI shapes currently exceed runtime support.
-    let mut replay_document = doc.clone();
-    replay_document["url"] = serde_json::json!("urn:test:round-trip-replay");
-    replay_document["version"] = serde_json::json!("1.0.0");
+    let replay_document = doc.clone();
     let loaded = dispatch(
         &mut registry,
         "wos_load_document",
@@ -343,27 +351,18 @@ async fn full_round_trip_with_10_plus_tool_calls() {
         "expected_transitions":[{"from":"open","target":"under_review","event":"startReview"},
             {"from":"under_review","target":"closed","event":"close"}]
     }).to_string();
-    // Current native agent constraints are arrays; the maintained AI runtime still
-    // expects its older object model. Preserve the exact candidate and refuse it.
-    // Supported execution is covered independently by exact_candidate_replay.rs.
-    let refusal = dispatch(
+    // This exercises human lifecycle events; it does not invoke an agent or
+    // claim that capability preconditions, review or governed output commit ran.
+    let conformance = dispatch(
         &mut registry,
         "wos_run_conformance",
         replay_id,
         serde_json::json!({"project_id":replay_id,"fixture_json":fixture_json}),
     )
     .await
-    .unwrap_err();
-    assert!(
-        refusal
-            .to_string()
-            .contains("unsupported-runtime-configuration"),
-        "{refusal}"
-    );
-    assert!(
-        refusal.to_string().contains("AI doc parse error"),
-        "{refusal}"
-    );
+    .expect("native policy declarations must not require a retired AI document");
+    assert_eq!(conformance["passed"], true, "{conformance}");
+    assert!(conformance["trace"].is_object());
     assert_eq!(
         registry.get(replay_id).unwrap().native_snapshot(),
         replay_document
@@ -445,8 +444,8 @@ async fn native_agents_description_survives_export_and_reopen() {
             "milestones": {}
         },
         "agents": [
-            {"id": "summaryBot", "modelIdentifier": "summary-model", "autonomy": "assistive"},
-            {"id": "triageBot", "modelIdentifier": "triage-model", "autonomy": "readOnly"}
+            {"id": "summaryBot", "agentType":"deterministic", "modelIdentifier": "summary-model", "modelVersion":"1.0.0"},
+            {"id": "triageBot", "agentType":"deterministic", "modelIdentifier": "triage-model", "modelVersion":"1.0.0"}
         ],
         "aiOversight": {},
         "extensions": {"x-test-context": {"retained": [1, true, "authored"]}}

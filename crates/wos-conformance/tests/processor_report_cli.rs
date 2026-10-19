@@ -10,7 +10,7 @@ fn fixtures_dir() -> PathBuf {
 }
 
 #[test]
-fn json_report_succeeds_for_verified_claims() {
+fn json_report_keeps_supported_governance_and_fails_incomplete_native_ai_claims() {
     let temp_dir = tempfile::tempdir().expect("create temp dir");
     let manifest_path = temp_dir.path().join("processor-manifest.json");
     std::fs::write(
@@ -37,8 +37,8 @@ fn json_report_succeeds_for_verified_claims() {
         .expect("run report CLI");
 
     assert!(
-        output.status.success(),
-        "expected success, stderr was: {}",
+        output.status.code() == Some(1),
+        "expected failed native AI claim, stderr was: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 
@@ -54,7 +54,7 @@ fn json_report_succeeds_for_verified_claims() {
     assert!(
         claims
             .iter()
-            .any(|claim| { claim["rule_id"] == "AI-001" && claim["status"] == "Verified" })
+            .any(|claim| { claim["rule_id"] == "AI-001" && claim["status"] == "Failed" })
     );
 }
 

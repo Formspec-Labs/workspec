@@ -147,7 +147,7 @@
         "$ref": "#/$defs/Actor"
       },
       "minItems": 1,
-      "description": "Non-empty list of actors (humans, systems, or agents) that may perform transitions. Each entry has a unique `id`; transitions reference these ids. When any actor uses type `agent`, the `agents` and `aiOversight` blocks are required (lint WOS-AGENT-XREF-001).",
+      "description": "Non-empty list of human, system or agent actors referenced by native transitions. An agent actor requires a matching agents declaration. Workflows combining agents and advanced features must also declare aiOversight; other behavior-specific policy requirements remain with their owning operations.",
       "examples": [
         [
           {
@@ -250,20 +250,13 @@
       "examples": [
         [
           {
-            "id": "docExtractor",
-            "autonomy": "assistive"
-          }
-        ],
-        [
-          {
-            "id": "intakeBot",
-            "autonomy": "readOnly",
-            "deonticConstraints": [
-              {
-                "kind": "prohibition",
-                "expression": "true"
-              }
-            ]
+            "id": "eligibilityAgent",
+            "agentType": "statistical",
+            "modelIdentifier": "eligibility-classifier",
+            "modelVersion": "1.0.0",
+            "autonomyPolicy": {
+              "maxAutonomy": "assistive"
+            }
           }
         ]
       ],
@@ -274,20 +267,21 @@
     },
     "aiOversight": {
       "$ref": "#/$defs/AIOversight",
-      "description": "Cross-cutting AI oversight embedded in the workflow envelope: disclosure posture, drift detection, narrative tier handling, volume constraints. Pairs with the agents array (ADR 0076).",
+      "description": "Defined shared native AI policy: autonomy ceiling, kind-specific rules, confidence floor, fallback chain, autonomous volume limits and assistance disclosures. Agent monitoring is configured on each native agent; reserved settings are rejected.",
       "examples": [
         {
-          "disclosure": {},
-          "driftDetection": {}
-        },
-        {
-          "volumeConstraints": {},
-          "narrativeTier": {}
+          "defaultAutonomy": "assistive",
+          "disclosure": {
+            "discloseThatAgentAssisted": true
+          },
+          "volumeConstraints": {
+            "maxAutonomousPerDay": 0
+          }
         }
       ],
       "x-lm": {
         "critical": true,
-        "intent": "Cross-cutting AI policy — disclosure (EU AI Act Art. 13, OMB M-24-10), drift detection, narrative tier; pairs with agents block"
+        "intent": "Defined shared AI policy composed with agent and action restrictions; configuration does not prove evaluation or execution"
       }
     },
     "signature": {
@@ -602,7 +596,7 @@
       "$comment": "Cross-cutting rule beyond JSON Schema expressivity: any transition gated by signature (on.kind=='signature') requires a signature block, and signers[] MUST cover the gating actor. Enforced by lint rule WOS-SIG-COVER-001."
     },
     {
-      "title": "Workflows with both agents and advanced features SHOULD declare aiOversight.",
+      "title": "Workflows with both agents and advanced features MUST declare aiOversight.",
       "if": {
         "allOf": [
           {
@@ -1312,7 +1306,17 @@
             "properties": {
               "states": {
                 "type": "object",
-                "additionalProperties": {"$ref": "#/$defs/State"}
+                "additionalProperties": {
+                  "$ref": "#/$defs/State"
+                },
+                "description": "Native child states belonging to this parallel region, keyed by their local state identifiers.",
+                "examples": [
+                  {
+                    "open": {
+                      "type": "atomic"
+                    }
+                  }
+                ]
               }
             }
           },
@@ -2098,8 +2102,14 @@
       "type": "object",
       "additionalProperties": {
         "if": {
-          "required": ["binding"],
-          "properties": {"binding": {"const": "formspec"}}
+          "required": [
+            "binding"
+          ],
+          "properties": {
+            "binding": {
+              "const": "formspec"
+            }
+          }
         },
         "then": {
           "properties": {
@@ -2803,29 +2813,36 @@
     },
     "AgentDeclaration": {
       "type": "object",
-      "required": [
-        "id"
-      ],
-      "description": "Was wos-ai-integration.schema.json AgentDeclaration plus wos-agent-config.schema.json plus wos-drift-monitor.schema.json. Inlined per ADR 0076.",
+      "description": "Native per-agent declaration joined to its actor; strict policy fields and descriptive x-* metadata only.",
       "properties": {
         "id": {
           "type": "string",
           "minLength": 1,
-          "$comment": "MUST match an actor.id where actor.type=='agent'.",
-          "description": "Stable agent identifier referenced by workflow actors, invoker bindings, provenance records, and governance rules.",
+          "description": "Native agent id joined reciprocally to an actors entry whose type is agent.",
           "examples": [
-            "eligibilityScreener"
+            "screenEligibility"
           ],
           "x-wos": {
             "openStringKind": "identifier"
           }
         },
+        "agentType": {
+          "enum": [
+            "deterministic",
+            "statistical",
+            "generative"
+          ],
+          "description": "Required model taxonomy; actor kind is declared once on the matching native actor.",
+          "examples": [
+            "deterministic"
+          ]
+        },
         "modelIdentifier": {
           "type": "string",
           "minLength": 1,
-          "description": "Provider or deployment model identifier used for this agent, recorded so invocations and provenance can be tied to a concrete model family.",
+          "description": "Admitted provider or deployment model identity, used by its maintained resolver and adapter.",
           "examples": [
-            "claude-sonnet-4-20250514"
+            "classifier"
           ],
           "x-wos": {
             "openStringKind": "identifier"
@@ -2834,127 +2851,151 @@
         "modelVersion": {
           "type": "string",
           "minLength": 1,
-          "description": "Provider or deployment model version used for this agent, recorded so behavior can be audited across upgrades and recalibrations.",
+          "description": "Explicit admitted model version; execution never invents or silently substitutes it.",
           "examples": [
-            "2025-05-14"
+            "1.0.0"
           ],
           "x-wos": {
             "openStringKind": "identifier"
           }
         },
+        "description": {
+          "type": "string",
+          "description": "Human-readable agent purpose retained without granting operational authority.",
+          "examples": [
+            "Human-readable explanation."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AgentCapability"
+          },
+          "description": "Structured capabilities; strings and undeclared write grants are invalid."
+        },
         "modelVersionPolicy": {
           "enum": [
             "pinned",
-            "minor-allowed",
-            "major-allowed"
+            "approved",
+            "latest"
+          ],
+          "description": "Model selection policy; approved and latest require their maintained resolvers.",
+          "examples": [
+            "pinned"
           ]
         },
-        "autonomy": {
-          "enum": [
-            "readOnly",
-            "assistive",
-            "supervised",
-            "autonomous"
-          ],
-          "$comment": "Capped by impactLevel. rights-impacting MUST NOT exceed assistive without explicit governance permission."
+        "invoker": {
+          "$ref": "#/$defs/InvokerSpec"
         },
         "deonticConstraints": {
           "type": "array",
           "items": {
             "$ref": "#/$defs/DeonticConstraint"
           },
-          "description": "Per-agent deontic constraints. Each constraint binds the agent (or a specified sub-actor) to a permission, prohibition, obligation, or right per OASIS LegalRuleML §3. The kernel checks `kind` and `expression` (a FEL string); the optional `actor`, `condition`, `defeasible`, `citationRefs`, and `x-legalruleml-iri` surfaces let governance reviewers carry the legal grounding without re-encoding it elsewhere."
+          "description": "Agent-scoped kind-specific rules composed with workflow and selected action rules."
         },
         "confidenceFloor": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1,
-          "description": "Minimum calibrated confidence the agent must meet before its output may be used at the configured autonomy level.",
-          "examples": [
-            0.86
-          ]
+          "$ref": "#/$defs/ConfidenceFloor"
         },
         "confidenceDecay": {
-          "type": "object",
-          "description": "Policy describing how an agent confidence score decays over time or across drift signals before recalibration or human review is required.",
-          "examples": [
-            {
-              "halfLife": "P30D",
-              "recalibrateBelow": 0.82
-            }
-          ]
+          "$ref": "#/$defs/ConfidenceDecay"
         },
         "fallbackChain": {
           "type": "array",
           "items": {
+            "$ref": "#/$defs/FallbackStep"
+          },
+          "description": "Complete agent fallback override; omission inherits the workflow chain, never concatenates.",
+          "minItems": 1
+        },
+        "cascadingInvocations": {
+          "type": "array",
+          "items": {
             "type": "string",
             "minLength": 1,
-            "description": "Agent identifier in the ordered fallback chain used when this agent cannot act, fails validation, or is demoted by governance policy.",
+            "description": "Stable nonempty identifier resolved within its native declaration scope.",
             "examples": [
-              "humanReviewer"
+              "screenEligibility"
             ],
             "x-wos": {
               "openStringKind": "identifier"
             }
           },
-          "$comment": "Actor ids, in order. MUST terminate in a human-review actor for rights-impacting transitions."
+          "description": "Native target agent ids allowed for cascading invocation, subject to owner cycle checks."
         },
-        "capabilities": {
+        "approvedVersions": {
           "type": "array",
-          "$comment": "Capability sub-shape: declared write scope, contract refs, tool grants.",
-          "description": "Capabilities this agent may perform, such as extraction, classification, drafting, or tool invocation; runtime policy evaluates requests against this list.",
-          "examples": [
-            [
-              "documentExtraction",
-              "eligibilityScreening"
-            ]
-          ]
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Explicit model version admitted to approved model selection.",
+            "examples": [
+              "1.0.0"
+            ],
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          },
+          "description": "Versions admitted by approved selection; not permission to substitute another model."
+        },
+        "calibration": {
+          "$ref": "#/$defs/AgentCalibrationConfig"
+        },
+        "autonomyPolicy": {
+          "$ref": "#/$defs/AutonomyPolicy"
+        },
+        "actionOverrides": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ActionOverride"
+          },
+          "description": "Additional restrictions at exact native lifecycle action occurrences."
         },
         "driftMonitoring": {
-          "type": "object",
-          "description": "Agent-specific drift monitoring configuration, including observed signals and the governance response when drift is detected.",
-          "examples": [
-            {
-              "metric": "agreementRate",
-              "threshold": 0.94
-            }
-          ]
-        },
-        "invoker": {
-          "$ref": "#/$defs/InvokerSpec",
-          "description": "Substrate adapter discriminator (ADR 0064). Selects which AgentInvoker implementation handles invocations of this agent at runtime. Each `kind` corresponds to one adapter crate (`wos-agent-anthropic`, `wos-agent-mcp`, `wos-agent-a2a`, `wos-agent-http`, `wos-agent-stub`, `wos-agent-sdk-claude`). Deployment binds the discriminator to a concrete adapter; the workflow stays substrate-portable."
+          "$ref": "#/$defs/AgentDriftMonitoring"
         }
-      }
+      },
+      "required": [
+        "id",
+        "agentType",
+        "modelIdentifier",
+        "modelVersion"
+      ],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+        }
+      },
+      "examples": [
+        {
+          "id": "eligibilityAgent",
+          "agentType": "statistical",
+          "modelIdentifier": "eligibility-classifier",
+          "modelVersion": "1.0.0"
+        }
+      ]
     },
     "InvokerSpec": {
       "type": "object",
       "required": [
         "kind"
       ],
-      "description": "Tagged union over substrate adapters. Each `kind` value selects one wos-agent-* adapter crate per ADR 0064.",
+      "description": "Closed substrate adapter discriminator and binding fields; admitted model identity comes only from the enclosing native agent.",
       "oneOf": [
         {
           "title": "anthropic",
           "type": "object",
           "required": [
-            "kind",
-            "model"
+            "kind"
           ],
           "additionalProperties": false,
           "properties": {
             "kind": {
               "const": "anthropic"
-            },
-            "model": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Anthropic model identifier used for the invocation, recorded so behavior can be audited by model family and release.",
-              "examples": [
-                "claude-sonnet-4-20250514"
-              ],
-              "x-wos": {
-                "openStringKind": "identifier"
-              }
             },
             "configRef": {
               "type": "string",
@@ -2966,6 +3007,11 @@
               "x-wos": {
                 "openStringKind": "identifier"
               }
+            }
+          },
+          "patternProperties": {
+            "^x-": {
+              "description": "Descriptive vendor metadata with no executable authority."
             }
           }
         },
@@ -2991,6 +3037,11 @@
               "x-wos": {
                 "openStringKind": "identifier"
               }
+            }
+          },
+          "patternProperties": {
+            "^x-": {
+              "description": "Descriptive vendor metadata with no executable authority."
             }
           }
         },
@@ -3029,6 +3080,11 @@
                 "openStringKind": "identifier"
               }
             }
+          },
+          "patternProperties": {
+            "^x-": {
+              "description": "Descriptive vendor metadata with no executable authority."
+            }
           }
         },
         {
@@ -3053,6 +3109,11 @@
               "x-wos": {
                 "openStringKind": "identifier"
               }
+            }
+          },
+          "patternProperties": {
+            "^x-": {
+              "description": "Descriptive vendor metadata with no executable authority."
             }
           }
         },
@@ -3092,6 +3153,11 @@
                 "openStringKind": "uri"
               }
             }
+          },
+          "patternProperties": {
+            "^x-": {
+              "description": "Descriptive vendor metadata with no executable authority."
+            }
           }
         },
         {
@@ -3112,7 +3178,8 @@
               "items": {
                 "type": "object",
                 "required": [
-                  "output"
+                  "output",
+                  "confidenceReport"
                 ],
                 "additionalProperties": false,
                 "properties": {
@@ -3130,15 +3197,6 @@
                   "output": {
                     "description": "Output payload returned by the invoker."
                   },
-                  "confidence": {
-                    "type": "number",
-                    "minimum": 0,
-                    "maximum": 1,
-                    "description": "Confidence score returned with the stubbed agent response; omitted values default to full confidence in tests.",
-                    "examples": [
-                      0.91
-                    ]
-                  },
                   "citations": {
                     "type": "array",
                     "description": "Citation array returned with the stubbed agent response and copied into invocation output for tests.",
@@ -3150,9 +3208,21 @@
                         }
                       ]
                     ]
+                  },
+                  "confidenceReport": {
+                    "$ref": "#/$defs/ConfidenceReport",
+                    "description": "Explicit canonical confidence report; missing scores or methods are never synthesized."
                   }
+                },
+                "patternProperties": {
+                  "^x-": {}
                 }
               }
+            }
+          },
+          "patternProperties": {
+            "^x-": {
+              "description": "Descriptive vendor metadata with no executable authority."
             }
           }
         }
@@ -3160,48 +3230,50 @@
     },
     "AIOversight": {
       "type": "object",
-      "description": "Cross-cutting AI policy. Disclosure, drift detection, narrative provenance, volume constraints. EU AI Act Art. 13 / OMB M-24-10 alignment.",
+      "description": "Defined shared AI policy only. Reserved oversightExtensions, reviewSampling, narrativeTier, driftDetection and assistGovernanceProxy are invalid even when empty.",
       "properties": {
-        "disclosure": {
-          "type": "object",
-          "description": "Disclosure policy for AI assistance in the workflow, including when people must be told that an agent contributed to a task, recommendation, or determination.",
+        "defaultAutonomy": {
+          "enum": [
+            "manual",
+            "assistive",
+            "supervisory",
+            "autonomous"
+          ],
+          "description": "Authored autonomy limit composed with all other native restrictions; selecting a level grants no operational authority.",
           "examples": [
-            {
-              "discloseThatAgentAssisted": true,
-              "noticeTemplateKey": "aiAssistanceNotice"
-            }
+            "manual"
           ]
         },
-        "driftDetection": {
-          "type": "object",
-          "description": "Workflow-level drift detection settings for AI agents, including monitoring cadence, recalibration triggers, and demotion behavior when model quality changes.",
-          "examples": [
-            {
-              "enabled": true,
-              "recalibrationEvent": "agent.recalibrated"
-            }
-          ]
+        "deonticConstraints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeonticConstraint"
+          },
+          "description": "Workflow-scoped rules composed with every applicable agent and selected action rule."
+        },
+        "confidenceFloor": {
+          "$ref": "#/$defs/ConfidenceFloor"
+        },
+        "fallbackChain": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FallbackStep"
+          },
+          "description": "Complete workflow fallback chain resolved by the maintained native owner.",
+          "minItems": 1
         },
         "volumeConstraints": {
-          "type": "object",
-          "description": "Workflow-level throughput limits for autonomous or assisted AI work, used to cap volume and force human review when operating limits are exceeded.",
-          "examples": [
-            {
-              "maxAutonomousPerHour": 25,
-              "escalationEvent": "ai.volumeExceeded"
-            }
-          ]
+          "$ref": "#/$defs/AgentVolumeConstraints"
         },
-        "narrativeTier": {
-          "type": "object",
-          "$comment": "Required when provenance.tier == 'narrative' or 'full'.",
-          "description": "Narrative authority tier for AI-generated explanations, distinguishing assistive narrative from authoritative reasoning used in rights-impacting decisions.",
-          "examples": [
-            {
-              "tier": "assistive",
-              "authoritative": false
-            }
-          ]
+        "disclosure": {
+          "$ref": "#/$defs/AgentDisclosure"
+        }
+      },
+      "required": [],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
         }
       }
     },
@@ -4430,15 +4502,15 @@
         "id",
         "timestamp",
         "auditLayer",
-          "definitionVersion",
-          "event"
+        "definitionVersion",
+        "event"
+      ],
+      "not": {
+        "required": [
+          "recordKind"
         ],
-        "not": {
-          "required": [
-            "recordKind"
-          ],
-          "description": "D26 removed the inner recordKind discriminator; Facts-tier records dispatch by required event literal."
-        },
+        "description": "D26 removed the inner recordKind discriminator; Facts-tier records dispatch by required event literal."
+      },
       "examples": [
         {
           "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
@@ -10170,131 +10242,398 @@
       ]
     },
     "DeonticConstraint": {
-      "type": "object",
-      "description": "Single deontic constraint (permission, prohibition, obligation, right) per OASIS LegalRuleML §3. Used by `agents[].deonticConstraints` and `governance.deonticConstraints` (where present). The kernel evaluates `kind` and `expression` (a FEL string); the optional surfaces (`actor`, `condition`, `defeasible`, `citationRefs`, `x-legalruleml-iri`) carry legal grounding without re-encoding it elsewhere.",
-      "required": [
-        "kind",
-        "expression"
-      ],
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Stable identifier for this constraint within the workflow document so reviewers, waivers, and amendments can cite a specific clause without fragile positional references.",
-          "examples": [
-            "no-deny-without-notice",
-            "right-to-appeal"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
-        },
-        "kind": {
-          "enum": [
-            "permission",
-            "prohibition",
-            "obligation",
-            "right"
-          ],
-          "description": "Deontic mode per OASIS LegalRuleML §3; determines how the processor interprets a satisfied `expression` (allow, block, obligate, or grant a right).",
-          "$comment": "OASIS LegalRuleML.",
-          "examples": [
-            "prohibition",
-            "obligation",
-            "permission",
-            "right"
-          ]
-        },
-        "actor": {
-          "type": "string",
-          "description": "Optional actor id or role id the constraint binds when it is not implied by the embedding context (for example the surrounding `agents[]` entry); MUST match declared actor identifiers when present.",
-          "examples": [
-            "respondent",
-            "agency-adjudicator"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
-        },
-        "expression": {
-          "type": "string",
-          "description": "FEL expression that the kernel evaluates per the constraint's kind. For permission: TRUE allows; for prohibition: TRUE blocks; for obligation: TRUE is the action that MUST be taken; for right: TRUE is the action that MAY be invoked by the rights-holder.",
-          "examples": [
-            "outcome == 'denied' && notice == null",
-            "outcome.adverse == true"
-          ],
-          "x-wos": {
-            "openStringKind": "fel"
-          }
-        },
-        "condition": {
-          "type": "string",
-          "description": "Optional FEL expression that gates when this constraint applies. When present and FALSE, the constraint is dormant; when TRUE or absent, the kernel evaluates `expression`.",
-          "examples": [
-            "caseFile.jurisdiction == 'US-CA'",
-            "caseFile.appealWindowOpen == true"
-          ],
-          "x-wos": {
-            "openStringKind": "fel"
-          }
-        },
-        "defeasible": {
-          "type": "boolean",
-          "default": false,
-          "description": "When true, this constraint MAY be overridden by a higher-priority constraint or an explicit waiver. When false (default), the constraint binds absolutely.",
-          "examples": [
-            false,
-            true
-          ]
-        },
-        "citationRefs": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "description": "Authoritative legal or policy reference that grounds this deontic constraint: resolvable IRI (regulation URL, URN) or conventional legal citation text (for example '42 CFR § 431.211') for reviewer traceability.",
-            "examples": [
-              "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-C/part-431",
-              "urn:agency:memo:phe-extension-2023",
-              "42 CFR § 431.211"
-            ],
-            "x-wos": {
-              "openStringKind": "prose"
+      "description": "One closed kind-specific native rule. Rule identifiers are unique within their containing scope; source location distinguishes scopes.",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Closed native permission rule; the native owner evaluates references and semantics at whole-candidate admission.",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Stable nonempty identifier resolved within its native declaration scope.",
+              "examples": [
+                "screenEligibility"
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
+            },
+            "kind": {
+              "const": "permission",
+              "description": "Closed native rule discriminator selecting exactly this kind-specific shape."
+            },
+            "citationRefs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Descriptive nonempty supporting source string; not restricted to a URI or evaluated as legal authority.",
+                "examples": [
+                  "42 CFR 431.211"
+                ],
+                "x-wos": {
+                  "openStringKind": "prose"
+                }
+              },
+              "description": "Supporting source strings preserved without claiming legal reasoning."
+            },
+            "allowedFields": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "description": "RFC 6901 JSON pointer; decoded segments identify a native value without path-prefix guessing.",
+                "examples": [
+                  "/amount"
+                ],
+                "pattern": "^(?:/(?:[^~/]|~0|~1)*)*$"
+              },
+              "description": "Permitted output JSON pointers; omission imposes no field restriction, while an empty array permits no output."
+            },
+            "bounds": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Boolean FEL value bound applied in addition to any permitted-field restriction.",
+              "examples": [
+                "output.amount >= 0"
+              ],
+              "x-wos": {
+                "openStringKind": "fel"
+              }
+            },
+            "onViolation": {
+              "enum": [
+                "flag",
+                "switchToAssistive",
+                "escalateToHuman",
+                "reject"
+              ],
+              "description": "Required violation disposition combined with every other applicable restriction.",
+              "examples": [
+                "flag"
+              ]
+            },
+            "nullBehavior": {
+              "enum": [
+                "pass",
+                "deny",
+                "escalate"
+              ],
+              "description": "Disposition when a predicate is null; never substitutes a boolean predicate value.",
+              "examples": [
+                "pass"
+              ]
+            },
+            "bypassable": {
+              "type": "boolean",
+              "description": "Whether a maintained waiver operation may consider this rule; no waiver authority is granted here.",
+              "examples": [
+                true
+              ]
             }
           },
-          "description": "Optional citations to authoritative sources (resolvable IRIs/URNs, agency memo references, or conventional legal citation text) that ground this constraint. Lets governance reviewers walk a specific deontic clause back to its legal source."
-        },
-        "x-legalruleml-iri": {
-          "type": "string",
-          "format": "iri-reference",
-          "description": "Optional IRI mapping this constraint into an external OASIS LegalRuleML document. Integration seam; the kernel does not interpret the value beyond passing it to legal tooling.",
-          "examples": [
-            "https://legal.example/oasis/lrml/deontic/constraint-42",
-            "urn:oasis:names:tc:legalruleml:constraint:appeal-right"
+          "required": [
+            "id",
+            "kind",
+            "onViolation"
           ],
-          "x-wos": {
-            "openStringKind": "uri"
-          }
-        }
-      },
-      "patternProperties": {
-        "^x-": true
-      },
-      "additionalProperties": false,
-      "examples": [
-        {
-          "id": "no-deny-without-notice",
-          "kind": "prohibition",
-          "expression": "outcome == 'denied' && notice == null",
-          "citationRefs": [
-            "42 CFR § 431.211"
+          "additionalProperties": false,
+          "patternProperties": {
+            "^x-": {
+              "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+            }
+          },
+          "anyOf": [
+            {
+              "required": [
+                "allowedFields"
+              ]
+            },
+            {
+              "required": [
+                "bounds"
+              ]
+            }
           ]
         },
         {
-          "id": "right-to-appeal",
+          "type": "object",
+          "description": "Closed native prohibition rule; the native owner evaluates references and semantics at whole-candidate admission.",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Stable nonempty identifier resolved within its native declaration scope.",
+              "examples": [
+                "screenEligibility"
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
+            },
+            "kind": {
+              "const": "prohibition",
+              "description": "Closed native rule discriminator selecting exactly this kind-specific shape."
+            },
+            "citationRefs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Descriptive nonempty supporting source string; not restricted to a URI or evaluated as legal authority.",
+                "examples": [
+                  "42 CFR 431.211"
+                ],
+                "x-wos": {
+                  "openStringKind": "prose"
+                }
+              },
+              "description": "Supporting source strings preserved without claiming legal reasoning."
+            },
+            "condition": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Boolean FEL condition whose true result violates this prohibition.",
+              "examples": [
+                "output.amount >= 0"
+              ],
+              "x-wos": {
+                "openStringKind": "fel"
+              }
+            },
+            "reason": {
+              "type": "string",
+              "description": "Human-readable reason retained with this prohibition and its evaluation evidence.",
+              "examples": [
+                "Human-readable explanation."
+              ],
+              "x-wos": {
+                "openStringKind": "prose"
+              }
+            },
+            "onViolation": {
+              "enum": [
+                "flag",
+                "switchToAssistive",
+                "escalateToHuman",
+                "reject"
+              ],
+              "description": "Required violation disposition combined with every other applicable restriction.",
+              "examples": [
+                "flag"
+              ]
+            },
+            "nullBehavior": {
+              "enum": [
+                "pass",
+                "deny",
+                "escalate"
+              ],
+              "description": "Disposition when a predicate is null; never substitutes a boolean predicate value.",
+              "examples": [
+                "pass"
+              ]
+            },
+            "bypassable": {
+              "type": "boolean",
+              "description": "Whether a maintained waiver operation may consider this rule; no waiver authority is granted here.",
+              "examples": [
+                true
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "condition",
+            "onViolation"
+          ],
+          "additionalProperties": false,
+          "patternProperties": {
+            "^x-": {
+              "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Closed native obligation rule; the native owner evaluates references and semantics at whole-candidate admission.",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Stable nonempty identifier resolved within its native declaration scope.",
+              "examples": [
+                "screenEligibility"
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
+            },
+            "kind": {
+              "const": "obligation",
+              "description": "Closed native rule discriminator selecting exactly this kind-specific shape."
+            },
+            "citationRefs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Descriptive nonempty supporting source string; not restricted to a URI or evaluated as legal authority.",
+                "examples": [
+                  "42 CFR 431.211"
+                ],
+                "x-wos": {
+                  "openStringKind": "prose"
+                }
+              },
+              "description": "Supporting source strings preserved without claiming legal reasoning."
+            },
+            "requirement": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Boolean FEL requirement whose false result violates this obligation.",
+              "examples": [
+                "output.amount >= 0"
+              ],
+              "x-wos": {
+                "openStringKind": "fel"
+              }
+            },
+            "reason": {
+              "type": "string",
+              "description": "Human-readable reason retained with this obligation and its evaluation evidence.",
+              "examples": [
+                "Human-readable explanation."
+              ],
+              "x-wos": {
+                "openStringKind": "prose"
+              }
+            },
+            "onViolation": {
+              "enum": [
+                "flag",
+                "switchToAssistive",
+                "escalateToHuman",
+                "reject"
+              ],
+              "description": "Required violation disposition combined with every other applicable restriction.",
+              "examples": [
+                "flag"
+              ]
+            },
+            "nullBehavior": {
+              "enum": [
+                "pass",
+                "deny",
+                "escalate"
+              ],
+              "description": "Disposition when a predicate is null; never substitutes a boolean predicate value.",
+              "examples": [
+                "pass"
+              ]
+            },
+            "bypassable": {
+              "type": "boolean",
+              "description": "Whether a maintained waiver operation may consider this rule; no waiver authority is granted here.",
+              "examples": [
+                true
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "requirement",
+            "onViolation"
+          ],
+          "additionalProperties": false,
+          "patternProperties": {
+            "^x-": {
+              "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Closed native right rule; the native owner evaluates references and semantics at whole-candidate admission.",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Stable nonempty identifier resolved within its native declaration scope.",
+              "examples": [
+                "screenEligibility"
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
+            },
+            "kind": {
+              "const": "right",
+              "description": "Closed native rule discriminator selecting exactly this kind-specific shape."
+            },
+            "citationRefs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Descriptive nonempty supporting source string; not restricted to a URI or evaluated as legal authority.",
+                "examples": [
+                  "42 CFR 431.211"
+                ],
+                "x-wos": {
+                  "openStringKind": "prose"
+                }
+              },
+              "description": "Supporting source strings preserved without claiming legal reasoning."
+            },
+            "entitlement": {
+              "type": "string",
+              "description": "RFC 6901 input entitlement rooted at input or caseFile; false and zero remain supplied values.",
+              "examples": [
+                "/input/application"
+              ],
+              "pattern": "^/(?:input|caseFile)(?:/(?:[^~/]|~0|~1)*)*$",
+              "minLength": 1
+            },
+            "description": {
+              "type": "string",
+              "description": "Human-readable description of input the processor must supply before output evaluation.",
+              "examples": [
+                "Human-readable explanation."
+              ],
+              "x-wos": {
+                "openStringKind": "prose"
+              }
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "entitlement"
+          ],
+          "additionalProperties": false,
+          "patternProperties": {
+            "^x-": {
+              "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+            }
+          }
+        }
+      ],
+      "examples": [
+        {
+          "id": "boundedAmount",
+          "kind": "permission",
+          "allowedFields": [
+            "/amount"
+          ],
+          "onViolation": "reject"
+        },
+        {
+          "id": "requireInput",
           "kind": "right",
-          "actor": "respondent",
-          "expression": "outcome.adverse == true",
-          "defeasible": false
+          "entitlement": "/input/application"
         }
       ]
     },
@@ -10912,17 +11251,31 @@
       "description": "Lifecycle action data. Existing action fields retain their Kernel §9.2 semantics; startAtExpression adds an explicit historical origin for a duration timer.",
       "properties": {
         "compensatingAction": {
-          "anyOf": [{"type": "null"}, {"$ref": "#/$defs/LifecycleAction"}],
+          "anyOf": [
+            {
+              "type": "null",
+              "description": "An explicit null declares that this action has no compensating native lifecycle action.",
+              "examples": [
+                null
+              ]
+            },
+            {
+              "$ref": "#/$defs/LifecycleAction"
+            }
+          ],
           "description": "Existing native compensating action. Explicit callbackPhase restrictions also apply recursively here."
         },
-          "callbackPhase": {
-            "type": "string",
-            "enum": [
-              "outbound",
-              "inbound"
-            ],
-            "description": "Explicit invokeService callback role. Required for deferred callback bindings; outbound persists a request, inbound admits a matching receipt before any business wake-up. Missing retains existing immediate phase inference. Binding kind/dispatch compatibility requires runtime validation."
-          },
+        "callbackPhase": {
+          "type": "string",
+          "enum": [
+            "outbound",
+            "inbound"
+          ],
+          "description": "Explicit invokeService callback role. Required for deferred callback bindings; outbound persists a request, inbound admits a matching receipt before any business wake-up. Missing retains existing immediate phase inference. Binding kind/dispatch compatibility requires runtime validation.",
+          "examples": [
+            "outbound"
+          ]
+        },
         "startAtExpression": {
           "type": "string",
           "minLength": 1,
@@ -10938,8 +11291,12 @@
           "type": "string",
           "minLength": 1,
           "description": "Existing native timer whose actual absolute deadline becomes the immutable task lifetime at createTask execution. Fresh task drafts and responses refuse at or after that instant before validation or mapping. Later timer cancellation or replacement does not extend the task. Tasks without this property keep their existing lifetime behavior (Kernel §13.2.1).",
-          "examples": ["responseWindow"],
-          "x-wos": {"openStringKind": "identifier"}
+          "examples": [
+            "responseWindow"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         }
       },
       "allOf": [
@@ -11012,22 +11369,1151 @@
           }
         },
         {
-          "if": {"required": ["expiresWithTimer"]},
+          "if": {
+            "required": [
+              "expiresWithTimer"
+            ]
+          },
           "then": {
-            "required": ["action", "taskRef"],
+            "required": [
+              "action",
+              "taskRef"
+            ],
             "properties": {
-              "action": {"const": "createTask"},
+              "action": {
+                "const": "createTask"
+              },
               "taskRef": {
                 "type": "string",
                 "minLength": 1,
-                "description": "Task definition reference receiving the explicit timer-bound lifetime.",
-                "examples": ["provideRequestedInformation"],
-                "x-wos": {"openStringKind": "identifier"}
+                "description": "Label retained on the task created by this native createTask action; not a task-definition registry or fallback action selector.",
+                "examples": [
+                  "provideRequestedInformation"
+                ],
+                "x-wos": {
+                  "openStringKind": "identifier"
+                }
               }
             }
           }
         }
       ]
+    },
+    "AgentPositiveDuration": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Positive ISO 8601 duration; the maintained timer or monitoring operation validates support and finite scheduling.",
+      "examples": [
+        "PT30S"
+      ],
+      "format": "duration",
+      "pattern": "^P(?=.*[1-9])(?:[0-9]+(?:\\.[0-9]+)?Y)?(?:[0-9]+(?:\\.[0-9]+)?M)?(?:[0-9]+(?:\\.[0-9]+)?W)?(?:[0-9]+(?:\\.[0-9]+)?D)?(?:T(?:[0-9]+(?:\\.[0-9]+)?H)?(?:[0-9]+(?:\\.[0-9]+)?M)?(?:[0-9]+(?:\\.[0-9]+)?S)?)?$"
+    },
+    "AgentCapability": {
+      "type": "object",
+      "description": "Structured capability declaration; invocation and output writes require their maintained owning operations.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable nonempty identifier resolved within its native declaration scope.",
+          "examples": [
+            "screenEligibility"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable purpose of this capability; descriptive text does not authorize invocation.",
+          "examples": [
+            "Human-readable explanation."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "inputContractRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Input definition reference resolved by the maintained invocation owner.",
+          "examples": [
+            "https://agency.gov/forms/input"
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          }
+        },
+        "outputContractRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Output definition reference resolved by the maintained contract processor.",
+          "examples": [
+            "https://agency.gov/forms/output"
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          }
+        },
+        "preconditions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Boolean FEL predicate checked by the invocation owner before invoking this capability.",
+            "examples": [
+              "output.amount >= 0"
+            ],
+            "x-wos": {
+              "openStringKind": "fel"
+            }
+          },
+          "description": "Capability preconditions; declaration alone does not prove their evaluation."
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+        }
+      }
+    },
+    "ConfidenceReport": {
+      "type": "object",
+      "description": "Canonical untrusted confidence report accompanying every agent output; computed decay and policy decisions are separate evidence.",
+      "properties": {
+        "overall": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Reported estimated probability that a competent reviewer would accept this output unchanged.",
+          "examples": [
+            0.9
+          ]
+        },
+        "method": {
+          "enum": [
+            "modelNative",
+            "calibrated",
+            "heuristic",
+            "conformal",
+            "declared"
+          ],
+          "description": "How the reported confidence was derived; a claim does not establish trusted calibration.",
+          "examples": [
+            "modelNative"
+          ]
+        },
+        "explanation": {
+          "type": "string",
+          "description": "Human-readable explanation of the reported confidence factors, preserved without changing the score.",
+          "examples": [
+            "Human-readable explanation."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "fieldLevel": {
+          "type": "object",
+          "description": "Reported per-output-field confidence values, each finite and between zero and one.",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Reported confidence for the named output field, preserved as supplied.",
+            "examples": [
+              0.9
+            ]
+          },
+          "examples": [
+            {
+              "amount": 0.8
+            }
+          ]
+        }
+      },
+      "required": [
+        "overall",
+        "method"
+      ],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+        }
+      },
+      "examples": [
+        {
+          "overall": 0.9,
+          "method": "declared",
+          "fieldLevel": {
+            "amount": 0.8
+          }
+        }
+      ]
+    },
+    "ConfidenceFloor": {
+      "type": "object",
+      "description": "Additional confidence restriction shared unchanged by workflow, agent and selected action scopes.",
+      "properties": {
+        "threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Minimum confidence; equality passes and every violated floor contributes its own effect.",
+          "examples": [
+            0.9
+          ]
+        },
+        "onViolation": {
+          "enum": [
+            "escalateToHuman",
+            "reject"
+          ],
+          "description": "Effect of confidence strictly below this floor; absence adds no floor at this scope.",
+          "examples": [
+            "escalateToHuman"
+          ]
+        }
+      },
+      "required": [
+        "threshold",
+        "onViolation"
+      ],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+        }
+      }
+    },
+    "DecayTrigger": {
+      "type": "object",
+      "description": "One event-triggered confidence reduction; configuration does not supply observed history.",
+      "properties": {
+        "event": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Native event name whose observed occurrence multiplies effective confidence by the declared factor.",
+          "examples": [
+            "case.updated"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "decayFactor": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Multiplicative reduction applied by the maintained history and decay operation.",
+          "examples": [
+            0.9
+          ]
+        }
+      },
+      "required": [
+        "event",
+        "decayFactor"
+      ],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+        }
+      }
+    },
+    "ConfidenceDecay": {
+      "type": "object",
+      "description": "Confidence decay requirements evaluated from processor-owned time and observed case history.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether decay requires maintained clock and history operations for execution.",
+          "examples": [
+            true
+          ]
+        },
+        "halfLife": {
+          "$ref": "#/$defs/AgentPositiveDuration"
+        },
+        "triggers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DecayTrigger"
+          },
+          "description": "Event-triggered reductions; enabled decay needs a half-life or at least one trigger."
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            },
+            "required": [
+              "enabled"
+            ]
+          },
+          "then": {
+            "anyOf": [
+              {
+                "required": [
+                  "halfLife"
+                ]
+              },
+              {
+                "required": [
+                  "triggers"
+                ],
+                "properties": {
+                  "triggers": {
+                    "minItems": 1
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "AgentCalibrationConfig": {
+      "type": "object",
+      "description": "Native per-agent calibration requirements; completion and freshness belong to the maintained calibration operation.",
+      "properties": {
+        "required": {
+          "type": "boolean",
+          "description": "Whether trusted calibration evidence and a maintained calibration operation are required.",
+          "examples": [
+            true
+          ]
+        },
+        "frequency": {
+          "$ref": "#/$defs/AgentPositiveDuration"
+        },
+        "minimumSamples": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Minimum positive number of reviewed outputs required for valid calibration.",
+          "examples": [
+            100
+          ]
+        },
+        "method": {
+          "enum": [
+            "plattScaling",
+            "isotonic",
+            "binning",
+            "custom"
+          ],
+          "description": "Declared calibration algorithm; omission selects binning at the owning operation.",
+          "examples": [
+            "plattScaling"
+          ]
+        }
+      },
+      "required": [
+        "required"
+      ],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "required": {
+                "const": true
+              }
+            },
+            "required": [
+              "required"
+            ]
+          },
+          "then": {
+            "required": [
+              "frequency"
+            ]
+          }
+        }
+      ]
+    },
+    "DemotionRule": {
+      "type": "object",
+      "description": "Same-agent operational reduction rule, addressed by its native occurrence and local identifier.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable nonempty identifier resolved within its native declaration scope.",
+          "examples": [
+            "screenEligibility"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "condition": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Boolean FEL condition over admitted case data and processor-owned operational state.",
+          "examples": [
+            "output.amount >= 0"
+          ],
+          "x-wos": {
+            "openStringKind": "fel"
+          }
+        },
+        "targetLevel": {
+          "enum": [
+            "manual",
+            "assistive",
+            "supervisory"
+          ],
+          "description": "Reduced operational autonomy level; a declaration does not execute the reduction.",
+          "examples": [
+            "manual"
+          ]
+        },
+        "pendingRecalibration": {
+          "type": "boolean",
+          "description": "Whether the retained reduction waits for trusted successful recalibration.",
+          "examples": [
+            true
+          ]
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable rationale retained with this native operational rule.",
+          "examples": [
+            "Human-readable explanation."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "condition",
+        "targetLevel"
+      ],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+        }
+      }
+    },
+    "EscalationRule": {
+      "type": "object",
+      "description": "Authenticated expiring restoration requirement; configuration is not evidence of approval.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable nonempty identifier resolved within its native declaration scope.",
+          "examples": [
+            "screenEligibility"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "condition": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Boolean FEL condition evaluated over trusted operational state and admitted case data.",
+          "examples": [
+            "output.amount >= 0"
+          ],
+          "x-wos": {
+            "openStringKind": "fel"
+          }
+        },
+        "targetLevel": {
+          "enum": [
+            "assistive",
+            "supervisory",
+            "autonomous"
+          ],
+          "description": "Requested restored autonomy, bounded by authored ceilings and retained reductions.",
+          "examples": [
+            "assistive"
+          ]
+        },
+        "requiredApproverRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Native human actor id whose authenticated binding may approve; a role label grants no authority.",
+          "examples": [
+            "supervisor"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "escalationExpiry": {
+          "$ref": "#/$defs/AgentPositiveDuration"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable rationale retained with the authenticated authorization decision.",
+          "examples": [
+            "Human-readable explanation."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "condition",
+        "targetLevel",
+        "requiredApproverRef",
+        "escalationExpiry"
+      ],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+        }
+      }
+    },
+    "AutonomyPolicy": {
+      "type": "object",
+      "description": "Per-agent authored ceiling and stateful rules; all applicable restrictions compose.",
+      "properties": {
+        "maxAutonomy": {
+          "enum": [
+            "manual",
+            "assistive",
+            "supervisory",
+            "autonomous"
+          ],
+          "description": "Authored autonomy limit composed with all other native restrictions; selecting a level grants no operational authority.",
+          "examples": [
+            "manual"
+          ]
+        },
+        "escalation": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EscalationRule"
+          },
+          "description": "Authenticated operational restoration requirements for this agent."
+        },
+        "demotion": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DemotionRule"
+          },
+          "description": "Operational reduction requirements addressed within this same agent."
+        }
+      },
+      "required": [],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+        }
+      }
+    },
+    "ActionOverride": {
+      "type": "object",
+      "description": "Additional restrictions at one exact native lifecycle action; metadata lookalikes do not resolve.",
+      "properties": {
+        "actionRef": {
+          "type": "string",
+          "description": "RFC 6901 pointer to one actual native lifecycle action, resolved against this same Workflow revision.",
+          "examples": [
+            "/lifecycle/states/review/onEntry/0"
+          ],
+          "pattern": "^(?:/(?:[^~/]|~0|~1)*)*$",
+          "minLength": 1
+        },
+        "autonomy": {
+          "enum": [
+            "manual",
+            "assistive",
+            "supervisory",
+            "autonomous"
+          ],
+          "description": "Authored autonomy limit composed with all other native restrictions; selecting a level grants no operational authority.",
+          "examples": [
+            "manual"
+          ]
+        },
+        "reviewWindow": {
+          "$ref": "#/$defs/AgentPositiveDuration"
+        },
+        "confidenceFloor": {
+          "$ref": "#/$defs/ConfidenceFloor"
+        },
+        "deonticConstraints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeonticConstraint"
+          },
+          "description": "Additional rules restricted to the selected native lifecycle action."
+        }
+      },
+      "required": [
+        "actionRef"
+      ],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+        }
+      }
+    },
+    "FallbackStep": {
+      "description": "Closed fallback action declaration; semantic admission checks terminal ordering, exact references and cycles.",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Native fallback retry declaration resolved and executed only by its maintained owner.",
+          "properties": {
+            "action": {
+              "const": "retry",
+              "description": "Closed fallback action discriminator; selecting an action does not execute it."
+            },
+            "maxRetries": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4294967295,
+              "description": "Finite retry count excluding the first invocation; the owner checks the complete schedule for overflow.",
+              "examples": [
+                3
+              ]
+            },
+            "backoff": {
+              "enum": [
+                "fixed",
+                "linear",
+                "exponential"
+              ],
+              "description": "Delay progression for finite retries of the same selected capability and admitted input.",
+              "examples": [
+                "fixed"
+              ]
+            },
+            "initialInterval": {
+              "$ref": "#/$defs/AgentPositiveDuration"
+            }
+          },
+          "required": [
+            "action",
+            "maxRetries",
+            "backoff",
+            "initialInterval"
+          ],
+          "additionalProperties": false,
+          "patternProperties": {
+            "^x-": {
+              "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Native fallback alternateAgent declaration resolved and executed only by its maintained owner.",
+          "properties": {
+            "action": {
+              "const": "alternateAgent",
+              "description": "Closed fallback action discriminator; selecting an action does not execute it."
+            },
+            "alternateAgentRef": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Same-revision native agent id selected for the same capability and admitted input.",
+              "examples": [
+                "alternateClassifier"
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
+            }
+          },
+          "required": [
+            "action",
+            "alternateAgentRef"
+          ],
+          "additionalProperties": false,
+          "patternProperties": {
+            "^x-": {
+              "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Native fallback escalateToHuman declaration resolved and executed only by its maintained owner.",
+          "properties": {
+            "action": {
+              "const": "escalateToHuman",
+              "description": "Closed fallback action discriminator; selecting an action does not execute it."
+            },
+            "taskActionRef": {
+              "type": "string",
+              "description": "RFC 6901 pointer to an actual native createTask action with a maintained human assignment; taskRef is only its label.",
+              "examples": [
+                "/lifecycle/states/review/onEntry/0"
+              ],
+              "pattern": "^(?:/(?:[^~/]|~0|~1)*)*$",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "action",
+            "taskActionRef"
+          ],
+          "additionalProperties": false,
+          "patternProperties": {
+            "^x-": {
+              "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Native fallback fail declaration resolved and executed only by its maintained owner.",
+          "properties": {
+            "action": {
+              "const": "fail",
+              "description": "Closed fallback action discriminator; selecting an action does not execute it."
+            }
+          },
+          "required": [
+            "action"
+          ],
+          "additionalProperties": false,
+          "patternProperties": {
+            "^x-": {
+              "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+            }
+          }
+        }
+      ]
+    },
+    "AgentDisclosure": {
+      "type": "object",
+      "description": "Shared notice requirements; declaring a disclosure does not prove notice delivery.",
+      "properties": {
+        "discloseThatAgentAssisted": {
+          "type": "boolean",
+          "description": "Whether people must be told that an agent assisted with the workflow.",
+          "examples": [
+            true
+          ]
+        },
+        "discloseModelIdentity": {
+          "type": "boolean",
+          "description": "Whether the assistance disclosure also identifies the admitted model.",
+          "examples": [
+            true
+          ]
+        },
+        "discloseConfidence": {
+          "type": "boolean",
+          "description": "Whether the assistance disclosure includes the supplied confidence report.",
+          "examples": [
+            true
+          ]
+        }
+      },
+      "required": [
+        "discloseThatAgentAssisted"
+      ],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+        }
+      }
+    },
+    "AgentVolumeConstraints": {
+      "type": "object",
+      "description": "Shared autonomous action limits requiring maintained count and clock operations.",
+      "properties": {
+        "maxAutonomousPerHour": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum autonomous actions in the processor-owned hour window; zero permits none.",
+          "examples": [
+            0
+          ]
+        },
+        "maxAutonomousPerDay": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum autonomous actions in the processor-owned day window; zero permits none.",
+          "examples": [
+            0
+          ]
+        }
+      },
+      "required": [],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+        }
+      }
+    },
+    "RubberStampConfig": {
+      "type": "object",
+      "description": "Review measurement requirements using the enclosing monitor evaluation window.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether observed human review measurements are required for this monitor.",
+          "examples": [
+            true
+          ]
+        },
+        "minReviewTime": {
+          "$ref": "#/$defs/AgentPositiveDuration"
+        },
+        "maxAgreementRate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Maximum observed aggregate agreement fraction; a signal is not proof of misconduct.",
+          "examples": [
+            0.9
+          ]
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            },
+            "required": [
+              "enabled"
+            ]
+          },
+          "then": {
+            "anyOf": [
+              {
+                "required": [
+                  "minReviewTime"
+                ]
+              },
+              {
+                "required": [
+                  "maxAgreementRate"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "AgentMonitorMetric": {
+      "type": "object",
+      "description": "Native metric declaration; configured values are not measured observations.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of the observed metric supplied by the maintained measurement operation.",
+          "examples": [
+            "accuracy"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "method": {
+          "enum": [
+            "psi",
+            "ks",
+            "chi2",
+            "accuracy",
+            "custom"
+          ],
+          "description": "Declared statistical method; measurement execution remains an owning operation.",
+          "examples": [
+            "psi"
+          ]
+        },
+        "threshold": {
+          "type": "number",
+          "description": "Finite threshold interpreted by the selected maintained measurement operation.",
+          "examples": [
+            0.92
+          ]
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+        }
+      }
+    },
+    "AgentAlertThreshold": {
+      "type": "object",
+      "description": "Native alert selecting exactly one direct action or same-agent demotion rule.",
+      "properties": {
+        "condition": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Boolean alert condition over observed metrics from the maintained measurement operation.",
+          "examples": [
+            "output.amount >= 0"
+          ],
+          "x-wos": {
+            "openStringKind": "fel"
+          }
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "warning",
+            "critical"
+          ],
+          "description": "Severity of the observed alert; it does not itself change a case outcome.",
+          "examples": [
+            "info"
+          ]
+        },
+        "action": {
+          "enum": [
+            "notify",
+            "demoteToAssistive",
+            "demoteToManual",
+            "suspend"
+          ],
+          "description": "Direct operational response requiring its maintained owning operation.",
+          "examples": [
+            "notify"
+          ]
+        },
+        "policyRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Same-agent demotion rule id resolved only in this declaration autonomyPolicy.demotion.",
+          "examples": [
+            "reduceOnDrift"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "notifyRoles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Notification recipient role label resolved by the maintained notification operation.",
+            "examples": [
+              "supervisor"
+            ],
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          },
+          "description": "Declared notification recipients; configuration is not delivery evidence."
+        }
+      },
+      "required": [
+        "condition",
+        "severity"
+      ],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "action"
+          ],
+          "not": {
+            "required": [
+              "policyRef"
+            ]
+          }
+        },
+        {
+          "required": [
+            "policyRef"
+          ],
+          "not": {
+            "required": [
+              "action"
+            ]
+          }
+        }
+      ]
+    },
+    "AgentMonitor": {
+      "type": "object",
+      "description": "One native per-agent monitor; unsupported measurement operations must be reported explicitly.",
+      "properties": {
+        "evaluationWindow": {
+          "$ref": "#/$defs/AgentPositiveDuration"
+        },
+        "metrics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AgentMonitorMetric"
+          },
+          "description": "Native metric declarations observed over this monitor evaluation window."
+        },
+        "rubberStamp": {
+          "$ref": "#/$defs/RubberStampConfig"
+        },
+        "alertThresholds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AgentAlertThreshold"
+          },
+          "description": "Alerts scoped to the enclosing agent and its observed measurements."
+        }
+      },
+      "required": [
+        "evaluationWindow",
+        "metrics"
+      ],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+        }
+      }
+    },
+    "AgentDeploymentSequence": {
+      "type": "object",
+      "description": "Declared shadow and canary requirements; configuration does not deploy or select a candidate.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether actual maintained deployment, measurement and selection operations are required.",
+          "examples": [
+            true
+          ]
+        },
+        "shadowDuration": {
+          "$ref": "#/$defs/AgentPositiveDuration"
+        },
+        "canaryPercentage": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 1,
+          "description": "Canary fraction strictly between zero and one, expressed as a fraction rather than percent.",
+          "examples": [
+            0.05
+          ]
+        },
+        "canaryDuration": {
+          "$ref": "#/$defs/AgentPositiveDuration"
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            },
+            "required": [
+              "enabled"
+            ]
+          },
+          "then": {
+            "required": [
+              "shadowDuration",
+              "canaryPercentage",
+              "canaryDuration"
+            ]
+          }
+        }
+      ]
+    },
+    "AgentDriftMonitoring": {
+      "type": "object",
+      "description": "Defined native per-agent monitoring configuration; observed behavior requires maintained operations.",
+      "properties": {
+        "monitors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AgentMonitor"
+          },
+          "description": "Same-agent monitoring declarations with native rule references."
+        },
+        "deploymentSequence": {
+          "$ref": "#/$defs/AgentDeploymentSequence"
+        },
+        "extensions": {
+          "type": "object",
+          "description": "Descriptive extension map whose keys must start with x- and grant no operational authority.",
+          "patternProperties": {
+            "^x-": {}
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "monitors"
+      ],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "description": "Descriptive vendor metadata retained verbatim without granting runtime authority."
+        }
+      }
     }
   }
 }

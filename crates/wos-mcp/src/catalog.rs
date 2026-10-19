@@ -1,3 +1,4 @@
+// Rust guideline compliant 2026-02-21
 //! One declaration owns discovery, defaults, validation, dispatch and generated help.
 use crate::{errors::ToolError, registry::ProjectRegistry, tools};
 use serde_json::{Map, Value, json};
@@ -262,18 +263,6 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
             &["impactLevel"],
         ),
         tool(
-            "wos_add_ai_agent",
-            "Add a native agents declaration with modelIdentifier and capabilities.",
-            scoped(
-                json!({"agent_id":string(),"role":string(),"model":string(),"capabilities":{"type":"array","items":{"type":"string"},"default":[]}}),
-                &["agent_id", "role", "model"],
-            ),
-            object(json!({"agent_id":string()}), &["agent_id"]),
-            handler!(tools::wos_add_ai_agent),
-            false,
-            &["agents"],
-        ),
-        tool(
             "wos_lint",
             "Return unchanged native diagnostics and counts for block, error, warning and info.",
             scoped(json!({}), &[]),
@@ -308,7 +297,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "wos_search",
-            "Search native states, transitions and actors through the typed read view; historical extension constraints remain searchable.",
+            "Search states, transitions and actors through the typed read view; navigate raw native rule values and locations on drafts.",
             scoped(
                 json!({"kind":{"enum":["state","transition","actor","constraint"]},"query":{"type":"string"}}),
                 &["kind", "query"],

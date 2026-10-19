@@ -1,3 +1,4 @@
+// Rust guideline compliant 2026-02-21
 //! Integration tests for the `wos-mcp` stdio binary.
 //!
 //! Each test spawns the compiled binary as a child process, drives a valid
@@ -266,14 +267,11 @@ fn tools_list_matches_shared_catalog() {
     let names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
 
     assert_eq!(responses[0]["result"], wos_mcp::catalog::descriptors());
-    for expected in [
-        "wos_edit_workflow",
-        "wos_set_impact_level",
-        "wos_add_ai_agent",
-    ] {
+    for expected in ["wos_edit_workflow", "wos_set_impact_level"] {
         assert!(names.contains(&expected));
     }
     for retired in [
+        "wos_add_ai_agent",
         "wos_add_due_process_path",
         "wos_add_assertion_gate",
         "wos_add_deontic_constraint",

@@ -1,0 +1,2185 @@
+{
+  "purpose": "Independent native semantic-load controls. Accept means an authoring draft can load, never execution readiness or task/invoker execution. Expected shapes follow expert-reviewed normative rules; no schema/code-derived expectations. Fallback-pointer supplement approved against AI digest c7b248b148dacdc02643f63a5ab9f9ae69d15011c5161605ab288863ec248550.",
+  "cases": [
+    {
+      "id": "native-draft-valid",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "accept"
+    },
+    {
+      "id": "agent-missing-id",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "agent-missing-agentType",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "agent-missing-modelIdentifier",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "agent-missing-modelVersion",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "agent-id-duplicate",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ]
+          },
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "agent-actor-missing",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "agent-declaration-missing",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "actor-wrong-kind",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "system"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "direct-agent-autonomy",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ],
+            "autonomy": "autonomous"
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "capability-string",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              "assess"
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "version-policy-retired",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ],
+            "modelVersionPolicy": "minor-allowed"
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "scalar-floor",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ],
+            "confidenceFloor": 0.8
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "grouped-rules",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ],
+            "deonticConstraints": {
+              "prohibitions": []
+            }
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "generic-rule-expression",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ],
+            "deonticConstraints": [
+              {
+                "id": "rule",
+                "kind": "prohibition",
+                "expression": "true"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "cross-kind-field",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ],
+            "deonticConstraints": [
+              {
+                "id": "rule",
+                "kind": "prohibition",
+                "condition": "true",
+                "requirement": "true",
+                "onViolation": "reject"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "right-wrong-root",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ],
+            "deonticConstraints": [
+              {
+                "id": "rule",
+                "kind": "right",
+                "entitlement": "/output/value"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "invalid-pointer-escape",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ],
+            "deonticConstraints": [
+              {
+                "id": "rule",
+                "kind": "permission",
+                "allowedFields": [
+                  "/a~2b"
+                ],
+                "onViolation": "reject"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "reserved-oversightExtensions",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive",
+          "oversightExtensions": {}
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "reserved-reviewSampling",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive",
+          "reviewSampling": {}
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "reserved-narrativeTier",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive",
+          "narrativeTier": {}
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "reserved-driftDetection",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive",
+          "driftDetection": {}
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "reserved-assistGovernanceProxy",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive",
+          "assistGovernanceProxy": {}
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "empty-chain",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ],
+            "fallbackChain": []
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "string-chain",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ],
+            "fallbackChain": [
+              "reviewer"
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "fallback-task-pointer",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ],
+            "fallbackChain": [
+              {
+                "action": "escalateToHuman",
+                "taskActionRef": "/lifecycle/states/review/onEntry/0"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "accept"
+    },
+    {
+      "id": "fallback-task-label-alias",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ],
+            "fallbackChain": [
+              {
+                "action": "escalateToHuman",
+                "taskRef": "review"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "fallback-task-pointer-missing",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ],
+            "fallbackChain": [
+              {
+                "action": "escalateToHuman",
+                "taskActionRef": "/lifecycle/states/review/onEntry/8"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "fallback-metadata-not-action",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ],
+            "fallbackChain": [
+              {
+                "action": "escalateToHuman",
+                "taskActionRef": "/x-fake"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        },
+        "x-fake": {
+          "action": "createTask",
+          "taskRef": "fake",
+          "assignTo": "reviewer"
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "fallback-duplicate-label-unambiguous-pointer",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ],
+            "fallbackChain": [
+              {
+                "action": "escalateToHuman",
+                "taskActionRef": "/lifecycle/states/review/onEntry/1"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                },
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "accept"
+    },
+    {
+      "id": "fallback-self-cycle",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ],
+            "fallbackChain": [
+              {
+                "action": "alternateAgent",
+                "alternateAgentRef": "assessor"
+              },
+              {
+                "action": "fail"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "fallback-no-terminal",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ],
+            "fallbackChain": [
+              {
+                "action": "retry",
+                "maxRetries": 1,
+                "backoff": "fixed",
+                "initialInterval": "PT1S"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "fallback-terminal-followed",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ],
+            "fallbackChain": [
+              {
+                "action": "fail"
+              },
+              {
+                "action": "fail"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "fallback-retry-zero",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ],
+            "fallbackChain": [
+              {
+                "action": "retry",
+                "maxRetries": 0,
+                "backoff": "fixed",
+                "initialInterval": "PT1S"
+              },
+              {
+                "action": "fail"
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "fallback-cross-kind",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ],
+            "fallbackChain": [
+              {
+                "action": "fail",
+                "maxRetries": 1
+              }
+            ]
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "duplicate-invoker-model",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ],
+            "invoker": {
+              "kind": "anthropic",
+              "model": "different"
+            }
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "stub-explicit-report",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ],
+            "invoker": {
+              "kind": "stub",
+              "responses": [
+                {
+                  "output": {},
+                  "confidenceReport": {
+                    "overall": 1.0,
+                    "method": "declared"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "accept"
+    },
+    {
+      "id": "stub-missing-report",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ],
+            "invoker": {
+              "kind": "stub",
+              "responses": [
+                {
+                  "output": {}
+                }
+              ]
+            }
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    },
+    {
+      "id": "stub-scalar-report",
+      "candidate": {
+        "$wosWorkflow": "1.0",
+        "url": "urn:independent:native-ai",
+        "version": "1.0.0",
+        "title": "Independent native AI checks",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "assessor",
+            "type": "agent"
+          },
+          {
+            "id": "reviewer",
+            "type": "human"
+          }
+        ],
+        "agents": [
+          {
+            "id": "assessor",
+            "agentType": "generative",
+            "modelIdentifier": "test-model",
+            "modelVersion": "1.0.0",
+            "capabilities": [
+              {
+                "id": "assess"
+              }
+            ],
+            "invoker": {
+              "kind": "stub",
+              "responses": [
+                {
+                  "output": {},
+                  "confidence": 1.0
+                }
+              ]
+            }
+          }
+        ],
+        "aiOversight": {
+          "defaultAutonomy": "assistive"
+        },
+        "lifecycle": {
+          "initialState": "review",
+          "states": {
+            "review": {
+              "type": "atomic",
+              "onEntry": [
+                {
+                  "action": "createTask",
+                  "taskRef": "review",
+                  "assignTo": "reviewer"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expectedNativeLoad": "refuse"
+    }
+  ]
+}
