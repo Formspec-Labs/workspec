@@ -36,6 +36,24 @@ const WORKFLOW_MARKER: &str = "$wosWorkflow";
 const WORKFLOW_SCHEMA: &str = include_str!("../../../schemas/wos-workflow.schema.json");
 const KERNEL_SPEC_SUMMARY: &str = include_str!("../../../specs/kernel/spec.llm.md");
 
+/// Select the same ordered guidance for generation and every repair attempt.
+fn cache_anchors(layer: Layer) -> Vec<CacheAnchor> {
+    match layer {
+        Layer::Kernel => vec![
+            CacheAnchor {
+                name: "kernel-schema",
+                content: WORKFLOW_SCHEMA.to_string(),
+            },
+            CacheAnchor {
+                name: "kernel-spec-summary",
+                content: KERNEL_SPEC_SUMMARY.to_string(),
+            },
+        ],
+        // Guidance for the remaining layers is tracked by fs-xkui.
+        Layer::Governance | Layer::Ai | Layer::Advanced => Vec::new(),
+    }
+}
+
 /// Build the initial generation prompt.
 ///
 /// Returns `(system, user, cache_anchors)`. Cache anchors are ordered most
@@ -50,21 +68,7 @@ pub fn build_generate_prompt(problem: &str, layer: Layer) -> (String, String, Ve
         marker = WORKFLOW_MARKER,
     );
 
-    let cache_anchors = match layer {
-        Layer::Kernel => vec![
-            CacheAnchor {
-                name: "kernel-schema",
-                content: WORKFLOW_SCHEMA.to_string(),
-            },
-            CacheAnchor {
-                name: "kernel-spec-summary",
-                content: KERNEL_SPEC_SUMMARY.to_string(),
-            },
-        ],
-        // Other layers TBD — until then the model relies on the system prompt
-        // alone. Lint will surface gaps and the repair loop will close them.
-        _ => Vec::new(),
-    };
+    let cache_anchors = cache_anchors(layer);
 
     let user = format!(
         "## Problem statement\n\n{problem}\n\n\
@@ -125,21 +129,7 @@ pub fn build_repair_prompt(
         prior_attempt = prior_attempt,
     );
 
-    // Repair re-uses the same cache anchors as generation so the provider
-    // keeps serving them from cache across the loop's iterations.
-    let cache_anchors = match layer {
-        Layer::Kernel => vec![
-            CacheAnchor {
-                name: "kernel-schema",
-                content: WORKFLOW_SCHEMA.to_string(),
-            },
-            CacheAnchor {
-                name: "kernel-spec-summary",
-                content: KERNEL_SPEC_SUMMARY.to_string(),
-            },
-        ],
-        _ => Vec::new(),
-    };
+    let cache_anchors = cache_anchors(layer);
 
     (system, user, cache_anchors)
 }
@@ -157,6 +147,21 @@ mod tests {
         assert!(user.contains("$wosWorkflow"));
         assert_eq!(anchors.len(), 2);
         assert_eq!(anchors[0].name, "kernel-schema");
+    }
+
+    #[test]
+    fn generation_and_repair_preserve_the_same_ordered_guidance() {
+        for layer in [Layer::Kernel, Layer::Governance, Layer::Ai, Layer::Advanced] {
+            let (_, _, generated) = build_generate_prompt("test problem", layer);
+            let (_, _, repaired) = build_repair_prompt("{}", &[], layer);
+            let contents = |anchors: Vec<CacheAnchor>| {
+                anchors
+                    .into_iter()
+                    .map(|anchor| (anchor.name, anchor.content))
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(contents(generated), contents(repaired), "{layer:?}");
+        }
     }
 
     #[test]
