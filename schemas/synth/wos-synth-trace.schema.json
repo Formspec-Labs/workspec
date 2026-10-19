@@ -137,9 +137,8 @@
           ]
         },
         "path": {
-          "type": "string",
-          "description": "Optional JSON Pointer (RFC 6901) anchoring the finding to a specific node in the attempt document. Absent when the finding is whole-document scoped. The pointer is computed against the attempt as parsed JSON, so it may not be present on iterations where the attempt failed to parse.",
-          "examples": ["/states/approved", "/lifecycle/transitions/2"]
+          "$ref": "https://wos-spec.org/schemas/tooling/1.0#/$defs/lintDiagnostic__Root/properties/path",
+          "description": "Optional slash-prefixed pointer anchoring the finding to the candidate. Omitted for whole-document findings."
         },
         "suggested_fix": {
           "type": "string",
@@ -168,14 +167,8 @@
       }
     },
     "Severity": {
-      "type": "string",
-      "enum": ["error", "warning", "info"],
-      "description": "Severity bucket the loop uses to decide whether the document is repair-worthy. Only `error` blocks convergence; `warning` and `info` are recorded in the trace but do not trigger another repair iteration. The loop converges when zero `error` findings remain (and conformance, if checked, passes).",
-      "examples": ["error", "warning", "info"],
-      "x-lm": {
-        "critical": true,
-        "intent": "Drives loop convergence — only `error` severities trigger repair iterations"
-      }
+      "$ref": "https://wos-spec.org/schemas/tooling/1.0#/$defs/synthTrace__Severity",
+      "description": "Canonical diagnostic severity preserved by synthesis. Block and error prevent convergence."
     },
     "ConformanceVerdict": {
       "type": "object",
@@ -219,7 +212,7 @@
     },
     "SynthOutcomeConverged": {
       "type": "object",
-      "description": "Outcome variant: the loop produced a document that cleared all error-severity lint findings (and passed conformance, if a fixture was supplied) within the iteration cap. The `document` field is the final attempt; the `trace` records every iteration that led there.",
+      "description": "Outcome variant: the loop produced a document that cleared all error- or block-severity lint findings (and passed conformance, if a fixture was supplied) within the iteration cap. The `document` field is the final attempt; the `trace` records every iteration that led there.",
       "required": ["outcome", "document", "trace"],
       "additionalProperties": false,
       "properties": {
@@ -252,7 +245,7 @@
     },
     "SynthOutcomeUnconverged": {
       "type": "object",
-      "description": "Outcome variant: the loop hit the iteration cap with error-severity findings still present. The `last_attempt` field is the most recent document the loop produced; `last_findings` is what was still wrong with it; `trace` records every iteration that led there.",
+      "description": "Outcome variant: the loop hit the iteration cap with error- or block-severity findings still present. The `last_attempt` field is the most recent document the loop produced; `last_findings` is what was still wrong with it; `trace` records every iteration that led there.",
       "required": ["outcome", "last_attempt", "last_findings", "trace"],
       "additionalProperties": false,
       "properties": {

@@ -16,14 +16,14 @@ use crate::trace::{IterationRecord, SynthTrace};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "outcome", rename_all = "snake_case")]
 pub enum SynthOutcome {
-    /// All error-severity findings cleared (and conformance passed if checked).
+    /// All error- and block-severity findings cleared (and conformance passed if checked).
     Converged {
         /// The final document as raw JSON text.
         document: String,
         /// Full loop trace.
         trace: SynthTrace,
     },
-    /// Iteration cap hit with errors still present.
+    /// Iteration cap hit with errors or blockers still present.
     Unconverged {
         /// Last attempt the loop produced.
         last_attempt: String,
@@ -55,7 +55,9 @@ pub async fn synthesize(
         let findings = tools.lint_document(&attempt).await?;
         let conformance = tools.run_conformance(&attempt).await?;
 
-        let errors_remain = findings.iter().any(|f| f.severity == Severity::Error);
+        let errors_remain = findings
+            .iter()
+            .any(|f| matches!(f.severity, Severity::Error | Severity::Block));
         let conformance_blocks = matches!(&conformance, Some(v) if !v.passed);
 
         trace.push(IterationRecord {
@@ -307,6 +309,29 @@ mod tests {
                 assert_eq!(trace.iterations.len(), 3, "should hit cap exactly");
             }
             other => panic!("expected unconverged, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn block_finding_triggers_repair_and_prevents_convergence_at_cap() {
+        for cap in [1, 2] {
+            let provider = ScriptedPrompter::new(vec!["{}", "{\"repaired\":true}"]);
+            let mut block = err("PUB-LINT-001");
+            block.severity = serde_json::from_value(serde_json::json!("block")).unwrap();
+            let tools = ScriptedTools::new(vec![vec![block], vec![]]);
+            let outcome =
+                pollster::block_on(synthesize(&provider, &tools, "test", Layer::Kernel, cap))
+                    .unwrap();
+            let trace = match outcome {
+                SynthOutcome::Unconverged { trace, .. } if cap == 1 => trace,
+                SynthOutcome::Converged { trace, .. } if cap == 2 => trace,
+                other => panic!("block must prevent convergence until repaired: {other:?}"),
+            };
+            assert_eq!(trace.iterations.len(), cap as usize);
+            assert_eq!(
+                serde_json::to_value(&trace).unwrap()["iterations"][0]["lint_findings"][0]["severity"],
+                "block"
+            );
         }
     }
 

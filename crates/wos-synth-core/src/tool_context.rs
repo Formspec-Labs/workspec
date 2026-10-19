@@ -63,6 +63,8 @@ pub struct LintFinding {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Severity {
+    /// Publication blocker; requires repair before convergence.
+    Block,
     Error,
     Warning,
     Info,

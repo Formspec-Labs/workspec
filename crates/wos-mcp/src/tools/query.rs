@@ -22,9 +22,11 @@ use crate::registry::ProjectRegistry;
 /// Returns:
 /// ```json
 /// {
-///   "diagnostics": [{ "severity": "error"|"warning", "message": "...", "path": "..." }],
+///   "diagnostics": [{ "ruleId": "K-016", "severity": "error", "tier": "T1", "message": "...", "path": "/lifecycle/initialState" }],
+///   "block_count": N,
 ///   "error_count": N,
-///   "warning_count": N
+///   "warning_count": N,
+///   "info_count": N
 /// }
 /// ```
 pub async fn wos_lint(
@@ -42,32 +44,27 @@ pub async fn wos_lint(
     let diagnostics = wos_lint::lint_document(&json)
         .map_err(|e| ToolError::Internal(format!("lint engine error: {e}")))?;
 
-    let mut error_count: u64 = 0;
-    let mut warning_count: u64 = 0;
+    Ok(lint_summary(&diagnostics))
+}
 
-    let diag_values: Vec<Value> = diagnostics
-        .iter()
-        .map(|d| {
-            let severity_str = if d.severity == wos_lint::LintSeverity::Error {
-                error_count += 1;
-                "error"
-            } else {
-                warning_count += 1;
-                "warning"
-            };
-            serde_json::json!({
-                "severity": severity_str,
-                "message": d.message,
-                "path": d.path,
-            })
-        })
-        .collect();
-
-    Ok(serde_json::json!({
-        "diagnostics": diag_values,
+/// Serialize native diagnostics and count each severity without rewriting findings.
+fn lint_summary(diagnostics: &[wos_lint::LintDiagnostic]) -> Value {
+    let (mut block_count, mut error_count, mut warning_count, mut info_count) = (0, 0, 0, 0);
+    for diagnostic in diagnostics {
+        match diagnostic.severity {
+            wos_lint::LintSeverity::Block => block_count += 1,
+            wos_lint::LintSeverity::Error => error_count += 1,
+            wos_lint::LintSeverity::Warning => warning_count += 1,
+            wos_lint::LintSeverity::Info => info_count += 1,
+        }
+    }
+    serde_json::json!({
+        "diagnostics": diagnostics,
+        "block_count": block_count,
         "error_count": error_count,
         "warning_count": warning_count,
-    }))
+        "info_count": info_count,
+    })
 }
 
 // ── wos_run_conformance ───────────────────────────────────────────────────────
@@ -489,6 +486,41 @@ mod tests {
         assert!(result["diagnostics"].is_array());
         assert!(result["error_count"].is_number());
         assert!(result["warning_count"].is_number());
+    }
+
+    #[test]
+    fn lint_summary_preserves_all_native_severities_and_metadata() {
+        let diagnostics: Vec<_> = [
+            wos_lint::LintSeverity::Block,
+            wos_lint::LintSeverity::Error,
+            wos_lint::LintSeverity::Warning,
+            wos_lint::LintSeverity::Info,
+        ]
+        .into_iter()
+        .map(|severity| wos_lint::LintDiagnostic {
+            rule_id: "PUB-LINT-001",
+            severity,
+            tier: wos_lint::Tier::T2,
+            path: "/governance/findings/0".into(),
+            message: "Review this finding.".into(),
+            suggested_fix: Some(wos_lint::SuggestedFix::RemoveProperty {
+                path: "/governance/findings/0".into(),
+            }),
+            related_docs: vec!["LINT-MATRIX.md#PUB-LINT-001".into()],
+            source: None,
+        })
+        .collect();
+        let result = lint_summary(&diagnostics);
+        assert_eq!(
+            result["diagnostics"],
+            serde_json::to_value(&diagnostics).unwrap()
+        );
+        for count in ["block_count", "error_count", "warning_count", "info_count"] {
+            assert_eq!(
+                result[count], 1,
+                "{count} must count only its native severity"
+            );
+        }
     }
 
     // ── wos_preview_state_graph ───────────────────────────────────────────

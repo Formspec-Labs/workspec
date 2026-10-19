@@ -94,11 +94,22 @@ fn load_published_schema() -> Value {
 
 /// Compile the published schema into a `jsonschema::Validator`.
 fn compile_schema() -> jsonschema::Validator {
-    let schema = load_published_schema();
+    compile_with_tooling(&load_published_schema())
+}
+
+fn compile_with_tooling(schema: &Value) -> jsonschema::Validator {
+    let tooling: Value =
+        serde_json::from_str(include_str!("../../../schemas/wos-tooling.schema.json")).unwrap();
+    let registry = jsonschema::Registry::new()
+        .add("https://wos-spec.org/schemas/tooling/1.0", tooling)
+        .unwrap()
+        .prepare()
+        .unwrap();
     jsonschema::options()
+        .with_registry(&registry)
         .with_draft(jsonschema::Draft::Draft202012)
-        .build(&schema)
-        .expect("published schema compiles as Draft 2020-12")
+        .build(schema)
+        .expect("published schema and local tooling resource compile as Draft 2020-12")
 }
 
 /// Format every validation error against `instance` for a panic message.
@@ -142,10 +153,7 @@ fn synth_outcome_validator() -> jsonschema::Validator {
         "$ref": "#/$defs/SynthOutcome"
     });
 
-    jsonschema::options()
-        .with_draft(jsonschema::Draft::Draft202012)
-        .build(&wrapper)
-        .expect("SynthOutcome wrapper schema compiles")
+    compile_with_tooling(&wrapper)
 }
 
 #[test]
@@ -189,5 +197,30 @@ fn unconverged_outcome_validates_against_outcome_schema() {
             format_errors(&validator, &json),
             serde_json::to_string_pretty(&json).unwrap(),
         );
+    }
+}
+
+#[test]
+fn block_trace_validates_in_both_views_and_rejects_path_and_severity_drift() {
+    let mut trace = representative_trace();
+    trace.iterations[0].lint_findings[0].severity = Severity::Block;
+    let value = serde_json::to_value(&trace).unwrap();
+    let canonical = compile_with_tooling(&serde_json::json!({
+        "$ref": "https://wos-spec.org/schemas/tooling/1.0#/$defs/synthTrace__SynthTrace"
+    }));
+    for validator in [compile_schema(), canonical] {
+        assert!(
+            validator.is_valid(&value),
+            "{}",
+            format_errors(&validator, &value)
+        );
+        let mut invalid_severity = value.clone();
+        invalid_severity["iterations"][0]["lint_findings"][0]["severity"] =
+            serde_json::json!("fatal");
+        assert!(!validator.is_valid(&invalid_severity));
+        let mut invalid_path = value.clone();
+        invalid_path["iterations"][0]["lint_findings"][0]["path"] =
+            serde_json::json!("$.states.approved");
+        assert!(!validator.is_valid(&invalid_path));
     }
 }

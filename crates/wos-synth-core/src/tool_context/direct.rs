@@ -80,10 +80,7 @@ fn render_suggested_fix(fix: &wos_lint::SuggestedFix) -> String {
 
 fn map_severity(severity: wos_lint::LintSeverity) -> Severity {
     match severity {
-        // Synth's Severity enum has no Block; collapse to Error for
-        // synth purposes (Block's publication-blocker semantics aren't
-        // observable from the synth tool harness).
-        wos_lint::LintSeverity::Block => Severity::Error,
+        wos_lint::LintSeverity::Block => Severity::Block,
         wos_lint::LintSeverity::Error => Severity::Error,
         wos_lint::LintSeverity::Warning => Severity::Warning,
         wos_lint::LintSeverity::Info => Severity::Info,
@@ -109,6 +106,57 @@ mod tests {
             ),
             Err(ToolError::Lint(_)) => {}
             Err(other) => panic!("unexpected error variant: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn native_block_severity_and_metadata_reach_repair_prompt() {
+        // lint_document has no Block-producing rule today; exercise its native
+        // diagnostic model explicitly at this production conversion boundary.
+        let diagnostic = wos_lint::LintDiagnostic {
+            rule_id: "PUB-LINT-001",
+            severity: wos_lint::LintSeverity::Block,
+            tier: wos_lint::Tier::T2,
+            path: "/governance/findings/0".into(),
+            message: "Resolve the publication blocker.".into(),
+            suggested_fix: Some(wos_lint::SuggestedFix::RemoveProperty {
+                path: "/governance/findings/0".into(),
+            }),
+            related_docs: vec!["LINT-MATRIX.md#PUB-LINT-001".into()],
+            source: None,
+        };
+        let finding = into_finding(diagnostic);
+        assert_eq!(serde_json::to_value(finding.severity).unwrap(), "block");
+        let (_, prompt, _) =
+            crate::prompts::build_repair_prompt("{}", &[finding], crate::prompts::Layer::Kernel);
+        assert!(prompt.contains("[PUB-LINT-001] Block at /governance/findings/0"));
+        assert!(prompt.contains("remove property at /governance/findings/0"));
+        assert!(prompt.contains("LINT-MATRIX.md#PUB-LINT-001"));
+    }
+
+    #[test]
+    fn real_emitted_diagnostics_reach_direct_repair_consumer() {
+        let candidate = r#"{"$wosWorkflow":"1.0","url":"urn:test:lint-repair","version":"1.0.0","title":"Repair test","impactLevel":"informational","actors":[{"id":"reviewer","type":"human"}],"lifecycle":{"initialState":"absent","states":{"review":{"type":"atomic"}}}}"#;
+        let native = wos_lint::lint_document(candidate).unwrap();
+        assert!(native.iter().any(|d| d.rule_id == "K-016"));
+        let findings =
+            pollster::block_on(DirectToolContext::new().lint_document(candidate)).unwrap();
+        assert_eq!(native.len(), findings.len());
+        let (_, prompt, _) = crate::prompts::build_repair_prompt(
+            candidate,
+            &findings,
+            crate::prompts::Layer::Kernel,
+        );
+        for (diagnostic, finding) in native.iter().zip(&findings) {
+            assert_eq!(finding.rule_id, diagnostic.rule_id);
+            assert_eq!(
+                serde_json::to_value(finding.severity).unwrap(),
+                serde_json::to_value(diagnostic.severity).unwrap()
+            );
+            assert_eq!(finding.path.as_deref(), Some(diagnostic.path.as_str()));
+            assert_eq!(finding.message, diagnostic.message);
+            assert!(prompt.contains(&format!("[{}]", diagnostic.rule_id)));
+            assert!(prompt.contains(&diagnostic.path));
         }
     }
 

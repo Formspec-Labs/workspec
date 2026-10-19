@@ -178,7 +178,7 @@
       "properties": {
         "ruleId": {
           "type": "string",
-          "description": "Stable rule identifier from LINT-MATRIX.md that produced this diagnostic. Format is FAMILY-NNN (e.g. K-001, G-037, AI-024). Callers switch on this field to suppress, escalate, or route diagnostics.",
+          "description": "Stable rule identifier from LINT-MATRIX.md. An uppercase family code, including hyphenated families such as WOS-EMBED-TARGET, ends with a three-or-more digit suffix. Consumers retain this identity when routing or repairing findings.",
           "examples": [
             "K-001",
             "G-037",
@@ -191,17 +191,20 @@
           "x-wos": {
             "openStringKind": "identifier"
           },
-          "minLength": 1
+          "minLength": 1,
+          "pattern": "^[A-Z][A-Z0-9-]*-[0-9]{3,}$"
         },
         "severity": {
           "type": "string",
           "enum": [
+            "block",
             "error",
             "warning",
             "info"
           ],
-          "description": "Diagnostic severity level. 'error' means the document is non-conformant. 'warning' means a likely mistake requiring review. 'info' is an informational suggestion with no conformance impact.",
+          "description": "Diagnostic severity. 'block' prevents publication regardless of lower-severity waivers. 'error' makes the document non-conformant. 'warning' requires review; 'info' is an informational suggestion. Both block and error prevent synthesis convergence.",
           "examples": [
+            "block",
             "error",
             "warning",
             "info"
@@ -229,11 +232,11 @@
         },
         "path": {
           "type": "string",
-          "description": "JSONPath expression pointing to the offending node in the source document. Always starts with '$.' for document-scoped diagnostics. Used by consumers to highlight the exact location in an editor or diff view.",
+          "description": "Slash-prefixed JSON-pointer-shaped path to the offending node, matching LintDiagnostic.path. Consumers use one pointer syntax for editor locations and repair prompts.",
           "examples": [
-            "$.states.approved",
-            "$.lifecycle.transitions[2]",
-            "$.actors.reviewer.permissions"
+            "/lifecycle/states/approved",
+            "/lifecycle/states/review/transitions/2",
+            "/actors/0"
           ],
           "x-lm": {
             "critical": true
@@ -241,7 +244,8 @@
           "x-wos": {
             "openStringKind": "pathExpression"
           },
-          "minLength": 1
+          "minLength": 1,
+          "pattern": "^/"
         },
         "message": {
           "type": "string",
@@ -284,16 +288,8 @@
               ]
             },
             "path": {
-              "type": "string",
-              "description": "JSONPath to the node that should be added, removed, or replaced. Required for add-property, remove-property, and replace-value kinds. Absent for rename and custom.",
-              "examples": [
-                "$.states.approved.type",
-                "$.lifecycle.transitions[0].guard"
-              ],
-              "x-wos": {
-                "openStringKind": "pathExpression"
-              },
-              "minLength": 1
+              "$ref": "#/$defs/lintDiagnostic__Root/properties/path",
+              "description": "Pointer to the property added, removed, or replaced. Uses the same slash-prefixed syntax as the diagnostic path."
             },
             "value": {
               "description": "Replacement or new value to write at the indicated path. Required for add-property and replace-value kinds. The type matches the expected JSON type of the target field.",
@@ -340,7 +336,102 @@
               "minLength": 1
             }
           },
-          "additionalProperties": false
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "add-property",
+                    "description": "Selects the add-property fix variant.",
+                    "examples": [
+                      "add-property"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "required": [
+                  "path",
+                  "value"
+                ]
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "remove-property",
+                    "description": "Selects the remove-property fix variant.",
+                    "examples": [
+                      "remove-property"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "required": [
+                  "path"
+                ]
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "replace-value",
+                    "description": "Selects the replace-value fix variant.",
+                    "examples": [
+                      "replace-value"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "required": [
+                  "path",
+                  "value"
+                ]
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "rename",
+                    "description": "Selects the rename fix variant.",
+                    "examples": [
+                      "rename"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "required": [
+                  "from",
+                  "to"
+                ]
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "custom",
+                    "description": "Selects the custom fix variant.",
+                    "examples": [
+                      "custom"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "required": [
+                  "hint"
+                ]
+              }
+            }
+          ]
         },
         "relatedDocs": {
           "type": "array",
@@ -1207,16 +1298,8 @@
           "minLength": 1
         },
         "path": {
-          "type": "string",
-          "description": "Optional JSON Pointer (RFC 6901) anchoring the finding to a specific node in the attempt document. Absent when the finding is whole-document scoped. The pointer is computed against the attempt as parsed JSON, so it may not be present on iterations where the attempt failed to parse.",
-          "examples": [
-            "/states/approved",
-            "/lifecycle/transitions/2"
-          ],
-          "x-wos": {
-            "openStringKind": "pathExpression"
-          },
-          "minLength": 1
+          "$ref": "#/$defs/lintDiagnostic__Root/properties/path",
+          "description": "Optional slash-prefixed pointer anchoring the finding to the candidate. Omitted for whole-document findings."
         },
         "suggested_fix": {
           "type": "string",
@@ -1256,22 +1339,8 @@
       }
     },
     "synthTrace__Severity": {
-      "type": "string",
-      "enum": [
-        "error",
-        "warning",
-        "info"
-      ],
-      "description": "Severity bucket the loop uses to decide whether the document is repair-worthy. Only `error` blocks convergence; `warning` and `info` are recorded in the trace but do not trigger another repair iteration. The loop converges when zero `error` findings remain (and conformance, if checked, passes).",
-      "examples": [
-        "error",
-        "warning",
-        "info"
-      ],
-      "x-lm": {
-        "critical": true,
-        "intent": "Drives loop convergence — only `error` severities trigger repair iterations"
-      }
+      "$ref": "#/$defs/lintDiagnostic__Root/properties/severity",
+      "description": "Severity preserved by the neutral synthesis finding type. Both block and error require repair; warning and info are retained without preventing convergence."
     },
     "synthTrace__ConformanceVerdict": {
       "type": "object",
@@ -1329,7 +1398,7 @@
     },
     "synthTrace__SynthOutcomeConverged": {
       "type": "object",
-      "description": "Outcome variant: the loop produced a document that cleared all error-severity lint findings (and passed conformance, if a fixture was supplied) within the iteration cap. The `document` field is the final attempt; the `trace` records every iteration that led there.",
+      "description": "Outcome variant: the loop produced a document that cleared all error- or block-severity lint findings (and passed conformance, if a fixture was supplied) within the iteration cap. The `document` field is the final attempt; the `trace` records every iteration that led there.",
       "required": [
         "outcome",
         "document",
@@ -1373,7 +1442,7 @@
     },
     "synthTrace__SynthOutcomeUnconverged": {
       "type": "object",
-      "description": "Outcome variant: the loop hit the iteration cap with error-severity findings still present. The `last_attempt` field is the most recent document the loop produced; `last_findings` is what was still wrong with it; `trace` records every iteration that led there.",
+      "description": "Outcome variant: the loop hit the iteration cap with error- or block-severity findings still present. The `last_attempt` field is the most recent document the loop produced; `last_findings` is what was still wrong with it; `trace` records every iteration that led there.",
       "required": [
         "outcome",
         "last_attempt",
