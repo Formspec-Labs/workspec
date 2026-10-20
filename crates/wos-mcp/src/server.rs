@@ -152,7 +152,8 @@ async fn handle_request(
                 Ok(result) => JsonRpcResponse::ok(
                     id,
                     serde_json::json!({
-                        "content": [{"type": "text", "text": result.to_string()}]
+                        "content": [{"type": "text", "text": result.to_string()}],
+                        "structuredContent": result
                     }),
                 ),
                 // Unknown tool name: routing failure → JSON-RPC error.

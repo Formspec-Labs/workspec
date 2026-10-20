@@ -5,6 +5,9 @@ use serde_json::{Map, Value, json};
 use std::{future::Future, pin::Pin, sync::LazyLock};
 use wos_authoring::native_schema::{fragment_reference as native, workflow_schema};
 
+#[path = "catalog_schema.rs"]
+mod catalog_schema;
+
 type Handler = for<'a> fn(
     &'a mut ProjectRegistry,
     &'a str,
@@ -626,7 +629,7 @@ impl Tool {
                     .flat_map(|action| action.fields.iter().copied()),
             )
             .collect::<std::collections::BTreeSet<_>>();
-        let mut result = json!({"name":self.name,"description":self.description,"inputSchema":input,"outputSchema":self.output,"annotations":{"readOnlyHint":self.read_only,"destructiveHint":!self.read_only,"idempotentHint":self.read_only,"openWorldHint":false},"x-wos-capabilities":capabilities});
+        let mut result = json!({"name":self.name,"description":self.description,"inputSchema":catalog_schema::portable(&input),"outputSchema":catalog_schema::portable(&self.output),"annotations":{"readOnlyHint":self.read_only,"destructiveHint":!self.read_only,"idempotentHint":self.read_only,"openWorldHint":false},"x-wos-capabilities":capabilities});
         if !self.actions.is_empty() {
             result["x-wos-actions"]=json!(self.actions.iter().map(|action|json!({"name":action.name,"description":action.description,"fields":action.fields})).collect::<Vec<_>>());
             result["x-wos-default-action"] = json!(self.default_action);

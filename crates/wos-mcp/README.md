@@ -50,6 +50,37 @@ retains stable reasons and identifies missing, failed, refused, or stale evidenc
 `draft_only` returns an explicit unverified draft after static success. Static
 and runtime dependencies remain independently selected.
 
+The supported client qualification uses the official Python `mcp==2.2.0` SDK
+over stdio with normal negotiation and output validation. Bootstrap its locked
+test environment once, then run the Cargo-owned journey offline:
+
+```sh
+uv sync --script crates/wos-mcp/tests/support/official_client.py --locked
+WOS_MCP_CLIENT_EVIDENCE=/tmp/wos-mcp-client \
+  cargo nextest run -p wos-mcp --test actual_client
+```
+
+The test selects `CARGO_BIN_EXE_wos-mcp`, exercises discovery, native edits,
+selected Definition/Mapping validation, reviewed failure/repair, and export into
+a fresh SDK/server process. It checks every advertised input/output schema against
+its metaschema, resolves every schema reference locally, and exercises accepted
+and refused actor kinds. It compares the same calls with Rust dispatch and
+retains complete native reports, exact selected requests, process stderr, SDK
+lock/binary identities and source revisions in the evidence directory. Without
+the environment variable it uses a temporary directory, retained on client
+failure. Missing `uv` or locked dependencies fail the test explicitly.
+
+The observed client negotiation selects `2024-11-05`. Successful calls include
+the same native value as text and `structuredContent`; discovery includes the
+reachable local canonical schema fragments at their original IDs. This qualifies
+this SDK path, with fresh owning checks after reopen. It does not qualify desktop
+client configuration, a model's tool choices, host admission or durable execution.
+The Studio snapshot-to-MCP-to-host handoff remains owned by `fs-6r3f`; this test
+retains the exact native workflow and independent static/replay selections without
+treating a Studio graph snapshot as a native workflow. `fs-pizw` can use these
+observed interoperability results when considering an agent adapter or SDK server
+migration.
+
 ```sh
 cargo run -p wos-mcp -- --list-tools
 cargo run -p wos-mcp -- --tool-help wos_edit_workflow
