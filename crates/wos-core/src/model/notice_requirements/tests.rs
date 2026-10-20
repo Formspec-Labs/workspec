@@ -108,6 +108,17 @@ fn notice_requirements_capture_scope_and_status_do_not_grant_consequences() {
         )
         .is_empty()
     );
+    assert_eq!(
+        check_notice_support(
+            &r,
+            NoticeConsequence::ResponseDeadline,
+            None,
+            &[NoticeCapability::Smtp],
+            "/notice"
+        )[0]
+        .rule_id,
+        "NOTICE-004"
+    );
     let production = requirement("transportAccepted", "production", "qualifiedObservation");
     assert_eq!(
         check_notice_support(
