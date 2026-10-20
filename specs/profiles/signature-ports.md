@@ -18,7 +18,7 @@ The [Signature Profile](signature.md) owns governed signing: roles, order, admis
 
 Signature remains an embedded workflow block. This prose catalog introduces no `$wos*` marker, `targetWorkflow`, independent authored version, signed payload or new cryptographic primitive. Its date identifies the prose revision, not a wire-format version. See [ADR 0076](../../../thoughts/adr/0076-product-tier-consolidation.md) and [WOS ADR 0063](../../thoughts/adr/0063-embedded-vs-sidecar-identity-boundary.md).
 
-The key words MUST, MUST NOT, SHOULD and MAY describe conformance requirements. Requirements whose implementation or executable evidence is absent remain gaps under [§5](#5-current-owners-and-coverage); prose does not satisfy them. Detailed write-deduplication, race precedence and seal-failure recovery remain separately tracked work under [§3.3](#33-write-order-and-recovery).
+The key words MUST, MUST NOT, SHOULD and MAY describe conformance requirements. Requirements whose implementation or executable evidence is absent remain gaps under [§5](#5-current-owners-and-coverage); prose does not satisfy them. [§3.3](#33-boundary-write-identity-and-replay) defines write-deduplication keys and replay requirements. Cross-operation race precedence and seal-failure recovery remain separate work under [§3.4](#34-cross-operation-order-and-recovery).
 
 ## 2. Normative Contract
 
@@ -44,7 +44,7 @@ The key words MUST, MUST NOT, SHOULD and MAY describe conformance requirements. 
 
 **Alternative tiers.** Orphan-marker voiding adds a marker for each prior signature. It retains the same authority and governed-use refusal while making each affected signature's status explicit at higher event cost.
 
-**Conformance.** Demonstrate authorized void, unauthorized refusal, subsequent signing refusal and offline status interpretation. The original signed records remain unchanged. Exercise every affected signature under the orphan-marker tier. Conditional ordering against access, signing or sealing needs the separate race rules in §3.3; this paragraph does not settle those races.
+**Conformance.** Demonstrate authorized void, unauthorized refusal, subsequent signing refusal and offline status interpretation. The original signed records remain unchanged. Exercise every affected signature under the orphan-marker tier. Conditional ordering against access, signing or sealing needs the separate race rules in §3.4; this paragraph does not settle those races.
 
 ### P-4. ReassignmentAuthority
 
@@ -76,7 +76,7 @@ The key words MUST, MUST NOT, SHOULD and MAY describe conformance requirements. 
 
 **Alternative tiers.** Signed JSON Web Token (JWT) sessions bind expiry and allow verification of the token signature without the issuer. Capability URLs trade access-token exposure risk for simpler access. Chain-anchored credentials record issuance in the chain. An alternative MUST enforce its declared recipient, scope and expiry; offline token verification does not prove current workflow permission.
 
-**Conformance.** Exercise a valid recipient, wrong recipient/scope, expired token, concurrent scanner/signer redemption and exact retry. Retain the same access outcome on retry without treating a changed request as equivalent. The precise key/retry rules remain §3.3 work; ordinary login or task access does not qualify this signing-session port.
+**Conformance.** Exercise a valid recipient, wrong recipient/scope, expired token, concurrent scanner/signer redemption and exact retry. Retain the same access outcome on retry without treating a changed effect request as equivalent, as specified in §3.3. Ordinary login or task access does not qualify this signing-session port.
 
 ### P-8. RecipientIdentityProofingProvider
 
@@ -92,7 +92,7 @@ The key words MUST, MUST NOT, SHOULD and MAY describe conformance requirements. 
 
 **Alternative tiers.** SMS, postal and push delivery use the same recipient/evidence boundary, with their own provider and regulatory requirements. A deployment MUST identify the channel actually exercised rather than infer its success from another channel.
 
-**Conformance.** Exercise authorized send, incorrect/revoked recipient refusal, retained transport outcome and uncertain-send handling without an uncontrolled duplicate effect. Demonstrate both default channels or each specifically claimed alternative. Preserve original attempt identities and evidence. Exact delivery retry semantics remain §3.3 work.
+**Conformance.** Exercise authorized send, incorrect/revoked recipient refusal, retained transport outcome and uncertain-send handling without an uncontrolled duplicate effect. Demonstrate both default channels or each specifically claimed alternative. Preserve original attempt identities and evidence under §3.3; the existence of delivery code alone does not qualify those replay rules.
 
 ### P-10. EnvelopeTimerPolicy
 
@@ -132,7 +132,7 @@ The key words MUST, MUST NOT, SHOULD and MAY describe conformance requirements. 
 
 **Alternative tiers.** Synchronous sealing keeps the final session waiting for durable completion. WOS-resident sealing omits Trellis and provides in-instance evidence without this catalog's offline-verifiable bundle claim. Neither alternative may equate the last signer's success with an unobserved seal.
 
-**Conformance.** Exercise accepted signing with delayed seal, successful observation, denied/failed seal and uncertain outcome/retry; verify that state does not report completion early. Export original durable bytes and verify them offline where claimed. Measure any declared latency on the actual path, separating service time, polling and download. Recovery/abandonment details remain §3.3 work; an old successful case archive does not qualify a new signing product.
+**Conformance.** Exercise accepted signing with delayed seal, successful observation, denied/failed seal and uncertain outcome/retry; verify that state does not report completion early. Export original durable bytes and verify them offline where claimed. Measure any declared latency on the actual path, separating service time, polling and download. Recovery/abandonment details remain §3.4 work; an old successful case archive does not qualify a new signing product.
 
 ## 3. Composition
 
@@ -158,9 +158,35 @@ Unlisted ports inherit their defaults. Optional bindings are declared explicitly
 
 A profile name alone proves neither adapter support nor jurisdictional legal sufficiency. A deployment MUST qualify every selected override and inherited default under §4. Variants without portable evidence cannot satisfy the offline `basic-esign` acceptance merely because another profile permits them.
 
-### 3.3 Write order and recovery
+### 3.3 Boundary-write identity and replay
 
-The catalog does not yet settle the seven boundary-write keys/retry semantics (`fs-6nik`), conditional-write race precedence (`fs-a9dn`), or pending-seal-failure retry, observability and abandonment rules (`fs-fihy`). Those separately tracked specifications must compose with the existing state model rather than create a second one. Signature tag/state mapping remains `fs-lht7` work where not already defined in §2.4.1.
+**Key, request and permission are different.** Each boundary below MUST use its logical key within the owning tenant, deployment/resource scope and operation kind. Components retain their admitted values: implementations MUST distinguish the structured tuple, rather than use ambiguous delimiter concatenation, implicit case folding or locale fallback. For `documentRef`, compare the exact `documentId` and `locale` string values; object property order is not another document identity. `tokenId` is an opaque identifier, not permission to store a raw bearer credential in keys or logs. These are logical identities, not new JSON fields, wire encodings or signed-payload formats.
+
+The owner MUST retain the admitted effect request's bytes or authoritative identity and associate its outcome with that key. Equality MUST preserve all effect-relevant content and bindings; it MUST NOT discard a changed recipient, document, signer, intent, channel, authorization scope or selected evidence. Use the owning format's existing byte/identity rules, not a second canonicalizer. Current credentials and volatile transport observations are checked separately from immutable effect content. A matching key alone neither proves equal requests nor authorizes disclosure of a stored result.
+
+| Boundary write | Logical deduplication key | Bound request and replay result |
+|---|---|---|
+| P-7 session redemption | `(envelopeId, signerId, tokenId)` | Bind the original recipient/session access request and token scope/expiry. Exact redemption retries retain the original access/session outcome, not a new `accessed` event. IP/user-agent observations are transport evidence, not key or effect-equality fields; scanner and signer observations do not create separate access acts. |
+| P-2 finalized view summary | `(envelopeId, signerId, sessionId)` | Bind the final document/locale/view summary. Pre-finalization collection is separate from this one anchored write. Exact retry retains its original event; a changed finalized summary conflicts. A genuinely new viewing session uses a new session identity. |
+| P-9 delivery attempt | `(envelopeId, recipientAddress, attemptId)` | Bind the retained recipient, selected channel, content and disclosure context. One attempt identifies one channel/effect. A changed channel or message under the same key conflicts; replay retains the original transport outcome. A new authorized attempt is a new operation, not an automatic workaround for an uncertain send. |
+| P-3 void | `(envelopeId, voidRequestId)` | Bind the authorized requester, target scope and reason. Exact retry retains the original void record, actor and time. A changed void request conflicts; ordering against another operation remains §3.4. |
+| P-4 reassignment | `(envelopeId, signerId, reassignRequestId)` | Bind the original assignment, replacement, authorizing actor/grant reference and reason. Retry retains the original assignment and audit-edge identities. A changed replacement or admitted grant/intention conflicts; current permission checks do not rewrite the original grant evidence. |
+| P-14 sealing | `(envelopeId, sealAttemptId)` | Bind the original immutable selected signing/evidence prefix, configuration and seal request. Retry returns or reconciles that original selection/receipt; it MUST NOT substitute the latest head, refresh an evidence deadline or silently allocate a new seal. |
+| K-2 affirmation append | `(envelopeId, signingActId, documentRef)` | Bind the exact admitted signer, source-signature evidence, digest/algorithm, intent and witness edge for that document. Minimal `documentRef` remains `{documentId, locale}`. One gesture shares an act ID across distinct document keys; changed signer/content under an existing key conflicts. Retry retains each original provenance record's ID, timestamp and result. |
+
+**Exact replay and conflict.** A committed exact duplicate MUST produce no second mutation and MUST retain the original result/evidence bytes and identities. The owner MUST refuse a differing effect request under that key as a conflict, rather than overwrite it, return fabricated success or silently switch keys. Rechecking current permission may refuse disclosure of the retained result; replay does not restore revoked authority or confer permission through cached output. Historical outcome bytes remain unchanged even when a later authorized view or refusal differs.
+
+**Concurrency and uncertainty.** Same-key concurrent requests MUST NOT independently perform the effect. The actual durable owner must reserve/compare the request and associate the result; an in-process mutex or HTTP response cache is not proof of durable external-effect coordination. After an uncertain remote outcome, recovery MUST reconcile the original effect or use an already qualified remote idempotent operation with that same original request. It MUST NOT blindly resend or mint a new identity. Expiry, purge or restart MUST NOT make a committed or unresolved effect fresh again; retention must preserve its replay/refusal meaning. Operational backoff, incident recovery and abandonment thresholds remain §3.4 work. This specification promises neither eventual completion nor unconditional exactly-once external execution.
+
+**Qualification.** For each claimed boundary, demonstrate exact replay, changed-request conflict, same-key concurrency, scope isolation, lost-response recovery and current output authorization. Check that original record IDs/times and effect counts remain stable, and that an unresolved result does not cause another effect after restart. Distinct-document keys under one signing act MUST remain distinct; do not collapse them merely to fit an existing catalog implementation. Pre-admission refusal is not evidence that an external effect committed.
+
+**Existing owners and gaps.** [Stack Common's replay primitives](../../../stack-common/crates/stack-common-idempotency/src/lib.rs) already distinguish byte-identical replay from payload conflict and provide scoped replay/locks. Its in-memory store is not a durable effect owner. [Browser completion](../../../workspec-server/crates/wos-server/src/services/browser_completion.rs) retains exact selectors under current permission; [notice delivery](../../../workspec-server/crates/wos-server/src/services/notice_delivery.rs) and its [Postgres store](../../../workspec-server/crates/wos-server-postgres/src/notice_delivery.rs) retain claimed attempts and refuse uncertain resends. These are reuse candidates, not qualification of the seven product keys.
+
+The current [generic task replay](../../crates/wos-runtime/src/runtime/tasks.rs) can return a stored task/actor/token result before comparing the incoming response. It therefore does not, by itself, establish this section's changed-request conflict requirement. The current [Trellis signed-acts correlation](../../../trellis/crates/trellis-verify-wos/src/signed_acts.rs) groups by act ID and compares document reference/hash fields; these key rules do not qualify multiple distinct documents under one gesture against that implementation. Actual owner controls and any required correction remain with `fs-jjwc` / `fs-6pb7`. This is a source-identified coverage gap, not an executed product-failure claim or a change to intended per-document keys. No runtime conformance follows from acceptance of this subsection (`fs-6nik`).
+
+### 3.4 Cross-operation order and recovery
+
+The catalog does not yet settle conditional-write race precedence (`fs-a9dn`) or pending-seal-failure retry, observability and abandonment rules (`fs-fihy`). Those separately tracked specifications must compose with the existing state model rather than create a second one. Signature tag/state mapping remains owned by [Signature Profile §2.4](signature.md#24-lifecycle-tags).
 
 Until the necessary semantics and executable owner evidence exist, a deployment MUST NOT claim complete retry/race/recovery conformance or complete routed-signing product conformance from this catalog alone. A receipt can still qualify its explicitly bounded behavior. Later work must preserve original failed/uncertain effects and existing admitted bytes; catalog acceptance does not authorize resets or live-business replay.
 
@@ -188,7 +214,7 @@ The following source map identifies reuse candidates, not completed adapters. Th
 | P-6 | [Signature registry/floors](signature.md#213-signing-intent-uri-registry) and same runtime | Existing recognition/admission owners are reusable; no full P-6 product adapter is qualified by this document. |
 | P-7 | Signature task admission; existing application authentication | No signing-link token/session adapter qualification. |
 | P-8 | [WOS Formspec binding](../../crates/wos-formspec-binding/src/lib.rs), verified identity/primitive evidence | No claim that every listed primitive or vendor is implemented. |
-| P-9 | [NoticeDelivery](../../../workspec-server/crates/wos-server/src/services/notice_delivery.rs), current admission/store/channel | Governed notices are reusable, not proof of full signing-product email/in-app delivery; `fs-6nik` retry rules. |
+| P-9 | [NoticeDelivery](../../../workspec-server/crates/wos-server/src/services/notice_delivery.rs), current admission/store/channel | Governed notices are reusable, not proof of full signing-product email/in-app delivery or §3.3 replay qualification. |
 | P-10 | [Native timers](../../crates/wos-runtime/src/runtime/timers.rs), signature expiry | Proposed reminder summaries, bounds and each alternative need product evidence. |
 | P-11 | Existing byte/attachment owners | Declared source resolution, allowlist and fetch-and-pin qualification are missing; `fs-7gl1` / `fs-ih9d`. |
 | P-12 | [Trellis presentation artifact](../../../trellis/thoughts/adr/0007-certificate-of-completion-composition.md); [binding fallback](../../crates/wos-runtime/src/binding.rs) | A fallback document digest is not the proposed presentation qualification; alternative canonicalization needs vectors. |
