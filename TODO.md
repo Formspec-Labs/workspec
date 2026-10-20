@@ -50,7 +50,7 @@ Cross-repo Do-next #1 (WOS-T4) — workflow-tier signature slice; cross-stack ro
 **P2 — standard:**
 
 - **#4 — ADR 0066 implementation (WOS center: 7 record kinds + policies + runtime + export)** `[7/6/5]=35` · `fs-j94f` · P2
-   links ADR 0066 — amendment and supersession (cross-stack rollup) `fs-lwsj`
+   blocked-by Actor authorization shape (AuthorizationAttestation) —… `fs-u2on` · links ADR 0066 — amendment and supersession (cross-stack rollup) `fs-lwsj`
 
    WOS center slice of ADR 0066 (amendment/supersession/rescission/correction). ADR Accepted 2026-05-06; cluster ratification sweep complete. LANDED: 7 ProvenanceKind variants + schema $defs + Facts-tier classification + audit_layer_for_kind tests + 2/3 export paths (PROV-O + XES). REMAINING (per checklist :256-281): governance policy sections (amendmentPolicy, rescissionPolicy, reinstatementPolicy, correctionPolicy, supersessionPolicy) each binding AppealMechanism-shaped gate + impact-level assurance floor; lint K-A-010; companion examples + fixtures emitting superseding workflow process + runtime targetCase URI validation; runtime emission on governed transitions (gated by #72); OCEL export; wos-conformance fixtures; WOS-IMPLEMENTATION-STATUS.md updates.
 
@@ -59,14 +59,14 @@ Cross-repo Do-next #1 (WOS-T4) — workflow-tier signature slice; cross-stack ro
      - Composes onto LB_T4 (fs-w0li — workflow-tier slice) and parent ADR 0066 rollup (fs-lwsj).
 
 - **#5 — ADR 0067 implementation (WOS center: clocks runtime + export + conformance)** `[7/5/5]=35` · `fs-lq08` · P2
-   links ADR 0067 — statutory clocks (cross-stack rollup) `fs-olho`
+   blocked-by Task SLA runtime implementation `fs-96nd` · links ADR 0067 — statutory clocks (cross-stack rollup) `fs-olho`, Align notice evidence and deadline requirements across WOS… `fs-hltb`, ADR 0067 — Runtime clock emission, ResponseClock and… `fs-7yfo`, WS-073 — ADR 0067 reference prove-out (HTTP/storage) `fs-f8vm`
 
    WOS center slice of ADR 0067 (statutory clocks). ADR Accepted 2026-05-06. LANDED: clockStarted / clockResolved ProvenanceKind + schema $defs (Clock with clockId/clockKind/originEventHash/duration/calendarRef/statuteReference/computedDeadline + ClockResolved with resolution/resolvingEventHash/resolvedAt) + Facts-tier classification + Task SLA authoring surface + business calendar §7.1 infrastructure. REMAINING (per checklist :283-308): runtime emission for 4 clock kinds (AppealClock / ProcessingSLA / GrantExpiry / StatuteClock) + pause/resume per D-4; Task SLA runtime + ADR 0067 D-2.1 SlaDefinition→ProcessingSLA migration; #51 statutory deadline chain composition with §7.1; wos-export PROV-O/OCEL/XES paths for clock kinds; wos-conformance fixtures (start, satisfied, elapsed, paused segment); kernel/companion prose for MUST behavior; ADR §Open questions resolution.
 
    **Acceptance:** All 6 checklist sections green. Cross-stack rollup ADR_67 (fs-olho); workspec-server prove-out at wos-server WS-073.
 
 - **#3 — Actor authorization shape (AuthorizationAttestation) — governance policy + runtime emission** `[7/4/5]=35` · `fs-u2on` · P2
-   blocked-by ADR 0066 implementation (WOS center: 7 record kinds +… `fs-j94f`
+   links Admit and run selected workflow governance through… `fs-ps24`
 
    Stack contract per ADR 0066 D-2. WOS-center provenance ALREADY LANDED: ProvenanceKind::AuthorizationAttestation at kind.rs:350, schema $defs/AuthorizationAttestationRecord, Facts-tier classification, export adapters (PROV-O/XES; OCEL pending). REMAINING: governance policy sections + runtime emission wiring. ADR 0066 Accepted 2026-05-06.
 
@@ -102,12 +102,16 @@ Cross-repo Do-next #1 (WOS-T4) — workflow-tier signature slice; cross-stack ro
 **P3 — sustaining:**
 
 - **#2 — AI-runtime capability-precondition emission wiring** `[6/5/4]=24` · `fs-w9dv` · P3
+   blocked-by Reconcile the AI behavioral spec, native Workflow schema… `fs-k07m` · links Reconcile the AI behavioral spec, native Workflow schema… `fs-k07m`
 
    Typed Rust path landed 2026-04-28 (5 unit + 6 Python schema tests pass). REMAINING: (a) runtime emission site — AI §3.3.1 step 1-3 specifies precondition evaluation but no runtime path actually evaluates Capability.preconditions (crates/wos-core/src/model/ai.rs:197); declarable but not fired. (b) JSON conformance fixture pair (blocked + permitted) under fixtures/conformance/. (c) Ergonomic constructor variant once call-site count justifies. BLOCKER (verified 2026-05-14): ADR 0064 AgentInvoker port landed (trait + 6 adapter crates) and WosRuntime accepts AgentInvokerRegistry, but ORCHESTRATOR that calls AgentInvoker::invoke() from transition execution still does not exist. DurableRuntime has no invoke_agent method; new AgentRuntime trait or method addition may be required.
 
    **Acceptance:**
-     - Runtime emits CapabilityPreconditionEvaluated on agent invocation; JSON conformance fixture pair (blocked + permitted).
-     - GATE: AI-runtime invocation seam design (orchestrator missing).
+     - The maintained runtime action path invokes AgentInvoker only after native capability selection, preconditions, required input rights and input validation pass.
+     - Emit the provenance defined by the reviewed AI Integration §3.3.1: blocked capabilityInvocation records retain data.invocationBlocked=true and outcome=preconditionNotSatisfied; do not invent an alternative record kind.
+     - Independently authored permitted/blocked JSON fixtures observe actual invocation count, received input and retained provenance.
+     - Use the shared native loader and ConfidenceReport type from fs-k07m.
+     - GATE: reviewed invocation action path, with output validation/review/governed commit composed through fs-t9h8 when that outcome is claimed.
 
 - **#14 — WOS-SIGNATURE-ADMISSION-REVOCATION-001 — revocation_policy enforcement** `[7/3/2]=14` · `fs-yciq` · P3
    links WOS-T4 cross-stack proof + signature-attestation /… `fs-w0li`, K-DET-001 — Determination-snapshot conformance + fixture… `fs-91cr`, SNAP-SPINE-001 — UWU-5 extracted: revocation-operations… `fs-q1ut`
@@ -144,6 +148,7 @@ Gate: ADR 0066 Accepted 2026-05-06 (cluster ratification sweep). Formspec Respon
 **P2 — standard:**
 
 - **ADR 0066 §2 — Workflow Governance (5 policy sections + K-A-010 lint)** · `fs-b4sa` · P2
+   blocked-by ReinstatementPolicy schema $def + lint K-A-010 `fs-g5nu` · links Align canonical workflow governance schema, typed model and… `fs-duw8`
 
    Per ADR 0066 D-2. Zero landed. Cross-link: W_71 (fs-g5nu) covers the ReinstatementPolicy $def + K-A-010 lint slice.
 
@@ -156,6 +161,7 @@ Gate: ADR 0066 Accepted 2026-05-06 (cluster ratification sweep). Formspec Respon
    **Acceptance:** wos-conformance fixtures per kind; WOS-IMPLEMENTATION-STATUS.md / matrix rows updated as applicable.
 
 - **ADR 0066 §4 — Runtime + binding (governed-transition emission, intake protection)** · `fs-k54o` · P2
+   blocked-by Reference-runtime emission wiring for cluster variants `fs-zjpl`
 
    Zero landed. Cross-link: W_72 (fs-zjpl) covers the broader reference-runtime emission wiring for all 14 cluster variants; this slice is the ADR 0066 subset.
 
@@ -171,15 +177,10 @@ Gate: ADR 0066 Accepted 2026-05-06 (cluster ratification sweep). Formspec Respon
 
    **Acceptance:** Companion examples + fixtures emitting superseding workflow process; runtime validation of targetCase URI shape.
 
-- **ADR 0066 §5 — Export (OCEL event types for amendment/supersession kinds)** · `fs-z3ll` · P3
-
-   wos-export: PROV-O + XES event types for all 7 kinds landed (prov_o.rs:685-691, xes.rs:683-689). OCEL remains.
-
-   **Acceptance:** OCEL event types or annotations for all 7 ADR 0066 record kinds.
-
 **Recently closed (kept for traceability; archive when stale):**
 
 - ~~**ADR 0066 §1 — Kernel / provenance (7 ProvenanceKind variants + tier map + tests)**~~ `fs-xe7l` · CLOSED — Seven ProvenanceKind variants (correctionAuthorized, amendmentAuthorized, determinationAmended, rescissionAuthorized, determinationRescinded, reinstated, authorizationAttestation)…
+- ~~**ADR 0066 §5 — Export (OCEL event types for amendment/supersession kinds)**~~ `fs-z3ll` · CLOSED — wos-export: PROV-O + XES event types for all 7 kinds landed (prov_o.rs:685-691, xes.rs:683-689).
 
 <!-- tk:end -->
 
@@ -194,9 +195,10 @@ Gate: ADR 0067 Accepted 2026-05-06. Trellis Wave 39 closed; Formspec StatuteCloc
 
 **P2 — standard:**
 
-- **ADR 0067 §2 — Runtime emission (4 clock kinds + pause/resume per D-4)** · `fs-7yfo` · P2
+- **ADR 0067 — Runtime clock emission, ResponseClock and pause/resume** · `fs-7yfo` · P2
+   links Task SLA runtime implementation `fs-96nd`, Align notice evidence and deadline requirements across WOS… `fs-hltb`, WS-073 — ADR 0067 reference prove-out (HTTP/storage) `fs-f8vm`, ADR 0067 implementation (WOS center: clocks runtime +… `fs-lq08`…
 
-   Four clock kinds + pause/resume semantics. ADR 0067 D-2.1 deprecates SlaDefinition in favor of ProcessingSLA with kind discriminator — migration not yet done.
+   Implement the declared clock kinds, including ResponseClock under D-8, plus pause/resume semantics. ADR 0067 D-2.1 deprecates SlaDefinition in favor of ProcessingSLA with kind discriminator — migration not yet done.
 
    **Acceptance:** AppealClock — adverse-decision / deterministic notice path (composes with Gov §4.1 #2); ProcessingSLA — intake accepted / intake-complete workflow event (with SlaDefinition→ProcessingSLA migration per D-2.1); GrantExpiry — benefit award issued transition; StatuteClock — WOS-owned triggers only (Formspec-originated use respondent-ledger path); Pause/resume per D-4 (clockResolved with resolution:paused + new clockStarted carrying residual duration, no separate ClockPaused record kind).
 
@@ -208,12 +210,6 @@ Gate: ADR 0067 Accepted 2026-05-06. Trellis Wave 39 closed; Formspec StatuteCloc
 
 **P3 — sustaining:**
 
-- **ADR 0067 §5 — wos-export (PROV-O / OCEL / XES for clockStarted + clockResolved)** · `fs-hfdc` · P3
-
-   Zero landed for clock kinds across all three export paths.
-
-   **Acceptance:** Distinct PROV-O / OCEL / XES event types or annotations for clockStarted / clockResolved.
-
 - **ADR 0067 §4 — #51 Statutory deadline chains (compose with business calendars + typed kernel events)** · `fs-lyt8` · P3
 
    Business calendar §7.1 infrastructure exists at specs/sidecars/business-calendar.md:185-196 (6-step normative algorithm). Composition with typed kernel events trigger-gated. Tracked broader at W_51 (fs-wsf0).
@@ -221,6 +217,7 @@ Gate: ADR 0067 Accepted 2026-05-06. Trellis Wave 39 closed; Formspec StatuteCloc
    **Acceptance:** Compose with §7.1 business calendars + typed kernel events; revisit trigger-gate once center contract ships (ADR 0067 accepted + D-1/D-2 shipped).
 
 - **ADR 0067 §3 — Task SLA (#40 runtime implementation)** · `fs-pdwr` · P3
+   blocked-by Task SLA runtime implementation `fs-96nd`
 
    Authoring surface landed at schemas/wos-workflow.schema.json:7762-7789 (slaDefinitions, SlaDefinition, warningThresholds, breachPolicy, escalationChain). Runtime implementation tracked at W_40 (fs-96nd); this row is the ADR 0067 cross-reference for clock contract overlap.
 
@@ -229,6 +226,7 @@ Gate: ADR 0067 Accepted 2026-05-06. Trellis Wave 39 closed; Formspec StatuteCloc
 **Recently closed (kept for traceability; archive when stale):**
 
 - ~~**ADR 0067 §1 — Kernel / provenance (clockStarted + clockResolved + Clock $def)**~~ `fs-nx1i` · CLOSED — clockStarted + clockResolved ProvenanceKind variants landed at kind.rs:361-377; payload $defs (Clock with…
+- ~~**ADR 0067 §5 — wos-export (PROV-O / OCEL / XES for clockStarted + clockResolved)**~~ `fs-hfdc` · CLOSED — Zero landed for clock kinds across all three export paths.
 
 <!-- tk:end -->
 
@@ -281,6 +279,7 @@ Stream: C. Cross-system envelope coordination + fixtures + separation-of-duties.
 Stream: D. Release-train tooling + wos-bench synthesis benchmark. Lower priority.
 
 - **§5.5 — wos-bench synthesis benchmark (Claim A falsification harness)** `[6/5/3]=18` · `fs-6qj8` · P3
+   links ADR 0065: complete current-spec synthesis and independently… `fs-xkui`
 
    Pairs with ADR 0065 Q6 / synth split. Plan: thoughts/plans/2026-04-16-wos-synthesis-benchmark.md. Spike open questions: thoughts/research/2026-04-20-wos-synth-v0-spike-findings.md#open-questions (Q-V0-1..4 need LIVE Anthropic runs). Sub-deliverables: scaffold crates/wos-bench (wos-synth-core + wos-synth-mock, optional Anthropic flag); problem statements + benchmarks/runs/<date>-<model>/results.json; rubric library + CLI; BENCHMARK.md leaderboard + methodology; scheduled/manual CI with secrets; inline ConformanceFixture wrapper vs wos_conformance::smoke_test_document-style API (spike Option B).
 
@@ -300,27 +299,34 @@ Stream: D. Release-train tooling + wos-bench synthesis benchmark. Lower priority
 <!-- tk:start epic=fs-d59u -->
 <!-- GENERATED by scripts/generate-todo.mjs from tk epic fs-d59u — edit tickets via tk, not this section -->
 
-**P2 — standard:**
+Close the gaps between authoring a WOS workflow and running the exact exported result. The supported process is: requirements and reviewed scenarios → native authoring → canonical schema/project checks → real WOS replay → explicit review/repair → verified export/reopen → actual host execution. Reuse ADR 0065's existing MCP/synthesis work and the current Policy Studio authoring model.
 
-- **ADR-0065 — Production seam (ToolContext via shared MCP handlers + CLI wiring + purity)** `[7/5/4]=28` · `fs-uqpw` · P2
+**P1 — high-leverage:**
 
-   Score [7/5/4]=28 (cluster #65a/b/c). ADR D-3 production seam + MCP plan completion §2. #65a: Implement SECOND ToolContext impl whose lint/conformance behavior matches wos_mcp tools (wos_lint, wos_run_conformance), not a parallel copy in wos-synth-core only. Needs adapter design: synth loop holds document JSON; wos_mcp::dispatch expects ProjectRegistry + project_id. Options: implicit scratch project per session, or thin wos_mcp type implementing ToolContext by delegating to existing tools::* internals. #65b: Switch wos-synth-cli from DirectToolContext to MCP-aligned ToolContext from #65a. #65c: Once #65a/b real, consider removing direct wos-lint / wos-conformance deps from wos-synth-core so loop crate stays provider-and-lint-free at crate edge.
+- **WOS creation: qualify author-to-runtime journeys with real behavioral tests** · `fs-6r3f` · P1
+   blocked-by WOS authoring: bind verification and export to the exact… `fs-rbn7`, ADR 0065: verify the full authoring flow through a real MCP… `fs-d79a`, Align counterfactual authoring checks with the selected… `fs-k6k9`, Align initial-case Mapping validation with protected intake… `fs-iif8`, Detect unreachable workflow states, nonfinal dead ends and… `fs-8371`, Complete the D1 appeal branch after a granted… `fs-xyv7`, Align notice evidence and deadline requirements across WOS… `fs-hltb` · links Automated D1 export end-to-end test on a real-size seeded… `fs-ipgs`, ADR 0080 — Governed Output-Commit Pipeline residue (~20%… `fs-t9h8`, Reconcile the AI behavioral spec, native Workflow schema… `fs-k07m`, WOS appeals route and applicant appeal UI `fs-79hi`…
 
-   **Acceptance:** Second ToolContext impl uses MCP handlers; wos-synth-cli wires MCP-backed dispatch as default; wos-synth-core loses direct wos-lint/wos-conformance deps if no in-crate stopgap remains.
+   Prove the complete creation process: requirements and reviewed scenarios, native authoring, validation, runtime replay, export/reopen, actual host admission and execution. Use the artifact produced by the supported tools with real Formspec evaluation and mapping; canned conformance responses cannot qualify this path.
 
-- **ADR-0065 — Spike + synth quality closure (#65g/h/i/j)** `[6/4/4]=24` · `fs-xkui` · P2
-
-   #65g: Run synth against Anthropic on PO fixture; record iteration counts, dominant first-pass diagnostics, conformance repair firing, schema/FEL/governance fix mix. Update thoughts/research/2026-04-20-wos-synth-v0-spike-findings.md in place. #65h: Feed rule_id, suggested_fix, spec_ref (structured block or JSON), not only LintDiagnostic Display text (cheapest prompt-engineering win per spike). #65i: Prefer upstream wos_conformance::smoke_test_document over ad-hoc inline ConformanceFixture wrappers (spike Option B). #65j: Replace substring matching for missing $wos* marker with typed discriminant or stable error code.
-
-   **Acceptance:** Q-V0-1..4 closed with live numbers; structured repair prompt wired; upstream conformance document gate API adopted; wos-lint parse error typed.
+   **Acceptance:**
+     - 1.
+     - A documented repeatable command takes a reviewed creation request/scenario set through supported MCP/CLI authoring operations and Policy Studio compile/replay to exact verified exports.
+     - Reuse the shared native-check and deterministic trace-informed repair proof from fs-uqpw/fs-563r and native Studio replay proof from fs-8qbf; fs-d79a must establish the real-client path, and fs-rbn7 must bind exact tested/exported inputs.
+     - Preserve tool transcripts, artifact identities and failure-stage results.
+     - Live-provider generation guidance, quality and measurements remain unqualified under deferred fs-xkui and are not prerequisites for this supported author-to-host journey. 2.
+     - Admit the exported candidate unchanged through maintained server configuration/publication APIs in an isolated test environment.
+     - Exercise actual Formspec engine validation, actual Mapping, task creation/completion and selected runtime storage/authorization; no test-side reconstruction or manual policy patch. 3.
+     - Independently reviewed scenarios cover approval, denial with required notice, missing information and correction, unauthorized action, deadline handling, and retry/restart.
+     - Assert actual case state, tasks, notices and retained provenance/evidence for the supported path.
+     - Timer tests may control the owning clock; durable restart/retry requires the real selected durable service. 4.
+     - Include a real rendered respondent/staff interaction for the representative journey and a deliberately broken guard/mapping/expectation control proving the suite detects wrong behavior.
+     - Test doubles are declared individually and cannot replace the Formspec/WOS/durable behavior being qualified. 5.
+     - CI runs deterministic validation/replay and an explicitly selected service-backed integration lane; unavailable required services produce not-run/failure rather than green.
+     - Retain exact revisions, native exits, transcripts/traces and artifact hashes with bounded diagnostics. 6.
+     - The creation guide names supported operations, review points, commands, emitted artifacts and observed limitations.
+     - Each claimed scenario has current evidence; historical D1 success, lint-only passes and local memory-backed adapters are not promoted to fresh end-to-end proof.
 
 **P3 — sustaining:**
-
-- **ADR-0065 — MCP transport + real-client validation (#65e/f)** `[5/4/3]=15` · `fs-d79a` · P3
-
-   #65e: wos-mcp Cargo.toml TODO — revisit rust-mcp-sdk with default-features=false + minimal features vs current hand-rolled stdio (transport swap). #65f: Exercise wos-mcp binary under REAL MCP host (e.g. Claude Desktop). Plan addendum + spike both state: v0 spike never touched MCP; silence is not proof of dual-entry correctness.
-
-   **Acceptance:** rust-mcp-sdk transport swap decision recorded; wos-mcp binary validated against Claude Desktop (or alternative real MCP host).
 
 - **ADR-0065 — Synth provider + schema hygiene (#65k/l/m + Anthropic cache marker)** `[5/3/3]=15` · `fs-s5wm` · P3
    links WOS-SYNTH-ANTHROPIC-CACHE-001 — Wire CacheAnchor to… `fs-6n85`
@@ -329,14 +335,62 @@ Stream: D. Release-train tooling + wos-bench synthesis benchmark. Lower priority
 
    **Acceptance:** CacheAnchor travels through Anthropic cache-control headers (not inline); SynthTrace schema drift test passes round-trip; ToolContext discipline preserved (no speculative methods).
 
+- **ADR 0065: complete current-spec synthesis and independently tested repair** · `fs-xkui` · P3
+   blocked-by ADR 0065: share MCP tool execution with synthesis and the… `fs-uqpw`, ADR 0064: carry actual conformance traces into synthesis… `fs-563r` · links §5.5 — wos-bench synthesis benchmark (Claim A falsification… `fs-6qj8`
+
+   Finish the synthesis quality work using current spec/schema guidance, required reviewed scenarios and actual behavioral feedback. Structured lint fields already reach repair prompts; do not rebuild that completed sub-slice. fs-563r owns adding the existing runtime trace to repair; this ticket owns generation policy, success criteria and measured quality.
+
+   **Acceptance:**
+     - 1.
+     - Every advertised synthesis layer receives the applicable current canonical schema/spec guidance and declared capabilities.
+     - Unsupported layers refuse explicitly rather than running with empty guidance.
+     - Generation and repair share one guidance selector and these inputs; adding a supported layer must not require synchronized selection edits in both prompt builders. 2.
+     - Required scenarios execute for each candidate through fs-uqpw.
+     - A lint-clean but behaviorally wrong candidate cannot succeed; unavailable/empty required conformance cannot become a pass. 3.
+     - A controlled failing case reaches repair with structured lint and observed runtime differences, then re-executes a changed candidate successfully.
+     - Preserve candidates, prompt inputs, traces, iteration counts and failed/exhausted outcomes.
+     - Do not change reviewed expectations to make a candidate pass. 4.
+     - Malformed generated JSON reaches a repair attempt through a maintained typed discriminant or stable error code.
+     - Current production DirectToolContext stringifies the error and exits; SynthError::UnparseableOutput is not constructed.
+     - The retired spike already classifies LintError variants, so reuse its useful assertions without extending that implementation or describing production substring matching as an existing defect.
+     - Use the supported upstream replay/document API (the historical smoke_test_document name was a proposal, not an assumed existing API). 5.
+     - Run the existing purchase-order spike/benchmark with the live configured provider and retain Q-V0-1..4 measurements: iterations, dominant first-pass diagnostics, schema/FEL/governance fixes and behavioral repair.
+     - Coordinate with fs-6qj8; one measurement corpus satisfies both, without duplicating the broader benchmark framework.
+     - No quality or cost result is asserted without measurement. 6.
+     - Update the spike findings with bounded conclusions and the actual supported route.
+     - Studio consumers expose semantic repairs for explicit reviewer choice as required by scenario-authoring.md.
+
 **P4 — backlog / trigger-gated:**
 
-- **ADR-0065 — Authoring plan reconciliation + checkbox refresh (#65n/o)** `[4/3/2]=8` · `fs-k63f` · P4
-   blocked-by ADR-0065 — Production seam (ToolContext via shared MCP… `fs-uqpw`
+- **ADR 0065: document the supported creation process and reconcile old plans** · `fs-k63f` · P4
 
-   #65n: Reconcile thoughts/plans/2026-04-17-wos-authoring-crate.md. Plan file layout (handlers/*.rs, long checkbox ladder) DIVERGES from shipped raw.rs / command.rs / project.rs. Either update plan to match reality OR extract gap list (MCP tools ↔ WosProject helpers) so obsolete steps aren't re-executed. #65o: After #65n, mark landed MCP/synth/authoring plan [x] steps against main (or add banner: 'checkboxes frozen — see work-spec/TODO.md ADR 0065 section').
+   Reconcile historical authoring/MCP/synth plans with shipped source and document the supported end-to-end creation process. This remains independently actionable: current gaps can be documented before implementation completes.
 
-   **Acceptance:** Plan file reflects shipped reality OR carries explicit gap list; landed checkboxes marked or freeze banner posted.
+   **Acceptance:**
+     - 1.
+     - Reconcile thoughts/plans/2026-04-17-wos-authoring-crate.md with actual raw.rs/command.rs/project.rs or retain a precise remaining-gap map.
+     - Mark verified landed plan steps or freeze obsolete checkboxes with an explicit pointer to current tickets. 2.
+     - The guide explains required inputs, review/scenario preparation, native edits, schema/project checks, real replay, repair/review, export/reopen and host admission.
+     - Show supported commands/API entry points and resulting artifacts. 3.
+     - Clearly distinguish draft, statically valid, behaviorally verified and host-qualified results.
+     - Describe unsupported operations and not-run checks without implying completion. 4.
+     - Link generated tool documentation and the maintained runnable example; no handwritten duplicate list of tool schemas/actions.
+     - Keep prose aligned when the epic's final acceptance is executed. 5.
+     - Existing pending implementation tickets remain open with their own evidence requirements.
+     - This documentation ticket has no hard dependency on fs-uqpw; updating docs does not implement or qualify that seam.
+
+**Recently closed (kept for traceability; archive when stale):**
+
+- ~~**ADR 0065: verify the full authoring flow through a real MCP client**~~ `fs-d79a` · CLOSED — Exercise the shipped wos-mcp binary through an actual MCP host/client.
+- ~~**Align initial-case Mapping validation with protected intake handoff context**~~ `fs-iif8` · CLOSED — Actual new shared project validation rejects the maintained D1 initial-case Mapping with five E1110 findings because it validates handoff.responseRef, response.data,…
+- ~~**WOS authoring: bind verification and export to the exact tested artifacts**~~ `fs-rbn7` · CLOSED — A successful check is useful only for the workflow and dependencies that were actually tested.
+- ~~**Policy Studio: replace placeholder scenario gates with native WOS replay**~~ `fs-8qbf` · CLOSED — Policy Studio currently walks declared transitions for ActualTrace and its compiler conformance gate can pass with a stub marker.
+- ~~**WOS authoring: replay exact candidates through the maintained runtime**~~ `fs-cilt` · CLOSED — Expose a supported reusable replay API over wos-conformance/WosRuntime.
+- ~~**WOS authoring: share canonical schema and project validation across callers**~~ `fs-h9gq` · CLOSED — MCP currently runs single-document lint, while Policy Studio has its own schema gate that removes unsupported regex patterns.
+- ~~**Reconcile the AI behavioral spec, native Workflow schema and runtime**~~ `fs-k07m` · CLOSED — Actual fs-d59u authoring/replay integration exposes a disagreement among normative prose, schema and runtime.
+- ~~**Replace event-hint provenance with evidence from completed native operations**~~ `fs-pzju` · CLOSED — During fs-k07m review, the shared reference companion was found to call wos-core/src/event_handler.rs branches that manufacture non-AI success records from ordinary event hints:…
+- ~~**WOS authoring: current-spec edits through one declarative MCP tool catalog**~~ `fs-rxgc` · CLOSED — WOS authoring still writes governance and AI content into x-wos-governance/x-wos-ai while the current Workflow schema defines native fields.
+- ~~**ADR 0065: share MCP tool execution with synthesis and the CLI**~~ `fs-uqpw` · CLOSED — Complete the existing production ToolContext seam using the same catalog, handlers, canonical validation and replay used by MCP.
 
 <!-- tk:end -->
 ### Behavioral / governance (1.0 scope under minutes-not-days)
@@ -369,7 +423,7 @@ The 2026-04-28 cluster ratification landed 14 new `ProvenanceKind` variants + cl
 <!-- GENERATED by scripts/generate-todo.mjs from tk epic fs-7a5t — edit tickets via tk, not this section -->
 
 - **#70 — DurableRuntime::AppendFailure typed enum** `[6/4/5]=30` · `fs-vmsx` · P2
-   links ADR 0070 — cross-layer failure and compensation `fs-qzg6`, Trellis #6 — ADR 0070 execution: CommitAttemptFailure… `fs-uj32`
+   links ADR 0070 — cross-layer failure and compensation `fs-qzg6`, Trellis #6 — ADR 0070 execution: CommitAttemptFailure… `fs-uj32`, Accepted signed TaskSubmit stalls in native preparation `fs-naer`
 
    Replace Result<_, RuntimeError> failure surface in DurableRuntime adapter contract with closed AppendFailure { Retryable, BudgetExhausted, Terminal } enum carrying typed reason codes. Today every adapter (in-memory + Restate + future) uses RuntimeError (not String) but classification of commit-attempt outcomes still string-matches into branching logic. WHY: ADR 0070 D-4.3 pins commit-failure taxonomy as substrate-classified, retry-budget-aware, with Stalled as terminal lifecycle state. NOT STARTED: no AppendFailure enum exists; CommitFailureKind enum exists in provenance layer only (record.rs:96). Composes with #72. ADR 0070 Accepted 2026-05-06.
 
@@ -406,6 +460,7 @@ Stream: C. Per-feature 1.0 work surface: equity, access control, joint design, l
 **P2 — standard:**
 
 - **#78 — Counterfactual tier emission** `[6/4/5]=30` · `fs-jg0f` · P2
+   links Admit and run selected workflow governance through… `fs-ps24`
 
    Add ProvenanceAuditTier::Counterfactual variant + dedicated ProvenanceKind variant(s). Wire Layer 1 injection path so runtime can stamp audit_layer='counterfactual'. CURRENT: AuditLayer::Counterfactual exists for parsing but no runtime emission. Maps to Feature Matrix 8.3. RELATED to #24b but distinct (reasoning trace vs counterfactual tier).
 
@@ -425,6 +480,7 @@ Stream: C. Per-feature 1.0 work surface: equity, access control, joint design, l
    **Acceptance:** Processor enforces RemediationTrigger.action per spec; DisparityMethod wired to runtime; conformance fixture per trigger action.
 
 - **#24b + #25 — Reasoning tier rule-firing trace + Catala-style defeasibility** `[7/6/4]` · `fs-paz1` · P2
+   links Admit and run selected workflow governance through… `fs-ps24`
 
    Score: #24b [7/6/4]=28; #25 [6/7/6]=36 (cluster total ~64). Vision model: workflow-governance with (sourceAuthority, priority) lexicographic. After ADR.
 
@@ -483,7 +539,7 @@ Stream: C. Per-feature 1.0 work surface: equity, access control, joint design, l
    **Acceptance:** Task lifecycle extends with Suspended / Cancelled / Return states; rework counter increments on Return; conformance per state.
 
 - **#40 — Task SLA runtime implementation** · `fs-96nd` · P3
-   blocked-by ADR 0067 implementation (WOS center: clocks runtime +… `fs-lq08`
+   links ADR 0067 — Runtime clock emission, ResponseClock and… `fs-7yfo`
 
    Score per §10.3. Beyond session-8 authoring surface; wire §10.3 runtime obligations. §4.7: spec home for envelope reminders + expirations once runtime fires slaDefinitions / warningThresholds / breachPolicy. Gated on ADR 0067 D-2.1 migration (SlaDefinition→ProcessingSLA).
 
@@ -507,6 +563,7 @@ Stream: C. Per-feature 1.0 work surface: equity, access control, joint design, l
    **Acceptance:** Named cancellation regions $def lands; runtime cancels region as unit; conformance fixture proves region-scoped cancellation.
 
 - **#77 — Canary deployment schema formalization** `[4/3/3]=12` · `fs-8rpq` · P4
+   links Specify and implement reserved native AI oversight settings `fs-yhw8`, WS-044 — Write-side drift detection (Drift §1.3)… `fs-2dmc`, Reconcile the AI behavioral spec, native Workflow schema… `fs-k07m`
 
    deploymentSequence property in drift-monitor spec prose needs schema $def in Advanced block. Shadow mode already has schema; canary phase (canaryPercentage, canaryDuration) is prose-only. Maps to Feature Matrix 5.22.
 
@@ -535,22 +592,11 @@ Stream: C. Per-feature 1.0 work surface: equity, access control, joint design, l
 <!-- tk:start epic=fs-dyhj -->
 <!-- GENERATED by scripts/generate-todo.mjs from tk epic fs-dyhj — edit tickets via tk, not this section -->
 
-**P3 — sustaining:**
 
-- **WOS-SYNTH-ANTHROPIC-CACHE-001 — Wire CacheAnchor to Anthropic cache control API** `[5/3/4]=20` · `fs-6n85` · P3
-   links ADR-0065 — Synth provider + schema hygiene (#65k/l/m +… `fs-s5wm`
+**Recently closed (kept for traceability; archive when stale):**
 
-   crates/wos-synth-anthropic/src/lib.rs:9-10 folds CacheAnchor data into system prompt verbatim because SDK doesn't expose cache control. Once Anthropic SDK adds cache-control blocks, wire real cache breaks — reduces token spend, improves prompt coherence on long synth sessions. PAIRS with #65k (delivery item at W_65_PROVIDER = fs-s5wm) — this is the source-level marker discovered by audit.
-
-   **Acceptance:** CacheAnchor data travels through Anthropic cache-control headers, not inline in system prompt; synth benchmarks show reduced token usage.
-
-**P4 — backlog / trigger-gated:**
-
-- **WOS-MCP-TYPED-ACCESSOR-001 — Replace untyped AIIntegrationDocument accessor in wos-mcp** `[4/2/3]=12` · `fs-07x9` · P4
-
-   crates/wos-mcp/src/tools/document.rs:169 still counts agents via raw extensions['x-wos-ai']['agents']. wos_core::model::ai::AIIntegrationDocument exists, but MCP tool has not been moved to typed accessor/deserialization path for current merged-envelope workspace model. Untyped path is latent source of drift if document shape changes.
-
-   **Acceptance:** wos-mcp uses typed accessor returning AIIntegrationDocument (or typed embedded agents block) without raw extension walking; cargo nextest run -p wos-mcp green.
+- ~~**WOS-SYNTH-ANTHROPIC-CACHE-001 — Wire CacheAnchor to Anthropic cache control API**~~ `fs-6n85` · CLOSED — crates/wos-synth-anthropic/src/lib.rs:9-10 folds CacheAnchor data into system prompt verbatim because SDK doesn't expose cache control.
+- ~~**WOS-MCP-TYPED-ACCESSOR-001 — Read current native agents through typed authoring accessors**~~ `fs-07x9` · CLOSED — Replace wos-mcp describe's raw extensions['x-wos-ai']['agents'] lookup with the typed current Workflow agents field.
 
 <!-- tk:end -->
 ### Hygiene / refactors **[Stream: C]**
@@ -575,7 +621,7 @@ Sequenced for module-bottleneck relief, not delayed by it.
 Stream: B. wos-runtime parity vs published §15 MUSTs; PARITY drift; HTTP §15 fixtures. Decomposed into #66a-#66g sub-items. Full context: workspec-server/crates/wos-server/TODO.md (WS-011, WS-074, WS-075).
 
 - **#66 — Runtime §15 processor parity (umbrella)** `[7/5/5]=35` · `fs-9pjk` · P1
-   links WS-075 — Cross-stack §15 conformance fixtures (HTTP) `fs-fd0q`
+   links WS-075 — Cross-stack §15 conformance fixtures (HTTP) `fs-fd0q`, Admit and run selected workflow governance through… `fs-ps24`
 
    Umbrella for Runtime Companion §15 / Phase 11 parity work. Decomposed into #66a-#66g children. Full context at workspec-server/crates/wos-server/TODO.md (WS-011, WS-074, WS-075). Cross-stack: wos-server WS-072 (ADR 0066 prove-out), WS-073 (ADR 0067 prove-out), WS-075 (§15 conformance fixtures HTTP).
 
@@ -639,12 +685,6 @@ Stream: D. ADR 0064 agent-adapter implementations + structured lint diagnostics 
 
 **P2 — standard:**
 
-- **ADR 0064 residual — Trace-emitting conformance (teachable traces/deltas)** `[6/5/5]=30` · `fs-563r` · P2
-
-   Teachable traces/deltas, not only pass/fail.
-
-   **Acceptance:** Conformance harness emits structured traces (passing AND failing paths); deltas visible; LLM consumes them for repair.
-
 - **#A4 — wos-agent-a2a invoke body** `[6/7/5]=30` · `fs-njef` · P2
    blocked-by AI-runtime capability-precondition emission wiring `fs-w9dv`
 
@@ -653,7 +693,7 @@ Stream: D. ADR 0064 agent-adapter implementations + structured lint diagnostics 
    **Acceptance:** A2A agent adapter invoke body wired; multi-agent orchestrator delegation works; conformance fixture.
 
 - **#A3 — wos-agent-mcp invoke body** `[6/6/5]=30` · `fs-pizw` · P2
-   blocked-by AI-runtime capability-precondition emission wiring `fs-w9dv`, ADR-0065 — MCP transport + real-client validation (#65e/f) `fs-d79a`
+   blocked-by AI-runtime capability-precondition emission wiring `fs-w9dv`, ADR 0065: verify the full authoring flow through a real MCP… `fs-d79a`
 
    MCP client; connect to MCP server per AgentSpec.mcp config; marshal AgentContext into tool call; collect tool result. Needs rust-mcp-sdk (same transport decision as #65e at W_65_MCP = fs-d79a). GATE: Do-next #2.
 
@@ -673,11 +713,19 @@ Stream: D. ADR 0064 agent-adapter implementations + structured lint diagnostics 
 
    **Acceptance:** Claude Agent SDK adapter invoke body wired; conformance fixture.
 
-- **ADR 0064 residual — Structured LintDiagnostic output contract** `[6/5/4]=24` · `fs-p2pd` · P2
+- **Specify and implement reserved native AI oversight settings** · `fs-yhw8` · P2
+   blocked-by Reconcile the AI behavioral spec, native Workflow schema… `fs-k07m` · links WS-044 — Write-side drift detection (Drift §1.3)… `fs-2dmc`, Reconcile the AI behavioral spec, native Workflow schema… `fs-k07m`, Canary deployment schema formalization `fs-8rpq`
 
-   Machine-stable JSON per rule; prerequisite for LLM repair loops.
+   The fs-k07m expert review found behavioral obligations without complete native authored shapes for aiOversight.oversightExtensions, reviewSampling, narrativeTier, driftDetection and assistGovernanceProxy, plus training-data and optimization disclosures. The reviewed spec reserves these configured fields and requires native/schema refusal; older runtime structs and open schema objects are not normative authority. Complete only explicitly chosen behaviors through their existing owners before advertising supported configuration.
 
-   **Acceptance:** LintDiagnostic JSON shape spec'd + schema; wos-lint emits structured JSON; LLM repair loop consumes it.
+   **Acceptance:**
+     - 1.
+     - Each enabled setting has explicit normative inputs, processing, outputs and checks, with expert approval before code/schema. 2.
+     - One canonical schema/model and maintained owner route interpret it consistently; remaining undefined settings still refuse. 3.
+     - Tests observe actual independent-first visibility/review, sampling selection, non-authoritative narrative handling, drift/disclosure or proxy behavior for every feature claimed, including causal negative controls.
+     - Emitted provenance alone does not prove an operation ran. 4.
+     - Runtime/API/MCP/Studio capability reporting names supported, unsupported and not-run stages; no AI Complete claim until all required operations are proved. 5.
+     - Existing related owners are linked rather than duplicated, and exact evidence/limitations are retained.
 
 **P4 — backlog / trigger-gated:**
 
@@ -686,6 +734,11 @@ Stream: D. ADR 0064 agent-adapter implementations + structured lint diagnostics 
    Companion drift lint — trigger-gated.
 
    **Acceptance:** COMP-001 lint detects companion drift; trigger: companion spec changes break consumers in field.
+
+**Recently closed (kept for traceability; archive when stale):**
+
+- ~~**ADR 0064: carry actual conformance traces into synthesis repair**~~ `fs-563r` · CLOSED — Structured passing/failing ConformanceTrace and deltas already exist.
+- ~~**ADR 0064: align the existing lint diagnostic schema with emitted results**~~ `fs-p2pd` · CLOSED — The structured LintDiagnostic/output and synthesis mapping already exist.
 
 <!-- tk:end -->
 ### Regulatory (1.0) **[Stream: C]**
@@ -705,11 +758,16 @@ Stream: C. EU AI Act + OMB M-24-10 + repositioning docs.
 
 **P3 — sustaining:**
 
-- **#53 — OMB M-24-10 compliance** `[6/4/3]=18` · `fs-jfdh` · P3
+- **#53 — Federal AI process-documentation policy mapping for the selected deployment** · `fs-jfdh` · P3
 
-   Process-documentation-shaped; overlaps Assurance + impact-level plumbing.
+   Current authority correction (2026-10-18): OMB M-25-21, dated April 3, 2025, explicitly rescinds and replaces M-24-10 on page 1. [Official OMB memorandum](https://www.whitehouse.gov/wp-content/uploads/2025/02/M-25-21-Accelerating-Federal-Use-of-AI-through-Innovation-Governance-and-Public-Trust.pdf). This establishes the replacement fact; it does not establish that M-25-21 is the sole or exhaustive current authority for every deployment.
 
-   **Acceptance:** OMB M-24-10 compliance spec'd; assurance + impact-level fields carry required process-documentation metadata; conformance fixture.
+   **Acceptance:**
+     - 1.
+     - Identify the applicable current federal AI policy and deployment obligations before selecting the requirements mapping; retain the original M-24-10 references as historical context. 2.
+     - Map applicable process-documentation requirements to the maintained assurance and impact-level metadata, recording both supported requirements and any gaps. 3.
+     - Add conformance evidence for those concrete metadata and emission requirements.
+     - This is technical evidence for the selected deployment, not blanket software compliance certification.
 
 **P4 — backlog / trigger-gated:**
 
