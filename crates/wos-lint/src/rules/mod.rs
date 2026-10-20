@@ -3,6 +3,7 @@
 //! Lint rule modules organized by verification tier.
 
 pub mod continuous_mode;
+pub mod control_flow;
 pub mod decision_table;
 pub mod fel_analysis;
 pub mod registry;

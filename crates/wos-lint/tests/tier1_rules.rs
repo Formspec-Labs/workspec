@@ -2118,16 +2118,16 @@ fn dm001_drift_monitor_extension_key_without_prefix() {
 }
 
 // ========================================================================
-// Edge case: valid minimal kernel produces zero diagnostics.
+// Edge case: a valid kernel still reports the structural analysis boundary.
 // ========================================================================
 
 #[test]
-fn minimal_valid_kernel_has_zero_diagnostics() {
+fn minimal_valid_kernel_has_only_structural_coverage_information() {
     let doc = minimal_kernel();
     let diags = lint(doc);
     assert!(
-        diags.is_empty(),
-        "minimal valid kernel should have 0 diagnostics, got: {diags:?}"
+        diags.iter().all(|d| d.rule_id == "WOS-FLOW-006" && d.severity == LintSeverity::Info),
+        "minimal valid kernel should have only structural coverage information, got: {diags:?}"
     );
 }
 

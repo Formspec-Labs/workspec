@@ -1,0 +1,25 @@
+{
+  "$wosWorkflow": "1.0",
+  "url": "urn:test:workflow-logic-probe",
+  "version": "1.0.0",
+  "title": "Offline workflow logic probe",
+  "impactLevel": "operational",
+  "actors": [
+    {
+      "id": "reviewer",
+      "type": "human"
+    }
+  ],
+  "lifecycle": {
+    "initialState": "review",
+    "states": {
+      "review": {
+        "type": "atomic",
+        "transitions": []
+      },
+      "done": {
+        "type": "final"
+      }
+    }
+  }
+}

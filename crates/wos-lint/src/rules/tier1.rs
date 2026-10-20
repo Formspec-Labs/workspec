@@ -85,6 +85,7 @@ fn check_workflow(
 
             check_lifecycle_initial_state_resolves_typed(&kernel, diagnostics); // K-032
             check_initial_state_keys_into_states_typed(&kernel, diagnostics); // K-016
+            super::control_flow::check(&kernel, diagnostics, skipped);
             check_set_data_paths_typed(&kernel, diagnostics);
             check_milestone_uniqueness_typed(&kernel, diagnostics);
             check_timer_exclusivity_typed(&kernel, diagnostics);

@@ -99,3 +99,45 @@ Documents are identified by their `$wos*` marker property. Per ADR 0076 the sche
 | `$wosProcess` | Runtime workflow-process state | `schemas/wos-process.schema.json` |
 | `$wosProvenanceLog` | Runtime append-only audit log | `schemas/wos-provenance-log.schema.json` |
 | `$wosTooling` | Tooling envelope wrapping conformance traces, lint diagnostics, MCP catalogs, synth traces, extension registries | `schemas/wos-tooling.schema.json` |
+
+### Structural control flow
+
+Tier 1 runs one typed lifecycle checker through `lint_document`, project lint,
+and the shared `validate` operation used by authoring and exact-byte static
+prepublication checks. `WOS-FLOW-001` refuses duplicate global state IDs;
+`002` reports unreachable states; `003` reports reachable nonfinal configurations
+without an exit; `004` reports closed configuration cycles without an outcome.
+Locations use authored JSON Pointers; targets retain the runtime's global IDs.
+
+The checker tracks concurrent active states, compound entry and ancestor exits,
+and parallel `$join` eligibility for `wait-all`, `cancel-siblings` and `fail-fast`.
+Fail-fast accepts normal all-region completion or an error final state, consistent
+with Kernel §4.4/§4.8.3. A nested final completes its enclosing scope; it does not
+by itself finish the process. Region transitions are conservatively interleaved:
+guard correlations and simultaneous event effects may create extra possible
+paths. A structural path is a possibility, never an execution or liveness proof.
+
+Kernel's deferred callback rule permits regional business finality while an
+independent receipt region remains active. `WOS-FLOW-007` identifies the narrow
+supported shape: a top-level `wait-all` parallel, all business regions at direct
+regional finals, and each receipt region containing one atomic state whose
+transitions self-target and invoke typed inbound callbacks, with no entry/exit
+actions or task creation. Names and tags cannot exempt a cycle. This business
+outcome does not establish process termination, callback authentication, pending
+work preservation, delivery or terminal-cleanup readiness. An authored process
+final that cannot be reached still receives `002`, including behind a blocked
+join in a persistent workflow. Other persistent shapes require separate
+qualification and can receive structural defects until modeled explicitly.
+
+`WOS-FLOW-006` always reports the analysis boundary: guards, ordered choice
+shadowing, case data, action effects, external events, fairness and eventual
+completion remain unproved. Administration and migration are outside normal
+start-to-outcome analysis. History restoration, data-dependent `foreach`, advanced
+constraints, and exhausted bounds emit `WOS-FLOW-005` and a required
+`workflow-control-flow: not-run` stage in shared validation, suppressing graph
+conclusions. The current author-time schema does not declare `historyState`;
+typed callers still receive an explicit history limitation, and shared validation
+also preserves any schema refusal. Limits are 4,096 states, depth 128, 8,192 active
+configurations and 65,536 authored transitions/configuration edges. These are
+analysis limits, not normative workflow size limits. A static pass proves neither
+runtime completion nor suitability for publication or deployment.
