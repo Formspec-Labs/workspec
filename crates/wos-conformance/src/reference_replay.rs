@@ -366,6 +366,27 @@ impl PreparedReferenceReplay {
     pub fn runtime_identity(&self) -> &Value {
         self.prepared.runtime_identity()
     }
+    /// Returns shared cohort configuration without member request and response data.
+    ///
+    /// Full replay identity, reviewed inputs and pairwise equality retain both values.
+    /// Every other configuration field remains part of this comparison.
+    pub(crate) fn cohort_runtime_configuration(&self) -> Result<Value, ConformanceError> {
+        let invalid = || {
+            ConformanceError::Parse("prepared reference invocation identity is malformed".into())
+        };
+        let mut configuration = self.runtime_identity().clone();
+        let invocations = configuration
+            .pointer_mut("/referenceAdapters/invocations")
+            .and_then(Value::as_array_mut)
+            .ok_or_else(invalid)?;
+        for invocation in invocations {
+            let invocation = invocation.as_object_mut().ok_or_else(invalid)?;
+            for field in ["expectedInput", "response"] {
+                invocation.remove(field).ok_or_else(invalid)?;
+            }
+        }
+        Ok(configuration)
+    }
     /// Returns the unchanged complete original request.
     pub fn request(&self) -> &ReplayRequest {
         &self.request

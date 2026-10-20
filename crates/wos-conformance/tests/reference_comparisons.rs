@@ -160,6 +160,146 @@ fn existing_review_cannot_accept_changed_threshold_outcome_or_member_inputs() {
     assert_eq!(compare_paired_approval_rates(&changed).status, "refused");
 }
 
+fn service_cohort() -> PairedApprovalRateRequest {
+    let mut cohort = request(0);
+    let mut workflow: Value =
+        serde_json::from_slice(&cohort.pairs[0].left.request.candidate_bytes).unwrap();
+    workflow["caseFile"] =
+        json!({"fields":{"income":{"type":"number"},"verified":{"type":"number"}}});
+    workflow["lifecycle"]["states"]["start"]["onEntry"] =
+        json!([{"action":"invokeService","serviceRef":"income-service"}]);
+    workflow["extensions"] = json!({"x-wos-reference-invocations":{
+        "profile":"referenceInvocations/1",
+        "bindings":[{"id":"income-service","kind":"requestResponse",
+            "descriptor":{"kind":"openapi","documentRef":"urn:fixture:income","operationRef":"verify"},
+            "inputMapping":{"income":"caseFile.income"},
+            "outputBinding":{"caseFile.verified":"$.verified"}}]
+    }});
+    let candidate = serde_json::to_vec(&workflow).unwrap();
+    for (index, pair) in cohort.pairs.iter_mut().enumerate() {
+        for member in [&mut pair.left, &mut pair.right] {
+            let income = 1000 + index;
+            member.request.candidate_bytes = candidate.clone();
+            let mut fixture: Value = serde_json::from_str(&member.request.fixture_json).unwrap();
+            fixture["initial_case_state"]["income"] = json!(income);
+            member.request.fixture_json = fixture.to_string();
+            member.adapters.invocations = serde_json::from_value(json!([{
+                "id":"income-fixture","serviceRef":"income-service",
+                "expectedInput":{"income":income},"response":{"verified":income},
+                "maxInvocations":1
+            }]))
+            .unwrap();
+            member.request.expectations.push(
+                serde_json::from_value(json!({
+                    "pointer":"/finalSnapshot/caseState/verified","expected":income
+                }))
+                .unwrap(),
+            );
+        }
+    }
+    review_metric(&mut cohort);
+    cohort
+}
+
+#[test]
+fn paired_service_data_varies_between_households_and_executes_every_member() {
+    let result = compare_paired_approval_rates(&service_cohort());
+    assert_eq!(result.status, "pass", "{:?}", result.refusals);
+    assert_eq!(
+        (result.approved_left, result.approved_right),
+        (Some(40), Some(40))
+    );
+    assert_eq!(result.members.len(), 200);
+    for (index, member) in result.members.iter().enumerate() {
+        let income = 1000 + index / 2;
+        let actual = member.result.as_ref().unwrap();
+        let saved = actual.final_snapshot.as_ref().unwrap();
+        assert_eq!(saved.case_state["verified"], json!(income));
+        assert_eq!(saved.step_results.len(), 1);
+        let step = &saved.step_results[0];
+        assert_eq!(step.output, json!({"verified":income}));
+        assert_eq!(
+            step.invocation_association.as_ref().unwrap().input,
+            json!({"income":income})
+        );
+        let retained = &actual.runtime_identity["referenceAdapters"]["invocations"][0];
+        assert_eq!(retained["expectedInput"], json!({"income":income}));
+        assert_eq!(retained["response"], json!({"verified":income}));
+    }
+}
+
+#[test]
+fn paired_service_data_preserves_pair_review_and_actual_request_checks() {
+    let mut unpaired = service_cohort();
+    unpaired.pairs[0].right.adapters.invocations[0].response = json!({"verified":999});
+    review_metric(&mut unpaired);
+    let result = compare_paired_approval_rates(&unpaired);
+    assert!(result.members.is_empty());
+    assert!(
+        result
+            .refusals
+            .iter()
+            .any(|reason| reason.contains("paired original inputs differ"))
+    );
+
+    let mut stale = service_cohort();
+    let pair = &mut stale.pairs[0];
+    for member in [&mut pair.left, &mut pair.right] {
+        member.adapters.invocations[0].response = json!({"verified":999});
+    }
+    let result = compare_paired_approval_rates(&stale);
+    assert!(result.members.is_empty());
+    assert!(
+        result
+            .refusals
+            .iter()
+            .any(|reason| reason.contains("typed metric review"))
+    );
+
+    let mut mismatch = service_cohort();
+    let pair = &mut mismatch.pairs[0];
+    for member in [&mut pair.left, &mut pair.right] {
+        member.adapters.invocations[0].expected_input = json!({"income":999});
+    }
+    review_metric(&mut mismatch);
+    let result = compare_paired_approval_rates(&mismatch);
+    assert_eq!(result.status, "refused");
+    assert_eq!(result.members.len(), 200);
+    assert_eq!((result.approved_left, result.approved_right), (None, None));
+    assert!(
+        result.members[..2]
+            .iter()
+            .all(|member| member.classification.is_none())
+    );
+}
+
+#[test]
+fn paired_service_configuration_drift_refuses_after_fresh_review() {
+    for mutation in 0..4 {
+        let mut cohort = service_cohort();
+        let pair = &mut cohort.pairs[1];
+        for member in [&mut pair.left, &mut pair.right] {
+            match mutation {
+                0 => member.adapters.invocations[0].max_invocations = 2,
+                1 => member.adapters.invocations[0].id = "another-fixture".into(),
+                2 => member.adapters.notice_transport.id = "another-transport".into(),
+                _ => member.request.clock_start_ms = 1,
+            }
+        }
+        review_metric(&mut cohort);
+        let result = compare_paired_approval_rates(&cohort);
+        assert_eq!(result.status, "refused");
+        assert!(result.members.is_empty());
+        assert!(
+            result.refusals.iter().any(|reason| reason.contains(
+                "cohort members select different native candidate, dependencies or runtime"
+            )),
+            "mutation {mutation}: {:?}",
+            result.refusals
+        );
+    }
+}
+
 fn signed_reference() -> (
     wos_conformance::studio_api::ReplayRequest,
     wos_conformance::studio_api::ReferenceReplayAdapters,

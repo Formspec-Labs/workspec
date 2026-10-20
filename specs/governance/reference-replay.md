@@ -216,6 +216,15 @@ adverseStatePointer. Each member contains its complete ReplayRequest and
 ReferenceReplayAdapters. Across all 200 members the selected candidate, dependencies and native runtime
 configuration MUST agree exactly. Within each pair all original inputs/recipes/dependencies,
 adapters and expectations must be identical except that one initial case scalar.
+For this cross-cohort configuration comparison, `FixtureInvocation.expectedInput`
+and `FixtureInvocation.response` are member interaction data: both MAY vary
+between pairs and MUST remain identical within each pair. Invocation identity,
+service reference, invocation limit, entry order and count, and every other native
+configuration field MUST still agree across the cohort. This comparison does not
+change full replay identity or reviewed member digests: both interaction values
+remain retained and bound exactly. Actual request, selected response and stored
+result reuse checks remain mandatory. Clock and time-advance configuration remain
+subject to the shared configuration requirement.
 No generated actual IDs are compared as original inputs. Native replay runs each
 member sequentially and retains every complete result. Each member must execute
 without error/refusal/failed submission and finish in exactly one selected

@@ -509,7 +509,7 @@ pub fn compare_paired_approval_rates(
                 }
                 for (member, prepared_member) in [(&pair.left, left), (&pair.right, right)] {
                     source_review(&prepared_member, request, &descriptor)?;
-                    let native = json!({"candidate":member.request.candidate_bytes,"dependencies":member.request.dependencies,"runtime":prepared_member.runtime_identity()});
+                    let native = json!({"candidate":member.request.candidate_bytes,"dependencies":member.request.dependencies,"runtime":prepared_member.cohort_runtime_configuration()?});
                     if common_native
                         .as_ref()
                         .is_some_and(|common| common != &native)
