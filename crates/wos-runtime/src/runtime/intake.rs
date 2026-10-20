@@ -346,7 +346,9 @@ impl WosRuntime {
         match outcome {
             IntakeAcceptanceOutcome::Accepted { case_disposition } => match case_disposition {
                 IntakeCaseDisposition::AttachToExistingCase { case_ref } => {
-                    let case = self.load_record_for_case_ref(case_ref)?.process;
+                    let mut existing = self.load_record_for_case_ref(case_ref)?;
+                    self.admit_original_intake_signature(request, &mut existing, true)?;
+                    let case = existing.process;
                     if request
                         .actor_bindings
                         .as_ref()
@@ -371,7 +373,8 @@ impl WosRuntime {
                     initial_case_state,
                 } => {
                     let case = match self.load_record_for_case_ref(case_ref) {
-                        Ok(existing) => {
+                        Ok(mut existing) => {
+                            self.admit_original_intake_signature(request, &mut existing, true)?;
                             self.ensure_matching_case_definition(
                                 &existing.process,
                                 definition,
@@ -393,11 +396,12 @@ impl WosRuntime {
                                 definition_version: definition.definition_version.clone(),
                                 initial_case_state: initial_case_state.clone(),
                             };
-                            self.create_process_inner(
+                            self.create_process_with_intake_admission(
                                 create,
                                 Some(case_ref.clone()),
                                 request.actor_bindings.clone(),
                                 request.actor_id.as_deref(),
+                                Some(request),
                             )?
                         }
                         Err(error) => return Err(error),

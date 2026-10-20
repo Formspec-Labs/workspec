@@ -21,6 +21,7 @@ serde_json = "1"
 semver = "1"
 sha2 = "0.10"
 stack-common-hash.workspace = true
+stack-common-notify = { path = "../../../stack-common/crates/stack-common-notify", default-features = false }
 stack-common-typeid.workspace = true
 thiserror = "2"
 time = { version = "0.3", features = ["formatting", "parsing"] }

@@ -818,7 +818,432 @@ pub(crate) struct SignatureProfileRegistration {
     pub(crate) profile: SignatureProfileDocument,
 }
 
+/// Selects the original intake signing step from a pinned host profile.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct IntakeSignatureSelection {
+    /// Package-local profile key registered by the host.
+    pub profile_key: String,
+    /// Original applicant step in that profile.
+    pub step_id: String,
+}
+
+/// Binds one qualified Source signer to its authorized native actor.
+///
+/// The host derives this association from protected owner evidence after current
+/// admission. This value grants no authority and never replaces Source signature bytes.
+#[derive(Debug, Clone)]
+pub struct CapturedSignatureSigner {
+    subject_ref: String,
+    actor_id: String,
+    signer_id: String,
+    response_sha256: String,
+    oidc_login: Option<CapturedSourceOidcLogin>,
+}
+
+/// Original authenticated Source login, separately qualified by the host.
+#[derive(Debug, Clone)]
+struct CapturedSourceOidcLogin {
+    issuer: String,
+    _subject: String,
+    _client: String,
+    _source_ownership_session: String,
+    _profile: String,
+}
+impl CapturedSignatureSigner {
+    /// Captures exact identities and the unchanged command Response.
+    ///
+    /// # Errors
+    /// Refuses empty identities or a Response that cannot be canonically hashed.
+    pub fn new(
+        subject_ref: impl Into<String>,
+        actor_id: impl Into<String>,
+        signer_id: impl Into<String>,
+        response: &integrity_canonical::ResponseJson,
+    ) -> Result<Self, RuntimeError> {
+        let (subject_ref, actor_id, signer_id) =
+            (subject_ref.into(), actor_id.into(), signer_id.into());
+        if [&subject_ref, &actor_id, &signer_id]
+            .iter()
+            .any(|value| value.trim().is_empty())
+        {
+            return Err(RuntimeError::Signature(
+                "qualified signer association missing".into(),
+            ));
+        }
+        let response_sha256 = original_response_hash(response)
+            .map_err(|_| RuntimeError::Signature("qualified signer Response invalid".into()))?;
+        Ok(Self {
+            subject_ref,
+            actor_id,
+            signer_id,
+            response_sha256,
+            oidc_login: None,
+        })
+    }
+
+    /// Retains the original login after current owning-host OIDC qualification.
+    ///
+    /// The host must verify the selected OIDC issuer/client and historical signing
+    /// association. This records only low login assurance, with no MFA or IAL claim.
+    /// The Source session identifies form ownership, not an IdP login session.
+    /// It neither authenticates these strings nor grants authority itself.
+    ///
+    /// # Errors
+    /// Refuses an incomplete original authenticated Source session.
+    pub fn with_source_oidc_login(
+        mut self,
+        issuer: &str,
+        subject: &str,
+        client: &str,
+        session: &str,
+        profile: &str,
+    ) -> Result<Self, RuntimeError> {
+        if [issuer, subject, client, session, profile]
+            .iter()
+            .any(|value| value.trim().is_empty())
+        {
+            return Err(RuntimeError::Signature(
+                "original OIDC owner session missing".into(),
+            ));
+        }
+        self.oidc_login = Some(CapturedSourceOidcLogin {
+            issuer: issuer.into(),
+            _subject: subject.into(),
+            _client: client.into(),
+            _source_ownership_session: session.into(),
+            _profile: profile.into(),
+        });
+        Ok(self)
+    }
+
+    /// Checks the exact subject, native actor and original command Response.
+    #[must_use]
+    pub fn matches(
+        &self,
+        subject_ref: &str,
+        actor_id: &str,
+        response: &integrity_canonical::ResponseJson,
+    ) -> bool {
+        self.subject_ref == subject_ref
+            && self.actor_id == actor_id
+            && original_response_hash(response).ok().as_deref()
+                == Some(self.response_sha256.as_str())
+    }
+
+    /// Returns the original Source signature subject without relabeling it.
+    #[must_use]
+    pub fn signer_id(&self) -> &str {
+        &self.signer_id
+    }
+}
+
+/// Holds original Source evidence captured for one admitted intake command.
+///
+/// The host verifies the response, handoff and current applicant association
+/// before constructing this value. It is not an HTTP request shape.
+#[derive(Debug, Clone)]
+pub struct CapturedIntakeSignature {
+    /// Exact admitted native request, including the original applicant.
+    request: crate::intake::IntakeAcceptanceRequest,
+    /// Unmodified original Source Response.
+    response: integrity_canonical::ResponseJson,
+    /// Exact Source-owned accepted response reference.
+    source_response_ref: String,
+    /// Evidence extracted by the binding with selected receipt trust.
+    evidence: Vec<VerifiedSignatureEvidence>,
+}
+
+enum AdmissionSubject<'a> {
+    Task(&'a ActiveTask),
+    Intake { response_ref: &'a str },
+}
+impl AdmissionSubject<'_> {
+    fn response_id(&self) -> &str {
+        match self {
+            Self::Task(task) => &task.task_id,
+            Self::Intake { response_ref } => response_ref,
+        }
+    }
+}
+
+fn original_response_hash(
+    source: &integrity_canonical::ResponseJson,
+) -> Result<String, RuntimeError> {
+    integrity_canonical::canonical_json_from_bytes(source.as_str().as_bytes())
+        .map(|bytes| stack_common_hash::sha256_prefixed(&bytes))
+        .map_err(|_| RuntimeError::Signature("original Response cannot canonicalize".into()))
+}
+impl CapturedIntakeSignature {
+    /// Returns the unchanged original Response captured for this admission.
+    #[must_use]
+    pub fn response(&self) -> &integrity_canonical::ResponseJson {
+        &self.response
+    }
+
+    /// Returns the Source-owned locator without relabeling it as a task.
+    #[must_use]
+    pub fn source_response_ref(&self) -> &str {
+        &self.source_response_ref
+    }
+
+    /// Returns immutable evidence supplied by the qualified binding owner.
+    #[must_use]
+    pub fn evidence(&self) -> &[VerifiedSignatureEvidence] {
+        &self.evidence
+    }
+
+    /// Captures unchanged original source and its owning binding evidence.
+    ///
+    /// The host must qualify receipt trust, the current actor and Source ownership.
+    /// This correlation check does not authenticate a caller-supplied verifier result.
+    ///
+    /// # Errors
+    /// Refuses ambiguous signatures, changed source pins or unsupported document claims.
+    pub fn new(
+        request: crate::intake::IntakeAcceptanceRequest,
+        response: integrity_canonical::ResponseJson,
+        source_response_ref: impl Into<String>,
+        evidence: Vec<VerifiedSignatureEvidence>,
+    ) -> Result<Self, RuntimeError> {
+        let source_response_ref = source_response_ref.into();
+        let refused = || RuntimeError::Signature("original intake source evidence differs".into());
+        if source_response_ref.trim().is_empty()
+            || evidence.len() != 1
+            || request
+                .actor_id
+                .as_deref()
+                .is_none_or(|v| v.trim().is_empty())
+            || request
+                .governed_case_ref
+                .as_deref()
+                .is_none_or(|v| v.trim().is_empty())
+        {
+            return Err(refused());
+        }
+        let item = &evidence[0];
+        if item.document_claims.is_some()
+            || response
+                .value()
+                .pointer("/extensions/x-formspec-document-attestations")
+                .is_some()
+        {
+            return Err(RuntimeError::Signature(
+                "original intake document claims require a supported selected source route".into(),
+            ));
+        }
+        let signatures = response
+            .value()
+            .get("authoredSignatures")
+            .and_then(serde_json::Value::as_array)
+            .ok_or_else(refused)?;
+        if signatures.len() != 1 {
+            return Err(refused());
+        }
+        let signature = &signatures[0];
+        let algorithm =
+            integrity_canonical::DigestAlgorithm::from_str(&item.signed_payload_digest_algorithm)
+                .map_err(|_| refused())?;
+        let payload = response.signed_payload(algorithm).map_err(|_| refused())?;
+        if item.source_response_ref.as_deref() != Some(source_response_ref.as_str())
+            || signature["signatureId"] != item.source_signature_id
+            || signature["signerId"].as_str() != item.signer_id.as_deref()
+            || item
+                .signer_id
+                .as_deref()
+                .is_none_or(|v| v.trim().is_empty())
+            || signature["signingIntent"] != item.signing_intent
+            || signature["signedPayload"]["signedAt"] != item.signed_at
+            || signature["documentId"] != item.document_id
+            || signature["signedPayload"]["canonicalization"] != "formspec-response-signing-v1"
+            || signature["signedPayload"]["definitionUrl"] != response.value()["definitionUrl"]
+            || signature["signedPayload"]["definitionVersion"]
+                != response.value()["definitionVersion"]
+            || signature["signedPayload"]["signingIntent"] != item.signing_intent
+            || signature["documentHash"] != item.document_hash
+            || signature["documentHashAlgorithm"] != item.document_hash_algorithm
+            || signature["signedPayload"]["digest"] != item.signed_payload_digest
+            || signature["signedPayload"]["digestAlgorithm"] != item.signed_payload_digest_algorithm
+            || signature["signedPayload"]["responseId"] != response.value()["id"]
+            || payload.digest != item.signed_payload_digest
+        {
+            return Err(refused());
+        }
+        Ok(Self {
+            request,
+            response,
+            source_response_ref,
+            evidence,
+        })
+    }
+}
+
+struct SelectedSigningStep<'a> {
+    selector: SignatureProfileSelector,
+    profile: &'a SignatureProfileDocument,
+    id: &'a str,
+}
+struct SignatureAdmissionSource<'a> {
+    response: &'a integrity_canonical::ResponseJson,
+    evidence: Option<&'a [VerifiedSignatureEvidence]>,
+    task_context: Option<(
+        &'a dyn crate::binding::ContractBindingAdapter,
+        &'a crate::store::TaskArtifact,
+    )>,
+}
+
 impl WosRuntime {
+    /// Installs one host-qualified signer association for this preparation only.
+    #[must_use]
+    pub fn with_captured_signature_signer(mut self, signer: CapturedSignatureSigner) -> Self {
+        self.captured_signature_signer = Some(signer);
+        self
+    }
+
+    /// Requires a genuine original signing act before intake creates any effects.
+    #[must_use]
+    pub fn with_intake_signature_selection(mut self, selection: IntakeSignatureSelection) -> Self {
+        self.intake_signature_selection = Some(selection);
+        self
+    }
+
+    /// Supplies host-captured evidence for exactly one original intake request.
+    #[must_use]
+    pub fn with_captured_intake_signature(mut self, captured: CapturedIntakeSignature) -> Self {
+        self.captured_intake_signature = Some(captured);
+        self
+    }
+
+    pub(super) fn admit_original_intake_signature(
+        &self,
+        request: &crate::intake::IntakeAcceptanceRequest,
+        record: &mut RuntimeRecord,
+        existing: bool,
+    ) -> Result<Option<ProvenanceRecord>, RuntimeError> {
+        let Some(selection) = &self.intake_signature_selection else {
+            if self.captured_intake_signature.is_some() {
+                return Err(RuntimeError::Signature(
+                    "original signing profile is not selected".into(),
+                ));
+            }
+            return Ok(None);
+        };
+        let refused =
+            || RuntimeError::Signature("original intake signature association refused".into());
+        let input = self
+            .captured_intake_signature
+            .as_ref()
+            .ok_or_else(refused)?;
+        let actor = request
+            .actor_id
+            .as_deref()
+            .filter(|value| !value.is_empty())
+            .ok_or_else(refused)?;
+        let case = request.governed_case_ref.as_deref().ok_or_else(refused)?;
+        let case = WorkflowProcess::extract_urn_type_id(case).unwrap_or(case);
+        if input.request != *request
+            || case != record.process.case_ledger_id
+            || input.source_response_ref.is_empty()
+            || input.evidence.len() != 1
+            || self
+                .captured_signature_signer
+                .as_ref()
+                .is_none_or(|binding| {
+                    !binding.matches(&input.source_response_ref, actor, &input.response)
+                        || input.evidence[0].signer_id.as_deref() != Some(binding.signer_id())
+                })
+            || input.evidence[0].source_response_ref.as_deref()
+                != Some(input.source_response_ref.as_str())
+            || selection.profile_key.trim().is_empty()
+            || selection.step_id.trim().is_empty()
+        {
+            return Err(refused());
+        }
+        let mut profiles = self.signature_profiles.iter().filter(|registration| {
+            registration.key.as_deref() == Some(selection.profile_key.as_str())
+        });
+        let profile = &profiles.next().ok_or_else(refused)?.profile;
+        if profiles.next().is_some() {
+            return Err(refused());
+        }
+        let outcome = self.signature_affirmation_for_subject(
+            record,
+            AdmissionSubject::Intake {
+                response_ref: &input.source_response_ref,
+            },
+            SelectedSigningStep {
+                selector: SignatureProfileSelector::Key(selection.profile_key.clone()),
+                profile,
+                id: &selection.step_id,
+            },
+            SignatureAdmissionSource {
+                response: &input.response,
+                evidence: Some(&input.evidence),
+                task_context: None,
+            },
+            actor,
+            &record.process.created_at,
+        )?;
+        let Some(AdmissionOutcome::Affirmation(affirmation)) = outcome else {
+            return Err(RuntimeError::Signature(
+                "original intake signature admission refused".into(),
+            ));
+        };
+        let step = profile
+            .signing_flow
+            .steps
+            .iter()
+            .find(|step| step.id == selection.step_id)
+            .ok_or_else(refused)?;
+        let completion = serde_json::json!({"profile":selection.profile_key,"stepId":step.id,
+            "roleId":step.role_id,"documentId":step.document_id,"signerId":affirmation.signer_id,
+            "signedAt":affirmation.signed_at});
+        if existing {
+            // A partially prepared intake can find its already-created process.
+            // It must reuse that original act and completion, never mint a second row.
+            let expected = affirmation.record.data.as_ref().ok_or_else(refused)?;
+            let matches: Vec<_> = record
+                .provenance_log
+                .iter()
+                .filter(|row| {
+                    row.record_kind == ProvenanceKind::SignatureAffirmation
+                        && row.data.as_ref() == Some(expected)
+                })
+                .collect();
+            let completed = record
+                .process
+                .extensions
+                .get(SIGNATURE_COMPLETIONS_EXTENSION)
+                .and_then(serde_json::Value::as_array)
+                .ok_or_else(refused)?;
+            if matches.len() != 1
+                || completed
+                    .iter()
+                    .filter(|value| **value == completion)
+                    .count()
+                    != 1
+            {
+                return Err(refused());
+            }
+            return Ok(None);
+        }
+        let completions = record
+            .process
+            .extensions
+            .entry(SIGNATURE_COMPLETIONS_EXTENSION.into())
+            .or_insert_with(|| serde_json::json!([]))
+            .as_array_mut()
+            .ok_or_else(refused)?;
+        if completions.iter().any(|value| {
+            value.get("profile") == Some(&serde_json::json!(selection.profile_key))
+                && value.get("stepId") == Some(&serde_json::json!(selection.step_id))
+        }) {
+            return Err(refused());
+        }
+        completions.push(completion);
+        Ok(Some(affirmation.record))
+    }
+
     /// Attach a package-local Signature Profile.
     #[must_use]
     pub fn with_signature_profile(
@@ -882,21 +1307,47 @@ impl WosRuntime {
         actor_id: &str,
         signed_at_default: &str,
     ) -> Result<Option<AdmissionOutcome>, RuntimeError> {
-        let minter = process_minter(&record.process)?;
-        let SignatureSubmissionSource {
-            response: response_source,
-            signature_evidence,
-            adapter,
-            accepted_artifact,
-        } = source;
-        let response = response_source.value();
         if !Self::is_signature_task(task) {
             return Ok(None);
         }
-
-        let (profile_selector, profile) = self.signature_profile_for_task(task)?;
-        let step_id = task_extension_str(task, SIGNATURE_STEP_ID_EXTENSION)
-            .ok_or_else(|| RuntimeError::Signature("signature task missing step id".to_string()))?;
+        let (selector, profile) = self.signature_profile_for_task(task)?;
+        let id = task_extension_str(task, SIGNATURE_STEP_ID_EXTENSION)
+            .ok_or_else(|| RuntimeError::Signature("signature task missing step id".into()))?;
+        self.signature_affirmation_for_subject(
+            record,
+            AdmissionSubject::Task(task),
+            SelectedSigningStep {
+                selector,
+                profile,
+                id,
+            },
+            SignatureAdmissionSource {
+                response: source.response,
+                evidence: source.signature_evidence,
+                task_context: Some((source.adapter, source.accepted_artifact)),
+            },
+            actor_id,
+            signed_at_default,
+        )
+    }
+    fn signature_affirmation_for_subject(
+        &self,
+        record: &RuntimeRecord,
+        subject: AdmissionSubject<'_>,
+        selected: SelectedSigningStep<'_>,
+        source: SignatureAdmissionSource<'_>,
+        actor_id: &str,
+        signed_at_default: &str,
+    ) -> Result<Option<AdmissionOutcome>, RuntimeError> {
+        let minter = process_minter(&record.process)?;
+        let SelectedSigningStep {
+            selector: profile_selector,
+            profile,
+            id: step_id,
+        } = selected;
+        let response_source = source.response;
+        let response = response_source.value();
+        let signature_evidence = source.evidence;
         let step = profile
             .signing_flow
             .steps
@@ -929,16 +1380,27 @@ impl WosRuntime {
         self.ensure_step_can_complete(record, profile, step)?;
         self.ensure_required_evidence_present(record, response, &profile.evidence)?;
         self.ensure_consent_present(record, response, &profile.evidence.consent_reference)?;
+        let signed_subject = match &self.captured_signature_signer {
+            Some(binding) if binding.matches(subject.response_id(), actor_id, response_source) => {
+                binding.signer_id()
+            }
+            Some(_) => {
+                return Err(RuntimeError::Signature(
+                    "qualified signer association differs".into(),
+                ));
+            }
+            None => actor_id,
+        };
         let signature_evidence = self.signature_evidence_for_submission(
             signature_evidence,
-            actor_id,
+            signed_subject,
             step,
             document,
             profile,
         )?;
         if let Some(failure) = signature_evidence.admission_failure.as_ref() {
             return Ok(Some(admission_failed_outcome(
-                &task.task_id,
+                subject.response_id(),
                 &signature_evidence,
                 SignatureAdmissionFailedReason::from(&failure.reason),
                 signature_evidence.signer_id.clone(),
@@ -950,7 +1412,7 @@ impl WosRuntime {
             && signature_evidence.signing_intent != *expected_intent
         {
             return Ok(Some(admission_failed_outcome(
-                &task.task_id,
+                subject.response_id(),
                 &signature_evidence,
                 SignatureAdmissionFailedReason::EvidenceDivergence,
                 signature_evidence.signer_id.clone(),
@@ -964,7 +1426,7 @@ impl WosRuntime {
         }
         if signature_evidence.document_hash != document.document_hash {
             return Ok(Some(admission_failed_outcome(
-                &task.task_id,
+                subject.response_id(),
                 &signature_evidence,
                 SignatureAdmissionFailedReason::EvidenceDivergence,
                 signature_evidence.signer_id.clone(),
@@ -978,7 +1440,7 @@ impl WosRuntime {
         }
         if signature_evidence.document_hash_algorithm != document.document_hash_algorithm {
             return Ok(Some(admission_failed_outcome(
-                &task.task_id,
+                subject.response_id(),
                 &signature_evidence,
                 SignatureAdmissionFailedReason::EvidenceDivergence,
                 signature_evidence.signer_id.clone(),
@@ -995,7 +1457,7 @@ impl WosRuntime {
             &profile.deployment_local_signing_intents,
         ) {
             return Ok(Some(admission_failed_outcome(
-                &task.task_id,
+                subject.response_id(),
                 &signature_evidence,
                 SignatureAdmissionFailedReason::MethodUnsupported,
                 signature_evidence.signer_id.clone(),
@@ -1003,11 +1465,32 @@ impl WosRuntime {
                 None,
             )));
         }
-        let identity_binding = signature_evidence
+        let response_identity = response_path(response, "identityBinding");
+        if signature_evidence
             .identity_binding
-            .clone()
-            .map(Ok)
-            .unwrap_or_else(|| self.identity_binding_for_submission(response, &profile.evidence))?;
+            .as_ref()
+            .zip(response_identity)
+            .is_some_and(|(a, b)| a != b)
+        {
+            return Err(RuntimeError::Signature(
+                "explicit signature identity evidence differs".into(),
+            ));
+        }
+        let identity_binding = if let Some(identity) = signature_evidence
+            .identity_binding
+            .as_ref()
+            .or(response_identity)
+        {
+            identity.clone()
+        } else if let Some(login) = self
+            .captured_signature_signer
+            .as_ref()
+            .and_then(|s| s.oidc_login.as_ref())
+        {
+            serde_json::json!({"method":"oidc","assuranceLevel":"low","providerRef":login.issuer})
+        } else {
+            self.identity_binding_for_submission(response, &profile.evidence)?
+        };
         let identity_method = identity_binding
             .get("method")
             .and_then(serde_json::Value::as_str)
@@ -1046,7 +1529,7 @@ impl WosRuntime {
             signed_at,
         ) {
             return Ok(Some(admission_failed_outcome(
-                &task.task_id,
+                subject.response_id(),
                 &signature_evidence,
                 SignatureAdmissionFailedReason::EvidenceDivergence,
                 signature_evidence.signer_id.clone(),
@@ -1062,7 +1545,7 @@ impl WosRuntime {
             Some(signer_id),
         ) {
             return Ok(Some(admission_failed_outcome(
-                &task.task_id,
+                subject.response_id(),
                 &signature_evidence,
                 SignatureAdmissionFailedReason::PostureFloorUnmet,
                 Some(signer_id.to_string()),
@@ -1077,9 +1560,19 @@ impl WosRuntime {
         let ceremony_id = signature_evidence
             .ceremony_id
             .as_deref()
-            .unwrap_or(&task.task_id);
+            .unwrap_or(subject.response_id());
         let document_claims = signature_evidence.document_claims.as_ref();
         let source_response_ref = if let Some(claims) = document_claims {
+            let (_, accepted_artifact) = source.task_context.ok_or_else(|| {
+                RuntimeError::Signature(
+                    "document claims require actual task artifact context".into(),
+                )
+            })?;
+            let AdmissionSubject::Task(task) = &subject else {
+                return Err(RuntimeError::Signature(
+                    "original intake document route unsupported".into(),
+                ));
+            };
             if claims.response_id != response["id"].as_str().unwrap_or_default()
                 || claims.document_ref.document_id != document.id
                 || accepted_artifact.response.as_str() != response_source.as_str()
@@ -1110,7 +1603,12 @@ impl WosRuntime {
         let witnessed_signature_ref = match document_claims
             .and_then(|claims| claims.witnessed_signature_ref.as_ref())
         {
-            Some(principal) => Some(self.resolve_witnessed_signature(record, adapter, principal)?),
+            Some(principal) => {
+                let (adapter, _) = source.task_context.ok_or_else(|| {
+                    RuntimeError::Signature("witness requires actual task source context".into())
+                })?;
+                Some(self.resolve_witnessed_signature(record, adapter, principal)?)
+            }
             None => None,
         };
 
@@ -1121,7 +1619,7 @@ impl WosRuntime {
 
         let (signing_act_id, presentation_hash) =
             signature_affirmation_k2_fields(&signature_evidence);
-        let provenance_record = ProvenanceRecord::signature_affirmation(
+        let mut provenance_record = ProvenanceRecord::signature_affirmation(
             &minter,
             SignatureAffirmationInput {
                 signer_id,
@@ -1164,6 +1662,9 @@ impl WosRuntime {
                 witnessed_signature_ref: witnessed_signature_ref.as_deref(),
             },
         );
+        if self.captured_signature_signer.is_some() {
+            provenance_record.actor_id = Some(actor_id.to_owned());
+        }
         let signed_at_owned = signed_at.to_string();
         let signer_id_owned = signer_id.to_string();
 
@@ -1177,7 +1678,7 @@ impl WosRuntime {
                 .any(|m| m == signature_method)
             {
                 return Ok(Some(admission_failed_outcome(
-                    &task.task_id,
+                    subject.response_id(),
                     &signature_evidence,
                     SignatureAdmissionFailedReason::MethodUnsupported,
                     Some(signer_id_owned),
@@ -1193,7 +1694,7 @@ impl WosRuntime {
                     .any(|intent| intent == &signature_evidence.signing_intent)
             {
                 return Ok(Some(admission_failed_outcome(
-                    &task.task_id,
+                    subject.response_id(),
                     &signature_evidence,
                     SignatureAdmissionFailedReason::MethodUnsupported,
                     Some(signer_id_owned),
@@ -1206,7 +1707,7 @@ impl WosRuntime {
                 SignaturePrimitiveStatus::DeferredPendingHelper { .. } => {
                     if posture.signature_policy.minimum_primitive_verification == "verified" {
                         return Ok(Some(admission_failed_outcome(
-                            &task.task_id,
+                            subject.response_id(),
                             &signature_evidence,
                             SignatureAdmissionFailedReason::PostureFloorUnmet,
                             Some(signer_id_owned),
@@ -1224,7 +1725,7 @@ impl WosRuntime {
                     .is_none_or(str::is_empty)
             {
                 return Ok(Some(admission_failed_outcome(
-                    &task.task_id,
+                    subject.response_id(),
                     &signature_evidence,
                     SignatureAdmissionFailedReason::PostureFloorUnmet,
                     Some(signer_id_owned),
@@ -1255,7 +1756,7 @@ impl WosRuntime {
                 }),
             )),
             SignaturePrimitiveStatus::Failed { .. } => Ok(Some(admission_failed_outcome(
-                &task.task_id,
+                subject.response_id(),
                 &signature_evidence,
                 SignatureAdmissionFailedReason::PrimitiveVerificationFailed,
                 Some(signer_id_owned),

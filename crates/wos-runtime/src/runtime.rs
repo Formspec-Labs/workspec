@@ -70,10 +70,10 @@ pub use provenance::{
     stamp_provenance, stamp_signature_decision_identity,
 };
 pub use signature::{
-    AdmissionOutcome, CompletionRequirementKind, HttpPostureResolver, PostureDeclaration,
-    PostureResolver, ResolvedPostureDeclaration, SIGNATURE_PROFILE_KEY_EXTENSION,
-    SIGNATURE_PROFILE_REF_EXTENSION, SIGNATURE_STEP_ID_EXTENSION, SignatureProfileDocument,
-    StaticPostureResolver,
+    AdmissionOutcome, CapturedIntakeSignature, CapturedSignatureSigner, CompletionRequirementKind,
+    HttpPostureResolver, IntakeSignatureSelection, PostureDeclaration, PostureResolver,
+    ResolvedPostureDeclaration, SIGNATURE_PROFILE_KEY_EXTENSION, SIGNATURE_PROFILE_REF_EXTENSION,
+    SIGNATURE_STEP_ID_EXTENSION, SignatureProfileDocument, StaticPostureResolver,
 };
 use support::{
     format_timestamp, impact_level_label, make_task_id, merge_case_state, parse_timestamp,
@@ -82,6 +82,34 @@ use support::{
 const COMPLETION_EVENT_EXTENSION_KEY: &str = "x-wos-runtime-completion-event";
 const FAILURE_EVENT_EXTENSION_KEY: &str = "x-wos-runtime-failure-event";
 
+/// Recognizes ordinary tasks or the runtime's exact authored signature selectors.
+///
+/// This checks selector shape only. Signature admission independently resolves
+/// the selected profile and verifies the actual signer and evidence.
+pub fn task_signature_metadata_supported(action: &wos_core::model::kernel::Action) -> bool {
+    let fields = &action.extensions;
+    if fields.is_empty() {
+        return true;
+    }
+    if action.action != wos_core::model::kernel::ActionKind::CreateTask || fields.len() != 2 {
+        return false;
+    }
+    let valid = |key: &str, limit: usize| {
+        fields
+            .get(key)
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|value| {
+                !value.is_empty()
+                    && value.trim() == value
+                    && value.len() <= limit
+                    && !value.chars().any(char::is_control)
+            })
+    };
+    valid(SIGNATURE_STEP_ID_EXTENSION, 256)
+        && (valid(SIGNATURE_PROFILE_KEY_EXTENSION, 256)
+            || valid(SIGNATURE_PROFILE_REF_EXTENSION, 2048))
+}
+
 /// Checks exact runtime outcome metadata against a selected task-creation action.
 ///
 /// This consistency check grants no task read, action, or disclosure authority.
@@ -89,19 +117,24 @@ const FAILURE_EVENT_EXTENSION_KEY: &str = "x-wos-runtime-failure-event";
 /// governing workflow and validate task association, assignment, scope, grants,
 /// exclusions, and current policy. Unsupported selection must refuse.
 ///
-/// Only ordinary task creation with no authored action extensions is supported.
 /// The actual persisted map must contain exactly the declared completion and
-/// failure event strings, without unknown keys or blank values. No metadata is
+/// failure events plus any supported native signature selectors. No metadata is
 /// changed, removed, or inferred from current access authority.
 pub fn task_outcome_metadata_matches(
     action: &wos_core::model::kernel::Action,
     extensions: &std::collections::HashMap<String, serde_json::Value>,
 ) -> bool {
     if action.action != wos_core::model::kernel::ActionKind::CreateTask
-        || !action.extensions.is_empty()
-        || extensions
-            .keys()
-            .any(|key| key != COMPLETION_EVENT_EXTENSION_KEY && key != FAILURE_EVENT_EXTENSION_KEY)
+        || !task_signature_metadata_supported(action)
+        || extensions.keys().any(|key| {
+            key != COMPLETION_EVENT_EXTENSION_KEY
+                && key != FAILURE_EVENT_EXTENSION_KEY
+                && !action.extensions.contains_key(key)
+        })
+        || action
+            .extensions
+            .iter()
+            .any(|(key, value)| extensions.get(key) != Some(value))
     {
         return false;
     }
@@ -676,6 +709,9 @@ pub struct WosRuntime {
     intake_acceptors: IntakeAcceptanceRegistry,
     intake_policy: Box<dyn IntakeAcceptancePolicy + Send + Sync>,
     signature_profiles: Vec<signature::SignatureProfileRegistration>,
+    intake_signature_selection: Option<IntakeSignatureSelection>,
+    captured_intake_signature: Option<CapturedIntakeSignature>,
+    captured_signature_signer: Option<CapturedSignatureSigner>,
     /// Agent invoker registry per ADR 0064. Maps each [`InvokerKind`] to a
     /// concrete adapter; the runtime looks up adapters by an agent
     /// declaration's `invoker` discriminator. Empty by default — runtimes
@@ -740,6 +776,9 @@ impl WosRuntime {
             intake_acceptors: IntakeAcceptanceRegistry::new(),
             intake_policy: Box::new(NoopIntakeAcceptancePolicy),
             signature_profiles: Vec::new(),
+            intake_signature_selection: None,
+            captured_intake_signature: None,
+            captured_signature_signer: None,
             agent_invokers: wos_core::AgentInvokerRegistry::new(),
             posture_resolver: Box::new(signature::HttpPostureResolver),
             posture_declarations: RefCell::new(HashMap::new()),
@@ -3370,8 +3409,16 @@ mod tests {
         completion: Option<&str>,
         failure: Option<&str>,
     ) -> (wos_core::model::kernel::Action, ActiveTask) {
+        outcome_metadata_fixture_with_signatures(completion, failure, serde_json::json!({}))
+    }
+
+    fn outcome_metadata_fixture_with_signatures(
+        completion: Option<&str>,
+        failure: Option<&str>,
+        extensions: serde_json::Value,
+    ) -> (wos_core::model::kernel::Action, ActiveTask) {
         let mut action = serde_json::json!({
-            "action": "createTask", "taskRef": "review", "assignTo": "reviewer"
+            "action": "createTask", "taskRef": "review", "assignTo": "reviewer", "extensions":extensions
         });
         if let Some(event) = completion {
             action["completionEvent"] = serde_json::json!(event);
@@ -3400,6 +3447,43 @@ mod tests {
             .unwrap();
         let task = runtime.load_process(&id).unwrap().active_tasks.remove(0);
         (selected, task)
+    }
+
+    #[test]
+    fn task_outcome_metadata_matches_native_signature_selectors_without_admitting_evidence() {
+        for selector in [
+            SIGNATURE_PROFILE_KEY_EXTENSION,
+            SIGNATURE_PROFILE_REF_EXTENSION,
+        ] {
+            let (action, task) = outcome_metadata_fixture_with_signatures(
+                Some("review.completed"),
+                None,
+                serde_json::json!({(selector):"selected-review",(SIGNATURE_STEP_ID_EXTENSION):"reviewSigns"}),
+            );
+            assert!(task_signature_metadata_supported(&action));
+            assert!(task_outcome_metadata_matches(&action, &task.extensions));
+            for key in [selector, SIGNATURE_STEP_ID_EXTENSION] {
+                let mut changed = task.extensions.clone();
+                changed.remove(key);
+                assert!(!task_outcome_metadata_matches(&action, &changed));
+                changed.insert(key.into(), serde_json::json!("foreign"));
+                assert!(!task_outcome_metadata_matches(&action, &changed));
+            }
+            for invalid in [
+                serde_json::json!(null),
+                serde_json::json!(""),
+                serde_json::json!(" x "),
+            ] {
+                let mut changed = action.clone();
+                changed.extensions.insert(selector.into(), invalid);
+                assert!(!task_signature_metadata_supported(&changed));
+            }
+            let mut changed = action.clone();
+            changed
+                .extensions
+                .insert("x-unowned-policy".into(), serde_json::json!(true));
+            assert!(!task_signature_metadata_supported(&changed));
+        }
     }
 
     #[test]
@@ -3865,7 +3949,7 @@ mod tests {
                     "formspec",
                     public_intake_request(
                         "ih-bad-catalog",
-                        case.clone(),
+                        case,
                         "urn:test:bad-catalog",
                         "1.0.0"
                     )
@@ -5558,6 +5642,251 @@ mod tests {
             })
             .expect_err("legacy names must not be accepted as process ids");
         assert!(matches!(err, RuntimeError::MigrationRejected(_)));
+    }
+
+    fn original_signing_runtime() -> (
+        WosRuntime,
+        IntakeAcceptanceRequest,
+        integrity_canonical::ResponseJson,
+        Vec<crate::binding::SignatureEvidence>,
+        Arc<AtomicUsize>,
+    ) {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosWorkflow":"1.0", "url":"urn:test:original-signing", "version":"1.0.0",
+            "lifecycle":{"initialState":"opened","states":{"opened":{"type":"atomic",
+                "onEntry":[{"action":"invokeService","serviceRef":"first-effect"}]}}}
+        }))
+        .unwrap();
+        let (_, profile) = sig013_harness_documents();
+        let mut request = public_intake_request(
+            "ih-original-signing",
+            test_case_ledger_urn("original-signing"),
+            "urn:test:original-signing",
+            "1.0.0",
+        );
+        request.actor_id = Some("applicant".into());
+        let mut raw = serde_json::json!({"id":"original-response","definitionUrl":"urn:test:original-form","definitionVersion":"1.0.0",
+            "status":"completed","data":{"signature":{"acceptedAt":"2026-04-22T12:00:00Z","affirmed":true,
+                "documentHash":profile.documents[0].document_hash}},
+            "authoredSignatures":[{"signatureId":"actual-original-act","documentId":"application",
+                "signerId":"oidc:original-applicant","signingIntent":"urn:wos:signing-intent:applicant-signature",
+                "documentHash":profile.documents[0].document_hash,"documentHashAlgorithm":"sha-256",
+                "signedPayload":{"canonicalization":"formspec-response-signing-v1","digestAlgorithm":"sha-256",
+                    "digest":"placeholder","responseId":"original-response","definitionUrl":"urn:test:original-form","definitionVersion":"1.0.0",
+                    "signedAt":"2026-04-22T12:00:00Z","signingIntent":"urn:wos:signing-intent:applicant-signature"}}]});
+        let source = integrity_canonical::ResponseJson::from_value(&raw).unwrap();
+        let digest = source
+            .signed_payload(integrity_canonical::DigestAlgorithm::Sha256)
+            .unwrap()
+            .digest;
+        raw["authoredSignatures"][0]["signedPayload"]["digest"] = serde_json::json!(digest);
+        let response = integrity_canonical::ResponseJson::from_value(&raw).unwrap();
+        let evidence = crate::binding::SignatureEvidence {
+            document_claims: None,
+            source_system: "formspec".into(),
+            source_signature_id: "actual-original-act".into(),
+            signing_act_id: None,
+            presentation_hash: None,
+            source_response_ref: Some("urn:test:original-response".into()),
+            document_id: "application".into(),
+            signer_id: Some("oidc:original-applicant".into()),
+            signing_intent: "urn:wos:signing-intent:applicant-signature".into(),
+            signature_method: Some("urn:formspec:sig-method:ed25519-cose-sign1@1".into()),
+            signed_payload_digest: digest,
+            signed_payload_digest_algorithm: "sha-256".into(),
+            signed_at: "2026-04-22T12:00:00Z".into(),
+            document_hash: profile.documents[0].document_hash.clone(),
+            document_hash_algorithm: "sha-256".into(),
+            signature_provider: Some("formspec".into()),
+            ceremony_id: Some("original-ceremony".into()),
+            identity_binding: Some(serde_json::json!({
+                "method":"email-otp","assuranceLevel":"standard"})),
+            signer_authority: None,
+            primitive_verification:
+                crate::binding::SignaturePrimitiveStatus::DeferredPendingHelper {
+                    reason: "unit-test-only-no-crypto-claim".into(),
+                },
+            verification_receipt: None,
+            admission_failure: None,
+        };
+        let service = RecordingService::with_response(serde_json::json!({}));
+        let calls = service.calls.clone();
+        let mut runtime = runtime_with_kernel(kernel)
+            .with_intake_policy(AutoCreatePublicIntakePolicy)
+            .with_signature_profile("original-profile", profile)
+            .with_intake_signature_selection(IntakeSignatureSelection {
+                profile_key: "original-profile".into(),
+                step_id: "applicantSigns".into(),
+            });
+        runtime = runtime.with_captured_signature_signer(
+            CapturedSignatureSigner::new(
+                "urn:test:original-response",
+                "applicant",
+                "oidc:original-applicant",
+                &response,
+            )
+            .unwrap(),
+        );
+        runtime.service = Box::new(service);
+        (runtime, request, response, vec![evidence], calls)
+    }
+
+    #[test]
+    fn original_intake_signature_precedes_effects_and_replay_retains_one_act() {
+        let (runtime, request, response, evidence, calls) = original_signing_runtime();
+        let expected = evidence[0].signed_payload_digest.clone();
+        let input = CapturedIntakeSignature::new(
+            request.clone(),
+            response,
+            "urn:test:original-response",
+            evidence,
+        )
+        .unwrap();
+        let mut runtime = runtime.with_captured_intake_signature(input);
+        let accepted = runtime
+            .accept_intake_handoff("formspec", request.clone())
+            .unwrap();
+        let process = accepted.creation.unwrap().process_id;
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        let first = runtime.store.load_record(&process).unwrap();
+        let acts: Vec<_> = first
+            .provenance_log
+            .iter()
+            .filter(|r| r.record_kind == ProvenanceKind::SignatureAffirmation)
+            .collect();
+        assert_eq!(acts.len(), 1);
+        assert_eq!(acts[0].actor_id.as_deref(), Some("applicant"));
+        assert_eq!(
+            acts[0].data.as_ref().unwrap()["signerId"],
+            "oidc:original-applicant"
+        );
+        assert_eq!(
+            acts[0].data.as_ref().unwrap()["signedPayloadDigest"],
+            expected
+        );
+        let original = serde_json::to_value(acts[0]).unwrap();
+        runtime
+            .accept_intake_handoff("formspec", request.clone())
+            .unwrap();
+        let mut retained = runtime.store.load_record(&process).unwrap();
+        assert!(
+            runtime
+                .admit_original_intake_signature(&request, &mut retained, true)
+                .unwrap()
+                .is_none()
+        );
+        let acts: Vec<_> = retained
+            .provenance_log
+            .iter()
+            .filter(|r| r.record_kind == ProvenanceKind::SignatureAffirmation)
+            .collect();
+        assert_eq!(acts.len(), 1);
+        assert_eq!(serde_json::to_value(acts[0]).unwrap(), original);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+    #[test]
+    fn original_intake_signature_refusals_create_no_process_or_entry_effect() {
+        for failure in [
+            "missing",
+            "wrong-request",
+            "missing-owner",
+            "foreign-subject",
+            "foreign-actor",
+            "changed-response",
+        ] {
+            let (mut runtime, request, response, evidence, calls) = original_signing_runtime();
+            let mut captured_request = request.clone();
+            let mut captured_response = response.clone();
+            match failure {
+                "missing-owner" => runtime.captured_signature_signer = None,
+                "foreign-subject" | "foreign-actor" => {
+                    runtime.captured_signature_signer = Some(
+                        CapturedSignatureSigner::new(
+                            if failure == "foreign-subject" {
+                                "foreign"
+                            } else {
+                                "urn:test:original-response"
+                            },
+                            if failure == "foreign-actor" {
+                                "foreign"
+                            } else {
+                                "applicant"
+                            },
+                            "oidc:original-applicant",
+                            &response,
+                        )
+                        .unwrap(),
+                    )
+                }
+                "wrong-request" => {
+                    captured_request.document["handoffId"] = serde_json::json!("foreign")
+                }
+                "changed-response" => {
+                    let mut raw = response.value().clone();
+                    raw["changed"] = serde_json::json!(true);
+                    captured_response =
+                        integrity_canonical::ResponseJson::from_value(&raw).unwrap();
+                }
+                _ => {}
+            }
+            let input = CapturedIntakeSignature::new(
+                captured_request,
+                captured_response,
+                "urn:test:original-response",
+                evidence,
+            );
+            if failure == "changed-response" {
+                assert!(input.is_err());
+                continue;
+            }
+            if failure != "missing" {
+                runtime = runtime.with_captured_intake_signature(input.unwrap());
+            }
+            assert!(
+                matches!(
+                    runtime.accept_intake_handoff("formspec", request.clone()),
+                    Err(RuntimeError::Signature(_))
+                ),
+                "{failure}"
+            );
+            assert_eq!(calls.load(Ordering::SeqCst), 0, "{failure}");
+            let case =
+                WorkflowProcess::extract_urn_type_id(request.governed_case_ref.as_deref().unwrap())
+                    .unwrap();
+            assert!(runtime.processes_for_case(case).is_empty(), "{failure}");
+        }
+    }
+    #[test]
+    fn original_intake_capture_refuses_wrong_or_ambiguous_source_pins() {
+        for failure in [
+            "signer",
+            "document",
+            "digest",
+            "source",
+            "ambiguous",
+            "declared-documents",
+        ] {
+            let (_, request, response, mut evidence, _) = original_signing_runtime();
+            let mut raw = response.value().clone();
+            match failure {
+                "signer" => evidence[0].signer_id = Some("foreign".into()),
+                "document" => evidence[0].document_hash = "b".repeat(64),
+                "digest" => evidence[0].signed_payload_digest = "b".repeat(64),
+                "source" => evidence[0].source_response_ref = Some("foreign".into()),
+                "ambiguous" => evidence.push(evidence[0].clone()),
+                _ => raw["extensions"] = serde_json::json!({"x-formspec-document-attestations":{}}),
+            }
+            assert!(
+                CapturedIntakeSignature::new(
+                    request,
+                    integrity_canonical::ResponseJson::from_value(&raw).unwrap(),
+                    "urn:test:original-response",
+                    evidence
+                )
+                .is_err(),
+                "{failure}"
+            );
+        }
     }
 
     /// Kernel + Signature Profile documents shared with conformance `SIG-013`

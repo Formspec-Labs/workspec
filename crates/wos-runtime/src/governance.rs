@@ -25,6 +25,10 @@ use wos_events::governance::{
 use crate::runtime::RuntimeError;
 use crate::store::{RuntimeRecord, TaskArtifactKind};
 
+mod notice_send;
+#[doc(inline)]
+pub use notice_send::CapturedNoticeSendInput;
+
 /// Actual immutable evaluation inputs, before effects or native persistence.
 ///
 /// Every transition is supplied, including nested and continuous transitions.
@@ -74,36 +78,42 @@ pub struct CapturedGovernanceDecision {
 /// its exact owning admission and rechecks it with the complete prior fence.
 /// Runtime checks the actual retained callback, content and proposal association;
 /// this structure does not itself grant delivery or resource authority.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CapturedGovernanceNotice {
     /// Actual original process and case association.
-    pub process_id: String,
+    process_id: String,
     /// Original durable case ledger.
-    pub case_ledger_id: String,
+    case_ledger_id: String,
     /// Exact selected original callback binding.
-    pub binding_id: String,
+    binding_id: String,
     /// Original immutable intent identifier.
-    pub intent_id: String,
+    intent_id: String,
     /// Original immutable delivery attempt.
-    pub attempt_id: String,
+    attempt_id: String,
     /// Retained CallbackReceived provenance identifier.
-    pub callback_record_ref: String,
+    callback_record_ref: String,
     /// Digest of that exact native callback record's data.
-    pub callback_data_sha256: String,
+    callback_data_sha256: String,
     /// Digest of the persisted, qualified original clock decision.
-    pub date_decision_sha256: String,
+    date_decision_sha256: String,
     /// Original-profile logical delivery time, not current physical/firing time.
-    pub governed_sent_at: String,
+    governed_sent_at: String,
     /// Actual exact rendered body covered by the recorded intent.
-    pub human_readable: String,
+    human_readable: String,
     /// Exact deterministic proposal content digest, absent for a request notice.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub proposal_content_sha256: Option<String>,
+    proposal_content_sha256: Option<String>,
+    /// Exact native selected policy identity, derived by the checked constructor.
+    selected_policy_fingerprint: String,
+    /// Original selected method, scope and anchor.
+    requirement: wos_core::model::notice_requirements::NoticeRequirement,
+    /// Complete original inputs, rechecked against retained records before effects.
+    send_input: CapturedNoticeSendInput,
 }
 
 /// Immutable, bounded per-preparation facts supplied by existing current owners.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CapturedGovernanceEvidence {
     /// Actual retained receipts; an empty list never means delivery occurred.
@@ -633,7 +643,7 @@ impl QualifiedGovernancePolicy {
             receipts.len() == 1,
             "original proposal has no unique qualified actual receipt",
         )?;
-        let sent_at = validate_captured_notice(context, receipts[0])?;
+        let sent_at = validate_captured_notice(self, context, receipts[0])?;
         let grace = self
             .selection
             .kernel
@@ -695,7 +705,7 @@ impl QualifiedGovernancePolicy {
                 receipts.len() == 1,
                 "appeal original notice receipt missing or ambiguous",
             )?;
-            let anchor = validate_captured_notice(context, receipts[0])?;
+            let anchor = validate_captured_notice(self, context, receipts[0])?;
             let deadline = anchor
                 .checked_add(calendar_period_ms(appeal_period(&self.selection)?)?)
                 .ok_or_else(|| refused("appeal deadline overflow"))?;
@@ -811,6 +821,32 @@ impl QualifiedGovernancePolicy {
                 && context.prior.process.case_ledger_id == context.proposed_process.case_ledger_id,
             "governance process association differs",
         )?;
+        for binding in &self.selection.rules.notice_timers {
+            let occurrences = context
+                .transitions
+                .iter()
+                .filter(|actual| transition_matches_observed(&binding.transition, actual))
+                .count();
+            if occurrences == 0 {
+                continue;
+            }
+            require(occurrences == 1, "elapsed notice transition is ambiguous")?;
+            let period_ms = wos_core::eval::parse_iso_duration_to_ms(&binding.duration)
+                .map_err(|_| refused("elapsed notice duration invalid"))?;
+            require(period_ms > 0, "elapsed notice duration must be positive")?;
+            notice_timer_witness(
+                self,
+                &context,
+                NoticeTimerSelection {
+                    timer_id: &binding.timer_id,
+                    event: &binding.transition.event,
+                    duration: &binding.duration,
+                    period_ms,
+                    notice_binding_id: &binding.request_notice_binding_id,
+                },
+                evidence,
+            )?;
+        }
         let mut decisions = Vec::new();
         for facts in required_facts(&context)? {
             let bindings: Vec<_> = self
@@ -843,7 +879,7 @@ impl QualifiedGovernancePolicy {
             decisions.push(if let Some(binding) = bindings.first() {
                 human_decision(&context, facts, binding, evidence)?
             } else {
-                timeout_decision(&context, facts, timeouts[0], evidence)?
+                timeout_decision(self, &context, facts, timeouts[0], evidence)?
             });
         }
         if let Some(due_process) = &self.selection.rules.due_process {
@@ -1520,72 +1556,128 @@ fn governance_time(ms: u64) -> Result<String, RuntimeError> {
         .map_err(|_| refused("governance deadline cannot format"))
 }
 
-fn timeout_decision(
-    context: &RuntimeGovernanceResultContext<'_>,
-    facts: &ProvenanceRecord,
-    binding: &TimeoutDecisionBinding,
-    evidence: &CapturedGovernanceEvidence,
-) -> Result<DecisionAudit, RuntimeError> {
+// The elapsed-period and no-response policies share original timer evidence.
+// Only the latter separately checks accepted corrections and emits a decision.
+struct NoticeTimerSelection<'a> {
+    timer_id: &'a str,
+    event: &'a str,
+    duration: &'a str,
+    period_ms: u64,
+    notice_binding_id: &'a str,
+}
+
+struct NoticeTimerWitness<'a> {
+    timer: &'a wos_core::instance::TimerState,
+    receipt: &'a CapturedGovernanceNotice,
+    fired: &'a ProvenanceRecord,
+    start: u64,
+    due: u64,
+}
+
+fn notice_timer_witness<'a>(
+    policy: &QualifiedGovernancePolicy,
+    context: &RuntimeGovernanceResultContext<'a>,
+    selected: NoticeTimerSelection<'_>,
+    evidence: &'a CapturedGovernanceEvidence,
+) -> Result<NoticeTimerWitness<'a>, RuntimeError> {
     require(
         context.event.actor_id.is_none()
-            && context.event.event == binding.transition.event
+            && context.event.event == selected.event
             && context
                 .event
                 .data
                 .as_ref()
-                .is_some_and(|data| data["timerId"] == binding.timer_id),
-        "timeout did not consume its actual native occurrence",
+                .is_some_and(|data| data["timerId"] == selected.timer_id),
+        "notice period did not consume its actual native occurrence",
     )?;
     let timers = context
         .prior
         .process
         .timers
         .iter()
-        .filter(|timer| timer.timer_id == binding.timer_id && timer.event == context.event.event)
+        .filter(|timer| timer.timer_id == selected.timer_id && timer.event == selected.event)
         .collect::<Vec<_>>();
     require(
         timers.len() == 1,
-        "original no-response timer missing or ambiguous",
+        "original notice timer missing or ambiguous",
     )?;
     let timer = timers[0];
-    let period_ms = calendar_period_ms(&binding.response_period)?;
     let due = governance_timestamp(&timer.deadline)?;
     let start = timer
         .created_at_ms
         .ok_or_else(|| refused("original timer origin missing"))?;
     require(
-        timer.duration_iso.as_deref() == Some(binding.response_period.as_str())
-            && timer.duration_ms == Some(period_ms)
+        timer.duration_iso.as_deref() == Some(selected.duration)
+            && timer.duration_ms == Some(selected.period_ms)
             && due
                 == start
-                    .checked_add(period_ms)
-                    .ok_or_else(|| refused("no-response deadline overflow"))?
+                    .checked_add(selected.period_ms)
+                    .ok_or_else(|| refused("notice deadline overflow"))?
             && context.now_ms >= due,
-        "original selected response timer has not expired or differs",
+        "original selected notice timer has not expired or differs",
     )?;
     let fired = context
         .provenance
         .iter()
         .filter(|record| {
             record.record_kind == ProvenanceKind::TimerFired
-                && record
-                    .data
-                    .as_ref()
-                    .is_some_and(|data| data["timerId"] == binding.timer_id)
+                && record.data.as_ref().is_some_and(|data| {
+                    data["timerId"] == selected.timer_id && data["firesEvent"] == selected.event
+                })
         })
         .collect::<Vec<_>>();
     require(
         fired.len() == 1,
         "actual native TimerFired witness missing or ambiguous",
     )?;
-    let receipts = evidence
+    let mut receipts = Vec::new();
+    for receipt in evidence
         .notices
         .iter()
-        .filter(|receipt| receipt.binding_id == binding.request_notice_binding_id)
-        .collect::<Vec<_>>();
+        .filter(|receipt| receipt.binding_id == selected.notice_binding_id)
+    {
+        if validate_captured_notice(policy, context, receipt)? == start {
+            receipts.push(receipt);
+        }
+    }
     require(
-        receipts.len() == 1 && validate_captured_notice(context, receipts[0])? == start,
+        receipts.len() == 1,
         "timer is not anchored to its qualified original request notice",
+    )?;
+    Ok(NoticeTimerWitness {
+        timer,
+        receipt: receipts[0],
+        fired: fired[0],
+        start,
+        due,
+    })
+}
+
+fn timeout_decision(
+    policy: &QualifiedGovernancePolicy,
+    context: &RuntimeGovernanceResultContext<'_>,
+    facts: &ProvenanceRecord,
+    binding: &TimeoutDecisionBinding,
+    evidence: &CapturedGovernanceEvidence,
+) -> Result<DecisionAudit, RuntimeError> {
+    let period_ms = calendar_period_ms(&binding.response_period)?;
+    let NoticeTimerWitness {
+        timer,
+        receipt,
+        fired,
+        start,
+        due,
+    } = notice_timer_witness(
+        policy,
+        context,
+        NoticeTimerSelection {
+            timer_id: &binding.timer_id,
+            event: &binding.transition.event,
+            duration: &binding.response_period,
+            period_ms,
+            notice_binding_id: &binding.request_notice_binding_id,
+        },
+        evidence,
     )?;
     let tasks = context
         .prior
@@ -1639,14 +1731,14 @@ fn timeout_decision(
                 case_field_path: None,
                 uri: Some(format!(
                     "urn:wos:provenance:{}",
-                    receipts[0].callback_record_ref
+                    receipt.callback_record_ref
                 )),
                 summary: Some("Actual qualified original request delivery".into()),
             },
             wos_events::governance::EvidenceReference {
                 kind: "fact".into(),
                 case_field_path: None,
-                uri: Some(format!("urn:wos:provenance:{}", fired[0].id)),
+                uri: Some(format!("urn:wos:provenance:{}", fired.id)),
                 summary: Some("Actual original selected-period timer occurrence".into()),
             },
         ],
@@ -1932,37 +2024,22 @@ fn governance_timestamp(raw: &str) -> Result<u64, RuntimeError> {
 }
 
 fn validate_captured_notice(
+    policy: &QualifiedGovernancePolicy,
     context: &RuntimeGovernanceResultContext<'_>,
     receipt: &CapturedGovernanceNotice,
 ) -> Result<u64, RuntimeError> {
     require(
-        receipt.process_id == context.prior.process.process_id
-            && receipt.case_ledger_id == context.prior.process.case_ledger_id,
-        "qualified notice belongs to another process or case",
+        receipt.selected_policy_fingerprint == policy.fingerprint,
+        "checked notice belongs to another selected policy",
     )?;
-    let found = context
-        .prior
-        .provenance_log
-        .iter()
-        .filter(|record| record.id == receipt.callback_record_ref)
-        .collect::<Vec<_>>();
+    let current = policy.capture_notice_send(context.prior, receipt.send_input.clone())?;
+    let current =
+        serde_json::to_value(&current).map_err(|_| refused("checked notice cannot serialize"))?;
+    let original = serde_json::to_value(receipt)
+        .map_err(|_| refused("original checked notice cannot serialize"))?;
     require(
-        found.len() == 1 && found[0].record_kind == ProvenanceKind::CallbackReceived,
-        "actual retained notice callback missing or ambiguous",
-    )?;
-    let data = found[0]
-        .data
-        .as_ref()
-        .ok_or_else(|| refused("actual callback data missing"))?;
-    require(
-        stack_common_hash::canonical_json_hash(data).ok().as_ref()
-            == Some(&receipt.callback_data_sha256)
-            && data["bindingId"] == receipt.binding_id
-            && data["data"]["delivery"]["intentId"] == receipt.intent_id
-            && data["data"]["delivery"]["attemptId"] == receipt.attempt_id
-            && data["data"]["clock"]["governedSentAt"] == receipt.governed_sent_at
-            && data["data"]["clock"]["dateDecisionSha256"] == receipt.date_decision_sha256,
-        "qualified original callback association differs",
+        current == original,
+        "checked notice differs from its original retained inputs",
     )?;
     let sent = governance_timestamp(&receipt.governed_sent_at)?;
     require(

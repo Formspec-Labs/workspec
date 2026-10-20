@@ -218,6 +218,46 @@ impl<'a> TrellisCustodyAppender<'a> {
         Ok(Some((outcome, receipt)))
     }
 
+    /// Reconstructs the exact append request for a read-only reconciliation.
+    ///
+    /// # Errors
+    /// Refuses foreign scopes or inputs the ordinary appender would refuse.
+    pub fn prepare_reconciliation(
+        &self,
+        input: &CustodyAppendInput,
+        ledger_scope: &LedgerScope,
+    ) -> Result<Option<SubstrateAppendRequest>, RuntimeError> {
+        if ledger_scope != &self.ledger_scope {
+            return Err(RuntimeError::Service(
+                "custody reconciliation scope refused".into(),
+            ));
+        }
+        self.prepare_input(input, ledger_scope)
+    }
+
+    /// Checks a reconciled acknowledgment through the ordinary append validator.
+    ///
+    /// The trusted provider binds the original request and returned checkpoint.
+    /// This is an acknowledgment, not independent verification of an export;
+    /// the pinned Core export still requires its maintained proof verifier.
+    ///
+    /// # Errors
+    /// Refuses foreign scopes, invalid source inputs or malformed acknowledgments.
+    pub fn acknowledged_reconciliation_outcome(
+        &self,
+        input: CustodyAppendInput,
+        result: SubstrateAppendResult,
+        ledger_scope: &LedgerScope,
+    ) -> Result<TrellisCustodyAppendOutcome, RuntimeError> {
+        if self.prepare_reconciliation(&input, ledger_scope)?.is_none() {
+            return Err(RuntimeError::Service(
+                "custody reconciliation input already stamped".into(),
+            ));
+        }
+        validate_trellis_result_for_scope(&input, &result, ledger_scope, true)?;
+        Ok(TrellisCustodyAppendOutcome::from_result(input, result))
+    }
+
     fn prepare_input(
         &self,
         input: &CustodyAppendInput,
@@ -512,6 +552,66 @@ mod tests {
         CreateProcessRequest, DismissTaskResult, DrainOnceResult, PersistDraftResult,
         TaskSubmissionResult,
     };
+
+    #[test]
+    fn reconciliation_retains_only_scoped_valid_acknowledgments_without_sending() {
+        let case = fixture_minter().mint_case_ledger_id();
+        let input = test_input(&test_context(case.clone()));
+        let client = RecordingSubstrateClient::default();
+        let appender = test_appender(&client, &case);
+        let ledger = test_ledger(&case);
+        let prepared = appender
+            .prepare_reconciliation(&input, &ledger)
+            .unwrap()
+            .unwrap();
+        assert_eq!(prepared.scope, ledger);
+        let acknowledgment = SubstrateAppendResult {
+            event_id: "event-original".into(),
+            sequence: 0,
+            prior_event_hash: None,
+            canonical_event_hash: TEST_HASH.into(),
+            checkpoint_ref: format!("trellis://{ledger}/checkpoints/original"),
+        };
+        let result = appender
+            .acknowledged_reconciliation_outcome(input.clone(), acknowledgment.clone(), &ledger)
+            .unwrap();
+        assert_eq!(result.record_id, input.record_id);
+        assert_eq!(result.canonical_event_hash, TEST_HASH);
+        let foreign = test_ledger(&fixture_minter().mint_case_ledger_id());
+        assert!(appender.prepare_reconciliation(&input, &foreign).is_err());
+        assert!(
+            appender
+                .acknowledged_reconciliation_outcome(
+                    input.clone(),
+                    acknowledgment.clone(),
+                    &foreign
+                )
+                .is_err()
+        );
+        for (field, value) in [
+            ("eventId", ""),
+            ("canonicalEventHash", "invalid"),
+            ("checkpointRef", "trellis://foreign/checkpoints/x"),
+        ] {
+            let mut raw = serde_json::to_value(&acknowledgment).unwrap();
+            raw[field] = serde_json::json!(value);
+            let changed = serde_json::from_value(raw).unwrap();
+            assert!(
+                appender
+                    .acknowledged_reconciliation_outcome(input.clone(), changed, &ledger)
+                    .is_err(),
+                "{field}"
+            );
+        }
+        let mut altered = input;
+        altered.record_id = fixture_minter().mint_provenance_id();
+        assert!(
+            appender
+                .acknowledged_reconciliation_outcome(altered, acknowledgment, &ledger)
+                .is_err()
+        );
+        assert!(client.requests.lock().unwrap().is_empty());
+    }
 
     #[test]
     fn native_custody_key_is_bounded_stable_and_separates_case_and_record() {

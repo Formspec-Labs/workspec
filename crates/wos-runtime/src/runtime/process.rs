@@ -178,6 +178,22 @@ impl WosRuntime {
         actor_bindings: Option<Vec<wos_core::instance::HumanActorBinding>>,
         initial_initiating_actor_id: Option<&str>,
     ) -> Result<WorkflowProcess, RuntimeError> {
+        self.create_process_with_intake_admission(
+            request,
+            bound_case_ledger_id,
+            actor_bindings,
+            initial_initiating_actor_id,
+            None,
+        )
+    }
+    pub(super) fn create_process_with_intake_admission(
+        &mut self,
+        request: CreateProcessRequest,
+        bound_case_ledger_id: Option<String>,
+        actor_bindings: Option<Vec<wos_core::instance::HumanActorBinding>>,
+        initial_initiating_actor_id: Option<&str>,
+        intake: Option<&crate::intake::IntakeAcceptanceRequest>,
+    ) -> Result<WorkflowProcess, RuntimeError> {
         let now_ms = self.clock.now_ms();
         let now_iso = format_timestamp(now_ms)?;
         let CreateProcessRequest {
@@ -325,6 +341,13 @@ impl WosRuntime {
         };
         let mut record = RuntimeRecord::new(instance);
         let mut appended_provenance = evaluator.provenance().records().to_vec();
+        // Qualify the original applicant act before actions, presentation or storage.
+        if let Some(intake) = intake
+            && let Some(affirmation) =
+                self.admit_original_intake_signature(intake, &mut record, false)?
+        {
+            appended_provenance.push(affirmation);
+        }
         // Annotate any timers created during instance initialization with calendarVersion.
         if let Some(cal) = &self.business_calendar {
             annotate_timer_created_with_calendar_version(&mut appended_provenance, cal);

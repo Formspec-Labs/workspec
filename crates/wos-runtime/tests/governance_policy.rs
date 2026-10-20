@@ -433,59 +433,142 @@ fn timestamp(ms: u64) -> String {
         .format(&time::format_description::well_known::Rfc3339)
         .unwrap()
 }
-fn receipt_for_proposal(
-    store: &mut SharedInMemoryStore,
+fn retained_snapshot(store: &SharedInMemoryStore, id: &str) -> Value {
+    let record = store.load_record(id).unwrap();
+    json!({"process":record.process,"provenance":record.provenance_log,
+        "aux":wos_runtime::store::runtime_aux_to_json(&record)})
+}
+fn notice_send_input(
+    outbound: wos_runtime::DeferredOutboundEvent,
+    body: &str,
+    physical_ms: u64,
+    governed_ms: u64,
+) -> wos_runtime::governance::CapturedNoticeSendInput {
+    use stack_common_notify::{DeliveryMessage, DeliveryOutcome, DeliveryRequest, SmtpCapability};
+    let request = DeliveryRequest::new(
+        "original-intent".into(),
+        "original-attempt".into(),
+        DeliveryMessage {
+            sender: "notice@example.test".into(),
+            recipient: "applicant@example.test".into(),
+            subject: "Individualized original notice".into(),
+            text_body: body.into(),
+            language: "en".into(),
+        },
+    )
+    .unwrap();
+    let digest = request.request_sha256().unwrap();
+    let outcome = DeliveryOutcome::Accepted {
+        version: 1,
+        intent_id: request.intent_id.clone(),
+        attempt_id: request.attempt_id.clone(),
+        message_id: format!("<{}@example.invalid>", &digest[7..]),
+        request_sha256: digest,
+        body_sha256: stack_common_hash::sha256_prefixed(body.as_bytes()),
+        started_at: timestamp(physical_ms - 1000),
+        observed_at: Some(timestamp(physical_ms)),
+        capability: SmtpCapability::SmtpTestCapture,
+        smtp_code: 250,
+    };
+    // Controlled original date-owner input. Native checks this association; the
+    // host separately reproduces calendar arithmetic and authenticates its source.
+    let profile = json!({"version":1,"profileId":"controlled-native-input","runId":"original-run",
+        "physicalAnchorAt":timestamp(physical_ms),"governedAnchorAt":timestamp(governed_ms),
+        "rateNumerator":1,"rateDenominator":1,"precision":"map_then_floor_milliseconds"});
+    let decision = json!({"version":1,"status":"qualified","code":"date_agreement",
+        "outcomeSha256":stack_common_hash::canonical_json_hash(&serde_json::to_value(&outcome).unwrap()).unwrap(),
+        "evidence":{"times":{"governedSentAt":timestamp(governed_ms),"witness":{
+            "rawPhysicalSentAt":timestamp(physical_ms),"profileSha256":stack_common_hash::canonical_json_hash(&profile).unwrap(),"profile":profile}}}});
+    wos_runtime::governance::CapturedNoticeSendInput {
+        outbound,
+        request,
+        outcome,
+        recipient_authority_ref: "urn:test:original-recipient-authority".into(),
+        callback_record_ref: String::new(),
+        clock_decision: Some(decision),
+    }
+}
+fn record_notice_callback(
+    runtime: &mut WosRuntime,
+    store: &SharedInMemoryStore,
+    id: &str,
+    mut input: wos_runtime::governance::CapturedNoticeSendInput,
+    message: &str,
+    event_type: &str,
+    now: u64,
+) -> wos_runtime::governance::CapturedNoticeSendInput {
+    let outcome = serde_json::to_value(&input.outcome).unwrap();
+    let physical = outcome["observedAt"].as_str().unwrap();
+    let decision = input.clock_decision.as_ref().unwrap();
+    let clock = json!({"version":1,"governedSentAt":decision["evidence"]["times"]["governedSentAt"],
+        "originalProfileSha256":decision["evidence"]["times"]["witness"]["profileSha256"],
+        "dateDecisionSha256":stack_common_hash::canonical_json_hash(decision).unwrap()});
+    runtime.enqueue_event(id,wos_core::instance::PendingEvent {origin:None,event:message.into(),actor_id:None,
+        data:Some(json!({"id":"original-notice-callback","source":"urn:test:notice-provider","specversion":"1.0",
+            "type":event_type,"subject":input.outbound.event.subject,"time":physical,
+            "data":{"sentAt":physical,"delivery":outcome,"clock":clock}})),
+        timestamp:timestamp(now),idempotency_token:None}).unwrap();
+    runtime.drain_once(id).unwrap();
+    input.callback_record_ref = store
+        .load_record(id)
+        .unwrap()
+        .provenance_log
+        .iter()
+        .find(|r| {
+            r.record_kind == ProvenanceKind::CallbackReceived
+                && r.data
+                    .as_ref()
+                    .is_some_and(|v| v["invocationId"] == input.outbound.event.invocation_id)
+        })
+        .unwrap()
+        .id
+        .clone();
+    input
+}
+fn proposal_send_input(
+    runtime: &mut WosRuntime,
+    store: &SharedInMemoryStore,
     id: &str,
     proposal: &wos_events::governance::AdverseNoticeProposal,
-) -> wos_runtime::governance::CapturedGovernanceNotice {
-    let mut prior = store.load_record(id).unwrap();
-    let mut record = wos_core::ProvenanceRecord::blank(
-        &stack_common_typeid::testing::fixture_minter(),
-        ProvenanceKind::CallbackReceived,
+) -> wos_runtime::governance::CapturedNoticeSendInput {
+    let prior = store.load_record(id).unwrap();
+    let outbound = prior
+        .process
+        .pending_outbound_events
+        .values()
+        .find(|v| v.binding_id == "sendDenialNotice")
+        .unwrap()
+        .clone();
+    let input = notice_send_input(
+        wos_runtime::DeferredOutboundEvent {
+            process_id: id.into(),
+            event: outbound,
+        },
+        &proposal.human_readable,
+        1_799_999_999_000,
+        1_799_999_999_000,
     );
-    record.timestamp = timestamp(1_800_000_000_000);
-    record.actor_id = Some("actor:service:notice".into());
-    let sent = timestamp(1_799_999_999_000);
-    let date =
-        stack_common_hash::canonical_json_hash(&json!({"controlledOwnerFixture":"original-clock"}))
-            .unwrap();
-    record.data = Some(json!({"bindingId":"sendDenialNotice","data":{
-        "delivery":{"status":"accepted","intentId":"original-intent","attemptId":"original-attempt"},
-        "clock":{"governedSentAt":sent,"dateDecisionSha256":date}}}));
-    // Controlled projection of the existing notice owner, not a live receipt qualification claim.
-    let receipt = wos_runtime::governance::CapturedGovernanceNotice {
-        process_id: id.into(),
-        case_ledger_id: prior.process.case_ledger_id.clone(),
-        binding_id: "sendDenialNotice".into(),
-        intent_id: "original-intent".into(),
-        attempt_id: "original-attempt".into(),
-        callback_record_ref: record.id.clone(),
-        callback_data_sha256: stack_common_hash::canonical_json_hash(record.data.as_ref().unwrap())
-            .unwrap(),
-        date_decision_sha256: date,
-        governed_sent_at: sent,
-        human_readable: proposal.human_readable.clone(),
-        proposal_content_sha256: Some(proposal.content_sha256.clone()),
-    };
-    prior.process.provenance_position += 1;
-    prior.provenance_log.push(record);
-    store.save_record(prior).unwrap();
-    receipt
+    record_notice_callback(
+        runtime,
+        store,
+        id,
+        input,
+        "denial.callback",
+        "urn:test:denial.accepted",
+        1_800_000_000_000,
+    )
 }
-fn enqueue_receipt(runtime: &mut WosRuntime, id: &str) {
-    runtime
-        .enqueue_event(
-            id,
-            wos_core::instance::PendingEvent {
-                event: "denial.noticeSent".into(),
-                actor_id: Some("actor:service:notice".into()),
-                data: None,
-                timestamp: timestamp(1_800_000_000_000),
-                origin: None,
-                idempotency_token: None,
-            },
-        )
-        .unwrap();
+fn receipt_for_proposal(
+    runtime: &mut WosRuntime,
+    store: &SharedInMemoryStore,
+    id: &str,
+    policy: &QualifiedGovernancePolicy,
+    proposal: &wos_events::governance::AdverseNoticeProposal,
+) -> wos_runtime::governance::CapturedGovernanceNotice {
+    let input = proposal_send_input(runtime, store, id, proposal);
+    policy
+        .capture_notice_send(&store.load_record(id).unwrap(), input)
+        .unwrap()
 }
 fn proposal(
     outcome: &wos_runtime::DrainOnceResult,
@@ -510,7 +593,7 @@ fn proposal(
 fn actual_adverse_proposal_is_deterministic_and_only_matching_retained_receipt_permits_effect() {
     let selection = due_selection();
     let policy = QualifiedGovernancePolicy::qualify(selection.clone()).unwrap();
-    let (mut runtime, mut store, id, effects) =
+    let (mut runtime, store, id, effects) =
         rig_selected(selection.kernel.clone(), Some(policy.clone()), evidence());
     let original = runtime.drain_once(&id).unwrap();
     let proposed = proposal(&original);
@@ -531,8 +614,7 @@ fn actual_adverse_proposal_is_deterministic_and_only_matching_retained_receipt_p
     {
         wos_events::NativeProvenanceEvent::from_record(row).unwrap();
     }
-    let receipt = receipt_for_proposal(&mut store, &id, &proposed);
-    enqueue_receipt(&mut runtime, &id);
+    let receipt = receipt_for_proposal(&mut runtime, &store, &id, &policy, &proposed);
     let before = effects.load(Ordering::SeqCst);
     assert!(matches!(
         runtime.drain_once(&id),
@@ -562,31 +644,87 @@ fn actual_adverse_proposal_is_deterministic_and_only_matching_retained_receipt_p
 #[test]
 fn mismatched_or_unretained_receipt_cannot_make_an_adverse_proposal_effective() {
     for label in [
-        "case", "intent", "attempt", "body", "content", "clock", "callback", "binding", "future",
+        "case", "pending", "callback", "binding", "result", "clock", "future", "policy",
     ] {
         let selection = due_selection();
         let policy = QualifiedGovernancePolicy::qualify(selection.clone()).unwrap();
         let (mut runtime, mut store, id, effects) =
             rig_selected(selection.kernel.clone(), Some(policy.clone()), evidence());
         let proposed = proposal(&runtime.drain_once(&id).unwrap());
-        let mut receipt = receipt_for_proposal(&mut store, &id, &proposed);
+        let input = proposal_send_input(&mut runtime, &store, &id, &proposed);
+        let receipt = policy
+            .capture_notice_send(&store.load_record(&id).unwrap(), input.clone())
+            .unwrap();
+        let mut prior = store.load_record(&id).unwrap();
         match label {
-            "case" => receipt.case_ledger_id = "another-case".into(),
-            "intent" => receipt.intent_id = "another-intent".into(),
-            "attempt" => receipt.attempt_id = "another-attempt".into(),
-            "body" => receipt.human_readable = "changed".into(),
-            "content" => receipt.proposal_content_sha256 = None,
-            "clock" => receipt.date_decision_sha256 = "changed".into(),
-            "callback" => receipt.callback_record_ref = "unretained".into(),
-            "binding" => receipt.binding_id = "another-binding".into(),
-            "future" => receipt.governed_sent_at = timestamp(1_800_000_000_001),
-            _ => unreachable!(),
+            "case" => prior.process.case_ledger_id = "foreign-case".into(),
+            "pending" => prior
+                .provenance_log
+                .retain(|r| r.record_kind != ProvenanceKind::CallbackPending),
+            "callback" => prior
+                .provenance_log
+                .retain(|r| r.id != input.callback_record_ref),
+            "binding" | "result" | "clock" | "future" => {
+                let data = prior
+                    .provenance_log
+                    .iter_mut()
+                    .find(|r| r.id == input.callback_record_ref)
+                    .unwrap()
+                    .data
+                    .as_mut()
+                    .unwrap();
+                match label {
+                    "binding" => data["bindingId"] = json!("foreign"),
+                    "result" => data["data"]["delivery"]["attemptId"] = json!("foreign"),
+                    "clock" => data["data"]["clock"]["dateDecisionSha256"] = json!("changed"),
+                    _ => {
+                        data["data"]["clock"]["governedSentAt"] =
+                            json!(timestamp(1_800_000_000_001))
+                    }
+                }
+            }
+            _ => {}
         }
-        enqueue_receipt(&mut runtime, &id);
-        let before = effects.load(Ordering::SeqCst);
+        if label == "case" {
+            // Actual storage refuses this identity change before governance can
+            // consume the forged prior; do not bypass that owner in a fixture.
+            let before = retained_snapshot(&store, &id);
+            let effects_before = effects.load(Ordering::SeqCst);
+            assert!(store.save_record(prior).is_err());
+            assert_eq!(retained_snapshot(&store, &id), before);
+            assert_eq!(effects.load(Ordering::SeqCst), effects_before);
+            continue;
+        }
+        if label != "policy" {
+            assert!(
+                policy.capture_notice_send(&prior, input.clone()).is_err(),
+                "{label}"
+            );
+        }
+        let saved_before = retained_snapshot(&store, &id);
+        let effects_before = effects.load(Ordering::SeqCst);
+        if let Err(error) = store.save_record(prior) {
+            // The retained deferred-request owner also rejects broken callback
+            // associations. Preserve that earlier refusal instead of forging a store.
+            assert!(
+                matches!(
+                    error,
+                    wos_runtime::StoreError::InvalidIntegrationEvidence(_)
+                ),
+                "{label}: {error}"
+            );
+            assert_eq!(retained_snapshot(&store, &id), saved_before, "{label}");
+            assert_eq!(effects.load(Ordering::SeqCst), effects_before, "{label}");
+            continue;
+        }
+        let mut selected = selection.clone();
+        if label == "policy" {
+            selected.delivery["title"] = json!("changed selection");
+        }
+        let current = QualifiedGovernancePolicy::qualify(selected).unwrap();
         runtime = runtime
             .with_governance_policy(
-                policy.clone(),
+                current,
                 wos_runtime::governance::CapturedGovernanceEvidence {
                     decisions: vec![],
                     notices: vec![receipt],
@@ -594,6 +732,8 @@ fn mismatched_or_unretained_receipt_cannot_make_an_adverse_proposal_effective() 
                 &[wos_core::model::notice_requirements::NoticeCapability::LocalSmtpTestCapture],
             )
             .unwrap();
+        let before = retained_snapshot(&store, &id);
+        let before_effects = effects.load(Ordering::SeqCst);
         assert!(
             matches!(
                 runtime.drain_once(&id),
@@ -601,12 +741,193 @@ fn mismatched_or_unretained_receipt_cannot_make_an_adverse_proposal_effective() 
             ),
             "{label}"
         );
-        assert_eq!(effects.load(Ordering::SeqCst), before, "{label}");
-        assert_ne!(
-            store.load_record(&id).unwrap().process.case_state["caseClosed"],
-            true,
+        assert_eq!(effects.load(Ordering::SeqCst), before_effects, "{label}");
+        assert_eq!(retained_snapshot(&store, &id), before, "{label}");
+    }
+}
+
+#[test]
+fn direct_checked_send_rejects_mismatched_inputs_without_effects() {
+    let selection = due_selection();
+    let policy = QualifiedGovernancePolicy::qualify(selection.clone()).unwrap();
+    let (mut runtime, store, id, effects) =
+        rig_selected(selection.kernel.clone(), Some(policy.clone()), evidence());
+    let proposed = proposal(&runtime.drain_once(&id).unwrap());
+    let original = proposal_send_input(&mut runtime, &store, &id, &proposed);
+    let prior = store.load_record(&id).unwrap();
+    policy
+        .capture_notice_send(&prior, original.clone())
+        .unwrap();
+    for label in [
+        "request",
+        "body",
+        "recipient",
+        "attempt",
+        "recipient-authority",
+        "process",
+        "binding",
+        "invocation",
+        "subject",
+        "callback",
+        "clock-absent",
+        "clock-status",
+        "clock-physical",
+        "clock-profile",
+        "clock-governed",
+        "scope",
+        "unobserved",
+        "code",
+    ] {
+        let mut input = original.clone();
+        match label {
+            "request" => input.request.version = 2,
+            "body" => input.request.message.text_body.push_str(" changed"),
+            "recipient" => input.request.message.recipient = "another@example.test".into(),
+            "attempt" => input.request.attempt_id = "foreign-attempt".into(),
+            "recipient-authority" => input.recipient_authority_ref.clear(),
+            "process" => input.outbound.process_id = "foreign".into(),
+            "binding" => input.outbound.event.binding_id = "foreign".into(),
+            "invocation" => input.outbound.event.invocation_id = "foreign".into(),
+            "subject" => input.outbound.event.subject = "foreign".into(),
+            "callback" => input.callback_record_ref = "foreign".into(),
+            "clock-absent" => input.clock_decision = None,
+            "clock-status" => {
+                input.clock_decision.as_mut().unwrap()["status"] = json!("CLOCK_NONQUALIFYING")
+            }
+            "clock-physical" => {
+                input.clock_decision.as_mut().unwrap()["evidence"]["times"]["witness"]["rawPhysicalSentAt"] =
+                    json!(timestamp(1_800_000_000_000))
+            }
+            "clock-profile" => {
+                input.clock_decision.as_mut().unwrap()["evidence"]["times"]["witness"]["profile"]
+                    ["runId"] = json!("foreign")
+            }
+            "clock-governed" => {
+                input.clock_decision.as_mut().unwrap()["evidence"]["times"]["governedSentAt"] =
+                    json!(timestamp(1_800_000_000_001))
+            }
+            _ => {
+                if let stack_common_notify::DeliveryOutcome::Accepted {
+                    capability,
+                    observed_at,
+                    smtp_code,
+                    ..
+                } = &mut input.outcome
+                {
+                    match label {
+                        "scope" => *capability = stack_common_notify::SmtpCapability::Smtp,
+                        "unobserved" => *observed_at = None,
+                        _ => *smtp_code = 550,
+                    }
+                }
+            }
+        }
+        assert!(
+            policy.capture_notice_send(&prior, input).is_err(),
             "{label}"
         );
+    }
+    assert_eq!(effects.load(Ordering::SeqCst), 1);
+    assert_ne!(
+        store.load_record(&id).unwrap().process.case_state["caseClosed"],
+        true
+    );
+}
+
+#[test]
+fn actual_non_success_transport_refuses_before_a_protected_effect() {
+    for label in [
+        "accepted-non2xx",
+        "unknown",
+        "retryable",
+        "terminal",
+        "captured",
+        "unobserved",
+    ] {
+        let selection = due_selection();
+        let policy = QualifiedGovernancePolicy::qualify(selection.clone()).unwrap();
+        let (mut runtime, store, id, effects) =
+            rig_selected(selection.kernel.clone(), Some(policy.clone()), evidence());
+        let proposed = proposal(&runtime.drain_once(&id).unwrap());
+        let prior = store.load_record(&id).unwrap();
+        let outbound = prior
+            .process
+            .pending_outbound_events
+            .values()
+            .find(|v| v.binding_id == "sendDenialNotice")
+            .unwrap()
+            .clone();
+        let mut input = notice_send_input(
+            wos_runtime::DeferredOutboundEvent {
+                process_id: id.clone(),
+                event: outbound,
+            },
+            &proposed.human_readable,
+            1_799_999_999_000,
+            1_799_999_999_000,
+        );
+        let mut value = serde_json::to_value(&input.outcome).unwrap();
+        match label {
+            "accepted-non2xx" => value["smtpCode"] = json!(550),
+            "unobserved" => value["observedAt"] = Value::Null,
+            _ => {
+                value.as_object_mut().unwrap().remove("smtpCode");
+                value.as_object_mut().unwrap().remove("capability");
+                match label {
+                    "unknown" => {
+                        value["status"] = json!("unknown");
+                        value["code"] = json!("transport_timeout");
+                    }
+                    "retryable" => {
+                        value["status"] = json!("retryable_failure");
+                        value["code"] = json!("smtp_temporary_rejection");
+                    }
+                    "terminal" => {
+                        value["status"] = json!("terminal_failure");
+                        value["code"] = json!("smtp_permanent_rejection");
+                    }
+                    _ => {
+                        value["status"] = json!("captured");
+                        value["capability"] = json!("test_capture");
+                        value["captureId"] = json!("fixture");
+                    }
+                }
+            }
+        }
+        input.outcome = serde_json::from_value(value.clone()).unwrap();
+        input.clock_decision.as_mut().unwrap()["outcomeSha256"] =
+            json!(stack_common_hash::canonical_json_hash(&value).unwrap());
+        if label == "unobserved" {
+            assert!(policy.capture_notice_send(&prior, input).is_err());
+            continue;
+        }
+        let input = record_notice_callback(
+            &mut runtime,
+            &store,
+            &id,
+            input,
+            "denial.callback",
+            "urn:test:denial.accepted",
+            1_800_000_000_000,
+        );
+        let before = retained_snapshot(&store, &id);
+        let before_effects = effects.load(Ordering::SeqCst);
+        // If a broken constructor ever returns checked evidence, feed it to
+        // the real protected transition so this control also detects an effect.
+        if let Ok(receipt) = policy.capture_notice_send(&store.load_record(&id).unwrap(), input) {
+            runtime=runtime.with_governance_policy(policy.clone(),
+                wos_runtime::governance::CapturedGovernanceEvidence {decisions:vec![],notices:vec![receipt]},
+                &[wos_core::model::notice_requirements::NoticeCapability::LocalSmtpTestCapture]).unwrap();
+        }
+        assert!(
+            matches!(
+                runtime.drain_once(&id),
+                Err(RuntimeError::GovernancePolicy(_))
+            ),
+            "{label}"
+        );
+        assert_eq!(effects.load(Ordering::SeqCst), before_effects, "{label}");
+        assert_eq!(retained_snapshot(&store, &id), before, "{label}");
     }
 }
 
@@ -728,11 +1049,10 @@ fn closed_appeal_rig_with_period(
     selection.kernel["governance"]["dueProcess"]["adverseDecisionPolicy"]["appealMechanism"]["appealWindow"] =
         json!(period);
     let policy = QualifiedGovernancePolicy::qualify(selection.clone()).unwrap();
-    let (mut runtime, mut store, id, _) =
+    let (mut runtime, store, id, _) =
         rig_selected(selection.kernel.clone(), Some(policy.clone()), evidence());
     let proposed = proposal(&runtime.drain_once(&id).unwrap());
-    let receipt = receipt_for_proposal(&mut store, &id, &proposed);
-    enqueue_receipt(&mut runtime, &id);
+    let receipt = receipt_for_proposal(&mut runtime, &store, &id, &policy, &proposed);
     runtime = runtime
         .with_governance_policy(
             policy.clone(),
@@ -908,7 +1228,9 @@ impl Clock for MovingClock {
     }
 }
 
-fn timeout_rig() -> (
+fn timer_rig(
+    elapsed: bool,
+) -> (
     WosRuntime,
     SharedInMemoryStore,
     String,
@@ -948,6 +1270,29 @@ fn timeout_rig() -> (
     selected["kernel"]["lifecycle"]["initialState"] = json!("requestPhoto");
     selected["kernel"]["lifecycle"]["states"]["requestPhoto"] = json!({"type":"atomic","onEntry":[{"action":"invokeService","serviceRef":"sendPhotoRequest","callbackPhase":"outbound"}],"transitions":[{"event":{"kind":"message","name":"photo.callback"},"target":"photoNoticeRecorded","actions":[{"action":"invokeService","serviceRef":"sendPhotoRequest","callbackPhase":"inbound"},{"action":"emitEvent","eventType":"photo.periodStarts"}]}]});
     selected["kernel"]["lifecycle"]["states"]["photoNoticeRecorded"] = json!({"type":"atomic","transitions":[{"event":{"kind":"message","name":"photo.periodStarts"},"target":"awaitingPhoto"}]});
+    if elapsed {
+        selected["rules"]["timeoutDecisions"] = json!([]);
+        selected["rules"]["noticeTimers"] = json!([{
+            "transition":{"from":"awaitingPhoto","to":"elapsedComplete","event":event},
+            "timerId":"photoResponse","duration":"P90D","requestNoticeBindingId":"sendPhotoRequest"
+        }]);
+        selected["kernel"]["lifecycle"]["states"]["elapsedComplete"] = json!({"type":"final"});
+        let state = &mut selected["kernel"]["lifecycle"]["states"]["awaitingPhoto"];
+        // Acceptance is retained without cancelling a separate minimum wait.
+        state["onEntry"][1]
+            .as_object_mut()
+            .unwrap()
+            .remove("completionEvent");
+        state["onEntry"][1]
+            .as_object_mut()
+            .unwrap()
+            .remove("expiresWithTimer");
+        state["transitions"][1]["target"] = json!("elapsedComplete");
+        state["transitions"][1]
+            .as_object_mut()
+            .unwrap()
+            .remove("tags");
+    }
     let selection: GovernancePolicySelection = serde_json::from_value(selected).unwrap();
     let policy = QualifiedGovernancePolicy::qualify(selection.clone()).unwrap();
     let clock = Arc::new(AtomicU64::new(original));
@@ -998,53 +1343,36 @@ fn timeout_rig() -> (
         )
         .unwrap();
     let id = process.process_id;
-    let request = store.load_record(&id).unwrap();
-    let subject = request
+    let prior = store.load_record(&id).unwrap();
+    let outbound = prior
         .process
-        .pending_callbacks
-        .keys()
-        .next()
+        .pending_outbound_events
+        .values()
+        .find(|v| v.binding_id == "sendPhotoRequest")
         .unwrap()
         .clone();
-    runtime.enqueue_event(&id,wos_core::instance::PendingEvent{origin:None,event:"photo.callback".into(),actor_id:None,data:Some(json!({"id":"original-photo-callback","source":"urn:test:photo-provider","specversion":"1.0","type":"urn:test:photo.accepted","subject":subject,"data":{"sentAt":timestamp(original)}})),timestamp:timestamp(original),idempotency_token:None}).unwrap();
-    runtime.drain_once(&id).unwrap();
-    runtime.drain_once(&id).unwrap();
-    let mut prior = store.load_record(&id).unwrap();
-    let mut callback = wos_core::ProvenanceRecord::blank(
-        &stack_common_typeid::testing::fixture_minter(),
-        ProvenanceKind::CallbackReceived,
+    let input = notice_send_input(
+        wos_runtime::DeferredOutboundEvent {
+            process_id: id.clone(),
+            event: outbound,
+        },
+        "Actual retained request to replace the photo within ninety calendar days",
+        original,
+        original,
     );
-    callback.timestamp = timestamp(original);
-    callback.actor_id = Some("actor:service:notice".into());
-    let date = stack_common_hash::canonical_json_hash(
-        &json!({"controlledOwnerFixture":"original-photo-clock"}),
-    )
-    .unwrap();
-    callback.data = Some(
-        json!({"bindingId":"sendPhotoRequest","data":{"delivery":{"status":"accepted",
-        "intentId":"original-photo-intent","attemptId":"original-photo-attempt"},"clock":{"governedSentAt":timestamp(original),"dateDecisionSha256":date}}}),
+    let input = record_notice_callback(
+        &mut runtime,
+        &store,
+        &id,
+        input,
+        "photo.callback",
+        "urn:test:photo.accepted",
+        original,
     );
-    let receipt = wos_runtime::governance::CapturedGovernanceNotice {
-        process_id: id.clone(),
-        case_ledger_id: prior.process.case_ledger_id.clone(),
-        binding_id: "sendPhotoRequest".into(),
-        intent_id: "original-photo-intent".into(),
-        attempt_id: "original-photo-attempt".into(),
-        callback_record_ref: callback.id.clone(),
-        callback_data_sha256: stack_common_hash::canonical_json_hash(
-            callback.data.as_ref().unwrap(),
-        )
-        .unwrap(),
-        date_decision_sha256: date,
-        governed_sent_at: timestamp(original),
-        human_readable: "Actual retained request to replace the photo within ninety calendar days"
-            .into(),
-        proposal_content_sha256: None,
-    };
-    prior.provenance_log.push(callback);
-    prior.process.provenance_position += 1;
-    let mut store = store;
-    store.save_record(prior).unwrap();
+    runtime.drain_once(&id).unwrap();
+    let receipt = policy
+        .capture_notice_send(&store.load_record(&id).unwrap(), input)
+        .unwrap();
     runtime = runtime
         .with_governance_policy(
             policy.clone(),
@@ -1056,6 +1384,131 @@ fn timeout_rig() -> (
         )
         .unwrap();
     (runtime, store, id, clock, effects)
+}
+
+fn timeout_rig() -> (
+    WosRuntime,
+    SharedInMemoryStore,
+    String,
+    Arc<AtomicU64>,
+    Arc<AtomicUsize>,
+) {
+    timer_rig(false)
+}
+
+#[test]
+fn elapsed_notice_period_allows_a_timely_accepted_correction_without_no_response_audit() {
+    let (mut runtime, store, id, clock, effects) = timer_rig(true);
+    let original = 1_800_000_000_000_u64;
+    clock.store(original + 89 * 86_400_000, Ordering::SeqCst);
+    let task = store
+        .load_record(&id)
+        .unwrap()
+        .process
+        .active_tasks
+        .iter()
+        .find(|task| task.task_ref == "replacePhoto")
+        .unwrap()
+        .task_id
+        .clone();
+    runtime
+        .submit_task_response(
+            &task,
+            integrity_canonical::ResponseJson::from_value(&json!({
+                "status":"completed","definitionUrl":"urn:test:review","definitionVersion":"1.0.0",
+                "data":{"approved":true,"photo":"accepted-correction"}
+            }))
+            .unwrap(),
+            "actor:human:applicant-3",
+            Some("timely-elapsed-photo"),
+        )
+        .unwrap();
+    assert!(
+        store
+            .load_record(&id)
+            .unwrap()
+            .artifacts
+            .values()
+            .any(|artifact| artifact.task_id == task
+                && artifact.kind == wos_runtime::TaskArtifactKind::Accepted)
+    );
+    clock.store(original + 90 * 86_400_000 - 1, Ordering::SeqCst);
+    assert_eq!(runtime.drain_once(&id).unwrap().processed_event, None);
+    assert_eq!(effects.load(Ordering::SeqCst), 0);
+    clock.store(original + 90 * 86_400_000, Ordering::SeqCst);
+    let outcome = runtime.drain_once(&id).unwrap();
+    assert!(outcome.processed_event.is_some());
+    assert_eq!(effects.load(Ordering::SeqCst), 1);
+    assert!(!outcome.provenance.iter().any(|record| matches!(
+        record.record_kind,
+        ProvenanceKind::ReasoningTierRecorded | ProvenanceKind::CounterfactualTierRecorded
+    )));
+    assert!(
+        outcome
+            .provenance
+            .iter()
+            .any(|record| record.record_kind == ProvenanceKind::TimerFired)
+    );
+}
+
+#[test]
+fn elapsed_notice_period_refuses_early_forged_and_tampered_timer_occurrences() {
+    for mutation in ["early", "duration", "origin", "deadline", "event"] {
+        let (mut runtime, mut store, id, clock, effects) = timer_rig(true);
+        let mut prior = store.load_record(&id).unwrap();
+        let timer = prior
+            .process
+            .timers
+            .iter_mut()
+            .find(|timer| timer.timer_id == "photoResponse")
+            .unwrap();
+        let event = timer.event.clone();
+        match mutation {
+            "duration" => timer.duration_iso = Some("P1D".into()),
+            "origin" => timer.created_at_ms = Some(1_800_000_000_001),
+            "deadline" => timer.deadline = timestamp(1_800_000_000_000 + 89 * 86_400_000),
+            "event" => timer.event = "foreign.timer".into(),
+            _ => (),
+        }
+        store.save_record(prior).unwrap();
+        clock.store(
+            1_800_000_000_000
+                + if mutation == "early" {
+                    1
+                } else {
+                    90 * 86_400_000
+                },
+            Ordering::SeqCst,
+        );
+        runtime
+            .enqueue_event(
+                &id,
+                wos_core::instance::PendingEvent {
+                    event,
+                    actor_id: None,
+                    data: Some(json!({"timerId":"photoResponse"})),
+                    timestamp: timestamp(clock.load(Ordering::SeqCst)),
+                    origin: None,
+                    idempotency_token: None,
+                },
+            )
+            .unwrap();
+        assert!(runtime.drain_once(&id).is_err(), "{mutation}");
+        assert_eq!(effects.load(Ordering::SeqCst), 0, "{mutation}");
+        assert!(
+            !store
+                .load_record(&id)
+                .unwrap()
+                .provenance_log
+                .iter()
+                .any(|record| matches!(
+                    record.record_kind,
+                    ProvenanceKind::ReasoningTierRecorded
+                        | ProvenanceKind::CounterfactualTierRecorded
+                )),
+            "{mutation}"
+        );
+    }
 }
 
 #[test]

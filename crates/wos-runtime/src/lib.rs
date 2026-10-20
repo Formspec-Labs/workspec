@@ -60,24 +60,25 @@ pub use runtime::reference_signature::{
 };
 #[doc(inline)]
 pub use runtime::{
+    CapturedIntakeSignature, CapturedSignatureSigner, Clock, CompanionPolicy,
+    CompletionRequirementKind, CreateProcessRequest, DismissTaskResult, DrainOnceResult,
+    HttpPostureResolver, IntakeSignatureSelection, MigrationMap, MigrationOutcome,
+    PersistDraftResult, PostureDeclaration, PostureResolver, ResolvedPostureDeclaration,
+    RuntimeError, RuntimeEventContext, RuntimeEventDecision, SIGNATURE_PROFILE_KEY_EXTENSION,
+    SIGNATURE_PROFILE_REF_EXTENSION, SIGNATURE_STEP_ID_EXTENSION, SignatureProfileDocument,
+    StaticPostureResolver, SystemClock, TaskSubmissionResult, TrellisCustodyAppendFailure,
+    TrellisCustodyAppendHandler, TrellisCustodyAppendOutcome, TrellisCustodyAppendStage,
+    TrellisCustodyAppender, WosRuntime, populate_provenance_record_fields, stamp_provenance,
+    task_outcome_metadata_matches, task_process_id, task_signature_metadata_supported,
+};
+#[doc(inline)]
+pub use runtime::{
     CaseProcessMembership, DeferredOutboundEvent, NativeCommandKey, NativeIntakeBindingOperation,
     NativeIntakeChange, NativePreparationError, NativePreparationFailure, NativePreparationPolicy,
     NativePresentationAcknowledgement, NativePresentationArtifactIdentity,
     NativePresentationInvocationOutcome, NativeProcessChange, NativeReadOnlyDependency,
     NativeRecoveryReference, NativeRuntimeCommand, NativeRuntimeOutcome, NativeRuntimeSnapshot,
     NativeTaskBindingOperation, PendingNativePresentationIntent, PreparedNativeCommand,
-};
-#[doc(inline)]
-pub use runtime::{
-    Clock, CompanionPolicy, CompletionRequirementKind, CreateProcessRequest, DismissTaskResult,
-    DrainOnceResult, HttpPostureResolver, MigrationMap, MigrationOutcome, PersistDraftResult,
-    PostureDeclaration, PostureResolver, ResolvedPostureDeclaration, RuntimeError,
-    RuntimeEventContext, RuntimeEventDecision, SIGNATURE_PROFILE_KEY_EXTENSION,
-    SIGNATURE_PROFILE_REF_EXTENSION, SIGNATURE_STEP_ID_EXTENSION, SignatureProfileDocument,
-    StaticPostureResolver, SystemClock, TaskSubmissionResult, TrellisCustodyAppendFailure,
-    TrellisCustodyAppendHandler, TrellisCustodyAppendOutcome, TrellisCustodyAppendStage,
-    TrellisCustodyAppender, WosRuntime, populate_provenance_record_fields, stamp_provenance,
-    task_outcome_metadata_matches, task_process_id,
 };
 #[doc(inline)]
 pub use store::{
