@@ -555,6 +555,24 @@ fn validate_dependency(
                 ..Default::default()
             };
             if dependency.role == DependencyRole::Mapping {
+                if candidate["intake"]["initialCaseMappingRef"].as_str()
+                    == Some(dependency.url.as_str())
+                {
+                    for (field, selected_value) in [
+                        ("definitionRef", &candidate["intake"]["contractRef"]),
+                        ("definitionVersion", &candidate["intake"]["contractVersion"]),
+                    ] {
+                        if &document[field] != selected_value || selected_value.is_null() {
+                            resolution.push(reference_error(
+                                &format!("/{field}"),
+                                format!(
+                                    "initial-case Mapping {} differs from intake {field}",
+                                    dependency.url
+                                ),
+                            ));
+                        }
+                    }
+                }
                 if let Some(source) = document.get("sourceSchema") {
                     if dependency.definition.is_some() {
                         resolution.push(reference_error(
@@ -632,6 +650,12 @@ fn validate_dependency(
                             )),
                         }
                         options.definition_document = Some(definition.document_json.clone());
+                        if candidate["intake"]["initialCaseMappingRef"].as_str()
+                            == Some(dependency.url.as_str())
+                        {
+                            options.mapping_source_context =
+                                Some(crate::intake_mapping::source_context());
+                        }
                     }
                 }
             }
@@ -751,6 +775,16 @@ fn resolve_workflow(
                 diagnostics,
             );
         }
+    }
+    if let Some(url) = workflow["intake"]["initialCaseMappingRef"].as_str() {
+        selected_reference(
+            DependencyRole::Mapping,
+            url,
+            None,
+            "/intake/initialCaseMappingRef",
+            dependencies,
+            diagnostics,
+        );
     }
     if let Some(bindings) = workflow["bindings"].as_array() {
         for (index, binding) in bindings.iter().enumerate() {

@@ -21,6 +21,7 @@
 
 mod diagnostic;
 mod document;
+pub mod intake_mapping;
 pub mod output;
 pub mod rules;
 pub mod studio_api;

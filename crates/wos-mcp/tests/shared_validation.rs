@@ -1,6 +1,8 @@
 //! Literal shared candidates exercise the actual owning API and MCP adapter.
 use serde_json::{Value, json};
 use wos_mcp::{dispatch::dispatch, registry::ProjectRegistry};
+#[path = "../../wos-conformance/tests/support/local_schemas.rs"]
+mod local_schemas;
 
 fn fixture(name: &str) -> Value {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -31,11 +33,7 @@ fn canonical_workflow_schema_enforces_embedded_hold_duration() {
     let current: Value =
         serde_json::from_str(include_str!("../../../schemas/wos-workflow.schema.json")).unwrap();
     let input = fixture("invalid-hold");
-    assert!(
-        !jsonschema::validator_for(&current)
-            .unwrap()
-            .is_valid(&input)
-    );
+    assert!(!local_schemas::validator(&current).is_valid(&input));
 }
 
 #[tokio::test]
@@ -210,5 +208,89 @@ async fn actual_dispatch_preserves_mapping_selection_and_native_formspec_report(
                         && finding.get("specRef").is_some())
             );
         }
+    }
+}
+
+#[tokio::test]
+async fn actual_dispatch_agrees_on_protected_intake_mapping_context() {
+    use wos_lint::studio_api::{ResolvedDependency, ValidationRequest, ValidationScope, validate};
+    for (source, version, definition_url, expected_status) in [
+        (
+            "handoff.responseRef",
+            "1.2.0",
+            "urn:test:definition",
+            "pass",
+        ),
+        ("response.data.name", "1.2.0", "urn:test:definition", "pass"),
+        (
+            "caseReservation.caseReference",
+            "1.2.0",
+            "urn:test:definition",
+            "pass",
+        ),
+        ("handoff.missing", "1.2.0", "urn:test:definition", "fail"),
+        (
+            "response.data.missing",
+            "1.2.0",
+            "urn:test:definition",
+            "fail",
+        ),
+        ("response.data.name", "1.3.0", "urn:test:definition", "fail"),
+        ("response.data.name", "1.2.0", "urn:foreign", "fail"),
+    ] {
+        let mut candidate = fixture("positive");
+        candidate["intake"] = json!({"contractRef":"urn:test:definition","contractVersion":"1.2.0","initialCaseMappingRef":"urn:test:initial-mapping"});
+        let dependencies = json!([
+            {"role":"definition","url":"urn:test:definition","version":"1.2.0","document_json":{"$formspec":"1.0","url":"urn:test:definition","version":"1.2.0","status":"draft","title":"Selected Definition","items":[{"key":"name","type":"field","dataType":"string","label":"Name"}]}},
+            {"role":"mapping","url":"urn:test:initial-mapping","version":"3.0.0","definition":{"url":"urn:test:definition","version":"1.2.0"},"document_json":{"$formspecMapping":"1.0","version":"3.0.0","definitionRef":definition_url,"definitionVersion":version,"targetSchema":{"format":"json"},"rules":[{"sourcePath":source,"targetPath":"result","transform":"preserve"}]}}
+        ]);
+        let selected: Vec<ResolvedDependency> =
+            serde_json::from_value(dependencies.clone()).unwrap();
+        let expected = serde_json::to_value(validate(ValidationRequest {
+            candidate: &candidate,
+            dependencies: &selected,
+            scope: ValidationScope::Project,
+        }))
+        .unwrap();
+        let original = candidate.clone();
+        let mut registry = ProjectRegistry::new();
+        let pid = registry
+            .insert(wos_authoring::WosProject::from_native_document(candidate).unwrap())
+            .unwrap()
+            .to_string();
+        let result = dispatch(
+            &mut registry,
+            "wos_lint",
+            &pid,
+            json!({"project_id":pid,"scope":"project","resolved_dependencies":dependencies}),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            result["validation"], expected,
+            "{source}, {version}, {definition_url}"
+        );
+        assert_eq!(result["validation"]["status"], expected_status);
+        let stage = result["validation"]["stages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|stage| stage["document"] == "urn:test:initial-mapping")
+            .unwrap();
+        assert_eq!(stage["required"], true);
+        if expected_status == "pass" {
+            assert_eq!(stage["formspec"]["valid"], true);
+        }
+        if source.ends_with("missing") {
+            assert_eq!(stage["status"], "fail");
+            assert!(
+                stage["formspec"]["diagnostics"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|d| d["code"] == "E1110" && d["path"] == "$.rules[0].sourcePath")
+            );
+        }
+        assert_eq!(registry.get(&pid).unwrap().native_snapshot(), original);
     }
 }

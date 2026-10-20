@@ -628,3 +628,119 @@ fn compensation_contract_errors_keep_exact_native_action_paths() {
         );
     }
 }
+
+#[test]
+fn initial_case_mapping_uses_protected_context_and_exact_definition_pins() {
+    let mut candidate = fixture("positive");
+    candidate["intake"] = json!({"contractRef":"urn:test:definition","contractVersion":"1.2.0","initialCaseMappingRef":"urn:test:mapping"});
+    let mut selected_mapping = mapping();
+    selected_mapping.document_json["definitionVersion"] = json!("1.2.0");
+    selected_mapping.document_json["rules"] = json!([
+        {"sourcePath":"handoff.responseRef","targetPath":"originalFilingRef","transform":"preserve"},
+        {"sourcePath":"response.data","targetPath":"originalAnswers","transform":"preserve"},
+        {"sourcePath":"response.data.name","targetPath":"name","transform":"preserve"},
+        {"sourcePath":"caseReservation.caseReference","targetPath":"referenceNumber","transform":"preserve"}
+    ]);
+    let deps = vec![definition(), selected_mapping.clone()];
+    let before = serde_json::to_value(&deps).unwrap();
+    let report = run(&candidate, &deps, ValidationScope::Project);
+    assert_eq!(report.status, CheckStatus::Pass, "{report:?}");
+    let native = report
+        .stages
+        .iter()
+        .find(|stage| stage.document.as_deref() == Some("urn:test:mapping"))
+        .unwrap();
+    assert!(native.required);
+    assert_eq!(native.status, CheckStatus::Pass);
+    assert!(
+        native.formspec.as_ref().unwrap()["valid"]
+            .as_bool()
+            .unwrap()
+    );
+    assert_eq!(serde_json::to_value(&deps).unwrap(), before);
+    for path in [
+        "signatureVerification.status",
+        "attachments[*].fieldPath",
+        "definition.hash",
+        "handoff.definitionRef.url",
+        "response.authoredSignatures[*].signedPayload.digest",
+    ] {
+        let mut metadata = selected_mapping.clone();
+        metadata.document_json["rules"][0]["sourcePath"] = json!(path);
+        let report = run(
+            &candidate,
+            &[definition(), metadata],
+            ValidationScope::Project,
+        );
+        assert_eq!(report.status, CheckStatus::Pass, "{path}: {report:?}");
+    }
+    for path in [
+        "handoff.missing",
+        "caseReservation.foreign",
+        "response.data.missing",
+        "response.datax.name",
+    ] {
+        let mut bad = selected_mapping.clone();
+        bad.document_json["rules"][0]["sourcePath"] = json!(path);
+        let report = run(&candidate, &[definition(), bad], ValidationScope::Project);
+        let native = report
+            .stages
+            .iter()
+            .find(|stage| stage.document.as_deref() == Some("urn:test:mapping"))
+            .unwrap();
+        assert_eq!(native.status, CheckStatus::Fail, "{path}: {report:?}");
+        assert!(
+            native.formspec.as_ref().unwrap()["diagnostics"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|d| d["code"] == "E1110" && d["path"] == "$.rules[0].sourcePath"),
+            "{native:?}"
+        );
+    }
+    for (field, value) in [
+        ("definitionRef", "urn:foreign"),
+        ("definitionVersion", "1.3.0"),
+        ("definitionVersion", "^1.0.0"),
+    ] {
+        let mut bad = selected_mapping.clone();
+        bad.document_json[field] = json!(value);
+        let report = run(&candidate, &[definition(), bad], ValidationScope::Project);
+        assert_eq!(report.status, CheckStatus::Fail, "{field}: {report:?}");
+        assert!(
+            report
+                .diagnostics
+                .iter()
+                .any(|d| d.rule_id == "WOS-REF-001"),
+            "{report:?}"
+        );
+    }
+    let mut ordinary = candidate.clone();
+    ordinary["intake"]
+        .as_object_mut()
+        .unwrap()
+        .remove("initialCaseMappingRef");
+    let report = run(&ordinary, &deps, ValidationScope::Project);
+    assert_eq!(report.status, CheckStatus::Fail);
+    assert!(
+        report
+            .stages
+            .iter()
+            .any(|stage| stage
+                .formspec
+                .as_ref()
+                .is_some_and(|native| native["diagnostics"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|d| d["code"] == "E1110")))
+    );
+    let mut missing = candidate.clone();
+    missing["intake"]["initialCaseMappingRef"] = json!("urn:absent");
+    assert!(
+        run(&missing, &deps, ValidationScope::Project)
+            .diagnostics
+            .iter()
+            .any(|d| d.path == "/intake/initialCaseMappingRef")
+    );
+}

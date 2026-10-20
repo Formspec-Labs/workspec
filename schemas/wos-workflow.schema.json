@@ -1137,7 +1137,22 @@
             "workflowInitiated",
             "publicIntake"
           ]
+        },
+        "initialCaseMappingRef": {
+          "type": "string",
+          "format": "uri",
+          "minLength": 1,
+          "description": "URI of the forward Formspec Mapping over protected accepted intake evidence plus host-owned caseReservation. Definition data is response.data; definitionRef and exact definitionVersion equal intake contractRef and contractVersion. The host validates original Definition item paths and protected input bindings before effects (Kernel §11.4.4).",
+          "examples": ["urn:agency:intake:initial-case-mapping"],
+          "x-wos": {
+            "openStringKind": "uri"
+          }
         }
+      },
+      "dependentRequired": {
+        "initialCaseMappingRef": [
+          "contractVersion"
+        ]
       }
     },
     "Actor": {
