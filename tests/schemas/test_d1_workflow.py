@@ -1,4 +1,4 @@
-"""Bounded D1 maintained-authoring artifact and native intake pin checks."""
+"""Historical D1 authoring evidence, intake pins and current-schema refusal."""
 import hashlib
 import json
 import runpy
@@ -12,11 +12,17 @@ def _artifact():
     return json.loads((WOS_SPEC_ROOT / 'examples/d1-passport.workflow.json').read_text())
 
 
-def test_workflow_conforms_and_binds_real_native_intake():
+def test_historical_workflow_has_precise_schema_refusal_and_native_intake_pins():
     artifact = _artifact()
     schema = json.loads((WOS_SPEC_ROOT / 'schemas/wos-workflow.schema.json').read_text())
     errors = list(Draft202012Validator(schema).iter_errors(artifact))
-    assert not errors, '\n'.join(str(error) for error in errors)
+    # Retained original bytes are evidence, not a current supported workflow.
+    # Current positive coverage lives in the native model/reference fixtures.
+    assert len(errors) == 1, '\n'.join(str(error) for error in errors)
+    error, = errors
+    assert error.validator == 'additionalProperties'
+    assert list(error.absolute_path) == ['governance', 'dueProcess']
+    assert "'explanationLevel'" in error.message
     source = WOS_SPEC_ROOT.parent / 'formspec-studio/demo-authoring/outputs/d1/v0.1.6'
     definition_path = source / 'passport-renewal/passport-renewal.definition.json'
     definition = json.loads(definition_path.read_text())
@@ -29,7 +35,7 @@ def test_workflow_conforms_and_binds_real_native_intake():
     assert pin['definitionHash'] != pin['rawDefinitionHash']
 
 
-def test_initial_review_is_human_without_placeholder_form_or_decision():
+def test_historical_initial_review_is_human_without_placeholder_form_or_decision():
     artifact = _artifact()
     assert artifact['impactLevel'] == 'rights-impacting'
     assert artifact['lifecycle']['initialState'] == 'awaitingReview'
@@ -51,7 +57,7 @@ def test_initial_review_is_human_without_placeholder_form_or_decision():
     assert pattern['description']
 
 
-def test_retained_log_proves_maintained_load_export_and_twin_replay():
+def test_historical_log_preserves_actual_load_export_and_twin_replay():
     path = WOS_SPEC_ROOT / 'examples/d1-passport.workflow.json'
     log = json.loads((WOS_SPEC_ROOT / 'examples/d1-passport.authoring-log.json').read_text())
     assert log['deterministicReplay'] is True
@@ -96,7 +102,7 @@ def test_atomic_normalization_omits_only_empty_structural_defaults():
             functions['omit_null_defaults'](invalid, [])
 
 
-def test_custody_is_an_explicit_first_slice_declaration():
+def test_historical_custody_is_an_explicit_first_slice_declaration():
     artifact = _artifact()
     assert artifact['custody'] == {'anchorRequirements': []}
     posture = artifact['extensions']['x-d1-custody-posture']

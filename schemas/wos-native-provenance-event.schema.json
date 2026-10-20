@@ -31,6 +31,56 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "required": [
+              "recordKind"
+            ],
+            "properties": {
+              "recordKind": {
+                "const": "reasoningTierRecorded"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "auditLayer": {
+                "const": "reasoning"
+              },
+              "data": {
+                "$ref": "#/$defs/ReasoningEvidence"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "recordKind"
+            ],
+            "properties": {
+              "recordKind": {
+                "const": "counterfactualTierRecorded"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "auditLayer": {
+                "const": "counterfactual"
+              },
+              "data": {
+                "$ref": "#/$defs/CounterfactualEvidence"
+              }
+            }
+          }
         }
       ],
       "required": [
@@ -299,7 +349,9 @@
             "callbackPending",
             "arazzoStep",
             "toolInvoked",
-            "policyDecision"
+            "policyDecision",
+            "reasoningTierRecorded",
+            "counterfactualTierRecorded"
           ]
         },
         "auditLayer": {
@@ -453,6 +505,377 @@
       ],
       "x-wos": {
         "open-enum": true
+      }
+    },
+    "RuleReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Reference to an authoritative rule applied in a decision. Mirrors `wos-workflow.schema.json#/$defs/RuleReference` (governance S6.2). Inlined at the API layer so codegen does not need a cross-schema resolver; structurally aligned so the API projection is byte-compatible with the kernel definition.",
+      "x-wos": {
+        "mirror": {
+          "source": "wos-workflow.schema.json",
+          "path": "$defs/RuleReference"
+        }
+      },
+      "required": [
+        "ruleId"
+      ],
+      "properties": {
+        "ruleId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Rule identifier (statute section, regulation paragraph, policy ID).",
+          "examples": [
+            "42-cfr-435-916",
+            "snap-eligibility-rule-3.2"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable summary of the rule.",
+          "examples": [
+            "Annual renewal of eligibility required for continued benefit receipt."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "sourceAuthority": {
+          "$ref": "#/$defs/SourceAuthority",
+          "description": "Authority rank (statute > regulation > policy > guideline)."
+        },
+        "citation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Formal citation to the source document.",
+          "examples": [
+            "42 CFR \u00a7 435.916"
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        }
+      }
+    },
+    "SourceAuthority": {
+      "type": "string",
+      "enum": [
+        "statute",
+        "regulation",
+        "policy",
+        "guideline"
+      ],
+      "description": "Authority rank for an applied rule (governance S6.2). Closed taxonomy (ADR 0082 D-12). `type: string` matches the kernel `wos-workflow.schema.json#/$defs/RuleReference.properties.sourceAuthority` projection.",
+      "examples": [
+        "statute",
+        "regulation"
+      ]
+    },
+    "EvidenceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Reference to a piece of evidence consulted in a Reasoning-tier record. Mirrors `wos-workflow.schema.json#/$defs/EvidenceReference` (governance S6.2). At least one of `caseFieldPath` or `uri` MUST be present so the evidence is locatable; the `anyOf` constraint is a load-bearing structural pin enforced by Gate 6 byte-parity (PLN-0403 path b).",
+      "x-wos": {
+        "mirror": {
+          "source": "wos-workflow.schema.json",
+          "path": "$defs/EvidenceReference"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "anyOf": [
+        {
+          "required": [
+            "caseFieldPath"
+          ]
+        },
+        {
+          "required": [
+            "uri"
+          ]
+        }
+      ],
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/EvidenceKind",
+          "description": "What this reference points to."
+        },
+        "caseFieldPath": {
+          "type": "string",
+          "minLength": 1,
+          "description": "JSON pointer / dotted path into the case file (when `kind` is `caseField`).",
+          "examples": [
+            "/medical/recentEvidence/2026-03-14"
+          ],
+          "x-wos": {
+            "openStringKind": "pathExpression"
+          }
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri",
+          "minLength": 1,
+          "description": "URI of the external document or record (when `kind` is `document` or `externalRecord`).",
+          "examples": [
+            "https://agency.gov/cases/12345/attachments/MED-007.pdf"
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          }
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Short human-readable description of what this evidence shows.",
+          "examples": [
+            "Updated medical assessment from treating physician dated 2026-03-14."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        }
+      }
+    },
+    "EvidenceKind": {
+      "type": "string",
+      "enum": [
+        "caseField",
+        "document",
+        "fact",
+        "externalRecord"
+      ],
+      "description": "Kind of evidence cited in a Reasoning-tier record (governance S6.2). Closed taxonomy. `type: string` matches the kernel `wos-workflow.schema.json#/$defs/EvidenceReference.properties.kind` projection.",
+      "examples": [
+        "caseField",
+        "document"
+      ]
+    },
+    "CriterionResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Single criterion check recorded in a Reasoning-tier record (governance S6.2).",
+      "required": [
+        "criterion",
+        "satisfied"
+      ],
+      "properties": {
+        "criterion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier or short label for the criterion that was checked.",
+          "examples": [
+            "incomeUnderThreshold"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "satisfied": {
+          "type": "boolean",
+          "description": "True when the criterion was satisfied by the case facts."
+        },
+        "detail": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional human-readable detail for the criterion result.",
+          "examples": [
+            "Reported income $17,500 below SNAP threshold $20,000."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        }
+      }
+    },
+    "Counterfactual": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Single counterfactual entry recorded in a Counterfactual-tier record (governance S6.4).",
+      "required": [
+        "polarity",
+        "factor",
+        "effect"
+      ],
+      "properties": {
+        "polarity": {
+          "$ref": "#/$defs/CounterfactualPolarity",
+          "description": "Whether this counterfactual is positive (would change outcome) or negative (did not affect outcome)."
+        },
+        "factor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Short identifier or label for the factor.",
+          "examples": [
+            "incomeReduction",
+            "applicantRace"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "effect": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable description of the counterfactual effect or non-effect.",
+          "examples": [
+            "If reported income were $1,500 lower, applicant would qualify.",
+            "Applicant race did not factor into the eligibility decision."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        }
+      }
+    },
+    "CounterfactualPolarity": {
+      "enum": [
+        "positive",
+        "negative"
+      ],
+      "description": "Counterfactual polarity (governance S6.4). `positive` records controllable factors that would change the outcome; `negative` records irrelevant factors that did not affect the outcome.",
+      "examples": [
+        "positive"
+      ]
+    },
+    "ReasoningEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "factsRecordRef",
+        "snapshotSha256",
+        "sourceRef",
+        "reason",
+        "rulesApplied",
+        "evidenceConsulted",
+        "criteriaChecked"
+      ],
+      "properties": {
+        "factsRecordRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "snapshotSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "sourceRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rulesApplied": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/RuleReference"
+          }
+        },
+        "evidenceConsulted": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/EvidenceReference"
+          }
+        },
+        "criteriaChecked": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/CriterionResult"
+          }
+        },
+        "adverseNotice": {
+          "$ref": "#/$defs/AdverseNoticeProposal"
+        }
+      }
+    },
+    "CounterfactualEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "factsRecordRef",
+        "snapshotSha256",
+        "sourceRef",
+        "positiveCounterfactuals",
+        "negativeCounterfactuals"
+      ],
+      "properties": {
+        "factsRecordRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "snapshotSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "sourceRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "positiveCounterfactuals": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/Counterfactual"
+          }
+        },
+        "negativeCounterfactuals": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/Counterfactual"
+          }
+        }
+      }
+    },
+    "AdverseNoticeProposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "factsRecordRef",
+        "snapshotSha256",
+        "templateKey",
+        "templateSha256",
+        "machineReadable",
+        "humanReadable",
+        "contentSha256"
+      ],
+      "properties": {
+        "factsRecordRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "snapshotSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "templateKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "templateSha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "machineReadable": {
+          "type": "object"
+        },
+        "humanReadable": {
+          "type": "string",
+          "minLength": 1
+        },
+        "contentSha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
       }
     }
   }

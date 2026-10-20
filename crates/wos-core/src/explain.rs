@@ -89,10 +89,15 @@ pub enum CounterfactualKind {
 ///
 /// # Provenance Record Format
 ///
-/// Records are expected to carry tier and relation data in their `data` field:
+/// Reference records carry tier and relation data in their `data` field:
 ///
 /// - Reasoning: `{ "tier": "reasoning", "relatedTransition": "<id>", "ruleId": "...", "authority": "...", "description": "...", "timestamp": "..." }`
 /// - Counterfactual: `{ "tier": "counterfactual", "relatedTransition": "<id>", "type": "positive"|"negative", "factor": "...", "description": "..." }`
+///
+/// Human `ReasoningTierRecorded` and `CounterfactualTierRecorded` records instead
+/// carry typed evidence associated by `factsRecordRef`. Malformed typed payloads
+/// are omitted without falling through to reference parsing. This summarizes
+/// retained judgments; it does not validate their source or causal correctness.
 ///
 /// # Spec Reference
 ///
@@ -111,6 +116,67 @@ pub fn assemble_explanation(
         let Some(data) = &record.data else {
             continue;
         };
+
+        // Dedicated runtime records retain the canonical structured evidence.
+        // Existing relatedTransition records retain their separate interpretation.
+        if record.record_kind == wos_events::ProvenanceKind::ReasoningTierRecorded {
+            if let Ok(evidence) =
+                serde_json::from_value::<wos_events::governance::ReasoningEvidence>(data.clone())
+                && evidence.facts_record_ref == transition_id
+            {
+                for rule in evidence.rules_applied {
+                    reasoning.push(ReasoningRecord {
+                        rule_id: rule.rule_id,
+                        authority: rule.source_authority,
+                        description: evidence.reason.clone(),
+                        timestamp: record.timestamp.clone(),
+                    });
+                }
+            }
+            continue;
+        }
+        if record.record_kind == wos_events::ProvenanceKind::CounterfactualTierRecorded {
+            if let Ok(evidence) = serde_json::from_value::<
+                wos_events::governance::CounterfactualEvidence,
+            >(data.clone())
+                && evidence.facts_record_ref == transition_id
+            {
+                for (records, kind) in [
+                    (
+                        evidence.positive_counterfactuals,
+                        CounterfactualKind::Positive,
+                    ),
+                    (
+                        evidence.negative_counterfactuals,
+                        CounterfactualKind::Negative,
+                    ),
+                ] {
+                    for record in records {
+                        let expected = match kind {
+                            CounterfactualKind::Positive => {
+                                wos_events::governance::CounterfactualPolarity::Positive
+                            }
+                            CounterfactualKind::Negative => {
+                                wos_events::governance::CounterfactualPolarity::Negative
+                            }
+                        };
+                        if record.polarity != expected {
+                            continue;
+                        }
+                        let item = CounterfactualRecord {
+                            factor: record.factor,
+                            description: record.effect,
+                            kind,
+                        };
+                        match kind {
+                            CounterfactualKind::Positive => positive_counterfactual.push(item),
+                            CounterfactualKind::Negative => negative_counterfactual.push(item),
+                        }
+                    }
+                }
+            }
+            continue;
+        }
 
         // Check if this record is related to our transition.
         let related_transition = data
@@ -601,3 +667,6 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod alignment_tests;

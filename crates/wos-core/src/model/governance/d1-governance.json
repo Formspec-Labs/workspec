@@ -1,0 +1,98 @@
+{
+  "dueProcess": {
+    "adverseDecisionPolicy": {
+      "noticeRequired": true,
+      "noticeTiming": "beforeEffective",
+      "noticeTemplateKey": "d1IndividualizedAdverseEn",
+      "explanationLevel": "individualized",
+      "counterfactualRequired": true,
+      "appealMechanism": {
+        "enabled": true,
+        "appealWindow": "P30D",
+        "reviewerConstraint": "independentFromOriginal",
+        "reviewerRoles": [
+          "appealReviewer"
+        ],
+        "continuationOfServices": false
+      }
+    }
+  },
+  "taskCatalog": [
+    {
+      "id": "reviewApplication",
+      "pattern": "reviewApplication",
+      "title": "Review passport application and record an action",
+      "description": "Review immutable original evidence and any photo correction. Request a new photo, approve or deny with an individualized reason.",
+      "verifiable": "partially",
+      "verificationMethod": "Compare the reason with retained original evidence and any separately accepted correction."
+    },
+    {
+      "id": "replacePhoto",
+      "pattern": "replacePhoto",
+      "title": "Replace the requested passport photo",
+      "description": "Submit only a replacement photo linked to the original filing. Prior application answers remain visible through the qualified retained-evidence reader and cannot be edited by this task.",
+      "verifiable": "partially",
+      "verificationMethod": "Compare the accepted replacement photo and original filing association."
+    },
+    {
+      "id": "disputeOutsideData",
+      "pattern": "disputeOutsideData",
+      "title": "Respond to the outside-data notice",
+      "description": "Read source, time and result of the two explicit mock checks; dispute an adverse result within the separate 10-calendar-day sample period.",
+      "verifiable": "partially",
+      "verificationMethod": "Retain the notice, qualifying sent receipt, response and reviewer reason; do not claim confirmation from unavailable data."
+    },
+    {
+      "id": "attachLatePhoto",
+      "pattern": "attachLatePhoto",
+      "title": "Attach a late requested photo to the closed case",
+      "description": "Use the exact application Definition and retained original data. Accepting late evidence keeps the case closed and does not reopen it.",
+      "verifiable": "partially",
+      "verificationMethod": "Retain late accepted response, source association, original answers and unchanged closed status."
+    },
+    {
+      "id": "considerReopening",
+      "pattern": "considerReopening",
+      "title": "Record whether to reopen the closed case",
+      "description": "Jordan as an authorized Adjudicator records an individualized reason before reopening; no applicant or integration role may perform this decision.",
+      "verifiable": "partially",
+      "verificationMethod": "Verify actual actor authority, completed reviewer task, nonblank reason and retained decision evidence."
+    },
+    {
+      "id": "fileAppeal",
+      "pattern": "fileAppeal",
+      "title": "File an administrative reconsideration request",
+      "description": "D1 demonstration policy: actual retained original notice, attributable filing and independent current authorized human review are required.",
+      "verifiable": "partially",
+      "verificationMethod": "Check the actual original proposal, qualified receipt, immutable filing deadline, actual assigned human and retained individual reasons."
+    },
+    {
+      "id": "reviewAppeal",
+      "pattern": "reviewAppeal",
+      "title": "Independently reconsider the original decision",
+      "description": "D1 demonstration policy: actual retained original notice, attributable filing and independent current authorized human review are required.",
+      "verifiable": "partially",
+      "verificationMethod": "Check the actual original proposal, qualified receipt, immutable filing deadline, actual assigned human and retained individual reasons."
+    },
+    {
+      "id": "reviewReturnedApplication",
+      "pattern": "reviewReturnedApplication",
+      "title": "Review the accepted correction and retained original application",
+      "description": "Review immutable original evidence and any photo correction. Request a new photo, approve or deny with an individualized reason.",
+      "verifiable": "partially",
+      "verificationMethod": "Compare the reason with retained original evidence and any separately accepted correction."
+    }
+  ],
+  "audit": {
+    "reasoningTier": {
+      "requiredForTags": [
+        "determination"
+      ]
+    },
+    "counterfactualTier": {
+      "requiredForTags": [
+        "adverse-decision"
+      ]
+    }
+  }
+}

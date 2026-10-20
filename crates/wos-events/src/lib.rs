@@ -12,6 +12,7 @@ use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub mod custody;
+pub mod governance;
 mod native_provenance;
 pub mod provenance;
 

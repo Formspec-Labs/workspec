@@ -124,6 +124,7 @@ pub fn check_governance(
         audit: AuditConfig {
             reasoning_tier: reasoning.and_then(Result::ok),
             counterfactual_tier: counterfactual.and_then(Result::ok),
+            extensions: HashMap::new(),
         },
     }
 }

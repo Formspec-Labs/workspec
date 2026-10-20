@@ -2293,13 +2293,15 @@
       "description": "Embedded due-process, review, and pipeline governance. Required for rights-impacting and safety-impacting impactLevel. Was wos-workflow-governance.schema.json plus wos-policy-parameters.schema.json plus wos-due-process.schema.json plus wos-assertion-gate.schema.json.",
       "properties": {
         "dueProcess": {
+          "$ref": "#/$defs/DueProcess",
           "type": "object",
           "$comment": "Notice, opportunity to be heard, appeal mechanism, adverse-decision policy.",
           "description": "Due-process policy block covering notice, explanation, appeal, counterfactual, and continuation-of-services requirements.",
           "examples": [
             {
               "adverseDecisionPolicy": {
-                "noticeRequired": true
+                "noticeRequired": true,
+                "noticeTemplateKey": "adverseDecisionNotice"
               }
             }
           ]

@@ -136,6 +136,10 @@ pub enum ProvenanceKind {
     AgentProvenanceAnnotation,
     AgentVersionChange,
     NarrativeTierRecorded,
+    /// Attributable reasoning tied to an actual determination Facts record.
+    ReasoningTierRecorded,
+    /// Human counterfactual judgment tied to the same Facts record.
+    CounterfactualTierRecorded,
     ConstraintTamperBlocked,
     DriftReclassification,
     AgentStateTransition,

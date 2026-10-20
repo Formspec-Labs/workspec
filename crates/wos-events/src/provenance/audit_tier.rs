@@ -39,8 +39,8 @@ impl From<K> for ProvenanceAuditTier {
             // Narrative tier (SP §5.4): the sole variant carrying narrative-layer
             // annotations today.
             K::NarrativeTierRecorded => Self::Narrative,
-            K::DeterminationReasoning => Self::Reasoning,
-            K::DeterminationCounterfactual => Self::Counterfactual,
+            K::DeterminationReasoning | K::ReasoningTierRecorded => Self::Reasoning,
+            K::DeterminationCounterfactual | K::CounterfactualTierRecorded => Self::Counterfactual,
 
             // Facts tier (SP §5.4): every other variant records an observable
             // fact about workflow execution. Deliberately enumerated rather than

@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-"""Replay maintained WOS MCP authoring for the bounded D1 intake workflow.
+"""Historical reproducer for the original bounded D1 intake workflow.
 
-This client authors configuration only. It creates no cases and runs no engine.
-The explicit supplement covers fields without an MCP editing tool. The final
-artifact comes from maintained load/export; omission of emitted null defaults
-is logged separately and never changes an authored value.
+This script records the original tool dialect and authored shape; it is not a
+current authoring entry point. Current validation rejects the historical
+dueProcess.explanationLevel placement, and the current graph check rejects its
+stranded review state. Preserve the retained artifact and actual authoring log.
+Historical reproduction requires the originally selected MCP implementation.
+
+The client creates no cases and runs no engine. Its explicit supplement covers
+fields without an editing tool in that original implementation. Omission of
+emitted null defaults is logged separately and never changes an authored value.
 """
 from __future__ import annotations
 

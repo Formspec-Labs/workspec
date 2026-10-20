@@ -10,6 +10,7 @@
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
+use std::sync::OnceLock;
 
 /// Governance content — the embedded `governance` block of a $wosWorkflow
 /// document per ADR 0076 D-1. Was a standalone document with
@@ -18,10 +19,10 @@ use std::collections::HashMap;
 /// Type name retained for consumer compatibility; the standalone-document
 /// framing is gone.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(remote = "Self", rename_all = "camelCase")]
 pub struct GovernanceDocument {
     /// Optional JSON Schema URI.
-    #[serde(rename = "$schema", default)]
+    #[serde(rename = "$schema", default, skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>,
 
     /// Kernel document this governance targets.
@@ -29,19 +30,19 @@ pub struct GovernanceDocument {
     pub target_workflow: String,
 
     /// Document version.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
 
     /// Human-readable title.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
 
     /// Human-readable description.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 
     /// Due process configuration (Governance S3).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub due_process: Option<DueProcess>,
 
     /// Review protocol bindings (Governance S4).
@@ -53,11 +54,11 @@ pub struct GovernanceDocument {
     pub pipelines: Vec<Pipeline>,
 
     /// Structured audit configuration (Governance S6).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub audit: Option<AuditConfig>,
 
     /// Quality controls (Governance S7).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quality_controls: Option<QualityControls>,
 
     /// Task catalog patterns (Governance S9).
@@ -81,6 +82,105 @@ pub struct GovernanceDocument {
     pub extensions: HashMap<String, serde_json::Value>,
 }
 
+// Remote Self derives the field decoder once, so validation cannot drift from a copied model.
+impl<'de> Deserialize<'de> for GovernanceDocument {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = serde_json::Value::deserialize(deserializer)?;
+        validate_governance(&value).map_err(D::Error::custom)?;
+        Self::deserialize(value).map_err(D::Error::custom)
+    }
+}
+
+impl Serialize for GovernanceDocument {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        Self::serialize(self, serializer)
+    }
+}
+
+/// Refusal to load a malformed governance block, without disclosing authored values.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum GovernanceShapeError {
+    /// The embedded owning schema failed to initialize.
+    #[error("embedded governance schema is invalid")]
+    Schema,
+    /// An authored value violates the owning schema at this JSON pointer.
+    #[error("governance schema violation at {0}")]
+    Instance(String),
+}
+
+impl GovernanceShapeError {
+    /// Returns the block-relative pointer, or the root for schema initialization failure.
+    #[must_use]
+    pub fn path(&self) -> &str {
+        match self {
+            Self::Schema => "",
+            Self::Instance(path) => path,
+        }
+    }
+}
+
+struct OfflineGovernanceSchemas;
+impl jsonschema::Retrieve for OfflineGovernanceSchemas {
+    fn retrieve(
+        &self,
+        uri: &jsonschema::Uri<String>,
+    ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+        match uri.as_str() {
+            "https://wos-spec.org/schemas/wos-reference-due-process.schema.json" => {
+                Ok(serde_json::from_str(include_str!(
+                    "../../../../schemas/wos-reference-due-process.schema.json"
+                ))?)
+            }
+            "https://wos-spec.org/schemas/wos-workflow.schema.json"
+            | "https://wos-spec.org/schemas/workflow/1.0" => Ok(serde_json::from_str(
+                include_str!("../../../../schemas/wos-workflow.schema.json"),
+            )?),
+            _ => Err(std::io::Error::other("schema resource unavailable offline").into()),
+        }
+    }
+}
+
+/// Validates an original governance block against the embedded owning schema.
+///
+/// Only Governance and its reachable local definitions apply, not workflow-required fields.
+/// This never replaces or fills defaults in the caller's JSON.
+///
+/// # Errors
+/// Returns a location-only refusal for malformed data or an invalid embedded schema.
+pub fn validate_governance(value: &serde_json::Value) -> Result<(), GovernanceShapeError> {
+    static VALIDATOR: OnceLock<Result<jsonschema::Validator, GovernanceShapeError>> =
+        OnceLock::new();
+    let validator = VALIDATOR
+        .get_or_init(|| {
+            let owner: serde_json::Value =
+                serde_json::from_str(include_str!("../../../../schemas/wos-workflow.schema.json"))
+                    .map_err(|_| GovernanceShapeError::Schema)?;
+            let schema = serde_json::json!({
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "$ref": "#/$defs/Governance",
+                "$defs": owner["$defs"],
+            });
+            jsonschema::options()
+                .should_validate_formats(true)
+                .with_retriever(OfflineGovernanceSchemas)
+                .build(&schema)
+                .map_err(|_| GovernanceShapeError::Schema)
+        })
+        .as_ref()
+        .map_err(Clone::clone)?;
+    validator
+        .validate(value)
+        .map_err(|error| GovernanceShapeError::Instance(error.instance_path().to_string()))
+}
+
+fn default_reasoning_tags() -> Vec<String> {
+    vec!["determination".to_owned()]
+}
+
+fn default_counterfactual_tags() -> Vec<String> {
+    vec!["adverse-decision".to_owned()]
+}
+
 fn default_max_delegation_depth() -> u32 {
     1
 }
@@ -93,12 +193,16 @@ pub struct DueProcess {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub execution: Option<super::due_process::DueProcessExecution>,
     /// FEL expression scoping when this policy applies.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scope: Option<String>,
 
     /// Adverse decision policy.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub adverse_decision_policy: Option<AdverseDecisionPolicy>,
+
+    /// Vendor extension values retained at their original x- keys.
+    #[serde(default, flatten)]
+    pub extensions: HashMap<String, serde_json::Value>,
 }
 
 /// Adverse decision policy (Governance S3.1).
@@ -110,19 +214,19 @@ pub struct AdverseDecisionPolicy {
     pub notice_required: bool,
 
     /// When notice is delivered relative to the decision.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub notice_timing: Option<NoticeTiming>,
 
     /// Minimum delay between notice and effect (ISO 8601).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub notice_grace_period: Option<String>,
 
     /// Notification template key.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub notice_template_key: Option<String>,
 
     /// Required explanation level.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub explanation_level: Option<ExplanationLevel>,
 
     /// Whether counterfactual explanation is required.
@@ -130,8 +234,12 @@ pub struct AdverseDecisionPolicy {
     pub counterfactual_required: bool,
 
     /// Appeal mechanism configuration.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub appeal_mechanism: Option<AppealMechanism>,
+
+    /// Vendor extension values retained at their original x- keys.
+    #[serde(default, flatten)]
+    pub extensions: HashMap<String, serde_json::Value>,
 }
 
 /// Notice timing relative to adverse decision.
@@ -161,11 +269,11 @@ pub struct AppealMechanism {
     pub enabled: bool,
 
     /// Appeal window duration (ISO 8601).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub appeal_window: Option<String>,
 
     /// Reviewer constraint description.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reviewer_constraint: Option<String>,
 
     /// Allowed reviewer roles.
@@ -176,9 +284,17 @@ pub struct AppealMechanism {
     #[serde(default)]
     pub continuation_of_services: bool,
 
+    /// Reference to the maintained continuation policy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub continuation_policy_ref: Option<String>,
+
     /// Scope of continuation.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub continuation_scope: Option<String>,
+
+    /// Vendor extension values retained at their original x- keys.
+    #[serde(default, flatten)]
+    pub extensions: HashMap<String, serde_json::Value>,
 }
 
 /// Review protocol binding (Governance S4).
@@ -329,12 +445,16 @@ pub enum RejectionPolicy {
 #[serde(rename_all = "camelCase")]
 pub struct AuditConfig {
     /// Reasoning tier configuration.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_tier: Option<ReasoningTierConfig>,
 
     /// Counterfactual tier configuration.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub counterfactual_tier: Option<CounterfactualTierConfig>,
+
+    /// Vendor extension values retained at their original x- keys.
+    #[serde(default, flatten)]
+    pub extensions: HashMap<String, serde_json::Value>,
 }
 
 /// Reasoning tier configuration (Governance S6.2).
@@ -342,12 +462,16 @@ pub struct AuditConfig {
 #[serde(rename_all = "camelCase")]
 pub struct ReasoningTierConfig {
     /// Tags that require reasoning tier records.
-    #[serde(default)]
+    #[serde(default = "default_reasoning_tags")]
     pub required_for_tags: Vec<String>,
 
     /// Whether decision requirements are mandatory.
     #[serde(default)]
     pub require_decision_requirements: bool,
+
+    /// Vendor extension values retained at their original x- keys.
+    #[serde(default, flatten)]
+    pub extensions: HashMap<String, serde_json::Value>,
 }
 
 /// Counterfactual tier configuration (Governance S6.4).
@@ -355,12 +479,16 @@ pub struct ReasoningTierConfig {
 #[serde(rename_all = "camelCase")]
 pub struct CounterfactualTierConfig {
     /// Tags that require counterfactual tier records.
-    #[serde(default)]
+    #[serde(default = "default_counterfactual_tags")]
     pub required_for_tags: Vec<String>,
 
     /// Whether negative counterfactuals must address protected characteristics.
     #[serde(default = "default_true")]
     pub require_protected_characteristics: bool,
+
+    /// Vendor extension values retained at their original x- keys.
+    #[serde(default, flatten)]
+    pub extensions: HashMap<String, serde_json::Value>,
 }
 
 fn default_true() -> bool {
@@ -678,47 +806,8 @@ pub enum TimeoutAction {
     Cancel,
 }
 
-/// Rule reference with authority ranking (Governance S6.2).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RuleReference {
-    /// Rule identifier.
-    pub rule_id: String,
+/// Shared rule and source-authority vocabulary for governance evidence.
+pub use wos_events::governance::{RuleReference, SourceAuthority};
 
-    /// Human-readable summary.
-    #[serde(default)]
-    pub description: Option<String>,
-
-    /// Authority level for explanation ordering.
-    #[serde(default)]
-    pub source_authority: Option<SourceAuthority>,
-
-    /// Formal citation.
-    #[serde(default)]
-    pub citation: Option<String>,
-}
-
-/// Source authority ranking (Governance S6.2).
-///
-/// Determines ordering in explanation assembly: statute (rank 1)
-/// through guideline (rank 4). Default: policy (rank 3).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum SourceAuthority {
-    Statute,
-    Regulation,
-    Policy,
-    Guideline,
-}
-
-impl SourceAuthority {
-    /// Numeric rank for sorting (lower = higher authority).
-    pub fn rank(self) -> u8 {
-        match self {
-            Self::Statute => 1,
-            Self::Regulation => 2,
-            Self::Policy => 3,
-            Self::Guideline => 4,
-        }
-    }
-}
+#[cfg(test)]
+mod alignment_tests;

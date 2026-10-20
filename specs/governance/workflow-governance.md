@@ -124,6 +124,8 @@ The affected individual MUST receive notice before the decision takes effect. Th
 
 A `noticeGracePeriod` (ISO 8601 duration) defines the minimum delay between notice delivery and the decision taking effect.
 
+Transport acceptance, recipient receipt or acknowledgment, and qualification of a business clock are distinct observations. The selected notice execution MUST declare the evidence sufficient for its particular consequence and its immutable deadline anchor. SMTP acceptance or local capture MUST NOT establish recipient receipt. An execution lacking the required observation MUST refuse the consequence before effect; a test selection MUST retain its explicit simulation evidence. This distinction does not relax the requirement that the individual receive notice before adverse effect.
+
 Notice assembly is deterministic. An `adverse-decision` transition records a proposed determination separately from applying its adverse consequence. The processor MUST retain the original pre-transition Facts-tier `caseFileSnapshot`, its digest, the actual determining transition location and firing provenance ID, and the determination time. The transition MUST NOT itself apply an adverse consequence before required notice, signature, explanation, appeal and continuation checks pass.
 
 When notice is required, the processor MUST assemble its authoritative content after any required approval, from that retained determination, its actual assembled explanation, selected appeal/continuation policy and the Notification Template referenced by `noticeTemplateKey`. Determination time, immutable notice issue time, transport acceptance time and qualified delivery/receipt time are distinct facts. A concrete printed appeal deadline MUST use an explicitly selected computable anchor; a processor MUST NOT infer future receipt time, substitute a retry timestamp or derive the deadline from the determination time merely because that transition fired earlier. Identical retained inputs, selected anchors and templates MUST produce byte-identical machine-readable content and human-readable prose. Model-generated Narrative-tier content MUST NOT be the authoritative notice.
@@ -176,6 +178,8 @@ Due process, review protocol bindings, and hold policies MAY include a `scope` p
 When a transition tagged `adverse-decision` (Kernel S4.12) fires, the processor MUST assemble a structured explanation from provenance. This explanation satisfies the due process requirement of §3.3 (individualized explanation) and §3.4 (counterfactual explanation) that affected individuals receive an individualized explanation of the decision.
 
 The assembly algorithm is deterministic -- two conformant processors MUST produce the same explanation structure from the same provenance log.
+
+Select records through their declared typed association: `relatedTransition` for native reference records and `factsRecordRef` for typed human records. Selection MUST resolve to the actual saved determining Facts record; a case identifier, equal event label or matching prose is insufficient. The following pseudocode shows the reference association; typed human records use their declared Facts reference while preserving the same authority and timestamp ordering.
 
 #### 3.8.1 Assembly Algorithm
 
@@ -334,7 +338,11 @@ Audit claims must be **testable** in the sense of Kernel §1.2 Design Goal 6 (ve
 
 ### 6.2 Reasoning Tier
 
-The Reasoning tier records how a decision was reached:
+The Reasoning tier records how a decision was reached.
+
+Reasoning records identify the actual determining Facts record and retained snapshot. Attributable human evidence retains its accepted task artifact, actual actor and selected evidence Mapping association. These associations require execution and source qualification; schema shape alone does not establish them.
+
+The structured fields are:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -367,6 +375,8 @@ Decision requirements are metadata declarations -- they record which inputs were
 ### 6.4 Counterfactual Tier
 
 The Counterfactual tier records what would change the outcome. REQUIRED for adverse decisions in `rights-impacting` workflows.
+
+Counterfactual records identify the actual determining Facts record and retained snapshot. Attributable human positive and negative statements describe the decision maker's judgment; they MUST NOT be represented as an evaluated alternative unless the selected native owner actually performed and retained that evaluation. The bounded reference profile retains its stricter evaluated-alternative requirements. Both forms retain their declared evidence meaning; neither substitutes for its required execution and source qualification.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|

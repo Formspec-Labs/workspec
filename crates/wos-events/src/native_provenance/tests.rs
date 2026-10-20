@@ -41,6 +41,13 @@ fn native_provenance_registry_parity_and_every_known_route() {
             None => {
                 assert!(entry.get("eventLiteral").is_none());
                 remaining.push(entry["literal"].clone());
+                if matches!(
+                    original.record_kind,
+                    ProvenanceKind::ReasoningTierRecorded
+                        | ProvenanceKind::CounterfactualTierRecorded
+                ) {
+                    original = human_record(original.record_kind);
+                }
                 let event = NativeProvenanceEvent::from_record(&original).unwrap();
                 assert_eq!(event.record_kind(), original.record_kind);
                 assert_eq!(event.record(), &serde_json::to_value(&original).unwrap());
@@ -48,8 +55,32 @@ fn native_provenance_registry_parity_and_every_known_route() {
             }
         }
     }
-    assert_eq!(canonical, 28);
-    assert_eq!(remaining.len(), 106);
+    let entries = registry["recordKinds"].as_array().unwrap();
+    assert_eq!(
+        canonical,
+        entries
+            .iter()
+            .filter(|entry| entry.get("eventLiteral").is_some())
+            .count()
+    );
+    assert_eq!(
+        canonical, 30,
+        "existing specialized routes remain unchanged"
+    );
+    assert_eq!(
+        entries.len(),
+        registry["totalCount"].as_u64().unwrap() as usize
+    );
+    assert_eq!(remaining.len(), entries.len() - canonical);
+    assert_eq!(remaining.len(), 108);
+    assert_eq!(registry["registryVersion"], "1.4.0");
+    assert_eq!(
+        registry["schemaValidatedCount"],
+        entries
+            .iter()
+            .filter(|entry| entry["schemaValidated"] == true)
+            .count()
+    );
     assert_eq!(
         schema["properties"]["record"]["properties"]["recordKind"]["enum"],
         Value::Array(remaining)
@@ -295,4 +326,163 @@ fn native_provenance_refuses_bytes_tags_and_trailing_input() {
     let mut bytes = json_to_dcbor_bytes(&payload(), &[]).unwrap();
     bytes.push(0);
     assert!(NativeProvenanceEvent::from_dcbor_slice(&bytes).is_err());
+}
+
+fn human_record(kind: ProvenanceKind) -> ProvenanceRecord {
+    let mut original = record();
+    original.record_kind = kind;
+    original.audit_layer = Some(crate::provenance::audit_layer_for_kind(kind).into());
+    original.data = Some(match kind {
+        ProvenanceKind::ReasoningTierRecorded => serde_json::json!({
+            "factsRecordRef":"actual-facts-id","snapshotSha256":"a".repeat(64),
+            "sourceRef":"accepted-task-artifact","reason":"This evidence does not meet the selected criterion.",
+            "rulesApplied":[{"ruleId":"rule:evidence","sourceAuthority":"regulation"}],
+            "evidenceConsulted":[{"kind":"caseField","caseFieldPath":"/evidence"}],
+            "criteriaChecked":[{"criterion":"sufficientEvidence","satisfied":false}],
+            "adverseNotice":{"factsRecordRef":"actual-facts-id","snapshotSha256":"a".repeat(64),
+                "templateKey":"decisionNotice","templateSha256":format!("sha256:{}","b".repeat(64)),
+                "machineReadable":{"reason":"The evidence does not meet the selected criterion."},
+                "humanReadable":"The evidence does not meet the selected criterion.",
+                "contentSha256":format!("sha256:{}","c".repeat(64))}}),
+        ProvenanceKind::CounterfactualTierRecorded => serde_json::json!({
+            "factsRecordRef":"actual-facts-id","snapshotSha256":"a".repeat(64),
+            "sourceRef":"accepted-task-artifact",
+            "positiveCounterfactuals":[{"polarity":"positive","factor":"evidence","effect":"Clear evidence would permit reconsideration."}],
+            "negativeCounterfactuals":[{"polarity":"negative","factor":"sex","effect":"Sex did not enter this assessment."}]}),
+        _ => panic!("human kind required"),
+    });
+    original
+}
+
+#[test]
+fn native_provenance_human_evidence_roundtrip_retains_business_event_and_data() {
+    for kind in [
+        ProvenanceKind::ReasoningTierRecorded,
+        ProvenanceKind::CounterfactualTierRecorded,
+    ] {
+        let original = human_record(kind);
+        assert_eq!(kind.canonical_event_literal(), None);
+        let value = serde_json::to_value(&original).unwrap();
+        let admitted = NativeProvenanceEvent::from_record(&original).unwrap();
+        assert_eq!(admitted.record(), &value);
+        assert_eq!(admitted.record()["event"], "original.trigger");
+        let bytes = json_to_dcbor_bytes(admitted.payload(), &[]).unwrap();
+        assert_eq!(
+            NativeProvenanceEvent::from_dcbor_slice(&bytes).unwrap(),
+            admitted
+        );
+        match kind {
+            ProvenanceKind::ReasoningTierRecorded => {
+                let typed: crate::governance::ReasoningEvidence =
+                    serde_json::from_value(value["data"].clone()).unwrap();
+                assert_eq!(serde_json::to_value(typed).unwrap(), value["data"]);
+            }
+            _ => {
+                let typed: crate::governance::CounterfactualEvidence =
+                    serde_json::from_value(value["data"].clone()).unwrap();
+                assert_eq!(serde_json::to_value(typed).unwrap(), value["data"]);
+            }
+        }
+    }
+}
+
+#[test]
+fn native_provenance_human_closed_shapes_and_original_association_fields_refuse() {
+    for kind in [
+        ProvenanceKind::ReasoningTierRecorded,
+        ProvenanceKind::CounterfactualTierRecorded,
+    ] {
+        let value = serde_json::json!({"record": human_record(kind)});
+        for key in ["factsRecordRef", "snapshotSha256", "sourceRef"] {
+            let mut bad = value.clone();
+            bad["record"]["data"].as_object_mut().unwrap().remove(key);
+            assert!(
+                NativeProvenanceEvent::from_json(&bad).is_err(),
+                "missing {key}"
+            );
+        }
+        for (pointer, replacement) in [
+            (
+                "/record/data/snapshotSha256",
+                serde_json::json!("sha256:wrong"),
+            ),
+            ("/record/data/sourceRef", serde_json::json!("")),
+            ("/record/auditLayer", serde_json::json!("facts")),
+            (
+                "/record/recordKind",
+                serde_json::json!("reasoningTierRecordedButUnknown"),
+            ),
+        ] {
+            let mut bad = value.clone();
+            *bad.pointer_mut(pointer).unwrap() = replacement;
+            assert!(NativeProvenanceEvent::from_json(&bad).is_err(), "{pointer}");
+        }
+        let mut bad = value.clone();
+        bad["record"]["data"]["undeclared"] = serde_json::json!(true);
+        assert!(NativeProvenanceEvent::from_json(&bad).is_err());
+    }
+    let reasoning =
+        serde_json::json!({"record":human_record(ProvenanceKind::ReasoningTierRecorded)});
+    for (pointer, replacement) in [
+        (
+            "/record/data/evidenceConsulted/0",
+            serde_json::json!({"kind":"document"}),
+        ),
+        (
+            "/record/data/evidenceConsulted/0",
+            serde_json::json!({"kind":"document","uri":"not a URI"}),
+        ),
+        (
+            "/record/data/adverseNotice/templateSha256",
+            serde_json::json!("b".repeat(64)),
+        ),
+        (
+            "/record/data/adverseNotice/contentSha256",
+            serde_json::json!("wrong"),
+        ),
+        (
+            "/record/data/adverseNotice/machineReadable",
+            serde_json::json!("not an object"),
+        ),
+    ] {
+        let mut bad = reasoning.clone();
+        *bad.pointer_mut(pointer).unwrap() = replacement;
+        assert!(NativeProvenanceEvent::from_json(&bad).is_err(), "{pointer}");
+    }
+    let mut counter =
+        serde_json::json!({"record":human_record(ProvenanceKind::CounterfactualTierRecorded)});
+    counter["record"]["data"]["positiveCounterfactuals"][0]["polarity"] =
+        serde_json::json!("unknown");
+    assert!(NativeProvenanceEvent::from_json(&counter).is_err());
+    assert!(
+        serde_json::from_value::<crate::governance::CounterfactualEvidence>(
+            counter["record"]["data"].clone()
+        )
+        .is_err()
+    );
+    // Changing the raw kind cannot reuse the opposite human payload.
+    let mut wrong = reasoning;
+    wrong["record"]["recordKind"] = serde_json::json!("counterfactualTierRecorded");
+    wrong["record"]["auditLayer"] = serde_json::json!("counterfactual");
+    assert!(NativeProvenanceEvent::from_json(&wrong).is_err());
+}
+
+#[test]
+fn native_provenance_shared_evidence_definitions_match_existing_api_owner() {
+    let native: Value = serde_json::from_str(SCHEMA).unwrap();
+    let api: Value = serde_json::from_str(include_str!(
+        "../../../../schemas/api/provenance.schema.json"
+    ))
+    .unwrap();
+    for name in [
+        "RuleReference",
+        "SourceAuthority",
+        "EvidenceReference",
+        "EvidenceKind",
+        "CriterionResult",
+        "Counterfactual",
+        "CounterfactualPolarity",
+    ] {
+        assert_eq!(native["$defs"][name], api["$defs"][name], "{name}");
+    }
 }
