@@ -97,7 +97,10 @@ impl WosRuntime {
             crate::governance::GovernanceResult::without_required_governance(context)?
         };
         result.validate_coverage(&context)?;
-        result.into_provenance(context.now_iso)
+        result.into_provenance(
+            &super::process_minter(context.proposed_process)?,
+            context.now_iso,
+        )
     }
 
     pub(super) fn validate_governance_output_bindings(

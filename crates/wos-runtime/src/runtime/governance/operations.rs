@@ -141,6 +141,8 @@ pub(super) fn apply(
     prospective: &[ProvenanceRecord],
     now: &str,
 ) -> Result<(GovernanceOutcome, Vec<ProvenanceRecord>), RefusalCode> {
+    let minter =
+        crate::runtime::process_minter(&record.process).map_err(|_| RefusalCode::StoreRejected)?;
     if state.operations.len() >= policy.limits.max_operations {
         return Err(RefusalCode::LimitReached);
     }
@@ -408,7 +410,7 @@ pub(super) fn apply(
                 (_, ContinuationChoice::Waive) => ContinuationStatus::Waived,
                 _ => ContinuationStatus::Frozen,
             };
-            let mut filed = ProvenanceRecord::blank(ProvenanceKind::AppealFiled);
+            let mut filed = ProvenanceRecord::blank(&minter, ProvenanceKind::AppealFiled);
             filed.actor_id = Some(actor.clone());
             filed.timestamp = now.into();
             filed.data = Some(
@@ -624,11 +626,12 @@ pub(super) fn apply(
                 .ok_or(RefusalCode::OverrideRejected)?;
             let prior_deadline = timer.deadline.clone();
             let new_deadline = add_days(&prior_deadline, *calendar_days)?;
-            let mut override_prov = ProvenanceRecord::blank(ProvenanceKind::OverrideRecorded);
+            let mut override_prov =
+                ProvenanceRecord::blank(&minter, ProvenanceKind::OverrideRecorded);
             override_prov.actor_id = Some(actor.clone());
             override_prov.timestamp = now.into();
             let override_record = OverrideRecord {
-                id: stack_common_typeid::mint_type_id(&record.process.tenant, "gov"),
+                id: minter.mint_governance_id(),
                 case_id: record.process.case_ledger_id.clone(),
                 rationale: OverrideRationale {
                     summary: rationale.clone(),

@@ -7,10 +7,9 @@
 //! C.0 (configuration + active_tasks.len parity) and C.1 (full DrainOnceResult shape +
 //! WorkflowProcess field parity) live here.
 
+use stack_common_typeid::testing::fixture_minter;
 use std::sync::{Arc, Mutex};
 
-use stack_common_typeid as typeid;
-use wos_core::ProvenanceRecord;
 use wos_core::instance::PendingEvent;
 use wos_runtime::restate_signature_fixture_runtime;
 use wos_runtime::runtime::CreateProcessRequest;
@@ -71,7 +70,7 @@ fn r6_sig013_tier3_conformance_negative_still_observable() {
 
 #[tokio::test]
 async fn r6_memory_parity_signature_start_drain_matches_reference_runtime() {
-    let process_id = typeid::mint_process_id();
+    let process_id = fixture_minter().mint_process_id();
     let req = signature_start_request(&process_id);
 
     let shared = SharedInMemoryStore(Arc::new(Mutex::new(InMemoryStore::new())));
@@ -125,7 +124,7 @@ async fn r6_memory_parity_signature_start_drain_matches_reference_runtime() {
 /// (`configuration`, `active_tasks` IDs, `pending_events` empty).
 #[tokio::test]
 async fn r6_c1_full_drain_result_shape_parity() {
-    let process_id = typeid::mint_process_id();
+    let process_id = fixture_minter().mint_process_id();
     let req = signature_start_request(&process_id);
 
     let shared = SharedInMemoryStore(Arc::new(Mutex::new(InMemoryStore::new())));
@@ -283,14 +282,9 @@ async fn r6_c1_full_drain_result_shape_parity() {
 }
 
 #[test]
-fn r6_seam_access_signer_fails_closed_and_renderer_is_operational() {
+fn r6_seam_access_renderer_is_operational() {
     let adapter = RestateRuntimeAdapter::new();
-    let signer = <RestateRuntimeAdapter as SeamAccess>::signer(&adapter);
     let renderer = <RestateRuntimeAdapter as SeamAccess>::renderer(&adapter);
-
-    let rec = ProvenanceRecord::state_transition("draft", "review", "start", Some("system"));
-    assert!(signer.sign(&rec).is_err());
-    assert!(signer.verify(&rec, &[1, 2, 3]).is_err());
 
     let out = renderer
         .render_explanation(&serde_json::json!({"ok": true}), "ignored")

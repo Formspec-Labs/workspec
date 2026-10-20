@@ -1303,8 +1303,7 @@ async fn generated_id_normalization_is_closed_and_retains_raw_relationships() {
     );
 
     let mut broken_copy = raw.clone();
-    broken_copy["attempts"][0]["provenance"][0]["id"] =
-        json!(wos_conformance::ProvenanceRecord::mint_id());
+    broken_copy["attempts"][0]["provenance"][0]["id"] = other["provenance"][0]["id"].clone();
     assert_ne!(
         semantic_native_report(&broken_copy),
         semantic_native_report(&raw),
@@ -1313,7 +1312,7 @@ async fn generated_id_normalization_is_closed_and_retains_raw_relationships() {
     let mut broken_firing = raw.clone();
     *broken_firing
         .pointer_mut("/attempts/0/drains/0/transitions/0/provenance_record_id")
-        .unwrap() = json!(wos_conformance::ProvenanceRecord::mint_id());
+        .unwrap() = other["provenance"][0]["id"].clone();
     assert_ne!(
         semantic_native_report(&broken_firing),
         semantic_native_report(&raw),

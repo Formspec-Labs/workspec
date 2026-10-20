@@ -760,6 +760,7 @@ class TestStalledInstanceStatus:
             "$wosProcess": "1.0",
             "processId": "sba-poc_process_01jqrpd32jf8xtx9qxkkv3rqsd",
             "caseLedgerId": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd",
+            "tenant": "sba-poc",
             "definitionUrl": "https://agency.gov/workflows/benefits",
             "definitionVersion": "1.0.0",
             "configuration": ["intake"],

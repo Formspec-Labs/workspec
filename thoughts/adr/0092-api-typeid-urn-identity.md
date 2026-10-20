@@ -72,7 +72,7 @@ A task does not need a `_task_` prefix — it lives at `/instances/{case_id}/tas
 
 `urn_scope_and_date()` (`instance_service.rs:131-139`, `task_service.rs:95-104`) — deleted. Scope and date extraction from the old URN is replaced by `typeid::extract_tenant()` and the UUIDv7 timestamp embedded in the TypeID suffix.
 
-The HTTP create handler default ID generation (`instances.rs:233-239`) stops generating free-form five-segment workflow-process URNs. When no `process_id` is supplied, the handler calls `typeid::mint_process_id()` and wraps the result with `urn:wos:`.
+The HTTP create handler default ID generation (`instances.rs:233-239`) stops generating free-form five-segment workflow-process URNs. When no `process_id` is supplied, the handler calls `typeid::mint_process_id()` and wraps the result with `urn:wos:`. *Implementation pointer: IDs are now minted by a tenant-bound `TypeIdMinter` in `stack-common-typeid` (no zero-argument `mint_*_id()`, no environment tenant); the byte format is unchanged.*
 
 ### D-4. `ActorRef` unchanged
 

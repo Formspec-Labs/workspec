@@ -86,7 +86,7 @@ pub fn continuous_reevaluate(
             //   - `data` carries the triggering mutation + cycles used for
             //     downstream tooling to locate the cycle.
             evaluator.record_provenance(ProvenanceRecord {
-                id: ProvenanceRecord::mint_id(),
+                id: ProvenanceRecord::mint_id(evaluator.minter()),
                 record_kind: ProvenanceKind::ConvergenceCapReached,
                 timestamp: String::new(),
                 actor_id: None,
@@ -146,6 +146,7 @@ mod tests {
     use super::*;
     use crate::model::kernel::*;
     use indexmap::IndexMap;
+    use stack_common_typeid::testing::fixture_minter;
     use std::collections::HashMap;
 
     /// Build a minimal state with defaults.
@@ -279,7 +280,7 @@ mod tests {
     #[test]
     fn continuous_mode_fires_when_guard_satisfied() {
         let kernel = continuous_kernel();
-        let mut evaluator = Evaluator::new(kernel).unwrap();
+        let mut evaluator = Evaluator::new(kernel, &fixture_minter()).unwrap();
 
         // Initially, ready=false so continuous re-eval should find nothing.
         let result = continuous_reevaluate(&mut evaluator, "test-init").unwrap();
@@ -328,7 +329,7 @@ mod tests {
         };
         kernel.evaluation_mode = Some(EvaluationMode::EventDriven);
 
-        let mut evaluator = Evaluator::new(kernel).unwrap();
+        let mut evaluator = Evaluator::new(kernel, &fixture_minter()).unwrap();
         evaluator
             .case_state_mut()
             .insert("ready".to_string(), serde_json::Value::Bool(true));
@@ -343,7 +344,7 @@ mod tests {
         let mut kernel = continuous_kernel();
         kernel.evaluation_mode = Some(EvaluationMode::EventDriven);
 
-        let mut evaluator = Evaluator::new(kernel).unwrap();
+        let mut evaluator = Evaluator::new(kernel, &fixture_minter()).unwrap();
         evaluator
             .case_state_mut()
             .insert("ready".to_string(), serde_json::Value::Bool(true));
@@ -423,7 +424,7 @@ mod tests {
             extensions: HashMap::new(),
         };
 
-        let mut evaluator = Evaluator::new(kernel).unwrap();
+        let mut evaluator = Evaluator::new(kernel, &fixture_minter()).unwrap();
         let result = continuous_reevaluate(&mut evaluator, "loop-trigger").unwrap();
 
         assert!(result.convergence_cap_reached);
@@ -498,7 +499,7 @@ mod tests {
             extensions: HashMap::new(),
         };
 
-        let mut evaluator = Evaluator::new(kernel).unwrap();
+        let mut evaluator = Evaluator::new(kernel, &fixture_minter()).unwrap();
         continuous_reevaluate(&mut evaluator, "loop-trigger").unwrap();
 
         let cap_record = evaluator

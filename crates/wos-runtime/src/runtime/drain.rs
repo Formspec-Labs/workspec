@@ -8,6 +8,7 @@
 //! own module makes the durable command boundary easier to inspect before
 //! Temporal/Restate adapter spikes are introduced.
 
+use super::process_minter;
 use wos_core::eval::Evaluator;
 use wos_core::{ProvenanceKind, ProvenanceRecord};
 
@@ -37,6 +38,7 @@ impl WosRuntime {
         let now_iso = format_timestamp(now_ms)?;
         let mut record = self.store.load_record(process_id)?;
         let prior = record.clone();
+        let minter = process_minter(&record.process)?;
         let mut appended_provenance =
             materialize_due_timers(&mut record.process, now_ms, &now_iso)?;
         appended_provenance.extend(super::tasks::retire_expired_tasks(&mut record, &now_iso)?);
@@ -181,7 +183,7 @@ impl WosRuntime {
             .any(|record| record.record_kind == ProvenanceKind::CaseStateMutation);
         if !runtime_result.transitions.is_empty() && case_state_can_mutate_explicitly {
             // This marker describes mutation accounting, not an additional state move.
-            let mut marker = ProvenanceRecord::blank(ProvenanceKind::StateTransition);
+            let mut marker = ProvenanceRecord::blank(&minter, ProvenanceKind::StateTransition);
             marker.actor_id = event.actor_id.clone();
             marker.data = Some(serde_json::json!({
                 "caseStateUnchangedByTransition": true,
@@ -196,7 +198,7 @@ impl WosRuntime {
         // Records are appended in lexicographic milestone-id order so the provenance
         // stream is deterministic.
         let post_state = record.process.case_state.clone();
-        let milestone_records = evaluate_milestones(&kernel, &mut record.process, &post_state);
+        let milestone_records = evaluate_milestones(&kernel, &mut record.process, &post_state)?;
         appended_provenance.extend(milestone_records);
 
         appended_provenance.extend(self.check_governance_result(

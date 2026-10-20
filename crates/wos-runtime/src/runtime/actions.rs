@@ -7,6 +7,7 @@
 //! operate on `WosRuntime` directly, but the split makes the center seam
 //! explicit before alternate durable adapters are introduced.
 
+use super::process_minter;
 use semver::{Version, VersionReq};
 use wos_core::eval::ObservedAction;
 use wos_core::instance::{
@@ -69,6 +70,7 @@ impl WosRuntime {
         actions: &[ObservedAction],
         now_iso: &str,
     ) -> Result<(Vec<String>, Vec<String>, Vec<ProvenanceRecord>), RuntimeError> {
+        let minter = process_minter(&record.process)?;
         wos_core::model::integration::validate_callback_actions(
             kernel,
             self.integration_profile.as_ref(),
@@ -164,6 +166,7 @@ impl WosRuntime {
                         }
                     }
                     provenance.push(ProvenanceRecord::task_lifecycle(
+                        &minter,
                         ProvenanceKind::TaskCreated,
                         &task.task_id,
                         observed.actor_id.as_deref(),
@@ -241,7 +244,7 @@ impl WosRuntime {
 
                     if reused_persisted_result {
                         provenance.push(ProvenanceRecord {
-                            id: ProvenanceRecord::mint_id(),
+                            id: ProvenanceRecord::mint_id(&minter),
                             record_kind: ProvenanceKind::IdempotencyDedup,
                             timestamp: String::new(),
                             actor_id: observed.actor_id.clone(),
@@ -268,7 +271,7 @@ impl WosRuntime {
                         });
                     } else {
                         provenance.push(ProvenanceRecord {
-                            id: ProvenanceRecord::mint_id(),
+                            id: ProvenanceRecord::mint_id(&minter),
                             record_kind: ProvenanceKind::StepResultPersisted,
                             timestamp: String::new(),
                             actor_id: observed.actor_id.clone(),
@@ -300,7 +303,7 @@ impl WosRuntime {
                         let validation_result =
                             self.validator.validate(contract_ref, &step_result.output)?;
                         provenance.push(ProvenanceRecord {
-                            id: ProvenanceRecord::mint_id(),
+                            id: ProvenanceRecord::mint_id(&minter),
                             record_kind: ProvenanceKind::ContractValidation,
                             timestamp: String::new(),
                             actor_id: observed.actor_id.clone(),
@@ -426,6 +429,7 @@ impl WosRuntime {
         record: &mut RuntimeRecord,
         now_iso: &str,
     ) -> Result<(Vec<FormspecTaskContext>, Vec<ProvenanceRecord>), RuntimeError> {
+        let minter = process_minter(&record.process)?;
         let mut pending_presentations = Vec::new();
         let mut provenance = super::tasks::retire_expired_tasks(record, now_iso)?;
 
@@ -448,6 +452,7 @@ impl WosRuntime {
                 continue;
             }
             provenance.push(ProvenanceRecord::task_lifecycle(
+                &minter,
                 ProvenanceKind::TaskPresented,
                 &task.task_id,
                 task.assigned_actor.as_deref(),

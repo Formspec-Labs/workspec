@@ -87,7 +87,7 @@ A workflow process is bound to a case ledger at `wos.kernel.process_started` tim
 
 **Renames in `wos-core`:**
 
-- `mint_case_id()` in [`work-spec/crates/wos-core/src/typeid.rs`](../../crates/wos-core/src/typeid.rs) is renamed `mint_case_ledger_id()` and continues minting `case_<ulid>` — but the IDs now name *ledgers*, not workflow instances.
+- `mint_case_id()` in [`work-spec/crates/wos-core/src/typeid.rs`](../../crates/wos-core/src/typeid.rs) is renamed `mint_case_ledger_id()` and continues minting `case_<ulid>` — but the IDs now name *ledgers*, not workflow instances. *Implementation pointer: IDs are now minted by a tenant-bound `TypeIdMinter` in `stack-common-typeid` (no zero-argument `mint_*_id()`, no environment tenant); the byte format is unchanged.*
 - A new `mint_process_id()` returns `process_<ulid>` for workflow instances.
 - The `WorkflowProcess` struct in [`work-spec/crates/wos-core/src/instance.rs`](../../crates/wos-core/src/instance.rs) is renamed `WorkflowProcess`; its `process_id` field becomes `process_id`; it gains a `case_ledger_id` foreign-key field bound at process start.
 - The runtime schema marker is `$wosProcess` in [`work-spec/schemas/wos-process.schema.json`](../../schemas/wos-process.schema.json).

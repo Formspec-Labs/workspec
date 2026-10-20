@@ -10,7 +10,8 @@
 //! input on `process_id` while the storage row binds the durable case-ledger
 //! foreign key — see case-boundary report §4.3 and ADR-0093 §5.
 
-use stack_common_typeid as typeid;
+use super::process_minter;
+use stack_common_typeid::{self as typeid, Tenant, TypeIdMinter};
 use wos_core::eval::{Evaluator, validate_migration_configuration};
 use wos_core::instance::{InstanceStatus, PendingEvent, WorkflowProcess};
 use wos_core::{InstanceMigratedInput, ProvenanceRecord};
@@ -191,13 +192,8 @@ impl WosRuntime {
         // 1. If the caller supplied an explicit tenant, validate it.
         // 2. If process_id is a valid TypeID, extract the prefix.
         // 3. If both are present, they must match.
-        // 4. Fall back to the deployment-default tenant.
-        let type_id_tenant = typeid::extract_tenant(&process_id)
-            .map(String::from)
-            .or_else(|| {
-                wos_core::instance::WorkflowProcess::extract_urn_parts(&process_id)
-                    .map(String::from)
-            });
+        // 4. Otherwise refuse: a tenant is never defaulted here.
+        let type_id_tenant = Tenant::of(&process_id).map(|tenant| tenant.to_string());
         let bound_case_ledger_id = bound_case_ledger_id
             .map(|value| {
                 let normalized = requested_type_id(&value)
@@ -213,8 +209,8 @@ impl WosRuntime {
             .transpose()?;
         let bound_case_tenant = bound_case_ledger_id
             .as_deref()
-            .and_then(typeid::extract_tenant)
-            .map(String::from);
+            .and_then(Tenant::of)
+            .map(|tenant| tenant.to_string());
         let inferred_tenant = type_id_tenant.as_ref().or_else(|| {
             if process_id.trim().is_empty() {
                 bound_case_tenant.as_ref()
@@ -224,33 +220,31 @@ impl WosRuntime {
         });
         let tenant = match (requested_tenant, inferred_tenant) {
             (Some(explicit), Some(prefix)) => {
-                if !typeid::is_valid_tenant(&explicit) {
-                    return Err(RuntimeError::TenantInvalid(explicit));
-                }
-                if explicit != *prefix {
+                let tenant = Tenant::parse(&explicit)
+                    .map_err(|_| RuntimeError::TenantInvalid(explicit.clone()))?;
+                if tenant.as_str() != prefix {
                     return Err(RuntimeError::TenantMismatch {
                         explicit,
                         type_id_prefix: prefix.clone(),
                     });
                 }
-                explicit
+                tenant
             }
-            (Some(explicit), None) => {
-                if !typeid::is_valid_tenant(&explicit) {
-                    return Err(RuntimeError::TenantInvalid(explicit));
-                }
-                explicit
+            (Some(explicit), None) => Tenant::parse(&explicit)
+                .map_err(|_| RuntimeError::TenantInvalid(explicit.clone()))?,
+            (None, Some(prefix)) => {
+                Tenant::parse(prefix).map_err(|_| RuntimeError::TenantInvalid(prefix.clone()))?
             }
-            (None, Some(prefix)) => prefix.clone(),
-            (None, None) => typeid::DEFAULT_TENANT.to_string(),
+            (None, None) => return Err(RuntimeError::TenantUnresolved),
         };
+        let minter = TypeIdMinter::new(tenant.clone());
         let bound_case_ledger_id = bound_case_ledger_id
             .map(|value| {
-                if let Some(prefix) = typeid::extract_tenant(&value)
+                if let Some(prefix) = Tenant::of(&value)
                     && prefix != tenant
                 {
                     return Err(RuntimeError::TenantMismatch {
-                        explicit: tenant.clone(),
+                        explicit: tenant.to_string(),
                         type_id_prefix: prefix.to_string(),
                     });
                 }
@@ -259,7 +253,7 @@ impl WosRuntime {
             .transpose()?;
 
         let process_id = if process_id.trim().is_empty() {
-            typeid::mint_type_id(&tenant, typeid::PROCESS_PREFIX)
+            minter.mint_process_id()
         } else if let Some(input_type_id) = requested_type_id(&process_id) {
             if !typeid::is_valid_type_id(input_type_id, Some(typeid::PROCESS_PREFIX)) {
                 return Err(RuntimeError::MigrationRejected(format!(
@@ -272,8 +266,7 @@ impl WosRuntime {
                 "process id `{process_id}` is not a WOS TypeID"
             )));
         };
-        let case_ledger_id = bound_case_ledger_id
-            .unwrap_or_else(|| typeid::mint_type_id(&tenant, typeid::CASE_PREFIX));
+        let case_ledger_id = bound_case_ledger_id.unwrap_or_else(|| minter.mint_case_ledger_id());
         let kernel = self
             .resolver
             .resolve_kernel(&definition_url, &definition_version)?;
@@ -288,6 +281,7 @@ impl WosRuntime {
         )?;
         let mut evaluator = Evaluator::with_time_and_case_state_and_actor(
             kernel.clone(),
+            &minter,
             now_ms,
             initial_case_state.as_ref(),
             initial_initiating_actor_id,
@@ -299,7 +293,7 @@ impl WosRuntime {
         let instance = WorkflowProcess {
             process_id,
             case_ledger_id,
-            tenant,
+            tenant: tenant.to_string(),
             definition_url,
             definition_version,
             actor_bindings,
@@ -592,6 +586,7 @@ impl WosRuntime {
         let now_ms = self.clock.now_ms();
         let now_iso = format_timestamp(now_ms)?;
         let mut record = self.store.load_record(process_id)?;
+        let minter = process_minter(&record.process)?;
         if record.process.definition_version == target_definition_version {
             return Ok(MigrationOutcome {
                 process_id: process_id.to_string(),
@@ -632,13 +627,16 @@ impl WosRuntime {
 
         let migration_map_json = serde_json::to_value(&migration_map)
             .map_err(|e| RuntimeError::MigrationRejected(e.to_string()))?;
-        let mut appended = vec![ProvenanceRecord::instance_migrated(InstanceMigratedInput {
-            from_version: previous_definition_version.as_str(),
-            to_version: target_definition_version,
-            migration_map: migration_map_json,
-            actor_id: operator_actor_id,
-            context: None,
-        })];
+        let mut appended = vec![ProvenanceRecord::instance_migrated(
+            &minter,
+            InstanceMigratedInput {
+                from_version: previous_definition_version.as_str(),
+                to_version: target_definition_version,
+                migration_map: migration_map_json,
+                actor_id: operator_actor_id,
+                context: None,
+            },
+        )];
         populate_provenance_record_fields(&mut appended, &target_kernel, target_definition_version);
         stamp_provenance(&mut appended, &now_iso);
 

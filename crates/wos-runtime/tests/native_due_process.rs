@@ -527,7 +527,7 @@ fn signed_response(runtime: &WosRuntime, process: &str, signing: &Signing) -> (S
         .unwrap();
     let mut response = json!({"$formspecResponse":"1.0","id":"actual-signed-response","definitionUrl":"urn:test:supervisor-form","definitionVersion":"1.0.0","status":"completed","authored":"1970-01-01T00:00:00Z","data":{"determinationId":d.id,"determinationSnapshotSha256":d.snapshot.sha256,"determinationFiringRecordId":d.firing.provenance_record_id,"signatureTaskId":task.task_id,"acceptedAt":"1970-01-01T00:00:00Z","affirmed":true}});
     let payload = integrity_canonical::build_signed_payload(
-        &response,
+        response.to_string().as_bytes(),
         integrity_canonical::DigestAlgorithm::Sha256,
     )
     .unwrap();
@@ -3143,7 +3143,9 @@ fn malformed_or_ambiguous_retained_notice_facts_refuse_before_saved_work() {
                 .unwrap();
             if mutation == "duplicate-alternative" {
                 let mut duplicate = counter.clone();
-                duplicate.id.push_str("-duplicate");
+                duplicate.id = stack_common_typeid::TypeIdMinter::for_parent(&process)
+                    .unwrap()
+                    .mint_provenance_id();
                 original.provenance_log.push(duplicate);
             } else {
                 let data = counter.data.as_mut().unwrap();

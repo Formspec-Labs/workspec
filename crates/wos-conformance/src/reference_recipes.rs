@@ -297,7 +297,8 @@ pub(crate) fn resolve_signature(
         .map_err(|error| fail(error.to_string()))?
         .format(&time::format_description::well_known::Rfc3339)
         .map_err(|error| fail(error.to_string()))?;
-    let payload = build_signed_payload(&unsigned, DigestAlgorithm::Sha256).map_err(fail)?;
+    let payload = build_signed_payload(unsigned.to_string().as_bytes(), DigestAlgorithm::Sha256)
+        .map_err(fail)?;
     let protected = integrity_cose::detached_signature_protected_header(
         -8,
         &decode(&key.kid_base64)?,

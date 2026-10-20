@@ -32,6 +32,7 @@
 //! (counts, key presence, parse success) catch behavior changes without
 //! being brittle to cosmetic changes.
 
+use stack_common_typeid::testing::fixture_minter;
 use std::collections::BTreeSet;
 
 use quick_xml::Reader;
@@ -204,8 +205,20 @@ fn sp_export_004_facts_tier_filter() {
     // populate pass to simulate what a Layer-1 tier injector will do once
     // the `NarrativeTierRecorded` construction path lands.
     let mut records = vec![
-        ProvenanceRecord::state_transition("draft", "submitted", "submit", Some("actor-1")),
-        ProvenanceRecord::state_transition("submitted", "approved", "approve", Some("actor-1")),
+        ProvenanceRecord::state_transition(
+            &fixture_minter(),
+            "draft",
+            "submitted",
+            "submit",
+            Some("actor-1"),
+        ),
+        ProvenanceRecord::state_transition(
+            &fixture_minter(),
+            "submitted",
+            "approved",
+            "approve",
+            Some("actor-1"),
+        ),
     ];
     populate_provenance_record_fields(&mut records, &kernel, "1.0.0");
     stamp_provenance(&mut records, "2026-04-16T00:00:00Z");
@@ -1125,6 +1138,7 @@ fn assert_ocel(fixture: &ExportFixture, log: &ProvenanceLog, config: &ExportConf
     ) {
         let mut unstamped_log = ProvenanceLog::default();
         unstamped_log.push(ProvenanceRecord::state_transition(
+            &fixture_minter(),
             "draft",
             "submitted",
             "submit",

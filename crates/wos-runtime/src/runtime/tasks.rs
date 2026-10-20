@@ -7,6 +7,7 @@
 //! reduces the size of `runtime.rs` without changing the current adapter
 //! behavior.
 
+use super::process_minter;
 use crate::binding::SubmissionValidation;
 use crate::milestones::evaluate_milestones;
 use crate::store::{
@@ -43,6 +44,7 @@ impl WosRuntime {
         let now_ms = self.clock.now_ms();
         let now_iso = format_timestamp(now_ms)?;
         let mut record = self.load_record_for_task_id(task_id)?;
+        let minter = process_minter(&record.process)?;
         if let Some(token) = idempotency_token {
             let replay_key = ReplayKey {
                 operation: ReplayOperation::PersistDraft,
@@ -86,6 +88,7 @@ impl WosRuntime {
             .artifacts
             .insert(artifact.artifact_id.clone(), artifact.clone());
         let mut provenance = ProvenanceRecord::task_lifecycle(
+            &minter,
             ProvenanceKind::TaskDraftPersisted,
             task_id,
             Some(actor_id),
@@ -148,6 +151,7 @@ impl WosRuntime {
             ));
         }
         let mut record = self.load_record_for_task_id(task_id)?;
+        let minter = process_minter(&record.process)?;
         record.validate_dismissal_replay()?;
         let key = ReplayKey {
             operation: ReplayOperation::DismissTask,
@@ -188,6 +192,7 @@ impl WosRuntime {
         )?;
         let now_iso = format_timestamp(self.clock.now_ms())?;
         let mut dismissal = ProvenanceRecord::task_lifecycle(
+            &minter,
             ProvenanceKind::TaskDismissed,
             task_id,
             Some(actor_id),
@@ -235,6 +240,7 @@ impl WosRuntime {
         let now_iso = format_timestamp(now_ms)?;
         let mut record = self.load_record_for_task_id(task_id)?;
         let prior = record.clone();
+        let minter = process_minter(&record.process)?;
         if let Some(token) = idempotency_token {
             let replay_key = ReplayKey {
                 operation: ReplayOperation::SubmitTaskResponse,
@@ -315,12 +321,14 @@ impl WosRuntime {
         self.require_native_task_binding(super::NativeTaskBindingOperation::Validate, binding)?;
         let validation = adapter.validate_submission(&task, &response)?;
         let mut provenance = vec![ProvenanceRecord::task_lifecycle(
+            &minter,
             ProvenanceKind::TaskResponseSubmitted,
             task_id,
             Some(actor_id),
             None,
         )];
         provenance.push(contract_validation_record(
+            &minter,
             task_id,
             actor_id,
             &response,
@@ -336,6 +344,7 @@ impl WosRuntime {
                 &now_iso,
             );
             provenance.push(ProvenanceRecord::task_lifecycle(
+                &minter,
                 ProvenanceKind::TaskFailed,
                 task_id,
                 Some(actor_id),
@@ -400,6 +409,7 @@ impl WosRuntime {
                 .and_then(|value| value.as_str().map(str::to_string))
                 .unwrap_or_else(|| "signature_admission_failed".to_string());
             provenance.push(ProvenanceRecord::signature_admission_failed(
+                &minter,
                 SignatureAdmissionFailedInput {
                     reason: &reason,
                     response_id: &failed.evidence_bindings.response_id,
@@ -413,6 +423,7 @@ impl WosRuntime {
                 },
             ));
             provenance.push(ProvenanceRecord::task_lifecycle(
+                &minter,
                 ProvenanceKind::TaskFailed,
                 &task.task_id,
                 Some(actor_id),
@@ -486,6 +497,7 @@ impl WosRuntime {
             self.reference_validate_case_change(&kernel, &record, &prospective_case)?;
             record.process.case_state = prospective_case;
             provenance.push(ProvenanceRecord::task_lifecycle(
+                &minter,
                 ProvenanceKind::DataMapping,
                 task_id,
                 Some(actor_id),
@@ -497,7 +509,7 @@ impl WosRuntime {
         }
 
         let post_state = record.process.case_state.clone();
-        let milestone_records = evaluate_milestones(&kernel, &mut record.process, &post_state);
+        let milestone_records = evaluate_milestones(&kernel, &mut record.process, &post_state)?;
         provenance.extend(milestone_records);
 
         let completion_event_key = if self.signature_flow_complete_after(&record.process, &task)? {
@@ -528,6 +540,7 @@ impl WosRuntime {
                     )?;
                     provenance.push(outcome.record);
                     provenance.push(ProvenanceRecord::task_lifecycle(
+                        &minter,
                         ProvenanceKind::TaskCompleted,
                         task_id,
                         Some(actor_id),
@@ -543,6 +556,7 @@ impl WosRuntime {
             }
         } else {
             provenance.push(ProvenanceRecord::task_lifecycle(
+                &minter,
                 ProvenanceKind::TaskCompleted,
                 task_id,
                 Some(actor_id),
@@ -641,8 +655,10 @@ impl WosRuntime {
         idempotency_token: Option<&str>,
         result: TaskSubmissionResult,
     ) -> Result<(), RuntimeError> {
+        let minter = process_minter(&record.process)?;
         record.process.provenance_position += 1;
         let mut rejection = ProvenanceRecord::task_lifecycle(
+            &minter,
             ProvenanceKind::TaskResponseRejected,
             task_id,
             Some(actor_id),
@@ -693,6 +709,7 @@ pub(super) fn retire_expired_tasks(
     record: &mut RuntimeRecord,
     now_iso: &str,
 ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
+    let minter = process_minter(&record.process)?;
     let now_ms = super::parse_timestamp(now_iso)?;
     // Validate every task before removing any, so malformed metadata cannot cause
     // partial cleanup when another task in this record is already expired.
@@ -710,6 +727,7 @@ pub(super) fn retire_expired_tasks(
     for task in &record.process.active_tasks {
         if expired_ids.contains(&task.task_id) {
             let mut failed = ProvenanceRecord::task_lifecycle(
+                &minter,
                 ProvenanceKind::TaskFailed,
                 &task.task_id,
                 None,

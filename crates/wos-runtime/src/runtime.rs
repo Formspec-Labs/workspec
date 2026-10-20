@@ -479,9 +479,41 @@ pub enum RuntimeError {
         type_id_prefix: String,
     },
 
+    /// No tenant could be resolved: a new process request carried no tenant and
+    /// no TypeID prefix, an existing process ID is not a TypeID, or an intake
+    /// record belongs to no case and the host configured no deployment minter.
+    #[error(
+        "tenant unresolved: supply a tenant or use a TypeID process or case id (ADR 0068 D-1.2)"
+    )]
+    TenantUnresolved,
+
     /// Requested capability is not enabled in this server build.
     #[error("{0}")]
     FeatureDisabled(&'static str),
+}
+
+/// Derives the minter for records inside `process` from its process ID.
+///
+/// The process ID prefix is the scope (ADR 0068 D-4). ADR 0068 D-1.2 makes the
+/// stored tenant canonical and a prefix mismatch a hard reject, so a process
+/// whose `tenant` differs from its ID prefix is refused here.
+///
+/// # Errors
+/// Returns [`RuntimeError::TenantUnresolved`] when the process ID is not a
+/// stack TypeID or WOS URN, and an invalid-creation-evidence store error when it
+/// disagrees with the process's `tenant`.
+pub(crate) fn process_minter(
+    process: &WorkflowProcess,
+) -> Result<stack_common_typeid::TypeIdMinter, RuntimeError> {
+    let minter = stack_common_typeid::TypeIdMinter::for_parent(&process.process_id)
+        .ok_or(RuntimeError::TenantUnresolved)?;
+    if minter.tenant().as_str() != process.tenant {
+        // Only stored data can cause this, so it is a server fault, not a 4xx.
+        return Err(RuntimeError::Store(StoreError::InvalidCreationEvidence(
+            "process tenant differs from its process id prefix".into(),
+        )));
+    }
+    Ok(minter)
 }
 
 impl From<provenance::CustodyReceiptStampError> for RuntimeError {
@@ -639,6 +671,9 @@ pub struct WosRuntime {
     /// Attached business calendar for SLA deadline computation (BC.1).
     business_calendar: Option<BusinessCalendarDocument>,
     bindings: BindingRegistry,
+    /// Host deployment minter for intake records that belong to no case yet
+    /// (rejected or deferred handoffs). Cases and processes never use it.
+    deployment_minter: Option<stack_common_typeid::TypeIdMinter>,
     intake_acceptors: IntakeAcceptanceRegistry,
     intake_policy: Box<dyn IntakeAcceptancePolicy + Send + Sync>,
     signature_profiles: Vec<signature::SignatureProfileRegistration>,
@@ -702,6 +737,7 @@ impl WosRuntime {
             deferred_callback_max_bytes: 1024 * 1024,
             business_calendar: None,
             bindings,
+            deployment_minter: None,
             intake_acceptors: IntakeAcceptanceRegistry::new(),
             intake_policy: Box::new(NoopIntakeAcceptancePolicy),
             signature_profiles: Vec::new(),
@@ -717,6 +753,17 @@ impl WosRuntime {
         P: CompanionPolicy + Send + Sync + 'static,
     {
         self.companion_policy = Box::new(companion_policy);
+        self
+    }
+
+    /// Attach the host's deployment minter.
+    ///
+    /// Only intake records outside any case (rejected or deferred handoffs) are
+    /// minted with it. A multi-tenant host must send `governed_case_ref` on every
+    /// intake request instead of relying on it. Without one, such handoffs refuse with
+    /// [`RuntimeError::TenantUnresolved`].
+    pub fn with_deployment_minter(mut self, minter: stack_common_typeid::TypeIdMinter) -> Self {
+        self.deployment_minter = Some(minter);
         self
     }
 
@@ -801,6 +848,7 @@ impl WosRuntime {
 
 #[cfg(test)]
 mod tests {
+    use stack_common_typeid::testing::fixture_minter;
     include!("runtime/queued_event_origin_tests.rs");
     mod compound_transition_tests {
         include!("runtime/compound_transition_tests.rs");
@@ -854,8 +902,8 @@ mod tests {
     #[test]
     fn stamp_provenance_fills_empty_timestamps_only() {
         let mut records = vec![
-            ProvenanceRecord::state_transition("a", "b", "ev", None),
-            ProvenanceRecord::state_transition("b", "c", "ev", None),
+            ProvenanceRecord::state_transition(&fixture_minter(), "a", "b", "ev", None),
+            ProvenanceRecord::state_transition(&fixture_minter(), "b", "c", "ev", None),
         ];
         records[0].timestamp = "2020-01-01T00:00:00Z".to_string();
 
@@ -894,9 +942,15 @@ mod tests {
     fn audit_layer_stamped_by_runtime_pass() {
         let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
         let mut records = vec![
-            ProvenanceRecord::state_transition("Draft", "Submitted", "submit", None),
+            ProvenanceRecord::state_transition(
+                &fixture_minter(),
+                "Draft",
+                "Submitted",
+                "submit",
+                None,
+            ),
             ProvenanceRecord {
-                id: ProvenanceRecord::mint_id(),
+                id: ProvenanceRecord::mint_id(&fixture_minter()),
                 record_kind: ProvenanceKind::NarrativeTierRecorded,
                 timestamp: String::new(),
                 actor_id: None,
@@ -932,6 +986,7 @@ mod tests {
             serde_json::json!([{ "id": "reviewer", "type": "human" }]),
         );
         let mut records = vec![ProvenanceRecord::state_transition(
+            &fixture_minter(),
             "Draft",
             "Submitted",
             "submit",
@@ -950,6 +1005,7 @@ mod tests {
             serde_json::json!([{ "id": "scheduler", "type": "system" }]),
         );
         let mut records = vec![ProvenanceRecord::state_transition(
+            &fixture_minter(),
             "Draft",
             "Submitted",
             "tick",
@@ -964,7 +1020,11 @@ mod tests {
     #[test]
     fn actor_type_absent_when_no_actor_id() {
         let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
-        let mut records = vec![ProvenanceRecord::timer_fired("timer-1", "deadline")];
+        let mut records = vec![ProvenanceRecord::timer_fired(
+            &fixture_minter(),
+            "timer-1",
+            "deadline",
+        )];
 
         populate_provenance_record_fields(&mut records, &kernel, "1.0.0");
 
@@ -977,6 +1037,7 @@ mod tests {
         // Unknown actor ids are NOT defaulted — the spec says omit, not default.
         let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
         let mut records = vec![ProvenanceRecord::state_transition(
+            &fixture_minter(),
             "Draft",
             "Submitted",
             "submit",
@@ -992,6 +1053,7 @@ mod tests {
     fn lifecycle_state_set_to_from_state_on_transition() {
         let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
         let mut records = vec![ProvenanceRecord::state_transition(
+            &fixture_minter(),
             "Draft",
             "Submitted",
             "submit",
@@ -1007,6 +1069,7 @@ mod tests {
     fn lifecycle_state_promoted_from_case_state_mutation_data() {
         let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
         let mut records = vec![ProvenanceRecord::case_state_mutation(
+            &fixture_minter(),
             "/amount",
             &serde_json::json!(42),
             None,
@@ -1022,6 +1085,7 @@ mod tests {
     fn definition_version_propagated_from_kernel_document() {
         let kernel = kernel_with_actors("2.7.3", serde_json::json!([]));
         let mut records = vec![ProvenanceRecord::state_transition(
+            &fixture_minter(),
             "Draft",
             "Submitted",
             "submit",
@@ -1037,6 +1101,7 @@ mod tests {
     fn inputs_outputs_set_for_state_transition() {
         let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
         let mut records = vec![ProvenanceRecord::state_transition(
+            &fixture_minter(),
             "Draft",
             "Submitted",
             "submit",
@@ -1079,9 +1144,13 @@ mod tests {
         });
         // Snapshot capture belongs to the pure evaluator. Runtime admission of
         // these tags separately requires a real qualified evidence owner.
-        let mut evaluator =
-            wos_core::eval::Evaluator::with_time_and_case_state(kernel, 0, Some(&case_state))
-                .unwrap();
+        let mut evaluator = wos_core::eval::Evaluator::with_time_and_case_state(
+            kernel,
+            &stack_common_typeid::testing::fixture_minter(),
+            0,
+            Some(&case_state),
+        )
+        .unwrap();
         evaluator
             .process_event("decide", Some("reviewer"), None)
             .unwrap();
@@ -1157,6 +1226,7 @@ mod tests {
         // these tags separately requires a real qualified evidence owner.
         let mut evaluator = wos_core::eval::Evaluator::with_time_and_case_state(
             kernel,
+            &stack_common_typeid::testing::fixture_minter(),
             0,
             Some(&serde_json::json!({"reviewScore":0})),
         )
@@ -1228,6 +1298,7 @@ mod tests {
         // these tags separately requires a real qualified evidence owner.
         let mut evaluator = wos_core::eval::Evaluator::with_time_and_case_state(
             kernel,
+            &stack_common_typeid::testing::fixture_minter(),
             0,
             Some(&serde_json::json!({"firstOutcome":"pending"})),
         )
@@ -1276,6 +1347,7 @@ mod tests {
     fn inputs_outputs_set_for_case_state_mutation() {
         let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
         let mut records = vec![ProvenanceRecord::case_state_mutation(
+            &fixture_minter(),
             "/amount",
             &serde_json::json!(42),
             None,
@@ -1296,6 +1368,7 @@ mod tests {
     fn outputs_unquoted_for_case_state_mutation_string_value() {
         let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
         let mut records = vec![ProvenanceRecord::case_state_mutation(
+            &fixture_minter(),
             "/status",
             &serde_json::json!("approved"),
             None,
@@ -1324,6 +1397,7 @@ mod tests {
 
         // Bool → unquoted `"true"` / `"false"`.
         let mut bool_records = vec![ProvenanceRecord::case_state_mutation(
+            &fixture_minter(),
             "/approved",
             &serde_json::json!(true),
             None,
@@ -1334,6 +1408,7 @@ mod tests {
 
         // Null → `"null"`.
         let mut null_records = vec![ProvenanceRecord::case_state_mutation(
+            &fixture_minter(),
             "/cleared",
             &serde_json::Value::Null,
             None,
@@ -1348,6 +1423,7 @@ mod tests {
         // "some valid JSON representation", not "these exact bytes".
         let object_value = serde_json::json!({ "k": 1, "nested": { "x": true } });
         let mut object_records = vec![ProvenanceRecord::case_state_mutation(
+            &fixture_minter(),
             "/payload",
             &object_value,
             None,
@@ -1362,6 +1438,7 @@ mod tests {
         // Array → same round-trip contract.
         let array_value = serde_json::json!([1, "two", false, null]);
         let mut array_records = vec![ProvenanceRecord::case_state_mutation(
+            &fixture_minter(),
             "/history",
             &array_value,
             None,
@@ -1378,6 +1455,7 @@ mod tests {
     fn digests_computed_and_non_empty_when_inputs_present() {
         let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
         let mut records = vec![ProvenanceRecord::state_transition(
+            &fixture_minter(),
             "Draft",
             "Submitted",
             "submit",
@@ -1404,7 +1482,11 @@ mod tests {
     fn digests_absent_when_inputs_empty() {
         let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
         // A timer_fired record has no inputs/outputs — digests must stay None.
-        let mut records = vec![ProvenanceRecord::timer_fired("timer-1", "deadline")];
+        let mut records = vec![ProvenanceRecord::timer_fired(
+            &fixture_minter(),
+            "timer-1",
+            "deadline",
+        )];
 
         populate_provenance_record_fields(&mut records, &kernel, "1.0.0");
 
@@ -1421,8 +1503,13 @@ mod tests {
             "1.0.0",
             serde_json::json!([{ "id": "reviewer", "type": "human" }]),
         );
-        let mut record =
-            ProvenanceRecord::state_transition("Draft", "Submitted", "submit", Some("reviewer"));
+        let mut record = ProvenanceRecord::state_transition(
+            &fixture_minter(),
+            "Draft",
+            "Submitted",
+            "submit",
+            Some("reviewer"),
+        );
         record.audit_layer = Some("reasoning".to_string());
         record.actor_type = Some("agent".to_string());
         record.lifecycle_state = Some("Preset".to_string());
@@ -2138,7 +2225,14 @@ mod tests {
                         .to_string(),
                     case_intent: IntakeCaseIntent::RequestGovernedCaseCreation,
                 })
-            } else if let Some(case_ref) = request.governed_case_ref.clone() {
+            } else if let Some(case_ref) = request.governed_case_ref.clone().or_else(|| {
+                // The handoff document's own `caseRef`: untrusted input.
+                request
+                    .document
+                    .get("caseRef")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_string)
+            }) {
                 Ok(IntakeInterpretation {
                     intake_id: request
                         .document
@@ -2175,8 +2269,10 @@ mod tests {
                 | IntakeAcceptanceOutcome::Deferred { .. } => return Ok(Vec::new()),
             };
 
+            let minter = stack_common_typeid::TypeIdMinter::for_parent(&case_ref)
+                .expect("test case refs are TypeIDs");
             Ok(vec![ProvenanceRecord {
-                id: ProvenanceRecord::mint_id(),
+                id: ProvenanceRecord::mint_id(&minter),
                 record_kind: ProvenanceKind::CaseCreated,
                 timestamp: String::new(),
                 actor_id: request.actor_id.clone(),
@@ -2225,8 +2321,17 @@ mod tests {
             context: &IntakePolicyContext,
         ) -> Result<IntakeAcceptanceDecision, RuntimeError> {
             let mut decision = NoopIntakeAcceptancePolicy.evaluate_intake_acceptance(context)?;
+            // Policy records are minted under the case's tenant, like any host's.
+            let minter = stack_common_typeid::TypeIdMinter::for_parent(
+                context
+                    .request
+                    .governed_case_ref
+                    .as_deref()
+                    .expect("test requests carry a case ref"),
+            )
+            .expect("test case refs are TypeIDs");
             decision.provenance.push(ProvenanceRecord {
-                id: ProvenanceRecord::mint_id(),
+                id: ProvenanceRecord::mint_id(&minter),
                 record_kind: ProvenanceKind::NarrativeTierRecorded,
                 timestamp: String::new(),
                 actor_id: None,
@@ -3139,12 +3244,12 @@ mod tests {
             }))
             .expect("kernel json"),
         );
-        let case_ledger_id = stack_common_typeid::mint_case_ledger_id();
+        let case_ledger_id = fixture_minter().mint_case_ledger_id();
         let case_ref = format!("urn:wos:{case_ledger_id}");
         let created_a = runtime
             .create_process_bound_to_case(
                 CreateProcessRequest {
-                    process_id: stack_common_typeid::mint_process_id(),
+                    process_id: fixture_minter().mint_process_id(),
                     tenant: None,
                     definition_url: "urn:test:intake-ambiguous".to_string(),
                     definition_version: "1.0.0".to_string(),
@@ -3156,7 +3261,7 @@ mod tests {
         let created_b = runtime
             .create_process_bound_to_case(
                 CreateProcessRequest {
-                    process_id: stack_common_typeid::mint_process_id(),
+                    process_id: fixture_minter().mint_process_id(),
                     tenant: None,
                     definition_url: "urn:test:intake-ambiguous".to_string(),
                     definition_version: "1.0.0".to_string(),
@@ -3423,7 +3528,7 @@ mod tests {
             record.process.active_tasks[0].created_at
         );
         let mut wrong_parent = original.clone();
-        wrong_parent.process_id = stack_common_typeid::mint_process_id();
+        wrong_parent.process_id = fixture_minter().mint_process_id();
         assert!(matches!(
             wrong_parent.validate(),
             Err(StoreError::InvalidCreationEvidence(_))
@@ -3725,8 +3830,7 @@ mod tests {
             original.creation
         );
         let mut forged = original.clone();
-        forged.creation.as_mut().unwrap().case_ledger_id =
-            stack_common_typeid::mint_case_ledger_id();
+        forged.creation.as_mut().unwrap().case_ledger_id = fixture_minter().mint_case_ledger_id();
         assert!(matches!(
             forged.validate_creation(),
             Err(StoreError::InvalidCreationEvidence(_))
@@ -4901,6 +5005,97 @@ mod tests {
         );
     }
 
+    fn caseless_rejecting_runtime() -> WosRuntime {
+        caseless_runtime_with_policy(PublicIntakeDisabledPolicy)
+    }
+
+    fn caseless_runtime_with_policy<P>(policy: P) -> WosRuntime
+    where
+        P: IntakeAcceptancePolicy + Send + Sync + 'static,
+    {
+        runtime_with_kernel(
+            serde_json::from_value(serde_json::json!({
+                "$wosWorkflow": "1.0",
+                "url": "urn:test:intake-reject-caseless",
+                "version": "1.0.0",
+                "actors": [{ "id": "intake-service", "type": "system" }],
+                "lifecycle": {
+                    "initialState": "open",
+                    "states": { "open": { "type": "atomic" } }
+                }
+            }))
+            .expect("kernel json"),
+        )
+        .with_intake_policy(policy)
+    }
+
+    fn caseless_intake_request() -> IntakeAcceptanceRequest {
+        IntakeAcceptanceRequest {
+            governed_case_ref: None,
+            ..public_intake_request(
+                "ih-reject-caseless",
+                test_case_ledger_urn("unused"),
+                "urn:test:intake-reject-caseless",
+                "1.0.0",
+            )
+        }
+    }
+
+    /// A rejected handoff that names no case has no tenant of its own: it uses
+    /// the host's deployment minter, and refuses when the host supplied none.
+    #[test]
+    fn caseless_rejected_intake_uses_only_the_deployment_minter() {
+        let error = caseless_rejecting_runtime()
+            .accept_intake_handoff("formspec", caseless_intake_request())
+            .unwrap_err();
+        assert!(matches!(error, RuntimeError::TenantUnresolved), "{error:?}");
+
+        let result = caseless_rejecting_runtime()
+            .with_deployment_minter(fixture_minter())
+            .accept_intake_handoff("formspec", caseless_intake_request())
+            .expect("reject decision");
+        let record = result
+            .provenance
+            .iter()
+            .find(|entry| entry.record_kind == ProvenanceKind::IntakeRejected)
+            .expect("rejected provenance");
+        assert_eq!(
+            stack_common_typeid::Tenant::of(&record.id)
+                .unwrap()
+                .as_str(),
+            "acme"
+        );
+    }
+
+    /// A handoff that carries the host's case reference inherits that case's
+    /// tenant, not the deployment minter's.
+    #[test]
+    fn rejected_intake_with_case_ref_inherits_the_case_tenant() {
+        let result = caseless_rejecting_runtime()
+            .with_deployment_minter(fixture_minter())
+            .accept_intake_handoff(
+                "formspec",
+                public_intake_request(
+                    "ih-reject-case-tenant",
+                    test_case_ledger_urn("other-tenant"),
+                    "urn:test:intake-reject-caseless",
+                    "1.0.0",
+                ),
+            )
+            .expect("reject decision");
+        let record = result
+            .provenance
+            .iter()
+            .find(|entry| entry.record_kind == ProvenanceKind::IntakeRejected)
+            .expect("rejected provenance");
+        assert_eq!(
+            stack_common_typeid::Tenant::of(&record.id)
+                .unwrap()
+                .as_str(),
+            "other-tenant"
+        );
+    }
+
     #[test]
     fn deferred_intake_provenance_is_runtime_populated() {
         let mut runtime = runtime_with_kernel(
@@ -5144,7 +5339,7 @@ mod tests {
     fn create_process_rejects_case_typeid_as_process_id() {
         let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
         let mut runtime = runtime_with_kernel(kernel);
-        let pre_minted = stack_common_typeid::mint_case_ledger_id();
+        let pre_minted = fixture_minter().mint_case_ledger_id();
         let err = runtime
             .create_process(CreateProcessRequest {
                 process_id: pre_minted.clone(),
@@ -5161,7 +5356,7 @@ mod tests {
     fn create_process_preserves_pre_minted_process_typeid() {
         let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
         let mut runtime = runtime_with_kernel(kernel);
-        let pre_minted = stack_common_typeid::mint_process_id();
+        let pre_minted = fixture_minter().mint_process_id();
         let created = runtime
             .create_process(CreateProcessRequest {
                 process_id: pre_minted.clone(),
@@ -5187,9 +5382,9 @@ mod tests {
     fn create_process_can_bind_multiple_processes_to_one_case_ledger() {
         let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
         let mut runtime = runtime_with_kernel(kernel);
-        let case_ledger_id = stack_common_typeid::mint_case_ledger_id();
-        let process_a = stack_common_typeid::mint_process_id();
-        let process_b = stack_common_typeid::mint_process_id();
+        let case_ledger_id = fixture_minter().mint_case_ledger_id();
+        let process_a = fixture_minter().mint_process_id();
+        let process_b = fixture_minter().mint_process_id();
 
         let created_a = runtime
             .create_process_bound_to_case(
@@ -5239,7 +5434,7 @@ mod tests {
         assert_eq!(found, expected);
 
         // Unknown case ledger ids yield an empty vector (not a NotFound error).
-        let unrelated = stack_common_typeid::mint_case_ledger_id();
+        let unrelated = fixture_minter().mint_case_ledger_id();
         assert!(
             runtime.processes_for_case(unrelated.as_str()).is_empty(),
             "unbound case ledger should return empty Vec",
@@ -5250,11 +5445,11 @@ mod tests {
     fn process_api_rejects_ambiguous_case_ledger_ref() {
         let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
         let mut runtime = runtime_with_kernel(kernel);
-        let case_ledger_id = stack_common_typeid::mint_case_ledger_id();
+        let case_ledger_id = fixture_minter().mint_case_ledger_id();
         let created_a = runtime
             .create_process_bound_to_case(
                 CreateProcessRequest {
-                    process_id: stack_common_typeid::mint_process_id(),
+                    process_id: fixture_minter().mint_process_id(),
                     tenant: None,
                     definition_url: "urn:test:populator".to_string(),
                     definition_version: "1.0.0".to_string(),
@@ -5266,7 +5461,7 @@ mod tests {
         let created_b = runtime
             .create_process_bound_to_case(
                 CreateProcessRequest {
-                    process_id: stack_common_typeid::mint_process_id(),
+                    process_id: fixture_minter().mint_process_id(),
                     tenant: None,
                     definition_url: "urn:test:populator".to_string(),
                     definition_version: "1.0.0".to_string(),
@@ -5305,12 +5500,24 @@ mod tests {
         let created = runtime
             .create_process(CreateProcessRequest {
                 process_id: "   ".to_string(),
-                tenant: None,
+                tenant: Some("acme".to_string()),
                 definition_url: "urn:test:populator".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: None,
             })
             .expect("create");
+        assert_eq!(
+            stack_common_typeid::Tenant::of(&created.process_id)
+                .unwrap()
+                .as_str(),
+            "acme"
+        );
+        assert_eq!(
+            stack_common_typeid::Tenant::of(&created.case_ledger_id)
+                .unwrap()
+                .as_str(),
+            "acme"
+        );
         assert!(
             WorkflowProcess::is_process_id(&created.process_id),
             "empty process_id must be replaced with a minted process TypeID, got {}",
@@ -5333,7 +5540,9 @@ mod tests {
         let err = runtime
             .create_process(CreateProcessRequest {
                 process_id: "legacy-case-42".to_string(),
-                tenant: None,
+                // A tenant is supplied so the refusal under test is the
+                // process-id shape, not the missing tenant.
+                tenant: Some("acme".to_string()),
                 definition_url: "urn:test:populator".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: None,
@@ -8026,7 +8235,7 @@ mod tests {
             Err(StoreError::InvalidProvenanceEvidence(_))
         ));
         let mut replaced = previous.clone();
-        replaced.provenance_log[0].id = stack_common_typeid::mint_provenance_id();
+        replaced.provenance_log[0].id = fixture_minter().mint_provenance_id();
         assert!(matches!(
             replaced.validate_provenance_update(&previous),
             Err(StoreError::InvalidProvenanceEvidence(_))
@@ -9730,7 +9939,7 @@ mod tests {
 
     fn bound_actor_request() -> CreateProcessRequest {
         CreateProcessRequest {
-            process_id: stack_common_typeid::mint_process_id(),
+            process_id: fixture_minter().mint_process_id(),
             tenant: None,
             definition_url: "urn:test:bound-actors".into(),
             definition_version: "1.0.0".into(),
@@ -9971,10 +10180,7 @@ mod tests {
             .unwrap();
         runtime.drain_once(&process.process_id).unwrap();
         let original = runtime.store.load_record(&process.process_id).unwrap();
-        for id in [
-            "malformed".to_string(),
-            stack_common_typeid::mint_process_id(),
-        ] {
+        for id in ["malformed".to_string(), fixture_minter().mint_process_id()] {
             let mut malformed = original.clone();
             malformed
                 .provenance_log
@@ -10197,6 +10403,7 @@ mod tests {
             .load_process(&accepted.creation.unwrap().process_id)
             .unwrap();
         let mut conflicting = vec![ProvenanceRecord::task_lifecycle(
+            &fixture_minter(),
             ProvenanceKind::TaskPresented,
             "test",
             Some("actor:human:original"),
@@ -10696,7 +10903,7 @@ mod tests {
         fn create(kernel: KernelDocument, now: u64) -> (WosRuntime, String) {
             let mut runtime = runtime_with_kernel(kernel);
             runtime.clock = Box::new(FixedClock { now_ms: now });
-            let id = stack_common_typeid::mint_process_id();
+            let id = fixture_minter().mint_process_id();
             runtime
                 .create_process(CreateProcessRequest {
                     process_id: id.clone(),
@@ -10817,7 +11024,7 @@ mod tests {
             let mut runtime =
                 runtime_with_kernel(kernel(None, true)).with_business_calendar(calendar);
             runtime.clock = Box::new(FixedClock { now_ms: now });
-            let id = stack_common_typeid::mint_process_id();
+            let id = fixture_minter().mint_process_id();
             runtime
                 .create_process(CreateProcessRequest {
                     process_id: id.clone(),
@@ -10874,7 +11081,7 @@ mod tests {
             let mut runtime =
                 runtime_with_kernel(selected.clone()).with_business_calendar(calendar.clone());
             runtime.clock = Box::new(FixedClock { now_ms: now });
-            let id = stack_common_typeid::mint_process_id();
+            let id = fixture_minter().mint_process_id();
             runtime
                 .create_process(CreateProcessRequest {
                     process_id: id.clone(),
@@ -10892,7 +11099,7 @@ mod tests {
                 record.process.active_tasks[0].expires_at.as_deref(),
                 Some(expected)
             );
-            let roundtrip =
+            let roundtrip: WorkflowProcess =
                 serde_json::from_value(serde_json::to_value(&record.process).unwrap()).unwrap();
             let restored =
                 wos_core::Evaluator::from_instance(selected, &roundtrip, now + 500).unwrap();
@@ -11013,7 +11220,7 @@ mod tests {
                 let mut runtime = runtime_with_kernel(serde_json::from_value(value).unwrap())
                     .with_business_calendar(calendar.clone());
                 runtime.clock = Box::new(FixedClock { now_ms: 10_000 });
-                let id = stack_common_typeid::mint_process_id();
+                let id = fixture_minter().mint_process_id();
                 runtime
                     .create_process(CreateProcessRequest {
                         process_id: id.clone(),
@@ -11391,7 +11598,7 @@ mod tests {
                 .unwrap()
                 .remove(0);
             let mut runtime = runtime_with_kernel(serde_json::from_value(value).unwrap());
-            let id = stack_common_typeid::mint_process_id();
+            let id = fixture_minter().mint_process_id();
             assert!(matches!(
                 runtime.create_process(CreateProcessRequest {
                     process_id: id.clone(),
@@ -11547,7 +11754,7 @@ mod tests {
         let mut runtime = runtime_with_kernel(serde_json::from_value(raw).unwrap())
             .with_governance_policy(policy, Default::default())
             .unwrap();
-        let id = stack_common_typeid::mint_process_id();
+        let id = stack_common_typeid::testing::fixture_minter().mint_process_id();
         runtime
             .create_process(CreateProcessRequest {
                 process_id: id.clone(),
@@ -11595,9 +11802,9 @@ mod tests {
         let mut runtime = runtime_with_kernel(serde_json::from_value(raw).unwrap())
             .with_intake_policy(AutoCreatePublicIntakePolicy);
         runtime.service = Box::new(service);
-        let id = stack_common_typeid::mint_process_id();
-        let case = stack_common_typeid::mint_case_ledger_id();
-        let result=runtime.accept_intake_handoff_with_allocation("formspec",IntakeAcceptanceRequest{actor_bindings:None,document:serde_json::json!({"handoffId":"governed-init","initiationMode":"publicIntake"}),actor_id:Some("actor:human:initiator".into()),governed_case_ref:Some(format!("urn:wos:{case}")),governed_case_definition:Some(IntakeCaseDefinition{definition_url:"urn:test:governed-intake-init".into(),definition_version:"1.0.0".into()}),initial_case_state:Some(serde_json::json!({"retained":true}))},Some(crate::intake::ProcessAllocation{process_id:id.clone(),case_ledger_id:case,tenant:"default".into()}));
+        let id = stack_common_typeid::testing::fixture_minter().mint_process_id();
+        let case = stack_common_typeid::testing::fixture_minter().mint_case_ledger_id();
+        let result=runtime.accept_intake_handoff_with_allocation("formspec",IntakeAcceptanceRequest{actor_bindings:None,document:serde_json::json!({"handoffId":"governed-init","initiationMode":"publicIntake"}),actor_id:Some("actor:human:initiator".into()),governed_case_ref:Some(format!("urn:wos:{case}")),governed_case_definition:Some(IntakeCaseDefinition{definition_url:"urn:test:governed-intake-init".into(),definition_version:"1.0.0".into()}),initial_case_state:Some(serde_json::json!({"retained":true}))},Some(crate::intake::ProcessAllocation{process_id:id.clone(),case_ledger_id:case,tenant:stack_common_typeid::Tenant::of(&id).unwrap().to_string()}));
         assert!(
             matches!(result, Err(RuntimeError::GovernancePolicy(_))),
             "{result:?}"
@@ -11609,7 +11816,7 @@ mod tests {
     fn actual_transition_id_cannot_be_satisfied_by_equal_looking_foreign_facts() {
         let kernel:KernelDocument=serde_json::from_value(serde_json::json!({"$wosWorkflow":"1.0","url":"urn:test:exact-facts","version":"1.0.0","lifecycle":{"initialState":"open","states":{"open":{"type":"atomic","transitions":[{"event":"decide","target":"done","tags":["determination"]}]},"done":{"type":"final"}}}})).unwrap();
         let mut runtime = runtime_with_kernel(kernel.clone());
-        let id = stack_common_typeid::mint_process_id();
+        let id = stack_common_typeid::testing::fixture_minter().mint_process_id();
         runtime
             .create_process(CreateProcessRequest {
                 process_id: id.clone(),
@@ -11649,7 +11856,8 @@ mod tests {
         );
         let mut foreign = original.clone();
         let actual = evaluator.transitions()[0].provenance_record_id.as_str();
-        foreign.iter_mut().find(|r| r.id == actual).unwrap().id = ProvenanceRecord::mint_id();
+        foreign.iter_mut().find(|r| r.id == actual).unwrap().id =
+            ProvenanceRecord::mint_id(&stack_common_typeid::testing::fixture_minter());
         assert!(
             matches!(crate::governance::GovernanceResult::without_required_governance(crate::governance::RuntimeGovernanceResultContext{provenance:&foreign,..context}),Err(RuntimeError::GovernancePolicy(code)) if code=="determination Facts missing or ambiguous")
         );
@@ -11657,5 +11865,201 @@ mod tests {
             serde_json::to_value(evaluator.provenance().records()).unwrap(),
             serde_json::to_value(original).unwrap()
         );
+    }
+
+    // Maintained strict scoped-identity controls, adapted without legacy loading.
+    fn attach_by_document_request(
+        handoff_id: &str,
+        document_case_ref: &str,
+    ) -> IntakeAcceptanceRequest {
+        IntakeAcceptanceRequest {
+            actor_bindings: None,
+            document: serde_json::json!({
+                "$formspecIntakeHandoff": "1.0",
+                "handoffId": handoff_id,
+                "initiationMode": "workflowInitiated",
+                "caseRef": document_case_ref,
+            }),
+            actor_id: Some("intake-service".to_string()),
+            governed_case_ref: None,
+            governed_case_definition: None,
+            initial_case_state: None,
+        }
+    }
+
+    fn attach_interpretation(case_ref: &str) -> IntakeInterpretation {
+        IntakeInterpretation {
+            intake_id: "ih-attach".to_string(),
+            case_intent: IntakeCaseIntent::AttachToExistingCase {
+                case_ref: case_ref.to_string(),
+            },
+        }
+    }
+
+    fn rejected_outcome() -> IntakeAcceptanceOutcome {
+        IntakeAcceptanceOutcome::Rejected {
+            code: "manualReviewRequired".to_string(),
+        }
+    }
+
+    #[test]
+    fn attach_intent_to_an_unknown_foreign_case_does_not_set_the_tenant() {
+        let request = attach_by_document_request("ih-foreign", test_case_ledger_urn("foreign"));
+        let interpretation = attach_interpretation(test_case_ledger_urn("foreign"));
+
+        let with_host = caseless_rejecting_runtime().with_deployment_minter(fixture_minter());
+        let minter = with_host
+            .intake_minter(&request, &interpretation, &rejected_outcome())
+            .unwrap();
+        assert_eq!(minter.tenant().as_str(), "acme");
+
+        // Without a deployment minter the handoff refuses; it never borrows
+        // the foreign tenant.
+        let error = caseless_rejecting_runtime()
+            .intake_minter(&request, &interpretation, &rejected_outcome())
+            .unwrap_err();
+        assert!(matches!(error, RuntimeError::TenantUnresolved), "{error:?}");
+    }
+
+    #[test]
+    fn attach_intent_to_a_stored_case_inherits_that_case_tenant() {
+        let mut runtime = caseless_rejecting_runtime().with_deployment_minter(fixture_minter());
+        runtime
+            .create_process(CreateProcessRequest {
+                process_id: test_process_id("stored-tenant").to_string(),
+                tenant: None,
+                definition_url: "urn:test:intake-reject-caseless".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: None,
+            })
+            .unwrap();
+        let case_ledger_id = runtime
+            .load_process(test_process_id("stored-tenant"))
+            .unwrap()
+            .case_ledger_id;
+        let minter = runtime
+            .intake_minter(
+                &attach_by_document_request("ih-stored", &case_ledger_id),
+                &attach_interpretation(&case_ledger_id),
+                &rejected_outcome(),
+            )
+            .unwrap();
+        assert_eq!(minter.tenant().as_str(), "stored-tenant");
+    }
+
+    #[test]
+    fn malformed_case_reference_refuses_instead_of_falling_back() {
+        let wrong_family = test_process_id("wrong-family");
+        let cases = [
+            (
+                attach_by_document_request("ih-bad-doc", "not-a-case"),
+                "not-a-case",
+            ),
+            (
+                public_intake_request(
+                    "ih-bad-host",
+                    wrong_family,
+                    "urn:test:intake-reject-caseless",
+                    "1.0.0",
+                ),
+                wrong_family,
+            ),
+        ];
+        for (request, bad_ref) in cases {
+            let mut runtime = caseless_rejecting_runtime().with_deployment_minter(fixture_minter());
+            let error = runtime
+                .accept_intake_handoff("formspec", request)
+                .unwrap_err();
+            assert!(
+                matches!(&error, RuntimeError::IntakeConflict(message) if message.contains(bad_ref)),
+                "{bad_ref}: {error:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn unresolvable_intake_tenant_leaves_no_pending_record() {
+        let mut runtime = caseless_rejecting_runtime();
+        let error = runtime
+            .accept_intake_handoff("formspec", caseless_intake_request())
+            .unwrap_err();
+        assert!(matches!(error, RuntimeError::TenantUnresolved), "{error:?}");
+        assert!(matches!(
+            runtime
+                .store
+                .load_intake_record("formspec", "ih-reject-caseless"),
+            Err(StoreError::NotFound(_))
+        ));
+
+        // The host fixes its configuration and the same intake id now succeeds.
+        runtime.deployment_minter = Some(fixture_minter());
+        runtime
+            .accept_intake_handoff("formspec", caseless_intake_request())
+            .expect("retry succeeds once a tenant source exists");
+    }
+
+    #[test]
+    fn explicit_tenant_is_validated_against_grammar_and_process_id_prefix() {
+        let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
+        let mut runtime = runtime_with_kernel(kernel);
+        let request = |tenant: &str| CreateProcessRequest {
+            process_id: test_process_id("acme").to_string(),
+            tenant: Some(tenant.to_string()),
+            definition_url: "urn:test:populator".to_string(),
+            definition_version: "1.0.0".to_string(),
+            initial_case_state: None,
+        };
+        let invalid = runtime.create_process(request("ACME_1")).unwrap_err();
+        assert!(
+            matches!(&invalid, RuntimeError::TenantInvalid(value) if value == "ACME_1"),
+            "{invalid:?}"
+        );
+        let mismatch = runtime.create_process(request("beta")).unwrap_err();
+        assert!(
+            matches!(
+                &mismatch,
+                RuntimeError::TenantMismatch { explicit, type_id_prefix }
+                    if explicit == "beta" && type_id_prefix == "acme"
+            ),
+            "{mismatch:?}"
+        );
+        let created = runtime.create_process(request("acme")).unwrap();
+        assert_eq!(created.tenant, "acme");
+    }
+
+    #[test]
+    fn process_without_any_tenant_source_is_refused() {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosWorkflow": "1.0",
+            "url": "urn:test:no-tenant-kernel",
+            "version": "1.0.0",
+            "lifecycle": {
+                "initialState": "open",
+                "states": { "open": { "type": "atomic" } }
+            }
+        }))
+        .unwrap();
+        let mut runtime = WosRuntime::new(
+            InMemoryStore::new(),
+            TestResolver::with_kernel(kernel),
+            RecordingPresenter::default(),
+            wos_core::traits::DefaultRuntime::new(),
+            RecordingService::with_response(serde_json::json!({})),
+            wos_core::traits::DefaultRuntime::new(),
+            FixedClock {
+                now_ms: 1_710_000_000_000,
+            },
+            formspec_bindings(),
+        );
+        let error = runtime
+            .create_process(CreateProcessRequest {
+                process_id: String::new(),
+                tenant: None,
+                definition_url: "urn:test:no-tenant-kernel".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: None,
+            })
+            .unwrap_err();
+        assert!(matches!(error, RuntimeError::TenantUnresolved), "{error:?}");
     }
 }

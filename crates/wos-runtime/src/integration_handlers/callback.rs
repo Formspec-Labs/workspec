@@ -12,6 +12,7 @@
 //! legacy phase inference. Explicit inbound phases fail closed on unknown
 //! subjects, so an authored follow-on event cannot mistake a no-op for admission.
 
+use crate::runtime::process_minter;
 use wos_core::eval::ObservedAction;
 use wos_core::instance::{PendingCallback, PendingOutboundEvent};
 use wos_core::model::kernel::KernelDocument;
@@ -132,6 +133,7 @@ fn handle_outbound(
     binding: &IntegrationBinding,
     now_iso: &str,
 ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
+    let minter = process_minter(&record.process)?;
     // `outbound_event_id` is the CloudEvent `id` for this emission — a unique
     // event identifier, not an idempotency key. Each callback fire is a new event.
     let deferred = binding.dispatch_mode == Some(IntegrationDispatchMode::Deferred);
@@ -280,7 +282,7 @@ fn handle_outbound(
                 .map_err(|error| RuntimeError::Integration(error.to_string()))?;
     }
     let pending_provenance = ProvenanceRecord {
-        id: ProvenanceRecord::mint_id(),
+        id: ProvenanceRecord::mint_id(&minter),
         record_kind: ProvenanceKind::CallbackPending,
         timestamp: String::new(),
         actor_id: observed.actor_id.clone(),
@@ -312,6 +314,7 @@ fn handle_inbound(
     service_ref: &str,
     binding: &IntegrationBinding,
 ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
+    let minter = process_minter(&record.process)?;
     let envelope_json = observed.event_data.clone().ok_or_else(|| {
         RuntimeError::Integration(format!(
             "callback binding '{service_ref}': no CloudEvent envelope in event data"
@@ -367,7 +370,7 @@ fn handle_inbound(
 
     if !updates.is_empty() {
         provenance.push(ProvenanceRecord {
-            id: ProvenanceRecord::mint_id(),
+            id: ProvenanceRecord::mint_id(&minter),
             record_kind: ProvenanceKind::DataMapping,
             timestamp: String::new(),
             actor_id: observed.actor_id.clone(),
@@ -408,7 +411,7 @@ fn handle_inbound(
     }
 
     provenance.push(ProvenanceRecord {
-        id: ProvenanceRecord::mint_id(),
+        id: ProvenanceRecord::mint_id(&minter),
         record_kind: ProvenanceKind::CallbackReceived,
         timestamp: String::new(),
         actor_id: observed.actor_id.clone(),

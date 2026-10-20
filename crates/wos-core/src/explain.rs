@@ -307,6 +307,7 @@ fn authority_rank(authority: Option<SourceAuthority>) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use stack_common_typeid::testing::fixture_minter;
     use wos_events::provenance::{ProvenanceKind, ProvenanceRecord};
 
     fn make_reasoning_record(
@@ -317,7 +318,7 @@ mod tests {
         timestamp: &str,
     ) -> ProvenanceRecord {
         ProvenanceRecord {
-            id: ProvenanceRecord::mint_id(),
+            id: ProvenanceRecord::mint_id(&fixture_minter()),
             record_kind: ProvenanceKind::ActionExecuted,
             timestamp: String::new(),
             actor_id: None,
@@ -354,7 +355,7 @@ mod tests {
         description: &str,
     ) -> ProvenanceRecord {
         ProvenanceRecord {
-            id: ProvenanceRecord::mint_id(),
+            id: ProvenanceRecord::mint_id(&fixture_minter()),
             record_kind: ProvenanceKind::ActionExecuted,
             timestamp: String::new(),
             actor_id: None,

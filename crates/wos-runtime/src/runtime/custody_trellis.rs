@@ -7,13 +7,15 @@
 //! through the same trait, while the append itself is delegated to the shared
 //! Trellis substrate client.
 
+//! Append results are validated acknowledgments of a durable checkpoint, not
+//! independently verified proofs. Consumers verify the export at that exact
+//! checkpoint through the maintained Trellis proof owner.
+
 use async_trait::async_trait;
-use stack_common_http::tenant::TenantScope;
 use trellis_service_client::{
-    AppendActor, ComputeContext, SubstrateAppendRequest, SubstrateAppendResult, SubstrateClient,
-    wos_provenance_append_request,
+    AppendActor, ComputeContext, LedgerScope, SubstrateAppendRequest, SubstrateAppendResult,
+    SubstrateClient, wos_provenance_append_request,
 };
-use trellis_types::ArtifactType;
 use wos_events::custody::{
     CustodyAppendContext, CustodyAppendError, CustodyAppendInput, CustodyAppendReceipt,
 };
@@ -28,70 +30,51 @@ const IDEMPOTENCY_KEY_PREFIX: &str = "wos-runtime:provenance";
 ///
 /// The appender is deliberately small: it owns only request routing context
 /// and a borrowed Trellis substrate client. Runtime state stays behind the
-/// existing [`crate::DurableRuntime`] trait.
+/// existing [`crate::DurableRuntime`] trait. Every record goes to the one
+/// ledger the appender was made for, the case's own ledger under the host's
+/// admitted scope (ADR 0168 §1.6); the scope key already carries the tenant.
 pub struct TrellisCustodyAppender<'a> {
     client: &'a dyn SubstrateClient,
-    tenant_scope: TenantScope,
     actor: AppendActor,
     compute_context: ComputeContext,
-    ledger_scope: Option<String>,
+    ledger_scope: LedgerScope,
 }
 
 impl<'a> TrellisCustodyAppender<'a> {
-    /// Creates a Trellis custody appender.
+    /// Creates an appender for the case ledger `ledger_scope`.
+    ///
+    /// The host derives the ledger from its admitted scope and the case's ledger
+    /// id (`LedgerScope::of`). Native case identity and stable append keys
+    /// remain unchanged.
     #[must_use]
     pub fn new(
         client: &'a dyn SubstrateClient,
-        tenant_scope: TenantScope,
         actor: AppendActor,
         compute_context: ComputeContext,
+        ledger_scope: LedgerScope,
     ) -> Self {
         Self {
             client,
-            tenant_scope,
             actor,
             compute_context,
-            ledger_scope: None,
+            ledger_scope,
         }
     }
 
-    /// Creates an appender with independently selected immutable ledger routing.
-    ///
-    /// The host must qualify this namespace from original protected evidence.
-    /// Native case identity and stable append keys remain unchanged.
-    ///
-    /// # Errors
-    /// Refuses blank routing, NUL or a namespace containing a slash.
-    pub fn new_for_ledger_scope(
-        client: &'a dyn SubstrateClient,
-        tenant_scope: TenantScope,
-        actor: AppendActor,
-        compute_context: ComputeContext,
-        ledger_scope: String,
-    ) -> Result<Self, RuntimeError> {
-        // Match the client's documented single-segment scope rule. The actual
-        // request constructor revalidates routing before any network call.
-        if ledger_scope.trim().is_empty()
-            || ledger_scope.contains('/')
-            || ledger_scope.contains('\0')
-        {
-            return Err(RuntimeError::Service(
-                "custody ledger scope must be a nonblank single segment".into(),
-            ));
-        }
-        let mut appender = Self::new(client, tenant_scope, actor, compute_context);
-        appender.ledger_scope = Some(ledger_scope);
-        Ok(appender)
+    /// The ledger every record is appended to.
+    #[must_use]
+    pub const fn ledger_scope(&self) -> &LedgerScope {
+        &self.ledger_scope
     }
 
     /// Appends custody records with current admission and owner persistence.
     ///
     /// Requires independently selected routing. The handler commits the complete
-    /// verified association and native hash atomically; this method never calls
+    /// admitted append association and native hash atomically; this method never calls
     /// the legacy hash-only stamp. It stops on the first error and never resends.
     ///
     /// # Errors
-    /// Retains actual verified results when post-append admission or persistence
+    /// Retains actual admitted append results when post-append admission or persistence
     /// fails. A persistence error may follow a committed transaction; callers
     /// must qualify current authorized readback before deciding recovery.
     pub async fn append_window_with_handler<R>(
@@ -106,14 +89,7 @@ impl<'a> TrellisCustodyAppender<'a> {
     where
         R: DurableRuntime + ?Sized,
     {
-        let scope = self.ledger_scope.as_deref().ok_or_else(|| {
-            TrellisCustodyAppendFailure::new(
-                TrellisCustodyAppendStage::BeforeAppend,
-                RuntimeError::Service(
-                    "custody handler requires independently selected ledger scope".into(),
-                ),
-            )
-        })?;
+        let scope = &self.ledger_scope;
         let inputs = runtime
             .load_custody_append_window(process_id, cursor, limit, context)
             .map_err(|error| {
@@ -132,11 +108,11 @@ impl<'a> TrellisCustodyAppender<'a> {
                 }
             };
             if let Some((outcome, _receipt)) = appended {
-                if let Err(error) = handler.persist_verified(&outcome, scope).await {
+                if let Err(error) = handler.persist_acknowledged(&outcome, scope).await {
                     return Err(TrellisCustodyAppendFailure {
                         stage: TrellisCustodyAppendStage::Persistence,
                         error,
-                        verified_outcome: Some(outcome),
+                        acknowledged_outcome: Some(outcome),
                         persisted_outcomes: persisted,
                     });
                 }
@@ -156,7 +132,7 @@ impl<'a> TrellisCustodyAppender<'a> {
     /// # Errors
     /// Returns an error when the runtime cannot load or stamp records, when a
     /// custody record cannot be decoded as WOS provenance, or when the Trellis
-    /// append fails or returns an invalid receipt.
+    /// append fails or returns an invalid acknowledgment.
     pub async fn append_window<R>(
         &self,
         runtime: &mut R,
@@ -183,12 +159,7 @@ impl<'a> TrellisCustodyAppender<'a> {
         &self,
         input: CustodyAppendInput,
     ) -> Result<Option<(TrellisCustodyAppendOutcome, CustodyAppendReceipt)>, RuntimeError> {
-        let scope = self
-            .ledger_scope
-            .as_deref()
-            .unwrap_or(&input.case_id)
-            .to_owned();
-        self.append_input_admitted(input, &scope, None)
+        self.append_input_admitted(input, &self.ledger_scope, None)
             .await
             .map_err(|failure| failure.error)
     }
@@ -196,7 +167,7 @@ impl<'a> TrellisCustodyAppender<'a> {
     async fn append_input_admitted(
         &self,
         input: CustodyAppendInput,
-        ledger_scope: &str,
+        ledger_scope: &LedgerScope,
         handler: Option<&dyn TrellisCustodyAppendHandler>,
     ) -> Result<
         Option<(TrellisCustodyAppendOutcome, CustodyAppendReceipt)>,
@@ -239,7 +210,7 @@ impl<'a> TrellisCustodyAppender<'a> {
                 return Err(TrellisCustodyAppendFailure {
                     stage: TrellisCustodyAppendStage::AfterAppendAdmission,
                     error,
-                    verified_outcome: Some(outcome),
+                    acknowledged_outcome: Some(outcome),
                     persisted_outcomes: Vec::new(),
                 });
             }
@@ -250,7 +221,7 @@ impl<'a> TrellisCustodyAppender<'a> {
     fn prepare_input(
         &self,
         input: &CustodyAppendInput,
-        ledger_scope: &str,
+        ledger_scope: &LedgerScope,
     ) -> Result<Option<SubstrateAppendRequest>, RuntimeError> {
         if input.case_id.contains('\0') || input.record_id.contains('\0') {
             return Err(RuntimeError::Service(
@@ -281,10 +252,9 @@ impl<'a> TrellisCustodyAppender<'a> {
                 return Ok(None);
             }
             SubstrateAppendRequest::new_json(
-                ledger_scope,
-                self.tenant_scope.clone(),
+                ledger_scope.clone(),
                 input.event_type.clone(),
-                trellis_idempotency_key(input),
+                trellis_idempotency_key(ledger_scope, input),
                 self.actor.clone(),
                 native.payload().clone(),
                 self.compute_context.clone(),
@@ -296,9 +266,8 @@ impl<'a> TrellisCustodyAppender<'a> {
                 return Ok(None);
             }
             wos_provenance_append_request(
-                ledger_scope,
-                self.tenant_scope.clone(),
-                trellis_idempotency_key(input),
+                ledger_scope.clone(),
+                trellis_idempotency_key(ledger_scope, input),
                 self.actor.clone(),
                 record,
                 self.compute_context.clone(),
@@ -323,29 +292,29 @@ pub trait TrellisCustodyAppendHandler: Send + Sync {
     async fn authorize_before_append(
         &self,
         input: &CustodyAppendInput,
-        ledger_scope: &str,
+        ledger_scope: &LedgerScope,
     ) -> Result<(), RuntimeError>;
 
     /// Rechecks current permission after actual append and result validation.
     ///
     /// # Errors
-    /// Refusal prevents owner persistence and retains the verified append result.
+    /// Refusal prevents owner persistence and retains the structurally validated append acknowledgment.
     async fn authorize_after_append(
         &self,
         input: &CustodyAppendInput,
         outcome: &TrellisCustodyAppendOutcome,
-        ledger_scope: &str,
+        ledger_scope: &LedgerScope,
     ) -> Result<(), RuntimeError>;
 
-    /// Atomically persists the complete verified association and native stamp.
+    /// Atomically persists the complete acknowledged association and native stamp.
     ///
     /// # Errors
     /// May refuse before or after commit. An error does not prove no local stamp;
     /// the owner must qualify readback without automatic append recovery.
-    async fn persist_verified(
+    async fn persist_acknowledged(
         &self,
         outcome: &TrellisCustodyAppendOutcome,
-        ledger_scope: &str,
+        ledger_scope: &LedgerScope,
     ) -> Result<(), RuntimeError>;
 }
 
@@ -356,9 +325,9 @@ pub enum TrellisCustodyAppendStage {
     BeforeAppend,
     /// Network append failed; external append status can be unknown.
     Append,
-    /// Actual append returned a result that did not qualify as verified.
+    /// Actual append returned a result that did not pass structural acknowledgment validation.
     ResultValidation,
-    /// Verified append exists, but post-append permission was refused.
+    /// Acknowledged append exists, but post-append permission was refused.
     AfterAppendAdmission,
     /// Owner persistence failed and may already have committed.
     Persistence,
@@ -373,8 +342,8 @@ pub struct TrellisCustodyAppendFailure {
     /// Original refusal or service error.
     #[source]
     pub error: RuntimeError,
-    /// Actual verified result when admission or persistence failed after append.
-    pub verified_outcome: Option<TrellisCustodyAppendOutcome>,
+    /// Actual append acknowledgment when admission or persistence failed after append.
+    pub acknowledged_outcome: Option<TrellisCustodyAppendOutcome>,
     /// Earlier outcomes confirmed persisted by successful handler calls.
     pub persisted_outcomes: Vec<TrellisCustodyAppendOutcome>,
 }
@@ -384,7 +353,7 @@ impl TrellisCustodyAppendFailure {
         Self {
             stage,
             error,
-            verified_outcome: None,
+            acknowledged_outcome: None,
             persisted_outcomes: Vec::new(),
         }
     }
@@ -407,8 +376,6 @@ pub struct TrellisCustodyAppendOutcome {
     pub canonical_event_hash: String,
     /// Trellis checkpoint reference.
     pub checkpoint_ref: String,
-    /// Trellis proof bundle reference.
-    pub bundle_ref: String,
 }
 
 impl TrellisCustodyAppendOutcome {
@@ -421,7 +388,6 @@ impl TrellisCustodyAppendOutcome {
             sequence: result.sequence,
             canonical_event_hash: result.canonical_event_hash,
             checkpoint_ref: result.checkpoint_ref,
-            bundle_ref: result.bundle_ref,
         }
     }
 }
@@ -483,11 +449,13 @@ fn validate_input_record_metadata(
     Ok(())
 }
 
-fn trellis_idempotency_key(input: &CustodyAppendInput) -> String {
+fn trellis_idempotency_key(ledger_scope: &LedgerScope, input: &CustodyAppendInput) -> String {
     // Trellis Core §17.2 permits at most 64 wire bytes. Hash the stable
-    // domain/case/record tuple; retain original identities in the event payload.
+    // domain/scope/case/record tuple (ADR 0168 §1.4: the adapter derives the key
+    // under the scope key); retain original identities in the event payload.
     stack_common_hash::sha256_nul_separated_parts(&[
         IDEMPOTENCY_KEY_PREFIX,
+        &ledger_scope.key().to_string(),
         &input.case_id,
         &input.record_id,
     ])
@@ -496,52 +464,24 @@ fn trellis_idempotency_key(input: &CustodyAppendInput) -> String {
 fn validate_trellis_result_for_scope(
     input: &CustodyAppendInput,
     result: &SubstrateAppendResult,
-    ledger_scope: &str,
+    ledger_scope: &LedgerScope,
     require_checkpoint_suffix: bool,
 ) -> Result<(), RuntimeError> {
+    // Append acknowledges a durable checkpoint; proof is the pinned Core §18 export.
+    result
+        .validate_for_event_append(ledger_scope)
+        .map_err(|error| RuntimeError::Service(error.to_string()))?;
     if !is_sha256_hash_text(&result.canonical_event_hash) {
         return Err(RuntimeError::Service(format!(
             "trellis custody append returned an invalid canonical_event_hash for record {}",
             input.record_id
         )));
     }
-    if result.event_id.trim().is_empty() {
-        return Err(RuntimeError::Service(format!(
-            "trellis custody append returned an empty event_id for record {}",
-            input.record_id
-        )));
-    }
     let checkpoint_prefix = format!("trellis://{ledger_scope}/checkpoints/");
-    if !result.checkpoint_ref.starts_with(&checkpoint_prefix)
-        || (require_checkpoint_suffix && result.checkpoint_ref.len() == checkpoint_prefix.len())
-    {
+    if require_checkpoint_suffix && result.checkpoint_ref.len() == checkpoint_prefix.len() {
         return Err(RuntimeError::Service(format!(
-            "trellis custody append checkpoint_ref is outside requested scope {} for record {}",
+            "trellis custody append checkpoint_ref lacks a checkpoint digest in scope {} for record {}",
             ledger_scope, input.record_id
-        )));
-    }
-    if result.bundle_ref.trim().is_empty() {
-        return Err(RuntimeError::Service(format!(
-            "trellis custody append returned an empty bundle_ref for record {}",
-            input.record_id
-        )));
-    }
-    if !result.verification_receipt.verified {
-        return Err(RuntimeError::Service(format!(
-            "trellis custody append returned an unverified receipt for record {}",
-            input.record_id
-        )));
-    }
-    if result.verification_receipt.artifact_type != ArtifactType::Event {
-        return Err(RuntimeError::Service(format!(
-            "trellis custody append receipt artifact type {} is not event for record {}",
-            result.verification_receipt.artifact_type, input.record_id
-        )));
-    }
-    if result.verification_receipt.event_type != input.event_type {
-        return Err(RuntimeError::Service(format!(
-            "trellis custody append receipt event type {} does not match requested {} for record {}",
-            result.verification_receipt.event_type, input.event_type, input.record_id
         )));
     }
     Ok(())
@@ -560,11 +500,11 @@ fn is_sha256_hash_text(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use stack_common_typeid::testing::fixture_minter;
 
     use async_trait::async_trait;
     use stack_common_error::StackError;
-    use stack_common_typeid as typeid;
-    use trellis_service_client::{SubstrateAppendRequest, VerificationReceipt};
+    use trellis_service_client::SubstrateAppendRequest;
     use wos_core::instance::{PendingEvent, WorkflowProcess};
 
     use crate::intake::{IntakeAcceptanceDecision, IntakeAcceptanceRequest};
@@ -575,8 +515,14 @@ mod tests {
 
     #[test]
     fn native_custody_key_is_bounded_stable_and_separates_case_and_record() {
-        let case_id = typeid::mint_case_ledger_id();
-        let record = ProvenanceRecord::state_transition("open", "closed", "close", Some("actor"));
+        let case_id = fixture_minter().mint_case_ledger_id();
+        let record = ProvenanceRecord::state_transition(
+            &fixture_minter(),
+            "open",
+            "closed",
+            "close",
+            Some("actor"),
+        );
         let context = CustodyAppendContext {
             event_type_prefix: "wos.kernel".into(),
             case_id: Some(case_id.clone()),
@@ -588,24 +534,39 @@ mod tests {
             .unwrap();
         let input =
             CustodyAppendInput::from_provenance_record(&record, &context, metadata).unwrap();
-        let key = trellis_idempotency_key(&input);
+        let ledger = test_ledger(&case_id);
+        let key = trellis_idempotency_key(&ledger, &input);
         assert!(trellis_types::idempotency_key_length_in_bound(
             key.as_bytes()
         ));
         assert_eq!(key.len(), 64);
-        assert_eq!(trellis_idempotency_key(&input), key);
+        assert_eq!(trellis_idempotency_key(&ledger, &input), key);
         let mut other_case = input.clone();
-        other_case.case_id = typeid::mint_case_ledger_id();
-        assert_ne!(trellis_idempotency_key(&other_case), key);
+        other_case.case_id = fixture_minter().mint_case_ledger_id();
+        assert_ne!(trellis_idempotency_key(&ledger, &other_case), key);
         let mut other_record = input.clone();
-        other_record.record_id = typeid::mint_provenance_id();
-        assert_ne!(trellis_idempotency_key(&other_record), key);
+        other_record.record_id = fixture_minter().mint_provenance_id();
+        assert_ne!(trellis_idempotency_key(&ledger, &other_record), key);
+        let other_scope =
+            stack_common_scope::Scope::fixture("tenant-two", "workspace-one", Some("test"));
+        let foreign = LedgerScope::of(&other_scope, &case_id).unwrap();
+        assert_ne!(
+            trellis_idempotency_key(&foreign, &input),
+            key,
+            "the scope key separates keys"
+        );
     }
 
     #[tokio::test]
     async fn append_window_delegates_to_trellis_and_stamps_receipt() {
-        let case_id = typeid::mint_case_ledger_id();
-        let record = ProvenanceRecord::state_transition("open", "closed", "close", Some("actor"));
+        let case_id = fixture_minter().mint_case_ledger_id();
+        let record = ProvenanceRecord::state_transition(
+            &fixture_minter(),
+            "open",
+            "closed",
+            "close",
+            Some("actor"),
+        );
         let context = CustodyAppendContext {
             event_type_prefix: "wos.kernel".to_string(),
             case_id: Some(case_id.clone()),
@@ -620,17 +581,7 @@ mod tests {
         let record_id = input.record_id.clone();
         let client = RecordingSubstrateClient::default();
         let mut runtime = RecordingDurableRuntime::new(input);
-        let appender = TrellisCustodyAppender::new(
-            &client,
-            TenantScope {
-                tenant: "tenant-one".to_string(),
-                workspace: "workspace-one".to_string(),
-                environment: "test".to_string(),
-                cell: "cell-one".to_string(),
-            },
-            AppendActor::service("wos-runtime"),
-            ComputeContext::no_delegated_compute("wos-runtime"),
-        );
+        let appender = test_appender(&client, &case_id);
 
         let outcomes = appender
             .append_window(&mut runtime, "process-1", 0, 25, context)
@@ -644,11 +595,12 @@ mod tests {
         assert_eq!(outcomes[0].canonical_event_hash, TEST_HASH);
         let requests = client.requests.lock().expect("requests");
         assert_eq!(requests.len(), 1);
-        assert_eq!(requests[0].scope, outcomes[0].case_id);
+        assert_eq!(requests[0].scope, test_ledger(&outcomes[0].case_id));
         assert_eq!(
             requests[0].idempotency_key,
             stack_common_hash::sha256_nul_separated_parts(&[
                 IDEMPOTENCY_KEY_PREFIX,
+                &test_scope().key().to_string(),
                 &outcomes[0].case_id,
                 &outcomes[0].record_id,
             ])
@@ -656,7 +608,6 @@ mod tests {
         assert!(trellis_types::idempotency_key_length_in_bound(
             requests[0].idempotency_key.as_bytes()
         ));
-        assert_eq!(requests[0].tenant_scope.tenant, "tenant-one");
         assert_eq!(requests[0].event_type, "wos.kernel.state_transition");
         let applied = runtime.applied.lock().expect("applied");
         assert_eq!(applied.len(), 1);
@@ -667,9 +618,14 @@ mod tests {
 
     #[tokio::test]
     async fn append_window_skips_records_that_already_have_trellis_receipts() {
-        let case_id = typeid::mint_case_ledger_id();
-        let mut record =
-            ProvenanceRecord::state_transition("open", "closed", "close", Some("actor"));
+        let case_id = fixture_minter().mint_case_ledger_id();
+        let mut record = ProvenanceRecord::state_transition(
+            &fixture_minter(),
+            "open",
+            "closed",
+            "close",
+            Some("actor"),
+        );
         record.canonical_event_hash = Some(TEST_HASH.to_string());
         let context = CustodyAppendContext {
             event_type_prefix: "wos.kernel".to_string(),
@@ -684,17 +640,7 @@ mod tests {
             .expect("custody input");
         let client = RecordingSubstrateClient::default();
         let mut runtime = RecordingDurableRuntime::new(input);
-        let appender = TrellisCustodyAppender::new(
-            &client,
-            TenantScope {
-                tenant: "tenant-one".to_string(),
-                workspace: "workspace-one".to_string(),
-                environment: "test".to_string(),
-                cell: "cell-one".to_string(),
-            },
-            AppendActor::service("wos-runtime"),
-            ComputeContext::no_delegated_compute("wos-runtime"),
-        );
+        let appender = test_appender(&client, &case_id);
 
         let outcomes = appender
             .append_window(&mut runtime, "process-1", 0, 25, context)
@@ -709,7 +655,7 @@ mod tests {
     #[tokio::test]
     async fn append_window_rejects_nul_identifiers_before_trellis_call() {
         for nul_in_case in [true, false] {
-            let context = test_context(typeid::mint_case_ledger_id());
+            let context = test_context(fixture_minter().mint_case_ledger_id());
             let mut input = test_input(&context);
             if nul_in_case {
                 input.case_id.push('\0');
@@ -717,8 +663,9 @@ mod tests {
                 input.record_id.push('\0');
             }
             let client = RecordingSubstrateClient::default();
+            let case_id = input.case_id.clone();
             let mut runtime = RecordingDurableRuntime::new(input);
-            let appender = test_appender(&client);
+            let appender = test_appender(&client, case_id.trim_end_matches('\0'));
 
             let err = appender
                 .append_window(&mut runtime, "process-1", 0, 25, context)
@@ -734,12 +681,12 @@ mod tests {
 
     #[tokio::test]
     async fn append_window_rejects_payload_record_id_mismatch_before_trellis_call() {
-        let context = test_context(typeid::mint_case_ledger_id());
+        let context = test_context(fixture_minter().mint_case_ledger_id());
         let mut input = test_input(&context);
-        input.record_id = typeid::mint_provenance_id();
+        input.record_id = fixture_minter().mint_provenance_id();
         let client = RecordingSubstrateClient::default();
+        let appender = test_appender(&client, &input.case_id);
         let mut runtime = RecordingDurableRuntime::new(input);
-        let appender = test_appender(&client);
 
         let err = appender
             .append_window(&mut runtime, "process-1", 0, 25, context)
@@ -755,12 +702,12 @@ mod tests {
 
     #[tokio::test]
     async fn append_window_rejects_event_type_mismatch_before_trellis_call() {
-        let context = test_context(typeid::mint_case_ledger_id());
+        let context = test_context(fixture_minter().mint_case_ledger_id());
         let mut input = test_input(&context);
         input.event_type = "wos.kernel.case_created".to_string();
         let client = RecordingSubstrateClient::default();
+        let appender = test_appender(&client, &input.case_id);
         let mut runtime = RecordingDurableRuntime::new(input);
-        let appender = test_appender(&client);
 
         let err = appender
             .append_window(&mut runtime, "process-1", 0, 25, context)
@@ -775,62 +722,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn append_window_accepts_event_artifact_type() {
-        let context = test_context(typeid::mint_case_ledger_id());
+    async fn append_window_accepts_durable_checkpoint_acknowledgement() {
+        let context = test_context(fixture_minter().mint_case_ledger_id());
         let input = test_input(&context);
         let client = RecordingSubstrateClient::default();
+        let appender = test_appender(&client, &input.case_id);
         let mut runtime = RecordingDurableRuntime::new(input);
-        let appender = test_appender(&client);
 
         let outcomes = appender
             .append_window(&mut runtime, "process-1", 0, 25, context)
             .await
-            .expect("event artifact_type must pass");
+            .expect("durable checkpoint acknowledgment must pass");
 
         assert_eq!(outcomes.len(), 1);
         assert_eq!(outcomes[0].event_type, "wos.kernel.state_transition");
         assert_eq!(client.requests.lock().expect("requests").len(), 1);
         assert_eq!(runtime.applied.lock().expect("applied").len(), 1);
-    }
-
-    #[tokio::test]
-    async fn append_window_rejects_event_type_echo_mismatch_without_stamping() {
-        let context = test_context(typeid::mint_case_ledger_id());
-        let input = test_input(&context);
-        let client = RecordingSubstrateClient::with_event_type("wos.kernel.case_created");
-        let mut runtime = RecordingDurableRuntime::new(input);
-        let appender = test_appender(&client);
-
-        let err = appender
-            .append_window(&mut runtime, "process-1", 0, 25, context)
-            .await
-            .expect_err("event_type echo mismatch must fail");
-
-        assert!(
-            matches!(err, RuntimeError::Service(message) if message.contains("receipt event type") && message.contains("does not match requested"))
-        );
-        assert_eq!(client.requests.lock().expect("requests").len(), 1);
-        assert!(runtime.applied.lock().expect("applied").is_empty());
-    }
-
-    #[tokio::test]
-    async fn append_window_rejects_non_event_artifact_type_without_stamping() {
-        let context = test_context(typeid::mint_case_ledger_id());
-        let input = test_input(&context);
-        let client = RecordingSubstrateClient::with_artifact_type(ArtifactType::Checkpoint);
-        let mut runtime = RecordingDurableRuntime::new(input);
-        let appender = test_appender(&client);
-
-        let err = appender
-            .append_window(&mut runtime, "process-1", 0, 25, context)
-            .await
-            .expect_err("non-event artifact_type must fail");
-
-        assert!(
-            matches!(err, RuntimeError::Service(message) if message.contains("receipt artifact type") && message.contains("is not event"))
-        );
-        assert_eq!(client.requests.lock().expect("requests").len(), 1);
-        assert!(runtime.applied.lock().expect("applied").is_empty());
     }
 
     include!("custody_admission_tests.rs");
@@ -849,7 +756,13 @@ mod tests {
 
     fn test_input(context: &CustodyAppendContext) -> CustodyAppendInput {
         let case_id = context.case_id.as_deref().expect("case id");
-        let record = ProvenanceRecord::state_transition("open", "closed", "close", Some("actor"));
+        let record = ProvenanceRecord::state_transition(
+            &fixture_minter(),
+            "open",
+            "closed",
+            "close",
+            Some("actor"),
+        );
         let metadata = context
             .metadata_for_provenance_record(case_id, 0, &record)
             .expect("metadata");
@@ -857,50 +770,31 @@ mod tests {
             .expect("custody input")
     }
 
-    fn test_appender<'a>(client: &'a RecordingSubstrateClient) -> TrellisCustodyAppender<'a> {
+    /// The scope every custody test appends under.
+    fn test_scope() -> stack_common_scope::Scope {
+        stack_common_scope::Scope::fixture("tenant-one", "workspace-one", Some("test"))
+    }
+
+    /// The case ledger `case_id` names under [`test_scope`].
+    fn test_ledger(case_id: &str) -> LedgerScope {
+        LedgerScope::of(&test_scope(), case_id).expect("a case ledger id is a ledger id")
+    }
+
+    fn test_appender<'a>(
+        client: &'a RecordingSubstrateClient,
+        case_id: &str,
+    ) -> TrellisCustodyAppender<'a> {
         TrellisCustodyAppender::new(
             client,
-            TenantScope {
-                tenant: "tenant-one".to_string(),
-                workspace: "workspace-one".to_string(),
-                environment: "test".to_string(),
-                cell: "cell-one".to_string(),
-            },
             AppendActor::service("wos-runtime"),
             ComputeContext::no_delegated_compute("wos-runtime"),
+            test_ledger(case_id),
         )
     }
 
+    #[derive(Default)]
     struct RecordingSubstrateClient {
         requests: std::sync::Mutex<Vec<SubstrateAppendRequest>>,
-        artifact_type: ArtifactType,
-        event_type_override: Option<String>,
-    }
-
-    impl Default for RecordingSubstrateClient {
-        fn default() -> Self {
-            Self {
-                requests: std::sync::Mutex::new(Vec::new()),
-                artifact_type: ArtifactType::Event,
-                event_type_override: None,
-            }
-        }
-    }
-
-    impl RecordingSubstrateClient {
-        fn with_artifact_type(artifact_type: ArtifactType) -> Self {
-            Self {
-                artifact_type,
-                ..Self::default()
-            }
-        }
-
-        fn with_event_type(event_type: impl Into<String>) -> Self {
-            Self {
-                event_type_override: Some(event_type.into()),
-                ..Self::default()
-            }
-        }
     }
 
     #[async_trait]
@@ -913,54 +807,34 @@ mod tests {
                 .lock()
                 .expect("requests")
                 .push(request.clone());
-            let receipt_event_type = self
-                .event_type_override
-                .clone()
-                .unwrap_or_else(|| request.event_type.clone());
             Ok(SubstrateAppendResult {
                 event_id: "evt_test".to_string(),
                 sequence: 0,
                 prior_event_hash: None,
                 canonical_event_hash: TEST_HASH.to_string(),
                 checkpoint_ref: format!("trellis://{}/checkpoints/cp_test", request.scope),
-                bundle_ref: "s3://test-bucket/bundle.zip".to_string(),
-                verification_receipt: VerificationReceipt {
-                    verified: true,
-                    artifact_type: self.artifact_type,
-                    event_type: receipt_event_type,
-                },
             })
         }
 
-        async fn head_bundle(
-            &self,
-            _scope: &str,
-            _tenant_scope: &TenantScope,
-        ) -> Result<Vec<u8>, StackError> {
+        async fn head_bundle(&self, _scope: &LedgerScope) -> Result<Vec<u8>, StackError> {
             unreachable!("not used by custody append test")
         }
 
         async fn bundle(
             &self,
-            _scope: &str,
+            _scope: &LedgerScope,
             _checkpoint_digest: &str,
-            _tenant_scope: &TenantScope,
         ) -> Result<Vec<u8>, StackError> {
             unreachable!("not used by custody append test")
         }
 
-        async fn signing_key_registry(
-            &self,
-            _scope: &str,
-            _tenant_scope: &TenantScope,
-        ) -> Result<Vec<u8>, StackError> {
+        async fn signing_key_registry(&self, _scope: &LedgerScope) -> Result<Vec<u8>, StackError> {
             unreachable!("not used by custody append test")
         }
 
         async fn event_type_registry(
             &self,
-            _scope: &str,
-            _tenant_scope: &TenantScope,
+            _scope: &LedgerScope,
         ) -> Result<serde_json::Value, StackError> {
             unreachable!("not used by custody append test")
         }

@@ -8,6 +8,7 @@ use wos_core::instance::{ActiveTaskStatus, WorkflowProcess};
 fn active_formspec_task_round_trips() {
     let json = r#"{
         "processId": "test_process_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "tenant": "test",
         "caseLedgerId": "test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
         "definitionUrl": "urn:wos:workflow:test",
         "definitionVersion": "1.0.0",
@@ -92,6 +93,7 @@ fn active_formspec_task_round_trips() {
 fn dual_identity_fields_round_trip() {
     let json = r#"{
         "processId": "test_process_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "tenant": "test",
         "caseLedgerId": "test_case_01jqrpd32jf8xtx9qxkkv3rqsd",
         "definitionUrl": "urn:wos:workflow:test",
         "definitionVersion": "1.0.0",
@@ -134,6 +136,7 @@ fn dual_identity_fields_round_trip() {
 fn missing_active_tasks_is_invalid() {
     let json = r#"{
         "processId": "test_process_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "tenant": "test",
         "caseLedgerId": "test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
         "definitionUrl": "urn:wos:workflow:test",
         "definitionVersion": "1.0.0",
@@ -160,6 +163,7 @@ fn terminal_task_statuses_are_not_active_tasks() {
         let json = format!(
             r#"{{
                 "processId": "test_process_01jqrpd32jf8xtx9qxkkv3rqsc",
+                "tenant": "test",
                 "caseLedgerId": "test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
                 "definitionUrl": "urn:wos:workflow:test",
                 "definitionVersion": "1.0.0",
@@ -193,6 +197,7 @@ fn terminal_task_statuses_are_not_active_tasks() {
 fn declined_status_carries_decline_reason() {
     let json = r#"{
         "processId": "test_process_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "tenant": "test",
         "caseLedgerId": "test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
         "definitionUrl": "urn:wos:workflow:test",
         "definitionVersion": "1.0.0",
@@ -225,6 +230,7 @@ fn declined_status_carries_decline_reason() {
 fn voided_status_carries_voided_by_and_voided_at() {
     let json = r#"{
         "processId": "test_process_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "tenant": "test",
         "caseLedgerId": "test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
         "definitionUrl": "urn:wos:workflow:test",
         "definitionVersion": "1.0.0",
@@ -252,6 +258,7 @@ fn voided_status_carries_voided_by_and_voided_at() {
 fn expired_status_carries_expired_at() {
     let json = r#"{
         "processId": "test_process_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "tenant": "test",
         "caseLedgerId": "test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
         "definitionUrl": "urn:wos:workflow:test",
         "definitionVersion": "1.0.0",
@@ -278,6 +285,7 @@ fn expired_status_carries_expired_at() {
 fn stalled_status_still_roundtrips() {
     let json = r#"{
         "processId": "test_process_01jqrpd32jf8xtx9qxkkv3rqsc",
+        "tenant": "test",
         "caseLedgerId": "test_case_01jqrpd32jf8xtx9qxkkv3rqsc",
         "definitionUrl": "urn:wos:workflow:test",
         "definitionVersion": "1.0.0",

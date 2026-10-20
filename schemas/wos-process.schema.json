@@ -8,6 +8,7 @@
     "$wosProcess",
     "processId",
     "caseLedgerId",
+    "tenant",
     "definitionUrl",
     "definitionVersion",
     "configuration",
@@ -102,7 +103,7 @@
     "tenant": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9-]{0,62}$",
-      "description": "Deployment tenant for this governed case (ADR 0068 D-1.1, PLN-0004). Grammar matches a single DNS label: lowercase ASCII letter first, then lowercase letters, digits, or hyphen, length 1 to 63. When processId is a WOS process TypeID, this value MUST equal the tenant prefix before the `_process_` segment. Processors set it from an explicit create-instance tenant when provided and valid, else from that TypeID prefix, else the deployment default (for example `default`). Omitted keys deserialize to the default tenant in Rust bindings.",
+      "description": "Deployment tenant for this governed case (ADR 0068 D-1.1, PLN-0004). Grammar matches a single DNS label: lowercase ASCII letter first, then lowercase letters, digits, or hyphen, length 1 to 63. When processId is a WOS process TypeID, this value MUST equal the tenant prefix before the `_process_` segment. Processors set it from an explicit create-instance tenant when provided and valid, else from that TypeID prefix; creation refuses when neither exists.",
       "examples": [
         "sba-poc",
         "default",

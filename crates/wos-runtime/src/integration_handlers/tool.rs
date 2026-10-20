@@ -12,6 +12,7 @@
 //! - A `toolId` field is read from `binding.extensions.toolId` for the
 //!   provenance record (falls back to `service_ref` if absent).
 
+use crate::runtime::process_minter;
 use wos_core::eval::ObservedAction;
 use wos_core::model::kernel::KernelDocument;
 use wos_core::{ProvenanceKind, ProvenanceRecord};
@@ -45,6 +46,7 @@ impl IntegrationBindingHandler for ToolHandler {
         binding: &IntegrationBinding,
         now_iso: &str,
     ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
+        let minter = process_minter(&record.process)?;
         let mut provenance = Vec::new();
 
         // The `toolId` is the logical tool identifier. It defaults to `service_ref`
@@ -59,6 +61,7 @@ impl IntegrationBindingHandler for ToolHandler {
         let input = build_integration_input(binding, kernel, observed, &record.process)?;
 
         if let Some(prov_record) = validate_integration_contract(
+            &minter,
             ctx.validator,
             service_ref,
             "request",
@@ -91,7 +94,7 @@ impl IntegrationBindingHandler for ToolHandler {
 
         if reused_persisted_result {
             provenance.push(ProvenanceRecord {
-                id: ProvenanceRecord::mint_id(),
+                id: ProvenanceRecord::mint_id(&minter),
                 record_kind: ProvenanceKind::IdempotencyDedup,
                 timestamp: String::new(),
                 actor_id: observed.actor_id.clone(),
@@ -120,7 +123,7 @@ impl IntegrationBindingHandler for ToolHandler {
             });
         } else {
             provenance.push(ProvenanceRecord {
-                id: ProvenanceRecord::mint_id(),
+                id: ProvenanceRecord::mint_id(&minter),
                 record_kind: ProvenanceKind::ToolInvoked,
                 timestamp: String::new(),
                 actor_id: observed.actor_id.clone(),
@@ -151,6 +154,7 @@ impl IntegrationBindingHandler for ToolHandler {
         }
 
         if let Some(prov_record) = validate_integration_contract(
+            &minter,
             ctx.validator,
             service_ref,
             "response",
@@ -168,7 +172,7 @@ impl IntegrationBindingHandler for ToolHandler {
         )?;
         if !updates.is_empty() {
             provenance.push(ProvenanceRecord {
-                id: ProvenanceRecord::mint_id(),
+                id: ProvenanceRecord::mint_id(&minter),
                 record_kind: ProvenanceKind::DataMapping,
                 timestamp: String::new(),
                 actor_id: observed.actor_id.clone(),
@@ -197,7 +201,7 @@ impl IntegrationBindingHandler for ToolHandler {
         }
 
         let post_state = record.process.case_state.clone();
-        let milestone_records = evaluate_milestones(kernel, &mut record.process, &post_state);
+        let milestone_records = evaluate_milestones(kernel, &mut record.process, &post_state)?;
         provenance.extend(milestone_records);
 
         Ok(provenance)

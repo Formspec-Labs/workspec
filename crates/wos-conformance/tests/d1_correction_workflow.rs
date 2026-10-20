@@ -6,6 +6,7 @@
 //! the processor double supplies their selected outputs, not production proof.
 
 use serde_json::{Value, json};
+use stack_common_typeid::testing::fixture_minter;
 use wos_conformance::stubs::StubService;
 use wos_core::instance::WorkflowProcess;
 use wos_core::model::governance::DelegationScope;
@@ -121,7 +122,7 @@ fn runtime() -> (WosRuntime, SharedInMemoryStore, WorkflowProcess) {
     let process = runtime
         .create_process_with_actor_bindings(
             CreateProcessRequest {
-                process_id: stack_common_typeid::mint_process_id(),
+                process_id: fixture_minter().mint_process_id(),
                 tenant: None,
                 definition_url: "urn:wos:demo:d1:passport-renewal".into(),
                 definition_version: "0.2.0".into(),

@@ -20,5 +20,6 @@ time = { version = "0.3", features = ["formatting", "parsing"] }
 wos-events = { path = "../wos-events" }
 
 [dev-dependencies]
+stack-common-typeid = { path = "../../../stack-common/crates/stack-common-typeid", features = ["testing"] }
 indexmap = "2"
 insta = { version = "1", features = ["json"] }

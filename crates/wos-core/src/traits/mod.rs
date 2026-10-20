@@ -143,18 +143,6 @@ pub trait AccessControl {
     fn can_delegate(&self, delegator_id: &str, delegate_id: &str, scope: &DelegationScope) -> bool;
 }
 
-/// Signs and verifies provenance records (Runtime S12.6).
-pub trait ProvenanceSigner {
-    /// Error type for signing operations.
-    type Error: std::error::Error;
-
-    /// Sign a provenance record.
-    fn sign(&self, record: &ProvenanceRecord) -> Result<Vec<u8>, Self::Error>;
-
-    /// Verify a signed provenance record.
-    fn verify(&self, record: &ProvenanceRecord, signature: &[u8]) -> Result<bool, Self::Error>;
-}
-
 /// Renders provenance into human-readable formats (Runtime S12.7).
 pub trait ReportRenderer {
     /// Error type for render operations.

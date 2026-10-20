@@ -81,7 +81,41 @@ impl RuntimeRecord {
         self.validate_native_presentations()?;
         crate::integration_handlers::callback::validate_pending_record(self)
             .map_err(StoreError::InvalidIntegrationEvidence)?;
+        self.validate_record_tenants()?;
         self.validate_dismissal_replay()
+    }
+
+    /// Requires every provenance record to carry its process's tenant prefix
+    /// (ADR 0068 D-4: the prefix is the scope).
+    ///
+    /// # Errors
+    /// Returns [`StoreError::InvalidCreationEvidence`] when the process's stored
+    /// `tenant` differs from its ID prefix, and
+    /// [`StoreError::InvalidProvenanceEvidence`] naming the first record whose ID
+    /// is not a TypeID of the process's tenant, or when the process ID carries no
+    /// tenant.
+    pub fn validate_record_tenants(&self) -> Result<(), StoreError> {
+        let process_tenant =
+            stack_common_typeid::Tenant::of(&self.process.process_id).ok_or_else(|| {
+                StoreError::InvalidProvenanceEvidence(format!(
+                    "process id `{}` carries no tenant",
+                    self.process.process_id
+                ))
+            })?;
+        if process_tenant.as_str() != self.process.tenant {
+            return Err(StoreError::InvalidCreationEvidence(
+                "process tenant differs from its process id prefix".into(),
+            ));
+        }
+        for record in &self.provenance_log {
+            if stack_common_typeid::Tenant::of(&record.id).as_ref() != Some(&process_tenant) {
+                return Err(StoreError::InvalidProvenanceEvidence(format!(
+                    "provenance record `{}` is not a TypeID of tenant `{process_tenant}`",
+                    record.id
+                )));
+            }
+        }
+        Ok(())
     }
 
     /// Checks retained creation identity against the actual loaded process.
@@ -121,6 +155,7 @@ impl RuntimeRecord {
             ));
         }
         self.validate_creation()?;
+        self.validate_record_tenants()?;
         crate::runtime::governance::records::validate_update(self, previous)?;
         previous.validate_native_presentations()?;
         let old_presentations: Vec<_> = previous
@@ -1098,6 +1133,7 @@ impl InMemoryStore {
     /// when the process is already present. Refusal leaves records and indexes unchanged.
     pub fn restore_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
         record.validate_creation()?;
+        record.validate_record_tenants()?;
         self.insert_record(record)
     }
 
@@ -1700,12 +1736,13 @@ fn validate_retained_provenance(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use stack_common_typeid::testing::fixture_minter;
     use wos_core::ProvenanceRecord;
     use wos_core::instance::InstanceStatus;
 
     fn creation_record() -> RuntimeRecord {
-        let process = stack_common_typeid::mint_process_id();
-        let case = stack_common_typeid::mint_case_ledger_id();
+        let process = fixture_minter().mint_process_id();
+        let case = fixture_minter().mint_case_ledger_id();
         let mut record = record_with(&process, &case);
         let kernel = serde_json::from_value(serde_json::json!({
             "$wosWorkflow": "1.0", "url": record.process.definition_url, "version": "1.0.0",
@@ -1821,7 +1858,7 @@ mod tests {
     #[test]
     fn creation_snapshot_shape_valid_wrong_process_is_refused() {
         let mut record = creation_record();
-        record.creation.as_mut().unwrap().process_id = stack_common_typeid::mint_process_id();
+        record.creation.as_mut().unwrap().process_id = fixture_minter().mint_process_id();
         record.creation.as_ref().unwrap().validate().unwrap();
         assert!(matches!(
             record.validate_creation(),
@@ -1930,11 +1967,10 @@ mod tests {
         let mut corrupt = original.clone();
         corrupt.creation.as_mut().unwrap().created_at = "invalid".into();
         let mut wrong_process = original.clone();
-        wrong_process.creation.as_mut().unwrap().process_id =
-            stack_common_typeid::mint_process_id();
+        wrong_process.creation.as_mut().unwrap().process_id = fixture_minter().mint_process_id();
         let mut wrong_case = original.clone();
         wrong_case.creation.as_mut().unwrap().case_ledger_id =
-            stack_common_typeid::mint_case_ledger_id();
+            fixture_minter().mint_case_ledger_id();
         wrong_case.creation.as_ref().unwrap().validate().unwrap();
         for invalid in [corrupt, wrong_process, wrong_case] {
             let id = invalid.process.process_id.clone();
@@ -1960,7 +1996,7 @@ mod tests {
         let mut store = InMemoryStore::new();
         store.restore_record(original.clone()).unwrap();
         let mut duplicate = original.clone();
-        let other_case = stack_common_typeid::mint_case_ledger_id();
+        let other_case = fixture_minter().mint_case_ledger_id();
         duplicate.process.case_ledger_id = other_case.clone();
         duplicate.creation.as_mut().unwrap().case_ledger_id = other_case.clone();
         duplicate.process.case_state = serde_json::json!({ "replaced": true });
@@ -2011,7 +2047,9 @@ mod tests {
             actor_bindings: None,
             process_id: process_id.to_string(),
             case_ledger_id: case_ledger_id.to_string(),
-            tenant: stack_common_typeid::DEFAULT_TENANT.to_string(),
+            tenant: stack_common_typeid::Tenant::of(process_id)
+                .expect("test process ids are TypeIDs")
+                .to_string(),
             definition_url: "urn:test:case-scoped-store".to_string(),
             definition_version: "1.0.0".to_string(),
             configuration: Vec::new(),
@@ -2053,8 +2091,13 @@ mod tests {
     }
 
     fn stamped_event(timestamp: &str, event: &str) -> ProvenanceRecord {
-        let mut record =
-            ProvenanceRecord::state_transition("from", "to", event, Some("actor:test"));
+        let mut record = ProvenanceRecord::state_transition(
+            &fixture_minter(),
+            "from",
+            "to",
+            event,
+            Some("actor:test"),
+        );
         record.timestamp = timestamp.to_string();
         record
     }
@@ -2063,12 +2106,87 @@ mod tests {
         stamped_event(timestamp, "evt")
     }
 
+    /// Every record in a written log must carry the process's tenant.
+    #[test]
+    fn writes_refuse_records_outside_the_process_tenant() {
+        let process_id = "acme_process_01hw7rm71vfay8vvw14d2pf2a0";
+        let case_id = "acme_case_01hw7rm71vfay8vvw14d2pf2a1";
+        let minted_in = |tenant: &str, timestamp: &str| {
+            let mut record = stamped(timestamp);
+            record.id = stack_common_typeid::TypeIdMinter::fixture(tenant).mint_provenance_id();
+            record
+        };
+
+        // Creation and restore check the whole log.
+        let mut foreign_at_creation = record_with(process_id, case_id);
+        foreign_at_creation
+            .provenance_log
+            .push(minted_in("default", "2026-01-01T00:00:00Z"));
+        assert!(matches!(
+            InMemoryStore::new().create_record(foreign_at_creation.clone()),
+            Err(StoreError::InvalidProvenanceEvidence(_))
+        ));
+        assert!(matches!(
+            InMemoryStore::new().restore_record(foreign_at_creation),
+            Err(StoreError::InvalidProvenanceEvidence(_))
+        ));
+
+        // A stored tenant that disagrees with the ID prefix is corrupt data.
+        let mut mismatched = record_with(process_id, case_id);
+        mismatched.process.tenant = "beta".to_string();
+        assert!(matches!(
+            InMemoryStore::new().create_record(mismatched.clone()),
+            Err(StoreError::InvalidCreationEvidence(_))
+        ));
+        assert!(matches!(
+            InMemoryStore::new().restore_record(mismatched),
+            Err(StoreError::InvalidCreationEvidence(_))
+        ));
+        let mut store = InMemoryStore::new();
+        store
+            .create_record(record_with(process_id, case_id))
+            .unwrap();
+        let mut tampered = store.load_record(process_id).unwrap();
+        tampered.process.tenant = "beta".to_string();
+        assert!(matches!(
+            store.save_record(tampered),
+            Err(StoreError::InvalidCreationEvidence(_))
+        ));
+        let mut current = store.load_record(process_id).unwrap();
+        current
+            .provenance_log
+            .push(minted_in("acme", "2026-01-02T00:00:00Z"));
+        store.save_record(current).unwrap();
+
+        // A record minted for another tenant is refused on save.
+        let mut foreign = store.load_record(process_id).unwrap();
+        foreign
+            .provenance_log
+            .push(minted_in("beta", "2026-01-03T00:00:00Z"));
+        let error = store.save_record(foreign).unwrap_err();
+        assert!(
+            matches!(&error, StoreError::InvalidProvenanceEvidence(message)
+                if message.contains("tenant `acme`")),
+            "{error:?}"
+        );
+
+        // So is a record with no TypeID shape.
+        let mut shapeless = store.load_record(process_id).unwrap();
+        let mut bad = stamped("2026-01-04T00:00:00Z");
+        bad.id = "prov-1".to_string();
+        shapeless.provenance_log.push(bad);
+        assert!(matches!(
+            store.save_record(shapeless),
+            Err(StoreError::InvalidProvenanceEvidence(_))
+        ));
+    }
+
     #[test]
     fn provenance_for_case_merges_records_from_multiple_processes_in_time_order() {
         let mut store = InMemoryStore::new();
-        let case_ledger_id = "default_case_01hw7rm71vfay8vvw14d2pf206";
-        let process_a = "default_process_01hw7rm71vfay8vvw14d2pf20b";
-        let process_b = "default_process_01hw7rm71vfay8vvw14d2pf20c";
+        let case_ledger_id = "acme_case_01hw7rm71vfay8vvw14d2pf206";
+        let process_a = "acme_process_01hw7rm71vfay8vvw14d2pf20b";
+        let process_b = "acme_process_01hw7rm71vfay8vvw14d2pf20c";
 
         store
             .create_record(record_with(process_a, case_ledger_id))
@@ -2120,9 +2238,9 @@ mod tests {
     #[test]
     fn provenance_for_case_preserves_encounter_order_for_identical_timestamps() {
         let mut store = InMemoryStore::new();
-        let case_ledger_id = "default_case_01hw7rm71vfay8vvw14d2pf209";
-        let process_a = "default_process_01hw7rm71vfay8vvw14d2pf20b";
-        let process_b = "default_process_01hw7rm71vfay8vvw14d2pf20c";
+        let case_ledger_id = "acme_case_01hw7rm71vfay8vvw14d2pf209";
+        let process_a = "acme_process_01hw7rm71vfay8vvw14d2pf20b";
+        let process_b = "acme_process_01hw7rm71vfay8vvw14d2pf20c";
         let timestamp = "2026-05-12T10:00:00Z";
 
         // Create B before A to prove the tie-break is encounter order, not
@@ -2164,20 +2282,20 @@ mod tests {
         let mut store = InMemoryStore::new();
         store
             .create_record(record_with(
-                "default_process_01hw7rm71vfay8vvw14d2pf20b",
-                "default_case_01hw7rm71vfay8vvw14d2pf205",
+                "acme_process_01hw7rm71vfay8vvw14d2pf20b",
+                "acme_case_01hw7rm71vfay8vvw14d2pf205",
             ))
             .unwrap();
 
         assert!(
             store
-                .provenance_for_case("default_case_01hw7rm71vfay8vvw14d2pf204")
+                .provenance_for_case("acme_case_01hw7rm71vfay8vvw14d2pf204")
                 .is_empty(),
             "unknown case ledger MUST yield an empty Vec, not panic or NotFound",
         );
         assert!(
             store
-                .processes_for_case("default_case_01hw7rm71vfay8vvw14d2pf204")
+                .processes_for_case("acme_case_01hw7rm71vfay8vvw14d2pf204")
                 .is_empty()
         );
     }
@@ -2185,9 +2303,9 @@ mod tests {
     #[test]
     fn save_record_rejects_case_ledger_id_mutation_without_reindexing() {
         let mut store = InMemoryStore::new();
-        let process_id = "default_process_01hw7rm71vfay8vvw14d2pf20d";
-        let original_case = "default_case_01hw7rm71vfay8vvw14d2pf208";
-        let mutated_case = "default_case_01hw7rm71vfay8vvw14d2pf207";
+        let process_id = "acme_process_01hw7rm71vfay8vvw14d2pf20d";
+        let original_case = "acme_case_01hw7rm71vfay8vvw14d2pf208";
+        let mutated_case = "acme_case_01hw7rm71vfay8vvw14d2pf207";
         store
             .create_record(record_with(process_id, original_case))
             .unwrap();
@@ -2224,8 +2342,8 @@ mod tests {
     #[test]
     fn append_provenance_for_case_writes_to_bound_process() {
         let mut store = InMemoryStore::new();
-        let case_ledger_id = "default_case_01hw7rm71vfay8vvw14d2pf202";
-        let process_id = "default_process_01hw7rm71vfay8vvw14d2pf20f";
+        let case_ledger_id = "acme_case_01hw7rm71vfay8vvw14d2pf202";
+        let process_id = "acme_process_01hw7rm71vfay8vvw14d2pf20f";
         store
             .create_record(record_with(process_id, case_ledger_id))
             .unwrap();
@@ -2250,15 +2368,15 @@ mod tests {
         let mut store = InMemoryStore::new();
         store
             .create_record(record_with(
-                "default_process_01hw7rm71vfay8vvw14d2pf20e",
-                "default_case_01hw7rm71vfay8vvw14d2pf203",
+                "acme_process_01hw7rm71vfay8vvw14d2pf20e",
+                "acme_case_01hw7rm71vfay8vvw14d2pf203",
             ))
             .unwrap();
 
         let err = store
             .append_provenance_for_case(
-                "default_case_01hw7rm71vfay8vvw14d2pf20a",
-                "default_process_01hw7rm71vfay8vvw14d2pf20e",
+                "acme_case_01hw7rm71vfay8vvw14d2pf20a",
+                "acme_process_01hw7rm71vfay8vvw14d2pf20e",
                 stamped("2026-05-12T11:00:00Z"),
             )
             .expect_err("mismatched case ledger MUST be refused");

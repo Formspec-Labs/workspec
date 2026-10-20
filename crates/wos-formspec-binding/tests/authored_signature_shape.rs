@@ -19,7 +19,7 @@ fn canonical_response() -> Value {
     let mut response: Value =
         serde_json::from_str(include_str!("fixtures/canonical-authored-response.json"))
             .expect("synthetic canonical fixture must be JSON");
-    let digest = build_signed_payload(&response, DigestAlgorithm::Sha256)
+    let digest = build_signed_payload(response.to_string().as_bytes(), DigestAlgorithm::Sha256)
         .expect("synthetic fixture must canonicalize")
         .digest;
     response["authoredSignatures"][0]["signedPayload"]["digest"] = digest.into();

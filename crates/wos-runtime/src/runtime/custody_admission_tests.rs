@@ -13,9 +13,9 @@ impl TrellisCustodyAppendHandler for AdmissionHandler {
     async fn authorize_before_append(
         &self,
         _input: &CustodyAppendInput,
-        scope: &str,
+        scope: &LedgerScope,
     ) -> Result<(), RuntimeError> {
-        assert_eq!(scope, "original-ledger");
+        assert_eq!(scope, &test_ledger("original-ledger"));
         self.calls.lock().unwrap().push("before");
         if self.refuse == Some(TrellisCustodyAppendStage::BeforeAppend) {
             return Err(RuntimeError::Service("before refused".into()));
@@ -27,9 +27,9 @@ impl TrellisCustodyAppendHandler for AdmissionHandler {
         &self,
         input: &CustodyAppendInput,
         outcome: &TrellisCustodyAppendOutcome,
-        scope: &str,
+        scope: &LedgerScope,
     ) -> Result<(), RuntimeError> {
-        assert_eq!(scope, "original-ledger");
+        assert_eq!(scope, &test_ledger("original-ledger"));
         assert_eq!(input.case_id, outcome.case_id);
         assert_eq!(input.record_id, outcome.record_id);
         self.calls.lock().unwrap().push("after");
@@ -39,12 +39,12 @@ impl TrellisCustodyAppendHandler for AdmissionHandler {
         Ok(())
     }
 
-    async fn persist_verified(
+    async fn persist_acknowledged(
         &self,
         outcome: &TrellisCustodyAppendOutcome,
-        scope: &str,
+        scope: &LedgerScope,
     ) -> Result<(), RuntimeError> {
-        assert_eq!(scope, "original-ledger");
+        assert_eq!(scope, &test_ledger("original-ledger"));
         self.calls.lock().unwrap().push("persist");
         // Model a real commit followed by a final authority refusal.
         self.outcomes.lock().unwrap().push(outcome.clone());
@@ -57,34 +57,25 @@ impl TrellisCustodyAppendHandler for AdmissionHandler {
     }
 }
 
-fn routed_appender(client: &RecordingSubstrateClient) -> TrellisCustodyAppender<'_> {
-    TrellisCustodyAppender::new_for_ledger_scope(
+/// An appender that routes every native case to the ledger `original-ledger`.
+fn routed_appender(client: &dyn SubstrateClient) -> TrellisCustodyAppender<'_> {
+    TrellisCustodyAppender::new(
         client,
-        TenantScope {
-            tenant: "tenant-one".into(),
-            workspace: "workspace-one".into(),
-            environment: "test".into(),
-            cell: "cell-one".into(),
-        },
         AppendActor::service("wos-runtime"),
         ComputeContext::no_delegated_compute("wos-runtime"),
-        "original-ledger".into(),
+        test_ledger("original-ledger"),
     )
-    .unwrap()
 }
 
 #[tokio::test]
 async fn custody_admission_routing_preserves_native_case_payload_and_key() {
-    let context = test_context(typeid::mint_case_ledger_id());
+    let context = test_context(fixture_minter().mint_case_ledger_id());
     let input = test_input(&context);
     let native_case = input.case_id.clone();
     let record_id = input.record_id.clone();
-    let key = trellis_idempotency_key(&input);
+    let key = trellis_idempotency_key(&test_ledger("original-ledger"), &input);
     let expected_payload = wos_provenance_append_request(
-        native_case.clone(),
-        test_appender(&RecordingSubstrateClient::default())
-            .tenant_scope
-            .clone(),
+        test_ledger(&native_case),
         key.clone(),
         AppendActor::service("wos-runtime"),
         provenance_record_from_input(&input).unwrap(),
@@ -107,7 +98,7 @@ async fn custody_admission_routing_preserves_native_case_payload_and_key() {
     );
     assert_eq!(*handler.outcomes.lock().unwrap(), outcomes);
     let requests = client.requests.lock().unwrap();
-    assert_eq!(requests[0].scope, "original-ledger");
+    assert_eq!(requests[0].scope, test_ledger("original-ledger"));
     assert_eq!(requests[0].idempotency_key, key);
     assert_eq!(requests[0].payload, expected_payload);
     assert_eq!(requests[0].event_type, outcomes[0].event_type);
@@ -121,7 +112,7 @@ async fn custody_admission_failures_retain_truth_and_do_not_hash_stamp_or_resend
         TrellisCustodyAppendStage::AfterAppendAdmission,
         TrellisCustodyAppendStage::Persistence,
     ] {
-        let context = test_context(typeid::mint_case_ledger_id());
+        let context = test_context(fixture_minter().mint_case_ledger_id());
         let input = test_input(&context);
         let record_id = input.record_id.clone();
         let mut runtime = RecordingDurableRuntime::new(input);
@@ -140,12 +131,15 @@ async fn custody_admission_failures_retain_truth_and_do_not_hash_stamp_or_resend
             client.requests.lock().unwrap().len(),
             usize::from(published)
         );
-        assert_eq!(failure.verified_outcome.is_some(), published);
-        if let Some(actual) = failure.verified_outcome {
+        assert_eq!(failure.acknowledged_outcome.is_some(), published);
+        if let Some(actual) = failure.acknowledged_outcome {
             assert_eq!(actual.record_id, record_id);
             assert_eq!(
                 actual.checkpoint_ref,
-                "trellis://original-ledger/checkpoints/cp_test"
+                format!(
+                    "trellis://{}/checkpoints/cp_test",
+                    test_ledger("original-ledger")
+                )
             );
         }
         assert!(failure.persisted_outcomes.is_empty());
@@ -153,43 +147,6 @@ async fn custody_admission_failures_retain_truth_and_do_not_hash_stamp_or_resend
         assert_eq!(
             handler.outcomes.lock().unwrap().len(),
             usize::from(stage == TrellisCustodyAppendStage::Persistence)
-        );
-    }
-}
-
-#[tokio::test]
-async fn custody_admission_requires_explicit_frozen_route() {
-    let context = test_context(typeid::mint_case_ledger_id());
-    let mut runtime = RecordingDurableRuntime::new(test_input(&context));
-    let client = RecordingSubstrateClient::default();
-    let handler = AdmissionHandler::default();
-    let failure = test_appender(&client)
-        .append_window_with_handler(&mut runtime, &handler, "process-1", 0, 25, context)
-        .await
-        .unwrap_err();
-    assert_eq!(failure.stage, TrellisCustodyAppendStage::BeforeAppend);
-    assert!(client.requests.lock().unwrap().is_empty());
-    assert!(handler.calls.lock().unwrap().is_empty());
-}
-
-#[test]
-fn custody_admission_constructor_refuses_invalid_namespace() {
-    let client = RecordingSubstrateClient::default();
-    for scope in ["", " ", "two/segments", "nul\0scope"] {
-        assert!(
-            TrellisCustodyAppender::new_for_ledger_scope(
-                &client,
-                TenantScope {
-                    tenant: "tenant-one".into(),
-                    workspace: "workspace-one".into(),
-                    environment: "test".into(),
-                    cell: "cell-one".into()
-                },
-                AppendActor::service("wos-runtime"),
-                ComputeContext::no_delegated_compute("wos-runtime"),
-                scope.into(),
-            )
-            .is_err()
         );
     }
 }
@@ -211,42 +168,37 @@ impl SubstrateClient for AlteredResultClient {
             return Err(StackError::unavailable("network outcome unknown"));
         }
         match self.alteration {
-            "namespace" => result.checkpoint_ref = "trellis://another-ledger/checkpoints/cp".into(),
+            "namespace" => {
+                result.checkpoint_ref =
+                    format!("trellis://{}/checkpoints/cp", test_ledger("another-ledger"))
+            }
             "empty-checkpoint" => result.checkpoint_ref = format!("trellis://{scope}/checkpoints/"),
-            "unverified" => result.verification_receipt.verified = false,
-            "event" => result.verification_receipt.event_type = "another.event".into(),
-            "artifact" => result.verification_receipt.artifact_type = ArtifactType::Checkpoint,
+
             "hash" => result.canonical_event_hash = "wrong".into(),
+            "blank-event" => result.event_id.clear(),
+            "blank-hash" => result.canonical_event_hash.clear(),
+            "blank-checkpoint" => result.checkpoint_ref.clear(),
+            "blank-prior-hash" => result.prior_event_hash = Some(String::new()),
             _ => unreachable!("known test alteration"),
         }
         Ok(result)
     }
-    async fn head_bundle(
-        &self,
-        _scope: &str,
-        _tenant: &TenantScope,
-    ) -> Result<Vec<u8>, StackError> {
+    async fn head_bundle(&self, _scope: &LedgerScope) -> Result<Vec<u8>, StackError> {
         unreachable!("not used")
     }
     async fn bundle(
         &self,
-        _scope: &str,
+        _scope: &LedgerScope,
         _checkpoint_digest: &str,
-        _tenant: &TenantScope,
     ) -> Result<Vec<u8>, StackError> {
         unreachable!("not used")
     }
-    async fn signing_key_registry(
-        &self,
-        _scope: &str,
-        _tenant: &TenantScope,
-    ) -> Result<Vec<u8>, StackError> {
+    async fn signing_key_registry(&self, _scope: &LedgerScope) -> Result<Vec<u8>, StackError> {
         unreachable!("not used")
     }
     async fn event_type_registry(
         &self,
-        _scope: &str,
-        _tenant: &TenantScope,
+        _scope: &LedgerScope,
     ) -> Result<serde_json::Value, StackError> {
         unreachable!("not used")
     }
@@ -257,32 +209,26 @@ async fn custody_admission_invalid_actual_results_stop_before_post_admission_and
     for alteration in [
         "namespace",
         "empty-checkpoint",
-        "unverified",
-        "event",
-        "artifact",
         "hash",
+        "blank-event",
+        "blank-hash",
+        "blank-checkpoint",
+        "blank-prior-hash",
     ] {
-        let context = test_context(typeid::mint_case_ledger_id());
+        let context = test_context(fixture_minter().mint_case_ledger_id());
         let mut runtime = RecordingDurableRuntime::new(test_input(&context));
         let client = AlteredResultClient {
             inner: Default::default(),
             alteration,
         };
-        let appender = TrellisCustodyAppender::new_for_ledger_scope(
-            &client,
-            test_appender(&client.inner).tenant_scope.clone(),
-            AppendActor::service("wos-runtime"),
-            ComputeContext::no_delegated_compute("wos-runtime"),
-            "original-ledger".into(),
-        )
-        .unwrap();
+        let appender = routed_appender(&client);
         let handler = AdmissionHandler::default();
         let failure = appender
             .append_window_with_handler(&mut runtime, &handler, "process-1", 0, 25, context)
             .await
             .unwrap_err();
         assert_eq!(failure.stage, TrellisCustodyAppendStage::ResultValidation);
-        assert!(failure.verified_outcome.is_none());
+        assert!(failure.acknowledged_outcome.is_none());
         assert_eq!(*handler.calls.lock().unwrap(), vec!["before"]);
         assert_eq!(client.inner.requests.lock().unwrap().len(), 1);
         assert!(runtime.applied.lock().unwrap().is_empty());
@@ -291,9 +237,15 @@ async fn custody_admission_invalid_actual_results_stop_before_post_admission_and
 
 #[tokio::test]
 async fn custody_admission_stamped_legacy_record_skips_without_invented_association() {
-    let context = test_context(typeid::mint_case_ledger_id());
+    let context = test_context(fixture_minter().mint_case_ledger_id());
     let case_id = context.case_id.as_deref().unwrap();
-    let mut record = ProvenanceRecord::state_transition("open", "closed", "close", Some("actor"));
+    let mut record = ProvenanceRecord::state_transition(
+        &fixture_minter(),
+        "open",
+        "closed",
+        "close",
+        Some("actor"),
+    );
     record.canonical_event_hash = Some(TEST_HASH.into());
     let metadata = context
         .metadata_for_provenance_record(case_id, 0, &record)
@@ -314,7 +266,7 @@ async fn custody_admission_stamped_legacy_record_skips_without_invented_associat
 
 #[tokio::test]
 async fn custody_admission_partial_window_retains_confirmed_and_uncertain_results() {
-    let context = test_context(typeid::mint_case_ledger_id());
+    let context = test_context(fixture_minter().mint_case_ledger_id());
     let first = test_input(&context);
     let second = test_input(&context);
     let first_id = first.record_id.clone();
@@ -333,7 +285,7 @@ async fn custody_admission_partial_window_retains_confirmed_and_uncertain_result
     assert_eq!(failure.stage, TrellisCustodyAppendStage::Persistence);
     assert_eq!(failure.persisted_outcomes.len(), 1);
     assert_eq!(failure.persisted_outcomes[0].record_id, first_id);
-    assert_eq!(failure.verified_outcome.unwrap().record_id, second_id);
+    assert_eq!(failure.acknowledged_outcome.unwrap().record_id, second_id);
     assert_eq!(handler.outcomes.lock().unwrap().len(), 2);
     assert_eq!(client.requests.lock().unwrap().len(), 2);
     assert!(runtime.applied.lock().unwrap().is_empty());
@@ -341,27 +293,20 @@ async fn custody_admission_partial_window_retains_confirmed_and_uncertain_result
 
 #[tokio::test]
 async fn custody_admission_network_error_keeps_external_status_unknown() {
-    let context = test_context(typeid::mint_case_ledger_id());
+    let context = test_context(fixture_minter().mint_case_ledger_id());
     let mut runtime = RecordingDurableRuntime::new(test_input(&context));
     let client = AlteredResultClient {
         inner: Default::default(),
         alteration: "append",
     };
-    let appender = TrellisCustodyAppender::new_for_ledger_scope(
-        &client,
-        test_appender(&client.inner).tenant_scope.clone(),
-        AppendActor::service("wos-runtime"),
-        ComputeContext::no_delegated_compute("wos-runtime"),
-        "original-ledger".into(),
-    )
-    .unwrap();
+    let appender = routed_appender(&client);
     let handler = AdmissionHandler::default();
     let failure = appender
         .append_window_with_handler(&mut runtime, &handler, "process-1", 0, 25, context)
         .await
         .unwrap_err();
     assert_eq!(failure.stage, TrellisCustodyAppendStage::Append);
-    assert!(failure.verified_outcome.is_none());
+    assert!(failure.acknowledged_outcome.is_none());
     assert_eq!(*handler.calls.lock().unwrap(), vec!["before"]);
     assert_eq!(client.inner.requests.lock().unwrap().len(), 1);
     assert!(runtime.applied.lock().unwrap().is_empty());
@@ -369,9 +314,9 @@ async fn custody_admission_network_error_keeps_external_status_unknown() {
 
 #[tokio::test]
 async fn custody_admission_generic_native_bytes_share_existing_publisher() {
-    let context = test_context(typeid::mint_case_ledger_id());
+    let context = test_context(fixture_minter().mint_case_ledger_id());
     let case_id = context.case_id.as_deref().unwrap().to_owned();
-    let mut record = ProvenanceRecord::action_executed("open", "log");
+    let mut record = ProvenanceRecord::action_executed(&fixture_minter(), "open", "log");
     crate::stamp_provenance(std::slice::from_mut(&mut record), "2026-10-11T00:00:00Z");
     assert!(NativeProvenanceEvent::from_record(&record).is_err());
     let kernel = serde_json::from_value(serde_json::json!({
@@ -394,7 +339,7 @@ async fn custody_admission_generic_native_bytes_share_existing_publisher() {
     assert_eq!(input.event_type, WOS_NATIVE_PROVENANCE_EVENT_LITERAL);
     let original = NativeProvenanceEvent::from_record_dcbor_slice(input.record_bytes()).unwrap();
     let expected_payload = original.payload().clone();
-    let expected_key = trellis_idempotency_key(&input);
+    let expected_key = trellis_idempotency_key(&test_ledger("original-ledger"), &input);
     let mut runtime = RecordingDurableRuntime::new(input);
     let client = RecordingSubstrateClient::default();
     let handler = AdmissionHandler::default();
@@ -404,7 +349,7 @@ async fn custody_admission_generic_native_bytes_share_existing_publisher() {
         .unwrap();
     assert_eq!(outcome[0].case_id, case_id);
     let requests = client.requests.lock().unwrap();
-    assert_eq!(requests[0].scope, "original-ledger");
+    assert_eq!(requests[0].scope, test_ledger("original-ledger"));
     assert_eq!(requests[0].event_type, WOS_NATIVE_PROVENANCE_EVENT_LITERAL);
     assert_eq!(requests[0].payload, expected_payload);
     assert_eq!(requests[0].idempotency_key, expected_key);

@@ -7,6 +7,7 @@
 //! and emits `EventEmitted` provenance with the full envelope captured in
 //! `data`.
 
+use crate::runtime::process_minter;
 use wos_core::eval::ObservedAction;
 use wos_core::model::kernel::KernelDocument;
 use wos_core::{ProvenanceKind, ProvenanceRecord};
@@ -37,6 +38,7 @@ impl IntegrationBindingHandler for EventEmitHandler {
         binding: &IntegrationBinding,
         now_iso: &str,
     ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
+        let minter = process_minter(&record.process)?;
         // `outbound_event_id` is the CloudEvent `id` for this emission — a unique
         // event identifier, not an idempotency key.
         let outbound_event_id = next_outbound_event_id(record, service_ref, "emit");
@@ -87,7 +89,7 @@ impl IntegrationBindingHandler for EventEmitHandler {
             .map_err(|e| RuntimeError::Service(e.to_string()))?;
 
         let provenance = ProvenanceRecord {
-            id: ProvenanceRecord::mint_id(),
+            id: ProvenanceRecord::mint_id(&minter),
             record_kind: ProvenanceKind::EventEmitted,
             timestamp: String::new(),
             actor_id: observed.actor_id.clone(),

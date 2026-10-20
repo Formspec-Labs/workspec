@@ -29,8 +29,13 @@ fn kernel() -> KernelDocument {
 
 #[test]
 fn selected_location_rows_and_intermediate_effects_are_actual() {
-    let mut evaluator =
-        Evaluator::with_time_and_case_state(kernel(), 0, Some(&json!({"income":150}))).unwrap();
+    let mut evaluator = Evaluator::with_time_and_case_state(
+        kernel(),
+        &stack_common_typeid::testing::fixture_minter(),
+        0,
+        Some(&json!({"income":150})),
+    )
+    .unwrap();
     assert_eq!(evaluator.initial_case_state()["level"], 100);
     evaluator
         .process_event("decide", Some("actor:human:reviewer"), None)
@@ -82,6 +87,7 @@ fn counterfactual_uses_same_native_table_without_entry_effects_or_firing() {
     };
     let actual = Evaluator::evaluate_reference_alternative(
         &kernel(),
+        &stack_common_typeid::testing::fixture_minter(),
         &location,
         &json!({"income":50,"level":100}),
         0,
@@ -97,6 +103,7 @@ fn counterfactual_uses_same_native_table_without_entry_effects_or_firing() {
     assert!(
         Evaluator::evaluate_reference_alternative(
             &kernel(),
+            &stack_common_typeid::testing::fixture_minter(),
             &TransitionLocation {
                 transition_index: 5,
                 ..location
@@ -159,8 +166,12 @@ fn compound_timer_and_repeated_self_firings_keep_actual_locations_and_distinct_i
             "ready":{"type":"atomic","transitions":[{"event":"repeat","target":"ready","guard":"true"}]}
         }}
     }}});
-    let mut evaluator =
-        Evaluator::with_time(serde_json::from_value(raw.clone()).unwrap(), 0).unwrap();
+    let mut evaluator = Evaluator::with_time(
+        serde_json::from_value(raw.clone()).unwrap(),
+        &stack_common_typeid::testing::fixture_minter(),
+        0,
+    )
+    .unwrap();
     evaluator.advance_time(1000, None).unwrap();
     for _ in 0..2 {
         assert!(evaluator.process_event("repeat", None, None).unwrap());
@@ -184,8 +195,12 @@ fn parallel_region_and_join_firings_keep_own_locations() {
             "b":{"initialState":"b-open","states":{"b-open":{"type":"atomic","transitions":[{"event":"finish","target":"b-done","guard":"true"}]},"b-done":{"type":"final"}}}
         },"transitions":[{"event":"$join","target":"done","guard":"true"}]},"done":{"type":"final"}
     }}});
-    let mut evaluator =
-        Evaluator::with_time(serde_json::from_value(raw.clone()).unwrap(), 0).unwrap();
+    let mut evaluator = Evaluator::with_time(
+        serde_json::from_value(raw.clone()).unwrap(),
+        &stack_common_typeid::testing::fixture_minter(),
+        0,
+    )
+    .unwrap();
     assert!(evaluator.process_event("finish", None, None).unwrap());
     assert_firing_locations(
         &raw,
@@ -203,8 +218,12 @@ fn automatic_and_foreach_body_and_completion_firings_keep_actual_locations() {
     let automatic = json!({"$wosWorkflow":"1.0","lifecycle":{"initialState":"open","states":{
         "open":{"type":"atomic","transitions":[{"target":"done","guard":"true"}]},"done":{"type":"final"}
     }}});
-    let mut evaluator =
-        Evaluator::with_time(serde_json::from_value(automatic.clone()).unwrap(), 0).unwrap();
+    let mut evaluator = Evaluator::with_time(
+        serde_json::from_value(automatic.clone()).unwrap(),
+        &stack_common_typeid::testing::fixture_minter(),
+        0,
+    )
+    .unwrap();
     assert!(evaluator.rescan_on_mutation().unwrap());
     assert_firing_locations(&automatic, &evaluator, &["/lifecycle/states/open"]);
     let foreach = json!({"$wosWorkflow":"1.0","lifecycle":{"initialState":"open","states":{
@@ -213,8 +232,12 @@ fn automatic_and_foreach_body_and_completion_firings_keep_actual_locations() {
             "check":{"type":"atomic","transitions":[{"target":"checked","guard":"true"}]},"checked":{"type":"final"}
         }},"transitions":[{"target":"done","guard":"true"}]},"done":{"type":"final"}
     }}});
-    let mut evaluator =
-        Evaluator::with_time(serde_json::from_value(foreach.clone()).unwrap(), 0).unwrap();
+    let mut evaluator = Evaluator::with_time(
+        serde_json::from_value(foreach.clone()).unwrap(),
+        &stack_common_typeid::testing::fixture_minter(),
+        0,
+    )
+    .unwrap();
     assert!(evaluator.process_event("begin", None, None).unwrap());
     assert_firing_locations(
         &foreach,
@@ -242,7 +265,11 @@ fn cross_compound_kernel() -> KernelDocument {
 
 #[test]
 fn compound_configuration_contains_only_the_actual_active_leaf() {
-    let evaluator = Evaluator::new(cross_compound_kernel()).unwrap();
+    let evaluator = Evaluator::new(
+        cross_compound_kernel(),
+        &stack_common_typeid::testing::fixture_minter(),
+    )
+    .unwrap();
     assert_eq!(evaluator.configuration().active_states(), ["a1"]);
     assert!(
         evaluator.configuration().contains("phaseA"),
@@ -252,7 +279,11 @@ fn compound_configuration_contains_only_the_actual_active_leaf() {
 
 #[test]
 fn cross_compound_transition_executes_full_paths_and_drops_departed_ancestors() {
-    let mut evaluator = Evaluator::new(cross_compound_kernel()).unwrap();
+    let mut evaluator = Evaluator::new(
+        cross_compound_kernel(),
+        &stack_common_typeid::testing::fixture_minter(),
+    )
+    .unwrap();
     evaluator.take_executed_actions();
     assert!(evaluator.process_event("go", None, None).unwrap());
     let messages: Vec<_> = evaluator
@@ -283,7 +314,11 @@ fn parallel_final_leaves_survive_without_an_eligible_join() {
             "b":{"initialState":"b","states":{"b":{"type":"atomic","transitions":[{"event":"finish","target":"b-done"}]},"b-done":{"type":"final"}}}
         },"transitions":[{"event":"finish","target":"wrong-parent"}]},"wrong-parent":{"type":"final"}
     }}});
-    let mut evaluator = Evaluator::new(serde_json::from_value(raw).unwrap()).unwrap();
+    let mut evaluator = Evaluator::new(
+        serde_json::from_value(raw).unwrap(),
+        &stack_common_typeid::testing::fixture_minter(),
+    )
+    .unwrap();
     assert!(evaluator.process_event("finish", None, None).unwrap());
     assert_eq!(
         evaluator.configuration().active_states(),
@@ -302,7 +337,11 @@ fn outward_parallel_transition_invalidates_pending_sibling_candidates() {
             "b":{"initialState":"b","states":{"b":{"type":"atomic","onExit":[{"action":"log","message":"exit-b"}],"transitions":[{"event":"go","target":"wrong-sibling"}]},"wrong-sibling":{"type":"final"}}}
         }},"done":{"type":"final"}
     }}});
-    let mut evaluator = Evaluator::new(serde_json::from_value(raw).unwrap()).unwrap();
+    let mut evaluator = Evaluator::new(
+        serde_json::from_value(raw).unwrap(),
+        &stack_common_typeid::testing::fixture_minter(),
+    )
+    .unwrap();
     assert!(evaluator.process_event("go", None, None).unwrap());
     assert_eq!(evaluator.configuration().active_states(), ["done"]);
     assert_eq!(evaluator.transitions().len(), 1);
@@ -323,7 +362,11 @@ fn explicit_parallel_descendant_entry_initializes_only_other_regions() {
             "b":{"initialState":"sibling","states":{"sibling":{"type":"atomic","onEntry":[{"action":"log","message":"enter-sibling"}]}}}
         }}
     }}});
-    let mut evaluator = Evaluator::new(serde_json::from_value(raw).unwrap()).unwrap();
+    let mut evaluator = Evaluator::new(
+        serde_json::from_value(raw).unwrap(),
+        &stack_common_typeid::testing::fixture_minter(),
+    )
+    .unwrap();
     assert!(evaluator.process_event("go", None, None).unwrap());
     assert_eq!(
         evaluator.configuration().active_states(),
@@ -349,7 +392,7 @@ fn explicit_parallel_descendant_entry_initializes_only_other_regions() {
 fn restored_leaf_rebuilds_scope_without_replaying_entry_actions() {
     let kernel = cross_compound_kernel();
     let instance:wos_core::instance::WorkflowProcess=serde_json::from_value(json!({
-        "processId":"test","caseLedgerId":"test-case","definitionUrl":"urn:test:compound-paths","definitionVersion":"1.0.0",
+        "processId":stack_common_typeid::testing::fixture_minter().mint_process_id(),"caseLedgerId":stack_common_typeid::testing::fixture_minter().mint_case_ledger_id(),"tenant":"acme","definitionUrl":"urn:test:compound-paths","definitionVersion":"1.0.0",
         "configuration":["b2"],"caseState":{},"provenancePosition":0,"timers":[],"activeTasks":[],"status":"active","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"
     })).unwrap();
     let mut evaluator = Evaluator::from_instance(kernel, &instance, 0).unwrap();
@@ -377,7 +420,11 @@ fn nested_parallel_multicast_reaches_other_regions_before_ancestor_fallback() {
             "b":{"initialState":"b","states":{"b":{"type":"atomic","transitions":[{"event":"go","target":"b-done"}]},"b-done":{"type":"final"}}}
         }}
     }}});
-    let mut evaluator = Evaluator::new(serde_json::from_value(raw).unwrap()).unwrap();
+    let mut evaluator = Evaluator::new(
+        serde_json::from_value(raw).unwrap(),
+        &stack_common_typeid::testing::fixture_minter(),
+    )
+    .unwrap();
     assert!(evaluator.process_event("go", None, None).unwrap());
     assert_eq!(
         evaluator.configuration().active_states(),
@@ -394,7 +441,7 @@ fn nested_parallel_multicast_reaches_other_regions_before_ancestor_fallback() {
 }
 
 fn saved_leaves(leaves: &[&str]) -> wos_core::instance::WorkflowProcess {
-    serde_json::from_value(json!({"processId":"test","caseLedgerId":"test-case","definitionUrl":"urn:test:compound-paths","definitionVersion":"1.0.0","configuration":leaves,"caseState":{},"provenancePosition":0,"timers":[],"activeTasks":[],"status":"active","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"})).unwrap()
+    serde_json::from_value(json!({"processId":stack_common_typeid::testing::fixture_minter().mint_process_id(),"caseLedgerId":stack_common_typeid::testing::fixture_minter().mint_case_ledger_id(),"tenant":"acme","definitionUrl":"urn:test:compound-paths","definitionVersion":"1.0.0","configuration":leaves,"caseState":{},"provenancePosition":0,"timers":[],"activeTasks":[],"status":"active","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"})).unwrap()
 }
 fn cancellable_parallel(policy: &str, join: bool) -> KernelDocument {
     let mut raw = json!({"$wosWorkflow": "1.0", "lifecycle": {"initialState": "parallel", "states": {"parallel": {"type": "parallel", "regions": {"a": {"initialState": "winner", "states": {"winner": {"type": "atomic", "transitions": [{"event": "win", "target": "won"}]}, "won": {"type": "final", "tags": ["error"]}}}, "b": {"initialState": "loser", "states": {"loser": {"type": "compound", "historyState": "deep", "initialState": "child", "onExit": [{"action": "log", "message": "exit-loser"}], "states": {"child": {"type": "atomic", "onExit": [{"action": "log", "message": "exit-child"}]}}}}}}}, "done": {"type": "final"}}}});
@@ -414,7 +461,11 @@ fn parallel_declared_transition_reenters_all_regions_with_explicit_target() {
             "b":{"initialState":"b1","states":{"b1":{"type":"atomic"},"b2":{"type":"atomic"}}}
         }}
     }}});
-    let mut evaluator = Evaluator::new(serde_json::from_value(raw).unwrap()).unwrap();
+    let mut evaluator = Evaluator::new(
+        serde_json::from_value(raw).unwrap(),
+        &stack_common_typeid::testing::fixture_minter(),
+    )
+    .unwrap();
     assert!(evaluator.process_event("advance", None, None).unwrap());
     assert!(evaluator.configuration().contains("a2"));
     evaluator.take_executed_actions();
@@ -456,7 +507,11 @@ fn cancellation_exits_nested_hooks_clears_history_and_retains_actual_evidence() 
 #[test]
 fn cancellation_policies_deliver_join_after_the_winning_final() {
     for policy in ["cancel-siblings", "fail-fast"] {
-        let mut evaluator = Evaluator::new(cancellable_parallel(policy, true)).unwrap();
+        let mut evaluator = Evaluator::new(
+            cancellable_parallel(policy, true),
+            &stack_common_typeid::testing::fixture_minter(),
+        )
+        .unwrap();
         assert!(evaluator.process_event("win", None, None).unwrap());
         assert_eq!(
             evaluator.configuration().active_states(),
@@ -502,7 +557,11 @@ fn child_cross_region_transition_reenters_parallel_without_conflicting_leaves() 
             "b":{"initialState":"b1","states":{"b1":{"type":"atomic"},"b2":{"type":"atomic"}}}
         }}
     }}});
-    let mut evaluator = Evaluator::new(serde_json::from_value(raw).unwrap()).unwrap();
+    let mut evaluator = Evaluator::new(
+        serde_json::from_value(raw).unwrap(),
+        &stack_common_typeid::testing::fixture_minter(),
+    )
+    .unwrap();
     assert!(evaluator.process_event("cross", None, None).unwrap());
     assert_eq!(evaluator.configuration().active_states(), ["a", "b2"]);
 }
@@ -519,7 +578,11 @@ fn nested_winning_join_cancels_outer_sibling_before_it_can_handle_the_event() {
             },"transitions":[{"event":{"kind":"signal","name":"$join","scope":"instance"},"target":"done"}]},"done":{"type":"final"}
         }}});
         raw["lifecycle"]["states"]["outer"]["cancellationPolicy"] = json!(policy);
-        let mut evaluator = Evaluator::new(serde_json::from_value(raw).unwrap()).unwrap();
+        let mut evaluator = Evaluator::new(
+            serde_json::from_value(raw).unwrap(),
+            &stack_common_typeid::testing::fixture_minter(),
+        )
+        .unwrap();
         assert!(evaluator.process_event("go", None, None).unwrap());
         assert_eq!(
             evaluator.configuration().active_states(),
@@ -553,7 +616,11 @@ fn shallow_and_deep_history_preserve_their_distinct_reentry_behavior() {
             "outside":{"type":"atomic","transitions":[{"event":"resume","target":"history"}]}
         }}});
         raw["lifecycle"]["states"]["history"]["historyState"] = json!(mode);
-        let mut evaluator = Evaluator::new(serde_json::from_value(raw).unwrap()).unwrap();
+        let mut evaluator = Evaluator::new(
+            serde_json::from_value(raw).unwrap(),
+            &stack_common_typeid::testing::fixture_minter(),
+        )
+        .unwrap();
         assert!(evaluator.process_event("next", None, None).unwrap());
         assert!(evaluator.process_event("pause", None, None).unwrap());
         assert!(evaluator.process_event("resume", None, None).unwrap());
@@ -574,7 +641,11 @@ fn regional_leaf_replacement_retains_authored_document_order() {
         }}
     }}});
     let kernel: KernelDocument = serde_json::from_value(raw).unwrap();
-    let mut evaluator = Evaluator::new(kernel.clone()).unwrap();
+    let mut evaluator = Evaluator::new(
+        kernel.clone(),
+        &stack_common_typeid::testing::fixture_minter(),
+    )
+    .unwrap();
     assert!(evaluator.process_event("advance", None, None).unwrap());
     assert_eq!(evaluator.configuration().active_states(), ["a2", "b"]);
     assert!(Evaluator::from_instance(kernel.clone(), &saved_leaves(&["a2", "b"]), 0).is_ok());
@@ -589,7 +660,11 @@ fn same_id_parallel_reentry_never_dispatches_old_event_to_new_sibling_states() {
             "b":{"initialState":"b1","states":{"b1":{"type":"atomic"},"b2":{"type":"atomic","transitions":[{"event":"cross","target":"wrong","actions":[{"action":"log","message":"new-sibling-must-not-run"}]}]},"wrong":{"type":"final"}}}
         }}
     }}});
-    let mut evaluator = Evaluator::new(serde_json::from_value(raw).unwrap()).unwrap();
+    let mut evaluator = Evaluator::new(
+        serde_json::from_value(raw).unwrap(),
+        &stack_common_typeid::testing::fixture_minter(),
+    )
+    .unwrap();
     assert!(evaluator.process_event("cross", None, None).unwrap());
     assert_eq!(evaluator.configuration().active_states(), ["a", "b2"]);
     assert_eq!(evaluator.transitions().len(), 1);
@@ -605,7 +680,11 @@ fn foreach_completion_reentry_never_dispatches_old_event_to_new_sibling_states()
             "b":{"initialState":"b1","states":{"b1":{"type":"atomic"},"b2":{"type":"atomic","transitions":[{"event":"go","target":"wrong","actions":[{"action":"log","message":"new-sibling-must-not-run"}]}]},"wrong":{"type":"final"}}}
         }}
     }}});
-    let mut evaluator = Evaluator::new(serde_json::from_value(raw).unwrap()).unwrap();
+    let mut evaluator = Evaluator::new(
+        serde_json::from_value(raw).unwrap(),
+        &stack_common_typeid::testing::fixture_minter(),
+    )
+    .unwrap();
     assert!(evaluator.process_event("go", None, None).unwrap());
     assert_eq!(evaluator.configuration().active_states(), ["a", "b2"]);
     assert_eq!(evaluator.transitions().len(), 2);
@@ -621,7 +700,11 @@ fn synchronous_foreach_reentry_invalidates_pending_parallel_entry_work() {
             "b":{"initialState":"b1","states":{"b1":{"type":"atomic","onEntry":[{"action":"log","message":"stale-default"}]},"b2":{"type":"atomic"}}}
         }}
     }}});
-    let mut evaluator = Evaluator::new(serde_json::from_value(raw).unwrap()).unwrap();
+    let mut evaluator = Evaluator::new(
+        serde_json::from_value(raw).unwrap(),
+        &stack_common_typeid::testing::fixture_minter(),
+    )
+    .unwrap();
     assert!(evaluator.process_event("go", None, None).unwrap());
     assert_eq!(evaluator.configuration().active_states(), ["a", "b2"]);
     assert!(
@@ -640,7 +723,11 @@ fn initial_parallel_entry_stops_after_synchronous_region_exit() {
             "b":{"initialState":"b","states":{"b":{"type":"atomic","onEntry":[{"action":"log","message":"stale-default"}]}}}
         }},"outside":{"type":"final"}
     }}});
-    let evaluator = Evaluator::new(serde_json::from_value(raw).unwrap()).unwrap();
+    let evaluator = Evaluator::new(
+        serde_json::from_value(raw).unwrap(),
+        &stack_common_typeid::testing::fixture_minter(),
+    )
+    .unwrap();
     assert_eq!(evaluator.configuration().active_states(), ["outside"]);
     assert!(evaluator.executed_actions().is_empty());
 }
@@ -657,6 +744,7 @@ fn deep_history_entry_stops_after_synchronous_saved_leaf_exit() {
     }}});
     let mut evaluator = Evaluator::with_time_and_case_state(
         serde_json::from_value(raw).unwrap(),
+        &stack_common_typeid::testing::fixture_minter(),
         0,
         Some(&json!({"leave":false})),
     )
@@ -686,6 +774,7 @@ fn interrupted_history_restore_does_not_resurrect_history_cleared_by_parent_exit
     }}});
     let mut evaluator = Evaluator::with_time_and_case_state(
         serde_json::from_value(raw).unwrap(),
+        &stack_common_typeid::testing::fixture_minter(),
         0,
         Some(&json!({"leave":false})),
     )
@@ -712,6 +801,7 @@ fn history_restore_stops_when_nested_exit_invalidates_remaining_saved_branches()
     }}});
     let mut evaluator = Evaluator::with_time_and_case_state(
         serde_json::from_value(raw).unwrap(),
+        &stack_common_typeid::testing::fixture_minter(),
         0,
         Some(&json!({"leave":false})),
     )
@@ -740,6 +830,7 @@ fn local_history_reentry_skips_invalidated_saved_leaves_and_restores_unaffected_
     }}});
     let mut evaluator = Evaluator::with_time_and_case_state(
         serde_json::from_value(raw).unwrap(),
+        &stack_common_typeid::testing::fixture_minter(),
         0,
         Some(&json!({"leave":false})),
     )

@@ -91,6 +91,7 @@ impl CompanionPolicy for ReferenceCompanionPolicy {
         &mut self,
         context: RuntimeEventContext,
     ) -> Result<RuntimeEventDecision, RuntimeError> {
+        let minter = crate::runtime::process_minter(&context.instance)?;
         let mut provenance = Vec::new();
         let event = context.event;
         let event_data = event.data.clone();
@@ -108,7 +109,7 @@ impl CompanionPolicy for ReferenceCompanionPolicy {
             observed
                 .refusals
                 .push("native agent event requires its admitted native policy".into());
-            provenance.push(policy_record(ProvenanceKind::DeonticEvaluation, serde_json::json!({"exercise":"nativeAgentEventRefusal","actorId":actor_id,"disposition":"unsupported","refusals":observed.refusals,"executionReadinessAssessed":false,"unexecutedStages":["invocation","inputDefinitionValidation","outputDefinitionValidation","humanReview","governedCommit"]})));
+            provenance.push(policy_record(&minter, ProvenanceKind::DeonticEvaluation, serde_json::json!({"exercise":"nativeAgentEventRefusal","actorId":actor_id,"disposition":"unsupported","refusals":observed.refusals,"executionReadinessAssessed":false,"unexecutedStages":["invocation","inputDefinitionValidation","outputDefinitionValidation","humanReview","governedCommit"]})));
             return Ok(RuntimeEventDecision {
                 event: None,
                 provenance,
@@ -129,6 +130,7 @@ impl CompanionPolicy for ReferenceCompanionPolicy {
                 let mut observed = PolicyEvaluation::default();
                 observed.refusals.push("native agent event without supplied output requires an executed owning operation".into());
                 provenance.extend(native_policy_provenance(
+                    &minter,
                     &observed,
                     actor_id,
                     policy,
@@ -149,6 +151,7 @@ impl CompanionPolicy for ReferenceCompanionPolicy {
                         "unsupported agent event hint {feature}: owning operation was not executed"
                     ));
                     provenance.extend(native_policy_provenance(
+                        &minter,
                         &observed,
                         actor_id,
                         policy,
@@ -248,6 +251,7 @@ impl CompanionPolicy for ReferenceCompanionPolicy {
                     );
                 }
                 provenance.extend(native_policy_provenance(
+                    &minter,
                     &observed,
                     actor_id,
                     policy,
@@ -285,6 +289,7 @@ impl CompanionPolicy for ReferenceCompanionPolicy {
 }
 
 fn native_policy_provenance(
+    minter: &stack_common_typeid::TypeIdMinter,
     observed: &PolicyEvaluation,
     actor_id: &str,
     policy: &NativeAiPolicy,
@@ -306,6 +311,7 @@ fn native_policy_provenance(
             ProvenanceKind::DeonticEvaluation
         };
         let mut record = policy_record(
+            minter,
             kind,
             serde_json::json!({"ruleId":observation.rule_id,"constraintId":observation.rule_id,"pointer":observation.pointer,"kind":observation.kind,"outcome":observation.outcome,"action":observation.action,"attribution":observation.attribution}),
         );
@@ -314,15 +320,22 @@ fn native_policy_provenance(
         }
         records.push(record);
     }
-    records.push(policy_record(ProvenanceKind::DeonticEvaluation,serde_json::json!({"exercise":exercise,"workflowUrl":policy.workflow_url(),"workflowVersion":policy.workflow_version(),"actorId":actor_id,"modelIdentifier":policy.agent(actor_id).map(|agent|agent.model_identifier.as_str()),"modelVersion":policy.agent(actor_id).map(|agent|agent.model_version.as_str()),"disposition":observed.disposition(),"errors":observed.errors,"refusals":observed.refusals,"confidenceReport":observed.confidence_report,"unexecutedStages":["invocation","inputDefinitionValidation","outputDefinitionValidation","humanReview","governedCommit"],"executionReadinessAssessed":false})));
+    records.push(policy_record(minter, ProvenanceKind::DeonticEvaluation,serde_json::json!({"exercise":exercise,"workflowUrl":policy.workflow_url(),"workflowVersion":policy.workflow_version(),"actorId":actor_id,"modelIdentifier":policy.agent(actor_id).map(|agent|agent.model_identifier.as_str()),"modelVersion":policy.agent(actor_id).map(|agent|agent.model_version.as_str()),"disposition":observed.disposition(),"errors":observed.errors,"refusals":observed.refusals,"confidenceReport":observed.confidence_report,"unexecutedStages":["invocation","inputDefinitionValidation","outputDefinitionValidation","humanReview","governedCommit"],"executionReadinessAssessed":false})));
     records
 }
-fn policy_record(kind: ProvenanceKind, data: serde_json::Value) -> ProvenanceRecord {
-    let mut record = ProvenanceRecord::configuration_warning(ConfigurationWarningInput {
-        subject: "native-ai-policy",
-        unresolved_ref: None,
-        context: None,
-    });
+fn policy_record(
+    minter: &stack_common_typeid::TypeIdMinter,
+    kind: ProvenanceKind,
+    data: serde_json::Value,
+) -> ProvenanceRecord {
+    let mut record = ProvenanceRecord::configuration_warning(
+        minter,
+        ConfigurationWarningInput {
+            subject: "native-ai-policy",
+            unresolved_ref: None,
+            context: None,
+        },
+    );
     record.record_kind = kind;
     record.data = Some(data);
     record

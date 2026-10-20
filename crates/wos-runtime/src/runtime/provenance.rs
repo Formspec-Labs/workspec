@@ -6,6 +6,7 @@
 //! before persistence: timestamp stamping, Semantic Profile field population,
 //! compensation records, and task validation provenance construction.
 
+use stack_common_typeid::TypeIdMinter;
 use wos_core::instance::WorkflowProcess;
 use wos_core::model::kernel::{ActorKind, KernelDocument};
 use wos_core::{ProvenanceAuditTier, ProvenanceKind, ProvenanceRecord};
@@ -256,12 +257,14 @@ pub fn stamp_custody_receipt(
 }
 
 pub(super) fn contract_validation_record(
+    minter: &TypeIdMinter,
     task_id: &str,
     actor_id: &str,
     response: &serde_json::Value,
     validation: &SubmissionValidation,
 ) -> ProvenanceRecord {
     ProvenanceRecord::contract_validation(
+        minter,
         task_id,
         Some(actor_id),
         serde_json::json!({
@@ -290,6 +293,7 @@ fn digest_of(items: &[String]) -> Option<String> {
 #[cfg(test)]
 mod stamp_custody_receipt_tests {
     use super::*;
+    use stack_common_typeid::testing::fixture_minter;
     use wos_events::custody::CustodyAppendReceipt;
 
     const HASH_A: &str = "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c";
@@ -297,14 +301,14 @@ mod stamp_custody_receipt_tests {
 
     #[test]
     fn stamps_when_absent() {
-        let mut record = ProvenanceRecord::unmatched_event("e", None);
+        let mut record = ProvenanceRecord::unmatched_event(&fixture_minter(), "e", None);
         stamp_custody_receipt(&mut record, &CustodyAppendReceipt::new(HASH_A)).expect("stamp");
         assert_eq!(record.canonical_event_hash.as_deref(), Some(HASH_A));
     }
 
     #[test]
     fn no_op_when_hash_unchanged() {
-        let mut record = ProvenanceRecord::unmatched_event("e", None);
+        let mut record = ProvenanceRecord::unmatched_event(&fixture_minter(), "e", None);
         record.canonical_event_hash = Some(HASH_A.to_string());
         stamp_custody_receipt(&mut record, &CustodyAppendReceipt::new(HASH_A)).expect("idempotent");
         assert_eq!(record.canonical_event_hash.as_deref(), Some(HASH_A));
@@ -312,7 +316,7 @@ mod stamp_custody_receipt_tests {
 
     #[test]
     fn conflict_when_hash_differs() {
-        let mut record = ProvenanceRecord::unmatched_event("e", None);
+        let mut record = ProvenanceRecord::unmatched_event(&fixture_minter(), "e", None);
         record.canonical_event_hash = Some(HASH_A.to_string());
         let err = stamp_custody_receipt(&mut record, &CustodyAppendReceipt::new(HASH_B))
             .expect_err("conflict");

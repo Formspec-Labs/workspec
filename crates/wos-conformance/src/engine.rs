@@ -13,6 +13,7 @@
 //! management, provenance recording, parallel regions, compound states)
 //! are exercised through the runtime boundary.
 
+use stack_common_typeid::TypeIdMinter;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -626,7 +627,14 @@ impl WorkflowEngine {
                 let ms = match parse_iso_duration_to_ms(delay) {
                     Ok(ms) => ms,
                     Err(raw) => {
-                        auxiliary_provenance.push(ProvenanceRecord::invalid_duration(raw, "delay"));
+                        let minter =
+                            TypeIdMinter::for_parent(CONFORMANCE_INSTANCE_ID).ok_or_else(|| {
+                                ConformanceError::Engine(
+                                    "conformance instance id is not a TypeID".to_string(),
+                                )
+                            })?;
+                        auxiliary_provenance
+                            .push(ProvenanceRecord::invalid_duration(&minter, raw, "delay"));
                         0
                     }
                 };

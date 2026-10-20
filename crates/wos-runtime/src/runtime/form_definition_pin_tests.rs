@@ -1,4 +1,5 @@
 use super::*;
+use stack_common_typeid::testing::fixture_minter;
 
 fn kernel_json() -> serde_json::Value {
     serde_json::json!({
@@ -32,7 +33,7 @@ fn request(id: &str) -> CreateProcessRequest {
 fn heterogeneous_form_pins_survive_reload_and_later_task_creation() {
     let kernel: KernelDocument = serde_json::from_value(kernel_json()).unwrap();
     let mut runtime = runtime_with_kernel(kernel.clone());
-    let id = stack_common_typeid::mint_process_id();
+    let id = fixture_minter().mint_process_id();
     let created = runtime.create_process(request(&id)).unwrap();
     assert_eq!(created.definition_version, "0.3.0");
     let first = &created.active_tasks[0];
@@ -115,7 +116,7 @@ fn missing_or_blank_future_form_pin_refuses_before_persistence_or_presentation()
         let presenter = RecordingPresenter::default();
         let presented = presenter.presented.clone();
         runtime.presenter = Box::new(presenter);
-        let id = stack_common_typeid::mint_process_id();
+        let id = fixture_minter().mint_process_id();
         let error = runtime.create_process(request(&id)).unwrap_err();
         assert!(
             matches!(error,RuntimeError::MissingMetadata(ref message) if message.contains("correction") && message.contains("definitionVersion"))
@@ -140,7 +141,7 @@ fn future_foreach_body_pins_are_checked_before_process_creation() {
         let mut valid = runtime_with_kernel(serde_json::from_value(document.clone()).unwrap());
         assert!(
             valid
-                .create_process(request(&stack_common_typeid::mint_process_id()))
+                .create_process(request(&fixture_minter().mint_process_id()))
                 .is_ok()
         );
         document["contracts"]["correction"]
@@ -151,7 +152,7 @@ fn future_foreach_body_pins_are_checked_before_process_creation() {
         let presenter = RecordingPresenter::default();
         let presented = presenter.presented.clone();
         runtime.presenter = Box::new(presenter);
-        let id = stack_common_typeid::mint_process_id();
+        let id = fixture_minter().mint_process_id();
         assert!(matches!(
             runtime.create_process(request(&id)),
             Err(RuntimeError::MissingMetadata(_))
@@ -171,7 +172,7 @@ fn migration_refuses_missing_target_form_pin_without_changing_original_evidence(
         .unwrap()
         .remove("definitionVersion");
     let mut runtime = runtime_with_kernels(vec![original, serde_json::from_value(target).unwrap()]);
-    let id = stack_common_typeid::mint_process_id();
+    let id = fixture_minter().mint_process_id();
     runtime.create_process(request(&id)).unwrap();
     let before = runtime.store.load_record(&id).unwrap();
     assert!(matches!(
@@ -216,7 +217,7 @@ fn future_compensation_contract_errors_refuse_before_persistence_or_presentation
         let presenter = RecordingPresenter::default();
         let presented = presenter.presented.clone();
         runtime.presenter = Box::new(presenter);
-        let id = stack_common_typeid::mint_process_id();
+        let id = stack_common_typeid::testing::fixture_minter().mint_process_id();
         let error = runtime.create_process(request(&id)).unwrap_err();
         assert!(if missing_contract {
             matches!(error, RuntimeError::ContractNotFound(_))

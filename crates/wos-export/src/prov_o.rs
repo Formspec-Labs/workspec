@@ -260,6 +260,7 @@ fn agent_iri(actor_id: &str, config: &ExportConfig) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use stack_common_typeid::testing::fixture_minter;
     use wos_core::{ProvenanceKind, ProvenanceLog, ProvenanceRecord};
 
     fn config() -> ExportConfig {
@@ -270,7 +271,8 @@ mod tests {
     }
 
     fn stamped_transition(actor: Option<&str>) -> ProvenanceRecord {
-        let mut record = ProvenanceRecord::state_transition("a", "b", "ev", actor);
+        let mut record =
+            ProvenanceRecord::state_transition(&fixture_minter(), "a", "b", "ev", actor);
         record.timestamp = "2026-01-01T00:00:00Z".into();
         record
     }
@@ -356,6 +358,7 @@ mod tests {
         let mut log = ProvenanceLog::default();
         // Unstamped: timestamp is empty. §5.3 documents this as "unknown".
         log.push(ProvenanceRecord::state_transition(
+            &fixture_minter(),
             "a",
             "b",
             "ev",
@@ -397,7 +400,8 @@ mod tests {
     #[test]
     fn omits_agent_link_when_actor_id_absent() {
         let mut log = ProvenanceLog::default();
-        let mut record = ProvenanceRecord::state_transition("a", "b", "ev", None);
+        let mut record =
+            ProvenanceRecord::state_transition(&fixture_minter(), "a", "b", "ev", None);
         record.timestamp = "2026-01-01T00:00:00Z".into();
         log.push(record);
 
@@ -428,7 +432,10 @@ mod tests {
         with_state.lifecycle_state = Some("draft".into());
         log.push(with_state);
         // Second record has no lifecycle_state → property omitted.
-        log.push(ProvenanceRecord::state_entered("approved"));
+        log.push(ProvenanceRecord::state_entered(
+            &fixture_minter(),
+            "approved",
+        ));
 
         let document = export(&log, &config());
 
@@ -705,7 +712,8 @@ mod tests {
 
         let mut log = ProvenanceLog::default();
         for kind in all {
-            let mut record = ProvenanceRecord::state_transition("a", "b", "ev", None);
+            let mut record =
+                ProvenanceRecord::state_transition(&fixture_minter(), "a", "b", "ev", None);
             record.record_kind = *kind;
             record.timestamp = "2026-01-01T00:00:00Z".into();
             log.push(record);

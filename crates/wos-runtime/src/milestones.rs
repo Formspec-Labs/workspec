@@ -7,6 +7,7 @@
 //! once per workflow process: once its condition has been true, the id is recorded
 //! in `WorkflowProcess::fired_milestones` and the milestone is never re-evaluated.
 
+use crate::runtime::{RuntimeError, process_minter};
 use std::collections::HashMap;
 
 use fel_core::{evaluate, fel_to_json, has_error_diagnostics, parse};
@@ -24,19 +25,25 @@ use wos_core::{ProvenanceKind, ProvenanceRecord};
 ///
 /// Records are returned in lexicographic milestone-id order so the provenance
 /// stream is deterministic regardless of `HashMap` iteration order.
+///
+/// Record IDs are minted under the tenant in `instance.process_id`.
+///
+/// # Errors
+/// Returns [`RuntimeError::TenantUnresolved`] when the process ID is not a TypeID.
 pub fn evaluate_milestones(
     kernel: &KernelDocument,
     instance: &mut WorkflowProcess,
     post_state: &serde_json::Value,
-) -> Vec<ProvenanceRecord> {
+) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
     if kernel.lifecycle.milestones.is_empty() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
 
     let case_map = match case_state_as_map(post_state) {
         Some(map) => map,
-        None => return Vec::new(),
+        None => return Ok(Vec::new()),
     };
+    let minter = process_minter(instance)?;
 
     // Sort milestone ids lexically for deterministic output.
     let mut ids: Vec<&String> = kernel.lifecycle.milestones.keys().collect();
@@ -55,7 +62,7 @@ pub fn evaluate_milestones(
         if milestone_condition_true(&milestone.condition, &case_map) {
             instance.fired_milestones.insert(id.clone());
             records.push(ProvenanceRecord {
-                id: ProvenanceRecord::mint_id(),
+                id: ProvenanceRecord::mint_id(&minter),
                 record_kind: ProvenanceKind::MilestoneFired,
                 timestamp: String::new(),
                 actor_id: None,
@@ -79,7 +86,7 @@ pub fn evaluate_milestones(
         }
     }
 
-    records
+    Ok(records)
 }
 
 /// Evaluate a FEL condition against the case-state map.
@@ -150,9 +157,9 @@ mod tests {
     fn bare_instance() -> WorkflowProcess {
         WorkflowProcess {
             actor_bindings: None,
-            process_id: "test".to_string(),
-            case_ledger_id: "test-case".to_string(),
-            tenant: stack_common_typeid::DEFAULT_TENANT.to_string(),
+            process_id: "beta_process_01hw7rm71vfay8vvw14d2pf2db".to_string(),
+            case_ledger_id: "beta_case_01hw7rm71vfay8vvw14d2pf2db".to_string(),
+            tenant: "beta".to_string(),
             definition_url: "urn:test".to_string(),
             definition_version: "1.0.0".to_string(),
             configuration: Vec::new(),
@@ -190,7 +197,7 @@ mod tests {
         let mut instance = bare_instance();
         let state = serde_json::json!({ "approved": true });
 
-        let records = evaluate_milestones(&kernel, &mut instance, &state);
+        let records = evaluate_milestones(&kernel, &mut instance, &state).unwrap();
 
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].record_kind, ProvenanceKind::MilestoneFired);
@@ -199,6 +206,21 @@ mod tests {
             Some(serde_json::json!({ "milestoneId": "approved" }))
         );
         assert!(instance.fired_milestones.contains("approved"));
+        // The record inherits the process ID's tenant, not a fixture default.
+        assert!(records[0].id.starts_with("beta_prov_"), "{}", records[0].id);
+    }
+
+    #[test]
+    fn refuses_a_process_whose_id_carries_no_tenant() {
+        let kernel = kernel_with_milestones(&serde_json::json!({
+            "approved": { "condition": "caseFile.approved == true" }
+        }));
+        let mut instance = bare_instance();
+        instance.process_id = "test".to_string();
+        let state = serde_json::json!({ "approved": true });
+        let error = evaluate_milestones(&kernel, &mut instance, &state).unwrap_err();
+        assert!(matches!(error, RuntimeError::TenantUnresolved), "{error:?}");
+        assert!(instance.fired_milestones.is_empty());
     }
 
     #[test]
@@ -209,7 +231,7 @@ mod tests {
         let mut instance = bare_instance();
         let state = serde_json::json!({ "approved": false });
 
-        let records = evaluate_milestones(&kernel, &mut instance, &state);
+        let records = evaluate_milestones(&kernel, &mut instance, &state).unwrap();
 
         assert!(records.is_empty());
         assert!(!instance.fired_milestones.contains("approved"));
@@ -224,7 +246,7 @@ mod tests {
         instance.fired_milestones.insert("approved".to_string());
         let state = serde_json::json!({ "approved": true });
 
-        let records = evaluate_milestones(&kernel, &mut instance, &state);
+        let records = evaluate_milestones(&kernel, &mut instance, &state).unwrap();
 
         assert!(
             records.is_empty(),
@@ -241,7 +263,7 @@ mod tests {
         let mut instance = bare_instance();
         let state = serde_json::json!({ "a": true, "z": true });
 
-        let records = evaluate_milestones(&kernel, &mut instance, &state);
+        let records = evaluate_milestones(&kernel, &mut instance, &state).unwrap();
 
         assert_eq!(records.len(), 2);
         assert_eq!(
@@ -260,7 +282,7 @@ mod tests {
         let mut instance = bare_instance();
         let state = serde_json::json!({ "anything": true });
 
-        let records = evaluate_milestones(&kernel, &mut instance, &state);
+        let records = evaluate_milestones(&kernel, &mut instance, &state).unwrap();
         assert!(records.is_empty());
     }
 }

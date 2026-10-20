@@ -108,14 +108,13 @@ def test_formspec_task_context_accepts_process_id():
     assert errors == [], f"valid process task context rejected: {errors}"
 
 
-def test_workflow_process_omitted_tenant_still_validates():
-    """Older persisted rows and minimal hand-authored fixtures may omit tenant."""
+def test_workflow_process_requires_tenant():
     schema = json.loads(PROCESS_SCHEMA.read_text())
     validator = Draft202012Validator(schema)
     doc = _minimal_instance()
     del doc["tenant"]
     errors = list(validator.iter_errors(doc))
-    assert errors == [], f"WorkflowProcess without tenant rejected: {errors}"
+    assert errors, "a WorkflowProcess without tenant must be rejected"
 
 
 def test_workflow_process_rejects_invalid_tenant_pattern():
@@ -177,3 +176,13 @@ def test_declared_task_actor_refuses_canonical_identity_in_local_slot():
         "createdAt": doc["createdAt"], "updatedAt": doc["updatedAt"],
     }]
     assert list(validator.iter_errors(doc))
+
+
+def test_public_process_and_runtime_artifact_require_same_tenant():
+    runtime_schema = json.loads(PROCESS_SCHEMA.read_text())
+    public_schema = json.loads(
+        (WOS_SPEC_ROOT / "schemas" / "api" / "instance.schema.json").read_text()
+    )["$defs"]["WorkflowProcess"]
+    for schema in (runtime_schema, public_schema):
+        assert "tenant" in schema["required"], "stored and public process identity requires tenant"
+    assert runtime_schema["properties"]["tenant"]["pattern"] == public_schema["properties"]["tenant"]["pattern"]

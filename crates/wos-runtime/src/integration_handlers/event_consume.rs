@@ -16,6 +16,7 @@
 //! Production runtimes may inject inbound events via an adapter layer; the
 //! handler interface is the same.
 
+use crate::runtime::process_minter;
 use wos_core::eval::ObservedAction;
 use wos_core::model::kernel::KernelDocument;
 use wos_core::{ProvenanceKind, ProvenanceRecord};
@@ -46,6 +47,7 @@ impl IntegrationBindingHandler for EventConsumeHandler {
         binding: &IntegrationBinding,
         _now_iso: &str,
     ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
+        let minter = process_minter(&record.process)?;
         // Extract the CloudEvent envelope from the triggering event data payload.
         // The runtime event payload is carried in `observed.event_data` (set by the
         // evaluator from the EventEntry's `data` field).
@@ -84,7 +86,7 @@ impl IntegrationBindingHandler for EventConsumeHandler {
 
         if !updates.is_empty() {
             provenance.push(ProvenanceRecord {
-                id: ProvenanceRecord::mint_id(),
+                id: ProvenanceRecord::mint_id(&minter),
                 record_kind: ProvenanceKind::DataMapping,
                 timestamp: String::new(),
                 actor_id: observed.actor_id.clone(),
@@ -112,7 +114,7 @@ impl IntegrationBindingHandler for EventConsumeHandler {
         }
 
         provenance.push(ProvenanceRecord {
-            id: ProvenanceRecord::mint_id(),
+            id: ProvenanceRecord::mint_id(&minter),
             record_kind: ProvenanceKind::EventConsumed,
             timestamp: String::new(),
             actor_id: observed.actor_id.clone(),

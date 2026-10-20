@@ -178,7 +178,9 @@ fn workflow_process(spec: &ProcessSpec, case_ledger_id: &str) -> WorkflowProcess
         actor_bindings: None,
         process_id: spec.process_id.clone(),
         case_ledger_id: case_ledger_id.to_string(),
-        tenant: stack_common_typeid::DEFAULT_TENANT.to_string(),
+        tenant: stack_common_typeid::Tenant::of(&spec.process_id)
+            .expect("fixture process ids are TypeIDs")
+            .to_string(),
         definition_url: spec.definition_url.clone(),
         definition_version: spec.definition_version.clone(),
         configuration: Vec::new(),
@@ -208,15 +210,23 @@ fn workflow_process(spec: &ProcessSpec, case_ledger_id: &str) -> WorkflowProcess
     }
 }
 
+/// Records inside a process take the tenant of its ID, whatever the fixture says.
+fn process_minter(process_id: &str) -> stack_common_typeid::TypeIdMinter {
+    stack_common_typeid::TypeIdMinter::for_parent(process_id)
+        .expect("fixture process ids are TypeIDs")
+}
+
 /// Build a stamped state-transition record for the workflow-style action.
 fn stamped_transition(
+    process_id: &str,
     from: &str,
     to: &str,
     event: &str,
     actor_id: Option<&str>,
     timestamp: &str,
 ) -> ProvenanceRecord {
-    let mut record = ProvenanceRecord::state_transition(from, to, event, actor_id);
+    let mut record =
+        ProvenanceRecord::state_transition(&process_minter(process_id), from, to, event, actor_id);
     record.timestamp = timestamp.to_string();
     record
 }
@@ -226,11 +236,13 @@ fn stamped_transition(
 /// timestamp are honored verbatim — this is the post-ledger direct surface, so
 /// the runtime stamper is NOT invoked.
 fn stamped_direct_append(
+    process_id: &str,
     event_type: &str,
     actor_id: Option<&str>,
     timestamp: &str,
 ) -> ProvenanceRecord {
-    let mut record = ProvenanceRecord::unmatched_event(event_type, actor_id);
+    let mut record =
+        ProvenanceRecord::unmatched_event(&process_minter(process_id), event_type, actor_id);
     if let Some(record_kind) = ProvenanceKind::from_canonical_event_literal(event_type) {
         record.record_kind = record_kind;
     }
@@ -294,7 +306,8 @@ fn execute_fixture(fixture: &CaseBoundaryFixture) -> FixtureExecution {
                 timestamp,
                 ..
             } => {
-                let record = stamped_direct_append(event_type, actor_id.as_deref(), timestamp);
+                let record =
+                    stamped_direct_append(process_id, event_type, actor_id.as_deref(), timestamp);
                 store
                     .append_provenance_for_case(case_ledger_id, process_id, record)
                     .unwrap_or_else(|e| {
@@ -313,8 +326,14 @@ fn execute_fixture(fixture: &CaseBoundaryFixture) -> FixtureExecution {
                 timestamp,
                 ..
             } => {
-                let record =
-                    stamped_transition(from_state, to_state, event, actor_id.as_deref(), timestamp);
+                let record = stamped_transition(
+                    process_id,
+                    from_state,
+                    to_state,
+                    event,
+                    actor_id.as_deref(),
+                    timestamp,
+                );
                 store
                     .append_provenance_for_case(&fixture.case_ledger_id, process_id, record)
                     .unwrap_or_else(|e| {

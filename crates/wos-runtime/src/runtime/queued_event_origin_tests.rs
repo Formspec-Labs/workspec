@@ -190,7 +190,7 @@ fn queued_event_origin_nested_foreach_keeps_nearest_transition() {
         }),
         "ready",
     );
-    let mut evaluator = Evaluator::new(kernel).unwrap();
+    let mut evaluator = Evaluator::new(kernel, &fixture_minter()).unwrap();
     evaluator.process_event("go", Some("worker"), None).unwrap();
     check_origin_actions(&evaluator, &[("outer", "iteration"), ("inner", "done")]);
 }
@@ -207,7 +207,7 @@ fn queued_event_origin_parallel_cancellation_keeps_causing_transition() {
         }),
         "work",
     );
-    let mut evaluator = Evaluator::new(kernel).unwrap();
+    let mut evaluator = Evaluator::new(kernel, &fixture_minter()).unwrap();
     evaluator
         .process_event("finish", Some("worker"), None)
         .unwrap();
@@ -223,7 +223,7 @@ fn queued_event_origin_continuous_transition_binds_synthetic_event() {
         }),
         "ready",
     );
-    let mut evaluator = Evaluator::new(kernel).unwrap();
+    let mut evaluator = Evaluator::new(kernel, &fixture_minter()).unwrap();
     assert!(evaluator.rescan_on_mutation().unwrap());
     check_origin_actions(&evaluator, &[("changed", "done")]);
     let id = evaluator.executed_actions()[0]

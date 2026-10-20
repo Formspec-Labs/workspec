@@ -1019,10 +1019,14 @@ impl GovernanceResult {
         Ok(())
     }
 
-    pub(crate) fn into_provenance(self, now: &str) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
+    pub(crate) fn into_provenance(
+        self,
+        minter: &stack_common_typeid::TypeIdMinter,
+        now: &str,
+    ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
         let mut records = Vec::new();
         for decision in self.decisions {
-            let mut record = ProvenanceRecord::blank(ProvenanceKind::ReasoningTierRecorded);
+            let mut record = ProvenanceRecord::blank(minter, ProvenanceKind::ReasoningTierRecorded);
             record.actor_id = decision.actor.clone();
             record.event = Some(decision.event.clone());
             record.timestamp = now.to_owned();
@@ -1033,7 +1037,7 @@ impl GovernanceResult {
             records.push(record);
             if let Some(counterfactual) = decision.counterfactual {
                 let mut record =
-                    ProvenanceRecord::blank(ProvenanceKind::CounterfactualTierRecorded);
+                    ProvenanceRecord::blank(minter, ProvenanceKind::CounterfactualTierRecorded);
                 record.actor_id = decision.actor;
                 record.event = Some(decision.event);
                 record.timestamp = now.to_owned();
@@ -1045,7 +1049,7 @@ impl GovernanceResult {
             }
         }
         for appeal in self.appeals {
-            let mut record = ProvenanceRecord::blank(ProvenanceKind::AppealFiled);
+            let mut record = ProvenanceRecord::blank(minter, ProvenanceKind::AppealFiled);
             record.actor_id = Some(appeal.actor);
             record.event = Some(appeal.event);
             record.timestamp = now.into();

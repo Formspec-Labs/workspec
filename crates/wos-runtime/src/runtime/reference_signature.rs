@@ -117,7 +117,7 @@ fn verify_subject(
     {
         return Err(RefusalCode::SignatureRejected);
     }
-    let payload = build_signed_payload(response, DigestAlgorithm::Sha256)
+    let payload = build_signed_payload(response.to_string().as_bytes(), DigestAlgorithm::Sha256)
         .map_err(|_| RefusalCode::SignatureRejected)?;
     if text(signature, "/signedPayload/canonicalization")?
         != integrity_canonical::CANONICALIZATION_PROFILE
@@ -432,7 +432,8 @@ mod tests {
         let response = json!({"id":"actual-response","definitionUrl":"urn:test:sign","definitionVersion":"1.0.0","status":"completed",
 "data":{"determinationId":"actual-determination",
                 "determinationSnapshotSha256":"b".repeat(64),"determinationFiringRecordId":"actual-firing","signatureTaskId":"actual-task"}});
-        let payload = build_signed_payload(&response, DigestAlgorithm::Sha256).unwrap();
+        let payload =
+            build_signed_payload(response.to_string().as_bytes(), DigestAlgorithm::Sha256).unwrap();
         let protected =
             integrity_cose::detached_signature_protected_header(-8, b"supervisor-key", METHOD);
         let structure = integrity_cose::sig_structure_bytes(&protected, &payload.canonical_bytes);
@@ -464,7 +465,7 @@ mod tests {
         let mut transplanted = signature.clone();
         transplanted["verificationReceipt"] = json!({"result":"Verified"});
         transplanted["signedPayload"]["digest"] = json!(
-            build_signed_payload(&changed, DigestAlgorithm::Sha256)
+            build_signed_payload(changed.to_string().as_bytes(), DigestAlgorithm::Sha256)
                 .unwrap()
                 .digest
         );
@@ -505,7 +506,7 @@ mod tests {
             *changed.pointer_mut(pointer).unwrap() = json!("different");
             let mut transplanted = signature.clone();
             transplanted["signedPayload"]["digest"] = json!(
-                build_signed_payload(&changed, DigestAlgorithm::Sha256)
+                build_signed_payload(changed.to_string().as_bytes(), DigestAlgorithm::Sha256)
                     .unwrap()
                     .digest
             );

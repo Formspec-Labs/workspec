@@ -76,7 +76,7 @@ let id = format!("urn:wos:{typeid}");
 
 **R-4.4** `urn_scope_and_date()` (`instance_service.rs:131-139`, `task_service.rs:95-104`) is deleted. Scope and date extraction from the URN is replaced by `typeid::extract_tenant(typeid)` and the UUIDv7 timestamp embedded in the TypeID suffix.
 
-**R-4.5** The HTTP create handler default ID generation (`instances.rs:233-239`) stops generating free-form five-segment workflow-process URNs. When no `process_id` is supplied by the client, it mints via `typeid::mint_process_id()` and wraps.
+**R-4.5** The HTTP create handler default ID generation (`instances.rs:233-239`) stops generating free-form five-segment workflow-process URNs. When no `process_id` is supplied by the client, it mints via `TypeIdMinter::mint_process_id()` and wraps. *Implementation pointer: IDs are now minted by a tenant-bound `TypeIdMinter` in `stack-common-typeid` (no zero-argument `mint_*_id()`, no environment tenant); the byte format is unchanged.*
 
 **R-4.6** `ActorRef` (`actor:<principalClass>:<id>`) is unchanged by this spec.
 

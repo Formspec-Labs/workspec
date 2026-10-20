@@ -138,7 +138,7 @@ fn rig_created(
     let process = runtime
         .create_process_with_actor_bindings(
             CreateProcessRequest {
-                process_id: stack_common_typeid::mint_process_id(),
+                process_id: stack_common_typeid::testing::fixture_minter().mint_process_id(),
                 tenant: None,
                 definition_url: "urn:test:governance-real-drain".into(),
                 definition_version: "1.0.0".into(),
@@ -211,6 +211,24 @@ fn actual_drain_emits_dedicated_tiers_linked_to_the_real_facts_before_one_effect
     }
     assert_eq!(effects.load(Ordering::SeqCst), 1);
     let retained = store.load_record(&id).unwrap();
+    // The same non-default scope survives creation, accepted task, later drain
+    // and human evidence records; no deployment/default minter can replace it.
+    let tenant = stack_common_typeid::Tenant::of(&id).unwrap();
+    assert_eq!(tenant.as_str(), "acme");
+    assert_eq!(retained.process.tenant, tenant.as_str());
+    assert_eq!(
+        stack_common_typeid::Tenant::of(&retained.process.case_ledger_id),
+        Some(tenant.clone())
+    );
+    assert!(!retained.provenance_log.is_empty());
+    for record in &retained.provenance_log {
+        assert_eq!(
+            stack_common_typeid::Tenant::of(&record.id),
+            Some(tenant.clone()),
+            "{}",
+            record.id
+        );
+    }
     assert!(retained.process.pending_events.is_empty());
     assert_eq!(runtime.drain_once(&id).unwrap().processed_event, None);
     assert_eq!(effects.load(Ordering::SeqCst), 1);
@@ -330,7 +348,7 @@ fn actual_initial_determination_refuses_before_entry_effects_or_creation() {
         FixedClock,
         restate_signature_fixture_bindings(),
     );
-    let id = stack_common_typeid::mint_process_id();
+    let id = stack_common_typeid::testing::fixture_minter().mint_process_id();
     let result = runtime.create_process(CreateProcessRequest {
         process_id: id.clone(),
         tenant: None,
@@ -406,7 +424,10 @@ fn receipt_for_proposal(
     proposal: &wos_events::governance::AdverseNoticeProposal,
 ) -> wos_runtime::governance::CapturedGovernanceNotice {
     let mut prior = store.load_record(id).unwrap();
-    let mut record = wos_core::ProvenanceRecord::blank(ProvenanceKind::CallbackReceived);
+    let mut record = wos_core::ProvenanceRecord::blank(
+        &stack_common_typeid::testing::fixture_minter(),
+        ProvenanceKind::CallbackReceived,
+    );
     record.timestamp = timestamp(1_800_000_000_000);
     record.actor_id = Some("actor:service:notice".into());
     let sent = timestamp(1_799_999_999_000);
@@ -629,7 +650,7 @@ fn actual_mapping_cannot_close_before_a_receipt_and_initial_adverse_values_refus
     )
     .with_governance_policy(qualified.clone(), Default::default())
     .unwrap();
-    let id = stack_common_typeid::mint_process_id();
+    let id = stack_common_typeid::testing::fixture_minter().mint_process_id();
     let result = runtime.create_process_with_actor_bindings(
         CreateProcessRequest {
             process_id: id.clone(),
@@ -917,7 +938,7 @@ fn timeout_rig() -> (
     let process = runtime
         .create_process_with_actor_bindings(
             CreateProcessRequest {
-                process_id: stack_common_typeid::mint_process_id(),
+                process_id: stack_common_typeid::testing::fixture_minter().mint_process_id(),
                 tenant: None,
                 definition_url: "urn:test:governance-real-drain".into(),
                 definition_version: "1.0.0".into(),
@@ -943,7 +964,10 @@ fn timeout_rig() -> (
         .unwrap();
     let id = process.process_id;
     let mut prior = store.load_record(&id).unwrap();
-    let mut callback = wos_core::ProvenanceRecord::blank(ProvenanceKind::CallbackReceived);
+    let mut callback = wos_core::ProvenanceRecord::blank(
+        &stack_common_typeid::testing::fixture_minter(),
+        ProvenanceKind::CallbackReceived,
+    );
     callback.timestamp = timestamp(original);
     callback.actor_id = Some("actor:service:notice".into());
     let date = stack_common_hash::canonical_json_hash(
@@ -1288,7 +1312,7 @@ fn selected_output_overlap_refuses_the_entire_action_list_before_any_effect() {
         let mut runtime=WosRuntime::new(store.clone(),Resolver(serde_json::from_value(selection.kernel).unwrap()),Presentations(presentations.clone()),DefaultRuntime::new(),OutputEffect(effects.clone()),DefaultRuntime::new(),FixedClock,restate_signature_fixture_bindings())
             .with_governance_policy(policy,Default::default()).unwrap()
             .with_integration_profile(serde_json::from_value(json!({"$wosIntegration":"1.0","targetWorkflow":{"url":"urn:test:governance-real-drain","compatibleVersions":"1.0.0"},"bindings":{"mapped":{"type":"request-response","interface":{"$ref":"urn:test:api"},"operation":"update","outputBinding":{target:"$.value"}}}})).unwrap());
-        let id = stack_common_typeid::mint_process_id();
+        let id = stack_common_typeid::testing::fixture_minter().mint_process_id();
         runtime
             .create_process_with_actor_bindings(
                 CreateProcessRequest {

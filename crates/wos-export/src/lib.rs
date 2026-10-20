@@ -92,10 +92,12 @@ pub(crate) fn is_facts_tier(record: &ProvenanceRecord) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use stack_common_typeid::testing::fixture_minter;
     use wos_core::ProvenanceRecord;
 
     fn record_with_layer(layer: Option<&str>) -> ProvenanceRecord {
-        let mut record = ProvenanceRecord::state_transition("a", "b", "ev", None);
+        let mut record =
+            ProvenanceRecord::state_transition(&fixture_minter(), "a", "b", "ev", None);
         record.audit_layer = layer.map(String::from);
         record
     }

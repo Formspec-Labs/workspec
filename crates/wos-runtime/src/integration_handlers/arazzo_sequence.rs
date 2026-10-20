@@ -23,6 +23,8 @@
 //! output binding only. Inter-step references are reserved for Arazzo Engine
 //! Binding (§2 of TODO).
 
+use crate::runtime::process_minter;
+use stack_common_typeid::TypeIdMinter;
 use std::collections::HashMap;
 use std::time::Instant;
 
@@ -88,6 +90,7 @@ impl IntegrationBindingHandler for ArazzoHandler {
         binding: &IntegrationBinding,
         now_iso: &str,
     ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
+        let minter = process_minter(&record.process)?;
         let steps = parse_steps(binding, service_ref)?;
         let mut provenance = Vec::new();
         // Accumulated per-step outputs: stepId → step output JSON.
@@ -95,8 +98,16 @@ impl IntegrationBindingHandler for ArazzoHandler {
         let mut step_outputs: HashMap<String, serde_json::Value> = HashMap::new();
 
         for step in &steps {
-            let (step_result_prov, step_output) =
-                execute_step(ctx, record, kernel, observed, step, &step_outputs, now_iso);
+            let (step_result_prov, step_output) = execute_step(
+                &minter,
+                ctx,
+                record,
+                kernel,
+                observed,
+                step,
+                &step_outputs,
+                now_iso,
+            );
             let step_provenance = step_result_prov;
 
             match step_output {
@@ -114,7 +125,7 @@ impl IntegrationBindingHandler for ArazzoHandler {
                         )?;
                         if !updates.is_empty() {
                             provenance.push(ProvenanceRecord {
-                                id: ProvenanceRecord::mint_id(),
+                                id: ProvenanceRecord::mint_id(&minter),
                                 record_kind: ProvenanceKind::DataMapping,
                                 timestamp: String::new(),
                                 actor_id: observed.actor_id.clone(),
@@ -170,7 +181,7 @@ impl IntegrationBindingHandler for ArazzoHandler {
             )?;
             if !updates.is_empty() {
                 provenance.push(ProvenanceRecord {
-                    id: ProvenanceRecord::mint_id(),
+                    id: ProvenanceRecord::mint_id(&minter),
                     record_kind: ProvenanceKind::DataMapping,
                     timestamp: String::new(),
                     actor_id: observed.actor_id.clone(),
@@ -200,7 +211,7 @@ impl IntegrationBindingHandler for ArazzoHandler {
         }
 
         let post_state = record.process.case_state.clone();
-        let milestone_records = evaluate_milestones(kernel, &mut record.process, &post_state);
+        let milestone_records = evaluate_milestones(kernel, &mut record.process, &post_state)?;
         provenance.extend(milestone_records);
 
         Ok(provenance)
@@ -214,6 +225,7 @@ impl IntegrationBindingHandler for ArazzoHandler {
 /// success and `outcome: "failed"` on error. This ensures the provenance stream
 /// always reflects the attempted steps.
 fn execute_step(
+    minter: &TypeIdMinter,
     ctx: &InvocationContext<'_>,
     record: &mut RuntimeRecord,
     kernel: &KernelDocument,
@@ -238,6 +250,7 @@ fn execute_step(
         Err(err) => {
             let duration_ms = start.elapsed().as_millis() as u64;
             step_provenance.push(arazzo_step_record(
+                minter,
                 observed,
                 &step.step_id,
                 "failed",
@@ -249,6 +262,7 @@ fn execute_step(
 
     // Request contract validation.
     let contract_result = validate_integration_contract(
+        minter,
         ctx.validator,
         &step.service_ref,
         "request",
@@ -262,6 +276,7 @@ fn execute_step(
         Err(err) => {
             let duration_ms = start.elapsed().as_millis() as u64;
             step_provenance.push(arazzo_step_record(
+                minter,
                 observed,
                 &step.step_id,
                 "failed",
@@ -290,6 +305,7 @@ fn execute_step(
         Err(err) => {
             let duration_ms = start.elapsed().as_millis() as u64;
             step_provenance.push(arazzo_step_record(
+                minter,
                 observed,
                 &step.step_id,
                 "failed",
@@ -301,6 +317,7 @@ fn execute_step(
 
     // Response contract validation.
     let response_contract_result = validate_integration_contract(
+        minter,
         ctx.validator,
         &step.service_ref,
         "response",
@@ -314,6 +331,7 @@ fn execute_step(
         Err(err) => {
             let duration_ms = start.elapsed().as_millis() as u64;
             step_provenance.push(arazzo_step_record(
+                minter,
                 observed,
                 &step.step_id,
                 "failed",
@@ -325,7 +343,7 @@ fn execute_step(
 
     let duration_ms = start.elapsed().as_millis() as u64;
     step_provenance.push(ProvenanceRecord {
-        id: ProvenanceRecord::mint_id(),
+        id: ProvenanceRecord::mint_id(minter),
         record_kind: ProvenanceKind::ArazzoStep,
         timestamp: String::new(),
         actor_id: observed.actor_id.clone(),
@@ -414,13 +432,14 @@ fn build_step_binding(
 }
 
 fn arazzo_step_record(
+    minter: &TypeIdMinter,
     observed: &ObservedAction,
     step_id: &str,
     outcome: &str,
     duration_ms: u64,
 ) -> ProvenanceRecord {
     ProvenanceRecord {
-        id: ProvenanceRecord::mint_id(),
+        id: ProvenanceRecord::mint_id(minter),
         record_kind: ProvenanceKind::ArazzoStep,
         timestamp: String::new(),
         actor_id: observed.actor_id.clone(),

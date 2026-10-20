@@ -16,3 +16,6 @@ serde_json_canonicalizer = "0.3"
 sha2 = "0.10"
 stack-common-typeid = { path = "../../../stack-common/crates/stack-common-typeid" }
 thiserror = "2"
+
+[dev-dependencies]
+stack-common-typeid = { path = "../../../stack-common/crates/stack-common-typeid", features = ["testing"] }

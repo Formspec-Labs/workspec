@@ -37,7 +37,7 @@ mod deferred_callback_acceptance {
         let service = RecordingService::with_response(serde_json::Value::Null);
         let calls = service.calls.clone();
         runtime.service = Box::new(service);
-        let id = stack_common_typeid::mint_process_id();
+        let id = fixture_minter().mint_process_id();
         runtime
             .create_process(CreateProcessRequest {
                 process_id: id.clone(),
@@ -362,7 +362,7 @@ mod deferred_callback_acceptance {
         let service = RecordingService::with_response(serde_json::Value::Null);
         let calls = service.calls.clone();
         runtime.service = Box::new(service);
-        let id = stack_common_typeid::mint_process_id();
+        let id = fixture_minter().mint_process_id();
         let process = runtime
             .create_process(CreateProcessRequest {
                 process_id: id,
@@ -410,7 +410,7 @@ mod deferred_callback_acceptance {
             .remove("callbackPhase");
         let mut runtime = runtime_with_kernel(serde_json::from_value(k).unwrap())
             .with_integration_profile(profile());
-        let id = stack_common_typeid::mint_process_id();
+        let id = fixture_minter().mint_process_id();
         assert!(
             runtime
                 .create_process(CreateProcessRequest {
@@ -481,7 +481,7 @@ mod deferred_callback_acceptance {
         value["lifecycle"]["states"]["neverReached"] = serde_json::json!({"type":"atomic","onEntry":[{"action":"setData","path":"caseFile.invalid","value":true,"callbackPhase":"inbound"}]});
         let mut invalid_runtime = runtime_with_kernel(serde_json::from_value(value).unwrap())
             .with_integration_profile(profile());
-        let new_id = stack_common_typeid::mint_process_id();
+        let new_id = fixture_minter().mint_process_id();
         assert!(
             invalid_runtime
                 .create_process(CreateProcessRequest {

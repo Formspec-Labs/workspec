@@ -1,7 +1,7 @@
 // Rust guideline compliant 2026-02-21
 
 use serde::{Deserialize, Deserializer, Serialize, de};
-use stack_common_typeid as typeid;
+use stack_common_typeid::TypeIdMinter;
 
 use crate::{ActorKind, AuditLayer, MutationSource, VerificationLevel};
 
@@ -719,15 +719,15 @@ impl<'de> Deserialize<'de> for ProvenanceRecord {
 impl ProvenanceRecord {
     /// Mints a new provenance-record identifier.
     #[must_use]
-    pub fn mint_id() -> String {
-        typeid::mint_provenance_id()
+    pub fn mint_id(minter: &TypeIdMinter) -> String {
+        minter.mint_provenance_id()
     }
 
     #[doc(hidden)]
     #[must_use]
-    pub fn blank(record_kind: ProvenanceKind) -> Self {
+    pub fn blank(minter: &TypeIdMinter, record_kind: ProvenanceKind) -> Self {
         Self {
-            id: Self::mint_id(),
+            id: Self::mint_id(minter),
             record_kind,
             timestamp: String::new(),
             actor_id: None,
@@ -793,8 +793,14 @@ impl ProvenanceRecord {
     }
 
     /// Create a state transition record.
-    pub fn state_transition(from: &str, to: &str, event: &str, actor_id: Option<&str>) -> Self {
-        let mut record = Self::blank(ProvenanceKind::StateTransition);
+    pub fn state_transition(
+        minter: &TypeIdMinter,
+        from: &str,
+        to: &str,
+        event: &str,
+        actor_id: Option<&str>,
+    ) -> Self {
+        let mut record = Self::blank(minter, ProvenanceKind::StateTransition);
         record.actor_id = actor_id.map(String::from);
         record.from_state = Some(from.to_string());
         record.to_state = Some(to.to_string());
@@ -805,6 +811,7 @@ impl ProvenanceRecord {
     /// Create a state transition record with transition tags and an optional
     /// determination snapshot.
     pub fn tagged_state_transition(
+        minter: &TypeIdMinter,
         from: &str,
         to: &str,
         event: &str,
@@ -812,15 +819,15 @@ impl ProvenanceRecord {
         transition_tags: &[String],
         case_file_snapshot: Option<CaseFileSnapshot>,
     ) -> Self {
-        let mut record = Self::state_transition(from, to, event, actor_id);
+        let mut record = Self::state_transition(minter, from, to, event, actor_id);
         record.transition_tags = transition_tags.to_vec();
         record.case_file_snapshot = case_file_snapshot;
         record
     }
 
     /// Create an unmatched event record (Kernel S4.9).
-    pub fn unmatched_event(event: &str, actor_id: Option<&str>) -> Self {
-        let mut record = Self::blank(ProvenanceKind::UnmatchedEvent);
+    pub fn unmatched_event(minter: &TypeIdMinter, event: &str, actor_id: Option<&str>) -> Self {
+        let mut record = Self::blank(minter, ProvenanceKind::UnmatchedEvent);
         record.actor_id = actor_id.map(String::from);
         record.event = Some(event.to_string());
         record
@@ -828,12 +835,14 @@ impl ProvenanceRecord {
 
     /// Create a case state mutation record (Kernel S5.4).
     pub fn case_state_mutation(
+        minter: &TypeIdMinter,
         path: &str,
         new_value: &serde_json::Value,
         actor_id: Option<&str>,
         lifecycle_state: &str,
     ) -> Self {
         Self::case_state_mutation_with_source(
+            minter,
             path,
             new_value,
             actor_id,
@@ -845,6 +854,7 @@ impl ProvenanceRecord {
 
     /// Create a case state mutation with typed provenance vocab.
     pub fn case_state_mutation_with_source(
+        minter: &TypeIdMinter,
         path: &str,
         new_value: &serde_json::Value,
         actor_id: Option<&str>,
@@ -852,7 +862,7 @@ impl ProvenanceRecord {
         mutation_source: Option<MutationSource>,
         verification_level: Option<VerificationLevel>,
     ) -> Self {
-        let mut record = Self::blank(ProvenanceKind::CaseStateMutation);
+        let mut record = Self::blank(minter, ProvenanceKind::CaseStateMutation);
         record.actor_id = actor_id.map(String::from);
         let mut data = serde_json::json!({
             "path": path,
@@ -875,8 +885,13 @@ impl ProvenanceRecord {
     }
 
     /// Create a timer created record (Lifecycle Detail S6.7).
-    pub fn timer_created(timer_id: &str, duration: &str, fires_event: &str) -> Self {
-        let mut record = Self::blank(ProvenanceKind::TimerCreated);
+    pub fn timer_created(
+        minter: &TypeIdMinter,
+        timer_id: &str,
+        duration: &str,
+        fires_event: &str,
+    ) -> Self {
+        let mut record = Self::blank(minter, ProvenanceKind::TimerCreated);
         record.data = Some(serde_json::json!({
             "timerId": timer_id,
             "duration": duration,
@@ -886,8 +901,8 @@ impl ProvenanceRecord {
     }
 
     /// Create a timer fired record (Lifecycle Detail S6.7).
-    pub fn timer_fired(timer_id: &str, fires_event: &str) -> Self {
-        let mut record = Self::blank(ProvenanceKind::TimerFired);
+    pub fn timer_fired(minter: &TypeIdMinter, timer_id: &str, fires_event: &str) -> Self {
+        let mut record = Self::blank(minter, ProvenanceKind::TimerFired);
         record.data = Some(serde_json::json!({
             "timerId": timer_id,
             "firesEvent": fires_event,
@@ -899,11 +914,12 @@ impl ProvenanceRecord {
 
     /// One iteration of a `ForEach` state is starting.
     pub fn foreach_iteration_started(
+        minter: &TypeIdMinter,
         foreach_state: &str,
         index: u32,
         item: &serde_json::Value,
     ) -> Self {
-        let mut record = Self::blank(ProvenanceKind::ForEachIterationStarted);
+        let mut record = Self::blank(minter, ProvenanceKind::ForEachIterationStarted);
         record.data = Some(serde_json::json!({
             "foreachState": foreach_state,
             "index": index,
@@ -915,11 +931,12 @@ impl ProvenanceRecord {
     /// One iteration of a `ForEach` state has completed. When iteration
     /// terminated early via `breakCondition`, `break_triggered` is `true`.
     pub fn foreach_iteration_completed(
+        minter: &TypeIdMinter,
         foreach_state: &str,
         index: u32,
         break_triggered: bool,
     ) -> Self {
-        let mut record = Self::blank(ProvenanceKind::ForEachIterationCompleted);
+        let mut record = Self::blank(minter, ProvenanceKind::ForEachIterationCompleted);
         let mut data = serde_json::json!({
             "foreachState": foreach_state,
             "index": index,
@@ -937,8 +954,13 @@ impl ProvenanceRecord {
     /// fires. `iterations` is the number of iterations actually executed
     /// (0 for empty-collection fast path); `broke` indicates whether the
     /// loop terminated early via `breakCondition`.
-    pub fn foreach_completed(foreach_state: &str, iterations: u32, broke: bool) -> Self {
-        let mut record = Self::blank(ProvenanceKind::ForEachCompleted);
+    pub fn foreach_completed(
+        minter: &TypeIdMinter,
+        foreach_state: &str,
+        iterations: u32,
+        broke: bool,
+    ) -> Self {
+        let mut record = Self::blank(minter, ProvenanceKind::ForEachCompleted);
         record.data = Some(serde_json::json!({
             "foreachState": foreach_state,
             "iterations": iterations,
@@ -948,8 +970,8 @@ impl ProvenanceRecord {
     }
 
     /// Create a timer cancelled record (Lifecycle Detail S6.7).
-    pub fn timer_cancelled(timer_id: &str, reason: &str) -> Self {
-        let mut record = Self::blank(ProvenanceKind::TimerCancelled);
+    pub fn timer_cancelled(minter: &TypeIdMinter, timer_id: &str, reason: &str) -> Self {
+        let mut record = Self::blank(minter, ProvenanceKind::TimerCancelled);
         record.data = Some(serde_json::json!({
             "timerId": timer_id,
             "reason": reason,
@@ -958,32 +980,32 @@ impl ProvenanceRecord {
     }
 
     /// Create a state-entry record.
-    pub fn state_entered(state: &str) -> Self {
-        let mut record = Self::blank(ProvenanceKind::OnEntry);
+    pub fn state_entered(minter: &TypeIdMinter, state: &str) -> Self {
+        let mut record = Self::blank(minter, ProvenanceKind::OnEntry);
         record.to_state = Some(state.to_string());
         record.data = Some(serde_json::json!({ "state": state }));
         record
     }
 
     /// Create an onEntry action record.
-    pub fn on_entry(state: &str, action_type: &str) -> Self {
-        let mut record = Self::blank(ProvenanceKind::OnEntry);
+    pub fn on_entry(minter: &TypeIdMinter, state: &str, action_type: &str) -> Self {
+        let mut record = Self::blank(minter, ProvenanceKind::OnEntry);
         record.to_state = Some(state.to_string());
         record.data = Some(serde_json::json!({ "actionType": action_type }));
         record
     }
 
     /// Create an onExit action record.
-    pub fn on_exit(state: &str, action_type: &str) -> Self {
-        let mut record = Self::blank(ProvenanceKind::OnExit);
+    pub fn on_exit(minter: &TypeIdMinter, state: &str, action_type: &str) -> Self {
+        let mut record = Self::blank(minter, ProvenanceKind::OnExit);
         record.from_state = Some(state.to_string());
         record.data = Some(serde_json::json!({ "actionType": action_type }));
         record
     }
 
     /// Create a generic action-executed record.
-    pub fn action_executed(state: &str, action_type: &str) -> Self {
-        let mut record = Self::blank(ProvenanceKind::ActionExecuted);
+    pub fn action_executed(minter: &TypeIdMinter, state: &str, action_type: &str) -> Self {
+        let mut record = Self::blank(minter, ProvenanceKind::ActionExecuted);
         record.to_state = Some(state.to_string());
         record.data = Some(serde_json::json!({ "actionType": action_type }));
         record
@@ -991,11 +1013,12 @@ impl ProvenanceRecord {
 
     /// Create a timer tolerance violation record (LCD S6.6, Runtime S7.2).
     pub fn tolerance_violation(
+        minter: &TypeIdMinter,
         timer_id: &str,
         duration_iso: &str,
         max_tolerance_iso: &str,
     ) -> Self {
-        let mut record = Self::blank(ProvenanceKind::ToleranceViolation);
+        let mut record = Self::blank(minter, ProvenanceKind::ToleranceViolation);
         record.data = Some(serde_json::json!({
             "timerId": timer_id,
             "duration": duration_iso,
@@ -1005,8 +1028,8 @@ impl ProvenanceRecord {
     }
 
     /// Create a history-cleared record.
-    pub fn history_cleared(state: &str, reason: &str) -> Self {
-        let mut record = Self::blank(ProvenanceKind::HistoryCleared);
+    pub fn history_cleared(minter: &TypeIdMinter, state: &str, reason: &str) -> Self {
+        let mut record = Self::blank(minter, ProvenanceKind::HistoryCleared);
         record.data = Some(serde_json::json!({
             "state": state,
             "reason": reason,
@@ -1015,8 +1038,8 @@ impl ProvenanceRecord {
     }
 
     /// Create an invalid-duration warning record.
-    pub fn invalid_duration(raw_duration: &str, timer_id: &str) -> Self {
-        let mut record = Self::blank(ProvenanceKind::InvalidDuration);
+    pub fn invalid_duration(minter: &TypeIdMinter, raw_duration: &str, timer_id: &str) -> Self {
+        let mut record = Self::blank(minter, ProvenanceKind::InvalidDuration);
         record.data = Some(serde_json::json!({
             "rawDuration": raw_duration,
             "timerId": timer_id,
@@ -1027,12 +1050,13 @@ impl ProvenanceRecord {
 
     /// Create a task lifecycle record emitted by the runtime layer.
     pub fn task_lifecycle(
+        minter: &TypeIdMinter,
         record_kind: ProvenanceKind,
         task_id: &str,
         actor_id: Option<&str>,
         data: Option<serde_json::Value>,
     ) -> Self {
-        let mut record = Self::blank(record_kind);
+        let mut record = Self::blank(minter, record_kind);
         record.actor_id = actor_id.map(String::from);
         record.data = Some(match data {
             Some(extra) => {
@@ -1060,7 +1084,10 @@ impl ProvenanceRecord {
     /// records typically omit it and convey the failing template key /
     /// reason via `context`.
     #[must_use]
-    pub fn configuration_warning(input: ConfigurationWarningInput<'_>) -> Self {
+    pub fn configuration_warning(
+        minter: &TypeIdMinter,
+        input: ConfigurationWarningInput<'_>,
+    ) -> Self {
         let mut data = serde_json::Map::new();
         if let Some(context) = input.context {
             for (k, v) in context {
@@ -1081,7 +1108,7 @@ impl ProvenanceRecord {
             );
         }
 
-        let mut record = Self::blank(ProvenanceKind::ConfigurationWarning);
+        let mut record = Self::blank(minter, ProvenanceKind::ConfigurationWarning);
         record.data = Some(serde_json::Value::Object(data));
         record
     }
@@ -1094,7 +1121,10 @@ impl ProvenanceRecord {
     /// failure. When `false`, the outcome is left unset — the invocation
     /// proceeded normally and downstream records carry the agent outcome.
     #[must_use]
-    pub fn capability_invocation(input: CapabilityInvocationInput<'_>) -> Self {
+    pub fn capability_invocation(
+        minter: &TypeIdMinter,
+        input: CapabilityInvocationInput<'_>,
+    ) -> Self {
         let mut data = serde_json::Map::new();
         if let Some(context) = input.context {
             for (k, v) in context {
@@ -1113,7 +1143,7 @@ impl ProvenanceRecord {
             serde_json::Value::Bool(input.invocation_blocked),
         );
 
-        let mut record = Self::blank(ProvenanceKind::CapabilityInvocation);
+        let mut record = Self::blank(minter, ProvenanceKind::CapabilityInvocation);
         record.actor_id = Some(input.agent_id.to_string());
         record.data = Some(serde_json::Value::Object(data));
         if input.invocation_blocked {
@@ -1124,11 +1154,12 @@ impl ProvenanceRecord {
 
     /// Create a contract validation record emitted by runtime task flows.
     pub fn contract_validation(
+        minter: &TypeIdMinter,
         task_id: &str,
         actor_id: Option<&str>,
         data: serde_json::Value,
     ) -> Self {
-        let mut record = Self::blank(ProvenanceKind::ContractValidation);
+        let mut record = Self::blank(minter, ProvenanceKind::ContractValidation);
         record.actor_id = actor_id.map(String::from);
         record.data = Some(serde_json::json!({
             "taskId": task_id,
@@ -1139,7 +1170,10 @@ impl ProvenanceRecord {
 
     /// Create a Signature Profile affirmation record.
     #[must_use]
-    pub fn signature_affirmation(input: SignatureAffirmationInput<'_>) -> Self {
+    pub fn signature_affirmation(
+        minter: &TypeIdMinter,
+        input: SignatureAffirmationInput<'_>,
+    ) -> Self {
         let mut data = serde_json::Map::from_iter([
             (
                 "signerId".to_string(),
@@ -1252,7 +1286,7 @@ impl ProvenanceRecord {
             );
         }
 
-        let mut record = Self::blank(ProvenanceKind::SignatureAffirmation);
+        let mut record = Self::blank(minter, ProvenanceKind::SignatureAffirmation);
         record.actor_id = Some(input.signer_id.to_string());
         record.data = Some(serde_json::Value::Object(data));
         record
@@ -1260,7 +1294,10 @@ impl ProvenanceRecord {
 
     /// Create a Signature Profile admission-failed record.
     #[must_use]
-    pub fn signature_admission_failed(input: SignatureAdmissionFailedInput<'_>) -> Self {
+    pub fn signature_admission_failed(
+        minter: &TypeIdMinter,
+        input: SignatureAdmissionFailedInput<'_>,
+    ) -> Self {
         let mut data = serde_json::Map::from_iter([
             (
                 "reason".to_string(),
@@ -1296,7 +1333,7 @@ impl ProvenanceRecord {
             );
         }
 
-        let mut record = Self::blank(ProvenanceKind::SignatureAdmissionFailed);
+        let mut record = Self::blank(minter, ProvenanceKind::SignatureAdmissionFailed);
         record.actor_id = input.signer_id.map(String::from);
         record.data = Some(serde_json::Value::Object(data));
         record
@@ -1306,7 +1343,10 @@ impl ProvenanceRecord {
 
     /// Create a correction-authorized record (ADR 0066 §1, Mode 1).
     #[must_use]
-    pub fn correction_authorized(input: CorrectionAuthorizedInput<'_>) -> Self {
+    pub fn correction_authorized(
+        minter: &TypeIdMinter,
+        input: CorrectionAuthorizedInput<'_>,
+    ) -> Self {
         const REQUIRED: &[&str] = &[
             "correctionTargetEventHash",
             "correctedFieldSet",
@@ -1339,7 +1379,7 @@ impl ProvenanceRecord {
         );
         data.insert("authorityBasis".to_string(), input.authority_basis);
 
-        let mut record = Self::blank(ProvenanceKind::CorrectionAuthorized);
+        let mut record = Self::blank(minter, ProvenanceKind::CorrectionAuthorized);
         record.actor_id = Some(input.authorizing_actor_id.to_string());
         record.data = Some(serde_json::Value::Object(data));
         record
@@ -1347,7 +1387,10 @@ impl ProvenanceRecord {
 
     /// Create an amendment-authorized record (ADR 0066 §2, Mode 2).
     #[must_use]
-    pub fn amendment_authorized(input: AmendmentAuthorizedInput<'_>) -> Self {
+    pub fn amendment_authorized(
+        minter: &TypeIdMinter,
+        input: AmendmentAuthorizedInput<'_>,
+    ) -> Self {
         const REQUIRED: &[&str] = &[
             "amendmentTargetEventHash",
             "priorDeterminationHash",
@@ -1374,7 +1417,7 @@ impl ProvenanceRecord {
         );
         data.insert("authorityBasis".to_string(), input.authority_basis);
 
-        let mut record = Self::blank(ProvenanceKind::AmendmentAuthorized);
+        let mut record = Self::blank(minter, ProvenanceKind::AmendmentAuthorized);
         record.actor_id = Some(input.authorizing_actor_id.to_string());
         record.data = Some(serde_json::Value::Object(data));
         record
@@ -1382,7 +1425,10 @@ impl ProvenanceRecord {
 
     /// Create a determination-amended record (ADR 0066 §2).
     #[must_use]
-    pub fn determination_amended(input: DeterminationAmendedInput<'_>) -> Self {
+    pub fn determination_amended(
+        minter: &TypeIdMinter,
+        input: DeterminationAmendedInput<'_>,
+    ) -> Self {
         const REQUIRED: &[&str] = &[
             "priorDeterminationHash",
             "newDeterminationValue",
@@ -1402,14 +1448,17 @@ impl ProvenanceRecord {
             serde_json::Value::String(input.amendment_authorization_event_hash.to_string()),
         );
 
-        let mut record = Self::blank(ProvenanceKind::DeterminationAmended);
+        let mut record = Self::blank(minter, ProvenanceKind::DeterminationAmended);
         record.data = Some(serde_json::Value::Object(data));
         record
     }
 
     /// Create a rescission-authorized record (ADR 0066 §3, Mode 4).
     #[must_use]
-    pub fn rescission_authorized(input: RescissionAuthorizedInput<'_>) -> Self {
+    pub fn rescission_authorized(
+        minter: &TypeIdMinter,
+        input: RescissionAuthorizedInput<'_>,
+    ) -> Self {
         const REQUIRED: &[&str] = &[
             "rescissionTargetEventHash",
             "priorDeterminationHash",
@@ -1443,7 +1492,7 @@ impl ProvenanceRecord {
             );
         }
 
-        let mut record = Self::blank(ProvenanceKind::RescissionAuthorized);
+        let mut record = Self::blank(minter, ProvenanceKind::RescissionAuthorized);
         record.actor_id = Some(input.authorizing_actor_id.to_string());
         record.data = Some(serde_json::Value::Object(data));
         record
@@ -1451,7 +1500,10 @@ impl ProvenanceRecord {
 
     /// Create a determination-rescinded record (ADR 0066 §3).
     #[must_use]
-    pub fn determination_rescinded(input: DeterminationRescindedInput<'_>) -> Self {
+    pub fn determination_rescinded(
+        minter: &TypeIdMinter,
+        input: DeterminationRescindedInput<'_>,
+    ) -> Self {
         const REQUIRED: &[&str] = &["priorDeterminationHash", "rescissionAuthorizationEventHash"];
         let mut data = merge_context(input.context, REQUIRED);
         data.insert(
@@ -1463,14 +1515,14 @@ impl ProvenanceRecord {
             serde_json::Value::String(input.rescission_authorization_event_hash.to_string()),
         );
 
-        let mut record = Self::blank(ProvenanceKind::DeterminationRescinded);
+        let mut record = Self::blank(minter, ProvenanceKind::DeterminationRescinded);
         record.data = Some(serde_json::Value::Object(data));
         record
     }
 
     /// Create a reinstated record (ADR 0066 §4, Mode 5 — Q26).
     #[must_use]
-    pub fn reinstated(input: ReinstatedInput<'_>) -> Self {
+    pub fn reinstated(minter: &TypeIdMinter, input: ReinstatedInput<'_>) -> Self {
         const REQUIRED: &[&str] = &[
             "priorRescissionEventHash",
             "reactivationAuthorizationEventHash",
@@ -1490,14 +1542,17 @@ impl ProvenanceRecord {
             serde_json::Value::String(input.reason.to_string()),
         );
 
-        let mut record = Self::blank(ProvenanceKind::Reinstated);
+        let mut record = Self::blank(minter, ProvenanceKind::Reinstated);
         record.data = Some(serde_json::Value::Object(data));
         record
     }
 
     /// Create an authorization-attestation record (ADR 0066 §5).
     #[must_use]
-    pub fn authorization_attestation(input: AuthorizationAttestationInput<'_>) -> Self {
+    pub fn authorization_attestation(
+        minter: &TypeIdMinter,
+        input: AuthorizationAttestationInput<'_>,
+    ) -> Self {
         const REQUIRED: &[&str] = &[
             "authorizingActorId",
             "authorityBasis",
@@ -1521,7 +1576,7 @@ impl ProvenanceRecord {
             );
         }
 
-        let mut record = Self::blank(ProvenanceKind::AuthorizationAttestation);
+        let mut record = Self::blank(minter, ProvenanceKind::AuthorizationAttestation);
         record.actor_id = Some(input.authorizing_actor_id.to_string());
         record.data = Some(serde_json::Value::Object(data));
         record
@@ -1531,7 +1586,7 @@ impl ProvenanceRecord {
 
     /// Create a clock-started record (ADR 0067 §2).
     #[must_use]
-    pub fn clock_started(input: ClockStartedInput<'_>) -> Self {
+    pub fn clock_started(minter: &TypeIdMinter, input: ClockStartedInput<'_>) -> Self {
         const REQUIRED: &[&str] = &[
             "clockId",
             "clockKind",
@@ -1575,14 +1630,14 @@ impl ProvenanceRecord {
             );
         }
 
-        let mut record = Self::blank(ProvenanceKind::ClockStarted);
+        let mut record = Self::blank(minter, ProvenanceKind::ClockStarted);
         record.data = Some(serde_json::Value::Object(data));
         record
     }
 
     /// Create a clock-resolved record (ADR 0067 §3).
     #[must_use]
-    pub fn clock_resolved(input: ClockResolvedInput<'_>) -> Self {
+    pub fn clock_resolved(minter: &TypeIdMinter, input: ClockResolvedInput<'_>) -> Self {
         const REQUIRED: &[&str] = &[
             "clockId",
             "originClockHash",
@@ -1628,7 +1683,7 @@ impl ProvenanceRecord {
             );
         }
 
-        let mut record = Self::blank(ProvenanceKind::ClockResolved);
+        let mut record = Self::blank(minter, ProvenanceKind::ClockResolved);
         record.data = Some(serde_json::Value::Object(data));
         record
     }
@@ -1637,7 +1692,10 @@ impl ProvenanceRecord {
 
     /// Create an identity-attestation record (ADR 0068 §4, Q15).
     #[must_use]
-    pub fn identity_attestation(input: IdentityAttestationInput<'_>) -> Self {
+    pub fn identity_attestation(
+        minter: &TypeIdMinter,
+        input: IdentityAttestationInput<'_>,
+    ) -> Self {
         const REQUIRED: &[&str] = &[
             "subjectGlobalId",
             "assuranceLevel",
@@ -1685,7 +1743,7 @@ impl ProvenanceRecord {
             ),
         );
 
-        let mut record = Self::blank(ProvenanceKind::IdentityAttestation);
+        let mut record = Self::blank(minter, ProvenanceKind::IdentityAttestation);
         record.data = Some(serde_json::Value::Object(data));
         record
     }
@@ -1698,7 +1756,10 @@ impl ProvenanceRecord {
     /// Returns an error when the key ids are malformed, when either assurance
     /// token has no portable ordering, or when the recovery would lower
     /// assurance.
-    pub fn key_rebind(input: KeyRebindInput<'_>) -> Result<Self, KeyRebindError> {
+    pub fn key_rebind(
+        minter: &TypeIdMinter,
+        input: KeyRebindInput<'_>,
+    ) -> Result<Self, KeyRebindError> {
         const REQUIRED: &[&str] = &[
             "priorKid",
             "newKid",
@@ -1736,7 +1797,7 @@ impl ProvenanceRecord {
             );
         }
 
-        let mut record = Self::blank(ProvenanceKind::KeyRebind);
+        let mut record = Self::blank(minter, ProvenanceKind::KeyRebind);
         record.data = Some(serde_json::Value::Object(data));
         Ok(record)
     }
@@ -1745,7 +1806,7 @@ impl ProvenanceRecord {
 
     /// Create a clock-skew-observed record (ADR 0069 §3).
     #[must_use]
-    pub fn clock_skew_observed(input: ClockSkewObservedInput<'_>) -> Self {
+    pub fn clock_skew_observed(minter: &TypeIdMinter, input: ClockSkewObservedInput<'_>) -> Self {
         const REQUIRED: &[&str] = &[
             "processorAuthoredAt",
             "substrateCreatedAt",
@@ -1775,7 +1836,7 @@ impl ProvenanceRecord {
             serde_json::Value::String(input.event_hash.to_string()),
         );
 
-        let mut record = Self::blank(ProvenanceKind::ClockSkewObserved);
+        let mut record = Self::blank(minter, ProvenanceKind::ClockSkewObserved);
         record.data = Some(serde_json::Value::Object(data));
         record
     }
@@ -1784,7 +1845,10 @@ impl ProvenanceRecord {
 
     /// Create a commit-attempt-failure record (ADR 0070 §2).
     #[must_use]
-    pub fn commit_attempt_failure(input: CommitAttemptFailureInput<'_>) -> Self {
+    pub fn commit_attempt_failure(
+        minter: &TypeIdMinter,
+        input: CommitAttemptFailureInput<'_>,
+    ) -> Self {
         const REQUIRED: &[&str] = &[
             "targetEventHash",
             "failureKind",
@@ -1813,14 +1877,17 @@ impl ProvenanceRecord {
             data.insert("errorPayload".to_string(), error_payload);
         }
 
-        let mut record = Self::blank(ProvenanceKind::CommitAttemptFailure);
+        let mut record = Self::blank(minter, ProvenanceKind::CommitAttemptFailure);
         record.data = Some(serde_json::Value::Object(data));
         record
     }
 
     /// Create an authorization-rejected record (ADR 0070 §4).
     #[must_use]
-    pub fn authorization_rejected(input: AuthorizationRejectedInput<'_>) -> Self {
+    pub fn authorization_rejected(
+        minter: &TypeIdMinter,
+        input: AuthorizationRejectedInput<'_>,
+    ) -> Self {
         const REQUIRED: &[&str] = &[
             "attemptedActorId",
             "attemptedAction",
@@ -1852,7 +1919,7 @@ impl ProvenanceRecord {
             );
         }
 
-        let mut record = Self::blank(ProvenanceKind::AuthorizationRejected);
+        let mut record = Self::blank(minter, ProvenanceKind::AuthorizationRejected);
         record.actor_id = Some(input.attempted_actor_id.to_string());
         record.data = Some(serde_json::Value::Object(data));
         record
@@ -1865,7 +1932,7 @@ impl ProvenanceRecord {
     /// `data` carries `fromVersion`, `toVersion`, and `migrationMap` per
     /// Kernel S11.2 steps 2–3.
     #[must_use]
-    pub fn instance_migrated(input: InstanceMigratedInput<'_>) -> Self {
+    pub fn instance_migrated(minter: &TypeIdMinter, input: InstanceMigratedInput<'_>) -> Self {
         const REQUIRED: &[&str] = &["fromVersion", "toVersion", "migrationMap"];
         let mut data = merge_context(input.context, REQUIRED);
         data.insert(
@@ -1878,7 +1945,7 @@ impl ProvenanceRecord {
         );
         data.insert("migrationMap".to_string(), input.migration_map);
 
-        let mut record = Self::blank(ProvenanceKind::InstanceMigrated);
+        let mut record = Self::blank(minter, ProvenanceKind::InstanceMigrated);
         if let Some(actor) = input.actor_id {
             record.actor_id = Some(actor.to_string());
         }
@@ -1888,7 +1955,10 @@ impl ProvenanceRecord {
 
     /// Create a migration-pin-changed record (ADR 0071 §3).
     #[must_use]
-    pub fn migration_pin_changed(input: MigrationPinChangedInput<'_>) -> Self {
+    pub fn migration_pin_changed(
+        minter: &TypeIdMinter,
+        input: MigrationPinChangedInput<'_>,
+    ) -> Self {
         const REQUIRED: &[&str] = &[
             "priorPinSet",
             "newPinSet",
@@ -1909,7 +1979,7 @@ impl ProvenanceRecord {
             serde_json::Value::String(input.migration_rationale.to_string()),
         );
 
-        let mut record = Self::blank(ProvenanceKind::MigrationPinChanged);
+        let mut record = Self::blank(minter, ProvenanceKind::MigrationPinChanged);
         record.actor_id = Some(input.authorizing_actor_id.to_string());
         record.data = Some(serde_json::Value::Object(data));
         record
@@ -2008,6 +2078,7 @@ mod constructor_literal_drift_tests {
     use super::*;
     use crate::provenance::kind::WOS_CANONICAL_EVENT_LITERALS;
     use serde_json::json;
+    use stack_common_typeid::testing::fixture_minter;
 
     fn assert_event_matches_kind(record: &ProvenanceRecord) {
         assert_eq!(
@@ -2026,7 +2097,7 @@ mod constructor_literal_drift_tests {
         for literal in WOS_CANONICAL_EVENT_LITERALS {
             let kind = ProvenanceKind::from_canonical_event_literal(literal)
                 .unwrap_or_else(|| panic!("substrate literal `{literal}` must parse to a kind"));
-            let record = ProvenanceRecord::blank(kind);
+            let record = ProvenanceRecord::blank(&fixture_minter(), kind);
             assert_eq!(
                 record.event.as_deref(),
                 Some(*literal),
@@ -2042,27 +2113,43 @@ mod constructor_literal_drift_tests {
 
     #[test]
     fn given_state_transition_constructor_when_built_then_event_matches_canonical_literal() {
-        let record = ProvenanceRecord::state_transition("a", "b", "trigger", Some("actor"));
+        let record = ProvenanceRecord::state_transition(
+            &fixture_minter(),
+            "a",
+            "b",
+            "trigger",
+            Some("actor"),
+        );
         assert_event_matches_kind(&record);
     }
 
     #[test]
     fn given_foreach_constructors_when_built_then_events_match_canonical_literals() {
         assert_event_matches_kind(&ProvenanceRecord::foreach_iteration_started(
+            &fixture_minter(),
             "fe",
             0,
             &json!("x"),
         ));
         assert_event_matches_kind(&ProvenanceRecord::foreach_iteration_completed(
-            "fe", 0, false,
+            &fixture_minter(),
+            "fe",
+            0,
+            false,
         ));
-        assert_event_matches_kind(&ProvenanceRecord::foreach_completed("fe", 2, false));
+        assert_event_matches_kind(&ProvenanceRecord::foreach_completed(
+            &fixture_minter(),
+            "fe",
+            2,
+            false,
+        ));
     }
 
     #[test]
     fn given_signature_constructors_when_built_then_events_match_canonical_literals() {
         let digest64 = format!("sha256:{}", "a".repeat(64));
         assert_event_matches_kind(&ProvenanceRecord::signature_admission_failed(
+            &fixture_minter(),
             SignatureAdmissionFailedInput {
                 reason: "test",
                 response_id: "r1",
@@ -2079,6 +2166,7 @@ mod constructor_literal_drift_tests {
         let pres_hash = format!("sha256:{}", "c".repeat(64));
         let signed_digest = format!("sha256:{}", "d".repeat(64));
         assert_event_matches_kind(&ProvenanceRecord::signature_affirmation(
+            &fixture_minter(),
             SignatureAffirmationInput {
                 signer_id: "signer",
                 role_id: "role-id",
@@ -2114,42 +2202,53 @@ mod constructor_literal_drift_tests {
     #[test]
     fn given_governance_clock_constructors_when_built_then_events_match_canonical_literals() {
         assert_event_matches_kind(&ProvenanceRecord::determination_rescinded(
+            &fixture_minter(),
             DeterminationRescindedInput {
                 prior_determination_hash: "h1",
                 rescission_authorization_event_hash: "h2",
                 context: None,
             },
         ));
-        assert_event_matches_kind(&ProvenanceRecord::reinstated(ReinstatedInput {
-            prior_rescission_event_hash: "h1",
-            reactivation_authorization_event_hash: "h2",
-            reason: "r",
-            context: None,
-        }));
-        assert_event_matches_kind(&ProvenanceRecord::clock_started(ClockStartedInput {
-            clock_id: "c1",
-            clock_kind: "AppealClock",
-            origin_event_hash: "oh",
-            duration: "P1D",
-            computed_deadline: "2020-01-02T00:00:00Z",
-            calendar_ref: None,
-            statute_reference: None,
-            context: None,
-        }));
-        assert_event_matches_kind(&ProvenanceRecord::clock_resolved(ClockResolvedInput {
-            clock_id: "c1",
-            origin_clock_hash: "oh",
-            resolution: ClockResolvedResolution::Satisfied {
-                resolving_event_hash: None,
+        assert_event_matches_kind(&ProvenanceRecord::reinstated(
+            &fixture_minter(),
+            ReinstatedInput {
+                prior_rescission_event_hash: "h1",
+                reactivation_authorization_event_hash: "h2",
+                reason: "r",
+                context: None,
             },
-            resolved_at: "2020-01-02T00:00:00Z",
-            context: None,
-        }));
+        ));
+        assert_event_matches_kind(&ProvenanceRecord::clock_started(
+            &fixture_minter(),
+            ClockStartedInput {
+                clock_id: "c1",
+                clock_kind: "AppealClock",
+                origin_event_hash: "oh",
+                duration: "P1D",
+                computed_deadline: "2020-01-02T00:00:00Z",
+                calendar_ref: None,
+                statute_reference: None,
+                context: None,
+            },
+        ));
+        assert_event_matches_kind(&ProvenanceRecord::clock_resolved(
+            &fixture_minter(),
+            ClockResolvedInput {
+                clock_id: "c1",
+                origin_clock_hash: "oh",
+                resolution: ClockResolvedResolution::Satisfied {
+                    resolving_event_hash: None,
+                },
+                resolved_at: "2020-01-02T00:00:00Z",
+                context: None,
+            },
+        ));
     }
 
     #[test]
     fn given_assurance_constructors_when_built_then_events_match_canonical_literals() {
         assert_event_matches_kind(&ProvenanceRecord::identity_attestation(
+            &fixture_minter(),
             IdentityAttestationInput {
                 subject_global_id: "subj",
                 assurance_level: "high",
@@ -2162,15 +2261,18 @@ mod constructor_literal_drift_tests {
             },
         ));
         assert_event_matches_kind(
-            &ProvenanceRecord::key_rebind(KeyRebindInput {
-                prior_kid: "0123456789abcdef0123456789abcdef",
-                new_kid: "fedcba9876543210fedcba9876543210",
-                prior_assurance: "high",
-                new_assurance: "high",
-                rebind_attestation_ref: "https://example.invalid/ref",
-                reason: None,
-                context: None,
-            })
+            &ProvenanceRecord::key_rebind(
+                &fixture_minter(),
+                KeyRebindInput {
+                    prior_kid: "0123456789abcdef0123456789abcdef",
+                    new_kid: "fedcba9876543210fedcba9876543210",
+                    prior_assurance: "high",
+                    new_assurance: "high",
+                    rebind_attestation_ref: "https://example.invalid/ref",
+                    reason: None,
+                    context: None,
+                },
+            )
             .expect("valid key-rebind fixture"),
         );
     }

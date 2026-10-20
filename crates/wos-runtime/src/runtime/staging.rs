@@ -6,6 +6,7 @@
 //! implementations. They do not verify arbitrary Rust code, supply authority,
 //! or replace the host's captured-input and current-state transaction fences.
 
+use super::process_minter;
 use super::staging_store::StageStore;
 use super::{
     CreateProcessRequest, DismissTaskResult, DrainOnceResult, PersistDraftResult, RuntimeError,
@@ -761,6 +762,7 @@ impl WosRuntime {
             require_token(code)?;
         }
         let mut record = self.store.load_record(&intent.process_id)?;
+        let minter = process_minter(&record.process)?;
         record.validate_creation()?;
         let fingerprint = stable_json_digest(&serde_json::to_value(intent).map_err(json_error)?);
         let invocation_value = serde_json::to_value(invocation).map_err(json_error)?;
@@ -849,6 +851,7 @@ impl WosRuntime {
             return Err(presentation_conflict(intent));
         }
         let mut provenance = ProvenanceRecord::task_lifecycle(
+            &minter,
             ProvenanceKind::TaskPresented,
             &intent.task_id,
             Some(&intent.assigned_actor),

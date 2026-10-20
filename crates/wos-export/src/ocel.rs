@@ -234,6 +234,7 @@ fn event_attributes(record: &ProvenanceRecord) -> Vec<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use stack_common_typeid::testing::fixture_minter;
     use wos_core::{ProvenanceKind, ProvenanceLog, ProvenanceRecord};
 
     fn config() -> ExportConfig {
@@ -244,7 +245,8 @@ mod tests {
     }
 
     fn stamped(kind: ProvenanceKind, timestamp: &str) -> ProvenanceRecord {
-        let mut record = ProvenanceRecord::state_transition("a", "b", "ev", Some("user-1"));
+        let mut record =
+            ProvenanceRecord::state_transition(&fixture_minter(), "a", "b", "ev", Some("user-1"));
         record.record_kind = kind;
         record.timestamp = timestamp.to_string();
         record
@@ -362,7 +364,13 @@ mod tests {
         let mut log = ProvenanceLog::default();
         // Unstamped record — constructors leave `timestamp` empty; the runtime
         // would normally push-stamp it, but tests may bypass that path.
-        log.push(ProvenanceRecord::state_transition("a", "b", "ev", None));
+        log.push(ProvenanceRecord::state_transition(
+            &fixture_minter(),
+            "a",
+            "b",
+            "ev",
+            None,
+        ));
 
         let document = export(&log, &config());
 

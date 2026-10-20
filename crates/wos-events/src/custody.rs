@@ -334,6 +334,7 @@ mod base64_record_bytes {
 
 #[cfg(test)]
 mod tests {
+    use stack_common_typeid::testing::fixture_minter;
     use std::path::PathBuf;
 
     use super::*;
@@ -342,8 +343,8 @@ mod tests {
 
     fn metadata() -> CustodyAppendMetadata {
         CustodyAppendMetadata {
-            case_id: typeid::mint_case_ledger_id(),
-            record_id: typeid::mint_provenance_id(),
+            case_id: fixture_minter().mint_case_ledger_id(),
+            record_id: fixture_minter().mint_provenance_id(),
             event_type: "wos.kernel.state_transition".to_string(),
         }
     }
@@ -359,8 +360,13 @@ mod tests {
 
     #[test]
     fn provenance_record_becomes_four_field_append_input() {
-        let mut record =
-            ProvenanceRecord::state_transition("intake", "review", "submitted", Some("worker"));
+        let mut record = ProvenanceRecord::state_transition(
+            &fixture_minter(),
+            "intake",
+            "review",
+            "submitted",
+            Some("worker"),
+        );
         record.timestamp = "2026-04-21T14:30:00Z".to_string();
         let input = CustodyAppendInput::from_provenance_record(&record, &context(), metadata())
             .expect("build input");
@@ -377,8 +383,13 @@ mod tests {
 
     #[test]
     fn provenance_event_type_preserves_canonical_and_routes_native_kinds() {
-        let mut record =
-            ProvenanceRecord::state_transition("intake", "review", "submitted", Some("worker"));
+        let mut record = ProvenanceRecord::state_transition(
+            &fixture_minter(),
+            "intake",
+            "review",
+            "submitted",
+            Some("worker"),
+        );
         assert_eq!(
             provenance_event_type("wos.kernel", &record).expect("event type"),
             "wos.kernel.state_transition"
@@ -392,8 +403,13 @@ mod tests {
     }
 
     fn record_with_seeded_kind(kind: ProvenanceKind, event: Option<&str>) -> ProvenanceRecord {
-        let mut record =
-            ProvenanceRecord::state_transition("intake", "review", "submitted", Some("worker"));
+        let mut record = ProvenanceRecord::state_transition(
+            &fixture_minter(),
+            "intake",
+            "review",
+            "submitted",
+            Some("worker"),
+        );
         record.record_kind = kind;
         record.event = event.map(str::to_string);
         record
@@ -556,8 +572,8 @@ mod tests {
     #[test]
     fn metadata_rejects_non_wos_event_type() {
         let error = CustodyAppendMetadata {
-            case_id: typeid::mint_case_ledger_id(),
-            record_id: typeid::mint_provenance_id(),
+            case_id: fixture_minter().mint_case_ledger_id(),
+            record_id: fixture_minter().mint_provenance_id(),
             event_type: "trellis.appended".to_string(),
         }
         .validate()
@@ -572,8 +588,8 @@ mod tests {
     #[test]
     fn metadata_rejects_non_case_type_id() {
         let error = CustodyAppendMetadata {
-            case_id: typeid::mint_provenance_id(),
-            record_id: typeid::mint_provenance_id(),
+            case_id: fixture_minter().mint_provenance_id(),
+            record_id: fixture_minter().mint_provenance_id(),
             event_type: "wos.kernel.state_transition".to_string(),
         }
         .validate()
@@ -585,8 +601,8 @@ mod tests {
     #[test]
     fn metadata_rejects_case_family_record_id() {
         let error = CustodyAppendMetadata {
-            case_id: typeid::mint_case_ledger_id(),
-            record_id: typeid::mint_case_ledger_id(),
+            case_id: fixture_minter().mint_case_ledger_id(),
+            record_id: fixture_minter().mint_case_ledger_id(),
             event_type: "wos.kernel.state_transition".to_string(),
         }
         .validate()
@@ -597,10 +613,10 @@ mod tests {
 
     #[test]
     fn metadata_rejects_unknown_record_family() {
-        let prov = typeid::mint_provenance_id();
+        let prov = fixture_minter().mint_provenance_id();
         let tail = prov.rsplit_once('_').expect("typeid").1;
         let error = CustodyAppendMetadata {
-            case_id: typeid::mint_case_ledger_id(),
+            case_id: fixture_minter().mint_case_ledger_id(),
             record_id: format!("default_custom_{tail}"),
             event_type: "wos.kernel.state_transition".to_string(),
         }
@@ -612,8 +628,13 @@ mod tests {
 
     #[test]
     fn oversized_records_fail_loudly() {
-        let mut record =
-            ProvenanceRecord::state_transition("intake", "review", "submitted", Some("worker"));
+        let mut record = ProvenanceRecord::state_transition(
+            &fixture_minter(),
+            "intake",
+            "review",
+            "submitted",
+            Some("worker"),
+        );
         record.data = Some(serde_json::json!({ "blob": "x".repeat(8_192) }));
         let mut context = context();
         context.max_inline_record_bytes = Some(128);
@@ -626,8 +647,9 @@ mod tests {
 
     #[test]
     fn context_uses_case_ledger_id_as_default_case_id() {
-        let record = ProvenanceRecord::unmatched_event("submitted", Some("worker"));
-        let case_ledger_id = typeid::mint_case_ledger_id();
+        let record =
+            ProvenanceRecord::unmatched_event(&fixture_minter(), "submitted", Some("worker"));
+        let case_ledger_id = fixture_minter().mint_case_ledger_id();
         let metadata = context()
             .metadata_for_provenance_record(&case_ledger_id, 0, &record)
             .expect("metadata");
@@ -638,7 +660,8 @@ mod tests {
 
     #[test]
     fn encoded_json_representation_uses_base64() {
-        let record = ProvenanceRecord::unmatched_event("submitted", Some("worker"));
+        let record =
+            ProvenanceRecord::unmatched_event(&fixture_minter(), "submitted", Some("worker"));
         let input = CustodyAppendInput::from_provenance_record(&record, &context(), metadata())
             .expect("append input");
 
@@ -689,52 +712,55 @@ mod tests {
 
     #[test]
     fn signature_affirmation_enters_custody_append_window() {
-        let record = ProvenanceRecord::signature_affirmation(SignatureAffirmationInput {
-            signer_id: "applicant",
-            role_id: "applicantSigner",
-            role: "signer",
-            document_id: "benefitsApplication",
-            signing_act_id: "01JQRPD32JF8XT9QXKKV3RQSD1",
-            document_ref: serde_json::json!({
-                "documentId": "benefitsApplication",
-                "locale": "en-US",
-            }),
-            document_hash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-            presentation_hash: "fedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedc",
-            document_hash_algorithm: "sha-256",
-            source_signature_system: "formspec",
-            source_signature_id: "sig-2026-0001",
-            signed_payload_digest: "abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
-            signed_payload_digest_algorithm: "sha-256",
-            signing_intent: "urn:wos:signing-intent:applicant-signature",
-            signed_at: "2026-04-22T14:30:00Z",
-            identity_binding: serde_json::json!({
-                "method": "email-otp",
-                "assuranceLevel": "standard",
-                "providerRef": "urn:agency.gov:identity:providers:email-otp"
-            }),
-            consent_reference: serde_json::json!({
-                "consentTextRef": "urn:agency.gov:consent:esign-benefits:v1",
-                "consentVersion": "1.0.0",
-                "acceptedAtPath": "response.signature.acceptedAt",
-                "affirmationPath": "response.signature.affirmed"
-            }),
-            signature_provider: "urn:agency.gov:signature:providers:formspec",
-            ceremony_id: "ceremony-2026-0001",
-            profile_ref: Some("urn:agency.gov:wos:signature-profile:benefits:v1"),
-            profile_key: None,
-            source_response_ref: "urn:agency.gov:formspec:responses:benefits:case-2026-0001",
-            signer_authority: None,
-            custody_hook_eligible: true,
-            primitive_verification: serde_json::json!({
-                "status": "deferredPendingHelper",
-                "reason": "formspec-signing-helper-pending",
-            }),
-            verification_receipt: None,
-            witnessed_signature_ref: None,
-        });
+        let record = ProvenanceRecord::signature_affirmation(
+            &fixture_minter(),
+            SignatureAffirmationInput {
+                signer_id: "applicant",
+                role_id: "applicantSigner",
+                role: "signer",
+                document_id: "benefitsApplication",
+                signing_act_id: "01JQRPD32JF8XT9QXKKV3RQSD1",
+                document_ref: serde_json::json!({
+                    "documentId": "benefitsApplication",
+                    "locale": "en-US",
+                }),
+                document_hash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                presentation_hash: "fedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedc",
+                document_hash_algorithm: "sha-256",
+                source_signature_system: "formspec",
+                source_signature_id: "sig-2026-0001",
+                signed_payload_digest: "abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+                signed_payload_digest_algorithm: "sha-256",
+                signing_intent: "urn:wos:signing-intent:applicant-signature",
+                signed_at: "2026-04-22T14:30:00Z",
+                identity_binding: serde_json::json!({
+                    "method": "email-otp",
+                    "assuranceLevel": "standard",
+                    "providerRef": "urn:agency.gov:identity:providers:email-otp"
+                }),
+                consent_reference: serde_json::json!({
+                    "consentTextRef": "urn:agency.gov:consent:esign-benefits:v1",
+                    "consentVersion": "1.0.0",
+                    "acceptedAtPath": "response.signature.acceptedAt",
+                    "affirmationPath": "response.signature.affirmed"
+                }),
+                signature_provider: "urn:agency.gov:signature:providers:formspec",
+                ceremony_id: "ceremony-2026-0001",
+                profile_ref: Some("urn:agency.gov:wos:signature-profile:benefits:v1"),
+                profile_key: None,
+                source_response_ref: "urn:agency.gov:formspec:responses:benefits:case-2026-0001",
+                signer_authority: None,
+                custody_hook_eligible: true,
+                primitive_verification: serde_json::json!({
+                    "status": "deferredPendingHelper",
+                    "reason": "formspec-signing-helper-pending",
+                }),
+                verification_receipt: None,
+                witnessed_signature_ref: None,
+            },
+        );
         let metadata = context()
-            .metadata_for_provenance_record(&typeid::mint_case_ledger_id(), 0, &record)
+            .metadata_for_provenance_record(&fixture_minter().mint_case_ledger_id(), 0, &record)
             .expect("metadata");
 
         let input = CustodyAppendInput::from_provenance_record(&record, &context(), metadata)

@@ -2,7 +2,7 @@
 
 //! Processor-level conformance claim verification tests.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use wos_conformance::{
     AssistGovernanceProxyEvidence, ClaimStatus, ProcessorClaims, ProcessorEvidence,
@@ -14,8 +14,38 @@ use wos_core::ai_policy::{
 };
 use wos_core::traits::{ContractValidator, ValidationResult};
 
-fn fixtures_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
+fn fixtures_dir() -> tempfile::TempDir {
+    let tests = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
+    let source = tests.join("fixtures");
+    // This named ReplayRequest + ReferenceReplayAdapters document belongs to
+    // reference_due_process_replay.rs, not the ordinary ConformanceFixture family.
+    const REFERENCE_REPLAY: &str = "reference-due-process-replay.json";
+    // Keep the same directory depth: existing authored document paths are relative.
+    let selected = tempfile::Builder::new()
+        .prefix("processor-fixtures-")
+        .tempdir_in(tests)
+        .unwrap();
+    for entry in std::fs::read_dir(source).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_file()
+            && path
+                .extension()
+                .is_some_and(|extension| extension == "json")
+            && path.file_name().unwrap() != REFERENCE_REPLAY
+        {
+            std::fs::copy(&path, selected.path().join(path.file_name().unwrap())).unwrap();
+        }
+    }
+    selected
+}
+
+#[test]
+fn malformed_selected_ordinary_fixture_is_still_a_load_error() {
+    let selected = fixtures_dir();
+    std::fs::write(selected.path().join("malformed-ordinary.json"), "{broken").unwrap();
+    let error =
+        verify_processor_manifest(&ProcessorManifest::default(), selected.path()).unwrap_err();
+    assert!(error.to_string().contains("malformed-ordinary.json"));
 }
 
 fn status_for(
@@ -86,7 +116,8 @@ fn incomplete_profiles_fail_against_current_fixture_inventory() {
         ..ProcessorManifest::default()
     };
 
-    let report = verify_processor_manifest(&manifest, &fixtures_dir()).expect("verify manifest");
+    let report =
+        verify_processor_manifest(&manifest, fixtures_dir().path()).expect("verify manifest");
 
     assert_eq!(status_for(&report, "G-051"), ClaimStatus::Failed);
     assert_eq!(status_for(&report, "G-052"), ClaimStatus::Failed);
@@ -105,7 +136,8 @@ fn ai004_claim_without_evidence_fails() {
         ..ProcessorManifest::default()
     };
 
-    let report = verify_processor_manifest(&manifest, &fixtures_dir()).expect("verify manifest");
+    let report =
+        verify_processor_manifest(&manifest, fixtures_dir().path()).expect("verify manifest");
     assert_eq!(status_for(&report, "AI-004"), ClaimStatus::Failed);
 }
 
@@ -151,7 +183,8 @@ fn ai004_claim_with_delegation_evidence_verifies() {
         },
     };
 
-    let report = verify_processor_manifest(&manifest, &fixtures_dir()).expect("verify manifest");
+    let report =
+        verify_processor_manifest(&manifest, fixtures_dir().path()).expect("verify manifest");
     assert_eq!(status_for(&report, "AI-004"), ClaimStatus::Verified);
 }
 
@@ -166,7 +199,8 @@ fn ai050_claim_without_proxy_evidence_fails() {
         ..ProcessorManifest::default()
     };
 
-    let report = verify_processor_manifest(&manifest, &fixtures_dir()).expect("verify manifest");
+    let report =
+        verify_processor_manifest(&manifest, fixtures_dir().path()).expect("verify manifest");
     assert_eq!(status_for(&report, "AI-050"), ClaimStatus::Failed);
 }
 
@@ -205,7 +239,8 @@ fn local_policy_evidence_cannot_verify_an_unexecuted_proxy() {
         },
     };
 
-    let report = verify_processor_manifest(&manifest, &fixtures_dir()).expect("verify manifest");
+    let report =
+        verify_processor_manifest(&manifest, fixtures_dir().path()).expect("verify manifest");
     assert_eq!(status_for(&report, "AI-050"), ClaimStatus::Failed);
 }
 
@@ -229,7 +264,8 @@ fn ai050_claim_with_false_differential_check_fails() {
         },
     };
 
-    let report = verify_processor_manifest(&manifest, &fixtures_dir()).expect("verify manifest");
+    let report =
+        verify_processor_manifest(&manifest, fixtures_dir().path()).expect("verify manifest");
     assert_eq!(status_for(&report, "AI-050"), ClaimStatus::Failed);
 }
 
@@ -266,6 +302,7 @@ fn ai004_claim_with_invalid_validation_result_fails() {
         },
     };
 
-    let report = verify_processor_manifest(&manifest, &fixtures_dir()).expect("verify manifest");
+    let report =
+        verify_processor_manifest(&manifest, fixtures_dir().path()).expect("verify manifest");
     assert_eq!(status_for(&report, "AI-004"), ClaimStatus::Failed);
 }

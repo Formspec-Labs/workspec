@@ -6,6 +6,7 @@
 //! by the in-memory adapter. Moving them out of `runtime.rs` makes the event
 //! loop easier to read while preserving the current lazy-deadline semantics.
 
+use super::process_minter;
 use chrono::DateTime;
 use wos_core::business_calendar::{
     BusinessCalendarDocument, BusinessCalendarError, next_business_moment,
@@ -25,6 +26,7 @@ pub(super) fn materialize_due_timers(
     now_ms: u64,
     now_iso: &str,
 ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
+    let minter = process_minter(instance)?;
     let mut due = Vec::new();
     let mut remaining = Vec::new();
 
@@ -39,13 +41,18 @@ pub(super) fn materialize_due_timers(
 
     let mut provenance = Vec::new();
     for timer in due {
-        provenance.push(ProvenanceRecord::timer_fired(&timer.timer_id, &timer.event));
+        provenance.push(ProvenanceRecord::timer_fired(
+            &minter,
+            &timer.timer_id,
+            &timer.event,
+        ));
         let deadline_ms = parse_timestamp(&timer.deadline)?;
         let lateness_ms = now_ms.saturating_sub(deadline_ms);
         let max_tolerance = max_tolerance_ms(timer.duration_ms.unwrap_or(0));
         if lateness_ms > max_tolerance {
             let tolerance_iso = tolerance_to_iso(max_tolerance);
             provenance.push(ProvenanceRecord::tolerance_violation(
+                &minter,
                 &timer.timer_id,
                 timer.duration_iso.as_deref().unwrap_or("P0D"),
                 &tolerance_iso,

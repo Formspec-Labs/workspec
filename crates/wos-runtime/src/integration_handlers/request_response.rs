@@ -6,6 +6,8 @@
 //! and its private helpers lives here. The handler receives an `InvocationContext`
 //! borrow from the runtime; it does not hold any owned runtime state.
 
+use crate::runtime::process_minter;
+use stack_common_typeid::TypeIdMinter;
 use std::collections::HashMap;
 
 use fel_core::{evaluate, fel_to_json, has_error_diagnostics, parse};
@@ -40,9 +42,11 @@ impl IntegrationBindingHandler for RequestResponseHandler {
         binding: &IntegrationBinding,
         now_iso: &str,
     ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
+        let minter = process_minter(&record.process)?;
         let mut provenance = Vec::new();
         let input = build_integration_input(binding, kernel, observed, &record.process)?;
         if let Some(prov_record) = validate_integration_contract(
+            &minter,
             ctx.validator,
             service_ref,
             "request",
@@ -74,7 +78,7 @@ impl IntegrationBindingHandler for RequestResponseHandler {
 
         if reused_persisted_result {
             provenance.push(ProvenanceRecord {
-                id: ProvenanceRecord::mint_id(),
+                id: ProvenanceRecord::mint_id(&minter),
                 record_kind: ProvenanceKind::IdempotencyDedup,
                 timestamp: String::new(),
                 actor_id: observed.actor_id.clone(),
@@ -102,7 +106,7 @@ impl IntegrationBindingHandler for RequestResponseHandler {
             });
         } else {
             provenance.push(ProvenanceRecord {
-                id: ProvenanceRecord::mint_id(),
+                id: ProvenanceRecord::mint_id(&minter),
                 record_kind: ProvenanceKind::StepResultPersisted,
                 timestamp: String::new(),
                 actor_id: observed.actor_id.clone(),
@@ -133,6 +137,7 @@ impl IntegrationBindingHandler for RequestResponseHandler {
         }
 
         if let Some(prov_record) = validate_integration_contract(
+            &minter,
             ctx.validator,
             service_ref,
             "response",
@@ -150,7 +155,7 @@ impl IntegrationBindingHandler for RequestResponseHandler {
         )?;
         if !updates.is_empty() {
             provenance.push(ProvenanceRecord {
-                id: ProvenanceRecord::mint_id(),
+                id: ProvenanceRecord::mint_id(&minter),
                 record_kind: ProvenanceKind::DataMapping,
                 timestamp: String::new(),
                 actor_id: observed.actor_id.clone(),
@@ -182,7 +187,7 @@ impl IntegrationBindingHandler for RequestResponseHandler {
         // follow any DataMapping record so the provenance stream reads:
         // data changed → milestone fired.
         let post_state = record.process.case_state.clone();
-        let milestone_records = evaluate_milestones(kernel, &mut record.process, &post_state);
+        let milestone_records = evaluate_milestones(kernel, &mut record.process, &post_state)?;
         provenance.extend(milestone_records);
 
         Ok(provenance)
@@ -205,6 +210,7 @@ pub(crate) struct InvocationContext<'r> {
 // --- Contract validation helper (extracted from WosRuntime method) ---
 
 pub(crate) fn validate_integration_contract(
+    minter: &TypeIdMinter,
     validator: &dyn ValidateContractsDyn,
     service_ref: &str,
     phase: &str,
@@ -224,7 +230,7 @@ pub(crate) fn validate_integration_contract(
     }
 
     Ok(Some(ProvenanceRecord {
-        id: ProvenanceRecord::mint_id(),
+        id: ProvenanceRecord::mint_id(minter),
         record_kind: ProvenanceKind::ContractValidation,
         timestamp: String::new(),
         actor_id: actor_id.map(str::to_string),
@@ -349,7 +355,8 @@ mod reference_cache_tests {
 
     #[test]
     fn qualified_cache_reuse_checks_actual_input_binding_fixture_and_output_before_return() {
-        let process = serde_json::from_value(json!({"processId":"test-process","caseLedgerId":"test-case","definitionUrl":"urn:test:service","definitionVersion":"1.0.0","configuration":["open"],"caseState":{},"provenancePosition":0,"timers":[],"activeTasks":[],"status":"active","createdAt":"1970-01-01T00:00:00Z","updatedAt":"1970-01-01T00:00:00Z"})).unwrap();
+        let minter = stack_common_typeid::testing::fixture_minter();
+        let process = serde_json::from_value(json!({"processId":minter.mint_process_id(),"caseLedgerId":minter.mint_case_ledger_id(),"tenant":minter.tenant().as_str(),"definitionUrl":"urn:test:service","definitionVersion":"1.0.0","configuration":["open"],"caseState":{},"provenancePosition":0,"timers":[],"activeTasks":[],"status":"active","createdAt":"1970-01-01T00:00:00Z","updatedAt":"1970-01-01T00:00:00Z"})).unwrap();
         let mut record = RuntimeRecord::new(process);
         let service = SelectedService {
             identity: "selected-fixture-a".into(),

@@ -70,6 +70,7 @@ integrity-signature-ring = { path = "../../../integrity-stack/crates/integrity-s
 integrity-canonical = { path = "../../../integrity-stack/crates/integrity-canonical" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+stack-common-typeid.workspace = true
 thiserror = "2"
 time = { version = "0.3", features = ["formatting", "parsing"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"], optional = true }
@@ -81,7 +82,7 @@ wos-server-ports = { path = "../../../workspec-server/crates/wos-server-ports", 
 wos-server-runtime-restate = { path = "../../../workspec-server/crates/wos-server-runtime-restate", optional = true }
 
 [dev-dependencies]
-stack-common-typeid.workspace = true
+stack-common-typeid = { workspace = true, features = ["testing"] }
 integrity-bundle-fixtures = { path = "../../../integrity-stack/crates/integrity-bundle-fixtures" }
 assert_cmd = "2"
 insta = { version = "1", features = ["json"] }

@@ -1,9 +1,10 @@
 use super::*;
 use crate::{CustodyAppendContext, CustodyAppendInput};
 use integrity_cbor::{encode_cbor_value, json_to_cbor_value, json_to_dcbor_bytes};
+use stack_common_typeid::testing::fixture_minter;
 
 fn record() -> ProvenanceRecord {
-    let mut record = ProvenanceRecord::state_entered("Draft");
+    let mut record = ProvenanceRecord::state_entered(&fixture_minter(), "Draft");
     record.timestamp = "2026-10-09T14:00:00.123Z".into();
     record.definition_version = Some("1.0.0".into());
     record.audit_layer = Some("facts".into());
@@ -97,7 +98,7 @@ fn native_provenance_preserves_original_json_and_actual_timestamp_tag() {
         workflow_ref: None,
     };
     let metadata = context
-        .metadata_for_provenance_record(&stack_common_typeid::mint_case_ledger_id(), 0, &original)
+        .metadata_for_provenance_record(&fixture_minter().mint_case_ledger_id(), 0, &original)
         .unwrap();
     assert_eq!(metadata.event_type, WOS_NATIVE_PROVENANCE_EVENT_LITERAL);
     let input = CustodyAppendInput::from_provenance_record(&original, &context, metadata).unwrap();
@@ -129,6 +130,7 @@ fn native_provenance_preserves_native_task_expiry_without_broadening_other_outco
     // Mirrors retire_expired_tasks: preserve its maintained constructor,
     // system actor, detail shape and unmodified native outcome literal.
     let mut expired = ProvenanceRecord::task_lifecycle(
+        &fixture_minter(),
         ProvenanceKind::TaskFailed,
         "review-task",
         None,

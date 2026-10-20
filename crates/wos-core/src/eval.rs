@@ -24,6 +24,7 @@ use crate::model::kernel::{
     State, StateKind, Transition, TransitionEvent,
 };
 use crate::timer::Timers;
+use stack_common_typeid::TypeIdMinter;
 use wos_events::provenance::{CaseFileSnapshot, ProvenanceLog, ProvenanceRecord};
 
 /// Active state configuration tracking leaf states.
@@ -125,6 +126,9 @@ pub struct Evaluator {
 
     /// Provenance log.
     provenance: ProvenanceLog,
+
+    /// Mints provenance-record IDs under the owning process's tenant.
+    minter: TypeIdMinter,
 
     /// Simulated time in milliseconds (for timer tests).
     simulated_time_ms: u64,
@@ -323,16 +327,20 @@ impl Evaluator {
     ///
     /// # Errors
     /// Returns evaluation errors, including invalid anchored timer input.
-    pub fn new(kernel: KernelDocument) -> Result<Self, EvalError> {
-        Self::with_time(kernel, 0)
+    pub fn new(kernel: KernelDocument, minter: &TypeIdMinter) -> Result<Self, EvalError> {
+        Self::with_time(kernel, minter, 0)
     }
 
     /// Create an evaluator using the provided millisecond clock.
     ///
     /// # Errors
     /// Returns evaluation errors, including invalid anchored timer input.
-    pub fn with_time(kernel: KernelDocument, current_time_ms: u64) -> Result<Self, EvalError> {
-        Self::with_time_and_case_state(kernel, current_time_ms, None)
+    pub fn with_time(
+        kernel: KernelDocument,
+        minter: &TypeIdMinter,
+        current_time_ms: u64,
+    ) -> Result<Self, EvalError> {
+        Self::with_time_and_case_state(kernel, minter, current_time_ms, None)
     }
 
     /// Create an evaluator using the provided millisecond clock and seeded case state.
@@ -341,10 +349,17 @@ impl Evaluator {
     /// Returns evaluation errors, including invalid anchored timer input.
     pub fn with_time_and_case_state(
         kernel: KernelDocument,
+        minter: &TypeIdMinter,
         current_time_ms: u64,
         initial_case_state: Option<&serde_json::Value>,
     ) -> Result<Self, EvalError> {
-        Self::with_time_and_case_state_and_actor(kernel, current_time_ms, initial_case_state, None)
+        Self::with_time_and_case_state_and_actor(
+            kernel,
+            minter,
+            current_time_ms,
+            initial_case_state,
+            None,
+        )
     }
 
     /// Initialize evaluation with an explicitly admitted initiating principal.
@@ -358,6 +373,7 @@ impl Evaluator {
     /// Returns evaluation errors, including invalid anchored timer input.
     pub fn with_time_and_case_state_and_actor(
         kernel: KernelDocument,
+        minter: &TypeIdMinter,
         current_time_ms: u64,
         initial_case_state: Option<&serde_json::Value>,
         initial_initiating_actor_id: Option<&str>,
@@ -386,6 +402,7 @@ impl Evaluator {
             case_state: seeded_case_state,
             timers: Timers::default(),
             provenance: ProvenanceLog::default(),
+            minter: minter.clone(),
             simulated_time_ms: current_time_ms,
             transitions: Vec::new(),
             executed_actions: Vec::new(),
@@ -399,11 +416,24 @@ impl Evaluator {
     }
 
     /// Restore an evaluator from a serialized workflow process.
+    ///
+    /// Provenance IDs are minted under the tenant in `instance.process_id`; the
+    /// persisted `tenant` field is never a minting source.
+    ///
+    /// # Errors
+    /// Returns [`EvalError::Internal`] when the process ID carries no tenant, and
+    /// timer errors for invalid persisted timers.
     pub fn from_instance(
         kernel: KernelDocument,
         instance: &WorkflowProcess,
         current_time_ms: u64,
     ) -> Result<Self, EvalError> {
+        let minter = TypeIdMinter::for_parent(&instance.process_id).ok_or_else(|| {
+            EvalError::Internal(format!(
+                "process id `{}` carries no tenant to mint under",
+                instance.process_id
+            ))
+        })?;
         let state_index = build_state_index(&kernel);
         let mut timers = Timers::default();
 
@@ -439,6 +469,7 @@ impl Evaluator {
             case_state: case_state_from_value(&instance.case_state),
             timers,
             provenance: ProvenanceLog::default(),
+            minter,
             simulated_time_ms: current_time_ms,
             transitions: Vec::new(),
             executed_actions: Vec::new(),
@@ -462,6 +493,11 @@ impl Evaluator {
     /// Mutable access to case state for pre-seeding.
     pub fn case_state_mut(&mut self) -> &mut HashMap<String, serde_json::Value> {
         &mut self.case_state
+    }
+
+    /// The minter that issues this evaluator's provenance-record IDs.
+    pub fn minter(&self) -> &TypeIdMinter {
+        &self.minter
     }
 
     /// The provenance log.
@@ -539,6 +575,7 @@ impl Evaluator {
     /// Rejects unresolved locations, absent guards, and native evaluation failures.
     pub fn evaluate_reference_alternative(
         kernel: &KernelDocument,
+        minter: &TypeIdMinter,
         location: &TransitionLocation,
         case_state: &serde_json::Value,
         now_ms: u64,
@@ -561,6 +598,7 @@ impl Evaluator {
             return Err("reference alternative case snapshot must be an object".into());
         }
         let mut evaluator = Self {
+            minter: minter.clone(),
             kernel: kernel.clone(),
             state_index: build_state_index(kernel),
             config: Configuration::default(),
@@ -635,8 +673,11 @@ impl Evaluator {
         }
 
         // Unmatched event — record in provenance, no state change.
-        self.provenance
-            .push(ProvenanceRecord::unmatched_event(event, actor));
+        self.provenance.push(ProvenanceRecord::unmatched_event(
+            &self.minter,
+            event,
+            actor,
+        ));
         Ok(false)
     }
 
@@ -920,8 +961,11 @@ impl Evaluator {
         if any_fired && self.parallel_ready(parallel_id) {
             let joined = self.try_fire_transition("$join", actor, event_data, false)?;
             if !joined.fired {
-                self.provenance
-                    .push(ProvenanceRecord::unmatched_event("$join", actor));
+                self.provenance.push(ProvenanceRecord::unmatched_event(
+                    &self.minter,
+                    "$join",
+                    actor,
+                ));
             }
             exited_roots.extend(joined.exited_roots);
         }
@@ -1005,7 +1049,7 @@ impl Evaluator {
             StateKind::Compound => {
                 self.config.enter_scope(state_id.to_string());
                 self.provenance
-                    .push(ProvenanceRecord::state_entered(state_id));
+                    .push(ProvenanceRecord::state_entered(&self.minter, state_id));
                 self.execute_on_entry_actions(state_id, actor, event_data)?;
 
                 if let Some(saved) = self.history_store.get(state_id).cloned() {
@@ -1023,7 +1067,7 @@ impl Evaluator {
             StateKind::Parallel => {
                 self.config.enter_scope(state_id.to_string());
                 self.provenance
-                    .push(ProvenanceRecord::state_entered(state_id));
+                    .push(ProvenanceRecord::state_entered(&self.minter, state_id));
                 self.execute_on_entry_actions(state_id, actor, event_data)?;
 
                 for region in indexed.state.regions.values() {
@@ -1060,7 +1104,7 @@ impl Evaluator {
 
                 self.config.enter(state_id.to_string());
                 self.provenance
-                    .push(ProvenanceRecord::state_entered(state_id));
+                    .push(ProvenanceRecord::state_entered(&self.minter, state_id));
                 self.execute_on_entry_actions(state_id, actor, event_data)?;
 
                 let collection_expr =
@@ -1109,7 +1153,10 @@ impl Evaluator {
 
                     self.provenance
                         .push(ProvenanceRecord::foreach_iteration_started(
-                            state_id, i_u32, item,
+                            &self.minter,
+                            state_id,
+                            i_u32,
+                            item,
                         ));
 
                     iterations += 1;
@@ -1141,6 +1188,7 @@ impl Evaluator {
                                 for action in &entry_actions {
                                     let action_name = action_kind_camel(action.action);
                                     self.provenance.push(ProvenanceRecord::on_entry(
+                                        &self.minter,
                                         &body_state_label,
                                         action_name,
                                     ));
@@ -1155,6 +1203,7 @@ impl Evaluator {
                                 for action in &exit_actions {
                                     let action_name = action_kind_camel(action.action);
                                     self.provenance.push(ProvenanceRecord::on_exit(
+                                        &self.minter,
                                         &body_state_label,
                                         action_name,
                                     ));
@@ -1235,6 +1284,7 @@ impl Evaluator {
 
                     self.provenance
                         .push(ProvenanceRecord::foreach_iteration_completed(
+                            &self.minter,
                             state_id,
                             i_u32,
                             break_triggered,
@@ -1264,7 +1314,10 @@ impl Evaluator {
                 }
 
                 self.provenance.push(ProvenanceRecord::foreach_completed(
-                    state_id, iterations, broke,
+                    &self.minter,
+                    state_id,
+                    iterations,
+                    broke,
                 ));
 
                 self.fire_foreach_outgoing(state_id, actor, event_data)?;
@@ -1274,7 +1327,7 @@ impl Evaluator {
             StateKind::Atomic | StateKind::Final => {
                 self.config.enter(state_id.to_string());
                 self.provenance
-                    .push(ProvenanceRecord::state_entered(state_id));
+                    .push(ProvenanceRecord::state_entered(&self.minter, state_id));
                 if indexed.state.kind != StateKind::Final {
                     self.execute_on_entry_actions(state_id, actor, event_data)?;
                 }
@@ -1400,6 +1453,7 @@ impl Evaluator {
         actions_start: usize,
     ) {
         let mut record = ProvenanceRecord::tagged_state_transition(
+            &self.minter,
             &transition.from,
             &transition.to,
             &transition.event,
@@ -1502,6 +1556,7 @@ impl Evaluator {
                 self.case_state.insert(key.to_string(), value.clone());
 
                 self.provenance.push(ProvenanceRecord::case_state_mutation(
+                    &self.minter,
                     path,
                     &value,
                     actor,
@@ -1525,8 +1580,11 @@ impl Evaluator {
                 } else {
                     // Preserve unanchored duration parsing and current-time behavior.
                     let duration_ms = parse_iso_duration_to_ms(duration).unwrap_or_else(|raw| {
-                        self.provenance
-                            .push(ProvenanceRecord::invalid_duration(raw, timer_id));
+                        self.provenance.push(ProvenanceRecord::invalid_duration(
+                            &self.minter,
+                            raw,
+                            timer_id,
+                        ));
                         0
                     });
                     TimerTiming {
@@ -1540,6 +1598,7 @@ impl Evaluator {
                 // Cancel existing timer with same ID (reentry, Lifecycle Detail S6.4).
                 if self.timers.cancel(timer_id).is_some() {
                     self.provenance.push(ProvenanceRecord::timer_cancelled(
+                        &self.minter,
                         timer_id,
                         "reentry-cancel",
                     ));
@@ -1565,8 +1624,12 @@ impl Evaluator {
                     duration_ms: timing.duration_ms,
                 });
 
-                let mut created =
-                    ProvenanceRecord::timer_created(timer_id, &duration_iso, fires_event.as_str());
+                let mut created = ProvenanceRecord::timer_created(
+                    &self.minter,
+                    timer_id,
+                    &duration_iso,
+                    fires_event.as_str(),
+                );
                 if let Some(deadline) = &action.deadline {
                     if let Some(data) = created.data.as_mut().and_then(|data| data.as_object_mut())
                     {
@@ -1595,6 +1658,7 @@ impl Evaluator {
                 let timer_id = action.timer_id.as_deref().unwrap_or("");
                 if self.timers.cancel(timer_id).is_some() {
                     self.provenance.push(ProvenanceRecord::timer_cancelled(
+                        &self.minter,
                         timer_id,
                         "explicit-cancel",
                     ));
@@ -1609,8 +1673,11 @@ impl Evaluator {
                     ActionKind::Log => "log",
                     _ => &action_name,
                 };
-                let mut action_record =
-                    ProvenanceRecord::action_executed(lifecycle_state, action_name_camel);
+                let mut action_record = ProvenanceRecord::action_executed(
+                    &self.minter,
+                    lifecycle_state,
+                    action_name_camel,
+                );
                 action_record.actor_id = actor.map(String::from);
                 if action.action == ActionKind::EmitEvent {
                     action_record.data.as_mut().expect("action record has data")["eventType"] =
@@ -1666,8 +1733,11 @@ impl Evaluator {
                 ActionKind::CancelTimer => "cancelTimer",
                 ActionKind::Log => "log",
             };
-            self.provenance
-                .push(ProvenanceRecord::on_entry(state_id, action_name));
+            self.provenance.push(ProvenanceRecord::on_entry(
+                &self.minter,
+                state_id,
+                action_name,
+            ));
             self.execute_action_in_state(action, actor, state_id, event_data)?;
         }
         Ok(())
@@ -1696,8 +1766,11 @@ impl Evaluator {
                 ActionKind::CancelTimer => "cancelTimer",
                 ActionKind::Log => "log",
             };
-            self.provenance
-                .push(ProvenanceRecord::on_exit(state_id, action_name));
+            self.provenance.push(ProvenanceRecord::on_exit(
+                &self.minter,
+                state_id,
+                action_name,
+            ));
             self.execute_action_in_state(action, actor, state_id, event_data)?;
         }
         Ok(())
@@ -2075,8 +2148,11 @@ impl Evaluator {
             let entry_actions = substate.on_entry.clone();
             for action in &entry_actions {
                 let action_name = action_kind_camel(action.action);
-                self.provenance
-                    .push(ProvenanceRecord::on_entry(&substate_label, action_name));
+                self.provenance.push(ProvenanceRecord::on_entry(
+                    &self.minter,
+                    &substate_label,
+                    action_name,
+                ));
                 self.execute_action_in_state(action, actor, &substate_label, event_data)?;
             }
 
@@ -2159,8 +2235,11 @@ impl Evaluator {
             let exit_actions = substate.on_exit.clone();
             for action in &exit_actions {
                 let action_name = action_kind_camel(action.action);
-                self.provenance
-                    .push(ProvenanceRecord::on_exit(&substate_label, action_name));
+                self.provenance.push(ProvenanceRecord::on_exit(
+                    &self.minter,
+                    &substate_label,
+                    action_name,
+                ));
                 self.execute_action_in_state(action, actor, &substate_label, event_data)?;
             }
 
@@ -2308,6 +2387,7 @@ impl Evaluator {
 
         let output_label = format!("{state_id}:output");
         self.provenance.push(ProvenanceRecord::case_state_mutation(
+            &self.minter,
             output_path,
             &merged,
             actor,
@@ -2682,8 +2762,11 @@ impl Evaluator {
         let expired = self.timers.collect_expired(current_time);
 
         for timer in expired {
-            self.provenance
-                .push(ProvenanceRecord::timer_fired(&timer.id, &timer.fires_event));
+            self.provenance.push(ProvenanceRecord::timer_fired(
+                &self.minter,
+                &timer.id,
+                &timer.fires_event,
+            ));
 
             // Check tolerance: if the timer fired significantly after its deadline,
             // emit a toleranceViolation diagnostic (LCD S6.6, Runtime S7.2).
@@ -2692,6 +2775,7 @@ impl Evaluator {
             if lateness_ms > max_tolerance {
                 let tolerance_iso = crate::timer::tolerance_to_iso(max_tolerance);
                 self.provenance.push(ProvenanceRecord::tolerance_violation(
+                    &self.minter,
                     &timer.id,
                     &timer.duration_iso,
                     &tolerance_iso,
@@ -2955,15 +3039,18 @@ impl Evaluator {
             self.config.enter(state_id.to_string());
         }
         self.provenance
-            .push(ProvenanceRecord::state_entered(state_id));
+            .push(ProvenanceRecord::state_entered(&self.minter, state_id));
         self.execute_on_entry_actions(state_id, actor, event_data)?;
         Ok(())
     }
 
     fn cancel_timers_created_in_state_tree(&mut self, state_id: &str, reason: &str) {
         for timer in self.timers.cancel_in_state(state_id) {
-            self.provenance
-                .push(ProvenanceRecord::timer_cancelled(&timer.id, reason));
+            self.provenance.push(ProvenanceRecord::timer_cancelled(
+                &self.minter,
+                &timer.id,
+                reason,
+            ));
         }
 
         let indexed = match self.state_index.get(state_id) {
@@ -3020,13 +3107,16 @@ impl Evaluator {
         cleared.sort();
         for state in cleared {
             self.history_store.remove(&state);
-            self.provenance
-                .push(ProvenanceRecord::history_cleared(&state, reason));
+            self.provenance.push(ProvenanceRecord::history_cleared(
+                &self.minter,
+                &state,
+                reason,
+            ));
         }
     }
     fn record_region_cancellation(&mut self, parallel: &str, region: &str, root: &str) {
         // This records the actual scope exit, without inventing an authored action.
-        let mut record = ProvenanceRecord::blank(crate::ProvenanceKind::OnExit);
+        let mut record = ProvenanceRecord::blank(&self.minter, crate::ProvenanceKind::OnExit);
         record.from_state = Some(root.into());
         record.data = Some(
             serde_json::json!({"parallelState":parallel,"region":region,"reason":"region-cancellation"}),
@@ -3729,6 +3819,7 @@ fn insert_nested(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use stack_common_typeid::testing::fixture_minter;
 
     mod initial_initiating_actor {
         use super::*;
@@ -3748,8 +3839,14 @@ mod tests {
         #[test]
         fn explicit_initial_actor_is_optional_and_not_event_data() {
             for actor in [Some("actor:human:initiator"), Some("intake-service"), None] {
-                let eval = Evaluator::with_time_and_case_state_and_actor(kernel(), 42, None, actor)
-                    .unwrap();
+                let eval = Evaluator::with_time_and_case_state_and_actor(
+                    kernel(),
+                    &fixture_minter(),
+                    42,
+                    None,
+                    actor,
+                )
+                .unwrap();
                 let action = eval.executed_actions().first().unwrap();
                 assert_eq!(action.actor_id.as_deref(), actor);
                 assert!(action.event_data.is_none());
@@ -3767,9 +3864,9 @@ mod tests {
         #[test]
         fn existing_initializers_remain_actorless() {
             for eval in [
-                Evaluator::new(kernel()).unwrap(),
-                Evaluator::with_time(kernel(), 42).unwrap(),
-                Evaluator::with_time_and_case_state(kernel(), 42, None).unwrap(),
+                Evaluator::new(kernel(), &fixture_minter()).unwrap(),
+                Evaluator::with_time(kernel(), &fixture_minter(), 42).unwrap(),
+                Evaluator::with_time_and_case_state(kernel(), &fixture_minter(), 42, None).unwrap(),
             ] {
                 assert!(
                     eval.executed_actions()
@@ -3815,7 +3912,7 @@ mod tests {
                 }
             }))
             .unwrap();
-            let mut eval = Evaluator::new(kernel).unwrap();
+            let mut eval = Evaluator::new(kernel, &fixture_minter()).unwrap();
             assert!(eval.process_event("review.completed", actor, None).unwrap());
             let actions: Vec<_> = eval
                 .provenance
@@ -3904,7 +4001,7 @@ mod tests {
                 }
             }))
             .unwrap();
-            Evaluator::with_time(kernel, now).unwrap()
+            Evaluator::with_time(kernel, &fixture_minter(), now).unwrap()
         }
 
         fn action(expression: Option<&str>, duration: &str) -> Action {
@@ -4540,7 +4637,9 @@ mod tests {
                 income_guard(),
             );
             let case = serde_json::json!({"income": 1200, "householdSize": 2});
-            let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+            let mut eval =
+                Evaluator::with_time_and_case_state(doc, &fixture_minter(), 0, Some(&case))
+                    .unwrap();
             assert!(eval.process_event("decide", None, None).unwrap());
             assert!(eval.configuration().contains("end"));
             // Trace was recorded.
@@ -4558,7 +4657,9 @@ mod tests {
                 income_guard(),
             );
             let case = serde_json::json!({"income": 9999, "householdSize": 2});
-            let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+            let mut eval =
+                Evaluator::with_time_and_case_state(doc, &fixture_minter(), 0, Some(&case))
+                    .unwrap();
             assert!(!eval.process_event("decide", None, None).unwrap());
             assert!(eval.configuration().contains("start"));
             let traces = eval.guard_evaluations();
@@ -4572,7 +4673,9 @@ mod tests {
             g.on_no_match = Some(OnNoMatch::Fail);
             let doc = doc_with_guard(vec![income_eligibility_table(HitPolicy::First)], g);
             let case = serde_json::json!({"income": 9999, "householdSize": 2});
-            let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+            let mut eval =
+                Evaluator::with_time_and_case_state(doc, &fixture_minter(), 0, Some(&case))
+                    .unwrap();
             let err = eval
                 .process_event("decide", None, None)
                 .expect_err("expected onNoMatch=fail to surface as Err");
@@ -4628,7 +4731,9 @@ mod tests {
             };
             let doc = doc_with_guard(vec![table], guard);
             let case = serde_json::json!({"x": 5});
-            let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+            let mut eval =
+                Evaluator::with_time_and_case_state(doc, &fixture_minter(), 0, Some(&case))
+                    .unwrap();
             assert!(eval.process_event("decide", None, None).unwrap());
         }
 
@@ -4642,6 +4747,7 @@ mod tests {
                     vec![income_eligibility_table(HitPolicy::Unique)],
                     income_guard(),
                 ),
+                &fixture_minter(),
                 0,
                 Some(&case_one),
             )
@@ -4693,7 +4799,8 @@ mod tests {
             let doc = doc_with_guard(vec![overlap_table], overlap_guard);
             let case_overlap = serde_json::json!({"x": 5});
             let mut eval =
-                Evaluator::with_time_and_case_state(doc, 0, Some(&case_overlap)).unwrap();
+                Evaluator::with_time_and_case_state(doc, &fixture_minter(), 0, Some(&case_overlap))
+                    .unwrap();
             let err = eval
                 .process_event("decide", None, None)
                 .expect_err("expected K-052 violation at runtime");
@@ -4750,7 +4857,9 @@ mod tests {
             };
             let doc = doc_with_guard(vec![table], guard);
             let case = serde_json::json!({"x": 5});
-            let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+            let mut eval =
+                Evaluator::with_time_and_case_state(doc, &fixture_minter(), 0, Some(&case))
+                    .unwrap();
             // Lowest priority integer wins → r-high-prio (priority=1, output=true).
             assert!(eval.process_event("decide", None, None).unwrap());
         }
@@ -4799,7 +4908,9 @@ mod tests {
             };
             let doc = doc_with_guard(vec![table], guard);
             let case = serde_json::json!({"x": 5});
-            let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+            let mut eval =
+                Evaluator::with_time_and_case_state(doc, &fixture_minter(), 0, Some(&case))
+                    .unwrap();
             let err = eval
                 .process_event("decide", None, None)
                 .expect_err("expected K-052 priority tie");
@@ -4826,7 +4937,9 @@ mod tests {
             // No tables declared on the document.
             let doc = doc_with_guard(vec![], guard);
             let case = serde_json::json!({"x": 5});
-            let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+            let mut eval =
+                Evaluator::with_time_and_case_state(doc, &fixture_minter(), 0, Some(&case))
+                    .unwrap();
             let err = eval
                 .process_event("decide", None, None)
                 .expect_err("expected K-051 missing table ref");
@@ -4875,7 +4988,9 @@ mod tests {
             };
             let doc = doc_with_guard(vec![table], guard);
             let case = serde_json::json!({"x": 5});
-            let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+            let mut eval =
+                Evaluator::with_time_and_case_state(doc, &fixture_minter(), 0, Some(&case))
+                    .unwrap();
             let err = eval
                 .process_event("decide", None, None)
                 .expect_err("expected K-053 non-boolean output cell");
@@ -4927,7 +5042,9 @@ mod tests {
             };
             let doc = doc_with_guard(vec![table], guard);
             let case = serde_json::json!({"x": 5});
-            let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+            let mut eval =
+                Evaluator::with_time_and_case_state(doc, &fixture_minter(), 0, Some(&case))
+                    .unwrap();
             let err = eval
                 .process_event("decide", None, None)
                 .expect_err("expected K-053 non-boolean input cell");
@@ -4978,7 +5095,9 @@ mod tests {
             };
             let doc = doc_with_guard(vec![table], guard);
             let case = serde_json::json!({"x": 5});
-            let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+            let mut eval =
+                Evaluator::with_time_and_case_state(doc, &fixture_minter(), 0, Some(&case))
+                    .unwrap();
             let err = eval
                 .process_event("decide", None, None)
                 .expect_err("expected K-053 collect on guard");
@@ -5035,7 +5154,9 @@ mod tests {
             };
             let doc = doc_with_guard(vec![table], guard);
             let case = serde_json::json!({"x": 5, "y": 5});
-            let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+            let mut eval =
+                Evaluator::with_time_and_case_state(doc, &fixture_minter(), 0, Some(&case))
+                    .unwrap();
             let err = eval
                 .process_event("decide", None, None)
                 .expect_err("expected K-051 missing inputBindings entry");
@@ -5069,7 +5190,9 @@ mod tests {
             };
             let doc = doc_with_guard(vec![table], guard);
             let case = serde_json::json!({"income": 1200, "householdSize": 2});
-            let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+            let mut eval =
+                Evaluator::with_time_and_case_state(doc, &fixture_minter(), 0, Some(&case))
+                    .unwrap();
             let err = eval
                 .process_event("decide", None, None)
                 .expect_err("expected K-051 outputColumn does not resolve");

@@ -258,6 +258,7 @@ mod tests {
     use super::*;
     use quick_xml::Reader;
     use quick_xml::events::Event as ReaderEvent;
+    use stack_common_typeid::testing::fixture_minter;
     use wos_core::{ProvenanceKind, ProvenanceLog, ProvenanceRecord};
 
     fn config() -> ExportConfig {
@@ -268,7 +269,13 @@ mod tests {
     }
 
     fn stamped_transition(actor: Option<&str>) -> ProvenanceRecord {
-        let mut record = ProvenanceRecord::state_transition("Draft", "Review", "submit", actor);
+        let mut record = ProvenanceRecord::state_transition(
+            &fixture_minter(),
+            "Draft",
+            "Review",
+            "submit",
+            actor,
+        );
         record.timestamp = "2026-01-01T00:00:00Z".into();
         // Populate lifecycle_state so downstream assertions for
         // `wos:lifecycleState` have a value to check. Previously derived
@@ -476,6 +483,7 @@ mod tests {
         let mut log = ProvenanceLog::default();
         // Unstamped — constructor leaves timestamp empty.
         log.push(ProvenanceRecord::state_transition(
+            &fixture_minter(),
             "Draft",
             "Review",
             "submit",

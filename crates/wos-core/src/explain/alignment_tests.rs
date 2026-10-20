@@ -3,7 +3,10 @@ use serde_json::{Value, json};
 use wos_events::ProvenanceKind;
 
 fn record(kind: ProvenanceKind, data: Value) -> ProvenanceRecord {
-    let mut record = ProvenanceRecord::state_entered("same-case");
+    let mut record = ProvenanceRecord::state_entered(
+        &stack_common_typeid::testing::fixture_minter(),
+        "same-case",
+    );
     record.record_kind = kind;
     record.timestamp = "2026-10-20T14:00:00Z".into();
     record.data = Some(data);

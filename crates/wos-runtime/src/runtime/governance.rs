@@ -393,6 +393,8 @@ impl WosRuntime {
                     return Err(RefusalCode::ExplanationRejected);
                 }
                 extra.extend(explanation::records(
+                    &super::process_minter(&record.process)
+                        .map_err(|_| RefusalCode::StoreRejected)?,
                     kernel,
                     binding,
                     &determination,

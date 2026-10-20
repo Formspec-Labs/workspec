@@ -50,7 +50,7 @@ fn entries(record: &RuntimeRecord, state: &str) -> usize {
 fn compound_paths_and_parent_timer_survive_actual_runtime_reloads_without_reentry() {
     let definition = kernel();
     let mut runtime = runtime_with_kernel(definition.clone());
-    let id = stack_common_typeid::mint_process_id();
+    let id = stack_common_typeid::testing::fixture_minter().mint_process_id();
     runtime
         .create_process(CreateProcessRequest {
             process_id: id.clone(),

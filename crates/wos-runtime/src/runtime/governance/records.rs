@@ -223,7 +223,7 @@ pub(crate) fn validate(record: &RuntimeRecord) -> Result<(), StoreError> {
             }
             let response = &accepted[0].response;
             let payload = integrity_canonical::build_signed_payload(
-                response,
+                response.to_string().as_bytes(),
                 integrity_canonical::DigestAlgorithm::Sha256,
             )
             .map_err(|_| refused())?;

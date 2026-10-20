@@ -13,10 +13,6 @@ use stack_common_typeid as typeid;
 
 use crate::model::governance::HoldType;
 
-fn default_tenant() -> String {
-    typeid::DEFAULT_TENANT.to_string()
-}
-
 /// A host-resolved human assignment for one authored workflow actor.
 ///
 /// This retained attribution grants no read, action, or deployment authority.
@@ -45,8 +41,8 @@ pub struct WorkflowProcess {
     /// MUST match the TypeID prefix when `process_id` is a WOS process TypeID.
     /// At creation, processors resolve this from `CreateProcessRequest.tenant`
     /// when set (and consistent with the TypeID prefix when both are present),
-    /// else from the `process_id` prefix, else [`stack_common_typeid::DEFAULT_TENANT`].
-    #[serde(default = "default_tenant")]
+    /// else from the `process_id` prefix, else creation refuses. Required: a
+    /// process document without a tenant does not load.
     pub tenant: String,
 
     /// Canonical URL of the governing Kernel Document.
@@ -170,12 +166,6 @@ pub struct WorkflowProcess {
 }
 
 impl WorkflowProcess {
-    /// Mints a new process identifier.
-    #[must_use]
-    pub fn mint_id() -> String {
-        typeid::mint_process_id()
-    }
-
     /// Returns whether `value` already matches the reserved case TypeID shape.
     #[must_use]
     pub fn is_case_id(value: &str) -> bool {

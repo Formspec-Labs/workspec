@@ -7,6 +7,7 @@
 //! evidence through task responses and emits `SignatureAffirmation`
 //! provenance when the profile requirements are satisfied.
 
+use super::process_minter;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::time::Duration;
@@ -870,6 +871,7 @@ impl WosRuntime {
         actor_id: &str,
         signed_at_default: &str,
     ) -> Result<Option<AdmissionOutcome>, RuntimeError> {
+        let minter = process_minter(&record.process)?;
         if !Self::is_signature_task(task) {
             return Ok(None);
         }
@@ -1078,8 +1080,9 @@ impl WosRuntime {
 
         let (signing_act_id, presentation_hash) =
             signature_affirmation_k2_fields(&signature_evidence);
-        let provenance_record =
-            ProvenanceRecord::signature_affirmation(SignatureAffirmationInput {
+        let provenance_record = ProvenanceRecord::signature_affirmation(
+            &minter,
+            SignatureAffirmationInput {
                 signer_id,
                 role_id: &role.id,
                 role: &role.role,
@@ -1115,7 +1118,8 @@ impl WosRuntime {
                 .map_err(|error| RuntimeError::Signature(error.to_string()))?,
                 verification_receipt: signature_evidence.verification_receipt.as_deref(),
                 witnessed_signature_ref: None,
-            });
+            },
+        );
         let signed_at_owned = signed_at.to_string();
         let signer_id_owned = signer_id.to_string();
 
@@ -1522,6 +1526,7 @@ impl WosRuntime {
         actor_id: Option<&str>,
         now_iso: &str,
     ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
+        let minter = process_minter(&record.process)?;
         let mut records = Vec::new();
         let actor_id = actor_id.unwrap_or("system");
 
@@ -1583,6 +1588,7 @@ impl WosRuntime {
                 .retain(|task| !selector.matches_task(task));
 
             let mut provenance = ProvenanceRecord::task_lifecycle(
+                &minter,
                 ProvenanceKind::TaskFailed,
                 &first_task.task_id,
                 Some(actor_id),
@@ -1949,8 +1955,14 @@ impl WosRuntime {
         now_iso: &str,
         details: serde_json::Value,
     ) -> Result<(), RuntimeError> {
-        let mut provenance =
-            ProvenanceRecord::task_lifecycle(kind, &task.task_id, Some(actor_id), Some(details));
+        let minter = process_minter(&record.process)?;
+        let mut provenance = ProvenanceRecord::task_lifecycle(
+            &minter,
+            kind,
+            &task.task_id,
+            Some(actor_id),
+            Some(details),
+        );
         provenance.timestamp = now_iso.to_string();
         let kernel = self.resolver.resolve_kernel(
             &record.process.definition_url,
@@ -3346,6 +3358,7 @@ mod k2_field_binding_tests {
     use super::*;
     use crate::binding::SignatureEvidence;
     use crate::binding::SignaturePrimitiveStatus;
+    use stack_common_typeid::testing::fixture_minter;
     use wos_core::ProvenanceRecord;
 
     const DOC_HASH: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -3413,35 +3426,38 @@ mod k2_field_binding_tests {
         };
 
         let (signing_act_id, presentation_hash) = super::signature_affirmation_k2_fields(&evidence);
-        let record = ProvenanceRecord::signature_affirmation(SignatureAffirmationInput {
-            signer_id: "signer-1",
-            role_id: "role-1",
-            role: "applicant",
-            document_id: "application",
-            signing_act_id,
-            document_ref: serde_json::json!({ "documentId": "application", "locale": "und" }),
-            document_hash: &evidence.document_hash,
-            presentation_hash,
-            document_hash_algorithm: &evidence.document_hash_algorithm,
-            source_signature_system: &evidence.source_system,
-            source_signature_id: &evidence.source_signature_id,
-            signed_payload_digest: &evidence.signed_payload_digest,
-            signed_payload_digest_algorithm: &evidence.signed_payload_digest_algorithm,
-            signing_intent: &evidence.signing_intent,
-            signed_at: &evidence.signed_at,
-            identity_binding: serde_json::json!({}),
-            consent_reference: serde_json::json!({}),
-            signature_provider: "test",
-            ceremony_id: "ceremony-1",
-            profile_ref: None,
-            profile_key: None,
-            source_response_ref: "urn:test:response:1",
-            signer_authority: None,
-            custody_hook_eligible: true,
-            primitive_verification: serde_json::json!({ "status": "verified" }),
-            verification_receipt: None,
-            witnessed_signature_ref: None,
-        });
+        let record = ProvenanceRecord::signature_affirmation(
+            &fixture_minter(),
+            SignatureAffirmationInput {
+                signer_id: "signer-1",
+                role_id: "role-1",
+                role: "applicant",
+                document_id: "application",
+                signing_act_id,
+                document_ref: serde_json::json!({ "documentId": "application", "locale": "und" }),
+                document_hash: &evidence.document_hash,
+                presentation_hash,
+                document_hash_algorithm: &evidence.document_hash_algorithm,
+                source_signature_system: &evidence.source_system,
+                source_signature_id: &evidence.source_signature_id,
+                signed_payload_digest: &evidence.signed_payload_digest,
+                signed_payload_digest_algorithm: &evidence.signed_payload_digest_algorithm,
+                signing_intent: &evidence.signing_intent,
+                signed_at: &evidence.signed_at,
+                identity_binding: serde_json::json!({}),
+                consent_reference: serde_json::json!({}),
+                signature_provider: "test",
+                ceremony_id: "ceremony-1",
+                profile_ref: None,
+                profile_key: None,
+                source_response_ref: "urn:test:response:1",
+                signer_authority: None,
+                custody_hook_eligible: true,
+                primitive_verification: serde_json::json!({ "status": "verified" }),
+                verification_receipt: None,
+                witnessed_signature_ref: None,
+            },
+        );
 
         let data = record
             .data

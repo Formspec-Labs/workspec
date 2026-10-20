@@ -1,9 +1,10 @@
-// Tests use the maintained permissive in-memory router, not deployment grants.
+// Tests use the maintained permissive in-memory router over a one-scope deployment, not
+// deployment grants.
 use super::*;
-use stack_common_http::tenant::{HeaderConfig, TenantScope};
+use stack_common_typeid::testing::fixture_minter;
 use trellis_service_client::{
-    AppendActor, ComputeContext, SubstrateClient, TrellisServiceClient, TrellisServiceClientConfig,
-    wos_provenance_append_request,
+    AppendActor, ComputeContext, LedgerScope, SubstrateClient, TrellisServiceClient,
+    TrellisServiceClientConfig, wos_provenance_append_request,
 };
 
 // Abort on assertion failure as well as normal return; never leave a test listener.
@@ -12,6 +13,53 @@ impl Drop for FixtureServer {
     fn drop(&mut self) {
         self.0.abort();
     }
+}
+
+/// The scope the fixture Trellis serves and every custody test appends under.
+fn fixture_scope() -> stack_common_scope::Scope {
+    stack_common_scope::Scope::fixture("tenant-a", "workspace-a", Some("test"))
+}
+
+/// The case ledger `case_id` names under [`fixture_scope`].
+fn case_ledger(case_id: &str) -> LedgerScope {
+    LedgerScope::of(&fixture_scope(), case_id).unwrap()
+}
+
+/// Serves the in-memory Trellis router for the one scope [`fixture_scope`], and a client of it.
+async fn fixture_trellis() -> (FixtureServer, TrellisServiceClient) {
+    let cell = stack_common_scope::Cell::parse("cell-a").unwrap();
+    let bucket: std::sync::Arc<dyn object_store::ObjectStore> =
+        std::sync::Arc::new(object_store::memory::InMemory::new());
+    stack_common_object_store::record_bucket_cell(bucket.as_ref(), &cell)
+        .await
+        .unwrap();
+    let bucket = stack_common_object_store::ScopedBucket::open(bucket, &cell)
+        .await
+        .unwrap();
+    let deployment = stack_common_scope::Deployment::new(
+        &trellis_server::test_harness::one_scope("tenant-a", "workspace-a", "test"),
+        trellis_server::test_harness::memory_store(bucket),
+    )
+    .unwrap();
+    let app = trellis_server::router(
+        trellis_server::test_harness::multi_producer_memory_state(),
+        std::sync::Arc::new(deployment),
+        stack_common_ops::HealthRouter::new(),
+    )
+    .expect("maintained Trellis router");
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = FixtureServer(tokio::spawn(async move {
+        axum::serve(listener, app.into_make_service())
+            .await
+            .unwrap();
+    }));
+    let client = TrellisServiceClient::new(
+        TrellisServiceClientConfig::new(format!("http://{address}"))
+            .with_timeout(std::time::Duration::from_secs(10)),
+    )
+    .unwrap();
+    (server, client)
 }
 
 #[tokio::test]
@@ -24,7 +72,7 @@ async fn native_custody_key_passes_real_router_and_replays_without_another_event
     });
     let kernel = serde_json::from_value(kernel_json).unwrap();
     let mut runtime = runtime_with_kernel(kernel);
-    let process_id = stack_common_typeid::mint_process_id();
+    let process_id = fixture_minter().mint_process_id();
     let created = runtime
         .create_process(CreateProcessRequest {
             process_id: process_id.clone(),
@@ -85,17 +133,12 @@ async fn native_custody_key_passes_real_router_and_replays_without_another_event
     );
     let original: ProvenanceRecord =
         serde_json::from_value(input.record_json_view().unwrap()).unwrap();
-    let tenant = TenantScope {
-        tenant: "tenant-a".into(),
-        workspace: "workspace-a".into(),
-        environment: "test".into(),
-        cell: "cell-a".into(),
-    };
+    let ledger = case_ledger(&input.case_id);
     let request = wos_provenance_append_request(
-        &input.case_id,
-        tenant.clone(),
+        ledger.clone(),
         stack_common_hash::sha256_nul_separated_parts(&[
             "wos-runtime:provenance",
+            &fixture_scope().key().to_string(),
             &input.case_id,
             &input.record_id,
         ]),
@@ -108,23 +151,12 @@ async fn native_custody_key_passes_real_router_and_replays_without_another_event
         request.idempotency_key.as_bytes()
     ));
 
-    let app = trellis_server::router(trellis_server::test_harness::multi_producer_memory_state())
-        .expect("maintained Trellis router");
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let address = listener.local_addr().unwrap();
-    let _server = FixtureServer(tokio::spawn(async move {
-        axum::serve(listener, app).await.unwrap();
-    }));
-    let client = TrellisServiceClient::new(
-        TrellisServiceClientConfig::new(format!("http://{address}"), HeaderConfig::wos())
-            .with_timeout(std::time::Duration::from_secs(10)),
-    )
-    .unwrap();
+    let (_server, client) = fixture_trellis().await;
     let appender = TrellisCustodyAppender::new(
         &client,
-        tenant.clone(),
         AppendActor::service("wos-runtime"),
         ComputeContext::no_delegated_compute("wos-runtime"),
+        ledger.clone(),
     );
     let outcomes = appender
         .append_window(&mut runtime, &process_id, cursor, 1, context.clone())
@@ -136,10 +168,7 @@ async fn native_custody_key_passes_real_router_and_replays_without_another_event
     assert_eq!(first.record_id, input.record_id);
     assert_eq!(first.sequence, 0);
     let digest = first.checkpoint_ref.rsplit('/').next().unwrap();
-    let pinned_before = client
-        .bundle(&input.case_id, digest, &tenant)
-        .await
-        .unwrap();
+    let pinned_before = client.bundle(&ledger, digest).await.unwrap();
     let replay = client
         .append_event(request.clone())
         .await
@@ -148,25 +177,16 @@ async fn native_custody_key_passes_real_router_and_replays_without_another_event
     assert_eq!(replay.sequence, first.sequence);
     assert_eq!(replay.canonical_event_hash, first.canonical_event_hash);
     assert_eq!(replay.checkpoint_ref, first.checkpoint_ref);
-    assert_eq!(replay.bundle_ref, first.bundle_ref);
+
     let mut changed = request.clone();
-    changed.payload["id"] = stack_common_typeid::mint_provenance_id().into();
+    changed.payload["id"] = fixture_minter().mint_provenance_id().into();
     let conflict = client
         .append_event(changed)
         .await
         .expect_err("same key with changed body");
     assert!(conflict.to_string().contains("409"), "{conflict}");
-    assert_eq!(
-        client
-            .bundle(&input.case_id, digest, &tenant)
-            .await
-            .unwrap(),
-        pinned_before
-    );
-    assert_eq!(
-        client.head_bundle(&input.case_id, &tenant).await.unwrap(),
-        pinned_before
-    );
+    assert_eq!(client.bundle(&ledger, digest).await.unwrap(), pinned_before);
+    assert_eq!(client.head_bundle(&ledger).await.unwrap(), pinned_before);
     let entries = integrity_bundle::read_stored_zip(&pinned_before).unwrap();
     let events = entries
         .iter()
@@ -219,7 +239,7 @@ async fn native_provenance_full_window_preserves_every_original_record_and_repla
         }}, "contracts":{"reviewForm":{"binding":"formspec","ref":"urn:formspec:review","definitionVersion":"1.0.0"}}
     })).unwrap();
     let mut runtime = runtime_with_kernel(kernel);
-    let process_id = stack_common_typeid::mint_process_id();
+    let process_id = fixture_minter().mint_process_id();
     let created = runtime
         .create_process(CreateProcessRequest {
             process_id: process_id.clone(),
@@ -272,12 +292,7 @@ async fn native_provenance_full_window_preserves_every_original_record_and_repla
         original.len(),
         "every original record belongs to the complete window"
     );
-    let tenant = TenantScope {
-        tenant: "tenant-a".into(),
-        workspace: "workspace-a".into(),
-        environment: "test".into(),
-        cell: "cell-a".into(),
-    };
+    let ledger = case_ledger(&created.case_ledger_id);
     let actor = AppendActor::service("wos-runtime");
     let compute = ComputeContext::no_delegated_compute("wos-runtime");
     let first_native =
@@ -287,11 +302,11 @@ async fn native_provenance_full_window_preserves_every_original_record_and_repla
         &inputs[0].record_json_view().unwrap()
     );
     let first_request = trellis_service_client::SubstrateAppendRequest::new_json(
-        inputs[0].case_id.clone(),
-        tenant.clone(),
+        case_ledger(&inputs[0].case_id),
         WOS_NATIVE_PROVENANCE_EVENT_LITERAL,
         stack_common_hash::sha256_nul_separated_parts(&[
             "wos-runtime:provenance",
+            &fixture_scope().key().to_string(),
             &inputs[0].case_id,
             &inputs[0].record_id,
         ]),
@@ -301,28 +316,14 @@ async fn native_provenance_full_window_preserves_every_original_record_and_repla
     )
     .unwrap();
 
-    let app = trellis_server::router(trellis_server::test_harness::multi_producer_memory_state())
-        .unwrap();
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let address = listener.local_addr().unwrap();
-    let _server = FixtureServer(tokio::spawn(async move {
-        axum::serve(listener, app).await.unwrap();
-    }));
-    let client = TrellisServiceClient::new(
-        TrellisServiceClientConfig::new(format!("http://{address}"), HeaderConfig::wos())
-            .with_timeout(std::time::Duration::from_secs(10)),
-    )
-    .unwrap();
-    let appender = TrellisCustodyAppender::new(&client, tenant.clone(), actor, compute);
+    let (_server, client) = fixture_trellis().await;
+    let appender = TrellisCustodyAppender::new(&client, actor, compute, ledger.clone());
     let outcomes = appender
         .append_window(&mut runtime, &process_id, 0, usize::MAX, context.clone())
         .await
         .unwrap();
     assert_eq!(outcomes.len(), original.len());
-    let head_before = client
-        .head_bundle(&created.case_ledger_id, &tenant)
-        .await
-        .unwrap();
+    let head_before = client.head_bundle(&ledger).await.unwrap();
     let original_zip_hash = stack_common_hash::sha256_prefixed(&head_before);
     // This fixture checks the export's embedded signing registry. Independent
     // agency trust qualification remains outside this local router test.
@@ -443,7 +444,7 @@ async fn native_provenance_full_window_preserves_every_original_record_and_repla
         outcomes[0].canonical_event_hash
     );
     assert_eq!(replay.checkpoint_ref, outcomes[0].checkpoint_ref);
-    assert_eq!(replay.bundle_ref, outcomes[0].bundle_ref);
+
     let mut changed = first_request;
     changed.payload["record"]["data"] = serde_json::json!({"changed":true});
     assert!(
@@ -462,10 +463,7 @@ async fn native_provenance_full_window_preserves_every_original_record_and_repla
             .is_empty()
     );
     assert_eq!(
-        client
-            .head_bundle(&created.case_ledger_id, &tenant)
-            .await
-            .unwrap(),
+        client.head_bundle(&ledger).await.unwrap(),
         head_before,
         "transport replay, conflict and stamped retry do not alter complete history"
     );

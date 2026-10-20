@@ -320,7 +320,10 @@ impl WosRuntime {
                         .iter()
                         .find(|d| d.id == saved_work.determination_id)
                         .ok_or(RuntimeError::Governance(RefusalCode::TargetRejected))?;
-                    let mut provenance = ProvenanceRecord::blank(ProvenanceKind::NoticeSent);
+                    let mut provenance = ProvenanceRecord::blank(
+                        &crate::runtime::process_minter(&record.process)?,
+                        ProvenanceKind::NoticeSent,
+                    );
                     provenance.actor_id = determination
                         .signature
                         .as_ref()

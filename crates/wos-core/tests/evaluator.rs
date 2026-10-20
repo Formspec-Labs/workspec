@@ -6,6 +6,7 @@
 //! processes events, and verifies configuration, case state, and
 //! provenance output.
 
+use stack_common_typeid::testing::fixture_minter;
 use std::collections::HashMap;
 
 use indexmap::IndexMap;
@@ -138,7 +139,7 @@ fn simple_transition_fires() {
     states.insert("start".into(), atomic(vec![transition("go", "end")]));
     states.insert("end".into(), final_state());
 
-    let mut eval = Evaluator::new(minimal_kernel("start", states)).unwrap();
+    let mut eval = Evaluator::new(minimal_kernel("start", states), &fixture_minter()).unwrap();
     assert!(eval.configuration().contains("start"));
 
     let fired = eval.process_event("go", None, None).unwrap();
@@ -156,7 +157,7 @@ fn unmatched_event_records_provenance() {
     states.insert("start".into(), atomic(vec![transition("go", "end")]));
     states.insert("end".into(), final_state());
 
-    let mut eval = Evaluator::new(minimal_kernel("start", states)).unwrap();
+    let mut eval = Evaluator::new(minimal_kernel("start", states), &fixture_minter()).unwrap();
     let fired = eval.process_event("unknown", None, None).unwrap();
     assert!(!fired);
     assert!(eval.configuration().contains("start"));
@@ -207,7 +208,7 @@ fn guard_blocks_transition() {
         ..minimal_kernel("start", states)
     };
 
-    let mut eval = Evaluator::new(kernel).unwrap();
+    let mut eval = Evaluator::new(kernel, &fixture_minter()).unwrap();
 
     // Guard should block (ready = false).
     let fired = eval.process_event("go", None, None).unwrap();
@@ -229,7 +230,7 @@ fn guard_passes_with_correct_data() {
     states.insert("end".into(), final_state());
 
     let kernel = minimal_kernel("start", states);
-    let mut eval = Evaluator::new(kernel).unwrap();
+    let mut eval = Evaluator::new(kernel, &fixture_minter()).unwrap();
 
     // Pre-seed case state with amount > 100.
     eval.case_state_mut()
@@ -256,7 +257,7 @@ fn guard_with_nested_object_data() {
     states.insert("end".into(), final_state());
 
     let kernel = minimal_kernel("start", states);
-    let mut eval = Evaluator::new(kernel).unwrap();
+    let mut eval = Evaluator::new(kernel, &fixture_minter()).unwrap();
 
     // Insert a nested object — this would have failed before the json_to_fel fix.
     eval.case_state_mut()
@@ -318,7 +319,7 @@ fn set_data_action_mutates_case_state() {
     );
     states.insert("end".into(), final_state());
 
-    let mut eval = Evaluator::new(minimal_kernel("start", states)).unwrap();
+    let mut eval = Evaluator::new(minimal_kernel("start", states), &fixture_minter()).unwrap();
     eval.process_event("go", None, None).unwrap();
 
     assert_eq!(
@@ -356,7 +357,7 @@ fn compound_state_enters_initial_substate() {
     let mut states = IndexMap::new();
     states.insert("review".into(), compound);
 
-    let eval = Evaluator::new(minimal_kernel("review", states)).unwrap();
+    let eval = Evaluator::new(minimal_kernel("review", states), &fixture_minter()).unwrap();
 
     // Should be in both compound parent and initial substate.
     assert!(eval.configuration().contains("review"));
@@ -409,7 +410,7 @@ fn parallel_join_fires_when_all_regions_final() {
     states.insert("parallel".into(), parallel);
     states.insert("completed".into(), final_state());
 
-    let mut eval = Evaluator::new(minimal_kernel("parallel", states)).unwrap();
+    let mut eval = Evaluator::new(minimal_kernel("parallel", states), &fixture_minter()).unwrap();
 
     // Both regions should be active.
     assert!(eval.configuration().contains("a_start"));
@@ -475,7 +476,7 @@ fn timer_fires_after_advance() {
     );
     states.insert("timed_out".into(), final_state());
 
-    let mut eval = Evaluator::new(minimal_kernel("waiting", states)).unwrap();
+    let mut eval = Evaluator::new(minimal_kernel("waiting", states), &fixture_minter()).unwrap();
     assert!(eval.configuration().contains("waiting"));
     assert_eq!(eval.timers().len(), 1);
 
@@ -511,7 +512,7 @@ fn guard_evaluation_captured_when_guard_passes() {
     );
     states.insert("end".into(), final_state());
 
-    let mut eval = Evaluator::new(minimal_kernel("start", states)).unwrap();
+    let mut eval = Evaluator::new(minimal_kernel("start", states), &fixture_minter()).unwrap();
     eval.case_state_mut()
         .insert("amount".to_string(), serde_json::json!(200));
 
@@ -545,7 +546,7 @@ fn guard_evaluation_captured_when_guard_blocks() {
     );
     states.insert("end".into(), final_state());
 
-    let mut eval = Evaluator::new(minimal_kernel("start", states)).unwrap();
+    let mut eval = Evaluator::new(minimal_kernel("start", states), &fixture_minter()).unwrap();
     eval.case_state_mut()
         .insert("amount".to_string(), serde_json::json!(50));
 
@@ -576,7 +577,7 @@ fn guard_evaluations_capture_short_circuited_false_guards() {
     states.insert("approved".into(), final_state());
     states.insert("escalated".into(), final_state());
 
-    let mut eval = Evaluator::new(minimal_kernel("start", states)).unwrap();
+    let mut eval = Evaluator::new(minimal_kernel("start", states), &fixture_minter()).unwrap();
     eval.case_state_mut()
         .insert("amount".to_string(), serde_json::json!(200));
 
@@ -596,7 +597,7 @@ fn guardless_transitions_produce_no_guard_evaluations() {
     states.insert("start".into(), atomic(vec![transition("go", "end")]));
     states.insert("end".into(), final_state());
 
-    let mut eval = Evaluator::new(minimal_kernel("start", states)).unwrap();
+    let mut eval = Evaluator::new(minimal_kernel("start", states), &fixture_minter()).unwrap();
     eval.process_event("go", None, None).unwrap();
 
     assert!(
@@ -618,7 +619,7 @@ fn take_guard_evaluations_drains_buffer() {
     );
     states.insert("end".into(), final_state());
 
-    let mut eval = Evaluator::new(minimal_kernel("start", states)).unwrap();
+    let mut eval = Evaluator::new(minimal_kernel("start", states), &fixture_minter()).unwrap();
     eval.case_state_mut()
         .insert("amount".to_string(), serde_json::json!(200));
 
@@ -650,7 +651,7 @@ fn guard_evaluation_inputs_include_wildcard_array_elements() {
     );
     states.insert("passed".into(), final_state());
 
-    let mut eval = Evaluator::new(minimal_kernel("start", states)).unwrap();
+    let mut eval = Evaluator::new(minimal_kernel("start", states), &fixture_minter()).unwrap();
     eval.case_state_mut().insert(
         "items".to_string(),
         serde_json::json!([{ "ok": true }, { "ok": true }]),
@@ -686,7 +687,7 @@ fn guard_evaluation_inputs_include_event_data() {
     );
     states.insert("review".into(), final_state());
 
-    let mut eval = Evaluator::new(minimal_kernel("start", states)).unwrap();
+    let mut eval = Evaluator::new(minimal_kernel("start", states), &fixture_minter()).unwrap();
     eval.process_event(
         "submit",
         None,
@@ -848,15 +849,18 @@ fn foreach_empty_collection_fires_outgoing_immediately() {
     );
     states.insert("done".into(), final_state());
 
-    let mut eval = Evaluator::new(KernelDocument {
-        case_file: Some(CaseFile {
-            fields: HashMap::new(),
-            contract_ref: None,
-            contract_version: None,
-            relationships: vec![],
-        }),
-        ..minimal_kernel("intake", states)
-    })
+    let mut eval = Evaluator::new(
+        KernelDocument {
+            case_file: Some(CaseFile {
+                fields: HashMap::new(),
+                contract_ref: None,
+                contract_version: None,
+                relationships: vec![],
+            }),
+            ..minimal_kernel("intake", states)
+        },
+        &fixture_minter(),
+    )
     .unwrap();
     eval.case_state_mut()
         .insert("items".into(), serde_json::json!([]));
@@ -908,15 +912,18 @@ fn foreach_iterates_collection_in_order() {
     );
     states.insert("done".into(), final_state());
 
-    let mut eval = Evaluator::new(KernelDocument {
-        case_file: Some(CaseFile {
-            fields: HashMap::new(),
-            contract_ref: None,
-            contract_version: None,
-            relationships: vec![],
-        }),
-        ..minimal_kernel("intake", states)
-    })
+    let mut eval = Evaluator::new(
+        KernelDocument {
+            case_file: Some(CaseFile {
+                fields: HashMap::new(),
+                contract_ref: None,
+                contract_version: None,
+                relationships: vec![],
+            }),
+            ..minimal_kernel("intake", states)
+        },
+        &fixture_minter(),
+    )
     .unwrap();
     eval.case_state_mut()
         .insert("items".into(), serde_json::json!([{"x": 1}, {"x": 2}]));
@@ -968,15 +975,18 @@ fn foreach_break_condition_terminates_early() {
     );
     states.insert("done".into(), final_state());
 
-    let mut eval = Evaluator::new(KernelDocument {
-        case_file: Some(CaseFile {
-            fields: HashMap::new(),
-            contract_ref: None,
-            contract_version: None,
-            relationships: vec![],
-        }),
-        ..minimal_kernel("intake", states)
-    })
+    let mut eval = Evaluator::new(
+        KernelDocument {
+            case_file: Some(CaseFile {
+                fields: HashMap::new(),
+                contract_ref: None,
+                contract_version: None,
+                relationships: vec![],
+            }),
+            ..minimal_kernel("intake", states)
+        },
+        &fixture_minter(),
+    )
     .unwrap();
     eval.case_state_mut().insert(
         "items".into(),
@@ -1046,15 +1056,18 @@ fn foreach_iteration_bindings_do_not_persist() {
     );
     states.insert("done".into(), final_state());
 
-    let mut eval = Evaluator::new(KernelDocument {
-        case_file: Some(CaseFile {
-            fields: HashMap::new(),
-            contract_ref: None,
-            contract_version: None,
-            relationships: vec![],
-        }),
-        ..minimal_kernel("intake", states)
-    })
+    let mut eval = Evaluator::new(
+        KernelDocument {
+            case_file: Some(CaseFile {
+                fields: HashMap::new(),
+                contract_ref: None,
+                contract_version: None,
+                relationships: vec![],
+            }),
+            ..minimal_kernel("intake", states)
+        },
+        &fixture_minter(),
+    )
     .unwrap();
     eval.case_state_mut()
         .insert("items".into(), serde_json::json!([1, 2, 3]));
@@ -1091,15 +1104,18 @@ fn foreach_non_array_collection_is_rejected() {
     );
     states.insert("done".into(), final_state());
 
-    let mut eval = Evaluator::new(KernelDocument {
-        case_file: Some(CaseFile {
-            fields: HashMap::new(),
-            contract_ref: None,
-            contract_version: None,
-            relationships: vec![],
-        }),
-        ..minimal_kernel("intake", states)
-    })
+    let mut eval = Evaluator::new(
+        KernelDocument {
+            case_file: Some(CaseFile {
+                fields: HashMap::new(),
+                contract_ref: None,
+                contract_version: None,
+                relationships: vec![],
+            }),
+            ..minimal_kernel("intake", states)
+        },
+        &fixture_minter(),
+    )
     .unwrap();
     eval.case_state_mut().insert(
         "notAnArray".into(),
@@ -1251,15 +1267,18 @@ fn foreach_body_on_entry_setdata_runs_per_iteration() {
     );
     states.insert("done".into(), final_state());
 
-    let mut eval = Evaluator::new(KernelDocument {
-        case_file: Some(CaseFile {
-            fields: HashMap::new(),
-            contract_ref: None,
-            contract_version: None,
-            relationships: vec![],
-        }),
-        ..minimal_kernel("intake", states)
-    })
+    let mut eval = Evaluator::new(
+        KernelDocument {
+            case_file: Some(CaseFile {
+                fields: HashMap::new(),
+                contract_ref: None,
+                contract_version: None,
+                relationships: vec![],
+            }),
+            ..minimal_kernel("intake", states)
+        },
+        &fixture_minter(),
+    )
     .unwrap();
     eval.case_state_mut().insert(
         "items".into(),
@@ -1330,15 +1349,18 @@ fn foreach_body_on_exit_setdata_runs_after_break_condition_fires() {
     );
     states.insert("done".into(), final_state());
 
-    let mut eval = Evaluator::new(KernelDocument {
-        case_file: Some(CaseFile {
-            fields: HashMap::new(),
-            contract_ref: None,
-            contract_version: None,
-            relationships: vec![],
-        }),
-        ..minimal_kernel("intake", states)
-    })
+    let mut eval = Evaluator::new(
+        KernelDocument {
+            case_file: Some(CaseFile {
+                fields: HashMap::new(),
+                contract_ref: None,
+                contract_version: None,
+                relationships: vec![],
+            }),
+            ..minimal_kernel("intake", states)
+        },
+        &fixture_minter(),
+    )
     .unwrap();
     eval.case_state_mut().insert(
         "items".into(),
@@ -1399,15 +1421,18 @@ fn foreach_body_actions_skipped_for_empty_collection() {
     );
     states.insert("done".into(), final_state());
 
-    let mut eval = Evaluator::new(KernelDocument {
-        case_file: Some(CaseFile {
-            fields: HashMap::new(),
-            contract_ref: None,
-            contract_version: None,
-            relationships: vec![],
-        }),
-        ..minimal_kernel("intake", states)
-    })
+    let mut eval = Evaluator::new(
+        KernelDocument {
+            case_file: Some(CaseFile {
+                fields: HashMap::new(),
+                contract_ref: None,
+                contract_version: None,
+                relationships: vec![],
+            }),
+            ..minimal_kernel("intake", states)
+        },
+        &fixture_minter(),
+    )
     .unwrap();
     eval.case_state_mut()
         .insert("items".into(), serde_json::json!([]));
@@ -1462,15 +1487,18 @@ fn foreach_body_actions_observe_current_item_binding_in_setdata_value() {
     );
     states.insert("done".into(), final_state());
 
-    let mut eval = Evaluator::new(KernelDocument {
-        case_file: Some(CaseFile {
-            fields: HashMap::new(),
-            contract_ref: None,
-            contract_version: None,
-            relationships: vec![],
-        }),
-        ..minimal_kernel("intake", states)
-    })
+    let mut eval = Evaluator::new(
+        KernelDocument {
+            case_file: Some(CaseFile {
+                fields: HashMap::new(),
+                contract_ref: None,
+                contract_version: None,
+                relationships: vec![],
+            }),
+            ..minimal_kernel("intake", states)
+        },
+        &fixture_minter(),
+    )
     .unwrap();
     eval.case_state_mut()
         .insert("items".into(), serde_json::json!([1, 2, 3]));
@@ -1511,15 +1539,18 @@ fn foreach_output_path_collect_appends_each_item_to_array() {
     );
     states.insert("done".into(), final_state());
 
-    let mut eval = Evaluator::new(KernelDocument {
-        case_file: Some(CaseFile {
-            fields: HashMap::new(),
-            contract_ref: None,
-            contract_version: None,
-            relationships: vec![],
-        }),
-        ..minimal_kernel("intake", states)
-    })
+    let mut eval = Evaluator::new(
+        KernelDocument {
+            case_file: Some(CaseFile {
+                fields: HashMap::new(),
+                contract_ref: None,
+                contract_version: None,
+                relationships: vec![],
+            }),
+            ..minimal_kernel("intake", states)
+        },
+        &fixture_minter(),
+    )
     .unwrap();
     eval.case_state_mut().insert(
         "items".into(),
@@ -1576,15 +1607,18 @@ fn foreach_output_path_collect_appends_to_existing_array() {
     );
     states.insert("done".into(), final_state());
 
-    let mut eval = Evaluator::new(KernelDocument {
-        case_file: Some(CaseFile {
-            fields: HashMap::new(),
-            contract_ref: None,
-            contract_version: None,
-            relationships: vec![],
-        }),
-        ..minimal_kernel("intake", states)
-    })
+    let mut eval = Evaluator::new(
+        KernelDocument {
+            case_file: Some(CaseFile {
+                fields: HashMap::new(),
+                contract_ref: None,
+                contract_version: None,
+                relationships: vec![],
+            }),
+            ..minimal_kernel("intake", states)
+        },
+        &fixture_minter(),
+    )
     .unwrap();
     eval.case_state_mut()
         .insert("items".into(), serde_json::json!(["new1", "new2"]));
@@ -1622,15 +1656,18 @@ fn foreach_output_path_shallow_replaces_top_level_keys() {
     );
     states.insert("done".into(), final_state());
 
-    let mut eval = Evaluator::new(KernelDocument {
-        case_file: Some(CaseFile {
-            fields: HashMap::new(),
-            contract_ref: None,
-            contract_version: None,
-            relationships: vec![],
-        }),
-        ..minimal_kernel("intake", states)
-    })
+    let mut eval = Evaluator::new(
+        KernelDocument {
+            case_file: Some(CaseFile {
+                fields: HashMap::new(),
+                contract_ref: None,
+                contract_version: None,
+                relationships: vec![],
+            }),
+            ..minimal_kernel("intake", states)
+        },
+        &fixture_minter(),
+    )
     .unwrap();
     eval.case_state_mut().insert(
         "items".into(),
@@ -1670,15 +1707,18 @@ fn foreach_output_path_deep_recursively_merges_objects() {
     );
     states.insert("done".into(), final_state());
 
-    let mut eval = Evaluator::new(KernelDocument {
-        case_file: Some(CaseFile {
-            fields: HashMap::new(),
-            contract_ref: None,
-            contract_version: None,
-            relationships: vec![],
-        }),
-        ..minimal_kernel("intake", states)
-    })
+    let mut eval = Evaluator::new(
+        KernelDocument {
+            case_file: Some(CaseFile {
+                fields: HashMap::new(),
+                contract_ref: None,
+                contract_version: None,
+                relationships: vec![],
+            }),
+            ..minimal_kernel("intake", states)
+        },
+        &fixture_minter(),
+    )
     .unwrap();
     eval.case_state_mut().insert(
         "items".into(),
@@ -1733,15 +1773,18 @@ fn foreach_output_path_collect_rejects_non_array_existing() {
     );
     states.insert("done".into(), final_state());
 
-    let mut eval = Evaluator::new(KernelDocument {
-        case_file: Some(CaseFile {
-            fields: HashMap::new(),
-            contract_ref: None,
-            contract_version: None,
-            relationships: vec![],
-        }),
-        ..minimal_kernel("intake", states)
-    })
+    let mut eval = Evaluator::new(
+        KernelDocument {
+            case_file: Some(CaseFile {
+                fields: HashMap::new(),
+                contract_ref: None,
+                contract_version: None,
+                relationships: vec![],
+            }),
+            ..minimal_kernel("intake", states)
+        },
+        &fixture_minter(),
+    )
     .unwrap();
     eval.case_state_mut()
         .insert("items".into(), serde_json::json!([{}]));
@@ -1781,15 +1824,18 @@ fn foreach_output_path_shallow_rejects_non_object_item() {
     );
     states.insert("done".into(), final_state());
 
-    let mut eval = Evaluator::new(KernelDocument {
-        case_file: Some(CaseFile {
-            fields: HashMap::new(),
-            contract_ref: None,
-            contract_version: None,
-            relationships: vec![],
-        }),
-        ..minimal_kernel("intake", states)
-    })
+    let mut eval = Evaluator::new(
+        KernelDocument {
+            case_file: Some(CaseFile {
+                fields: HashMap::new(),
+                contract_ref: None,
+                contract_version: None,
+                relationships: vec![],
+            }),
+            ..minimal_kernel("intake", states)
+        },
+        &fixture_minter(),
+    )
     .unwrap();
     eval.case_state_mut()
         .insert("items".into(), serde_json::json!(["primitive-string"]));
@@ -1827,15 +1873,18 @@ fn foreach_output_path_persists_after_foreach_completes() {
     );
     states.insert("done".into(), final_state());
 
-    let mut eval = Evaluator::new(KernelDocument {
-        case_file: Some(CaseFile {
-            fields: HashMap::new(),
-            contract_ref: None,
-            contract_version: None,
-            relationships: vec![],
-        }),
-        ..minimal_kernel("intake", states)
-    })
+    let mut eval = Evaluator::new(
+        KernelDocument {
+            case_file: Some(CaseFile {
+                fields: HashMap::new(),
+                contract_ref: None,
+                contract_version: None,
+                relationships: vec![],
+            }),
+            ..minimal_kernel("intake", states)
+        },
+        &fixture_minter(),
+    )
     .unwrap();
     eval.case_state_mut()
         .insert("items".into(), serde_json::json!([1, 2, 3]));
@@ -1951,15 +2000,18 @@ fn foreach_compound_body_walks_substates_to_final() {
     );
     states.insert("done".into(), final_state());
 
-    let mut eval = Evaluator::new(KernelDocument {
-        case_file: Some(CaseFile {
-            fields: HashMap::new(),
-            contract_ref: None,
-            contract_version: None,
-            relationships: vec![],
-        }),
-        ..minimal_kernel("intake", states)
-    })
+    let mut eval = Evaluator::new(
+        KernelDocument {
+            case_file: Some(CaseFile {
+                fields: HashMap::new(),
+                contract_ref: None,
+                contract_version: None,
+                relationships: vec![],
+            }),
+            ..minimal_kernel("intake", states)
+        },
+        &fixture_minter(),
+    )
     .unwrap();
     eval.case_state_mut()
         .insert("items".into(), serde_json::json!([1, 2]));
@@ -2056,15 +2108,18 @@ fn foreach_compound_body_guard_branches_pick_first_eligible() {
     );
     states.insert("done".into(), final_state());
 
-    let mut eval = Evaluator::new(KernelDocument {
-        case_file: Some(CaseFile {
-            fields: HashMap::new(),
-            contract_ref: None,
-            contract_version: None,
-            relationships: vec![],
-        }),
-        ..minimal_kernel("intake", states)
-    })
+    let mut eval = Evaluator::new(
+        KernelDocument {
+            case_file: Some(CaseFile {
+                fields: HashMap::new(),
+                contract_ref: None,
+                contract_version: None,
+                relationships: vec![],
+            }),
+            ..minimal_kernel("intake", states)
+        },
+        &fixture_minter(),
+    )
     .unwrap();
     eval.case_state_mut()
         .insert("items".into(), serde_json::json!(["a"]));
@@ -2110,15 +2165,18 @@ fn foreach_compound_body_stuck_substate_errors() {
     );
     states.insert("done".into(), final_state());
 
-    let mut eval = Evaluator::new(KernelDocument {
-        case_file: Some(CaseFile {
-            fields: HashMap::new(),
-            contract_ref: None,
-            contract_version: None,
-            relationships: vec![],
-        }),
-        ..minimal_kernel("intake", states)
-    })
+    let mut eval = Evaluator::new(
+        KernelDocument {
+            case_file: Some(CaseFile {
+                fields: HashMap::new(),
+                contract_ref: None,
+                contract_version: None,
+                relationships: vec![],
+            }),
+            ..minimal_kernel("intake", states)
+        },
+        &fixture_minter(),
+    )
     .unwrap();
     eval.case_state_mut()
         .insert("items".into(), serde_json::json!(["only"]));
@@ -2156,15 +2214,18 @@ fn foreach_compound_body_missing_initial_state_errors() {
     );
     states.insert("done".into(), final_state());
 
-    let mut eval = Evaluator::new(KernelDocument {
-        case_file: Some(CaseFile {
-            fields: HashMap::new(),
-            contract_ref: None,
-            contract_version: None,
-            relationships: vec![],
-        }),
-        ..minimal_kernel("intake", states)
-    })
+    let mut eval = Evaluator::new(
+        KernelDocument {
+            case_file: Some(CaseFile {
+                fields: HashMap::new(),
+                contract_ref: None,
+                contract_version: None,
+                relationships: vec![],
+            }),
+            ..minimal_kernel("intake", states)
+        },
+        &fixture_minter(),
+    )
     .unwrap();
     eval.case_state_mut()
         .insert("items".into(), serde_json::json!([1]));
@@ -2197,15 +2258,18 @@ fn foreach_unsupported_body_kind_errors() {
     );
     states.insert("done".into(), final_state());
 
-    let mut eval = Evaluator::new(KernelDocument {
-        case_file: Some(CaseFile {
-            fields: HashMap::new(),
-            contract_ref: None,
-            contract_version: None,
-            relationships: vec![],
-        }),
-        ..minimal_kernel("intake", states)
-    })
+    let mut eval = Evaluator::new(
+        KernelDocument {
+            case_file: Some(CaseFile {
+                fields: HashMap::new(),
+                contract_ref: None,
+                contract_version: None,
+                relationships: vec![],
+            }),
+            ..minimal_kernel("intake", states)
+        },
+        &fixture_minter(),
+    )
     .unwrap();
     eval.case_state_mut()
         .insert("items".into(), serde_json::json!([1]));
@@ -2323,7 +2387,9 @@ fn decision_table_guard_routes_to_table_evaluator() {
     // matches r-1or2-person → eligible=true → transition fires.
     {
         let case = serde_json::json!({"monthlyIncome": 1200, "householdSize": 1});
-        let mut eval = Evaluator::with_time_and_case_state(doc.clone(), 0, Some(&case)).unwrap();
+        let mut eval =
+            Evaluator::with_time_and_case_state(doc.clone(), &fixture_minter(), 0, Some(&case))
+                .unwrap();
         assert!(eval.configuration().contains("screening"));
         let fired = eval.process_event("screen", None, None).unwrap();
         assert!(fired, "eligible case should fire the transition");
@@ -2354,7 +2420,9 @@ fn decision_table_guard_routes_to_table_evaluator() {
     // the old `as_fel_str` short-circuit it would have fired regardless.
     {
         let case = serde_json::json!({"monthlyIncome": 1200, "householdSize": 5});
-        let mut eval = Evaluator::with_time_and_case_state(doc.clone(), 0, Some(&case)).unwrap();
+        let mut eval =
+            Evaluator::with_time_and_case_state(doc.clone(), &fixture_minter(), 0, Some(&case))
+                .unwrap();
         let fired = eval.process_event("screen", None, None).unwrap();
         assert!(
             !fired,
@@ -2370,7 +2438,8 @@ fn decision_table_guard_routes_to_table_evaluator() {
     // row (the boundary is inclusive per the cell expression).
     {
         let case = serde_json::json!({"monthlyIncome": 2500, "householdSize": 2});
-        let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+        let mut eval =
+            Evaluator::with_time_and_case_state(doc, &fixture_minter(), 0, Some(&case)).unwrap();
         let fired = eval.process_event("screen", None, None).unwrap();
         assert!(fired, "boundary case should fire");
     }
@@ -2410,7 +2479,8 @@ fn fel_and_decision_table_guards_agree_on_equivalent_predicates() {
         let mut doc = minimal_kernel("start", states);
         doc.decision_tables = decision_tables;
 
-        let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(case)).unwrap();
+        let mut eval =
+            Evaluator::with_time_and_case_state(doc, &fixture_minter(), 0, Some(case)).unwrap();
         eval.process_event("go", None, None).unwrap()
     }
 
@@ -2468,7 +2538,8 @@ fn absolute_timer_waits_until_declared_deadline() {
     let mut waiting = atomic(vec![transition("$timeout.state", "done")]);
     waiting.on_entry.push(timer);
     let states = IndexMap::from([("waiting".into(), waiting), ("done".into(), final_state())]);
-    let mut eval = Evaluator::with_time(minimal_kernel("waiting", states), 1_000).unwrap();
+    let mut eval =
+        Evaluator::with_time(minimal_kernel("waiting", states), &fixture_minter(), 1_000).unwrap();
     assert_eq!(eval.timers().iter().next().unwrap().deadline_ms, 10_000);
     eval.advance_time(0, None).unwrap();
     assert!(eval.configuration().contains("waiting"));
@@ -2498,7 +2569,9 @@ fn absolute_timer_accepts_offsets_fractional_and_past_deadlines() {
         ("1970-01-01T01:00:10.230+01:00", 10_230),
         ("1970-01-01T00:00:00.999Z", 999),
     ] {
-        let mut eval = Evaluator::with_time(absolute_timer_kernel(deadline), 1_000).unwrap();
+        let mut eval =
+            Evaluator::with_time(absolute_timer_kernel(deadline), &fixture_minter(), 1_000)
+                .unwrap();
         let timer = eval.timers().iter().next().unwrap();
         assert_eq!(timer.deadline_ms, expected);
         assert!(timer.absolute_deadline);
@@ -2539,7 +2612,7 @@ fn absolute_timer_invalid_replacement_preserves_existing_timer() {
             .unwrap()
             .transitions
             .push(reset);
-        let mut eval = Evaluator::with_time(kernel, 1_000).unwrap();
+        let mut eval = Evaluator::with_time(kernel, &fixture_minter(), 1_000).unwrap();
         let before = serde_json::to_value(eval.provenance().records()).unwrap();
         assert!(matches!(
             eval.process_event("reset", None, None),
@@ -2567,7 +2640,7 @@ fn absolute_timer_refuses_missing_identity_and_event() {
             }
             let kernel = serde_json::from_value(value).unwrap();
             assert!(matches!(
-                Evaluator::with_time(kernel, 1_000),
+                Evaluator::with_time(kernel, &fixture_minter(), 1_000),
                 Err(wos_core::eval::EvalError::Timer { .. })
             ));
         }
@@ -2603,9 +2676,14 @@ fn foreach_compound_body_emissions_retain_each_actual_transition() {
                 "done":{"type":"final"}
             }}
         })).unwrap();
-        let mut evaluator =
-            Evaluator::with_time_and_case_state_and_actor(kernel, 42, None, Some("worker"))
-                .unwrap();
+        let mut evaluator = Evaluator::with_time_and_case_state_and_actor(
+            kernel,
+            &fixture_minter(),
+            42,
+            None,
+            Some("worker"),
+        )
+        .unwrap();
         if !initial_entry {
             evaluator.process_event("go", Some("worker"), None).unwrap();
         }

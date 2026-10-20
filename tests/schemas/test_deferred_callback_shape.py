@@ -78,6 +78,7 @@ def test_process_declares_omitted_defaults_and_real_pending_maps(validators):
     # Use a maintained minimal portable process fixture, without unrelated test DTOs.
     doc = {"$wosProcess": "1.0", "processId": "default_process_01hw7rm71vfay8vvw14d2pf2db",
            "caseLedgerId": "default_case_01hw7rm71vfay8vvw14d2pf2db",
+           "tenant": "default",
            "definitionUrl": "urn:wos:test:deferred", "definitionVersion": "1.0.0",
            "configuration": ["waiting"], "caseState": {}, "provenancePosition": 0,
            "timers": [], "activeTasks": [], "status": "active",
@@ -98,13 +99,20 @@ def test_process_declares_omitted_defaults_and_real_pending_maps(validators):
     assert schema["properties"]["nextDeferredCallbackSequence"]["default"] == 0
 
 
-def test_deferred_d1_authored_action_sites_validate(validators):
+def test_historical_deferred_d1_refuses_old_governance_and_retains_callback_action_shape(validators):
+    # Historical authored bytes stay immutable; this is not a fresh D1 qualification.
     doc = json.loads((ROOT / "examples/d1-passport-complete-deferred.workflow.json").read_text())
-    validators["$wosWorkflow"].validate(doc)
-    # A mutation at the actual receipt-region site is rejected by the owning schema.
+    errors = list(validators["$wosWorkflow"].iter_errors(doc))
+    assert len(errors) == 1
+    assert list(errors[0].path) == ["governance", "dueProcess"]
+    assert errors[0].validator == "additionalProperties"
+    assert "explanationLevel" in errors[0].message
     receipt = doc["lifecycle"]["states"]["caseAndDelivery"]["regions"]["delivery"]["states"]["awaitingDeliveryReceipt"]
-    receipt["transitions"][0]["actions"][0]["action"] = "setData"
-    assert not validators["$wosWorkflow"].is_valid(doc)
+    action = receipt["transitions"][0]["actions"][0]
+    validator = validator_for_def("LifecycleAction")
+    validator.validate(action)
+    action["action"] = "setData"
+    assert not validator.is_valid(action)
 
 
 def test_callback_phase_restrictions_apply_inside_compensation():

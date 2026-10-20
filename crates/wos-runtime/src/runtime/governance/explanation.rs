@@ -61,6 +61,7 @@ fn observation(guard: &GuardEvaluation) -> Result<NativeDecisionEvaluation, Refu
     })
 }
 pub(super) fn records(
+    minter: &stack_common_typeid::TypeIdMinter,
     kernel: &KernelDocument,
     binding: &DeterminationBinding,
     determination: &DeterminationState,
@@ -83,6 +84,7 @@ pub(super) fn records(
     }
     let replay = Evaluator::evaluate_reference_alternative(
         kernel,
+        minter,
         &binding.transition,
         snapshot,
         timestamp(&determination.determined_at)?,
@@ -100,7 +102,7 @@ pub(super) fn records(
         return Err(RefusalCode::ExplanationRejected);
     }
     let reason = reasons[0];
-    let mut record = ProvenanceRecord::blank(ProvenanceKind::DeterminationReasoning);
+    let mut record = ProvenanceRecord::blank(minter, ProvenanceKind::DeterminationReasoning);
     record.actor_id = Some(determination.determining_human.clone());
     record.timestamp = now.into();
     record.data = Some(
@@ -137,6 +139,7 @@ pub(super) fn records(
             }
             let alternate = Evaluator::evaluate_reference_alternative(
                 kernel,
+                minter,
                 &binding.transition,
                 &changed,
                 timestamp(&determination.determined_at)?,
@@ -163,7 +166,8 @@ pub(super) fn records(
                 }
                 _ => {}
             }
-            let mut record = ProvenanceRecord::blank(ProvenanceKind::DeterminationCounterfactual);
+            let mut record =
+                ProvenanceRecord::blank(minter, ProvenanceKind::DeterminationCounterfactual);
             record.actor_id = Some(determination.determining_human.clone());
             record.timestamp = now.into();
             record.data = Some(
@@ -203,6 +207,7 @@ mod tests {
         })).unwrap();
         let mut original = Evaluator::evaluate_reference_alternative(
             &kernel,
+            &stack_common_typeid::testing::fixture_minter(),
             &TransitionLocation {
                 state_pointer: "/lifecycle/states/open".into(),
                 transition_index: 0,

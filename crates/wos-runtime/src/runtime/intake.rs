@@ -2,6 +2,7 @@
 
 //! Host-side intake-acceptance command handling for the reference runtime.
 
+use stack_common_typeid::TypeIdMinter;
 use std::slice;
 
 use serde_json::{Map, Value};
@@ -140,6 +141,9 @@ impl WosRuntime {
                         })?;
                 self.require_native_creation_allocation(&decision.outcome, allocation.as_ref())?;
                 self.validate_intake_allocation(&decision.outcome, &request, allocation.as_ref())?;
+                // Refuse before anything is persisted: a pending record whose
+                // provenance can never be minted would strand the intake id.
+                self.intake_minter(&request, &interpretation, &decision.outcome)?;
                 self.persist_pending_intake_record(binding, &interpretation, &request, decision)?
             }
         };
@@ -221,6 +225,67 @@ impl WosRuntime {
     /// Provenance order is intentional: entries copied from the pending record
     /// (policy-emitted) first, then the runtime intake outcome record, then rows
     /// from the binding finalizer (`finalize_intake_acceptance` on the intake adapter).
+    /// Resolves the minter for intake-level records, in this order:
+    ///
+    /// 1. the case of an accepted outcome (the policy has verified it);
+    /// 2. the host's `governed_case_ref`;
+    /// 3. an attach-intent case, only when that case exists in the store (the
+    ///    handoff document's `caseRef` is untrusted until then);
+    /// 4. the host's deployment minter, for a handoff that names no case.
+    ///
+    /// A case reference that is present but not a case TypeID refuses; it
+    /// never falls through to a later source. A well-formed attach-intent case
+    /// that is not in the store contributes nothing and falls through to the
+    /// deployment minter. A multi-tenant host must therefore send
+    /// `governed_case_ref` on every request; the deployment minter is only the
+    /// single-tenant default.
+    ///
+    /// # Errors
+    /// Returns [`RuntimeError::IntakeConflict`] for a malformed case reference
+    /// and [`RuntimeError::TenantUnresolved`] when no source applies.
+    pub(super) fn intake_minter(
+        &self,
+        request: &IntakeAcceptanceRequest,
+        interpretation: &IntakeInterpretation,
+        outcome: &IntakeAcceptanceOutcome,
+    ) -> Result<TypeIdMinter, RuntimeError> {
+        fn from_case_ref(case_ref: &str) -> Result<TypeIdMinter, RuntimeError> {
+            let malformed = || {
+                RuntimeError::IntakeConflict(format!(
+                    "intake case reference `{case_ref}` is not a case TypeID"
+                ))
+            };
+            let minter = TypeIdMinter::for_parent(case_ref).ok_or_else(malformed)?;
+            if stack_common_typeid::parse_case_ledger_id(case_ref).is_none() {
+                return Err(malformed());
+            }
+            Ok(minter)
+        }
+
+        if let IntakeAcceptanceOutcome::Accepted {
+            case_disposition:
+                IntakeCaseDisposition::AttachToExistingCase { case_ref }
+                | IntakeCaseDisposition::CreateGovernedCase { case_ref, .. },
+        } = outcome
+        {
+            return from_case_ref(case_ref);
+        }
+        if let Some(case_ref) = request.governed_case_ref.as_deref() {
+            return from_case_ref(case_ref);
+        }
+        if let IntakeCaseIntent::AttachToExistingCase { case_ref } = &interpretation.case_intent {
+            let minter = from_case_ref(case_ref)?;
+            let canonical =
+                stack_common_typeid::parse_case_ledger_id(case_ref).unwrap_or(case_ref.as_str());
+            if !self.store.processes_for_case(canonical).is_empty() {
+                return Ok(minter);
+            }
+        }
+        self.deployment_minter
+            .clone()
+            .ok_or(RuntimeError::TenantUnresolved)
+    }
+
     fn prepare_intake_record(
         &mut self,
         binding: &str,
@@ -243,7 +308,9 @@ impl WosRuntime {
             self.canonicalize_intake_outcome(&policy_outcome, request, allocation)?;
         let finalize_outcome = outcome_for_binding_finalize(&policy_outcome, &final_outcome);
         let mut provenance = record.provenance_log.clone();
+        let minter = self.intake_minter(request, interpretation, &final_outcome)?;
         provenance.push(intake_outcome_provenance(
+            &minter,
             binding,
             request,
             interpretation,
@@ -797,6 +864,7 @@ fn outcome_for_binding_finalize(
 }
 
 fn intake_outcome_provenance(
+    minter: &TypeIdMinter,
     binding: &str,
     request: &IntakeAcceptanceRequest,
     interpretation: &IntakeInterpretation,
@@ -867,7 +935,7 @@ fn intake_outcome_provenance(
     };
 
     ProvenanceRecord {
-        id: ProvenanceRecord::mint_id(),
+        id: ProvenanceRecord::mint_id(minter),
         record_kind,
         timestamp: String::new(),
         actor_id: request.actor_id.clone(),

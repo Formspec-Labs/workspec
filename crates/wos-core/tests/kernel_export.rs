@@ -3,6 +3,7 @@
 //! Regression checks for absent optional fields and authored JSON nulls.
 
 use serde_json::{Value, json};
+use stack_common_typeid::testing::fixture_minter;
 use wos_core::model::kernel::{
     Action, Actor, ContractReference, FieldDefinition, State, Transition,
 };
@@ -67,7 +68,7 @@ fn explicit_null_default_initializes_a_case_field() {
         }}
     });
     let kernel = serde_json::from_value(document).unwrap();
-    let evaluator = wos_core::eval::Evaluator::new(kernel).unwrap();
+    let evaluator = wos_core::eval::Evaluator::new(kernel, &fixture_minter()).unwrap();
     let state = evaluator.case_state_json();
     assert_eq!(state.get("cleared"), Some(&Value::Null));
     assert!(state.get("absent").is_none());

@@ -535,6 +535,7 @@
         "id",
         "caseLedgerId",
         "processId",
+        "tenant",
         "workflowUrl",
         "workflowVersion",
         "lifecycleState",

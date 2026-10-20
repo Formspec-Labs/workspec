@@ -73,7 +73,7 @@ fn canonical_digest_matches_integrity_canonical_recomputation_for_bundle_001() {
          updating this test"
     );
 
-    let recomputed = build_signed_payload(&response, DigestAlgorithm::Sha256)
+    let recomputed = build_signed_payload(&bytes, DigestAlgorithm::Sha256)
         .expect("integrity-canonical build_signed_payload succeeds for bundle 001 response");
 
     assert_eq!(

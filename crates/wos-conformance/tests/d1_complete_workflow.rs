@@ -7,6 +7,7 @@
 //! processing-pause accounting, host authorization, or offline export verification.
 
 use serde_json::{Value, json};
+use stack_common_typeid::testing::fixture_minter;
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, AtomicU64, Ordering},
@@ -319,7 +320,7 @@ impl Fixture {
         let process = runtime
             .create_process_with_actor_bindings(
                 CreateProcessRequest {
-                    process_id: stack_common_typeid::mint_process_id(),
+                    process_id: fixture_minter().mint_process_id(),
                     tenant: None,
                     definition_url: "urn:wos:demo:d1:passport-complete".into(),
                     definition_version: "0.3.0".into(),

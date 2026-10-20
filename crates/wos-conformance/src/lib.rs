@@ -411,6 +411,7 @@ pub enum ConformanceError {
 #[cfg(test)]
 mod runner_trace_tests {
     use super::*;
+    use stack_common_typeid::testing::fixture_minter;
 
     /// Resolve a fixture from `tests/fixtures/` and return (json, base_dir).
     /// The `tests/fixtures/` directory is already wired for `run_fixture`.
@@ -507,7 +508,7 @@ mod runner_trace_tests {
     #[test]
     fn policy_applications_synthesized_from_deontic_evaluation_records() {
         let matching = ProvenanceRecord {
-            id: ProvenanceRecord::mint_id(),
+            id: ProvenanceRecord::mint_id(&fixture_minter()),
             record_kind: ProvenanceKind::DeonticEvaluation,
             timestamp: "2026-04-18T00:00:00Z".to_string(),
             actor_id: None,
@@ -534,7 +535,7 @@ mod runner_trace_tests {
         };
         // Non-policy kind: must be filtered out.
         let state_transition = ProvenanceRecord {
-            id: ProvenanceRecord::mint_id(),
+            id: ProvenanceRecord::mint_id(&fixture_minter()),
             record_kind: ProvenanceKind::StateTransition,
             timestamp: "2026-04-18T00:00:00Z".to_string(),
             actor_id: None,
@@ -557,7 +558,7 @@ mod runner_trace_tests {
         };
         // Different event: must be filtered out.
         let other_event = ProvenanceRecord {
-            id: ProvenanceRecord::mint_id(),
+            id: ProvenanceRecord::mint_id(&fixture_minter()),
             record_kind: ProvenanceKind::AutonomyComputed,
             timestamp: "2026-04-18T00:00:00Z".to_string(),
             actor_id: None,
@@ -601,7 +602,7 @@ mod runner_trace_tests {
     #[test]
     fn policy_applications_recognize_constraint_id_on_deontic_bypass() {
         let bypass = ProvenanceRecord {
-            id: ProvenanceRecord::mint_id(),
+            id: ProvenanceRecord::mint_id(&fixture_minter()),
             record_kind: ProvenanceKind::DeonticBypass,
             timestamp: "2026-04-18T00:00:00Z".to_string(),
             actor_id: None,
@@ -638,7 +639,7 @@ mod runner_trace_tests {
     #[test]
     fn policy_applications_fall_back_to_kind_name_when_no_identifier() {
         let resolution = ProvenanceRecord {
-            id: ProvenanceRecord::mint_id(),
+            id: ProvenanceRecord::mint_id(&fixture_minter()),
             record_kind: ProvenanceKind::DeonticResolution,
             timestamp: "2026-04-18T00:00:00Z".to_string(),
             actor_id: None,

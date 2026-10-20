@@ -109,6 +109,7 @@ impl RuntimeStore for SharedInMemoryStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use stack_common_typeid::testing::fixture_minter;
     use wos_core::instance::{InstanceStatus, WorkflowProcess};
 
     fn record_with(process_id: &str, case_ledger_id: &str) -> RuntimeRecord {
@@ -116,7 +117,9 @@ mod tests {
             actor_bindings: None,
             process_id: process_id.to_string(),
             case_ledger_id: case_ledger_id.to_string(),
-            tenant: stack_common_typeid::DEFAULT_TENANT.to_string(),
+            tenant: stack_common_typeid::Tenant::of(process_id)
+                .expect("test process ids are TypeIDs")
+                .to_string(),
             definition_url: "urn:test:shared-in-memory-store".to_string(),
             definition_version: "1.0.0".to_string(),
             configuration: Vec::new(),
@@ -158,8 +161,13 @@ mod tests {
     }
 
     fn stamped(timestamp: &str) -> ProvenanceRecord {
-        let mut record =
-            ProvenanceRecord::state_transition("from", "to", "evt", Some("actor:test"));
+        let mut record = ProvenanceRecord::state_transition(
+            &fixture_minter(),
+            "from",
+            "to",
+            "evt",
+            Some("actor:test"),
+        );
         record.timestamp = timestamp.to_string();
         record
     }
@@ -167,9 +175,9 @@ mod tests {
     #[test]
     fn shared_in_memory_store_forwards_case_scoped_traversals() {
         let mut store = SharedInMemoryStore::default();
-        let case_ledger_id = "default_case_01hw7rm71vfay8vvw14d2pf201";
-        let process_a = "default_process_01hw7rm71vfay8vvw14d2pf202";
-        let process_b = "default_process_01hw7rm71vfay8vvw14d2pf203";
+        let case_ledger_id = "acme_case_01hw7rm71vfay8vvw14d2pf201";
+        let process_a = "acme_process_01hw7rm71vfay8vvw14d2pf202";
+        let process_b = "acme_process_01hw7rm71vfay8vvw14d2pf203";
 
         store
             .create_record(record_with(process_a, case_ledger_id))
