@@ -124,15 +124,19 @@ Each signing step MUST reference a declared role by `roleId` and a declared docu
 
 ### 2.4 Lifecycle Tags
 
-The standard lifecycle tags are:
+The standard lifecycle tags are scoped views of the envelope and recipient states in [§2.4.1](#241-envelope-and-recipient-state-model). They remain profile semantics layered over kernel state/tag data, not new kernel state kinds or another transition model. A tag describes the signing obligation or ceremony in its scope; it is not a one-to-one encoding of the complete ceremony state.
 
-- `awaiting-signature`
-- `signature-complete`
-- `signature-declined`
-- `signature-expired`
-- `signature-voided`
+| Lifecycle tag | Recipient or signing-scope meaning | Envelope-state interpretation |
+|---|---|---|
+| `awaiting-signature` | An outstanding signing obligation; an active recipient assignment can be `pending` or `accessed`. The tag alone does not distinguish those states or prove dispatch or document access. | Use the actual §2.4.1 facts to distinguish `draft`, `sent` and `in-progress`; the tag alone does not establish progress. |
+| `signature-complete` | Signing is complete in the tagged scope: the applicable signer/document pairs have admitted `SignatureAffirmation` records (`signed` recipients). | For a nonterminal ceremony with signed progress, outstanding required pairs or final seal observation mean `in-progress`. `completed` requires all required pairs to be admitted **and** the final seal or equivalent closure event to be observed. `voided` and `expired` retain their §2.4.1 meanings. |
+| `signature-declined` | The affected recipient assignment is `declined`, a recipient-terminal outcome. | There is no `declined` envelope state. Apply the configured decline transition (§2.11); this tag alone neither voids nor completes the ceremony. |
+| `signature-expired` | The affected outstanding unsigned assignments (`pending` or `accessed`) have expired. Already-admitted affirmations remain evidence. | The envelope is `expired` when its configured expiry fires before completion. An expired signing scope alone does not prove that the entire ceremony expired. |
+| `signature-voided` | An authorized void cancels pending assignments and prevents further signature admission. It does not introduce a `canceled` recipient-state token. | The ceremony is `voided`; retain the authorizing actor, reason and cancellation provenance required by §2.11. |
 
-These are profile semantics layered over kernel state/tag data. They are not new kernel state kinds.
+Processors MUST apply §2.4.1's state obligations rather than infer canonical state or completion from a tag alone. In particular, a `signature-complete` tag or last-signer success is not final-seal evidence. Dispatch, access, admission and seal observations retain their distinct meanings.
+
+Reassignment needs no additional lifecycle tag: the original assignment becomes `reassigned`, a replacement assignment begins `pending`, and the original assignment edge remains auditable (§2.11). `awaiting-signature` can describe the replacement obligation without erasing the original outcome.
 
 #### 2.4.1 Envelope and Recipient State Model
 
@@ -329,6 +333,8 @@ When any posture check fails, the runtime MUST emit `signatureAdmissionFailed` w
 The `deploymentLocalSigningIntents` field was the original mechanism in the Posture Declaration for registering deployment-local intent URIs. ADR-0090 restructures the Posture Declaration shape; the `signing.deploymentLocalIntents` block (§2.10.1) replaces `deploymentLocalSigningIntents` at the top level. Deployments MUST migrate from `deploymentLocalSigningIntents` to `posture.signing.deploymentLocalIntents` when adopting the ADR-0090 posture shape. The `deploymentLocalSigningIntents` top-level field is **deprecated** and will be removed in a future profile revision.
 
 ### 2.11 Decline, Void, Expiry, and Reassignment
+
+The lifecycle tags are the scoped state views in [§2.4](#24-lifecycle-tags); the canonical envelope and recipient states and completion conditions remain in [§2.4.1](#241-envelope-and-recipient-state-model). The operations below preserve those meanings and their audit evidence.
 
 A decline MUST record signer, reason, timestamp, and document. It MUST follow the configured decline transition.
 
