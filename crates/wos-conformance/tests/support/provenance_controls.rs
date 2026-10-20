@@ -24,6 +24,7 @@ pub fn request(vector: &Value) -> ReplayRequest {
                 url: dependency["url"].as_str().unwrap().into(),
                 version: dependency["version"].as_str().map(str::to_string),
                 bytes: serde_json::to_vec(&dependency["document"]).unwrap(),
+                definition: None,
             })
             .collect(),
         fixture_json: vector["fixture"].to_string(),

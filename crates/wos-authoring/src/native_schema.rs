@@ -48,6 +48,27 @@ pub fn validate_fragment(pointer: &str, value: &Value) -> Result<(), AuthoringDi
         .retriever(OfflineRetriever)
         .add(id, workflow_schema().clone())
         .expect("bundled schema resource is valid")
+        .add(
+            "https://wos-spec.org/schemas/wos-workflow.schema.json",
+            workflow_schema().clone(),
+        )
+        .expect("bundled workflow alias is valid")
+        .add(
+            "https://wos-spec.org/schemas/wos-reference-due-process.schema.json",
+            serde_json::from_str::<Value>(include_str!(
+                "../../../schemas/wos-reference-due-process.schema.json"
+            ))
+            .expect("bundled native policy schema is JSON"),
+        )
+        .expect("bundled native policy resource is valid")
+        .add(
+            "https://wos-spec.org/schemas/wos-reference-replay.schema.json",
+            serde_json::from_str::<Value>(include_str!(
+                "../../../schemas/wos-reference-replay.schema.json"
+            ))
+            .expect("bundled replay schema is JSON"),
+        )
+        .expect("bundled replay resource is valid")
         .prepare()
         .expect("bundled schema references resolve");
     let validator = jsonschema::options()

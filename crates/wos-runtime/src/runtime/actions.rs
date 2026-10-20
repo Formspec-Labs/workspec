@@ -255,6 +255,7 @@ impl WosRuntime {
                         &input,
                         idempotency_key,
                         now_iso,
+                        None,
                     )?;
 
                     if reused_persisted_result {

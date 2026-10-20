@@ -16,6 +16,10 @@
 
 use std::fs;
 
+#[cfg(test)]
+#[path = "../../../wos-conformance/tests/support/local_schemas.rs"]
+mod test_schemas;
+
 use serde_json::Value;
 use wos_authoring::WosProject;
 
@@ -281,7 +285,7 @@ mod tests {
         let schema: Value =
             serde_json::from_str(include_str!("../../../../schemas/wos-workflow.schema.json"))
                 .unwrap();
-        let validator = jsonschema::validator_for(&schema).unwrap();
+        let validator = test_schemas::validator(&schema);
         assert!(
             validator.is_valid(&input),
             "authored fixture must satisfy its schema"
@@ -338,7 +342,7 @@ mod tests {
         let schema: Value =
             serde_json::from_str(include_str!("../../../../schemas/wos-workflow.schema.json"))
                 .unwrap();
-        let validator = jsonschema::validator_for(&schema).unwrap();
+        let validator = test_schemas::validator(&schema);
         let leaf = json!({"type": "atomic", "description": null});
         let cases = [
             leaf.clone(),

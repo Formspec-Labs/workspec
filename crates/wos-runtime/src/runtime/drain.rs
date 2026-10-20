@@ -25,6 +25,14 @@ use super::{
 impl WosRuntime {
     /// Drain a single event from the instance queue.
     pub fn drain_once(&mut self, process_id: &str) -> Result<DrainOnceResult, RuntimeError> {
+        self.drain_once_governance(process_id, None)
+    }
+
+    pub(super) fn drain_once_governance(
+        &mut self,
+        process_id: &str,
+        governance_request: Option<&wos_core::model::due_process::GovernanceRequest>,
+    ) -> Result<DrainOnceResult, RuntimeError> {
         let now_ms = self.clock.now_ms();
         let now_iso = format_timestamp(now_ms)?;
         let mut record = self.store.load_record(process_id)?;
@@ -32,7 +40,17 @@ impl WosRuntime {
             materialize_due_timers(&mut record.process, now_ms, &now_iso)?;
         appended_provenance.extend(super::tasks::retire_expired_tasks(&mut record, &now_iso)?);
 
-        let Some(event) = record.process.pending_events.first().cloned() else {
+        let injected = if let Some(request) = governance_request {
+            let kernel = self.resolver.resolve_kernel(
+                &record.process.definition_url,
+                &record.process.definition_version,
+            )?;
+            Some(self.reference_governance_event(&kernel, request, &now_iso)?)
+        } else {
+            None
+        };
+        let Some(event) = injected.or_else(|| record.process.pending_events.first().cloned())
+        else {
             if !appended_provenance.is_empty() {
                 // Resolve kernel for SP §5.3/§5.4 field population (due-timer
                 // materialization path). The kernel is always resolvable here
@@ -55,7 +73,9 @@ impl WosRuntime {
             return Ok(DrainOnceResult::default());
         };
 
-        record.process.pending_events.remove(0);
+        if governance_request.is_none() {
+            record.process.pending_events.remove(0);
+        }
         let kernel = self.resolver.resolve_kernel(
             &record.process.definition_url,
             &record.process.definition_version,
@@ -119,6 +139,16 @@ impl WosRuntime {
         runtime_result.transitions = evaluator.transitions().to_vec();
         runtime_result.guard_evaluations = evaluator.take_guard_evaluations();
 
+        let actions = evaluator.take_executed_actions();
+        appended_provenance.extend(self.reference_preflight(
+            &kernel,
+            &mut record,
+            &evaluator,
+            &actions,
+            &runtime_result.guard_evaluations,
+            governance_request,
+            &now_iso,
+        )?);
         appended_provenance.extend(evaluator.provenance().records().to_vec());
         // Annotate any newly created timers with calendarVersion when a calendar
         // is attached (provenance approach a — augment data field, no new variant).
@@ -135,6 +165,7 @@ impl WosRuntime {
             &convergence_error_ids,
         );
         record.process.timers = timer_states;
+        self.reference_apply_timer_extensions(&mut record, &runtime_result.transitions)?;
         record.process.history_store = evaluator.history_store().clone();
         record.process.updated_at = now_iso.clone();
 
@@ -163,7 +194,6 @@ impl WosRuntime {
         let milestone_records = evaluate_milestones(&kernel, &mut record.process, &post_state);
         appended_provenance.extend(milestone_records);
 
-        let actions = evaluator.take_executed_actions();
         let (created_task_ids, emitted_events, runtime_provenance) =
             self.apply_observed_actions(&kernel, &mut record, &actions, &now_iso)?;
         appended_provenance.extend(runtime_provenance);
@@ -198,6 +228,7 @@ impl WosRuntime {
         self.store.save_record(record.clone())?;
 
         self.deliver_pending_presentations(&pending_presentations)?;
+        self.deliver_pending_notices(process_id)?;
 
         runtime_result.provenance = appended_provenance;
         runtime_result.created_task_ids = created_task_ids;

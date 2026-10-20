@@ -2349,7 +2349,9 @@
           "properties": {
             "policies": {
               "type": "array",
-              "items": { "$ref": "#/$defs/HoldPolicy" },
+              "items": {
+                "$ref": "#/$defs/HoldPolicy"
+              },
               "description": "Typed hold policies governed by Governance section 12, including required duration and resume behavior."
             }
           },
@@ -5615,6 +5617,56 @@
           "then": {
             "$ref": "#/$defs/MigrationPinChangedRecord"
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "event": {
+                "const": "wos.governance.reasoning_recorded"
+              }
+            },
+            "required": [
+              "event"
+            ]
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "auditLayer": {
+                "const": "reasoning"
+              },
+              "data": {
+                "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/DeterminationReasoningData"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "event": {
+                "const": "wos.governance.counterfactual_recorded"
+              }
+            },
+            "required": [
+              "event"
+            ]
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "auditLayer": {
+                "const": "counterfactual"
+              },
+              "data": {
+                "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/DeterminationCounterfactualData"
+              }
+            }
+          }
         }
       ]
     },
@@ -7809,6 +7861,10 @@
         "adverseDecisionPolicy": {
           "$ref": "#/$defs/AdverseDecisionPolicy",
           "description": "Policy governing adverse decisions: denial, reduction, termination, or other unfavorable determinations."
+        },
+        "execution": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/DueProcessExecution",
+          "description": "Explicit native referenceDueProcess/1 configuration. Requires admitted original sources, actors, actual signature subject verification, and qualified fixture transport."
         }
       }
     },

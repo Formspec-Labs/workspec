@@ -1,0 +1,1693 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/wos-reference-replay.schema.json",
+  "title": "Native reference replay inputs and comparisons",
+  "description": "Closed software-fixture inputs. Dynamic key, source, clock, reference, and exact-result checks remain native owner obligations. No hosted, human, legal, FNS, or publication qualification.",
+  "$ref": "#/$defs/ReferenceReplayAdapters",
+  "$defs": {
+    "NativeTimeAdvance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "beforeEventIndex",
+        "duration"
+      ],
+      "properties": {
+        "beforeEventIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "duration": {
+          "type": "string",
+          "pattern": "^P(?:[1-9]|[1-9][0-9]{1,3}|[12][0-9]{4}|3[0-5][0-9]{3}|36[0-4][0-9]{2}|36500)D$"
+        }
+      }
+    },
+    "DeterminationTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bindingRef",
+        "firingOccurrence"
+      ],
+      "properties": {
+        "bindingRef": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Id"
+        },
+        "firingOccurrence": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "FixtureReceiptSigner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "suite",
+        "kidBase64",
+        "publicKeyBase64",
+        "methodUri"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Id"
+        },
+        "suite": {
+          "const": "ed25519"
+        },
+        "kidBase64": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "publicKeyBase64": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "methodUri": {
+          "const": "urn:formspec:receipt-method:ed25519-cose-sign1@1"
+        }
+      }
+    },
+    "FixtureTransportFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempt",
+        "outcome"
+      ],
+      "properties": {
+        "attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "outcome": {
+          "const": "noEffectFailure"
+        }
+      }
+    },
+    "FixtureNoticeTransport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "scope",
+        "mode",
+        "retainedResultsIdentity",
+        "failureSchedule"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Id"
+        },
+        "scope": {
+          "const": "softwareFixture"
+        },
+        "mode": {
+          "const": "sameInstantQualifiedReceipt"
+        },
+        "retainedResultsIdentity": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Digest"
+        },
+        "failureSchedule": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FixtureTransportFailure"
+          }
+        }
+      }
+    },
+    "FixtureSigningCapability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "scope",
+        "documentKeyRef",
+        "pkcs8Base64",
+        "receiptSignerRef",
+        "receiptPkcs8Base64"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Id"
+        },
+        "scope": {
+          "const": "softwareFixture"
+        },
+        "documentKeyRef": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Id"
+        },
+        "pkcs8Base64": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "receiptSignerRef": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Id"
+        },
+        "receiptPkcs8Base64": {
+          "type": "string",
+          "contentEncoding": "base64"
+        }
+      }
+    },
+    "DocumentSigningKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "taskRef",
+        "signerHuman",
+        "kidBase64",
+        "publicKeyBase64",
+        "methodUri"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Id"
+        },
+        "taskRef": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Id"
+        },
+        "signerHuman": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Human"
+        },
+        "kidBase64": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "publicKeyBase64": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "methodUri": {
+          "const": "urn:formspec:sig-method:ed25519-cose-sign1@1"
+        }
+      }
+    },
+    "EvidenceSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "role",
+        "bytesBase64",
+        "sha256"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Id"
+        },
+        "role": {
+          "enum": [
+            "source",
+            "review",
+            "hearingEvidence",
+            "overrideEvidence"
+          ]
+        },
+        "bytesBase64": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "sha256": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Digest"
+        }
+      }
+    },
+    "HumanActorBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "declaredActor",
+        "assignedActor"
+      ],
+      "properties": {
+        "declaredActor": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Id"
+        },
+        "assignedActor": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Human"
+        }
+      }
+    },
+    "FixtureInvocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "serviceRef",
+        "expectedInput",
+        "response",
+        "maxInvocations"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Id"
+        },
+        "serviceRef": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Id"
+        },
+        "expectedInput": {},
+        "response": {},
+        "maxInvocations": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        }
+      }
+    },
+    "ReferenceInvocationDescriptor": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "documentRef",
+            "operationRef"
+          ],
+          "properties": {
+            "kind": {
+              "const": "openapi"
+            },
+            "documentRef": {
+              "type": "string",
+              "minLength": 1
+            },
+            "operationRef": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "endpoint"
+          ],
+          "properties": {
+            "kind": {
+              "const": "opa"
+            },
+            "endpoint": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    },
+    "ReferenceInvocationBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "descriptor",
+        "inputMapping",
+        "outputBinding"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Id"
+        },
+        "kind": {
+          "enum": [
+            "requestResponse",
+            "opaPolicy"
+          ]
+        },
+        "descriptor": {
+          "$ref": "#/$defs/ReferenceInvocationDescriptor"
+        },
+        "inputMapping": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "outputBinding": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "ReferenceInvocations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "bindings"
+      ],
+      "properties": {
+        "profile": {
+          "const": "referenceInvocations/1"
+        },
+        "bindings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReferenceInvocationBinding"
+          }
+        }
+      }
+    },
+    "TemplateSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "contentType"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "contentType": {
+          "enum": [
+            "text",
+            "structured",
+            "appeal-rights",
+            "action-required",
+            "contact-information"
+          ]
+        },
+        "content": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "condition": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "NotificationTemplate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "sections"
+      ],
+      "properties": {
+        "category": {
+          "enum": [
+            "adverse-decision",
+            "hold-notification",
+            "appeal-acknowledgment",
+            "sla-warning",
+            "case-status-update",
+            "resume-notification"
+          ]
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "subject": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TemplateSection"
+          }
+        },
+        "requiredVariables": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "deliveryChannels": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "postal",
+              "email",
+              "portal",
+              "sms",
+              "in-app"
+            ]
+          }
+        },
+        "localeRef": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "authority": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "extensions": {
+          "type": "object",
+          "maxProperties": 0
+        }
+      }
+    },
+    "NotificationTemplateDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "templates"
+      ],
+      "properties": {
+        "$schema": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "targetWorkflow": {
+          "type": "string"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "templates": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/NotificationTemplate"
+          }
+        },
+        "extensions": {
+          "type": "object",
+          "maxProperties": 0
+        }
+      },
+      "description": "Maintained native NotificationTemplateDocument adapter DTO; not a complete canonical Delivery document."
+    },
+    "ReferenceReplayAdapters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "humanActorBindings",
+        "trustedReceiptSigners",
+        "noticeTransport",
+        "retainedEvidence",
+        "templates",
+        "documentSigningKeys",
+        "fixtureSigningCapabilities",
+        "invocations"
+      ],
+      "properties": {
+        "timeAdvances": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NativeTimeAdvance"
+          }
+        },
+        "scope": {
+          "const": "softwareFixture"
+        },
+        "humanActorBindings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HumanActorBinding"
+          }
+        },
+        "trustedReceiptSigners": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FixtureReceiptSigner"
+          }
+        },
+        "noticeTransport": {
+          "$ref": "#/$defs/FixtureNoticeTransport"
+        },
+        "retainedEvidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceSelection"
+          }
+        },
+        "templates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NotificationTemplateDocument"
+          }
+        },
+        "documentSigningKeys": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DocumentSigningKey"
+          }
+        },
+        "fixtureSigningCapabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FixtureSigningCapability"
+          }
+        },
+        "invocations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FixtureInvocation"
+          }
+        }
+      }
+    },
+    "GovernanceRecipeCommand": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "const": "issueNotice"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "channel",
+            "continuationChoice"
+          ],
+          "properties": {
+            "kind": {
+              "const": "fileAppeal"
+            },
+            "channel": {
+              "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Channel"
+            },
+            "continuationChoice": {
+              "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/ContinuationChoice"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "reviewerActor",
+            "calendarDaysFromFiling"
+          ],
+          "properties": {
+            "kind": {
+              "const": "scheduleHearing"
+            },
+            "reviewerActor": {
+              "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Id"
+            },
+            "calendarDaysFromFiling": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 36500
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "evidenceRefs"
+          ],
+          "properties": {
+            "kind": {
+              "const": "holdHearing"
+            },
+            "evidenceRefs": {
+              "type": "array",
+              "items": {
+                "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/SourceRef"
+              },
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "outcome",
+            "rationale",
+            "evidenceRefs"
+          ],
+          "properties": {
+            "kind": {
+              "const": "recordDisposition"
+            },
+            "outcome": {
+              "enum": [
+                "upheld",
+                "reversed"
+              ]
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1
+            },
+            "evidenceRefs": {
+              "type": "array",
+              "items": {
+                "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/SourceRef"
+              },
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "rationale"
+          ],
+          "properties": {
+            "kind": {
+              "const": "requestServiceTermination"
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "calendarDays",
+            "rationale",
+            "evidenceRefs"
+          ],
+          "properties": {
+            "kind": {
+              "const": "extendPreNoticeWindow"
+            },
+            "calendarDays": {
+              "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Days"
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1
+            },
+            "evidenceRefs": {
+              "type": "array",
+              "items": {
+                "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/SourceRef"
+              },
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "const": "applyAdverseEffect"
+            }
+          }
+        }
+      ]
+    },
+    "GovernanceRecipe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationRef",
+        "idempotencyToken",
+        "actor",
+        "command"
+      ],
+      "properties": {
+        "operationRef": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Id"
+        },
+        "target": {
+          "$ref": "#/$defs/DeterminationTarget"
+        },
+        "idempotencyToken": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Token"
+        },
+        "actor": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/GovernanceActor"
+        },
+        "command": {
+          "$ref": "#/$defs/GovernanceRecipeCommand"
+        }
+      }
+    },
+    "FormspecAuthoredSignatureTemplate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "signatureId",
+        "documentId",
+        "signingIntent",
+        "documentHash",
+        "documentHashAlgorithm",
+        "signatureProvider",
+        "ceremonyId",
+        "signerId",
+        "signerName",
+        "consentTextRef",
+        "consentVersion",
+        "affirmationText",
+        "consentAccepted"
+      ],
+      "properties": {
+        "signatureId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "documentId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "signingIntent": {
+          "type": "string",
+          "minLength": 1
+        },
+        "documentHash": {
+          "type": "string",
+          "minLength": 1
+        },
+        "documentHashAlgorithm": {
+          "type": "string",
+          "minLength": 1
+        },
+        "signatureProvider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ceremonyId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "signerId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "signerName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "consentTextRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "consentVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "affirmationText": {
+          "type": "string",
+          "minLength": 1
+        },
+        "consentAccepted": {
+          "const": true
+        },
+        "identityBinding": {}
+      }
+    },
+    "SignatureRecipe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "signingCapabilityRef",
+        "signature"
+      ],
+      "properties": {
+        "target": {
+          "$ref": "#/$defs/DeterminationTarget"
+        },
+        "signingCapabilityRef": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Id"
+        },
+        "signature": {
+          "$ref": "#/$defs/FormspecAuthoredSignatureTemplate"
+        }
+      }
+    },
+    "NativeAttemptSelector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eventIndex",
+        "kind",
+        "occurrence"
+      ],
+      "properties": {
+        "eventIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "kind": {
+          "enum": [
+            "event",
+            "taskSubmission",
+            "governanceOperation",
+            "clock",
+            "migration"
+          ]
+        },
+        "occurrence": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "NativeSubject": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "bindingRef",
+            "firingOccurrence"
+          ],
+          "properties": {
+            "kind": {
+              "const": "determination"
+            },
+            "bindingRef": {
+              "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Id"
+            },
+            "firingOccurrence": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "transition",
+            "evaluationOccurrence"
+          ],
+          "properties": {
+            "kind": {
+              "const": "decision"
+            },
+            "transition": {
+              "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/TransitionLocation"
+            },
+            "evaluationOccurrence": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "operationRef",
+            "operationOccurrence"
+          ],
+          "properties": {
+            "kind": {
+              "const": "operation"
+            },
+            "operationRef": {
+              "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Id"
+            },
+            "operationOccurrence": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "taskRef",
+            "taskOccurrence"
+          ],
+          "properties": {
+            "kind": {
+              "const": "task"
+            },
+            "taskRef": {
+              "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Id"
+            },
+            "taskOccurrence": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "timerId",
+            "timerOccurrence"
+          ],
+          "properties": {
+            "kind": {
+              "const": "timer"
+            },
+            "timerId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "timerOccurrence": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "operationRef",
+            "operationOccurrence"
+          ],
+          "properties": {
+            "kind": {
+              "const": "override"
+            },
+            "operationRef": {
+              "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Id"
+            },
+            "operationOccurrence": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "determinationId"
+          ],
+          "properties": {
+            "kind": {
+              "const": "notice"
+            },
+            "determinationId": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "target"
+          ],
+          "properties": {
+            "kind": {
+              "const": "notice"
+            },
+            "target": {
+              "$ref": "#/$defs/DeterminationTarget"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "determinationId"
+          ],
+          "properties": {
+            "kind": {
+              "const": "appeal"
+            },
+            "determinationId": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "target"
+          ],
+          "properties": {
+            "kind": {
+              "const": "appeal"
+            },
+            "target": {
+              "$ref": "#/$defs/DeterminationTarget"
+            }
+          }
+        }
+      ]
+    },
+    "NativeSelector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempt",
+        "subject"
+      ],
+      "properties": {
+        "attempt": {
+          "$ref": "#/$defs/NativeAttemptSelector"
+        },
+        "subject": {
+          "$ref": "#/$defs/NativeSubject"
+        }
+      }
+    },
+    "ObservationExpectation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pointer",
+        "expected"
+      ],
+      "properties": {
+        "pointer": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Pointer"
+        },
+        "expected": {}
+      }
+    },
+    "DefinitionSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "url",
+        "version"
+      ],
+      "properties": {
+        "url": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "ResolvedDependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "url",
+        "bytes"
+      ],
+      "properties": {
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bytes": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          }
+        },
+        "definition": {
+          "$ref": "#/$defs/DefinitionSelection"
+        }
+      }
+    },
+    "ReplayRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateBytes",
+        "dependencies",
+        "fixtureJson",
+        "clockStartMs",
+        "requiredObservations",
+        "expectations"
+      ],
+      "properties": {
+        "candidateBytes": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          }
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResolvedDependency"
+          }
+        },
+        "fixtureJson": {
+          "type": "string",
+          "minLength": 1
+        },
+        "clockStartMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requiredObservations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "expectations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ObservationExpectation"
+          }
+        }
+      }
+    },
+    "CohortMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "request",
+        "adapters"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Id"
+        },
+        "request": {
+          "$ref": "#/$defs/ReplayRequest"
+        },
+        "adapters": {
+          "$ref": "#/$defs/ReferenceReplayAdapters"
+        }
+      }
+    },
+    "PairedReplayMembers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "left",
+        "right"
+      ],
+      "properties": {
+        "left": {
+          "$ref": "#/$defs/CohortMember"
+        },
+        "right": {
+          "$ref": "#/$defs/CohortMember"
+        }
+      }
+    },
+    "PairedApprovalRateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pairs",
+        "protectedCasePointer",
+        "leftValue",
+        "rightValue",
+        "thresholdPercentagePoints",
+        "sourceRefs",
+        "favorableStatePointer",
+        "adverseStatePointer",
+        "review"
+      ],
+      "properties": {
+        "pairs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PairedReplayMembers"
+          },
+          "minItems": 100,
+          "maxItems": 100
+        },
+        "protectedCasePointer": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Pointer"
+        },
+        "leftValue": {
+          "$ref": "#/$defs/JSONScalar"
+        },
+        "rightValue": {
+          "$ref": "#/$defs/JSONScalar"
+        },
+        "thresholdPercentagePoints": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "sourceRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/SourceRef"
+          },
+          "minItems": 1
+        },
+        "favorableStatePointer": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Pointer"
+        },
+        "adverseStatePointer": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Pointer"
+        },
+        "review": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/ReviewRef"
+        }
+      }
+    },
+    "MetricMemberDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "independentInputSha256"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Id"
+        },
+        "independentInputSha256": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Digest"
+        }
+      }
+    },
+    "MetricDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "metric",
+        "operator",
+        "protectedCasePointer",
+        "leftValue",
+        "rightValue",
+        "thresholdPercentagePoints",
+        "sourceRefs",
+        "favorableStatePointer",
+        "adverseStatePointer",
+        "reviewId",
+        "members"
+      ],
+      "properties": {
+        "metric": {
+          "const": "absoluteApprovalRateDifference"
+        },
+        "operator": {
+          "const": "lt"
+        },
+        "protectedCasePointer": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Pointer"
+        },
+        "leftValue": {
+          "$ref": "#/$defs/JSONScalar"
+        },
+        "rightValue": {
+          "$ref": "#/$defs/JSONScalar"
+        },
+        "thresholdPercentagePoints": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "sourceRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/SourceRef"
+          },
+          "minItems": 1
+        },
+        "favorableStatePointer": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Pointer"
+        },
+        "adverseStatePointer": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Pointer"
+        },
+        "reviewId": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Id"
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MetricMemberDescriptor"
+          },
+          "minItems": 200,
+          "maxItems": 200
+        }
+      }
+    },
+    "EngineeringReviewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id",
+        "method"
+      ],
+      "properties": {
+        "kind": {
+          "const": "model"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "MetricReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "decision",
+        "reviewer",
+        "reviewedAt",
+        "rationale",
+        "descriptor"
+      ],
+      "properties": {
+        "scope": {
+          "const": "softwareFixture"
+        },
+        "decision": {
+          "enum": [
+            "accepted",
+            "rejected",
+            "inconclusive"
+          ]
+        },
+        "reviewer": {
+          "$ref": "#/$defs/EngineeringReviewer"
+        },
+        "reviewedAt": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Timestamp"
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "descriptor": {
+          "$ref": "#/$defs/MetricDescriptor"
+        }
+      }
+    },
+    "EngineeringClaim": {
+      "enum": [
+        "bilingualStructuredFacts",
+        "plainLanguageEngineeringReview",
+        "accessibilityStructureReview"
+      ]
+    },
+    "EngineeringObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "verdict",
+        "observations"
+      ],
+      "properties": {
+        "verdict": {
+          "enum": [
+            "supported",
+            "refuted",
+            "inconclusive"
+          ]
+        },
+        "observations": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "ReviewedNoticeVariant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "locale",
+        "bodySha256"
+      ],
+      "properties": {
+        "locale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bodySha256": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Digest"
+        }
+      }
+    },
+    "EngineeringNoticeReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "reviewer",
+        "reviewedAt",
+        "artifactSha256",
+        "variants",
+        "claims",
+        "observations",
+        "limitations"
+      ],
+      "properties": {
+        "scope": {
+          "const": "engineeringFixture"
+        },
+        "reviewer": {
+          "$ref": "#/$defs/EngineeringReviewer"
+        },
+        "reviewedAt": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Timestamp"
+        },
+        "artifactSha256": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Digest"
+        },
+        "variants": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReviewedNoticeVariant"
+          },
+          "minItems": 1
+        },
+        "claims": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EngineeringClaim"
+          },
+          "minItems": 1
+        },
+        "observations": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/EngineeringClaim"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/EngineeringObservation"
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "RenderedNoticeReviewAssertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selector",
+        "artifactSha256",
+        "variants",
+        "requiredClaims",
+        "reviewBytes",
+        "reviewSha256",
+        "comparisonClockMs"
+      ],
+      "properties": {
+        "selector": {
+          "$ref": "#/$defs/NativeSelector"
+        },
+        "artifactSha256": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Digest"
+        },
+        "variants": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReviewedNoticeVariant"
+          },
+          "minItems": 1
+        },
+        "requiredClaims": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EngineeringClaim"
+          },
+          "minItems": 1
+        },
+        "reviewBytes": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          }
+        },
+        "reviewSha256": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Digest"
+        },
+        "comparisonClockMs": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "JSONScalar": {
+      "type": [
+        "string",
+        "boolean",
+        "number"
+      ]
+    }
+  }
+}

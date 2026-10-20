@@ -70,6 +70,7 @@ impl IntegrationBindingHandler for PolicyEngineHandler {
             &input,
             None, // policy evaluation is not idempotency-keyed at the binding level
             now_iso,
+            Some(binding),
         )?;
 
         // Determine the engine adapter from `extensions.engineType`.
@@ -165,7 +166,7 @@ impl IntegrationBindingHandler for PolicyEngineHandler {
 }
 
 /// Select and invoke the correct `PolicyDecision::from_*` constructor based on engine type.
-fn normalize_decision(
+pub(crate) fn normalize_decision(
     engine_type: &str,
     raw_response: &serde_json::Value,
     service_ref: &str,

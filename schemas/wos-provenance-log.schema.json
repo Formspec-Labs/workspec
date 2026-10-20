@@ -133,6 +133,12 @@
           },
           {
             "$ref": "#/$defs/MigrationPinChangedEventRecord"
+          },
+          {
+            "$ref": "#/$defs/DeterminationReasoningDataRecord"
+          },
+          {
+            "$ref": "#/$defs/DeterminationCounterfactualDataRecord"
           }
         ]
       }
@@ -1746,6 +1752,60 @@
           ],
           "x-wos": {
             "openStringKind": "identifier"
+          }
+        }
+      }
+    },
+    "DeterminationReasoningDataRecord": {
+      "type": "object",
+      "description": "Actual native determinationReasoning provenance with a closed reviewed data payload.",
+      "if": {
+        "properties": {
+          "event": {
+            "const": "wos.governance.reasoning_recorded"
+          }
+        },
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/DeterminationReasoningData"
+          },
+          "auditLayer": {
+            "const": "reasoning"
+          }
+        }
+      }
+    },
+    "DeterminationCounterfactualDataRecord": {
+      "type": "object",
+      "description": "Actual native determinationCounterfactual provenance with a closed reviewed data payload.",
+      "if": {
+        "properties": {
+          "event": {
+            "const": "wos.governance.counterfactual_recorded"
+          }
+        },
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/DeterminationCounterfactualData"
+          },
+          "auditLayer": {
+            "const": "counterfactual"
           }
         }
       }

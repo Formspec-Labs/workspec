@@ -93,6 +93,35 @@ pub trait ExternalService {
     /// Error type for service operations.
     type Error: std::error::Error;
 
+    /// Admits actual input and binding before invocation or persisted-result reuse.
+    ///
+    /// Qualified fixture adapters return their immutable selected identity.
+    /// Legacy providers return None and make no selected-input qualification claim.
+    ///
+    /// # Errors
+    /// Rejects an unsupported binding or mismatched selected actual input.
+    fn invocation_identity(
+        &self,
+        _service_ref: &str,
+        _input: &serde_json::Value,
+        _binding: Option<&serde_json::Value>,
+    ) -> Result<Option<String>, Self::Error> {
+        Ok(None)
+    }
+
+    /// Checks a provider result before invocation completion or cached reuse.
+    ///
+    /// # Errors
+    /// Qualified adapters reject output inconsistent with their selected fixture.
+    fn validate_cached_output(
+        &self,
+        _service_ref: &str,
+        _input: &serde_json::Value,
+        _output: &serde_json::Value,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
     /// Invoke a referenced service.
     fn invoke(
         &self,

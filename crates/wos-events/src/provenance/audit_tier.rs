@@ -6,9 +6,8 @@ use super::kind::ProvenanceKind as K;
 ///
 /// The tier for a record is deterministic from its [`ProvenanceKind`]. Only
 /// [`ProvenanceKind::NarrativeTierRecorded`] maps to [`Self::Narrative`] today;
-/// every other variant is a factual observation ([`Self::Facts`]). The
-/// `"reasoning"` and `"counterfactual"` tiers (SP §5.4) are reserved for Layer
-/// 1 injection paths not yet wired to a dedicated `ProvenanceKind` variant.
+/// native determination reasoning and hypothetical evaluations use their own
+/// tiers. Remaining variants are factual observations ([`Self::Facts`]).
 ///
 /// The [`From`] implementation is written exhaustively (no wildcard arm) so
 /// that adding a new `ProvenanceKind` variant upstream forces the author to
@@ -18,6 +17,8 @@ use super::kind::ProvenanceKind as K;
 pub enum ProvenanceAuditTier {
     Facts,
     Narrative,
+    Reasoning,
+    Counterfactual,
 }
 
 impl ProvenanceAuditTier {
@@ -26,6 +27,8 @@ impl ProvenanceAuditTier {
         match self {
             Self::Facts => "facts",
             Self::Narrative => "narrative",
+            Self::Reasoning => "reasoning",
+            Self::Counterfactual => "counterfactual",
         }
     }
 }
@@ -36,6 +39,8 @@ impl From<K> for ProvenanceAuditTier {
             // Narrative tier (SP §5.4): the sole variant carrying narrative-layer
             // annotations today.
             K::NarrativeTierRecorded => Self::Narrative,
+            K::DeterminationReasoning => Self::Reasoning,
+            K::DeterminationCounterfactual => Self::Counterfactual,
 
             // Facts tier (SP §5.4): every other variant records an observable
             // fact about workflow execution. Deliberately enumerated rather than

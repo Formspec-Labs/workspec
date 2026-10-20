@@ -89,6 +89,9 @@ fn default_max_delegation_depth() -> u32 {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DueProcess {
+    /// Explicit bounded native execution configuration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution: Option<super::due_process::DueProcessExecution>,
     /// FEL expression scoping when this policy applies.
     #[serde(default)]
     pub scope: Option<String>,

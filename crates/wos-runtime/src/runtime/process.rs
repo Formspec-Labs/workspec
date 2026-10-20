@@ -340,6 +340,16 @@ impl WosRuntime {
             &convergence_error_ids,
         );
         let actions = evaluator.take_executed_actions();
+        let guards = evaluator.take_guard_evaluations();
+        appended_provenance.extend(self.reference_preflight(
+            &kernel,
+            &mut record,
+            &evaluator,
+            &actions,
+            &guards,
+            None,
+            &now_iso,
+        )?);
         let (created_task_ids, emitted_events, runtime_provenance) =
             self.apply_observed_actions(&kernel, &mut record, &actions, &now_iso)?;
         appended_provenance.extend(runtime_provenance);
@@ -359,6 +369,20 @@ impl WosRuntime {
             &record.process,
             &kernel,
         )?);
+        if let Some(cap) = self.reference_due_process.as_ref() {
+            let (raw, execution) = super::governance::admission::validate(cap, &kernel)
+                .map_err(RuntimeError::Governance)?;
+            record
+                .creation
+                .as_mut()
+                .ok_or(RuntimeError::Governance(
+                    wos_core::model::due_process::RefusalCode::StoreRejected,
+                ))?
+                .reference_due_process = Some(crate::intake::DueProcessCreationWitness {
+                definition_sha256: super::governance::admission::digest(&raw),
+                execution,
+            });
+        }
         self.store.create_record(record.clone())?;
 
         self.deliver_pending_presentations(&pending_presentations)?;

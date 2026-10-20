@@ -1651,6 +1651,10 @@
       },
       "additionalProperties": false,
       "properties": {
+        "dueProcess": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/DueProcessState",
+          "description": "Actual saved native due-process facts admitted through the bounded reference owner."
+        },
         "activeDelegations": {
           "type": "array",
           "items": {

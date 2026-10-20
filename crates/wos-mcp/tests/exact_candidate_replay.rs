@@ -5,6 +5,10 @@
 use serde_json::{Value, json};
 use wos_mcp::{dispatch::dispatch, registry::ProjectRegistry};
 
+#[path = "../../wos-conformance/tests/support/replay_semantics.rs"]
+mod replay_semantics;
+use replay_semantics::semantic_native_report;
+
 fn workflow() -> Value {
     json!({"$wosWorkflow":"1.0","url":"urn:test:mcp-exact","version":"1.0.0","title":"MCP candidate control","impactLevel":"operational",
       "actors":[{"id":"reviewer","type":"human"}],"lifecycle":{"initialState":"open","states":{
@@ -116,7 +120,10 @@ async fn actual_mcp_repeats_and_compares_only_actual_output_values() {
         .unwrap();
     assert_eq!(first["passed"], false);
     assert_eq!(first["differences"][0]["actual"], json!(["done"]));
-    assert_eq!(first["trace"], second["trace"]);
+    assert_eq!(
+        semantic_native_report(&first)["trace"],
+        semantic_native_report(&second)["trace"]
+    );
     assert_eq!(first["identity"], second["identity"]);
     assert_eq!(first["attempts"][0]["clockMs"], 12345);
     assert_eq!(first["execution"]["hosted"], false);
@@ -156,6 +163,7 @@ async fn common_literal_vectors_match_the_owner_through_actual_mcp() {
                     url: dependency["url"].as_str().unwrap().into(),
                     version: dependency["version"].as_str().map(str::to_string),
                     bytes: serde_json::to_vec(&dependency["document"]).unwrap(),
+                    definition: None,
                 })
                 .collect(),
         });
@@ -185,14 +193,14 @@ async fn common_literal_vectors_match_the_owner_through_actual_mcp() {
                     vector["id"]
                 );
                 assert_eq!(
-                    serde_json::to_value(owner.final_snapshot).unwrap(),
-                    adapter["finalSnapshot"],
+                    semantic_native_report(&serde_json::to_value(&owner).unwrap())["finalSnapshot"],
+                    semantic_native_report(&adapter)["finalSnapshot"],
                     "vector {}",
                     vector["id"]
                 );
                 assert_eq!(
-                    serde_json::to_value(owner.trace).unwrap(),
-                    adapter["trace"],
+                    semantic_native_report(&serde_json::to_value(&owner).unwrap())["trace"],
+                    semantic_native_report(&adapter)["trace"],
                     "vector {}",
                     vector["id"]
                 );

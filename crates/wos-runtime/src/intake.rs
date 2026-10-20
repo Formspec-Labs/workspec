@@ -172,6 +172,9 @@ pub enum IntakeAcceptanceOutcome {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProcessCreationSnapshot {
+    /// Immutable selected requirement for native due-process restore validation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reference_due_process: Option<DueProcessCreationWitness>,
     /// Actual internal process identifier.
     pub process_id: String,
     /// Actual case ledger bound at creation.
@@ -189,6 +192,16 @@ pub struct ProcessCreationSnapshot {
     pub actor_bindings: Option<Vec<wos_core::instance::HumanActorBinding>>,
     /// Task metadata after creation staging, in creation order.
     pub tasks: Vec<TaskCreationSnapshot>,
+}
+
+/// Immutable selected policy witness retained by original process creation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DueProcessCreationWitness {
+    /// Canonical digest of the actual original selected workflow JSON.
+    pub definition_sha256: String,
+    /// Exact selected bounded native configuration.
+    pub execution: wos_core::model::due_process::DueProcessExecution,
 }
 
 /// Original task metadata without responses or presentation bodies.
@@ -289,6 +302,7 @@ impl ProcessCreationSnapshot {
             });
         }
         let snapshot = Self {
+            reference_due_process: None,
             process_id: process.process_id.clone(),
             case_ledger_id: process.case_ledger_id.clone(),
             tenant: process.tenant.clone(),

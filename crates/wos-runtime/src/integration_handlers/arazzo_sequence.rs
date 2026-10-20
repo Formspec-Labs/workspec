@@ -282,6 +282,7 @@ fn execute_step(
         &step_binding,
         None,
         now_iso,
+        None,
     );
 
     let step_result = match invoke_result {

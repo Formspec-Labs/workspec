@@ -105,7 +105,45 @@ fn same_prepared_inputs_repeat_semantically() {
     let first = replay(&prepared).unwrap();
     let second = replay(&prepared).unwrap();
     assert_eq!(first.identity, second.identity);
-    assert_eq!(first.trace, second.trace);
+    let mut semantic_traces = Vec::new();
+    let mut firing_ids = Vec::new();
+    for actual in [&first, &second] {
+        assert!(actual.passed);
+        let mut trace = actual.trace.clone();
+        for guard in trace
+            .steps
+            .iter_mut()
+            .flat_map(|step| &mut step.guards_evaluated)
+        {
+            // Each run retains its own actual firing identity. Verify that
+            // association before comparing the repeatable semantic values.
+            let firing_id = guard.firing_record_id.take().unwrap();
+            let record = actual
+                .provenance
+                .as_ref()
+                .unwrap()
+                .iter()
+                .find(|record| record.id == firing_id)
+                .unwrap();
+            assert_eq!(
+                record.record_kind,
+                wos_core::ProvenanceKind::StateTransition
+            );
+            assert_eq!(
+                record.from_state.as_deref(),
+                Some(guard.source_state.as_str())
+            );
+            assert_eq!(
+                record.to_state.as_deref(),
+                Some(guard.target_state.as_str())
+            );
+            firing_ids.push(firing_id);
+        }
+        semantic_traces.push(trace);
+    }
+    assert_eq!(firing_ids.len(), 2);
+    assert_ne!(firing_ids[0], firing_ids[1]);
+    assert_eq!(semantic_traces[0], semantic_traces[1]);
     assert_eq!(first.final_snapshot, second.final_snapshot);
 }
 
@@ -129,6 +167,7 @@ fn substituted_document_and_unresolved_or_wrong_identity_dependencies_refuse() {
         url: "urn:test:wrong".into(),
         version: Some("1.0.0".into()),
         bytes: serde_json::to_vec(&alternate).unwrap(),
+        definition: None,
     });
     assert!(
         prepare_replay(input)
@@ -151,6 +190,7 @@ fn substituted_document_and_unresolved_or_wrong_identity_dependencies_refuse() {
         url: "urn:test:exact-replay".into(),
         version: Some("2.0.0".into()),
         bytes: serde_json::to_vec(&candidate("true")).unwrap(),
+        definition: None,
     });
     assert!(
         prepare_replay(input)
@@ -372,6 +412,7 @@ fn selected_calendar_bytes_change_timer_behavior_without_candidate_changes() {
             url: "urn:test:calendar".into(),
             version: Some("1.0.0".into()),
             bytes: serde_json::to_vec(&calendar).unwrap(),
+            definition: None,
         });
         replay(&prepare_replay(input).unwrap()).unwrap()
     };
@@ -498,6 +539,7 @@ fn common_literal_vectors_match_independent_expected_outcomes() {
                 url: dependency["url"].as_str().unwrap().into(),
                 version: dependency["version"].as_str().map(str::to_string),
                 bytes: serde_json::to_vec(&dependency["document"]).unwrap(),
+                definition: None,
             });
         }
         let actual = match prepare_replay(input) {
@@ -599,6 +641,7 @@ fn deployment_posture_binds_native_signature_policy_without_workflow_target() {
             url: vector["dependency"]["url"].as_str().unwrap().into(),
             version: Some("1.0.0".into()),
             bytes: serde_json::to_vec(&vector["dependency"]["document"]).unwrap(),
+            definition: None,
         });
         input
     };

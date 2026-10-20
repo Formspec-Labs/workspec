@@ -7,9 +7,12 @@ pub(crate) mod actor_bindings;
 mod custody_trellis;
 mod drain;
 mod durable_impl;
+pub mod governance;
 mod intake;
 mod process;
 mod provenance;
+pub mod reference_invocations;
+pub mod reference_signature;
 mod signature;
 mod staging;
 mod staging_store;
@@ -383,6 +386,10 @@ pub enum RuntimeError {
     #[error(transparent)]
     CustodyAppend(#[from] CustodyAppendError),
 
+    /// A bounded native due-process operation refused admission.
+    #[error("native due-process refused: {0:?}")]
+    Governance(wos_core::model::due_process::RefusalCode),
+
     /// Native preparation refused an unsupported effect or inconsistent input.
     #[error(transparent)]
     NativePreparation(#[from] NativePreparationError),
@@ -530,6 +537,18 @@ where
 }
 
 pub(crate) trait InvokeServicesDyn {
+    fn invocation_identity(
+        &self,
+        service_ref: &str,
+        input: &serde_json::Value,
+        binding: Option<&serde_json::Value>,
+    ) -> Result<Option<String>, RuntimeError>;
+    fn validate_cached_output(
+        &self,
+        service_ref: &str,
+        input: &serde_json::Value,
+        output: &serde_json::Value,
+    ) -> Result<(), RuntimeError>;
     fn invoke(
         &self,
         service_ref: &str,
@@ -543,6 +562,24 @@ where
     T: ExternalService,
     T::Error: StdError + Send + Sync + 'static,
 {
+    fn invocation_identity(
+        &self,
+        service_ref: &str,
+        input: &serde_json::Value,
+        binding: Option<&serde_json::Value>,
+    ) -> Result<Option<String>, RuntimeError> {
+        ExternalService::invocation_identity(self, service_ref, input, binding)
+            .map_err(|error| RuntimeError::Service(error.to_string()))
+    }
+    fn validate_cached_output(
+        &self,
+        service_ref: &str,
+        input: &serde_json::Value,
+        output: &serde_json::Value,
+    ) -> Result<(), RuntimeError> {
+        ExternalService::validate_cached_output(self, service_ref, input, output)
+            .map_err(|error| RuntimeError::Service(error.to_string()))
+    }
     fn invoke(
         &self,
         service_ref: &str,
@@ -579,6 +616,7 @@ where
 
 /// Generic WOS runtime.
 pub struct WosRuntime {
+    reference_due_process: Option<governance::ReferenceDueProcessCapabilities>,
     preparation: Option<staging::PreparationState>,
     #[cfg(test)]
     preparation_fault_at_write: Option<usize>,
@@ -641,6 +679,7 @@ impl WosRuntime {
         C: Clock + Send + Sync + 'static,
     {
         Self {
+            reference_due_process: None,
             preparation: None,
             #[cfg(test)]
             preparation_fault_at_write: None,
@@ -3653,6 +3692,7 @@ mod tests {
                 let mut decision =
                     AutoCreatePublicIntakePolicy.evaluate_intake_acceptance(context)?;
                 decision.creation = Some(crate::ProcessCreationSnapshot {
+                    reference_due_process: None,
                     actor_bindings: None,
                     process_id: "forged".into(),
                     case_ledger_id: "forged".into(),

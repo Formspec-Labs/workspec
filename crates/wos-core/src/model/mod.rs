@@ -5,6 +5,7 @@
 pub mod ai;
 pub mod business_calendar;
 pub mod decision_table;
+pub mod due_process;
 pub mod governance;
 pub mod integration;
 pub mod kernel;

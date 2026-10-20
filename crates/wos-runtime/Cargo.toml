@@ -11,6 +11,10 @@ async-trait = "0.1"
 base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
 fel-core.workspace = true
+integrity-canonical = { path = "../../../integrity-stack/crates/integrity-canonical" }
+integrity-cose = { path = "../../../integrity-stack/crates/integrity-cose" }
+integrity-signature = { path = "../../../integrity-stack/crates/integrity-signature" }
+integrity-signature-ring = { path = "../../../integrity-stack/crates/integrity-signature-ring" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 semver = "1"
@@ -27,10 +31,11 @@ wos-core = { path = "../wos-core" }
 wos-events = { path = "../wos-events" }
 
 [dev-dependencies]
+wos-formspec-binding = { path = "../wos-formspec-binding" }
+ring = "0.17"
 axum = "0.8"
 integrity-bundle = { path = "../../../integrity-stack/crates/integrity-bundle" }
 integrity-cbor = { path = "../../../integrity-stack/crates/integrity-cbor" }
-integrity-cose = { path = "../../../integrity-stack/crates/integrity-cose" }
 jsonschema = "0.46"
 stack-common-error = { path = "../../../stack-common/crates/stack-common-error", default-features = false }
 tokio = { version = "1", features = ["macros", "rt"] }

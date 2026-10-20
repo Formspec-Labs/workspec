@@ -4,6 +4,12 @@ use std::process::Command;
 
 use serde_json::{Value, json};
 
+#[path = "../../wos-conformance/tests/support/replay_semantics.rs"]
+mod replay_semantics;
+#[path = "../../wos-conformance/tests/support/local_schemas.rs"]
+mod test_schemas;
+use replay_semantics::semantic_native_report;
+
 fn positive() -> Value {
     serde_json::from_str(include_str!(
         "../../wos-lint/tests/fixtures/shared-validation/positive.json"
@@ -94,61 +100,6 @@ async fn mcp(candidate: &Value, tool: &str, arguments: &Value) -> Result<Value, 
         .await
         .map_err(|error| error.to_string())
 }
-/// Compare the whole native result after normalizing only independently minted IDs.
-///
-/// Closed locations: /initialization/result/caseLedgerId; /provenance/*/id;
-/// /attempts/*/provenance/*/id; /attempts/*/drains/*/provenance/*/id.
-/// Process/task IDs, authored payload IDs, timestamps, array order, counts, and
-/// every other field remain exact. Provenance tokens preserve repeated-ID
-/// relationships across the top-level, per-attempt, and per-drain copies.
-fn semantic_native_report(raw: &Value) -> Value {
-    let mut semantic = raw.clone();
-    if let Some(id) = semantic.pointer_mut("/initialization/result/caseLedgerId") {
-        let family = id.as_str().unwrap().rsplit_once('_').unwrap().0;
-        *id = json!(format!("{family}_<generated-case-ledger>"));
-    }
-    let mut provenance_ids = std::collections::BTreeMap::new();
-    if let Some(records) = semantic.get_mut("provenance") {
-        normalize_provenance_ids(records, &mut provenance_ids);
-    }
-    if let Some(attempts) = semantic.get_mut("attempts").and_then(Value::as_array_mut) {
-        for attempt in attempts {
-            if let Some(records) = attempt.get_mut("provenance") {
-                normalize_provenance_ids(records, &mut provenance_ids);
-            }
-            if let Some(drains) = attempt.get_mut("drains").and_then(Value::as_array_mut) {
-                for drain in drains {
-                    if let Some(records) = drain.get_mut("provenance") {
-                        normalize_provenance_ids(records, &mut provenance_ids);
-                    }
-                }
-            }
-        }
-    }
-    semantic
-}
-
-fn normalize_provenance_ids(
-    records: &mut Value,
-    ids: &mut std::collections::BTreeMap<String, String>,
-) {
-    if let Some(records) = records.as_array_mut() {
-        for record in records {
-            // Only this direct native-record field changes. An id anywhere in
-            // record data or other nested structures remains untouched.
-            if let Some(value) = record.get_mut("id") {
-                let id = value.as_str().unwrap();
-                let next = ids.len();
-                let normalized = ids.entry(id.to_string()).or_insert_with(|| {
-                    let family = id.rsplit_once('_').unwrap().0;
-                    format!("{family}_<generated-provenance-{next}>")
-                });
-                *value = json!(normalized);
-            }
-        }
-    }
-}
-
 fn assert_native_replay(actual: &Value, expected: &Value, id: &Value) {
     assert_eq!(
         semantic_native_report(actual),
@@ -250,6 +201,7 @@ fn owner_replay(vector: &Value, arguments: &Value) -> Result<Value, String> {
                 url: dependency["url"].as_str().unwrap().into(),
                 version: dependency["version"].as_str().map(str::to_string),
                 bytes: serde_json::to_vec(&dependency["document"]).unwrap(),
+                definition: None,
             })
             .collect(),
     })
@@ -696,13 +648,6 @@ async fn actual_generate_options_use_real_tools_beyond_session_limit_and_preserv
 }
 
 fn assert_trace_schema(value: &Value) {
-    let tooling: Value =
-        serde_json::from_str(include_str!("../../../schemas/wos-tooling.schema.json")).unwrap();
-    let registry = jsonschema::Registry::new()
-        .add("https://wos-spec.org/schemas/tooling/1.0", tooling)
-        .unwrap()
-        .prepare()
-        .unwrap();
     for schema in [
         serde_json::from_str::<Value>(include_str!(
             "../../../schemas/synth/wos-synth-trace.schema.json"
@@ -710,10 +655,7 @@ fn assert_trace_schema(value: &Value) {
         .unwrap(),
         json!({"$ref":"https://wos-spec.org/schemas/tooling/1.0#/$defs/synthTrace__SynthTrace"}),
     ] {
-        let validator = jsonschema::options()
-            .with_registry(&registry)
-            .build(&schema)
-            .unwrap();
+        let validator = test_schemas::validator(&schema);
         assert!(
             validator.is_valid(value),
             "{:?}",
@@ -1053,14 +995,9 @@ async fn repair_provider_failure_saves_complete_native_evidence_and_original_err
         last_attempt: raw,
         trace,
     };
-    let tooling: Value =
-        serde_json::from_str(include_str!("../../../schemas/wos-tooling.schema.json")).unwrap();
-    let registry = jsonschema::Registry::new()
-        .add("https://wos-spec.org/schemas/tooling/1.0", tooling)
-        .unwrap()
-        .prepare()
-        .unwrap();
-    let validator = jsonschema::options().with_registry(&registry).build(&json!({"$ref":"https://wos-spec.org/schemas/tooling/1.0#/$defs/synthTrace__SynthOutcome"})).unwrap();
+    let validator = test_schemas::validator(
+        &json!({"$ref":"https://wos-spec.org/schemas/tooling/1.0#/$defs/synthTrace__SynthOutcome"}),
+    );
     assert!(validator.is_valid(&serde_json::to_value(&outcome).unwrap()));
     let roundtrip: SynthOutcome =
         serde_json::from_value(serde_json::to_value(&outcome).unwrap()).unwrap();
@@ -1092,14 +1029,9 @@ async fn empty_model_output_is_retained_verbatim_and_valid_evidence() {
         assert_eq!(trace.iterations[0].attempt, "");
         assert!(trace.iterations[0].assessment.intake_error.is_some());
         assert_trace_schema(&serde_json::to_value(&trace).unwrap());
-        let tooling: Value =
-            serde_json::from_str(include_str!("../../../schemas/wos-tooling.schema.json")).unwrap();
-        let registry = jsonschema::Registry::new()
-            .add("https://wos-spec.org/schemas/tooling/1.0", tooling)
-            .unwrap()
-            .prepare()
-            .unwrap();
-        let validator=jsonschema::options().with_registry(&registry).build(&json!({"$ref":"https://wos-spec.org/schemas/tooling/1.0#/$defs/synthTrace__SynthOutcome"})).unwrap();
+        let validator = test_schemas::validator(
+            &json!({"$ref":"https://wos-spec.org/schemas/tooling/1.0#/$defs/synthTrace__SynthOutcome"}),
+        );
         assert!(validator.is_valid(&value));
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("empty.json");
@@ -1341,6 +1273,15 @@ async fn generated_id_normalization_is_closed_and_retains_raw_relationships() {
         semantic_native_report(&broken_copy),
         semantic_native_report(&raw),
         "repeated native provenance references must retain the same relationship"
+    );
+    let mut broken_firing = raw.clone();
+    *broken_firing
+        .pointer_mut("/attempts/0/drains/0/transitions/0/provenance_record_id")
+        .unwrap() = json!(wos_conformance::ProvenanceRecord::mint_id());
+    assert_ne!(
+        semantic_native_report(&broken_firing),
+        semantic_native_report(&raw),
+        "a firing reference cannot normalize away a broken native relationship"
     );
     let mut added_payload = raw.clone();
     added_payload["provenance"][0]["data"]["id"] = raw["provenance"][0]["id"].clone();

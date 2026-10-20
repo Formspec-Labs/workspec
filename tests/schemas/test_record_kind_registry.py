@@ -177,8 +177,14 @@ def test_record_kind_registry_event_literals_are_f13_shaped():
         assert EVENT_LITERAL_RE.match(event_literal), (
             f"{entry['literal']} has non-F-13 eventLiteral {event_literal!r}"
         )
-        assert event_literal.rsplit(".", maxsplit=1)[1] == _camel_to_snake(
-            entry["literal"]
+        # These bounded causal facts avoid the determination_* wire prefix,
+        # which names actual determinations in Trellis verification.
+        native_causal_names = {
+            "determinationReasoning": "reasoning_recorded",
+            "determinationCounterfactual": "counterfactual_recorded",
+        }
+        assert event_literal.rsplit(".", maxsplit=1)[1] == native_causal_names.get(
+            entry["literal"], _camel_to_snake(entry["literal"])
         )
 
 

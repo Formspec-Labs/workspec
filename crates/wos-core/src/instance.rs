@@ -559,6 +559,9 @@ where
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GovernanceState {
+    /// Native reference due-process facts, never inferred from event names.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub due_process: Option<crate::model::due_process::DueProcessState>,
     /// Active delegation chains.
     #[serde(default)]
     pub active_delegations: Vec<ActiveDelegation>,

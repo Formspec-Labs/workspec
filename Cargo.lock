@@ -1187,6 +1187,17 @@ dependencies = [
 
 [[package]]
 name = "fancy-regex"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e24cb5a94bcae1e5408b0effca5cd7172ea3c5755049c5f3af4cd283a165298"
+dependencies = [
+ "bit-set",
+ "regex-automata",
+ "regex-syntax",
+]
+
+[[package]]
+name = "fancy-regex"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72cf461f865c862bb7dc573f643dd6a2b6842f7c30b07882b56bd148cc2761b8"
@@ -1318,6 +1329,21 @@ dependencies = [
  "fel-core",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "formspec-eval"
+version = "0.2.0"
+dependencies = [
+ "chrono",
+ "fancy-regex 0.14.0",
+ "fel-core",
+ "formspec-core",
+ "rust_decimal",
+ "semver_rs",
+ "serde",
+ "serde_json",
+ "url",
 ]
 
 [[package]]
@@ -2333,7 +2359,7 @@ dependencies = [
  "bytecount",
  "data-encoding",
  "email_address",
- "fancy-regex",
+ "fancy-regex 0.17.0",
  "fraction",
  "getrandom 0.3.4",
  "idna",
@@ -2360,7 +2386,7 @@ dependencies = [
  "bytecount",
  "data-encoding",
  "email_address",
- "fancy-regex",
+ "fancy-regex 0.17.0",
  "fraction",
  "getrandom 0.3.4",
  "idna",
@@ -6462,10 +6488,16 @@ name = "wos-conformance"
 version = "0.1.0"
 dependencies = [
  "assert_cmd",
+ "base64 0.22.1",
  "insta",
  "integrity-bundle-fixtures",
  "integrity-canonical",
+ "integrity-cose",
+ "integrity-signature",
+ "integrity-signature-ring",
+ "jsonschema 0.46.1",
  "quick-xml 0.36.2",
+ "ring",
  "serde",
  "serde_json",
  "stack-common-typeid",
@@ -6529,14 +6561,20 @@ name = "wos-formspec-binding"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "fel-core",
+ "formspec-core",
+ "formspec-eval",
+ "formspec-lint",
  "integrity-canonical",
  "integrity-cose",
  "integrity-signature",
  "integrity-signature-ring",
  "ring",
+ "semver_rs",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "time",
  "wos-core",
  "wos-runtime",
 ]
@@ -6588,9 +6626,13 @@ dependencies = [
  "chrono",
  "fel-core",
  "integrity-bundle",
+ "integrity-canonical",
  "integrity-cbor",
  "integrity-cose",
+ "integrity-signature",
+ "integrity-signature-ring",
  "jsonschema 0.46.1",
+ "ring",
  "semver",
  "serde",
  "serde_json",
@@ -6610,6 +6652,7 @@ dependencies = [
  "ureq",
  "wos-core",
  "wos-events",
+ "wos-formspec-binding",
 ]
 
 [[package]]

@@ -170,6 +170,9 @@ mod tests {
             state_after: "review".into(),
             expected_state_after: Some("review".into()),
             guards_evaluated: vec![GuardEvaluation {
+                location: None,
+                decision_table: None,
+                firing_record_id: None,
                 guard_id: "initial->review:application.submitted".into(),
                 source_state: "initial".into(),
                 target_state: "review".into(),

@@ -75,6 +75,7 @@ impl RuntimeRecord {
                 StoreError::InvalidCreationEvidence("original process creation is missing".into())
             })?
             .validate_created_process(&self.process)?;
+        crate::runtime::governance::records::validate(self)?;
         self.validate_bound_task_attribution()?;
         self.validate_task_lifetimes()?;
         self.validate_native_presentations()?;
@@ -97,6 +98,7 @@ impl RuntimeRecord {
                 StoreError::InvalidCreationEvidence("original process creation is missing".into())
             })?
             .validate_process(&self.process)?;
+        crate::runtime::governance::records::validate(self)?;
         self.validate_bound_task_attribution()?;
         self.validate_task_lifetimes()?;
         self.validate_native_presentations()?;
@@ -119,6 +121,7 @@ impl RuntimeRecord {
             ));
         }
         self.validate_creation()?;
+        crate::runtime::governance::records::validate_update(self, previous)?;
         previous.validate_native_presentations()?;
         let old_presentations: Vec<_> = previous
             .provenance_log
@@ -754,6 +757,9 @@ fn dismissal_witness(
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StepResultRecord {
+    /// Exact qualified native input/binding/adapter association, when supplied.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub invocation_association: Option<ServiceInvocationAssociation>,
     /// Service reference declared by the kernel action.
     pub service_ref: String,
     /// Idempotency key used for the invocation, if any.
@@ -762,6 +768,18 @@ pub struct StepResultRecord {
     pub output: serde_json::Value,
     /// ISO 8601 persistence timestamp.
     pub recorded_at: String,
+}
+
+/// Exact immutable association checked before qualified service-result reuse.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServiceInvocationAssociation {
+    /// Actual constructed native request.
+    pub input: serde_json::Value,
+    /// Actual selected native integration binding.
+    pub binding: serde_json::Value,
+    /// Immutable selected adapter and fixture identity.
+    pub adapter_identity: String,
 }
 
 /// Stored task artifact.
@@ -1225,6 +1243,7 @@ pub fn runtime_aux_to_json(record: &RuntimeRecord) -> serde_json::Value {
                 "serviceRef": s.service_ref,
                 "idempotencyKey": s.idempotency_key,
                 "output": s.output,
+                "invocationAssociation": s.invocation_association,
                 "recordedAt": s.recorded_at,
             })
         })
@@ -1342,6 +1361,13 @@ pub fn runtime_aux_from_json(v: &serde_json::Value) -> Result<RuntimeAuxFields, 
             arr.iter()
                 .filter_map(|s| {
                     Some(StepResultRecord {
+                        invocation_association: s
+                            .get("invocationAssociation")
+                            .filter(|value| !value.is_null())
+                            .cloned()
+                            .map(serde_json::from_value)
+                            .transpose()
+                            .ok()?,
                         service_ref: s.get("serviceRef")?.as_str()?.to_string(),
                         idempotency_key: s
                             .get("idempotencyKey")

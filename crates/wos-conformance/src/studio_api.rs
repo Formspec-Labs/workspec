@@ -4,7 +4,8 @@
 //!
 //! Preparation binds all workflow and dependency bytes before execution. Fixture
 //! document declarations assert these selections and cannot replace them. Results
-//! identify fixture-provided Formspec/service behavior; they establish neither
+//! identify selected native or fixture Formspec processing and fixture services;
+//! they establish neither
 //! hosted execution nor durable recovery. Studio consumers use this module only.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -12,6 +13,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use integrity_canonical::{DigestAlgorithm, canonical_json_bytes, compute_digest};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+pub use wos_formspec_binding::selected::DefinitionSelection;
+use wos_formspec_binding::selected::{
+    ImmutableFormspecProcessor, SelectedDocument, SelectedDocumentKind,
+};
 
 use crate::{
     ConformanceError, ConformanceFixture, ConformanceTrace, Delta, Event, Outcome, TraceStep,
@@ -48,6 +53,9 @@ pub struct ResolvedDependency {
     pub version: Option<String>,
     /// Original immutable JSON bytes.
     pub bytes: Vec<u8>,
+    /// Exact Definition pairing for a selected native Mapping.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub definition: Option<DefinitionSelection>,
 }
 
 /// Independently reviewed expected value at an observed JSON pointer.
@@ -61,7 +69,8 @@ pub struct ObservationExpectation {
 }
 
 /// Complete inputs for one authoring scenario.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReplayRequest {
     /// Actual selected workflow snapshot bytes.
     pub candidate_bytes: Vec<u8>,
@@ -91,6 +100,9 @@ pub struct DocumentIdentity {
     pub raw_sha256: String,
     /// SHA-256 of canonical JSON bytes.
     pub canonical_sha256: String,
+    /// Exact Definition pairing, independent of the Mapping version range.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub definition: Option<DefinitionSelection>,
 }
 
 /// Frozen inputs accepted by preparation; execution never rereads paths.
@@ -102,13 +114,36 @@ pub struct PreparedReplay {
     clock_start_ms: u64,
     expectations: Vec<ObservationExpectation>,
     runtime_identity: Value,
-    retained_bytes: BTreeMap<String, Vec<u8>>,
+    retained_bytes: BTreeMap<(String, String, Option<String>), Vec<u8>>,
+    selected_formspec: Option<ImmutableFormspecProcessor>,
+    assert_transitions: bool,
+    reference_adapters: Option<std::sync::Arc<crate::reference_replay::ReferenceReplayAdapters>>,
 }
 
 impl PreparedReplay {
+    /// Returns the complete immutable native preparation identity.
+    pub fn identity(&self) -> &str {
+        &self.identity
+    }
+    /// Returns the selected native source and configuration identity.
+    pub fn runtime_identity(&self) -> &Value {
+        &self.runtime_identity
+    }
     /// Returns the exact retained bytes selected for a document role.
     pub fn input_bytes(&self, role: &str) -> Option<&[u8]> {
-        self.retained_bytes.get(role).map(Vec::as_slice)
+        let mut matches = self
+            .retained_bytes
+            .iter()
+            .filter(|((selected, _, _), _)| selected == role);
+        let (_, bytes) = matches.next()?;
+        matches.next().is_none().then_some(bytes.as_slice())
+    }
+
+    /// Returns bytes for one exact selected document identity.
+    pub fn input_bytes_for(&self, role: &str, url: &str, version: Option<&str>) -> Option<&[u8]> {
+        self.retained_bytes
+            .get(&(role.into(), url.into(), version.map(str::to_owned)))
+            .map(Vec::as_slice)
     }
 }
 
@@ -118,14 +153,20 @@ impl PreparedReplay {
 pub struct RuntimeSnapshot {
     /// Active state configuration in native document order.
     pub configuration: Vec<String>,
+    /// Actual retained native governance state.
+    pub governance_state: Value,
     /// Actual current case values.
     pub case_state: Value,
     /// Service outputs read from the saved native runtime record.
     pub step_results: Vec<wos_runtime::store::StepResultRecord>,
+    /// Actual native creation/completion/artifact association for every task.
+    pub task_history: Value,
     /// Native active-task records.
     pub active_tasks: Value,
     /// Native pending-timer records.
     pub timers: Value,
+    /// Actual ordered timer creation/firing/cancellation associations.
+    pub timer_history: Value,
     /// Actual selected process definition version.
     pub definition_version: String,
     /// Observed provenance cursor used to retain each attempt's records.
@@ -158,6 +199,10 @@ pub struct ReplayAttempt {
     pub submission_result: Option<Value>,
     /// Native migration outcome, retained before any later readback failure.
     pub migration_result: Option<Value>,
+    /// Actual typed governed operation result, including refusals.
+    pub governance_result: Option<Value>,
+    /// Original and resolved native recipe/signature inputs.
+    pub recipe_resolution: Option<Value>,
     /// Actual typed unsupported-operation refusals; never inferred from payload fields.
     pub refusals: Vec<String>,
     /// Native runtime error, when the operation rejected with an error.
@@ -245,6 +290,7 @@ fn document_identity(
         version,
         raw_sha256: digest(bytes),
         canonical_sha256: content_digest(value)?,
+        definition: None,
     })
 }
 
@@ -277,10 +323,24 @@ fn check_supported_workflow(value: &Value, role: &str) -> Result<(), Conformance
     }
     if !kernel.bindings.is_empty() {
         return Err(refused(
-            "unsupported-governed-output-binding: canonical OutputBinding execution is unavailable; task Formspec mapping is a separate fixture capability",
+            "unsupported-governed-output-binding: canonical OutputBinding execution is unavailable; task Formspec mapping is a separate binding capability",
         ));
     }
-    for field in ["custody", "assurance", "intake"] {
+    if let Some(custody) = value.get("custody") {
+        let neutral = custody.as_object().is_some_and(|block| {
+            block.is_empty()
+                || (block.len() == 1
+                    && block
+                        .get("anchorRequirements")
+                        .is_some_and(|anchors| anchors.as_array().is_some_and(Vec::is_empty)))
+        });
+        if !neutral {
+            return Err(refused(format!(
+                "unsupported-embedded-behavior {role}.custody"
+            )));
+        }
+    }
+    for field in ["assurance", "intake"] {
         if value.get(field).is_some_and(|block| !block.is_null()) {
             return Err(refused(format!(
                 "unsupported-embedded-behavior {role}.{field}"
@@ -302,6 +362,13 @@ fn check_supported_workflow(value: &Value, role: &str) -> Result<(), Conformance
 /// Returns a named refusal for substituted/unresolved inputs, unsupported behavior,
 /// invalid JSON, missing workflow identity, unsupported observations, or clock overflow.
 pub fn prepare_replay(request: ReplayRequest) -> Result<PreparedReplay, ConformanceError> {
+    prepare_replay_with_reference(request, None)
+}
+
+pub(crate) fn prepare_replay_with_reference(
+    request: ReplayRequest,
+    reference: Option<&crate::reference_replay::ReferenceReplayAdapters>,
+) -> Result<PreparedReplay, ConformanceError> {
     for required in &request.required_observations {
         if !SUPPORTED_OBSERVATIONS.contains(&required.as_str()) {
             return Err(refused(format!("unsupported-observation {required}")));
@@ -323,7 +390,11 @@ pub fn prepare_replay(request: ReplayRequest) -> Result<PreparedReplay, Conforma
     let version = candidate["version"]
         .as_str()
         .ok_or_else(|| refused("missing-candidate-version"))?;
-    let fixture_value = parse(request.fixture_json.as_bytes(), "fixture")?;
+    let original_fixture_value = parse(request.fixture_json.as_bytes(), "fixture")?;
+    let mut fixture_value = original_fixture_value.clone();
+    if let Some(reference) = reference {
+        crate::reference_replay::lower_time_advances(&mut fixture_value, &reference.time_advances)?;
+    }
     check_fields(
         &fixture_value,
         &[
@@ -358,15 +429,85 @@ pub fn prepare_replay(request: ReplayRequest) -> Result<PreparedReplay, Conforma
     {
         check_fields(
             entry,
-            &["event", "actor", "data", "delay", "task_submission"],
+            &[
+                "event",
+                "actor",
+                "data",
+                "delay",
+                "task_submission",
+                "governance_operation",
+                "governance_recipe",
+            ],
             "event",
         )?;
+        let governed = entry
+            .get("governance_operation")
+            .or_else(|| entry.get("governance_recipe"));
+        if let Some(recipe) = entry.get("governance_recipe") {
+            crate::reference_replay::validate_reference_fragment("GovernanceRecipe", recipe)?;
+        }
+        if governed.is_some() {
+            if reference.is_none()
+                || ["task_submission", "data"]
+                    .iter()
+                    .any(|field| entry.get(*field).is_some())
+                || (entry.get("governance_operation").is_some()
+                    && entry.get("governance_recipe").is_some())
+                || governed.is_some_and(Value::is_null)
+            {
+                return Err(refused(
+                    "native governance request requires exclusive selected reference capability",
+                ));
+            }
+        }
         if let Some(submission) = entry.get("task_submission") {
             check_fields(
                 submission,
-                &["task_ref", "response", "idempotency_token"],
+                &[
+                    "task_ref",
+                    "response",
+                    "idempotency_token",
+                    "signature_recipe",
+                ],
                 "task_submission",
             )?;
+            if submission.get("signature_recipe").is_some()
+                && (reference.is_none() || submission["signature_recipe"].is_null())
+            {
+                return Err(refused(
+                    "native signature recipe requires selected reference capability",
+                ));
+            }
+            if let Some(recipe) = submission.get("signature_recipe") {
+                crate::reference_replay::validate_reference_fragment("SignatureRecipe", recipe)?;
+                let capability = recipe["signingCapabilityRef"]
+                    .as_str()
+                    .expect("schema-validated recipe reference");
+                if reference.is_none_or(|adapters| {
+                    !adapters
+                        .fixture_signing_capabilities
+                        .iter()
+                        .any(|selected| selected.id == capability)
+                }) {
+                    return Err(refused("unselected signing recipe capability"));
+                }
+                let response = &submission["response"];
+                if response.get("authoredSignatures").is_some()
+                    || response.get("sourceResponseRef").is_some()
+                    || [
+                        "determinationId",
+                        "determinationSnapshotSha256",
+                        "determinationFiringRecordId",
+                        "signatureTaskId",
+                    ]
+                    .iter()
+                    .any(|field| response["data"].get(*field).is_some())
+                {
+                    return Err(refused(
+                        "signature recipe cannot prepopulate native associations or verdicts",
+                    ));
+                }
+            }
             if entry
                 .get("actor")
                 .and_then(Value::as_str)
@@ -409,12 +550,66 @@ pub fn prepare_replay(request: ReplayRequest) -> Result<PreparedReplay, Conforma
         }
     }
     let mut retained_bytes = BTreeMap::from([
-        ("kernel".into(), request.candidate_bytes.clone()),
-        ("fixture".into(), request.fixture_json.as_bytes().to_vec()),
+        (
+            ("kernel".into(), url.into(), Some(version.into())),
+            request.candidate_bytes.clone(),
+        ),
+        (
+            ("fixture".into(), fixture.id.clone(), None),
+            request.fixture_json.as_bytes().to_vec(),
+        ),
     ]);
     let mut identities = BTreeSet::from([(url.to_string(), Some(version.to_string()))]);
+    let mut formspec_identities = BTreeSet::new();
+    let mut formspec_documents = Vec::new();
     for dependency in request.dependencies {
         let role = &dependency.role;
+        if matches!(role.as_str(), "definition" | "mapping") {
+            let value = parse(&dependency.bytes, role)?;
+            let selected_version = dependency
+                .version
+                .as_ref()
+                .ok_or_else(|| refused("selected Formspec version missing"))?;
+            if !formspec_identities.insert((
+                role.clone(),
+                dependency.url.clone(),
+                dependency.version.clone(),
+            )) {
+                return Err(refused(format!("duplicate-dependency-identity {role}")));
+            }
+            let mut identity = document_identity(
+                role,
+                &dependency.url,
+                dependency.version.clone(),
+                &dependency.bytes,
+                &value,
+            )?;
+            identity.definition = dependency.definition.clone();
+            inputs.push(identity);
+            retained_bytes.insert(
+                (
+                    role.clone(),
+                    dependency.url.clone(),
+                    dependency.version.clone(),
+                ),
+                dependency.bytes.clone(),
+            );
+            formspec_documents.push(SelectedDocument {
+                kind: if role == "definition" {
+                    SelectedDocumentKind::Definition
+                } else {
+                    SelectedDocumentKind::Mapping
+                },
+                url: dependency.url,
+                version: selected_version.clone(),
+                bytes: dependency.bytes,
+                definition: dependency.definition,
+            });
+            continue;
+        }
+        if dependency.definition.is_some() {
+            return Err(refused(format!("unexpected-definition-pairing {role}")));
+        }
         if selected.contains_key(role)
             || role == "integration"
             || role == "ai"
@@ -505,7 +700,14 @@ pub fn prepare_replay(request: ReplayRequest) -> Result<PreparedReplay, Conforma
                 return Err(refused("missing-notifications-block"));
             }
         }
-        retained_bytes.insert(role.clone(), dependency.bytes.clone());
+        retained_bytes.insert(
+            (
+                role.clone(),
+                dependency.url.clone(),
+                dependency.version.clone(),
+            ),
+            dependency.bytes.clone(),
+        );
         inputs.push(document_identity(
             role,
             &dependency.url,
@@ -567,30 +769,67 @@ pub fn prepare_replay(request: ReplayRequest) -> Result<PreparedReplay, Conforma
         .collect();
     fixture.inline_documents = selected.into_iter().collect();
     // Construct now to reject unsupported embedded input shapes before execution.
-    WorkflowEngine::from_resolved(&fixture, request.clock_start_ms, true).map_err(|error| {
-        match error {
-            ConformanceError::UnsupportedOperation(_) => error,
-            other => refused(format!("unsupported-runtime-configuration: {other}")),
+    let selected_formspec = if formspec_documents.is_empty() {
+        None
+    } else {
+        if !fixture.definition_errors.is_empty() || !fixture.contract_outcomes.is_empty() {
+            return Err(refused(
+                "selected Formspec cannot use canned validation outcomes",
+            ));
         }
+        Some(
+            ImmutableFormspecProcessor::new(&formspec_documents)
+                .map_err(|error| refused(error.to_string()))?,
+        )
+    };
+    WorkflowEngine::from_reference(
+        &fixture,
+        request.clock_start_ms,
+        true,
+        selected_formspec.as_ref(),
+        reference,
+        &request.candidate_bytes,
+    )
+    .map_err(|error| match error {
+        ConformanceError::UnsupportedOperation(_) => error,
+        other => refused(format!("unsupported-runtime-configuration: {other}")),
     })?;
     inputs.push(document_identity(
         "fixture",
         &fixture.id,
         None,
         request.fixture_json.as_bytes(),
-        &fixture_value,
+        &original_fixture_value,
     )?);
-    inputs.sort_by(|left, right| left.role.cmp(&right.role));
+    if reference.is_some_and(|reference| !reference.time_advances.is_empty()) {
+        let lowered =
+            serde_json::to_vec(&fixture_value).map_err(|error| refused(error.to_string()))?;
+        inputs.push(document_identity(
+            "loweredFixture",
+            &fixture.id,
+            None,
+            &lowered,
+            &fixture_value,
+        )?);
+        retained_bytes.insert(("loweredFixture".into(), fixture.id.clone(), None), lowered);
+    }
+    inputs.sort_by(|left, right| {
+        (&left.role, &left.url, &left.version).cmp(&(&right.role, &right.url, &right.version))
+    });
     let schema = include_bytes!("../../../schemas/wos-workflow.schema.json");
     let schema_value = parse(schema, "workflow-schema")?;
-    let runtime_identity = json!({
+    let mut runtime_identity = json!({
         "engine":"in-memory WosRuntime", "packageVersion":env!("CARGO_PKG_VERSION"),
         "compiledSource":serde_json::from_str::<Value>(env!("WOS_REPLAY_BUILD_IDENTITY")).map_err(|error| refused(error.to_string()))?,
         "schema":{"id":schema_value["$id"], "rawSha256":digest(schema)},
         "canonicalization":integrity_canonical::CANONICALIZATION_PRIMITIVE,
-        "digestAlgorithm":"sha-256", "fixtureFormspecProcessor":true, "fixtureService":true, "fixtureContractValidator":true,
+        "digestAlgorithm":"sha-256", "fixtureFormspecProcessor":selected_formspec.is_none(), "fixtureService":true, "fixtureContractValidator":true,
         "taskPresenter":"no-op", "agentOutputs":"fixture event payloads; native policy stage only; no model invocation, definition validation, human review or governed output commit", "accessControl":FIXTURE_ACCESS_POLICY, "clockStartMs":request.clock_start_ms
     });
+    if let Some(reference) = reference {
+        runtime_identity["referenceAdapters"] =
+            serde_json::to_value(reference).map_err(|error| refused(error.to_string()))?;
+    }
     let identity = content_digest(&json!({"inputs":inputs,"runtime":runtime_identity,
         "requiredObservations":request.required_observations,"expectations":request.expectations}))?;
     Ok(PreparedReplay {
@@ -601,6 +840,10 @@ pub fn prepare_replay(request: ReplayRequest) -> Result<PreparedReplay, Conforma
         expectations: request.expectations,
         runtime_identity,
         retained_bytes,
+        selected_formspec,
+        assert_transitions: reference.is_none()
+            || fixture_value.get("expected_transitions").is_some(),
+        reference_adapters: reference.cloned().map(std::sync::Arc::new),
     })
 }
 
@@ -616,14 +859,25 @@ pub fn prepare_replay(request: ReplayRequest) -> Result<PreparedReplay, Conforma
 /// Creation failures, operation rejections, and readback failures remain in the
 /// returned evidence; absent observations are nullable and make the run refuse.
 pub fn replay(prepared: &PreparedReplay) -> Result<ReplayResult, ConformanceError> {
-    let mut engine =
-        WorkflowEngine::from_resolved(&prepared.fixture, prepared.clock_start_ms, true)?;
+    let original_workflow = prepared
+        .input_bytes("kernel")
+        .ok_or_else(|| refused("selected workflow bytes absent"))?;
+    let mut engine = WorkflowEngine::from_reference(
+        &prepared.fixture,
+        prepared.clock_start_ms,
+        true,
+        prepared.selected_formspec.as_ref(),
+        prepared.reference_adapters.as_deref(),
+        original_workflow,
+    )?;
     let result = match engine.execute(&prepared.fixture) {
         Ok(result) => result,
         Err(error) => return Ok(creation_failure(prepared, error, engine.initialization())),
     };
     let mut failures = result.failures;
-    if result.transitions.len() != prepared.fixture.expected_transitions.len() {
+    if prepared.assert_transitions
+        && result.transitions.len() != prepared.fixture.expected_transitions.len()
+    {
         failures.push(format!(
             "transition count: expected {}, observed {}",
             prepared.fixture.expected_transitions.len(),
@@ -684,7 +938,7 @@ pub fn replay(prepared: &PreparedReplay) -> Result<ReplayResult, ConformanceErro
         identity: prepared.identity.clone(),
         inputs: prepared.inputs.clone(),
         runtime_identity: prepared.runtime_identity.clone(),
-        execution: execution_labels(),
+        execution: execution_labels(prepared),
         failures,
         refusals,
         differences,
@@ -716,7 +970,7 @@ fn creation_failure(
         identity: prepared.identity.clone(),
         inputs: prepared.inputs.clone(),
         runtime_identity: prepared.runtime_identity.clone(),
-        execution: execution_labels(),
+        execution: execution_labels(prepared),
         failures: vec![error.clone()],
         refusals: vec!["not-run: native process creation failed".into()],
         differences: Vec::new(),
@@ -729,9 +983,11 @@ fn creation_failure(
     }
 }
 
-fn execution_labels() -> Value {
-    json!({"runtime":"in-memory WosRuntime","formspec":"FixtureFormspecProcessor (canned definition validation and response mapping)",
-        "services":"fixture-provided canned response", "contractValidator":"fixture-configured port results; no external provider qualification", "notifications":"required notice delivery unsupported; reference admission refuses before process creation (fs-hltb)", "taskPresentation":"no-op", "agentOutputs":"fixture event payloads; native policy stage only; no model invocation, definition validation, human review or governed output commit", "accessControl":FIXTURE_ACCESS_POLICY, "hosted":false,"durable":false})
+fn execution_labels(prepared: &PreparedReplay) -> Value {
+    let selected = prepared.selected_formspec.is_some();
+    json!({"runtime":"in-memory WosRuntime","fixtureFormspecProcessor":!selected,
+        "formspec":if selected {"FormspecBinding + ImmutableFormspecProcessor (selected native Definition evaluation and Mapping)"} else {"FixtureFormspecProcessor (canned definition validation and response mapping)"},
+        "services":"fixture-provided canned response", "contractValidator":"fixture-configured port results; no external provider qualification", "notifications":if prepared.reference_adapters.is_some() {"selected deterministic local fixture transport; native qualified-receipt admission; no hosted/provider delivery qualification"} else {"required notice delivery unsupported; reference admission refuses before process creation (fs-hltb)"}, "taskPresentation":"no-op", "agentOutputs":"fixture event payloads; native policy stage only; no model invocation, definition validation, human review or governed output commit", "accessControl":FIXTURE_ACCESS_POLICY, "hosted":false,"durable":false})
 }
 
 fn trace_attempts(
@@ -834,3 +1090,30 @@ fn trace_attempts(
     }
     trace
 }
+
+#[doc(inline)]
+pub use crate::native_observations::{
+    NativeAttemptKind, NativeAttemptSelector, NativeComparison, NativeResolution, NativeSelector,
+    NativeSubject, compare_observation, compare_provenance_observation, resolve_observation,
+};
+
+#[doc(inline)]
+pub use crate::reference_replay::{
+    FixtureInvocation, FixtureNoticeTransport, FixtureReceiptSigner, FixtureSigningCapability,
+    FixtureTransportFailure, NativeTimeAdvance, PreparedReferenceReplay, ReferenceReplayAdapters,
+    ReferenceScope, prepare_reference_replay, replay_reference,
+};
+
+#[doc(inline)]
+pub use crate::reference_recipes::{DeterminationTarget, GovernanceRecipe, SignatureRecipe};
+
+#[doc(inline)]
+pub use crate::reference_comparisons::{
+    CohortClassification, CohortMember, CohortMemberResult, EngineeringClaim,
+    EngineeringNoticeReview, EngineeringObservation, EngineeringReviewer, EngineeringVerdict,
+    MetricDescriptor, MetricMemberDescriptor, MetricReview, NativeReplaySession,
+    PairedApprovalRateRequest, PairedApprovalRateResult, PairedReplayMembers,
+    RenderedNoticeComparison, RenderedNoticeReviewAssertion, ReviewedNoticeVariant,
+    begin_reference_replay, compare_paired_approval_rates, compare_rendered_notice,
+    paired_metric_descriptor,
+};

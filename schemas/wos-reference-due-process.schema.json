@@ -1,0 +1,2642 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json",
+  "title": "WOS native reference due-process profile",
+  "description": "Closed referenceDueProcess/1 policy, native requests, immutable facts, and fixture evidence. Hosted delivery and legal qualification remain unsupported.",
+  "$ref": "#/$defs/DueProcessExecution",
+  "$defs": {
+    "TransitionLocation": {
+      "type": "object",
+      "description": "Closed TransitionLocation shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "statePointer",
+        "transitionIndex"
+      ],
+      "properties": {
+        "statePointer": {
+          "$ref": "#/$defs/Pointer",
+          "description": "Retained statePointer value under referenceDueProcess/1."
+        },
+        "transitionIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Retained transitionIndex value under referenceDueProcess/1."
+        }
+      }
+    },
+    "FiringRef": {
+      "type": "object",
+      "description": "Closed FiringRef shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "definitionSha256",
+        "location",
+        "provenanceRecordId"
+      ],
+      "properties": {
+        "definitionSha256": {
+          "$ref": "#/$defs/Digest",
+          "description": "Retained definitionSha256 value under referenceDueProcess/1."
+        },
+        "location": {
+          "$ref": "#/$defs/TransitionLocation",
+          "description": "Retained location value under referenceDueProcess/1."
+        },
+        "provenanceRecordId": {
+          "$ref": "#/$defs/RecordId",
+          "description": "Retained provenanceRecordId value under referenceDueProcess/1."
+        }
+      }
+    },
+    "SourceRef": {
+      "type": "object",
+      "description": "Closed SourceRef shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "sourceVersion",
+        "sectionAnchor",
+        "retainedSha256"
+      ],
+      "properties": {
+        "sourceVersion": {
+          "$ref": "#/$defs/Id",
+          "description": "Retained sourceVersion value under referenceDueProcess/1."
+        },
+        "sectionAnchor": {
+          "type": "string",
+          "description": "Retained sectionAnchor value under referenceDueProcess/1.",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "retainedSha256": {
+          "$ref": "#/$defs/Digest",
+          "description": "Retained retainedSha256 value under referenceDueProcess/1."
+        }
+      }
+    },
+    "ReviewRef": {
+      "type": "object",
+      "description": "Closed ReviewRef shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "sha256"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Id",
+          "description": "Retained id value under referenceDueProcess/1."
+        },
+        "sha256": {
+          "$ref": "#/$defs/Digest",
+          "description": "Retained sha256 value under referenceDueProcess/1."
+        }
+      }
+    },
+    "CaseChange": {
+      "type": "object",
+      "description": "Closed CaseChange shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "casePointer",
+        "value"
+      ],
+      "properties": {
+        "casePointer": {
+          "$ref": "#/$defs/Pointer",
+          "description": "Retained casePointer value under referenceDueProcess/1."
+        },
+        "value": {
+          "$ref": "#/$defs/Scalar",
+          "description": "Retained value value under referenceDueProcess/1."
+        }
+      }
+    },
+    "CaseAlternative": {
+      "type": "object",
+      "description": "Closed CaseAlternative shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "changes",
+        "description",
+        "sourceRefs"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Id",
+          "description": "Retained id value under referenceDueProcess/1."
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CaseChange"
+          },
+          "description": "Retained changes value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "description": {
+          "type": "string",
+          "description": "Retained description value under referenceDueProcess/1.",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "sourceRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "description": "Retained sourceRefs value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "ReasonBinding": {
+      "type": "object",
+      "description": "Closed ReasonBinding shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "tableRef",
+        "rowId",
+        "reasonCode",
+        "sourceAuthority",
+        "description",
+        "sourceRefs"
+      ],
+      "properties": {
+        "tableRef": {
+          "$ref": "#/$defs/Id",
+          "description": "Retained tableRef value under referenceDueProcess/1."
+        },
+        "rowId": {
+          "type": "string",
+          "description": "Retained rowId value under referenceDueProcess/1.",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "reasonCode": {
+          "$ref": "#/$defs/Id",
+          "description": "Retained reasonCode value under referenceDueProcess/1."
+        },
+        "sourceAuthority": {
+          "$ref": "#/$defs/SourceAuthority",
+          "description": "Retained sourceAuthority value under referenceDueProcess/1."
+        },
+        "description": {
+          "type": "string",
+          "description": "Retained description value under referenceDueProcess/1.",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "sourceRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "description": "Retained sourceRefs value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "ExplanationBinding": {
+      "type": "object",
+      "description": "Closed ExplanationBinding shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "tableRef",
+        "outputColumn",
+        "beneficialOutput",
+        "reasons",
+        "positive",
+        "negative"
+      ],
+      "properties": {
+        "tableRef": {
+          "$ref": "#/$defs/Id",
+          "description": "Retained tableRef value under referenceDueProcess/1."
+        },
+        "outputColumn": {
+          "$ref": "#/$defs/Id",
+          "description": "Retained outputColumn value under referenceDueProcess/1."
+        },
+        "beneficialOutput": {
+          "$ref": "#/$defs/Scalar",
+          "description": "Retained beneficialOutput value under referenceDueProcess/1."
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReasonBinding"
+          },
+          "description": "Retained reasons value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "positive": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CaseAlternative"
+          },
+          "description": "Retained positive value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "negative": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CaseAlternative"
+          },
+          "description": "Retained negative value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "DeterminationBinding": {
+      "type": "object",
+      "description": "Closed DeterminationBinding shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "transition",
+        "pendingStatePointer",
+        "appliedStatePointers",
+        "servicePointers",
+        "signatureTaskRef",
+        "explanation",
+        "sourceRefs"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Id",
+          "description": "Retained id value under referenceDueProcess/1."
+        },
+        "transition": {
+          "$ref": "#/$defs/TransitionLocation",
+          "description": "Retained transition value under referenceDueProcess/1."
+        },
+        "pendingStatePointer": {
+          "$ref": "#/$defs/Pointer",
+          "description": "Retained pendingStatePointer value under referenceDueProcess/1."
+        },
+        "appliedStatePointers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Pointer"
+          },
+          "description": "Retained appliedStatePointers value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "servicePointers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Pointer"
+          },
+          "description": "Retained servicePointers value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "signatureTaskRef": {
+          "$ref": "#/$defs/Id",
+          "description": "Retained signatureTaskRef value under referenceDueProcess/1."
+        },
+        "explanation": {
+          "$ref": "#/$defs/ExplanationBinding",
+          "description": "Retained explanation value under referenceDueProcess/1."
+        },
+        "sourceRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "description": "Retained sourceRefs value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "OperationBinding": {
+      "type": "object",
+      "description": "Closed OperationBinding shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "determinationRef",
+        "actors",
+        "requiredStatePointers",
+        "triggerEvent",
+        "transition",
+        "sourceRefs"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Id",
+          "description": "Retained id value under referenceDueProcess/1."
+        },
+        "kind": {
+          "$ref": "#/$defs/OperationKind",
+          "description": "Retained kind value under referenceDueProcess/1."
+        },
+        "determinationRef": {
+          "$ref": "#/$defs/Id",
+          "description": "Retained determinationRef value under referenceDueProcess/1."
+        },
+        "actors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Id"
+          },
+          "description": "Retained actors value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "requiredStatePointers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Pointer"
+          },
+          "description": "Retained requiredStatePointers value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "triggerEvent": {
+          "type": "string",
+          "description": "Retained triggerEvent value under referenceDueProcess/1."
+        },
+        "transition": {
+          "$ref": "#/$defs/TransitionLocation",
+          "description": "Retained transition value under referenceDueProcess/1."
+        },
+        "sourceRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "description": "Retained sourceRefs value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "NoticeTemplateSelection": {
+      "type": "object",
+      "description": "Closed NoticeTemplateSelection shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "locale",
+        "templateKey",
+        "review"
+      ],
+      "properties": {
+        "locale": {
+          "type": "string",
+          "description": "Retained locale value under referenceDueProcess/1."
+        },
+        "templateKey": {
+          "$ref": "#/$defs/Id",
+          "description": "Retained templateKey value under referenceDueProcess/1."
+        },
+        "review": {
+          "$ref": "#/$defs/ReviewRef",
+          "description": "Retained review value under referenceDueProcess/1."
+        }
+      }
+    },
+    "NoticePolicy": {
+      "type": "object",
+      "description": "Closed NoticePolicy shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "recipientPointer",
+        "deliveryChannel",
+        "templates",
+        "evidenceClass",
+        "appealAnchor",
+        "graceAnchor",
+        "sourceRefs"
+      ],
+      "properties": {
+        "recipientPointer": {
+          "$ref": "#/$defs/Pointer",
+          "description": "Retained recipientPointer value under referenceDueProcess/1."
+        },
+        "deliveryChannel": {
+          "$ref": "#/$defs/DeliveryChannel",
+          "description": "Retained deliveryChannel value under referenceDueProcess/1."
+        },
+        "templates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NoticeTemplateSelection"
+          },
+          "description": "Retained templates value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "evidenceClass": {
+          "$ref": "#/$defs/EvidenceClass",
+          "description": "Retained evidenceClass value under referenceDueProcess/1."
+        },
+        "appealAnchor": {
+          "$ref": "#/$defs/AppealAnchor",
+          "description": "Retained appealAnchor value under referenceDueProcess/1."
+        },
+        "graceAnchor": {
+          "$ref": "#/$defs/GraceAnchor",
+          "description": "Retained graceAnchor value under referenceDueProcess/1."
+        },
+        "sourceRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "description": "Retained sourceRefs value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "HearingDeadline": {
+      "type": "object",
+      "description": "Closed HearingDeadline shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "calendarDays",
+        "purpose"
+      ],
+      "properties": {
+        "calendarDays": {
+          "$ref": "#/$defs/Days"
+        },
+        "purpose": {
+          "$ref": "#/$defs/HearingPurpose",
+          "description": "Retained purpose value under referenceDueProcess/1."
+        }
+      }
+    },
+    "ContinuationPolicy": {
+      "type": "object",
+      "description": "Closed ContinuationPolicy shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "choice",
+        "scope",
+        "endsOn"
+      ],
+      "properties": {
+        "choice": {
+          "$ref": "#/$defs/ContinuationChoicePolicy",
+          "description": "Retained choice value under referenceDueProcess/1."
+        },
+        "scope": {
+          "$ref": "#/$defs/ContinuationScope",
+          "description": "Retained scope value under referenceDueProcess/1."
+        },
+        "endsOn": {
+          "$ref": "#/$defs/ContinuationEnd",
+          "description": "Retained endsOn value under referenceDueProcess/1."
+        }
+      }
+    },
+    "AppealPolicy": {
+      "type": "object",
+      "description": "Closed AppealPolicy shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "channels",
+        "standingActors",
+        "reviewerActors",
+        "excludedDeterminationActors",
+        "hearingDeadline",
+        "continuation",
+        "sourceRefs"
+      ],
+      "properties": {
+        "channels": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Channel"
+          },
+          "description": "Retained channels value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "standingActors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Id"
+          },
+          "description": "Retained standingActors value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "reviewerActors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Id"
+          },
+          "description": "Retained reviewerActors value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "excludedDeterminationActors": {
+          "$ref": "#/$defs/ExcludedDeterminationActors",
+          "description": "Retained excludedDeterminationActors value under referenceDueProcess/1."
+        },
+        "hearingDeadline": {
+          "$ref": "#/$defs/HearingDeadline",
+          "description": "Retained hearingDeadline value under referenceDueProcess/1."
+        },
+        "continuation": {
+          "$ref": "#/$defs/ContinuationPolicy",
+          "description": "Retained continuation value under referenceDueProcess/1."
+        },
+        "sourceRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "description": "Retained sourceRefs value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "ExtensionPolicy": {
+      "type": "object",
+      "description": "Closed ExtensionPolicy shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "timerId",
+        "allowedStatePointers",
+        "maxCumulativeCalendarDays",
+        "sourceRefs"
+      ],
+      "properties": {
+        "timerId": {
+          "$ref": "#/$defs/Id",
+          "description": "Retained timerId value under referenceDueProcess/1."
+        },
+        "allowedStatePointers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Pointer"
+          },
+          "description": "Retained allowedStatePointers value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "maxCumulativeCalendarDays": {
+          "$ref": "#/$defs/Days"
+        },
+        "sourceRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "description": "Retained sourceRefs value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "Limits": {
+      "type": "object",
+      "description": "Closed Limits shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "maxDeterminations",
+        "maxNotices",
+        "maxAppeals",
+        "maxOperations",
+        "maxOutstandingNoticeWork",
+        "maxTransportAttempts",
+        "maxNoticeBytes"
+      ],
+      "properties": {
+        "maxDeterminations": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Retained maxDeterminations value under referenceDueProcess/1.",
+          "maximum": 100000
+        },
+        "maxNotices": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Retained maxNotices value under referenceDueProcess/1.",
+          "maximum": 100000
+        },
+        "maxAppeals": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Retained maxAppeals value under referenceDueProcess/1.",
+          "maximum": 100000
+        },
+        "maxOperations": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Retained maxOperations value under referenceDueProcess/1.",
+          "maximum": 100000
+        },
+        "maxOutstandingNoticeWork": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Retained maxOutstandingNoticeWork value under referenceDueProcess/1.",
+          "maximum": 100000
+        },
+        "maxTransportAttempts": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Retained maxTransportAttempts value under referenceDueProcess/1.",
+          "maximum": 100000
+        },
+        "maxNoticeBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Retained maxNoticeBytes value under referenceDueProcess/1.",
+          "maximum": 10485760
+        }
+      }
+    },
+    "DueProcessExecution": {
+      "type": "object",
+      "description": "Closed DueProcessExecution shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "determinations",
+        "operations",
+        "notice",
+        "appeal",
+        "limits"
+      ],
+      "properties": {
+        "profile": {
+          "$ref": "#/$defs/ReferenceProfile",
+          "description": "Retained profile value under referenceDueProcess/1."
+        },
+        "determinations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeterminationBinding"
+          },
+          "description": "Retained determinations value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "operations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/OperationBinding"
+          },
+          "description": "Retained operations value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "notice": {
+          "$ref": "#/$defs/NoticePolicy",
+          "description": "Retained notice value under referenceDueProcess/1."
+        },
+        "appeal": {
+          "$ref": "#/$defs/AppealPolicy",
+          "description": "Retained appeal value under referenceDueProcess/1."
+        },
+        "preNoticeExtension": {
+          "$ref": "#/$defs/ExtensionPolicy",
+          "description": "Retained preNoticeExtension value under referenceDueProcess/1."
+        },
+        "limits": {
+          "$ref": "#/$defs/Limits",
+          "description": "Retained limits value under referenceDueProcess/1."
+        }
+      }
+    },
+    "GovernanceActor": {
+      "type": "object",
+      "description": "Closed GovernanceActor shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "declaredActor",
+        "actingActor"
+      ],
+      "properties": {
+        "declaredActor": {
+          "$ref": "#/$defs/Id",
+          "description": "Retained declaredActor value under referenceDueProcess/1."
+        },
+        "actingActor": {
+          "type": "string",
+          "description": "Retained actingActor value under referenceDueProcess/1."
+        }
+      }
+    },
+    "GovernanceRequest": {
+      "type": "object",
+      "description": "Closed GovernanceRequest shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "operationRef",
+        "idempotencyToken",
+        "actor",
+        "command"
+      ],
+      "properties": {
+        "operationRef": {
+          "$ref": "#/$defs/Id",
+          "description": "Retained operationRef value under referenceDueProcess/1."
+        },
+        "determinationId": {
+          "$ref": "#/$defs/RecordId",
+          "description": "Retained determinationId value under referenceDueProcess/1."
+        },
+        "idempotencyToken": {
+          "$ref": "#/$defs/Token",
+          "description": "Retained idempotencyToken value under referenceDueProcess/1."
+        },
+        "actor": {
+          "$ref": "#/$defs/GovernanceActor",
+          "description": "Retained actor value under referenceDueProcess/1."
+        },
+        "command": {
+          "$ref": "#/$defs/GovernanceCommand",
+          "description": "Retained command value under referenceDueProcess/1."
+        }
+      }
+    },
+    "SnapshotRef": {
+      "type": "object",
+      "description": "Closed SnapshotRef shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "recordId",
+        "sha256"
+      ],
+      "properties": {
+        "recordId": {
+          "$ref": "#/$defs/RecordId",
+          "description": "Retained recordId value under referenceDueProcess/1."
+        },
+        "sha256": {
+          "$ref": "#/$defs/SnapshotDigest",
+          "description": "Retained sha256 value under referenceDueProcess/1."
+        }
+      }
+    },
+    "DeterminationSignature": {
+      "type": "object",
+      "description": "Closed DeterminationSignature shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "taskId",
+        "affirmationRecordId",
+        "supervisorHuman",
+        "signedContentSha256"
+      ],
+      "properties": {
+        "taskId": {
+          "type": "string",
+          "description": "Retained taskId value under referenceDueProcess/1."
+        },
+        "affirmationRecordId": {
+          "$ref": "#/$defs/RecordId",
+          "description": "Retained affirmationRecordId value under referenceDueProcess/1."
+        },
+        "supervisorHuman": {
+          "$ref": "#/$defs/Human",
+          "description": "Retained supervisorHuman value under referenceDueProcess/1."
+        },
+        "signedContentSha256": {
+          "$ref": "#/$defs/Digest",
+          "description": "Retained signedContentSha256 value under referenceDueProcess/1."
+        }
+      }
+    },
+    "AdverseEffect": {
+      "type": "object",
+      "description": "Closed AdverseEffect shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "operationRecordId",
+        "appliedAt"
+      ],
+      "properties": {
+        "operationRecordId": {
+          "$ref": "#/$defs/RecordId",
+          "description": "Retained operationRecordId value under referenceDueProcess/1."
+        },
+        "appliedAt": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "Retained appliedAt value under referenceDueProcess/1."
+        }
+      }
+    },
+    "DeterminationState": {
+      "type": "object",
+      "description": "Closed DeterminationState shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "bindingRef",
+        "firing",
+        "determinedAt",
+        "snapshot",
+        "determiningHuman",
+        "servicePointers"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RecordId",
+          "description": "Retained id value under referenceDueProcess/1."
+        },
+        "bindingRef": {
+          "$ref": "#/$defs/Id",
+          "description": "Retained bindingRef value under referenceDueProcess/1."
+        },
+        "firing": {
+          "$ref": "#/$defs/FiringRef",
+          "description": "Retained firing value under referenceDueProcess/1."
+        },
+        "determinedAt": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "Retained determinedAt value under referenceDueProcess/1."
+        },
+        "snapshot": {
+          "$ref": "#/$defs/SnapshotRef",
+          "description": "Retained snapshot value under referenceDueProcess/1."
+        },
+        "determiningHuman": {
+          "$ref": "#/$defs/Human",
+          "description": "Retained determiningHuman value under referenceDueProcess/1."
+        },
+        "servicePointers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Pointer"
+          },
+          "description": "Retained servicePointers value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "signature": {
+          "$ref": "#/$defs/DeterminationSignature",
+          "description": "Retained signature value under referenceDueProcess/1."
+        },
+        "effect": {
+          "$ref": "#/$defs/AdverseEffect",
+          "description": "Retained effect value under referenceDueProcess/1."
+        }
+      }
+    },
+    "NoticeVariant": {
+      "type": "object",
+      "description": "Closed NoticeVariant shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "locale",
+        "templateKey",
+        "review",
+        "body",
+        "bodySha256"
+      ],
+      "properties": {
+        "locale": {
+          "type": "string",
+          "description": "Retained locale value under referenceDueProcess/1."
+        },
+        "templateKey": {
+          "$ref": "#/$defs/Id",
+          "description": "Retained templateKey value under referenceDueProcess/1."
+        },
+        "review": {
+          "$ref": "#/$defs/ReviewRef",
+          "description": "Retained review value under referenceDueProcess/1."
+        },
+        "body": {
+          "type": "string",
+          "description": "Retained body value under referenceDueProcess/1."
+        },
+        "bodySha256": {
+          "$ref": "#/$defs/Digest",
+          "description": "Retained bodySha256 value under referenceDueProcess/1."
+        }
+      }
+    },
+    "TransportAcknowledgement": {
+      "type": "object",
+      "description": "Closed TransportAcknowledgement shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "noticeId",
+        "transportKey",
+        "correlation",
+        "artifactSha256",
+        "channel",
+        "acceptedAt",
+        "adapterResultId"
+      ],
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/AcknowledgementKind",
+          "description": "Retained kind value under referenceDueProcess/1."
+        },
+        "noticeId": {
+          "$ref": "#/$defs/RecordId",
+          "description": "Retained noticeId value under referenceDueProcess/1."
+        },
+        "transportKey": {
+          "$ref": "#/$defs/Token",
+          "description": "Retained transportKey value under referenceDueProcess/1."
+        },
+        "correlation": {
+          "$ref": "#/$defs/Token",
+          "description": "Retained correlation value under referenceDueProcess/1."
+        },
+        "artifactSha256": {
+          "$ref": "#/$defs/Digest",
+          "description": "Retained artifactSha256 value under referenceDueProcess/1."
+        },
+        "channel": {
+          "$ref": "#/$defs/DeliveryChannel",
+          "description": "Retained channel value under referenceDueProcess/1."
+        },
+        "acceptedAt": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "Retained acceptedAt value under referenceDueProcess/1."
+        },
+        "adapterResultId": {
+          "$ref": "#/$defs/Token",
+          "description": "Retained adapterResultId value under referenceDueProcess/1."
+        }
+      }
+    },
+    "QualifiedNoticeReceipt": {
+      "type": "object",
+      "description": "Closed QualifiedNoticeReceipt shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "noticeId",
+        "transportKey",
+        "correlation",
+        "artifactSha256",
+        "channel",
+        "evidenceClass",
+        "qualifiedAt",
+        "adapterResultId"
+      ],
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/ReceiptKind",
+          "description": "Retained kind value under referenceDueProcess/1."
+        },
+        "noticeId": {
+          "$ref": "#/$defs/RecordId",
+          "description": "Retained noticeId value under referenceDueProcess/1."
+        },
+        "transportKey": {
+          "$ref": "#/$defs/Token",
+          "description": "Retained transportKey value under referenceDueProcess/1."
+        },
+        "correlation": {
+          "$ref": "#/$defs/Token",
+          "description": "Retained correlation value under referenceDueProcess/1."
+        },
+        "artifactSha256": {
+          "$ref": "#/$defs/Digest",
+          "description": "Retained artifactSha256 value under referenceDueProcess/1."
+        },
+        "channel": {
+          "$ref": "#/$defs/DeliveryChannel",
+          "description": "Retained channel value under referenceDueProcess/1."
+        },
+        "evidenceClass": {
+          "$ref": "#/$defs/EvidenceClass",
+          "description": "Retained evidenceClass value under referenceDueProcess/1."
+        },
+        "qualifiedAt": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "Retained qualifiedAt value under referenceDueProcess/1."
+        },
+        "adapterResultId": {
+          "$ref": "#/$defs/Token",
+          "description": "Retained adapterResultId value under referenceDueProcess/1."
+        }
+      }
+    },
+    "TransportFailure": {
+      "type": "object",
+      "description": "Closed TransportFailure shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "code"
+      ],
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/FailureKind",
+          "description": "Retained kind value under referenceDueProcess/1."
+        },
+        "code": {
+          "$ref": "#/$defs/FailureCode",
+          "description": "Retained code value under referenceDueProcess/1."
+        }
+      }
+    },
+    "NoticeState": {
+      "type": "object",
+      "description": "Closed NoticeState shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "determinationId",
+        "artifactSha256",
+        "artifactBytesBase64",
+        "issueAt",
+        "appealDeadline",
+        "effectEligibleAt",
+        "recipient",
+        "channel",
+        "variants",
+        "transportKey",
+        "correlation",
+        "status",
+        "attempts",
+        "acknowledgements",
+        "transportResults"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RecordId",
+          "description": "Retained id value under referenceDueProcess/1."
+        },
+        "determinationId": {
+          "$ref": "#/$defs/RecordId",
+          "description": "Retained determinationId value under referenceDueProcess/1."
+        },
+        "artifactSha256": {
+          "$ref": "#/$defs/Digest",
+          "description": "Retained artifactSha256 value under referenceDueProcess/1."
+        },
+        "artifactBytesBase64": {
+          "type": "string",
+          "description": "Retained artifactBytesBase64 value under referenceDueProcess/1."
+        },
+        "issueAt": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "Retained issueAt value under referenceDueProcess/1."
+        },
+        "appealDeadline": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "Retained appealDeadline value under referenceDueProcess/1."
+        },
+        "effectEligibleAt": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "Retained effectEligibleAt value under referenceDueProcess/1."
+        },
+        "recipient": {
+          "type": "string",
+          "description": "Retained recipient value under referenceDueProcess/1."
+        },
+        "channel": {
+          "$ref": "#/$defs/DeliveryChannel",
+          "description": "Retained channel value under referenceDueProcess/1."
+        },
+        "variants": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NoticeVariant"
+          },
+          "description": "Retained variants value under referenceDueProcess/1."
+        },
+        "transportKey": {
+          "$ref": "#/$defs/Token",
+          "description": "Retained transportKey value under referenceDueProcess/1."
+        },
+        "correlation": {
+          "$ref": "#/$defs/Token",
+          "description": "Retained correlation value under referenceDueProcess/1."
+        },
+        "status": {
+          "$ref": "#/$defs/NoticeStatus",
+          "description": "Retained status value under referenceDueProcess/1."
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Retained attempts value under referenceDueProcess/1."
+        },
+        "acknowledgements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TransportAcknowledgement"
+          },
+          "description": "Retained acknowledgements value under referenceDueProcess/1."
+        },
+        "receipt": {
+          "$ref": "#/$defs/QualifiedNoticeReceipt",
+          "description": "Retained receipt value under referenceDueProcess/1."
+        },
+        "failure": {
+          "$ref": "#/$defs/TransportFailure",
+          "description": "Retained failure value under referenceDueProcess/1."
+        },
+        "transportResults": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TransportResult"
+          },
+          "uniqueItems": true,
+          "description": "Distinct actual typed execute or lookup results in first saved runtime observation order. This diagnostic set is bounded by saved attempt reservations and grants no delivery qualification or invocation count."
+        }
+      }
+    },
+    "HearingSchedule": {
+      "type": "object",
+      "description": "Closed HearingSchedule shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "operationRecordId",
+        "scheduledAt",
+        "scheduledFor",
+        "reviewerActor",
+        "reviewerHuman"
+      ],
+      "properties": {
+        "operationRecordId": {
+          "$ref": "#/$defs/RecordId",
+          "description": "Retained operationRecordId value under referenceDueProcess/1."
+        },
+        "scheduledAt": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "Retained scheduledAt value under referenceDueProcess/1."
+        },
+        "scheduledFor": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "Retained scheduledFor value under referenceDueProcess/1."
+        },
+        "reviewerActor": {
+          "$ref": "#/$defs/Id",
+          "description": "Retained reviewerActor value under referenceDueProcess/1."
+        },
+        "reviewerHuman": {
+          "$ref": "#/$defs/Human",
+          "description": "Retained reviewerHuman value under referenceDueProcess/1."
+        }
+      }
+    },
+    "HeldHearing": {
+      "type": "object",
+      "description": "Closed HeldHearing shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "operationRecordId",
+        "heldAt",
+        "reviewerHuman",
+        "evidenceRefs"
+      ],
+      "properties": {
+        "operationRecordId": {
+          "$ref": "#/$defs/RecordId",
+          "description": "Retained operationRecordId value under referenceDueProcess/1."
+        },
+        "heldAt": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "Retained heldAt value under referenceDueProcess/1."
+        },
+        "reviewerHuman": {
+          "$ref": "#/$defs/Human",
+          "description": "Retained reviewerHuman value under referenceDueProcess/1."
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "description": "Retained evidenceRefs value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "Disposition": {
+      "type": "object",
+      "description": "Closed Disposition shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "operationRecordId",
+        "recordedAt",
+        "outcome",
+        "rationale",
+        "evidenceRefs"
+      ],
+      "properties": {
+        "operationRecordId": {
+          "$ref": "#/$defs/RecordId",
+          "description": "Retained operationRecordId value under referenceDueProcess/1."
+        },
+        "recordedAt": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "Retained recordedAt value under referenceDueProcess/1."
+        },
+        "outcome": {
+          "$ref": "#/$defs/DispositionOutcome",
+          "description": "Retained outcome value under referenceDueProcess/1."
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Retained rationale value under referenceDueProcess/1.",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "description": "Retained evidenceRefs value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "HouseholdTermination": {
+      "type": "object",
+      "description": "Closed HouseholdTermination shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "operationRecordId",
+        "requestedAt",
+        "requestedBy",
+        "rationale"
+      ],
+      "properties": {
+        "operationRecordId": {
+          "$ref": "#/$defs/RecordId",
+          "description": "Retained operationRecordId value under referenceDueProcess/1."
+        },
+        "requestedAt": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "Retained requestedAt value under referenceDueProcess/1."
+        },
+        "requestedBy": {
+          "$ref": "#/$defs/Human",
+          "description": "Retained requestedBy value under referenceDueProcess/1."
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Retained rationale value under referenceDueProcess/1.",
+          "minLength": 1,
+          "maxLength": 4096
+        }
+      }
+    },
+    "AppealState": {
+      "type": "object",
+      "description": "Closed AppealState shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "determinationId",
+        "noticeId",
+        "filedAt",
+        "filedBy",
+        "channel",
+        "continuationChoice",
+        "continuation",
+        "hearingDeadline"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RecordId",
+          "description": "Retained id value under referenceDueProcess/1."
+        },
+        "determinationId": {
+          "$ref": "#/$defs/RecordId",
+          "description": "Retained determinationId value under referenceDueProcess/1."
+        },
+        "noticeId": {
+          "$ref": "#/$defs/RecordId",
+          "description": "Retained noticeId value under referenceDueProcess/1."
+        },
+        "filedAt": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "Retained filedAt value under referenceDueProcess/1."
+        },
+        "filedBy": {
+          "$ref": "#/$defs/Human",
+          "description": "Retained filedBy value under referenceDueProcess/1."
+        },
+        "channel": {
+          "$ref": "#/$defs/Channel",
+          "description": "Retained channel value under referenceDueProcess/1."
+        },
+        "continuationChoice": {
+          "$ref": "#/$defs/ContinuationChoice",
+          "description": "Retained continuationChoice value under referenceDueProcess/1."
+        },
+        "continuation": {
+          "$ref": "#/$defs/ContinuationStatus",
+          "description": "Retained continuation value under referenceDueProcess/1."
+        },
+        "hearingDeadline": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "Retained hearingDeadline value under referenceDueProcess/1."
+        },
+        "schedule": {
+          "$ref": "#/$defs/HearingSchedule",
+          "description": "Retained schedule value under referenceDueProcess/1."
+        },
+        "hearing": {
+          "$ref": "#/$defs/HeldHearing",
+          "description": "Retained hearing value under referenceDueProcess/1."
+        },
+        "disposition": {
+          "$ref": "#/$defs/Disposition",
+          "description": "Retained disposition value under referenceDueProcess/1."
+        },
+        "termination": {
+          "$ref": "#/$defs/HouseholdTermination",
+          "description": "Retained termination value under referenceDueProcess/1."
+        }
+      }
+    },
+    "OverrideRationale": {
+      "type": "object",
+      "description": "Closed OverrideRationale shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "summary"
+      ],
+      "properties": {
+        "summary": {
+          "type": "string",
+          "description": "Retained summary value under referenceDueProcess/1."
+        }
+      }
+    },
+    "OverrideAuthorityVerification": {
+      "type": "object",
+      "description": "Closed OverrideAuthorityVerification shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "actorId",
+        "method",
+        "verifiedAt"
+      ],
+      "properties": {
+        "actorId": {
+          "type": "string",
+          "description": "Retained actorId value under referenceDueProcess/1."
+        },
+        "method": {
+          "$ref": "#/$defs/OverrideAuthorityMethod",
+          "description": "Retained method value under referenceDueProcess/1."
+        },
+        "verifiedAt": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "Retained verifiedAt value under referenceDueProcess/1."
+        },
+        "authoritySource": {
+          "type": "string",
+          "description": "Retained authoritySource value under referenceDueProcess/1."
+        }
+      }
+    },
+    "OverrideEvidenceReference": {
+      "type": "object",
+      "description": "Closed OverrideEvidenceReference shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "uri"
+      ],
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/OverrideEvidenceKind",
+          "description": "Retained kind value under referenceDueProcess/1."
+        },
+        "uri": {
+          "type": "string",
+          "description": "Retained uri value under referenceDueProcess/1."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Retained summary value under referenceDueProcess/1."
+        }
+      }
+    },
+    "OverrideRecord": {
+      "$ref": "wos-workflow.schema.json#/$defs/OverrideRecord"
+    },
+    "ExtensionState": {
+      "type": "object",
+      "description": "Closed ExtensionState shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "operationRecordId",
+        "determinationBindingRef",
+        "timerId",
+        "calendarDays",
+        "cumulativeCalendarDays",
+        "priorDeadline",
+        "newDeadline",
+        "overrideRecord"
+      ],
+      "properties": {
+        "operationRecordId": {
+          "$ref": "#/$defs/RecordId",
+          "description": "Retained operationRecordId value under referenceDueProcess/1."
+        },
+        "determinationBindingRef": {
+          "$ref": "#/$defs/Id",
+          "description": "Retained determinationBindingRef value under referenceDueProcess/1."
+        },
+        "timerId": {
+          "$ref": "#/$defs/Id",
+          "description": "Retained timerId value under referenceDueProcess/1."
+        },
+        "calendarDays": {
+          "$ref": "#/$defs/Days"
+        },
+        "cumulativeCalendarDays": {
+          "$ref": "#/$defs/Days"
+        },
+        "priorDeadline": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "Retained priorDeadline value under referenceDueProcess/1."
+        },
+        "newDeadline": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "Retained newDeadline value under referenceDueProcess/1."
+        },
+        "overrideRecord": {
+          "$ref": "#/$defs/OverrideRecord",
+          "description": "Retained overrideRecord value under referenceDueProcess/1."
+        }
+      }
+    },
+    "OperationState": {
+      "type": "object",
+      "description": "Closed OperationState shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "recordId",
+        "operationRef",
+        "kind",
+        "performedAt",
+        "actor",
+        "firing",
+        "outcome"
+      ],
+      "properties": {
+        "recordId": {
+          "$ref": "#/$defs/RecordId",
+          "description": "Retained recordId value under referenceDueProcess/1."
+        },
+        "operationRef": {
+          "$ref": "#/$defs/Id",
+          "description": "Retained operationRef value under referenceDueProcess/1."
+        },
+        "determinationId": {
+          "$ref": "#/$defs/RecordId",
+          "description": "Retained determinationId value under referenceDueProcess/1."
+        },
+        "kind": {
+          "$ref": "#/$defs/OperationKind",
+          "description": "Retained kind value under referenceDueProcess/1."
+        },
+        "performedAt": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "Retained performedAt value under referenceDueProcess/1."
+        },
+        "actor": {
+          "$ref": "#/$defs/GovernanceActor",
+          "description": "Retained actor value under referenceDueProcess/1."
+        },
+        "firing": {
+          "$ref": "#/$defs/FiringRef",
+          "description": "Retained firing value under referenceDueProcess/1."
+        },
+        "outcome": {
+          "$ref": "#/$defs/GovernanceOutcome",
+          "description": "Retained outcome value under referenceDueProcess/1."
+        }
+      }
+    },
+    "ReplayState": {
+      "type": "object",
+      "description": "Closed ReplayState shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "request",
+        "result"
+      ],
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/GovernanceRequest",
+          "description": "Retained request value under referenceDueProcess/1."
+        },
+        "result": {
+          "$ref": "#/$defs/GovernanceResult",
+          "description": "Retained result value under referenceDueProcess/1."
+        }
+      }
+    },
+    "DueProcessState": {
+      "type": "object",
+      "description": "Closed DueProcessState shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "determinations",
+        "notices",
+        "appeals",
+        "extensions",
+        "operations",
+        "replays"
+      ],
+      "properties": {
+        "determinations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeterminationState"
+          },
+          "description": "Retained determinations value under referenceDueProcess/1."
+        },
+        "notices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NoticeState"
+          },
+          "description": "Retained notices value under referenceDueProcess/1."
+        },
+        "appeals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AppealState"
+          },
+          "description": "Retained appeals value under referenceDueProcess/1."
+        },
+        "extensions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExtensionState"
+          },
+          "description": "Retained extensions value under referenceDueProcess/1."
+        },
+        "operations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/OperationState"
+          },
+          "description": "Retained operations value under referenceDueProcess/1."
+        },
+        "replays": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReplayState"
+          },
+          "description": "Retained replays value under referenceDueProcess/1."
+        }
+      }
+    },
+    "PendingNoticeWork": {
+      "type": "object",
+      "description": "Closed PendingNoticeWork shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "processId",
+        "noticeId",
+        "determinationId",
+        "transportKey",
+        "correlation",
+        "artifactSha256",
+        "artifactBytesBase64",
+        "recipient",
+        "channel",
+        "issueAt"
+      ],
+      "properties": {
+        "processId": {
+          "type": "string",
+          "description": "Retained processId value under referenceDueProcess/1."
+        },
+        "noticeId": {
+          "$ref": "#/$defs/RecordId",
+          "description": "Retained noticeId value under referenceDueProcess/1."
+        },
+        "determinationId": {
+          "$ref": "#/$defs/RecordId",
+          "description": "Retained determinationId value under referenceDueProcess/1."
+        },
+        "transportKey": {
+          "$ref": "#/$defs/Token",
+          "description": "Retained transportKey value under referenceDueProcess/1."
+        },
+        "correlation": {
+          "$ref": "#/$defs/Token",
+          "description": "Retained correlation value under referenceDueProcess/1."
+        },
+        "artifactSha256": {
+          "$ref": "#/$defs/Digest",
+          "description": "Retained artifactSha256 value under referenceDueProcess/1."
+        },
+        "artifactBytesBase64": {
+          "type": "string",
+          "description": "Retained artifactBytesBase64 value under referenceDueProcess/1."
+        },
+        "recipient": {
+          "type": "string",
+          "description": "Retained recipient value under referenceDueProcess/1."
+        },
+        "channel": {
+          "$ref": "#/$defs/DeliveryChannel",
+          "description": "Retained channel value under referenceDueProcess/1."
+        },
+        "issueAt": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "Retained issueAt value under referenceDueProcess/1."
+        }
+      }
+    },
+    "NamedScalar": {
+      "type": "object",
+      "description": "Closed NamedScalar shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "value"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/Id",
+          "description": "Retained name value under referenceDueProcess/1."
+        },
+        "value": {
+          "$ref": "#/$defs/Scalar",
+          "description": "Retained value value under referenceDueProcess/1."
+        }
+      }
+    },
+    "NativeDecisionEvaluation": {
+      "type": "object",
+      "description": "Closed NativeDecisionEvaluation shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "location",
+        "tableRef",
+        "inputs",
+        "matchedRowIds",
+        "outputs",
+        "guardResult"
+      ],
+      "properties": {
+        "location": {
+          "$ref": "#/$defs/TransitionLocation",
+          "description": "Retained location value under referenceDueProcess/1."
+        },
+        "tableRef": {
+          "$ref": "#/$defs/Id",
+          "description": "Retained tableRef value under referenceDueProcess/1."
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NamedScalar"
+          },
+          "description": "Retained inputs value under referenceDueProcess/1."
+        },
+        "matchedRowIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Retained matchedRowIds value under referenceDueProcess/1."
+        },
+        "selectedRowId": {
+          "type": "string",
+          "description": "Retained selectedRowId value under referenceDueProcess/1."
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NamedScalar"
+          },
+          "description": "Retained outputs value under referenceDueProcess/1."
+        },
+        "guardResult": {
+          "type": "boolean",
+          "description": "Retained guardResult value under referenceDueProcess/1."
+        }
+      }
+    },
+    "DeterminationReasoningData": {
+      "type": "object",
+      "description": "Closed DeterminationReasoningData shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "tier",
+        "relatedTransition",
+        "ruleId",
+        "authority",
+        "description",
+        "timestamp",
+        "evaluation",
+        "sourceRefs"
+      ],
+      "properties": {
+        "tier": {
+          "$ref": "#/$defs/ReasoningTier",
+          "description": "Retained tier value under referenceDueProcess/1."
+        },
+        "relatedTransition": {
+          "type": "string",
+          "description": "Retained relatedTransition value under referenceDueProcess/1."
+        },
+        "ruleId": {
+          "$ref": "#/$defs/Id",
+          "description": "Retained ruleId value under referenceDueProcess/1."
+        },
+        "authority": {
+          "$ref": "#/$defs/SourceAuthority",
+          "description": "Retained authority value under referenceDueProcess/1."
+        },
+        "description": {
+          "type": "string",
+          "description": "Retained description value under referenceDueProcess/1.",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "timestamp": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "Retained timestamp value under referenceDueProcess/1."
+        },
+        "evaluation": {
+          "$ref": "#/$defs/NativeDecisionEvaluation",
+          "description": "Retained evaluation value under referenceDueProcess/1."
+        },
+        "sourceRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "description": "Retained sourceRefs value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "DeterminationCounterfactualData": {
+      "type": "object",
+      "description": "Closed DeterminationCounterfactualData shape from Governance native reference execution.",
+      "additionalProperties": false,
+      "required": [
+        "tier",
+        "relatedTransition",
+        "type",
+        "factor",
+        "description",
+        "alternative",
+        "originalSnapshotSha256",
+        "alternateSnapshotSha256",
+        "originalEvaluation",
+        "alternateEvaluation",
+        "sourceRefs"
+      ],
+      "properties": {
+        "tier": {
+          "$ref": "#/$defs/CounterfactualTier",
+          "description": "Retained tier value under referenceDueProcess/1."
+        },
+        "relatedTransition": {
+          "type": "string",
+          "description": "Retained relatedTransition value under referenceDueProcess/1."
+        },
+        "type": {
+          "$ref": "#/$defs/CounterfactualKind",
+          "description": "Retained kindType value under referenceDueProcess/1."
+        },
+        "factor": {
+          "$ref": "#/$defs/Id",
+          "description": "Retained factor value under referenceDueProcess/1."
+        },
+        "description": {
+          "type": "string",
+          "description": "Retained description value under referenceDueProcess/1.",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "alternative": {
+          "$ref": "#/$defs/CaseAlternative",
+          "description": "Retained alternative value under referenceDueProcess/1."
+        },
+        "originalSnapshotSha256": {
+          "$ref": "#/$defs/SnapshotDigest",
+          "description": "Retained originalSnapshotSha256 value under referenceDueProcess/1."
+        },
+        "alternateSnapshotSha256": {
+          "$ref": "#/$defs/SnapshotDigest",
+          "description": "Retained alternateSnapshotSha256 value under referenceDueProcess/1."
+        },
+        "originalEvaluation": {
+          "$ref": "#/$defs/NativeDecisionEvaluation",
+          "description": "Retained originalEvaluation value under referenceDueProcess/1."
+        },
+        "alternateEvaluation": {
+          "$ref": "#/$defs/NativeDecisionEvaluation",
+          "description": "Retained alternateEvaluation value under referenceDueProcess/1."
+        },
+        "sourceRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "description": "Retained sourceRefs value under referenceDueProcess/1.",
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "OperationKind": {
+      "type": "string",
+      "enum": [
+        "issueNotice",
+        "fileAppeal",
+        "scheduleHearing",
+        "holdHearing",
+        "recordDisposition",
+        "requestServiceTermination",
+        "extendPreNoticeWindow",
+        "applyAdverseEffect"
+      ]
+    },
+    "RefusalCode": {
+      "type": "string",
+      "enum": [
+        "unsupportedProfile",
+        "invalidConfiguration",
+        "unboundTransition",
+        "actorRejected",
+        "targetRejected",
+        "selectionRejected",
+        "invocationRequired",
+        "replayConflict",
+        "signatureRejected",
+        "explanationRejected",
+        "noticePending",
+        "clockRejected",
+        "continuationFrozen",
+        "operationStateRejected",
+        "overrideRejected",
+        "limitReached",
+        "storeRejected"
+      ]
+    },
+    "ReferenceProfile": {
+      "type": "string",
+      "enum": [
+        "referenceDueProcess/1"
+      ]
+    },
+    "Channel": {
+      "type": "string",
+      "enum": [
+        "phone",
+        "in-person",
+        "written"
+      ]
+    },
+    "DeliveryChannel": {
+      "type": "string",
+      "enum": [
+        "mail",
+        "portal"
+      ]
+    },
+    "EvidenceClass": {
+      "type": "string",
+      "enum": [
+        "fixtureQualifiedReceipt"
+      ]
+    },
+    "AppealAnchor": {
+      "type": "string",
+      "enum": [
+        "noticeIssued"
+      ]
+    },
+    "GraceAnchor": {
+      "type": "string",
+      "enum": [
+        "qualifiedReceipt"
+      ]
+    },
+    "ContinuationChoicePolicy": {
+      "type": "string",
+      "enum": [
+        "electionRequired",
+        "defaultUnlessWaived"
+      ]
+    },
+    "ContinuationChoice": {
+      "type": "string",
+      "enum": [
+        "elect",
+        "waive",
+        "unspecified"
+      ]
+    },
+    "ContinuationStatus": {
+      "type": "string",
+      "enum": [
+        "frozen",
+        "waived",
+        "released"
+      ]
+    },
+    "ContinuationScope": {
+      "type": "string",
+      "enum": [
+        "currentLevel"
+      ]
+    },
+    "ContinuationEnd": {
+      "type": "string",
+      "enum": [
+        "dispositionOrHouseholdTermination"
+      ]
+    },
+    "ExcludedDeterminationActors": {
+      "type": "string",
+      "enum": [
+        "determinerAndSupervisor"
+      ]
+    },
+    "HearingPurpose": {
+      "type": "string",
+      "enum": [
+        "hearingHeld"
+      ]
+    },
+    "DispositionOutcome": {
+      "type": "string",
+      "enum": [
+        "upheld",
+        "reversed"
+      ]
+    },
+    "NoticeStatus": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "qualified",
+        "blocked",
+        "exhausted"
+      ]
+    },
+    "SourceAuthority": {
+      "type": "string",
+      "enum": [
+        "statute",
+        "regulation",
+        "policy",
+        "guideline"
+      ]
+    },
+    "CounterfactualKind": {
+      "type": "string",
+      "enum": [
+        "positive",
+        "negative"
+      ]
+    },
+    "ReasoningTier": {
+      "type": "string",
+      "enum": [
+        "reasoning"
+      ]
+    },
+    "CounterfactualTier": {
+      "type": "string",
+      "enum": [
+        "counterfactual"
+      ]
+    },
+    "AcknowledgementKind": {
+      "type": "string",
+      "enum": [
+        "accepted"
+      ]
+    },
+    "ReceiptKind": {
+      "type": "string",
+      "enum": [
+        "qualifiedReceipt"
+      ]
+    },
+    "FailureKind": {
+      "type": "string",
+      "enum": [
+        "noEffectFailure"
+      ]
+    },
+    "FailureCode": {
+      "type": "string",
+      "enum": [
+        "injectedFailure",
+        "attemptsExhausted"
+      ]
+    },
+    "Scalar": {
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Closed String variant.",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "const": "string"
+            },
+            "value": {
+              "description": "Retained value value under referenceDueProcess/1.",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Closed Number variant.",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "const": "number"
+            },
+            "value": {
+              "description": "Retained value value under referenceDueProcess/1.",
+              "type": "number"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Closed Boolean variant.",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "const": "boolean"
+            },
+            "value": {
+              "description": "Retained value value under referenceDueProcess/1.",
+              "type": "boolean"
+            }
+          }
+        }
+      ]
+    },
+    "GovernanceCommand": {
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Closed IssueNotice variant.",
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "const": "issueNotice"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Closed FileAppeal variant.",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "channel",
+            "continuationChoice"
+          ],
+          "properties": {
+            "kind": {
+              "const": "fileAppeal"
+            },
+            "channel": {
+              "$ref": "#/$defs/Channel",
+              "description": "Retained channel value under referenceDueProcess/1."
+            },
+            "continuationChoice": {
+              "$ref": "#/$defs/ContinuationChoice",
+              "description": "Retained continuationChoice value under referenceDueProcess/1."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Closed ScheduleHearing variant.",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "appealId",
+            "reviewerActor",
+            "scheduledFor"
+          ],
+          "properties": {
+            "kind": {
+              "const": "scheduleHearing"
+            },
+            "appealId": {
+              "type": "string",
+              "description": "Retained appealId value under referenceDueProcess/1."
+            },
+            "reviewerActor": {
+              "type": "string",
+              "description": "Retained reviewerActor value under referenceDueProcess/1."
+            },
+            "scheduledFor": {
+              "$ref": "#/$defs/Timestamp",
+              "description": "Retained scheduledFor value under referenceDueProcess/1."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Closed HoldHearing variant.",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "appealId",
+            "evidenceRefs"
+          ],
+          "properties": {
+            "kind": {
+              "const": "holdHearing"
+            },
+            "appealId": {
+              "type": "string",
+              "description": "Retained appealId value under referenceDueProcess/1."
+            },
+            "evidenceRefs": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SourceRef"
+              },
+              "description": "Retained evidenceRefs value under referenceDueProcess/1."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Closed RecordDisposition variant.",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "appealId",
+            "outcome",
+            "rationale",
+            "evidenceRefs"
+          ],
+          "properties": {
+            "kind": {
+              "const": "recordDisposition"
+            },
+            "appealId": {
+              "type": "string",
+              "description": "Retained appealId value under referenceDueProcess/1."
+            },
+            "outcome": {
+              "$ref": "#/$defs/DispositionOutcome",
+              "description": "Retained outcome value under referenceDueProcess/1."
+            },
+            "rationale": {
+              "type": "string",
+              "description": "Retained rationale value under referenceDueProcess/1."
+            },
+            "evidenceRefs": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SourceRef"
+              },
+              "description": "Retained evidenceRefs value under referenceDueProcess/1."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Closed RequestServiceTermination variant.",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "appealId",
+            "rationale"
+          ],
+          "properties": {
+            "kind": {
+              "const": "requestServiceTermination"
+            },
+            "appealId": {
+              "type": "string",
+              "description": "Retained appealId value under referenceDueProcess/1."
+            },
+            "rationale": {
+              "description": "Retained rationale value under referenceDueProcess/1.",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Closed ExtendPreNoticeWindow variant.",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "calendarDays",
+            "rationale",
+            "evidenceRefs"
+          ],
+          "properties": {
+            "kind": {
+              "const": "extendPreNoticeWindow"
+            },
+            "calendarDays": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Retained calendarDays value under referenceDueProcess/1."
+            },
+            "rationale": {
+              "type": "string",
+              "description": "Retained rationale value under referenceDueProcess/1."
+            },
+            "evidenceRefs": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SourceRef"
+              },
+              "description": "Retained evidenceRefs value under referenceDueProcess/1."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Closed ApplyAdverseEffect variant.",
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "const": "applyAdverseEffect"
+            }
+          }
+        }
+      ]
+    },
+    "GovernanceOutcome": {
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Closed NoticeStaged variant.",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "noticeId"
+          ],
+          "properties": {
+            "kind": {
+              "const": "noticeStaged"
+            },
+            "noticeId": {
+              "$ref": "#/$defs/RecordId",
+              "description": "Retained noticeId value under referenceDueProcess/1."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Closed AppealFiled variant.",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "appealId"
+          ],
+          "properties": {
+            "kind": {
+              "const": "appealFiled"
+            },
+            "appealId": {
+              "$ref": "#/$defs/RecordId",
+              "description": "Retained appealId value under referenceDueProcess/1."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Closed HearingScheduled variant.",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "appealId",
+            "scheduledFor"
+          ],
+          "properties": {
+            "kind": {
+              "const": "hearingScheduled"
+            },
+            "appealId": {
+              "type": "string",
+              "description": "Retained appealId value under referenceDueProcess/1."
+            },
+            "scheduledFor": {
+              "$ref": "#/$defs/Timestamp",
+              "description": "Retained scheduledFor value under referenceDueProcess/1."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Closed HearingHeld variant.",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "appealId",
+            "heldAt"
+          ],
+          "properties": {
+            "kind": {
+              "const": "hearingHeld"
+            },
+            "appealId": {
+              "type": "string",
+              "description": "Retained appealId value under referenceDueProcess/1."
+            },
+            "heldAt": {
+              "$ref": "#/$defs/Timestamp",
+              "description": "Retained heldAt value under referenceDueProcess/1."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Closed DispositionRecorded variant.",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "appealId",
+            "outcome"
+          ],
+          "properties": {
+            "kind": {
+              "const": "dispositionRecorded"
+            },
+            "appealId": {
+              "type": "string",
+              "description": "Retained appealId value under referenceDueProcess/1."
+            },
+            "outcome": {
+              "$ref": "#/$defs/DispositionOutcome",
+              "description": "Retained outcome value under referenceDueProcess/1."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Closed ServiceTerminationRequested variant.",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "appealId"
+          ],
+          "properties": {
+            "kind": {
+              "const": "serviceTerminationRequested"
+            },
+            "appealId": {
+              "$ref": "#/$defs/RecordId",
+              "description": "Retained appealId value under referenceDueProcess/1."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Closed PreNoticeWindowExtended variant.",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "overrideRecordId",
+            "newDeadline"
+          ],
+          "properties": {
+            "kind": {
+              "const": "preNoticeWindowExtended"
+            },
+            "overrideRecordId": {
+              "type": "string",
+              "description": "Retained overrideRecordId value under referenceDueProcess/1."
+            },
+            "newDeadline": {
+              "$ref": "#/$defs/Timestamp",
+              "description": "Retained newDeadline value under referenceDueProcess/1."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Closed AdverseEffectApplied variant.",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "appliedAt"
+          ],
+          "properties": {
+            "kind": {
+              "const": "adverseEffectApplied"
+            },
+            "appliedAt": {
+              "$ref": "#/$defs/Timestamp",
+              "description": "Retained appliedAt value under referenceDueProcess/1."
+            }
+          }
+        }
+      ]
+    },
+    "GovernanceResult": {
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Closed Committed variant.",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "operationRecordId",
+            "outcome"
+          ],
+          "properties": {
+            "status": {
+              "const": "committed"
+            },
+            "operationRecordId": {
+              "type": "string",
+              "description": "Retained operationRecordId value under referenceDueProcess/1."
+            },
+            "outcome": {
+              "$ref": "#/$defs/GovernanceOutcome",
+              "description": "Retained outcome value under referenceDueProcess/1."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Closed Refused variant.",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "code"
+          ],
+          "properties": {
+            "status": {
+              "const": "refused"
+            },
+            "code": {
+              "$ref": "#/$defs/RefusalCode",
+              "description": "Retained code value under referenceDueProcess/1."
+            }
+          }
+        }
+      ]
+    },
+    "TransportResult": {
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Closed AcceptedOnly variant.",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "acknowledgement"
+          ],
+          "properties": {
+            "kind": {
+              "const": "acceptedOnly"
+            },
+            "acknowledgement": {
+              "$ref": "#/$defs/TransportAcknowledgement",
+              "description": "Retained acknowledgement value under referenceDueProcess/1."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Closed Qualified variant.",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "acknowledgement",
+            "receipt"
+          ],
+          "properties": {
+            "kind": {
+              "const": "qualified"
+            },
+            "acknowledgement": {
+              "$ref": "#/$defs/TransportAcknowledgement",
+              "description": "Retained acknowledgement value under referenceDueProcess/1."
+            },
+            "receipt": {
+              "$ref": "#/$defs/QualifiedNoticeReceipt",
+              "description": "Retained receipt value under referenceDueProcess/1."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Closed Failed variant.",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "failure"
+          ],
+          "properties": {
+            "kind": {
+              "const": "failed"
+            },
+            "failure": {
+              "$ref": "#/$defs/TransportFailure",
+              "description": "Retained failure value under referenceDueProcess/1."
+            }
+          }
+        }
+      ]
+    },
+    "OverrideAuthorityMethod": {
+      "type": "string",
+      "enum": [
+        "roleAssignment"
+      ]
+    },
+    "OverrideEvidenceKind": {
+      "type": "string",
+      "enum": [
+        "document"
+      ]
+    },
+    "Id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "Token": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]{1,128}$"
+    },
+    "Digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "SnapshotDigest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "Timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{0,2}[1-9])?Z$",
+      "format": "date-time"
+    },
+    "Pointer": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?:/(?:[^~]|~[01])*)+$"
+    },
+    "Human": {
+      "type": "string",
+      "pattern": "^actor:human:[A-Za-z0-9._-]+$"
+    },
+    "RecordId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "Days": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 36500
+    }
+  }
+}

@@ -10,7 +10,8 @@ use integrity_canonical::{DigestAlgorithm, canonical_json_bytes, compute_digest}
 use serde_json::json;
 
 // This scope is deliberately explicit and reported. It is not a complete
-// compiler input graph or binary fingerprint; sibling selection remains external.
+// compiler input graph or binary fingerprint. Used Formspec/FEL sibling sources
+// have a separate declared fingerprint below.
 const NATIVE_CRATES: &[&str] = &[
     "wos-conformance",
     "wos-runtime",
@@ -73,6 +74,41 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     collect(&root.join("Cargo.toml"), root, &mut files)?;
     collect(&root.join("Cargo.lock"), root, &mut files)?;
+    // Embedded owner schemas participate in validation behavior, including the
+    // reference policy and replay resources loaded through offline resolvers.
+    collect(&root.join("schemas"), root, &mut files)?;
+    let stack_root = root.parent().ok_or("missing stack root")?;
+    let mut external_files = BTreeMap::new();
+    let mut external_revisions = BTreeMap::new();
+    for relative in [
+        "formspec/crates/formspec-core",
+        "formspec/crates/formspec-eval",
+        "formspec/crates/formspec-lint",
+        "fel-core",
+    ] {
+        let selected = stack_root.join(relative);
+        collect(&selected.join("src"), stack_root, &mut external_files)?;
+        collect(
+            &selected.join("Cargo.toml"),
+            stack_root,
+            &mut external_files,
+        )?;
+        if selected.join("build.rs").exists() {
+            collect(&selected.join("build.rs"), stack_root, &mut external_files)?;
+        }
+        external_revisions.insert(relative, git(&selected, &["rev-parse", "HEAD"]));
+    }
+    for relative in [
+        "formspec/schemas",
+        "formspec/Cargo.toml",
+        "formspec/Cargo.lock",
+        "fel-core/Cargo.lock",
+    ] {
+        let selected = stack_root.join(relative);
+        if selected.exists() {
+            collect(&selected, stack_root, &mut external_files)?;
+        }
+    }
     for reference in ["HEAD", "index", "packed-refs"] {
         if let Some(path) = git(root, &["rev-parse", "--git-path", reference]) {
             let path = PathBuf::from(path);
@@ -107,10 +143,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let identity = json!({
         "nativeGitRevision":git(root, &["rev-parse", "HEAD"]),
         "nativeReplaySourceSnapshot":hash(&canonical_json_bytes(&serde_json::to_value(&files)?)?),
-        "sourceScope":{"crates":NATIVE_CRATES,"paths":["src/**", "Cargo.toml", "existing build.rs"],"workspaceInputs":["Cargo.toml", "Cargo.lock"]},
+        "sourceScope":{"crates":NATIVE_CRATES,"paths":["src/**", "Cargo.toml", "existing build.rs"],"workspaceInputs":["Cargo.toml", "Cargo.lock", "schemas/**"]},
         "lockfileSha256":hash(&std::fs::read(root.join("Cargo.lock"))?),
         "target":std::env::var("TARGET").ok(),"profile":std::env::var("PROFILE").ok(),"features":features,
-        "toolchain":null,"completeCompiledGraph":false,"externalPathDependencySourceFingerprints":null
+        "toolchain":null,"completeCompiledGraph":false,
+        "externalPathDependencySourceFingerprints":{"sourceSha256":hash(&canonical_json_bytes(&serde_json::to_value(&external_files)?)?),"revisions":external_revisions,"files":external_files}
     });
     println!("cargo:rustc-env=WOS_REPLAY_BUILD_IDENTITY={identity}");
     Ok(())

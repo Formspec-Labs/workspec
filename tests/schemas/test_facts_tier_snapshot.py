@@ -196,10 +196,53 @@ _VALID_SEED_DATA_BY_KIND = {
     },
 }
 
+_NATIVE_SOURCE = {
+    "sourceVersion": "selected-policy",
+    "sectionAnchor": "income-limit",
+    "retainedSha256": "sha256:" + "a" * 64,
+}
+_NATIVE_EVALUATION = {
+    "location": {"statePointer": "/lifecycle/states/review", "transitionIndex": 0},
+    "tableRef": "eligibility",
+    "inputs": [{"name": "income", "value": {"kind": "number", "value": 150}}],
+    "matchedRowIds": ["high"],
+    "selectedRowId": "high",
+    "outputs": [{"name": "adverse", "value": {"kind": "boolean", "value": True}}],
+    "guardResult": True,
+}
+_VALID_SEED_DATA_BY_KIND.update({
+    "determinationReasoning": {
+        "tier": "reasoning", "relatedTransition": "actual-firing", "ruleId": "income",
+        "authority": "policy", "description": "Income exceeds the selected limit.",
+        "timestamp": "2026-04-19T12:00:00Z", "evaluation": _NATIVE_EVALUATION,
+        "sourceRefs": [_NATIVE_SOURCE],
+    },
+    "determinationCounterfactual": {
+        "tier": "counterfactual", "relatedTransition": "actual-firing", "type": "positive",
+        "factor": "lower-income", "description": "Lower income changes the selected result.",
+        "alternative": {
+            "id": "lower-income", "description": "Lower income changes the selected result.",
+            "changes": [{"casePointer": "/income", "value": {"kind": "number", "value": 50}}],
+            "sourceRefs": [_NATIVE_SOURCE],
+        },
+        "originalSnapshotSha256": "a" * 64, "alternateSnapshotSha256": "b" * 64,
+        "originalEvaluation": _NATIVE_EVALUATION,
+        "alternateEvaluation": {
+            **_NATIVE_EVALUATION,
+            "inputs": [{"name": "income", "value": {"kind": "number", "value": 50}}],
+            "matchedRowIds": ["low"], "selectedRowId": "low", "guardResult": False,
+            "outputs": [{"name": "adverse", "value": {"kind": "boolean", "value": False}}],
+        },
+        "sourceRefs": [_NATIVE_SOURCE],
+    },
+})
+
 
 def _valid_seed_record(record_kind: str, **extra) -> dict:
     if record_kind in _VALID_SEED_DATA_BY_KIND and "data" not in extra:
         extra = {**extra, "data": _VALID_SEED_DATA_BY_KIND[record_kind]}
+    if record_kind in {"determinationReasoning", "determinationCounterfactual"}:
+        extra = {"auditLayer": _VALID_SEED_DATA_BY_KIND[record_kind]["tier"], **extra}
     return _facts_record(record_kind, **extra)
 
 

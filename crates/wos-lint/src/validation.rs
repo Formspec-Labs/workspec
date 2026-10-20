@@ -146,6 +146,20 @@ impl jsonschema::Retrieve for Offline {
         &self,
         uri: &jsonschema::Uri<String>,
     ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
+        let selected = match uri.as_str() {
+            "https://wos-spec.org/schemas/wos-reference-due-process.schema.json" => Some(
+                include_str!("../../../schemas/wos-reference-due-process.schema.json"),
+            ),
+            "https://wos-spec.org/schemas/wos-reference-replay.schema.json" => Some(include_str!(
+                "../../../schemas/wos-reference-replay.schema.json"
+            )),
+            "https://wos-spec.org/schemas/wos-workflow.schema.json"
+            | "https://wos-spec.org/schemas/workflow/1.0" => Some(WORKFLOW),
+            _ => None,
+        };
+        if let Some(text) = selected {
+            return Ok(serde_json::from_str(text)?);
+        }
         Err(format!("schema resource unavailable offline: {uri}").into())
     }
 }

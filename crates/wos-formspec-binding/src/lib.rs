@@ -2,6 +2,8 @@
 
 //! Formspec binding adapter for `wos-runtime`.
 
+pub mod selected;
+
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use integrity_canonical::{CANONICALIZATION_PROFILE, DigestAlgorithm, build_signed_payload};
@@ -1405,18 +1407,41 @@ where
 
     fn signature_evidence(
         &self,
-        _task: &ActiveTask,
+        task: &ActiveTask,
         response: &serde_json::Value,
     ) -> Result<Option<Vec<SignatureEvidence>>, BindingError> {
         let signatures = parse_authored_signatures_for_evidence(response)?;
         if signatures.is_empty() {
             return Ok(None);
         }
-        let source_response_ref = response
-            .get("sourceResponseRef")
-            .or_else(|| response.get("formspecResponseRef"))
-            .and_then(serde_json::Value::as_str)
-            .map(str::to_string);
+        // The bounded native profile signs the actual task association inside
+        // Response.data. Derive evidence from the real task after exact checking;
+        // the closed Response schema admits no new top-level source alias.
+        let signed_task = response
+            .get("data")
+            .and_then(|data| data.get("signatureTaskId"));
+        if let Some(value) = signed_task {
+            if value.as_str().filter(|id| !id.is_empty()) != Some(task.task_id.as_str())
+                || ["sourceResponseRef", "formspecResponseRef"]
+                    .iter()
+                    .any(|field| {
+                        response
+                            .get(*field)
+                            .is_some_and(|alias| alias.as_str() != Some(task.task_id.as_str()))
+                    })
+            {
+                return Err(BindingError::InvalidInput(
+                    "signed signatureTaskId does not match actual task".into(),
+                ));
+            }
+        }
+        let source_response_ref = signed_task.map(|_| task.task_id.clone()).or_else(|| {
+            response
+                .get("sourceResponseRef")
+                .or_else(|| response.get("formspecResponseRef"))
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned)
+        });
         let response_signer_id =
             response_path(response, "signerId").and_then(serde_json::Value::as_str);
         let signer_authority = response_path(response, "signerAuthority")
@@ -1761,18 +1786,21 @@ mod tests {
     #[test]
     fn task_hooks_preserve_full_response_and_actual_task_for_validation_replay_and_mapping() {
         let mut task = formspec_task();
-        task.context = Some(serde_json::from_value(serde_json::json!({
-            "taskId": task.task_id,
-            "processId": "test-process",
-            "contractRef": task.contract_ref,
-            "definitionUrl": task.definition_url,
-            "definitionVersion": task.definition_version,
-            "binding": "formspec",
-            "assignedActor": task.assigned_actor,
-            "prefillData": {"retained": true},
-            "prefillMappingRef": task.prefill_mapping_ref,
-            "responseMappingRef": task.response_mapping_ref
-        })).unwrap());
+        task.context = Some(
+            serde_json::from_value(serde_json::json!({
+                "taskId": task.task_id,
+                "processId": "test-process",
+                "contractRef": task.contract_ref,
+                "definitionUrl": task.definition_url,
+                "definitionVersion": task.definition_version,
+                "binding": "formspec",
+                "assignedActor": task.assigned_actor,
+                "prefillData": {"retained": true},
+                "prefillMappingRef": task.prefill_mapping_ref,
+                "responseMappingRef": task.response_mapping_ref
+            }))
+            .unwrap(),
+        );
         // Existing owning canonical fixture; transport preservation does not
         // assert that its signature has been verified for operational intake.
         let response = signed_response();
@@ -1783,22 +1811,56 @@ mod tests {
             expected_response: response.clone(),
             calls: calls.clone(),
         });
-        assert!(adapter.validate_submission(&task, &response).unwrap().validation_outcome.definition_valid);
-        assert!(adapter.revalidate_submission(&task, &response).unwrap().validation_outcome.definition_valid);
-        assert!(adapter.compute_case_mutation(&task, &response).unwrap().is_none());
+        assert!(
+            adapter
+                .validate_submission(&task, &response)
+                .unwrap()
+                .validation_outcome
+                .definition_valid
+        );
+        assert!(
+            adapter
+                .revalidate_submission(&task, &response)
+                .unwrap()
+                .validation_outcome
+                .definition_valid
+        );
+        assert!(
+            adapter
+                .compute_case_mutation(&task, &response)
+                .unwrap()
+                .is_none()
+        );
         assert_eq!(*calls.lock().unwrap(), vec!["validate", "validate", "map"]);
         assert_eq!(response, original);
 
         let mut mismatched = response.clone();
         mismatched["definitionVersion"] = serde_json::json!("2.0.0");
-        assert!(!adapter.validate_submission(&task, &mismatched).unwrap().validation_outcome.definition_valid);
+        assert!(
+            !adapter
+                .validate_submission(&task, &mismatched)
+                .unwrap()
+                .validation_outcome
+                .definition_valid
+        );
         assert_eq!(*calls.lock().unwrap(), vec!["validate", "validate", "map"]);
         let mut rejected = response.clone();
         rejected["meta"] = serde_json::json!({"rejectEnvelope": true});
-        assert!(!adapter.validate_submission(&task, &rejected).unwrap().validation_outcome.definition_valid);
+        assert!(
+            !adapter
+                .validate_submission(&task, &rejected)
+                .unwrap()
+                .validation_outcome
+                .definition_valid
+        );
         let mut unmapped = task.clone();
         unmapped.response_mapping_ref = None;
-        assert!(adapter.compute_case_mutation(&unmapped, &response).unwrap().is_none());
+        assert!(
+            adapter
+                .compute_case_mutation(&unmapped, &response)
+                .unwrap()
+                .is_none()
+        );
         assert_eq!(*calls.lock().unwrap(), vec!["validate", "validate", "map"]);
     }
 
@@ -2231,6 +2293,49 @@ mod tests {
             "registered method_uri must not produce an admission failure"
         );
         assert!(evidence[0].verification_receipt.is_none());
+    }
+
+    #[test]
+    fn signed_task_association_uses_actual_task_and_rejects_foreign_or_malformed_refs() {
+        let adapter = FormspecBinding::new(StubProcessor);
+        let task = formspec_task();
+        let mut response = signed_response();
+        response["data"]["signatureTaskId"] = serde_json::json!(task.task_id);
+        response["authoredSignatures"][0]["signedPayload"]["digest"] = serde_json::json!(
+            build_signed_payload(&response, DigestAlgorithm::Sha256)
+                .unwrap()
+                .digest
+        );
+        let evidence = adapter
+            .signature_evidence(&task, &response)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            evidence[0].source_response_ref.as_deref(),
+            Some(task.task_id.as_str())
+        );
+        for invalid in [
+            serde_json::Value::Null,
+            serde_json::json!("other-task"),
+            serde_json::json!(false),
+            serde_json::json!(""),
+        ] {
+            let mut changed = response.clone();
+            changed["data"]["signatureTaskId"] = invalid;
+            changed["authoredSignatures"][0]["signedPayload"]["digest"] = serde_json::json!(
+                build_signed_payload(&changed, DigestAlgorithm::Sha256)
+                    .unwrap()
+                    .digest
+            );
+            assert!(adapter.signature_evidence(&task, &changed).is_err());
+        }
+        response["sourceResponseRef"] = serde_json::json!("conflicting-alias");
+        response["authoredSignatures"][0]["signedPayload"]["digest"] = serde_json::json!(
+            build_signed_payload(&response, DigestAlgorithm::Sha256)
+                .unwrap()
+                .digest
+        );
+        assert!(adapter.signature_evidence(&task, &response).is_err());
     }
 
     #[test]

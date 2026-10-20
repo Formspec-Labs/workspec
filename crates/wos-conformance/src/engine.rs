@@ -112,9 +112,13 @@ pub struct WorkflowEngine {
     /// Whether runtime rejections are retained for authoring assertions.
     authoring_replay: bool,
 
+    reference_adapters: Option<crate::reference_replay::ReferenceReplayAdapters>,
+
     /// Native result of the most recent task submission.
     submission_result: Option<serde_json::Value>,
     migration_result: Option<serde_json::Value>,
+    governance_result: Option<serde_json::Value>,
+    recipe_resolution: Option<serde_json::Value>,
     pending_observation_errors: Vec<String>,
 
     /// Successful native drains retained even if a later drain rejects.
@@ -143,6 +147,33 @@ impl WorkflowEngine {
         fixture: &ConformanceFixture,
         clock_start_ms: u64,
         authoring_replay: bool,
+    ) -> Result<Self, ConformanceError> {
+        Self::from_selected(fixture, clock_start_ms, authoring_replay, None)
+    }
+
+    pub(crate) fn from_selected(
+        fixture: &ConformanceFixture,
+        clock_start_ms: u64,
+        authoring_replay: bool,
+        selected_formspec: Option<&wos_formspec_binding::selected::ImmutableFormspecProcessor>,
+    ) -> Result<Self, ConformanceError> {
+        Self::from_reference(
+            fixture,
+            clock_start_ms,
+            authoring_replay,
+            selected_formspec,
+            None,
+            &[],
+        )
+    }
+
+    pub(crate) fn from_reference(
+        fixture: &ConformanceFixture,
+        clock_start_ms: u64,
+        authoring_replay: bool,
+        selected_formspec: Option<&wos_formspec_binding::selected::ImmutableFormspecProcessor>,
+        reference: Option<&crate::reference_replay::ReferenceReplayAdapters>,
+        workflow_bytes: &[u8],
     ) -> Result<Self, ConformanceError> {
         if fixture.documents.values().any(|path| path != "inline") {
             return Err(ConformanceError::Parse(
@@ -305,23 +336,92 @@ impl WorkflowEngine {
             None => StubService::null_response(),
         };
 
+        if reference.is_some() && fixture.service_response.is_some() {
+            return Err(ConformanceError::Parse(
+                "selected adapters cannot mix canned service_response".into(),
+            ));
+        }
+        let (stub_service, selected_integration) =
+            crate::reference_invocations::ReplayService::new(
+                &kernel,
+                reference.map(|adapters| adapters.invocations.as_slice()),
+                stub_service,
+            )?;
+        if integration_profile.is_some() && selected_integration.is_some() {
+            return Err(ConformanceError::Parse(
+                "ambiguous integration profile".into(),
+            ));
+        }
+        let integration_profile = selected_integration.or(integration_profile);
         let clock = SharedClock::new(clock_start_ms);
         let mut bindings = BindingRegistry::new();
         let binding_used = match fixture.binding.as_deref() {
             Some("formspec") | Some("conformance") | None => {
-                let processor = if fixture.definition_errors.is_empty() {
-                    FixtureFormspecProcessor::new(
-                        definition_url.clone(),
-                        definition_version.clone(),
-                    )
+                if let Some(processor) = selected_formspec {
+                    for selected in kernels_by_version.values() {
+                        processor
+                            .validate_workflow(selected)
+                            .map_err(|error| ConformanceError::Parse(error.to_string()))?;
+                    }
+                    let trusted = reference
+                        .map(|reference| {
+                            reference
+                                .trusted_receipt_signers
+                                .iter()
+                                .map(|selected| {
+                                    use base64::{Engine as _, engine::general_purpose::STANDARD};
+                                    let kid =
+                                        STANDARD.decode(&selected.kid_base64).map_err(|error| {
+                                            ConformanceError::Parse(error.to_string())
+                                        })?;
+                                    let public =
+                                        STANDARD.decode(&selected.public_key_base64).map_err(
+                                            |error| ConformanceError::Parse(error.to_string()),
+                                        )?;
+                                    if selected.suite != "ed25519"
+                                        || STANDARD.encode(&kid) != selected.kid_base64
+                                        || STANDARD.encode(&public) != selected.public_key_base64
+                                    {
+                                        return Err(ConformanceError::Parse(
+                                            "invalid selected receipt signer".into(),
+                                        ));
+                                    }
+                                    wos_formspec_binding::TrustedReceiptSigner::ed25519(
+                                        kid,
+                                        public.as_slice().try_into().map_err(|_| {
+                                            ConformanceError::Parse(
+                                                "invalid Ed25519 receipt key".into(),
+                                            )
+                                        })?,
+                                        selected.method_uri.clone(),
+                                    )
+                                    .map_err(|error| ConformanceError::Parse(error.to_string()))
+                                })
+                                .collect::<Result<Vec<_>, ConformanceError>>()
+                        })
+                        .transpose()?
+                        .unwrap_or_default();
+                    bindings.register(
+                        wos_formspec_binding::FormspecBinding::new_with_trusted_receipt_signers(
+                            processor.clone().with_clock(clock.clone()),
+                            trusted,
+                        ),
+                    );
                 } else {
-                    FixtureFormspecProcessor::with_definition_errors(
-                        definition_url.clone(),
-                        definition_version.clone(),
-                        fixture.definition_errors.clone(),
-                    )
-                };
-                bindings.register(wos_formspec_binding::FormspecBinding::new(processor));
+                    let processor = if fixture.definition_errors.is_empty() {
+                        FixtureFormspecProcessor::new(
+                            definition_url.clone(),
+                            definition_version.clone(),
+                        )
+                    } else {
+                        FixtureFormspecProcessor::with_definition_errors(
+                            definition_url.clone(),
+                            definition_version.clone(),
+                            fixture.definition_errors.clone(),
+                        )
+                    };
+                    bindings.register(wos_formspec_binding::FormspecBinding::new(processor));
+                }
                 "formspec".to_string()
             }
             Some(other) => {
@@ -330,19 +430,87 @@ impl WorkflowEngine {
                 )));
             }
         };
-        // Admission precedes native process creation, including initial actions.
-        // Every selected kernel version is checked by the same owner before a
-        // later migration can activate it. No fixture label supplies support.
+        let reference_capabilities = if let Some(reference) = reference.filter(|_| {
+            kernel
+                .governance
+                .as_ref()
+                .and_then(|governance| governance.pointer("/dueProcess/execution"))
+                .is_some()
+        }) {
+            if selected_formspec.is_none() || kernels_by_version.len() != 1 {
+                return Err(ConformanceError::Parse("reference due process requires selected native Formspec and one immutable workflow version".into()));
+            }
+            if reference.notice_transport.id.is_empty()
+                || reference.notice_transport.mode != "sameInstantQualifiedReceipt"
+                || !reference
+                    .notice_transport
+                    .retained_results_identity
+                    .starts_with("sha256:")
+                || reference
+                    .notice_transport
+                    .failure_schedule
+                    .iter()
+                    .any(|failure| failure.attempt == 0 || failure.outcome != "noEffectFailure")
+            {
+                return Err(ConformanceError::Parse(
+                    "unsupported selected notice transport".into(),
+                ));
+            }
+            let verifier = wos_runtime::SelectedDeterminationSignatureVerifier::new(
+                reference.document_signing_keys.clone(),
+            )
+            .map_err(|error| ConformanceError::Parse(format!("signature capability: {error:?}")))?;
+            Some(
+                wos_runtime::runtime::governance::ReferenceDueProcessCapabilities {
+                    workflow_bytes: workflow_bytes.to_vec(),
+                    retained_evidence: reference.retained_evidence.clone(),
+                    templates: reference.templates.clone(),
+                    notice_transport: Box::new(
+                        wos_runtime::runtime::governance::DeterministicNoticeTransport::new(
+                            reference
+                                .notice_transport
+                                .failure_schedule
+                                .iter()
+                                .map(|failure| failure.attempt),
+                        ),
+                    ),
+                    signature_verifier: Box::new(verifier),
+                },
+            )
+        } else {
+            None
+        };
+        // Every selected kernel version is admitted by its actual implemented owner.
         for selected in kernels_by_version.values() {
-            ReferenceCompanionPolicy::validate_configuration(selected, None, &companion_docs)
+            if let Some(capabilities) = reference_capabilities.as_ref() {
+                ReferenceCompanionPolicy::validate_reference_due_process_configuration(
+                    selected,
+                    None,
+                    &companion_docs,
+                    capabilities,
+                )
                 .map_err(native_runtime_error)?;
+            } else {
+                ReferenceCompanionPolicy::validate_configuration(selected, None, &companion_docs)
+                    .map_err(native_runtime_error)?;
+            }
         }
-        let companion_policy = ReferenceCompanionPolicy::new(
-            &kernel,
-            ai_doc.clone(),
-            governance_json.clone(),
-            companion_docs.clone(),
-        )
+        let companion_policy = if let Some(capabilities) = reference_capabilities.as_ref() {
+            ReferenceCompanionPolicy::new_reference_due_process(
+                &kernel,
+                ai_doc.clone(),
+                governance_json.clone(),
+                companion_docs.clone(),
+                capabilities,
+            )
+        } else {
+            ReferenceCompanionPolicy::new(
+                &kernel,
+                ai_doc.clone(),
+                governance_json.clone(),
+                companion_docs.clone(),
+            )
+        }
         .map_err(native_runtime_error)?;
         let mut runtime = WosRuntime::new(
             wos_runtime::InMemoryStore::new(),
@@ -361,6 +529,11 @@ impl WorkflowEngine {
             bindings,
         )
         .with_companion_policy(companion_policy);
+        if let Some(capabilities) = reference_capabilities {
+            runtime
+                .configure_reference_due_process(capabilities)
+                .map_err(native_runtime_error)?;
+        }
         if let Some(profile) = integration_profile {
             runtime = runtime.with_integration_profile(profile);
         }
@@ -382,8 +555,11 @@ impl WorkflowEngine {
             next_fixture_event_token: 0,
             binding_used,
             authoring_replay,
+            reference_adapters: reference.cloned(),
             submission_result: None,
             migration_result: None,
+            governance_result: None,
+            recipe_resolution: None,
             pending_observation_errors: Vec::new(),
             observed_drains: Vec::new(),
             initialization: serde_json::Value::Null,
@@ -415,7 +591,15 @@ impl WorkflowEngine {
         };
         self.initialization =
             serde_json::json!({"request":creation_request,"result":null,"error":null});
-        match self.runtime.create_process(creation_request) {
+        let created = if let Some(reference) = &self.reference_adapters {
+            self.runtime.create_process_with_actor_bindings(
+                creation_request,
+                reference.human_actor_bindings.clone(),
+            )
+        } else {
+            self.runtime.create_process(creation_request)
+        };
+        match created {
             Ok(created) => {
                 self.initialization["result"] = serde_json::to_value(created)
                     .map_err(|error| ConformanceError::Engine(error.to_string()))?
@@ -471,6 +655,13 @@ impl WorkflowEngine {
                 (
                     "migration",
                     self.process_migration_event(event_entry).map(|_| ()),
+                )
+            } else if event_entry.governance_operation.is_some()
+                || event_entry.governance_recipe.is_some()
+            {
+                (
+                    "governanceOperation",
+                    self.process_governance_entry(event_entry),
                 )
             } else if let Some(submission) = &event_entry.task_submission {
                 (
@@ -672,8 +863,16 @@ impl WorkflowEngine {
             .runtime
             .load_process(CONFORMANCE_INSTANCE_ID)
             .map_err(native_runtime_error)?;
+        let record = self
+            .runtime
+            .load_reference_record(CONFORMANCE_INSTANCE_ID)
+            .map_err(native_runtime_error)?;
         Ok(crate::studio_api::RuntimeSnapshot {
+            task_history: native_task_history(&record)?,
+            timer_history: native_timer_history(&record)?,
             configuration: process.configuration,
+            governance_state: serde_json::to_value(process.governance_state)
+                .map_err(|error| ConformanceError::Engine(error.to_string()))?,
             case_state: process.case_state,
             step_results: self
                 .runtime
@@ -693,6 +892,8 @@ impl WorkflowEngine {
         self.observed_drains.clear();
         self.submission_result = None;
         self.migration_result = None;
+        self.governance_result = None;
+        self.recipe_resolution = None;
         self.pending_observation_errors.clear();
     }
 
@@ -737,6 +938,8 @@ impl WorkflowEngine {
             drains: std::mem::take(&mut self.observed_drains),
             submission_result: self.submission_result.take(),
             migration_result: self.migration_result.take(),
+            governance_result: self.governance_result.take(),
+            recipe_resolution: self.recipe_resolution.take(),
             error,
             refusals,
             provenance: None,
@@ -835,6 +1038,56 @@ impl WorkflowEngine {
         Ok(())
     }
 
+    fn process_governance_entry(
+        &mut self,
+        entry: &crate::fixture::EventEntry,
+    ) -> Result<(), ConformanceError> {
+        let record = self
+            .runtime
+            .load_reference_record(CONFORMANCE_INSTANCE_ID)
+            .map_err(native_runtime_error)?;
+        let request = if let Some(recipe) = &entry.governance_recipe {
+            let resolved = crate::reference_recipes::resolve_governance(&record, recipe)?;
+            self.recipe_resolution =
+                Some(serde_json::json!({"recipe":recipe,"resolvedRequest":resolved}));
+            resolved
+        } else {
+            entry
+                .governance_operation
+                .clone()
+                .ok_or_else(|| ConformanceError::Parse("governance request absent".into()))?
+        };
+        let actor = entry
+            .actor
+            .as_deref()
+            .ok_or_else(|| ConformanceError::Parse("governance actual actor absent".into()))?;
+        if actor != request.actor.acting_actor {
+            return Err(ConformanceError::Parse(
+                "governance outer actor conflicts".into(),
+            ));
+        }
+        let (outcome, observation) = self
+            .runtime
+            .governance_operation_with_observation(CONFORMANCE_INSTANCE_ID, actor, request)
+            .map_err(native_runtime_error)?;
+        if let Some(observation) = observation {
+            self.observed_drains.push(observation);
+        }
+        self.governance_result = Some(
+            serde_json::to_value(&outcome)
+                .map_err(|error| ConformanceError::Parse(error.to_string()))?,
+        );
+        if let wos_core::model::due_process::GovernanceResult::Refused { code } = outcome {
+            return Err(ConformanceError::UnsupportedOperation(format!(
+                "native governance refused: {code:?}"
+            )));
+        }
+        self.runtime
+            .deliver_pending_notices(CONFORMANCE_INSTANCE_ID)
+            .map_err(native_runtime_error)?;
+        self.drain_runtime_until_idle()
+    }
+
     fn process_task_submission(
         &mut self,
         submission: &crate::fixture::TaskSubmission,
@@ -844,27 +1097,54 @@ impl WorkflowEngine {
             .runtime
             .load_process(CONFORMANCE_INSTANCE_ID)
             .map_err(native_runtime_error)?;
-        let task = instance
+        let mut matching = instance
             .active_tasks
             .iter()
-            .find(|t| t.task_ref == submission.task_ref)
-            .ok_or_else(|| {
-                ConformanceError::Engine(format!(
-                    "no active task with task_ref '{}'",
-                    submission.task_ref
-                ))
-            })?;
+            .filter(|task| task.task_ref == submission.task_ref);
+        let task = matching.next().ok_or_else(|| {
+            ConformanceError::Engine(format!(
+                "no active task with task_ref '{}'",
+                submission.task_ref
+            ))
+        })?;
+        if matching.next().is_some() {
+            return Err(ConformanceError::Engine(
+                "active task reference is ambiguous".into(),
+            ));
+        }
         let task_id = task.task_id.clone();
         let actor_id = submitted_actor
             .map(str::to_string)
             .or_else(|| task.assigned_actor.clone())
             .ok_or_else(|| ConformanceError::Engine("task has no assigned actor".to_string()))?;
 
+        let response = if let Some(recipe) = &submission.signature_recipe {
+            let record = self
+                .runtime
+                .load_reference_record(CONFORMANCE_INSTANCE_ID)
+                .map_err(native_runtime_error)?;
+            let adapters = self.reference_adapters.as_ref().ok_or_else(|| {
+                ConformanceError::Parse("selected signing capability absent".into())
+            })?;
+            let (response, resolution) = crate::reference_recipes::resolve_signature(
+                &record,
+                task,
+                &actor_id,
+                &submission.response,
+                recipe,
+                adapters,
+                self.clock.now_ms(),
+            )?;
+            self.recipe_resolution = Some(resolution);
+            response
+        } else {
+            submission.response.clone()
+        };
         let submission_result = self
             .runtime
             .submit_task_response(
                 &task_id,
-                submission.response.clone(),
+                response,
                 &actor_id,
                 submission.idempotency_token.as_deref(),
             )
@@ -1011,6 +1291,11 @@ impl WorkflowEngine {
                 .map_err(native_runtime_error)?;
             let idle = result.processed_event.is_none();
             self.observed_drains.push(result);
+            if self.reference_adapters.is_some() {
+                self.runtime
+                    .deliver_pending_notices(CONFORMANCE_INSTANCE_ID)
+                    .map_err(native_runtime_error)?;
+            }
             if idle {
                 return Ok(());
             }
@@ -1285,7 +1570,10 @@ impl TaskPresenter for NoopPresenter {
 /// Fixtures may use `record_kind` or `record_type` (snake_case aliases);
 /// the Rust struct serializes as `recordKind` (camelCase via serde).
 /// This function normalizes all three forms to `recordKind` before matching.
-fn provenance_partial_match(expected: &serde_json::Value, actual: &ProvenanceRecord) -> bool {
+pub(crate) fn provenance_partial_match(
+    expected: &serde_json::Value,
+    actual: &ProvenanceRecord,
+) -> bool {
     // Normalize fixture field names to match serde's camelCase output.
     // `record_type` and `record_kind` both map to `recordKind`.
     // This normalization is top-level only — it must NOT recurse into nested objects.
@@ -1362,6 +1650,8 @@ mod observation_failure_tests {
             }],
             submission_result: Some(serde_json::json!({"rejected":{"code":"native-rejection"}})),
             migration_result: None,
+            governance_result: None,
+            recipe_resolution: None,
             error: Some("original native operation error".into()),
             refusals: Vec::new(),
             provenance: None,
@@ -1369,6 +1659,9 @@ mod observation_failure_tests {
         };
         let after = crate::studio_api::RuntimeSnapshot {
             configuration: vec!["observed-state".into()],
+            governance_state: serde_json::Value::Null,
+            task_history: serde_json::json!([]),
+            timer_history: serde_json::json!([]),
             case_state: serde_json::json!({"actual":42}),
             step_results: Vec::new(),
             active_tasks: serde_json::json!([]),
@@ -1403,4 +1696,147 @@ mod observation_failure_tests {
         assert_eq!(attempt.after, Some(after));
         assert_eq!(attempt.observation_errors.len(), 2);
     }
+}
+
+/// Associates native task creation/completion with actual saved accepted artifacts.
+fn native_task_history(
+    record: &wos_runtime::store::RuntimeRecord,
+) -> Result<serde_json::Value, ConformanceError> {
+    let mut observations = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for creation in record
+        .provenance_log
+        .iter()
+        .filter(|item| item.record_kind == ProvenanceKind::TaskCreated)
+    {
+        let data = creation
+            .data
+            .as_ref()
+            .ok_or_else(|| ConformanceError::Engine("task creation data missing".into()))?;
+        let task_id = data
+            .get("taskId")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| ConformanceError::Engine("task creation id missing".into()))?;
+        if !seen.insert(task_id) {
+            return Err(ConformanceError::Engine("ambiguous task creation".into()));
+        }
+        let task_ref = data
+            .pointer("/details/taskRef")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| ConformanceError::Engine("task reference missing".into()))?;
+        let active = record
+            .process
+            .active_tasks
+            .iter()
+            .find(|task| task.task_id == task_id);
+        let completions: Vec<_> = record
+            .provenance_log
+            .iter()
+            .filter(|item| {
+                item.record_kind == ProvenanceKind::TaskCompleted
+                    && item
+                        .data
+                        .as_ref()
+                        .and_then(|data| data.get("taskId"))
+                        .and_then(serde_json::Value::as_str)
+                        == Some(task_id)
+            })
+            .collect();
+        if completions.len() > 1 || (active.is_some() && !completions.is_empty()) {
+            return Err(ConformanceError::Engine(
+                "inconsistent task lifecycle".into(),
+            ));
+        }
+        let accepted = if let Some(completion) = completions.first() {
+            let artifact_id = completion
+                .data
+                .as_ref()
+                .and_then(|data| data.pointer("/details/artifactId"))
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| {
+                    ConformanceError::Engine(
+                        "completed task has no accepted artifact reference".into(),
+                    )
+                })?;
+            let artifact = record
+                .artifacts
+                .get(artifact_id)
+                .filter(|artifact| {
+                    artifact.task_id == task_id
+                        && artifact.kind == wos_runtime::store::TaskArtifactKind::Accepted
+                })
+                .ok_or_else(|| {
+                    ConformanceError::Engine("completed task accepted artifact missing".into())
+                })?;
+            serde_json::json!({"artifactId":artifact.artifact_id,"taskId":artifact.task_id,"response":artifact.response,"actorId":artifact.actor_id,"recordedAt":artifact.recorded_at})
+        } else {
+            serde_json::Value::Null
+        };
+        observations.push(serde_json::json!({"taskId":task_id,"taskRef":task_ref,
+            "status":if completions.is_empty(){active.map(|task|serde_json::to_value(&task.status).unwrap_or(serde_json::Value::Null)).unwrap_or(serde_json::Value::Null)}else{serde_json::json!("completed")},
+            "creation":creation,"active":active,"completion":completions.first(),"acceptedArtifact":accepted}));
+    }
+    Ok(serde_json::Value::Array(observations))
+}
+
+/// Retains each actual native timer lifetime in creation order, including firing.
+fn native_timer_history(
+    record: &wos_runtime::store::RuntimeRecord,
+) -> Result<serde_json::Value, ConformanceError> {
+    let mut result = Vec::new();
+    for (index, creation) in record
+        .provenance_log
+        .iter()
+        .enumerate()
+        .filter(|(_, record)| record.record_kind == ProvenanceKind::TimerCreated)
+    {
+        let id = creation
+            .data
+            .as_ref()
+            .and_then(|data| data.get("timerId"))
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| ConformanceError::Engine("native timer creation missing id".into()))?;
+        let next = record
+            .provenance_log
+            .iter()
+            .enumerate()
+            .skip(index + 1)
+            .find(|(_, record)| {
+                record.record_kind == ProvenanceKind::TimerCreated
+                    && record
+                        .data
+                        .as_ref()
+                        .and_then(|data| data.get("timerId"))
+                        .and_then(serde_json::Value::as_str)
+                        == Some(id)
+            })
+            .map(|(index, _)| index)
+            .unwrap_or(record.provenance_log.len());
+        let events: Vec<_> = record.provenance_log[index + 1..next]
+            .iter()
+            .filter(|record| {
+                matches!(
+                    record.record_kind,
+                    ProvenanceKind::TimerFired | ProvenanceKind::TimerCancelled
+                ) && record
+                    .data
+                    .as_ref()
+                    .and_then(|data| data.get("timerId"))
+                    .and_then(serde_json::Value::as_str)
+                    == Some(id)
+            })
+            .collect();
+        let active = if next == record.provenance_log.len() {
+            record
+                .process
+                .timers
+                .iter()
+                .find(|timer| timer.timer_id == id)
+        } else {
+            None
+        };
+        result.push(serde_json::json!({"timerId":id,"creation":creation,"events":events,"active":active,
+            "fired":events.iter().any(|event|event.record_kind==ProvenanceKind::TimerFired),"cancelled":events.iter().any(|event|event.record_kind==ProvenanceKind::TimerCancelled)}));
+    }
+    Ok(serde_json::Value::Array(result))
 }

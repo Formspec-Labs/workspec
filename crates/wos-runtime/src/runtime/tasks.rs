@@ -452,6 +452,10 @@ impl WosRuntime {
             return Ok(result);
         }
 
+        let kernel = self.resolver.resolve_kernel(
+            &record.process.definition_url,
+            &record.process.definition_version,
+        )?;
         let accepted_artifact = build_artifact(
             &record,
             task_id,
@@ -472,10 +476,13 @@ impl WosRuntime {
         if let Some(bundle) = mutation
             && !bundle.field_updates.is_empty()
         {
+            let mut prospective_case = record.process.case_state.clone();
             merge_case_state(
-                &mut record.process.case_state,
+                &mut prospective_case,
                 &serde_json::Value::Object(bundle.field_updates.clone()),
             );
+            self.reference_validate_case_change(&kernel, &record, &prospective_case)?;
+            record.process.case_state = prospective_case;
             provenance.push(ProvenanceRecord::task_lifecycle(
                 ProvenanceKind::DataMapping,
                 task_id,
@@ -487,10 +494,6 @@ impl WosRuntime {
             ));
         }
 
-        let kernel = self.resolver.resolve_kernel(
-            &record.process.definition_url,
-            &record.process.definition_version,
-        )?;
         let post_state = record.process.case_state.clone();
         let milestone_records = evaluate_milestones(&kernel, &mut record.process, &post_state);
         provenance.extend(milestone_records);

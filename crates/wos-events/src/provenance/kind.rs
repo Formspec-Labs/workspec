@@ -148,6 +148,10 @@ pub enum ProvenanceKind {
     FallbackTerminal,
 
     // ── Due process (WG S4, S6, S7) ────────────────────────────────
+    /// Actual selected decision row and retained policy reasoning.
+    DeterminationReasoning,
+    /// Actual native hypothetical evaluation related to a determination firing.
+    DeterminationCounterfactual,
     NoticeSent,
     SeparationViolation,
     AppealFiled,
@@ -480,6 +484,8 @@ define_canonical_substrate_events! {
     "wos.governance.clock_skew_observed" => ClockSkewObserved,
     "wos.governance.clock_started" => ClockStarted,
     "wos.governance.correction_authorized" => CorrectionAuthorized,
+    "wos.governance.counterfactual_recorded" => DeterminationCounterfactual,
+    "wos.governance.reasoning_recorded" => DeterminationReasoning,
     "wos.governance.determination_amended" => DeterminationAmended,
     "wos.governance.determination_rescinded" => DeterminationRescinded,
     "wos.governance.reinstated" => Reinstated,

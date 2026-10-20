@@ -69,6 +69,7 @@ impl IntegrationBindingHandler for RequestResponseHandler {
             &input,
             idempotency_key.as_deref(),
             now_iso,
+            Some(binding),
         )?;
 
         if reused_persisted_result {
@@ -262,17 +263,40 @@ pub(crate) fn load_or_invoke_service_result(
     input: &serde_json::Value,
     idempotency_key: Option<&str>,
     recorded_at: &str,
+    binding: Option<&IntegrationBinding>,
 ) -> Result<(StepResultRecord, bool), RuntimeError> {
+    let binding_value = binding
+        .map(serde_json::to_value)
+        .transpose()
+        .map_err(|error| RuntimeError::Integration(error.to_string()))?;
+    let adapter_identity =
+        service.invocation_identity(service_ref, input, binding_value.as_ref())?;
+    let association =
+        adapter_identity.map(
+            |adapter_identity| crate::store::ServiceInvocationAssociation {
+                input: input.clone(),
+                binding: binding_value.clone().unwrap_or(serde_json::Value::Null),
+                adapter_identity,
+            },
+        );
     if let Some(existing) = idempotency_key.and_then(|key| {
         record.step_results.iter().find(|result| {
             result.service_ref == service_ref && result.idempotency_key.as_deref() == Some(key)
         })
     }) {
+        if existing.invocation_association != association {
+            return Err(RuntimeError::Integration(
+                "persisted service result input/binding/fixture association changed".into(),
+            ));
+        }
+        service.validate_cached_output(service_ref, input, &existing.output)?;
         return Ok((existing.clone(), true));
     }
 
     let output = service.invoke(service_ref, input, idempotency_key)?;
+    service.validate_cached_output(service_ref, input, &output)?;
     let step_result = StepResultRecord {
+        invocation_association: association,
         service_ref: service_ref.to_string(),
         idempotency_key: idempotency_key.map(str::to_string),
         output,
@@ -280,6 +304,136 @@ pub(crate) fn load_or_invoke_service_result(
     };
     record.step_results.push(step_result.clone());
     Ok((step_result, false))
+}
+
+#[cfg(test)]
+mod reference_cache_tests {
+    use super::*;
+    use serde_json::{Value, json};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use wos_core::traits::ExternalService;
+
+    struct SelectedService {
+        identity: String,
+        calls: AtomicUsize,
+    }
+    impl ExternalService for SelectedService {
+        type Error = std::io::Error;
+        fn invocation_identity(
+            &self,
+            _: &str,
+            input: &Value,
+            _: Option<&Value>,
+        ) -> Result<Option<String>, Self::Error> {
+            if input != &json!({"income": 150}) {
+                return Err(std::io::Error::other("changed actual request"));
+            }
+            Ok(Some(self.identity.clone()))
+        }
+        fn validate_cached_output(
+            &self,
+            _: &str,
+            _: &Value,
+            output: &Value,
+        ) -> Result<(), Self::Error> {
+            if output != &json!({"verified": 145}) {
+                return Err(std::io::Error::other("changed selected output"));
+            }
+            Ok(())
+        }
+        fn invoke(&self, _: &str, _: &Value, _: Option<&str>) -> Result<Value, Self::Error> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(json!({"verified": 145}))
+        }
+    }
+
+    #[test]
+    fn qualified_cache_reuse_checks_actual_input_binding_fixture_and_output_before_return() {
+        let process = serde_json::from_value(json!({"processId":"test-process","caseLedgerId":"test-case","definitionUrl":"urn:test:service","definitionVersion":"1.0.0","configuration":["open"],"caseState":{},"provenancePosition":0,"timers":[],"activeTasks":[],"status":"active","createdAt":"1970-01-01T00:00:00Z","updatedAt":"1970-01-01T00:00:00Z"})).unwrap();
+        let mut record = RuntimeRecord::new(process);
+        let service = SelectedService {
+            identity: "selected-fixture-a".into(),
+            calls: AtomicUsize::new(0),
+        };
+        let binding:IntegrationBinding=serde_json::from_value(json!({"type":"request-response","inputMapping":{"income":"caseFile.income"},"outputBinding":{"caseFile.external":"$.verified"}})).unwrap();
+        let invoke = |record: &mut RuntimeRecord,
+                      service: &SelectedService,
+                      input: &Value,
+                      binding: &IntegrationBinding| {
+            load_or_invoke_service_result(
+                service,
+                record,
+                "income",
+                input,
+                Some("same-key"),
+                "1970-01-01T00:00:00Z",
+                Some(binding),
+            )
+        };
+        assert!(
+            !invoke(&mut record, &service, &json!({"income":150}), &binding)
+                .unwrap()
+                .1
+        );
+        assert!(
+            invoke(&mut record, &service, &json!({"income":150}), &binding)
+                .unwrap()
+                .1
+        );
+        assert_eq!(service.calls.load(Ordering::SeqCst), 1);
+        assert!(
+            invoke(
+                &mut record.clone(),
+                &service,
+                &json!({"income":151}),
+                &binding
+            )
+            .is_err()
+        );
+        let changed = SelectedService {
+            identity: "selected-fixture-b".into(),
+            calls: AtomicUsize::new(0),
+        };
+        assert!(
+            invoke(
+                &mut record.clone(),
+                &changed,
+                &json!({"income":150}),
+                &binding
+            )
+            .is_err()
+        );
+        assert_eq!(changed.calls.load(Ordering::SeqCst), 0);
+        let mut new_binding = binding.clone();
+        new_binding
+            .output_binding
+            .insert("caseFile.changed".into(), "$.verified".into());
+        assert!(
+            invoke(
+                &mut record.clone(),
+                &service,
+                &json!({"income":150}),
+                &new_binding
+            )
+            .is_err()
+        );
+        for mutate in 0..3 {
+            let mut corrupted = record.clone();
+            match mutate {
+                0 => corrupted.step_results[0].output = json!({"verified":999}),
+                1 => corrupted.step_results[0].invocation_association = None,
+                _ => {
+                    corrupted.step_results[0]
+                        .invocation_association
+                        .as_mut()
+                        .unwrap()
+                        .input = json!({"income":999})
+                }
+            }
+            assert!(invoke(&mut corrupted, &service, &json!({"income":150}), &binding).is_err());
+        }
+        assert_eq!(service.calls.load(Ordering::SeqCst), 1);
+    }
 }
 
 // --- Input construction from case state + observed action ---

@@ -105,6 +105,8 @@ pub async fn wos_run_conformance(
         url: String,
         version: Option<String>,
         document_json: String,
+        #[serde(default)]
+        definition: Option<wos_conformance::studio_api::DefinitionSelection>,
     }
     // Direct handler callers and dispatch use the same declaration and defaults.
     let args = crate::catalog::validate_arguments("wos_run_conformance", &args)?;
@@ -133,6 +135,7 @@ pub async fn wos_run_conformance(
                 url: input.url,
                 version: input.version,
                 bytes: input.document_json.into_bytes(),
+                definition: input.definition,
             })
             .collect(),
         fixture_json,

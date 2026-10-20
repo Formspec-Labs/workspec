@@ -340,7 +340,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
     ];
     let dependency = object(
-        json!({"role":string(),"url":string(),"version":{"type":["string","null"]},"document_json":string()}),
+        json!({"role":string(),"url":string(),"version":{"type":["string","null"]},"document_json":string(),"definition":{"type":"object","properties":{"url":string(),"version":string()},"required":["url","version"],"additionalProperties":false}}),
         &["role", "url", "document_json"],
     );
     let expectation = object(
@@ -474,6 +474,22 @@ impl jsonschema::Retrieve for OfflineRetriever {
         &self,
         uri: &jsonschema::Uri<String>,
     ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
+        let selected = match uri.as_str() {
+            "https://wos-spec.org/schemas/wos-reference-due-process.schema.json" => Some(
+                include_str!("../../../schemas/wos-reference-due-process.schema.json"),
+            ),
+            "https://wos-spec.org/schemas/wos-reference-replay.schema.json" => Some(include_str!(
+                "../../../schemas/wos-reference-replay.schema.json"
+            )),
+            "https://wos-spec.org/schemas/wos-workflow.schema.json"
+            | "https://wos-spec.org/schemas/workflow/1.0" => {
+                Some(include_str!("../../../schemas/wos-workflow.schema.json"))
+            }
+            _ => None,
+        };
+        if let Some(text) = selected {
+            return Ok(serde_json::from_str(text)?);
+        }
         Err(format!("schema resource is not distributed locally: {uri}").into())
     }
 }

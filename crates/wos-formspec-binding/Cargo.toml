@@ -8,13 +8,19 @@ repository.workspace = true
 
 [dependencies]
 base64 = "0.22"
+fel-core.workspace = true
+formspec-core = { path = "../../../formspec/crates/formspec-core" }
+formspec-eval = { path = "../../../formspec/crates/formspec-eval" }
+formspec-lint = { path = "../../../formspec/crates/formspec-lint" }
 integrity-canonical = { path = "../../../integrity-stack/crates/integrity-canonical" }
 integrity-cose = { path = "../../../integrity-stack/crates/integrity-cose" }
 integrity-signature = { path = "../../../integrity-stack/crates/integrity-signature" }
 ring = "0.17"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+semver_rs = "0.2"
 thiserror = "2"
+time = { version = "0.3", features = ["formatting"] }
 wos-core = { path = "../wos-core" }
 wos-runtime = { path = "../wos-runtime" }
 

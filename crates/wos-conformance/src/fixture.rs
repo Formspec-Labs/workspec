@@ -131,6 +131,12 @@ pub struct EventEntry {
     /// generated `task_id` at runtime.
     #[serde(default)]
     pub task_submission: Option<TaskSubmission>,
+    /// Trusted native governed request, never dispatched as generic event data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub governance_operation: Option<wos_core::model::due_process::GovernanceRequest>,
+    /// Stable authored reference resolved by native replay against actual saved facts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub governance_recipe: Option<crate::reference_recipes::GovernanceRecipe>,
 }
 
 /// A task response submission within a fixture event sequence.
@@ -141,6 +147,9 @@ pub struct TaskSubmission {
 
     /// Response envelope to submit.
     pub response: serde_json::Value,
+    /// Explicit native sign act recipe; no authored generated IDs or verdicts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature_recipe: Option<crate::reference_recipes::SignatureRecipe>,
 
     /// Idempotency token for replay protection.
     #[serde(default)]

@@ -34,6 +34,43 @@ impl ReferenceCompanionPolicy {
         Ok(Self { ai_doc })
     }
 
+    /// Admits bounded due process using validated concrete native capabilities.
+    ///
+    /// Generic construction continues to refuse these operations. The runtime
+    /// independently requires the same selected capabilities on every preflight.
+    ///
+    /// # Errors
+    /// Refuses invalid capabilities or any unsupported companion operation family.
+    pub fn new_reference_due_process(
+        kernel: &KernelDocument,
+        ai_doc: Option<NativeAiPolicy>,
+        governance: Option<serde_json::Value>,
+        companions: HashMap<String, serde_json::Value>,
+        capabilities: &crate::runtime::governance::ReferenceDueProcessCapabilities,
+    ) -> Result<Self, RuntimeError> {
+        Self::validate_reference_due_process_configuration(
+            kernel,
+            governance.as_ref(),
+            &companions,
+            capabilities,
+        )?;
+        Ok(Self { ai_doc })
+    }
+
+    /// Validates selected due process without admitting unrelated companion families.
+    ///
+    /// # Errors
+    /// Refuses invalid capabilities or unsupported declared operations.
+    pub fn validate_reference_due_process_configuration(
+        kernel: &KernelDocument,
+        governance: Option<&serde_json::Value>,
+        companions: &HashMap<String, serde_json::Value>,
+        capabilities: &crate::runtime::governance::ReferenceDueProcessCapabilities,
+    ) -> Result<(), RuntimeError> {
+        capabilities.validate_configuration(kernel)?;
+        admission::validate_reference_due_process(kernel, governance, companions)
+    }
+
     /// Validate declared operation requirements before reference process creation.
     ///
     /// This also admits selected migration targets through the same requirement checks.

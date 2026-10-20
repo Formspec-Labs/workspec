@@ -614,6 +614,9 @@ mod tests {
     #[test]
     fn render_trace_shows_guard_detail_when_present() {
         let guard = GuardEvaluation {
+            location: None,
+            decision_table: None,
+            firing_record_id: None,
             guard_id: "submitted->approved:approve".to_string(),
             source_state: "submitted".to_string(),
             target_state: "approved".to_string(),

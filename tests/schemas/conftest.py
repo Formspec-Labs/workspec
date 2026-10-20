@@ -87,6 +87,12 @@ def _build_registry() -> tuple[Registry, dict[str, dict[str, Any]]]:
                 resources.append(
                     (file_alias, DRAFT202012.create_resource(schema))
                 )
+    # Unmarked reusable profile resources are referenced by canonical schemas.
+    for rel in ["wos-reference-due-process.schema.json", "wos-reference-replay.schema.json"]:
+        path = SCHEMAS_ROOT / rel
+        if path.exists():
+            schema = _load_schema(rel)
+            resources.append((schema["$id"], DRAFT202012.create_resource(schema)))
     registry = Registry().with_resources(resources)
     return registry, by_marker
 

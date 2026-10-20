@@ -399,8 +399,12 @@
             "openStringKind": "pathExpression"
           },
           "anyOf": [
-            { "maxLength": 0 },
-            { "pattern": "^/" }
+            {
+              "maxLength": 0
+            },
+            {
+              "pattern": "^/"
+            }
           ]
         },
         "message": {
@@ -920,6 +924,48 @@
               }
             }
           ]
+        },
+        "location": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/TransitionLocation",
+          "description": "Exact selected native guard location."
+        },
+        "firingRecordId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Actual StateTransition provenance ID, absent for an unselected guard."
+        },
+        "decisionTable": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "tableRef",
+            "matchedRowIds",
+            "selectedRowId",
+            "outputColumn",
+            "output"
+          ],
+          "properties": {
+            "tableRef": {
+              "type": "string"
+            },
+            "matchedRowIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "selectedRowId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "outputColumn": {
+              "type": "string"
+            },
+            "output": {}
+          },
+          "description": "Actual native decision table row/output observation; absent outputs and rows remain explicit."
         }
       }
     },

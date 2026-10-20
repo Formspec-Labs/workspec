@@ -34,6 +34,7 @@ pub enum NativeReadOnlyDependency {
     IntakePolicy,
     CompanionPolicy,
     PostureResolver,
+    DueProcessSignatureVerifier,
 }
 /// Task binding operation requiring separate host qualification.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -200,6 +201,11 @@ pub enum NativeRuntimeCommand {
     DrainOnce {
         process_id: String,
     },
+    GovernanceOperation {
+        process_id: String,
+        caller_actor_id: String,
+        request: wos_core::model::due_process::GovernanceRequest,
+    },
     TaskDraft {
         task_id: String,
         response: serde_json::Value,
@@ -236,6 +242,7 @@ pub enum NativeRuntimeOutcome {
     IntakeAccepted(IntakeAcceptanceDecision),
     EventEnqueued,
     Drained(DrainOnceResult),
+    GovernanceOperation(wos_core::model::due_process::GovernanceResult),
     DraftPersisted(PersistDraftResult),
     TaskSubmitted(TaskSubmissionResult),
     TaskDismissed(DismissTaskResult),
@@ -381,6 +388,7 @@ pub struct PreparedNativeCommand {
     presentations: Vec<PendingNativePresentationIntent>,
     queried_cases: Vec<String>,
     deferred: Vec<DeferredOutboundEvent>,
+    notice_work: Vec<wos_core::model::due_process::PendingNoticeWork>,
 }
 impl PreparedNativeCommand {
     pub fn command_key(&self) -> &NativeCommandKey {
@@ -403,6 +411,10 @@ impl PreparedNativeCommand {
     }
     pub fn deferred_outbound_events(&self) -> &[DeferredOutboundEvent] {
         &self.deferred
+    }
+    /// Returns immutable notice work staged without any transport invocation.
+    pub fn notice_work(&self) -> &[wos_core::model::due_process::PendingNoticeWork] {
+        &self.notice_work
     }
     pub fn queried_case_ledger_ids(&self) -> &[String] {
         &self.queried_cases
@@ -501,6 +513,21 @@ impl WosRuntime {
             .map_err(&failure)?;
         let deferred = collector.deferred_outbound_events().map_err(&failure)?;
         let (processes, intakes, queried_cases) = collector.finish().map_err(&failure)?;
+        let notice_work = processes
+            .iter()
+            .flat_map(|change| {
+                let (before, after) = match change {
+                    NativeProcessChange::Create(after) => (None, after),
+                    NativeProcessChange::Replace { before, after } => (Some(before), after),
+                };
+                let previous = before
+                    .map(super::governance::retained_notice_ids)
+                    .unwrap_or_default();
+                super::governance::pending_notice_work(after)
+                    .into_iter()
+                    .filter(move |work| !previous.contains(&work.notice_id))
+            })
+            .collect();
         Ok(PreparedNativeCommand {
             key,
             command,
@@ -510,6 +537,7 @@ impl WosRuntime {
             presentations,
             queried_cases,
             deferred,
+            notice_work,
         })
     }
     fn execute_native_command(
@@ -561,6 +589,13 @@ impl WosRuntime {
             NativeRuntimeCommand::DrainOnce { process_id } => {
                 Ok(NativeRuntimeOutcome::Drained(self.drain_once(process_id)?))
             }
+            NativeRuntimeCommand::GovernanceOperation {
+                process_id,
+                caller_actor_id,
+                request,
+            } => Ok(NativeRuntimeOutcome::GovernanceOperation(
+                self.governance_operation(process_id, caller_actor_id, request.clone())?,
+            )),
             NativeRuntimeCommand::TaskDraft {
                 task_id,
                 response,

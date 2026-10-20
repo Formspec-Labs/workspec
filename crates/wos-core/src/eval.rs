@@ -18,6 +18,7 @@ use time::format_description::well_known::Rfc3339;
 
 use crate::context::EvalContext;
 use crate::instance::WorkflowProcess;
+use crate::model::due_process::TransitionLocation;
 use crate::model::kernel::{
     Action, ActionKind, CancellationPolicy, HistoryMode, KernelDocument, MergeStrategy, Region,
     State, StateKind, Transition, TransitionEvent,
@@ -57,6 +58,8 @@ impl Configuration {
 /// Flat index entry for a state at any nesting depth.
 #[derive(Debug, Clone)]
 pub struct IndexedState {
+    /// Exact JSON pointer of the authored state.
+    pub pointer: String,
     /// The typed state definition.
     pub state: State,
     /// Parent parallel state ID, if this state lives in a region.
@@ -88,6 +91,9 @@ pub struct Evaluator {
     /// Case state (field name -> value).
     case_state: HashMap<String, serde_json::Value>,
 
+    initial_case_state: serde_json::Value,
+    entered_state_pointers: Vec<String>,
+
     /// Timer tracking.
     timers: Timers,
 
@@ -102,6 +108,9 @@ pub struct Evaluator {
 
     /// All actions executed during this evaluator lifetime.
     executed_actions: Vec<ObservedAction>,
+
+    /// Case data immediately after each prospective action, for effect preflight.
+    action_case_states: Vec<serde_json::Value>,
 
     /// Guard evaluations observed during this evaluator lifetime.
     ///
@@ -130,6 +139,10 @@ const CONTINUOUS_RESCAN_EVENT: &str = "$postMutationRescan";
 /// An observed state transition.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ObservedTransition {
+    /// Exact authored transition selected by native evaluation.
+    pub location: TransitionLocation,
+    /// Actual StateTransition provenance record created for this firing.
+    pub provenance_record_id: String,
     /// Source state.
     pub from: String,
     /// Target state.
@@ -157,6 +170,15 @@ pub struct ObservedTransition {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct GuardEvaluation {
+    /// Exact authored transition tested, when evaluated as a lifecycle guard.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub location: Option<TransitionLocation>,
+    /// Actual selected native decision row and evaluated output.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decision_table: Option<DecisionTableObservation>,
+    /// Actual firing record; absent for a tested but unselected guard.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub firing_record_id: Option<String>,
     /// Synthesized identifier: `{source_state}->{target_state}:{event}`.
     pub guard_id: String,
     /// Source state of the transition whose guard was evaluated.
@@ -171,6 +193,22 @@ pub struct GuardEvaluation {
     pub result: bool,
     /// Inputs actually read by the guard, nested by FEL namespace.
     pub inputs: serde_json::Value,
+}
+
+/// Actual decision-table selection observed during native evaluation.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DecisionTableObservation {
+    /// Selected authored table identifier.
+    pub table_ref: String,
+    /// All matching row identifiers in document order.
+    pub matched_row_ids: Vec<String>,
+    /// Winning row, absent when no row matched.
+    pub selected_row_id: Option<String>,
+    /// Actual evaluated output column.
+    pub output_column: String,
+    /// Actual evaluated output, absent when no row matched.
+    pub output: Option<serde_json::Value>,
 }
 
 /// An action executed by the evaluator during a single event step.
@@ -191,7 +229,7 @@ pub struct ObservedAction {
     pub event_data: Option<serde_json::Value>,
     /// Actual emitEvent ActionExecuted record, captured during evaluation.
     pub provenance_record_id: Option<String>,
-    /// Nearest actual transition that executed this emitEvent action, if any.
+    /// Nearest actual transition that executed this action, if any.
     pub transition_record_id: Option<String>,
     /// Exact timer present when an explicitly bounded createTask action executed.
     /// Runtime applies its selected calendar to this ephemeral capture; later
@@ -314,12 +352,15 @@ impl Evaluator {
             kernel,
             state_index,
             config: Configuration::default(),
+            initial_case_state: serde_json::json!(seeded_case_state),
+            entered_state_pointers: Vec::new(),
             case_state: seeded_case_state,
             timers: Timers::default(),
             provenance: ProvenanceLog::default(),
             simulated_time_ms: current_time_ms,
             transitions: Vec::new(),
             executed_actions: Vec::new(),
+            action_case_states: Vec::new(),
             guard_evaluations: Vec::new(),
             history_store: HashMap::new(),
         };
@@ -364,12 +405,15 @@ impl Evaluator {
             config: Configuration {
                 active: instance.configuration.clone(),
             },
+            initial_case_state: instance.case_state.clone(),
+            entered_state_pointers: Vec::new(),
             case_state: case_state_from_value(&instance.case_state),
             timers,
             provenance: ProvenanceLog::default(),
             simulated_time_ms: current_time_ms,
             transitions: Vec::new(),
             executed_actions: Vec::new(),
+            action_case_states: Vec::new(),
             guard_evaluations: Vec::new(),
             history_store: instance.history_store.clone(),
         })
@@ -419,6 +463,21 @@ impl Evaluator {
         &self.executed_actions
     }
 
+    /// Case data before any prospective entry or transition actions.
+    pub fn initial_case_state(&self) -> &serde_json::Value {
+        &self.initial_case_state
+    }
+
+    /// Exact state pointers entered, including transient and initial states.
+    pub fn entered_state_pointers(&self) -> &[String] {
+        &self.entered_state_pointers
+    }
+
+    /// Case data immediately after each action, in executed-action order.
+    pub fn action_case_states(&self) -> &[serde_json::Value] {
+        &self.action_case_states
+    }
+
     /// Consume the executed-action log.
     pub fn take_executed_actions(&mut self) -> Vec<ObservedAction> {
         std::mem::take(&mut self.executed_actions)
@@ -439,6 +498,68 @@ impl Evaluator {
     /// `DrainOnceResult.guard_evaluations` scopes to the single drained event.
     pub fn take_guard_evaluations(&mut self) -> Vec<GuardEvaluation> {
         std::mem::take(&mut self.guard_evaluations)
+    }
+
+    /// Evaluates one actual authored guard against an isolated retained snapshot.
+    ///
+    /// This invokes the same guard and decision-table evaluators without entering
+    /// states, applying actions, firing transitions, or creating firing evidence.
+    ///
+    /// # Errors
+    /// Rejects unresolved locations, absent guards, and native evaluation failures.
+    pub fn evaluate_reference_alternative(
+        kernel: &KernelDocument,
+        location: &TransitionLocation,
+        case_state: &serde_json::Value,
+        now_ms: u64,
+    ) -> Result<GuardEvaluation, String> {
+        let definition = serde_json::to_value(kernel).map_err(|error| error.to_string())?;
+        let state = definition
+            .pointer(&location.state_pointer)
+            .ok_or("state pointer does not resolve")?;
+        let transition = state
+            .get("transitions")
+            .and_then(serde_json::Value::as_array)
+            .and_then(|transitions| transitions.get(location.transition_index))
+            .ok_or("transition index does not resolve")?;
+        let transition: Transition =
+            serde_json::from_value(transition.clone()).map_err(|error| error.to_string())?;
+        if transition.guard.is_none() {
+            return Err("reference alternative requires an actual selected guard".into());
+        }
+        if !case_state.is_object() {
+            return Err("reference alternative case snapshot must be an object".into());
+        }
+        let mut evaluator = Self {
+            kernel: kernel.clone(),
+            state_index: build_state_index(kernel),
+            config: Configuration::default(),
+            initial_case_state: case_state.clone(),
+            entered_state_pointers: Vec::new(),
+            case_state: case_state_from_value(case_state),
+            timers: Timers::default(),
+            provenance: ProvenanceLog::default(),
+            simulated_time_ms: now_ms,
+            transitions: Vec::new(),
+            executed_actions: Vec::new(),
+            action_case_states: Vec::new(),
+            guard_evaluations: Vec::new(),
+            history_store: HashMap::new(),
+        };
+        evaluator
+            .evaluate_transition_guard(
+                transition.guard.as_ref(),
+                location,
+                None,
+                &location.state_pointer,
+                &transition.target,
+                "$referenceAlternative",
+            )
+            .map_err(|error| error.to_string())?;
+        evaluator
+            .guard_evaluations
+            .pop()
+            .ok_or_else(|| "native guard produced no observation".into())
     }
 
     /// The kernel document.
@@ -558,7 +679,11 @@ impl Evaluator {
                 None => continue,
             };
 
-            for transition in &indexed.state.transitions {
+            for (transition_index, transition) in indexed.state.transitions.iter().enumerate() {
+                let location = TransitionLocation {
+                    state_pointer: indexed.pointer.clone(),
+                    transition_index,
+                };
                 let event_matches =
                     transition_matches_dispatch(transition, event, continuous_rescan);
                 if !event_matches {
@@ -566,6 +691,7 @@ impl Evaluator {
                 }
                 if !self.evaluate_transition_guard(
                     transition.guard.as_ref(),
+                    &location,
                     event_data,
                     active_state,
                     &transition.target,
@@ -577,6 +703,7 @@ impl Evaluator {
                 self.fire_transition(
                     active_state,
                     &transition.target,
+                    &location,
                     dispatch_event,
                     actor,
                     &transition.actions,
@@ -638,7 +765,16 @@ impl Evaluator {
                 continue;
             }
 
-            for transition in &state_def.transitions {
+            for (transition_index, transition) in state_def.transitions.iter().enumerate() {
+                let location = TransitionLocation {
+                    state_pointer: self
+                        .state_index
+                        .get(&active)
+                        .ok_or_else(|| EvalError::StateNotFound(active.clone()))?
+                        .pointer
+                        .clone(),
+                    transition_index,
+                };
                 let event_matches =
                     transition_matches_dispatch(transition, event, continuous_rescan);
                 if !event_matches {
@@ -646,6 +782,7 @@ impl Evaluator {
                 }
                 if !self.evaluate_transition_guard(
                     transition.guard.as_ref(),
+                    &location,
                     event_data,
                     &active,
                     &transition.target,
@@ -671,22 +808,21 @@ impl Evaluator {
                 self.config.exit(&active);
                 self.enter_state(&target, actor, event_data)?;
 
-                self.transitions.push(ObservedTransition {
+                let transition = ObservedTransition {
+                    location: location.clone(),
+                    provenance_record_id: String::new(),
                     from: active.clone(),
                     to: target.clone(),
                     event: dispatch_event.to_string(),
                     tags: transition.tags.clone(),
-                });
-                let transition_record = ProvenanceRecord::tagged_state_transition(
-                    &active,
-                    &target,
-                    dispatch_event,
-                    actor,
-                    &transition.tags,
-                    case_file_snapshot,
-                );
-                let transition_record_id = transition_record.id.clone();
-                self.provenance.push(transition_record);
+                };
+                self.record_transition(transition, actor, case_file_snapshot, actions_start);
+                let transition_record_id = self
+                    .transitions
+                    .last()
+                    .expect("recorded transition")
+                    .provenance_record_id
+                    .clone();
 
                 self.apply_parallel_cancellation_policy(
                     parallel_id,
@@ -806,6 +942,7 @@ impl Evaluator {
             .ok_or_else(|| EvalError::StateNotFound(state_id.to_string()))?
             .clone();
 
+        self.entered_state_pointers.push(indexed.pointer.clone());
         match indexed.state.kind {
             StateKind::Compound => {
                 self.config.enter(state_id.to_string());
@@ -1092,6 +1229,7 @@ impl Evaluator {
         &mut self,
         source: &str,
         target: &str,
+        location: &TransitionLocation,
         event: &str,
         actor: Option<&str>,
         actions: &[Action],
@@ -1115,6 +1253,8 @@ impl Evaluator {
 
         self.record_transition(
             ObservedTransition {
+                location: location.clone(),
+                provenance_record_id: String::new(),
                 from: source.to_string(),
                 to: target.to_string(),
                 event: event.to_string(),
@@ -1131,12 +1271,12 @@ impl Evaluator {
     /// Retain an actual transition and bind its still-unbound emissions.
     fn record_transition(
         &mut self,
-        transition: ObservedTransition,
+        mut transition: ObservedTransition,
         actor: Option<&str>,
         case_file_snapshot: Option<CaseFileSnapshot>,
         actions_start: usize,
     ) {
-        let record = ProvenanceRecord::tagged_state_transition(
+        let mut record = ProvenanceRecord::tagged_state_transition(
             &transition.from,
             &transition.to,
             &transition.event,
@@ -1144,18 +1284,29 @@ impl Evaluator {
             &transition.tags,
             case_file_snapshot,
         );
+        let data = record.data.get_or_insert_with(|| serde_json::json!({}));
+        data["nativeTransitionLocation"] =
+            serde_json::to_value(&transition.location).expect("transition location serializes");
         let record_id = record.id.clone();
+        transition.provenance_record_id = record_id.clone();
+        if let Some(guard) = self.guard_evaluations.iter_mut().rev().find(|guard| {
+            guard.location.as_ref() == Some(&transition.location)
+                && guard.result
+                && guard.firing_record_id.is_none()
+        }) {
+            guard.firing_record_id = Some(record_id.clone());
+        }
         self.provenance.push(record);
         self.bind_emitted_action_origins(actions_start, &record_id);
         self.transitions.push(transition);
     }
 
-    /// Bind still-unbound emissions to their nearest actual transition.
+    /// Bind still-unbound actions to their nearest actual transition.
     fn bind_emitted_action_origins(&mut self, start: usize, transition_record_id: &str) {
         for action in &mut self.executed_actions[start..] {
-            // Nested transitions already own their emissions. Non-emit actions
-            // have no captured emit provenance and allocate no origin references.
-            if action.provenance_record_id.is_some() && action.transition_record_id.is_none() {
+            // Nested transitions already own their actions; initial entry has no
+            // transition to invent. Every governed effect retains its real origin.
+            if action.transition_record_id.is_none() {
                 action.transition_record_id = Some(transition_record_id.to_string());
             }
         }
@@ -1347,6 +1498,15 @@ impl Evaluator {
             }
         }
 
+        if self
+            .kernel
+            .governance
+            .as_ref()
+            .and_then(|value| value.pointer("/dueProcess/execution"))
+            .is_some()
+        {
+            self.action_case_states.push(self.case_state_json());
+        }
         self.executed_actions.push(ObservedAction {
             provenance_record_id,
             transition_record_id: None,
@@ -1431,12 +1591,14 @@ impl Evaluator {
     fn evaluate_transition_guard(
         &mut self,
         guard: Option<&crate::model::decision_table::Guard>,
+        location: &TransitionLocation,
         event_data: Option<&serde_json::Value>,
         source_state: &str,
         target_state: &str,
         event: &str,
     ) -> Result<bool, EvalError> {
-        match guard {
+        let start = self.guard_evaluations.len();
+        let result = match guard {
             None => Ok(true),
             Some(crate::model::decision_table::Guard::Fel(expr)) => self.evaluate_guard(
                 Some(expr.as_str()),
@@ -1453,7 +1615,11 @@ impl Evaluator {
                     target_state,
                     event,
                 ),
+        };
+        for evaluation in &mut self.guard_evaluations[start..] {
+            evaluation.location = Some(location.clone());
         }
+        result
     }
 
     /// Validate an absolute deadline before replacing a timer.
@@ -1616,6 +1782,9 @@ impl Evaluator {
 
         let inputs = build_guard_inputs(&parsed, &self.case_state, event_data);
         self.guard_evaluations.push(GuardEvaluation {
+            location: None,
+            decision_table: None,
+            firing_record_id: None,
             guard_id: format!("{source_state}->{target_state}:{event}"),
             source_state: source_state.to_string(),
             target_state: target_state.to_string(),
@@ -1751,6 +1920,14 @@ impl Evaluator {
                 })?;
 
             let substate_label = format!("{foreach_state_id}:body:{current_id}");
+            let foreach_pointer = &self
+                .state_index
+                .get(foreach_state_id)
+                .ok_or_else(|| EvalError::StateNotFound(foreach_state_id.into()))?
+                .pointer;
+            let substate_key = current_id.replace('~', "~0").replace('/', "~1");
+            self.entered_state_pointers
+                .push(format!("{foreach_pointer}/body/states/{substate_key}"));
 
             // Substate onEntry — atomic and final substates emit them; we
             // intentionally don't recurse for nested compound substates in
@@ -1794,7 +1971,17 @@ impl Evaluator {
             // Find the first eligible anonymous outgoing transition.
             let transitions = substate.transitions.clone();
             let mut next_id = None;
-            for transition in &transitions {
+            for (transition_index, transition) in transitions.iter().enumerate() {
+                let body_pointer = &self
+                    .state_index
+                    .get(foreach_state_id)
+                    .ok_or_else(|| EvalError::StateNotFound(foreach_state_id.into()))?
+                    .pointer;
+                let substate_key = current_id.replace('~', "~0").replace('/', "~1");
+                let location = TransitionLocation {
+                    state_pointer: format!("{body_pointer}/body/states/{substate_key}"),
+                    transition_index,
+                };
                 if transition.event.is_some() {
                     // Explicit-event transitions do not auto-fire inside a
                     // body; they would require the runtime to receive an
@@ -1804,6 +1991,7 @@ impl Evaluator {
                 }
                 let passes = self.evaluate_transition_guard(
                     transition.guard.as_ref(),
+                    &location,
                     event_data,
                     &current_id,
                     &transition.target,
@@ -1822,13 +2010,14 @@ impl Evaluator {
                 next_id = Some((
                     transition.target.clone(),
                     transition.tags.clone(),
+                    location,
                     snapshot,
                     actions_start,
                 ));
                 break;
             }
 
-            let (next, tags, snapshot, actions_start) = match next_id {
+            let (next, tags, location, snapshot, actions_start) = match next_id {
                 Some(n) => n,
                 None => {
                     return Err(EvalError::ForEach {
@@ -1854,6 +2043,8 @@ impl Evaluator {
 
             entered_by = Some((
                 ObservedTransition {
+                    location,
+                    provenance_record_id: String::new(),
                     from: substate_label,
                     to: format!("{foreach_state_id}:body:{next}"),
                     event: SYNTHETIC_EVENT.to_string(),
@@ -2026,7 +2217,16 @@ impl Evaluator {
 
         const SYNTHETIC_EVENT: &str = "$foreachComplete";
 
-        for transition in transitions {
+        for (transition_index, transition) in transitions.into_iter().enumerate() {
+            let location = TransitionLocation {
+                state_pointer: self
+                    .state_index
+                    .get(state_id)
+                    .ok_or_else(|| EvalError::StateNotFound(state_id.into()))?
+                    .pointer
+                    .clone(),
+                transition_index,
+            };
             // Anonymous transitions only (event = None). Foreach-state
             // transitions with an explicit event still fire later via normal
             // dispatch when that event arrives.
@@ -2035,6 +2235,7 @@ impl Evaluator {
             }
             let guard_passes = self.evaluate_transition_guard(
                 transition.guard.as_ref(),
+                &location,
                 event_data,
                 state_id,
                 &transition.target,
@@ -2046,6 +2247,7 @@ impl Evaluator {
             self.fire_transition(
                 state_id,
                 &transition.target,
+                &location,
                 SYNTHETIC_EVENT,
                 actor,
                 &transition.actions,
@@ -2256,6 +2458,18 @@ impl Evaluator {
                     }
                 };
                 self.guard_evaluations.push(GuardEvaluation {
+                    location: None,
+                    decision_table: Some(DecisionTableObservation {
+                        table_ref: table_ref.to_string(),
+                        matched_row_ids: matches
+                            .iter()
+                            .map(|index| table.rows[*index].id.clone())
+                            .collect(),
+                        selected_row_id: None,
+                        output_column: guard.output_column.clone(),
+                        output: None,
+                    }),
+                    firing_record_id: None,
                     guard_id: format!("{source_state}->{target_state}:{event}"),
                     source_state: source_state.to_string(),
                     target_state: target_state.to_string(),
@@ -2313,6 +2527,18 @@ impl Evaluator {
         };
 
         self.guard_evaluations.push(GuardEvaluation {
+            location: None,
+            decision_table: Some(DecisionTableObservation {
+                table_ref: table_ref.to_string(),
+                matched_row_ids: matches
+                    .iter()
+                    .map(|index| table.rows[*index].id.clone())
+                    .collect(),
+                selected_row_id: Some(selected_row.id.clone()),
+                output_column: guard.output_column.clone(),
+                output: Some(serde_json::json!(passed)),
+            }),
+            firing_record_id: None,
             guard_id: format!("{source_state}->{target_state}:{event}"),
             source_state: source_state.to_string(),
             target_state: target_state.to_string(),
@@ -2569,6 +2795,13 @@ impl Evaluator {
             return Ok(());
         }
 
+        self.entered_state_pointers.push(
+            self.state_index
+                .get(state_id)
+                .ok_or_else(|| EvalError::StateNotFound(state_id.into()))?
+                .pointer
+                .clone(),
+        );
         self.config.enter(state_id.to_string());
         self.provenance
             .push(ProvenanceRecord::state_entered(state_id));
@@ -2646,7 +2879,14 @@ impl Evaluator {
 /// Build a flat state index from the typed kernel document.
 fn build_state_index(kernel: &KernelDocument) -> HashMap<String, IndexedState> {
     let mut index = HashMap::new();
-    index_states_recursive(&kernel.lifecycle.states, None, None, None, &mut index);
+    index_states_recursive(
+        &kernel.lifecycle.states,
+        "/lifecycle/states",
+        None,
+        None,
+        None,
+        &mut index,
+    );
     index
 }
 
@@ -2670,15 +2910,19 @@ pub fn validate_migration_configuration(
 /// Recursively index states from a states map.
 fn index_states_recursive(
     states: &indexmap::IndexMap<String, State>,
+    states_pointer: &str,
     parallel_parent: Option<&str>,
     region_name: Option<&str>,
     direct_parent: Option<&str>,
     index: &mut HashMap<String, IndexedState>,
 ) {
     for (name, state) in states {
+        let escaped = name.replace('~', "~0").replace('/', "~1");
+        let pointer = format!("{states_pointer}/{escaped}");
         index.insert(
             name.clone(),
             IndexedState {
+                pointer: pointer.clone(),
                 state: state.clone(),
                 parallel_parent: parallel_parent.map(String::from),
                 region_name: region_name.map(String::from),
@@ -2689,6 +2933,7 @@ fn index_states_recursive(
         if state.kind == StateKind::Compound {
             index_states_recursive(
                 &state.states,
+                &format!("{pointer}/states"),
                 parallel_parent,
                 region_name,
                 Some(name),
@@ -2698,7 +2943,15 @@ fn index_states_recursive(
 
         if state.kind == StateKind::Parallel {
             for (rname, region) in &state.regions {
-                index_states_recursive(&region.states, Some(name), Some(rname), Some(name), index);
+                let region_key = rname.replace('~', "~0").replace('/', "~1");
+                index_states_recursive(
+                    &region.states,
+                    &format!("{pointer}/regions/{region_key}/states"),
+                    Some(name),
+                    Some(rname),
+                    Some(name),
+                    index,
+                );
             }
         }
     }

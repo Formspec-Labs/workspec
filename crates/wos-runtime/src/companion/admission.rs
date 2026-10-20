@@ -57,6 +57,23 @@ pub(super) fn validate(
     selected_governance: Option<&Value>,
     companions: &HashMap<String, Value>,
 ) -> Result<(), RuntimeError> {
+    validate_selected(kernel, selected_governance, companions, false)
+}
+
+pub(super) fn validate_reference_due_process(
+    kernel: &KernelDocument,
+    selected_governance: Option<&Value>,
+    companions: &HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
+    validate_selected(kernel, selected_governance, companions, true)
+}
+
+fn validate_selected(
+    kernel: &KernelDocument,
+    selected_governance: Option<&Value>,
+    companions: &HashMap<String, Value>,
+    native_due_process: bool,
+) -> Result<(), RuntimeError> {
     // Kernel §9.5 requires actual compensating action execution. The former
     // name-based record generator was not a compensation owner.
     if kernel
@@ -78,9 +95,10 @@ pub(super) fn validate(
         }
     }
     let governance = kernel.governance.as_ref().or(selected_governance);
-    if kernel
-        .impact_level
-        .is_some_and(|impact| impact.requires_due_process())
+    if !native_due_process
+        && kernel
+            .impact_level
+            .is_some_and(|impact| impact.requires_due_process())
         && kernel.lifecycle.states.values().any(has_adverse_transition)
     {
         // Governance §3 applies to rights/safety adverse capabilities even if a
@@ -116,26 +134,30 @@ pub(super) fn validate(
             ));
         }
         if let Some(policy) = due.and_then(|due| due.get("adverseDecisionPolicy")) {
-            if policy.get("noticeRequired").and_then(Value::as_bool) == Some(true) {
+            if !native_due_process
+                && policy.get("noticeRequired").and_then(Value::as_bool) == Some(true)
+            {
                 return Err(refuse(
                     "/governance/dueProcess/adverseDecisionPolicy/noticeRequired",
                     "Governance §3.2 delivery before effect, qualified receipt and grace timing (fs-hltb)",
                 ));
             }
-            if policy
-                .get("counterfactualRequired")
-                .and_then(Value::as_bool)
-                == Some(true)
+            if !native_due_process
+                && policy
+                    .get("counterfactualRequired")
+                    .and_then(Value::as_bool)
+                    == Some(true)
             {
                 return Err(refuse(
                     "/governance/dueProcess/adverseDecisionPolicy/counterfactualRequired",
                     "Governance §3.4 counterfactual explanation",
                 ));
             }
-            if policy
-                .get("explanationLevel")
-                .and_then(Value::as_str)
-                .is_some_and(|level| level == "individualized")
+            if !native_due_process
+                && policy
+                    .get("explanationLevel")
+                    .and_then(Value::as_str)
+                    .is_some_and(|level| level == "individualized")
             {
                 return Err(refuse(
                     "/governance/dueProcess/adverseDecisionPolicy/explanationLevel",
@@ -143,11 +165,12 @@ pub(super) fn validate(
                 ));
             }
             if let Some(appeal) = policy.get("appealMechanism") {
-                if appeal.get("enabled").and_then(Value::as_bool) == Some(true)
-                    || appeal
-                        .get("continuationOfServices")
-                        .and_then(Value::as_bool)
-                        == Some(true)
+                if !native_due_process
+                    && (appeal.get("enabled").and_then(Value::as_bool) == Some(true)
+                        || appeal
+                            .get("continuationOfServices")
+                            .and_then(Value::as_bool)
+                            == Some(true))
                 {
                     return Err(refuse(
                         "/governance/dueProcess/adverseDecisionPolicy/appealMechanism",
@@ -220,9 +243,13 @@ pub(super) fn validate(
             .pointer("/qualityControls/overrideAuthority")
             .and_then(Value::as_object)
         {
-            if authority
-                .values()
-                .any(|value| value.as_bool() == Some(true))
+            if !(native_due_process
+                && governance
+                    .pointer("/dueProcess/execution/preNoticeExtension")
+                    .is_some())
+                && authority
+                    .values()
+                    .any(|value| value.as_bool() == Some(true))
             {
                 return Err(refuse(
                     "/governance/qualityControls/overrideAuthority",
@@ -232,7 +259,16 @@ pub(super) fn validate(
         }
         if let Some(audit) = governance.get("audit").and_then(Value::as_object) {
             for (tier, requirements) in audit {
-                if nonempty_array(requirements.get("requiredForTags")) {
+                let implemented_native_tier = native_due_process
+                    && matches!(tier.as_str(), "reasoning" | "counterfactual")
+                    && requirements
+                        .get("requiredForTags")
+                        .and_then(Value::as_array)
+                        .is_some_and(|tags| {
+                            tags.iter()
+                                .all(|tag| tag.as_str() == Some("adverse-decision"))
+                        });
+                if nonempty_array(requirements.get("requiredForTags")) && !implemented_native_tier {
                     return Err(refuse(
                         &format!("/governance/audit/{tier}"),
                         "Governance §6 actual reasoning/counterfactual evidence",

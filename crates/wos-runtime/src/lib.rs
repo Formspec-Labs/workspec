@@ -47,6 +47,10 @@ pub use restate_fixture_support::{
     signature_runtime_fixture_profile,
 };
 #[doc(inline)]
+pub use runtime::reference_signature::{
+    SelectedDeterminationSignatureVerifier, SelectedDocumentSigningKey,
+};
+#[doc(inline)]
 pub use runtime::{
     CaseProcessMembership, DeferredOutboundEvent, NativeCommandKey, NativeIntakeBindingOperation,
     NativeIntakeChange, NativePreparationError, NativePreparationFailure, NativePreparationPolicy,

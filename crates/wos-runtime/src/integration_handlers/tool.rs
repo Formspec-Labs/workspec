@@ -86,6 +86,7 @@ impl IntegrationBindingHandler for ToolHandler {
             &input,
             idempotency_key.as_deref(),
             now_iso,
+            Some(binding),
         )?;
 
         if reused_persisted_result {
