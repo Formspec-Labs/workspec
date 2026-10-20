@@ -6,6 +6,8 @@ use wos_core::model::governance_checks::{
     GovernanceIssueKind, LifecycleIndex, check_governance, check_reference_governance,
 };
 use wos_lint::studio_api::{CheckStatus, ValidationRequest, ValidationScope, validate};
+#[path = "../../wos-conformance/tests/support/local_schemas.rs"]
+mod local_schemas;
 
 fn fixture() -> Value {
     serde_json::from_str(include_str!("fixtures/shared-validation/rights-human.json")).unwrap()
@@ -121,5 +123,80 @@ fn selected_reference_execution_requires_its_inputs_at_every_impact_level() {
             "{impact:?}: {:?}",
             checks.issues
         );
+    }
+}
+
+#[test]
+fn required_adverse_notice_timing_agrees_in_schema_shared_check_and_actual_lint() {
+    let schema = local_schemas::validator(&json!({
+        "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json"
+    }));
+    for impact in [
+        "rights-impacting",
+        "safety-impacting",
+        "operational",
+        "informational",
+    ] {
+        for notice_required in [true, false] {
+            for timing in [
+                None,
+                Some("beforeEffective"),
+                Some("onEffective"),
+                Some("afterEffective"),
+            ] {
+                let mut input = fixture();
+                input["impactLevel"] = json!(impact);
+                let policy = input["governance"]["dueProcess"]["adverseDecisionPolicy"]
+                    .as_object_mut()
+                    .unwrap();
+                policy.insert("noticeRequired".into(), json!(notice_required));
+                policy.insert("noticeTemplateKey".into(), json!("adverseNotice"));
+                policy
+                    .get_mut("appealMechanism")
+                    .unwrap()
+                    .as_object_mut()
+                    .unwrap()
+                    .insert(
+                        "reviewerConstraint".into(),
+                        json!("independentFromOriginal"),
+                    );
+                policy.remove("noticeTiming");
+                if let Some(timing) = timing {
+                    policy.insert("noticeTiming".into(), json!(timing));
+                }
+                let refuse = matches!(impact, "rights-impacting" | "safety-impacting")
+                    && notice_required
+                    && timing != Some("beforeEffective");
+                assert_eq!(
+                    schema.is_valid(&input),
+                    !refuse,
+                    "schema {impact}/{notice_required}/{timing:?}: {:?}",
+                    schema
+                        .iter_errors(&input)
+                        .map(|error| error.to_string())
+                        .collect::<Vec<_>>()
+                );
+                let kernel: KernelDocument = serde_json::from_value(input.clone()).unwrap();
+                let checks =
+                    check_governance(&kernel, &input["governance"], &LifecycleIndex::new(&kernel));
+                assert_eq!(
+                    checks
+                        .issues
+                        .iter()
+                        .any(|issue| issue.kind == GovernanceIssueKind::NoticeTiming
+                            && issue.path == "/dueProcess/adverseDecisionPolicy/noticeTiming"),
+                    refuse
+                );
+                let native = wos_lint::lint_workflow_with_project(&input.to_string()).unwrap();
+                assert_eq!(
+                    native.iter().any(|diagnostic| diagnostic.rule_id == "G-001"
+                        && diagnostic
+                            .path
+                            .ends_with("/dueProcess/adverseDecisionPolicy/noticeTiming")),
+                    refuse,
+                    "lint {impact}/{notice_required}/{timing:?}: {native:?}"
+                );
+            }
+        }
     }
 }

@@ -6,6 +6,7 @@ use super::governance::{
     ReasoningTierConfig,
 };
 use super::kernel::{ImpactLevel, KernelDocument};
+use super::notice_requirements::check_adverse_notice_timing;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
@@ -49,6 +50,8 @@ impl LifecycleIndex {
 /// Reason a static declaration fails independently of runtime evidence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GovernanceIssueKind {
+    /// Required adverse notice lacks explicit before-effect timing.
+    NoticeTiming,
     /// Rights-impacting policy lacks individualized explanations.
     ExplanationLevel,
     /// The selected policy does not require counterfactual evidence.
@@ -98,6 +101,27 @@ pub fn check_governance(
     } else {
         Vec::new()
     };
+    if kernel
+        .impact_level
+        .is_some_and(ImpactLevel::requires_due_process)
+        && governance.pointer("/dueProcess/adverseDecisionPolicy/noticeRequired")
+            == Some(&Value::Bool(true))
+    {
+        let timing = governance
+            .pointer("/dueProcess/adverseDecisionPolicy/noticeTiming")
+            .cloned()
+            .and_then(|value| serde_json::from_value(value).ok());
+        if let Some(issue) =
+            check_adverse_notice_timing(timing, "/dueProcess/adverseDecisionPolicy/noticeTiming")
+        {
+            issues.push(GovernanceIssue {
+                rule_id: issue.rule_id,
+                path: issue.path,
+                kind: GovernanceIssueKind::NoticeTiming,
+                message: issue.message,
+            });
+        }
+    }
     if let Some(execution) = governance.pointer("/dueProcess/execution") {
         issues.extend(execution_issues(execution));
     }

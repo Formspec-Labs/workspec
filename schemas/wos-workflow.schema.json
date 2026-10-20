@@ -569,6 +569,37 @@
       }
     },
     {
+      "title": "Required adverse notice in rights/safety workflows MUST precede effect.",
+      "if": {
+        "required": ["impactLevel"],
+        "properties": {
+          "impactLevel": {"enum": ["rights-impacting", "safety-impacting"]}
+        }
+      },
+      "then": {
+        "properties": {
+          "governance": {
+            "properties": {
+              "dueProcess": {
+                "properties": {
+                  "adverseDecisionPolicy": {
+                    "if": {
+                      "required": ["noticeRequired"],
+                      "properties": {"noticeRequired": {"const": true}}
+                    },
+                    "then": {
+                      "required": ["noticeTiming"],
+                      "properties": {"noticeTiming": {"const": "beforeEffective"}}
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "title": "Workflows whose actors include any agent-typed actor MUST declare agents[].",
       "if": {
         "properties": {

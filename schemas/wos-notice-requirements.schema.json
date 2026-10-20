@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/wos-notice-requirements.schema.json",
+  "title": "WOS Notice Requirement",
+  "description": "Declared notice observation, evidence scope and clock anchor. Declaration validity does not establish installed provider capability or authenticate historical evidence. Governance S3.2 and S3.5.",
+  "$ref": "#/$defs/NoticeRequirement",
+  "$defs": {
+    "NoticeRequirement": {
+      "type": "object",
+      "required": ["observation", "scope", "anchor"],
+      "additionalProperties": false,
+      "properties": {
+        "observation": {
+          "type": "string",
+          "enum": ["transportAccepted", "recipientReceived", "recipientAcknowledged", "fixtureQualifiedReceipt"],
+          "examples": ["transportAccepted", "fixtureQualifiedReceipt"],
+          "description": "Required evidence meaning. Transport acceptance and local capture do not establish recipient receipt or acknowledgment. Fixture qualification has only its declared software test meaning."
+        },
+        "scope": {
+          "type": "string",
+          "enum": ["production", "softwareFixture"],
+          "examples": ["production", "softwareFixture"],
+          "description": "Scope retained in derived clock and effect evidence. Fixture qualification cannot satisfy production scope."
+        },
+        "anchor": {
+          "type": "string",
+          "enum": ["none", "qualifiedObservation"],
+          "examples": ["none", "qualifiedObservation"],
+          "description": "Ordinary informational status uses none. Consequence-bearing use requires the original immutable qualified observation. Period and calendar rules remain in their existing policy owner."
+        }
+      }
+    }
+  }
+}
