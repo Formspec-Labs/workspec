@@ -356,6 +356,8 @@ The profile registers the following intent URIs. The set is **append-only**: rem
 
 This table is the baseline WOS signing-intent registry, not an example catalog. A Signature Profile Runtime MUST recognize every URI in this table. Deployment-local URI registration happens only through §2.13.2, and the `urn:wos:signing-intent:*` namespace is reserved to this profile.
 
+Envelope-routed signing uses this complete baseline as the default P-6 `IntentRegistry` described in the [content-attestation design memo](../../../thoughts/research/2026-05-12-content-attestation-envelope-research.md). It does not introduce an envelope-only subset or reclassify a `urn:wos:signing-intent:*` URI as deployment-local. Selecting another registry adapter does not relax this profile's recognition, namespace, authentication-method, or signer-authority requirements.
+
 | Intent URI | Meaning | Authentication-method floor (general) | Signer-authority floor (§2.14) |
 |---|---|---|---|
 | `urn:wos:signing-intent:applicant-signature` | The principal party signing on their own behalf — the primary applicant, party, signer of record. | `email-otp` or stronger | `self` |
