@@ -2784,3 +2784,63 @@ fn shared_static_checks_preserve_policy_versus_evidence_refusals() {
         assert_eq!(calls.load(Ordering::SeqCst), 0);
     }
 }
+
+#[test]
+fn multiple_actual_table_inputs_create_explanation_before_any_clock_retry() {
+    let mut raw = fixture();
+    raw["caseFile"]["fields"]["householdSize"] = json!({"type":"number","default":1});
+    raw["decisionTables"][0]["inputs"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"name":"householdSize","type":"number"}));
+    for row in raw["decisionTables"][0]["rows"].as_array_mut().unwrap() {
+        row["inputCells"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!("householdSize > 0"));
+    }
+    raw["lifecycle"]["states"]["open"]["transitions"][0]["guard"]["inputBindings"]["householdSize"] =
+        json!("caseFile.householdSize");
+    let (mut runtime, time, calls) = runtime(&raw);
+    let process = create(&mut runtime).unwrap();
+    enqueue(&mut runtime, &process, "decide", "actor:human:determiner");
+    runtime.drain_once(&process).unwrap();
+    let saved = runtime.load_reference_record(&process).unwrap();
+    assert_eq!(time.0.load(Ordering::SeqCst), 0);
+    assert_eq!(saved.process.configuration, ["pending"]);
+    let due = saved
+        .process
+        .governance_state
+        .as_ref()
+        .unwrap()
+        .due_process
+        .as_ref()
+        .unwrap();
+    assert_eq!(due.determinations.len(), 1);
+    assert_eq!(due.determinations[0].determined_at, "1970-01-01T00:00:00Z");
+    let reasoning: Vec<_> = saved
+        .provenance_log
+        .iter()
+        .filter(|p| p.record_kind == wos_core::ProvenanceKind::DeterminationReasoning)
+        .collect();
+    assert_eq!(reasoning.len(), 1);
+    let evaluation = &reasoning[0].data.as_ref().unwrap()["evaluation"];
+    assert_eq!(
+        evaluation["inputs"],
+        json!([{"name":"householdSize","value":{"kind":"number","value":1}},{"name":"income","value":{"kind":"number","value":150}}])
+    );
+    let alternatives: Vec<_> = saved
+        .provenance_log
+        .iter()
+        .filter(|p| p.record_kind == wos_core::ProvenanceKind::DeterminationCounterfactual)
+        .collect();
+    assert_eq!(alternatives.len(), 2);
+    for alternative in alternatives {
+        assert_eq!(
+            &alternative.data.as_ref().unwrap()["originalEvaluation"],
+            evaluation
+        );
+    }
+    assert_eq!(saved.process.case_state["level"], 100);
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}

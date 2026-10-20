@@ -36,6 +36,8 @@ fn observation(guard: &GuardEvaluation) -> Result<NativeDecisionEvaluation, Refu
         Ok(())
     }
     flatten(&guard.inputs, "", &mut inputs)?;
+    // Named object inputs are unordered evidence, unlike matched table rows.
+    inputs.sort_by(|left, right| left.name.cmp(&right.name));
     Ok(NativeDecisionEvaluation {
         location: guard
             .location
@@ -184,4 +186,57 @@ pub(super) fn records(
         }
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn named_input_order_does_not_change_actual_native_evaluation_evidence() {
+        let kernel: KernelDocument = serde_json::from_value(json!({"$wosWorkflow":"1.0",
+            "decisionTables":[{"id":"eligibility","hitPolicy":"first","inputs":[{"name":"income","type":"number"},{"name":"householdSize","type":"number"}],"outputs":[{"name":"adverse","type":"boolean"}],"rows":[
+                {"id":"high","inputCells":["income > 100","householdSize > 0"],"outputCells":["true"]},
+                {"id":"low","inputCells":["income <= 100","householdSize > 0"],"outputCells":["false"]}]}],
+            "lifecycle":{"initialState":"open","states":{"open":{"type":"atomic","transitions":[{"target":"pending","guard":{"kind":"decisionTable","ref":"eligibility","outputColumn":"adverse","inputBindings":{"income":"caseFile.income","householdSize":"caseFile.householdSize"}}}]},"pending":{"type":"atomic"}}}
+        })).unwrap();
+        let mut original = Evaluator::evaluate_reference_alternative(
+            &kernel,
+            &TransitionLocation {
+                state_pointer: "/lifecycle/states/open".into(),
+                transition_index: 0,
+            },
+            &json!({"income":150,"householdSize":1}),
+            0,
+        )
+        .unwrap();
+        let fields = vec![
+            ("income".into(), json!(150)),
+            ("householdSize".into(), json!(1)),
+        ];
+        original.inputs = Value::Object(fields.iter().cloned().collect());
+        let mut reordered = original.clone();
+        reordered.inputs = Value::Object(fields.into_iter().rev().collect());
+        assert_ne!(
+            original.inputs.to_string(),
+            reordered.inputs.to_string(),
+            "control must exercise actual insertion-order differences"
+        );
+        let expected = observation(&original).unwrap();
+        assert_eq!(expected, observation(&reordered).unwrap());
+        reordered.inputs["income"] = json!(151);
+        assert_ne!(
+            expected,
+            observation(&reordered).unwrap(),
+            "different actual scalar evidence must remain different"
+        );
+        let mut changed_row = original.clone();
+        changed_row.decision_table.as_mut().unwrap().selected_row_id = Some("low".into());
+        assert_ne!(
+            expected,
+            observation(&changed_row).unwrap(),
+            "selected-row evidence must remain exact"
+        );
+    }
 }
