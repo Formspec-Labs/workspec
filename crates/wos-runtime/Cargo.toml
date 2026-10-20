@@ -11,6 +11,7 @@ async-trait = "0.1"
 base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
 fel-core.workspace = true
+jsonschema = { version = "0.46", default-features = false }
 integrity-canonical = { path = "../../../integrity-stack/crates/integrity-canonical" }
 integrity-cose = { path = "../../../integrity-stack/crates/integrity-cose" }
 integrity-signature = { path = "../../../integrity-stack/crates/integrity-signature" }
@@ -36,7 +37,6 @@ ring = "0.17"
 axum = "0.8"
 integrity-bundle = { path = "../../../integrity-stack/crates/integrity-bundle" }
 integrity-cbor = { path = "../../../integrity-stack/crates/integrity-cbor" }
-jsonschema = "0.46"
 stack-common-error = { path = "../../../stack-common/crates/stack-common-error", default-features = false }
 tokio = { version = "1", features = ["macros", "rt"] }
 trellis-export-writer = { path = "../../../trellis/crates/trellis-export-writer" }

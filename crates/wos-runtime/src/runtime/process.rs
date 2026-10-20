@@ -350,6 +350,26 @@ impl WosRuntime {
             None,
             &now_iso,
         )?);
+        let initial_event = wos_core::instance::PendingEvent {
+            event: "wos.initial".into(),
+            actor_id: initial_initiating_actor_id.map(str::to_owned),
+            data: None,
+            idempotency_token: None,
+            timestamp: now_iso.clone(),
+            origin: None,
+        };
+        let initial_provenance =
+            self.check_governance_result(crate::governance::RuntimeGovernanceResultContext {
+                kernel: &kernel,
+                prior: &record,
+                event: &initial_event,
+                proposed_process: &record.process,
+                transitions: evaluator.transitions(),
+                provenance: &appended_provenance,
+                now_ms,
+                now_iso: &now_iso,
+            })?;
+        appended_provenance.extend(initial_provenance);
         let (created_task_ids, emitted_events, runtime_provenance) =
             self.apply_observed_actions(&kernel, &mut record, &actions, &now_iso)?;
         appended_provenance.extend(runtime_provenance);
@@ -579,6 +599,12 @@ impl WosRuntime {
                 new_definition_version: target_definition_version.to_string(),
                 migration_map,
             });
+        }
+
+        if self.generic_governance.is_some() {
+            return Err(RuntimeError::MigrationRejected(
+                "generic governance requires explicit version requalification".into(),
+            ));
         }
 
         if !record.process.pending_outbound_events.is_empty() {

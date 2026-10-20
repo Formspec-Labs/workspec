@@ -36,6 +36,7 @@ impl WosRuntime {
         let now_ms = self.clock.now_ms();
         let now_iso = format_timestamp(now_ms)?;
         let mut record = self.store.load_record(process_id)?;
+        let prior = record.clone();
         let mut appended_provenance =
             materialize_due_timers(&mut record.process, now_ms, &now_iso)?;
         appended_provenance.extend(super::tasks::retire_expired_tasks(&mut record, &now_iso)?);
@@ -59,6 +60,8 @@ impl WosRuntime {
                     &record.process.definition_url,
                     &record.process.definition_version,
                 )?;
+                self.validate_governance_selection(&kernel)?;
+                self.validate_governance_maintenance(&prior, &record)?;
                 super::provenance::populate_process_provenance_fields(
                     &mut appended_provenance,
                     &kernel,
@@ -80,6 +83,7 @@ impl WosRuntime {
             &record.process.definition_url,
             &record.process.definition_version,
         )?;
+        self.validate_governance_selection(&kernel)?;
         super::actor_bindings::validate_binding_definition(
             record.process.actor_bindings.as_deref(),
             &kernel,
@@ -110,6 +114,7 @@ impl WosRuntime {
         appended_provenance.extend(decision.provenance);
 
         let Some(event) = decision.event else {
+            self.validate_governance_maintenance(&prior, &record)?;
             super::provenance::populate_process_provenance_fields(
                 &mut appended_provenance,
                 &kernel,
@@ -193,6 +198,19 @@ impl WosRuntime {
         let post_state = record.process.case_state.clone();
         let milestone_records = evaluate_milestones(&kernel, &mut record.process, &post_state);
         appended_provenance.extend(milestone_records);
+
+        appended_provenance.extend(self.check_governance_result(
+            crate::governance::RuntimeGovernanceResultContext {
+                kernel: &kernel,
+                prior: &prior,
+                event: &event,
+                proposed_process: &record.process,
+                transitions: &runtime_result.transitions,
+                provenance: &appended_provenance,
+                now_ms,
+                now_iso: &now_iso,
+            },
+        )?);
 
         let (created_task_ids, emitted_events, runtime_provenance) =
             self.apply_observed_actions(&kernel, &mut record, &actions, &now_iso)?;

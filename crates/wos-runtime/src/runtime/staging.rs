@@ -33,6 +33,7 @@ pub enum NativeReadOnlyDependency {
     ContractValidator,
     IntakePolicy,
     CompanionPolicy,
+    GovernancePolicy,
     PostureResolver,
     DueProcessSignatureVerifier,
 }

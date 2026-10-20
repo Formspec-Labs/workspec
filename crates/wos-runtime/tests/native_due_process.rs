@@ -3249,3 +3249,33 @@ fn issued_notice_treats_placeholder_shaped_factual_values_as_literal_text() {
         saved.variants[0].body_sha256
     );
 }
+
+#[test]
+fn generic_and_reference_owners_refuse_both_installation_orders() {
+    use wos_runtime::governance::{GovernancePolicySelection, QualifiedGovernancePolicy};
+    let raw = json!({"$wosWorkflow":"1.0","url":"urn:test:generic-owner","version":"1.0.0","governance":{},
+        "lifecycle":{"initialState":"open","states":{"open":{"type":"atomic","transitions":[{"event":"human.completed","target":"done","tags":["determination"]}]},"done":{"type":"final"}}}});
+    let policy=QualifiedGovernancePolicy::qualify(serde_json::from_value::<GovernancePolicySelection>(json!({"version":1,"kernel":raw,"delivery":{"targetWorkflow":"urn:test:generic-owner"},"humanDecisions":[{"transition":{"from":"open","to":"done","event":"human.completed"},"taskRef":"review","evidencePointer":"/data/governance","rules":[{"ruleId":"rule:human"}],"criteria":["retained"],"caseFieldPaths":["/retained"],"positiveFactors":[],"negativeFactors":[]}]})).unwrap()).unwrap();
+    let reference = fixture();
+    let (reference_runtime, _, _) = runtime(&reference);
+    assert!(matches!(
+        reference_runtime.with_governance_policy(policy.clone(), Default::default()),
+        Err(RuntimeError::GovernancePolicy(_))
+    ));
+    let mut generic_runtime = WosRuntime::new(
+        InMemoryStore::new(),
+        Resolver(serde_json::from_value(raw).unwrap()),
+        DefaultRuntime::new(),
+        DefaultRuntime::new(),
+        Services(Arc::new(AtomicUsize::new(0))),
+        DefaultRuntime::new(),
+        Time(Arc::new(AtomicU64::new(0))),
+        BindingRegistry::new(),
+    )
+    .with_governance_policy(policy, Default::default())
+    .unwrap();
+    assert!(matches!(
+        generic_runtime.configure_reference_due_process(capabilities(&reference)),
+        Err(RuntimeError::Governance(RefusalCode::UnsupportedProfile))
+    ));
+}

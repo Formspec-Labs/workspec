@@ -7,6 +7,7 @@ pub(crate) mod actor_bindings;
 mod custody_trellis;
 mod drain;
 mod durable_impl;
+mod generic_governance;
 pub mod governance;
 mod intake;
 mod process;
@@ -389,6 +390,9 @@ pub enum RuntimeError {
     /// A bounded native due-process operation refused admission.
     #[error("native due-process refused: {0:?}")]
     Governance(wos_core::model::due_process::RefusalCode),
+    /// A qualified generic governance selection refused the actual proposed result.
+    #[error("governance policy refused: {0}")]
+    GovernancePolicy(String),
 
     /// Native preparation refused an unsupported effect or inconsistent input.
     #[error(transparent)]
@@ -617,6 +621,7 @@ where
 /// Generic WOS runtime.
 pub struct WosRuntime {
     reference_due_process: Option<governance::ReferenceDueProcessCapabilities>,
+    generic_governance: Option<crate::governance::SelectedGovernancePolicy>,
     preparation: Option<staging::PreparationState>,
     #[cfg(test)]
     preparation_fault_at_write: Option<usize>,
@@ -680,6 +685,7 @@ impl WosRuntime {
     {
         Self {
             reference_due_process: None,
+            generic_governance: None,
             preparation: None,
             #[cfg(test)]
             preparation_fault_at_write: None,
@@ -1066,41 +1072,22 @@ mod tests {
             }
         }))
         .unwrap();
-        let mut runtime = runtime_with_kernel(kernel);
         let case_state = serde_json::json!({
             "applicantId": "A-123",
             "income": 17500,
             "eligible": true
         });
-
-        runtime
-            .create_process(CreateProcessRequest {
-                process_id: test_process_id("case-determination").to_string(),
-                tenant: None,
-                definition_url: "urn:test:determination-snapshot".to_string(),
-                definition_version: "1.0.0".to_string(),
-                initial_case_state: Some(case_state.clone()),
-            })
+        // Snapshot capture belongs to the pure evaluator. Runtime admission of
+        // these tags separately requires a real qualified evidence owner.
+        let mut evaluator =
+            wos_core::eval::Evaluator::with_time_and_case_state(kernel, 0, Some(&case_state))
+                .unwrap();
+        evaluator
+            .process_event("decide", Some("reviewer"), None)
             .unwrap();
-        runtime
-            .enqueue_event(
-                test_process_id("case-determination"),
-                PendingEvent {
-                    origin: None,
-                    event: "decide".to_string(),
-                    actor_id: Some("reviewer".to_string()),
-                    data: None,
-                    timestamp: "2026-04-19T00:00:00Z".to_string(),
-                    idempotency_token: None,
-                },
-            )
-            .unwrap();
-
-        let result = runtime
-            .drain_once(test_process_id("case-determination"))
-            .unwrap();
-        let transition = result
-            .provenance
+        let transition = evaluator
+            .provenance()
+            .records()
             .iter()
             .find(|record| record.record_kind == ProvenanceKind::StateTransition)
             .expect("state transition provenance");
@@ -1166,36 +1153,20 @@ mod tests {
             }
         }))
         .unwrap();
-        let mut runtime = runtime_with_kernel(kernel);
-
-        runtime
-            .create_process(CreateProcessRequest {
-                process_id: test_process_id("case-join-determination").to_string(),
-                tenant: None,
-                definition_url: "urn:test:join-determination-snapshot".to_string(),
-                definition_version: "1.0.0".to_string(),
-                initial_case_state: Some(serde_json::json!({ "reviewScore": 0 })),
-            })
+        // Snapshot capture belongs to the pure evaluator. Runtime admission of
+        // these tags separately requires a real qualified evidence owner.
+        let mut evaluator = wos_core::eval::Evaluator::with_time_and_case_state(
+            kernel,
+            0,
+            Some(&serde_json::json!({"reviewScore":0})),
+        )
+        .unwrap();
+        evaluator
+            .process_event("completeReview", Some("reviewer"), None)
             .unwrap();
-        runtime
-            .enqueue_event(
-                test_process_id("case-join-determination"),
-                PendingEvent {
-                    origin: None,
-                    event: "completeReview".to_string(),
-                    actor_id: Some("reviewer".to_string()),
-                    data: None,
-                    timestamp: "2026-04-19T00:00:00Z".to_string(),
-                    idempotency_token: None,
-                },
-            )
-            .unwrap();
-
-        let result = runtime
-            .drain_once(test_process_id("case-join-determination"))
-            .unwrap();
-        let join_transition = result
-            .provenance
+        let join_transition = evaluator
+            .provenance()
+            .records()
             .iter()
             .find(|record| {
                 record.record_kind == ProvenanceKind::StateTransition
@@ -1253,50 +1224,28 @@ mod tests {
             }
         }))
         .unwrap();
-        let mut runtime = runtime_with_kernel(kernel);
-
-        runtime
-            .create_process(CreateProcessRequest {
-                process_id: test_process_id("case-multi-determination").to_string(),
-                tenant: None,
-                definition_url: "urn:test:multi-determination-snapshot".to_string(),
-                definition_version: "1.0.0".to_string(),
-                initial_case_state: Some(serde_json::json!({ "firstOutcome": "pending" })),
-            })
-            .unwrap();
+        // Snapshot capture belongs to the pure evaluator. Runtime admission of
+        // these tags separately requires a real qualified evidence owner.
+        let mut evaluator = wos_core::eval::Evaluator::with_time_and_case_state(
+            kernel,
+            0,
+            Some(&serde_json::json!({"firstOutcome":"pending"})),
+        )
+        .unwrap();
+        let mut snapshots = Vec::new();
         for event in ["decideFirst", "decideSecond"] {
-            runtime
-                .enqueue_event(
-                    test_process_id("case-multi-determination"),
-                    PendingEvent {
-                        origin: None,
-                        event: event.to_string(),
-                        actor_id: Some("reviewer".to_string()),
-                        data: None,
-                        timestamp: "2026-04-19T00:00:00Z".to_string(),
-                        idempotency_token: None,
-                    },
-                )
+            evaluator
+                .process_event(event, Some("reviewer"), None)
                 .unwrap();
         }
-
-        let mut snapshots = Vec::new();
-        loop {
-            let result = runtime
-                .drain_once(test_process_id("case-multi-determination"))
-                .unwrap();
-            for record in &result.provenance {
-                if record.record_kind == ProvenanceKind::StateTransition {
-                    if let Some(snapshot) = record.case_file_snapshot.as_ref() {
-                        snapshots.push((
-                            record.from_state.clone().unwrap_or_default(),
-                            snapshot.jcs_canonical.clone(),
-                        ));
-                    }
+        for record in evaluator.provenance().records() {
+            if record.record_kind == ProvenanceKind::StateTransition {
+                if let Some(snapshot) = &record.case_file_snapshot {
+                    snapshots.push((
+                        record.from_state.clone().unwrap_or_default(),
+                        snapshot.jcs_canonical.clone(),
+                    ));
                 }
-            }
-            if result.provenance.is_empty() {
-                break;
             }
         }
 
@@ -11581,4 +11530,132 @@ mod tests {
         }
     }
     include!("deferred_callback_tests.rs");
+    #[test]
+    fn generic_selected_owner_preserves_default_native_ai_block_and_policy_report() {
+        let mut raw = serde_json::json!({"$wosWorkflow":"1.0","url":"urn:test:generic-ai-composition","version":"1.0.0","impactLevel":"operational",
+            "actors":[{"id":"assessor","type":"agent"}],"agents":[{"id":"assessor","agentType":"deterministic","modelIdentifier":"selected-model","modelVersion":"1.0.0"}],"aiOversight":{},"governance":{},
+            "lifecycle":{"initialState":"open","states":{"open":{"type":"atomic","transitions":[{"event":"decide","target":"done","actions":[{"action":"setData","path":"caseFile.unauthorized","value":true}]}]},"done":{"type":"final"}}}});
+        raw["actors"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::json!({"id":"reviewer","type":"human"}));
+        raw["contracts"] = serde_json::json!({"review":{"binding":"formspec","ref":"urn:test:review","definitionVersion":"1.0.0"}});
+        raw["lifecycle"]["states"]["open"]["onEntry"] = serde_json::json!([{"action":"createTask","taskRef":"review","assignTo":"reviewer","contractRef":"review","completionEvent":"human.completed"}]);
+        raw["lifecycle"]["states"]["open"]["transitions"].as_array_mut().unwrap().push(serde_json::json!({"event":"human.completed","target":"done","tags":["determination"]}));
+        let selection:crate::governance::GovernancePolicySelection=serde_json::from_value(serde_json::json!({"version":1,"kernel":raw,"delivery":{"targetWorkflow":"urn:test:generic-ai-composition"},"humanDecisions":[{"transition":{"from":"open","to":"done","event":"human.completed"},"taskRef":"review","evidencePointer":"/data/governance","rules":[{"ruleId":"rule:human"}],"criteria":["retained"],"caseFieldPaths":["/retained"],"positiveFactors":[],"negativeFactors":[]}]})).unwrap();
+        let policy = crate::governance::QualifiedGovernancePolicy::qualify(selection).unwrap();
+        let mut runtime = runtime_with_kernel(serde_json::from_value(raw).unwrap())
+            .with_governance_policy(policy, Default::default())
+            .unwrap();
+        let id = stack_common_typeid::mint_process_id();
+        runtime
+            .create_process(CreateProcessRequest {
+                process_id: id.clone(),
+                tenant: None,
+                definition_url: "urn:test:generic-ai-composition".into(),
+                definition_version: "1.0.0".into(),
+                initial_case_state: Some(serde_json::json!({"retained":42})),
+            })
+            .unwrap();
+        runtime
+            .enqueue_event(
+                &id,
+                PendingEvent {
+                    event: "decide".into(),
+                    actor_id: Some("assessor".into()),
+                    data: Some(serde_json::json!({"output":{"decision":"approve"}})),
+                    timestamp: String::new(),
+                    origin: None,
+                    idempotency_token: None,
+                },
+            )
+            .unwrap();
+        let result = runtime.drain_once(&id).unwrap();
+        assert!(
+            result
+                .policy_evaluation
+                .as_ref()
+                .unwrap()
+                .refusals
+                .iter()
+                .any(|r| r.contains("admitted native policy"))
+        );
+        assert!(result.transitions.is_empty());
+        let after = runtime.load_process(&id).unwrap();
+        assert_eq!(after.configuration, ["open"]);
+        assert_eq!(after.case_state, serde_json::json!({"retained":42}));
+    }
+
+    #[test]
+    fn actual_intake_created_determination_refuses_before_process_or_provider() {
+        let raw = serde_json::json!({"$wosWorkflow":"1.0","url":"urn:test:governed-intake-init","version":"1.0.0",
+            "lifecycle":{"initialState":"first","states":{"first":{"type":"foreach","collection":"[]","body":{"type":"atomic"},"transitions":[{"target":"done","tags":["determination","adverse-decision"],"actions":[{"action":"invokeService","serviceRef":"must-not-run"}]}]},"done":{"type":"final"}}}});
+        let service = RecordingService::with_response(serde_json::json!({"unauthorized":true}));
+        let calls = service.calls.clone();
+        let mut runtime = runtime_with_kernel(serde_json::from_value(raw).unwrap())
+            .with_intake_policy(AutoCreatePublicIntakePolicy);
+        runtime.service = Box::new(service);
+        let id = stack_common_typeid::mint_process_id();
+        let case = stack_common_typeid::mint_case_ledger_id();
+        let result=runtime.accept_intake_handoff_with_allocation("formspec",IntakeAcceptanceRequest{actor_bindings:None,document:serde_json::json!({"handoffId":"governed-init","initiationMode":"publicIntake"}),actor_id:Some("actor:human:initiator".into()),governed_case_ref:Some(format!("urn:wos:{case}")),governed_case_definition:Some(IntakeCaseDefinition{definition_url:"urn:test:governed-intake-init".into(),definition_version:"1.0.0".into()}),initial_case_state:Some(serde_json::json!({"retained":true}))},Some(crate::intake::ProcessAllocation{process_id:id.clone(),case_ledger_id:case,tenant:"default".into()}));
+        assert!(
+            matches!(result, Err(RuntimeError::GovernancePolicy(_))),
+            "{result:?}"
+        );
+        assert!(runtime.store.load_record(&id).is_err());
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+    }
+    #[test]
+    fn actual_transition_id_cannot_be_satisfied_by_equal_looking_foreign_facts() {
+        let kernel:KernelDocument=serde_json::from_value(serde_json::json!({"$wosWorkflow":"1.0","url":"urn:test:exact-facts","version":"1.0.0","lifecycle":{"initialState":"open","states":{"open":{"type":"atomic","transitions":[{"event":"decide","target":"done","tags":["determination"]}]},"done":{"type":"final"}}}})).unwrap();
+        let mut runtime = runtime_with_kernel(kernel.clone());
+        let id = stack_common_typeid::mint_process_id();
+        runtime
+            .create_process(CreateProcessRequest {
+                process_id: id.clone(),
+                tenant: None,
+                definition_url: "urn:test:exact-facts".into(),
+                definition_version: "1.0.0".into(),
+                initial_case_state: Some(serde_json::json!({"retained":42})),
+            })
+            .unwrap();
+        let prior = runtime.store.load_record(&id).unwrap();
+        let mut evaluator =
+            wos_core::eval::Evaluator::from_instance(kernel.clone(), &prior.process, 0).unwrap();
+        evaluator.process_event("decide", None, None).unwrap();
+        let mut proposed = prior.process.clone();
+        proposed.case_state = evaluator.case_state_json();
+        let event = PendingEvent {
+            event: "decide".into(),
+            actor_id: None,
+            data: None,
+            timestamp: "1970-01-01T00:00:00Z".into(),
+            origin: None,
+            idempotency_token: None,
+        };
+        let original = evaluator.provenance().records().to_vec();
+        let context = crate::governance::RuntimeGovernanceResultContext {
+            kernel: &kernel,
+            prior: &prior,
+            event: &event,
+            proposed_process: &proposed,
+            transitions: evaluator.transitions(),
+            provenance: &original,
+            now_ms: 0,
+            now_iso: "1970-01-01T00:00:00Z",
+        };
+        assert!(
+            matches!(crate::governance::GovernanceResult::without_required_governance(context),Err(RuntimeError::GovernancePolicy(code)) if code=="required governance capability not installed")
+        );
+        let mut foreign = original.clone();
+        let actual = evaluator.transitions()[0].provenance_record_id.as_str();
+        foreign.iter_mut().find(|r| r.id == actual).unwrap().id = ProvenanceRecord::mint_id();
+        assert!(
+            matches!(crate::governance::GovernanceResult::without_required_governance(crate::governance::RuntimeGovernanceResultContext{provenance:&foreign,..context}),Err(RuntimeError::GovernancePolicy(code)) if code=="determination Facts missing or ambiguous")
+        );
+        assert_eq!(
+            serde_json::to_value(evaluator.provenance().records()).unwrap(),
+            serde_json::to_value(original).unwrap()
+        );
+    }
 }

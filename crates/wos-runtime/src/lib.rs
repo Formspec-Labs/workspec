@@ -11,6 +11,7 @@ pub mod cloudevents;
 pub mod companion;
 mod durable;
 pub mod intake;
+pub mod governance;
 pub mod integration;
 pub mod integration_handlers;
 pub mod milestones;

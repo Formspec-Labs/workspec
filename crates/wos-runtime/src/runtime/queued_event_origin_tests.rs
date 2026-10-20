@@ -38,7 +38,7 @@ fn origin_event(event: &str) -> PendingEvent {
 fn queued_event_origin_retains_exact_transition_across_later_drain_and_restore() {
     let kernel = origin_kernel(
         serde_json::json!({
-            "waiting":{"type":"atomic","transitions":[{"event":"record","target":"recorded","tags":["determination"]}]},
+            "waiting":{"type":"atomic","transitions":[{"event":"record","target":"recorded","tags":["recording"]}]},
             "recorded":{"type":"atomic","onEntry":[{"action":"emitEvent","eventType":"notify"}],
                 "transitions":[{"event":"notify","target":"notified"}]},
             "notified":{"type":"final"}
@@ -73,7 +73,7 @@ fn queued_event_origin_retains_exact_transition_across_later_drain_and_restore()
         transition
             .transition_tags
             .iter()
-            .any(|tag| tag == "determination")
+            .any(|tag| tag == "recording")
     );
     assert_eq!(queued.timestamp, transition.timestamp);
     let action = before

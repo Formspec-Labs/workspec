@@ -234,6 +234,7 @@ impl WosRuntime {
         let now_ms = self.clock.now_ms();
         let now_iso = format_timestamp(now_ms)?;
         let mut record = self.load_record_for_task_id(task_id)?;
+        let prior = record.clone();
         if let Some(token) = idempotency_token {
             let replay_key = ReplayKey {
                 operation: ReplayOperation::SubmitTaskResponse,
@@ -245,6 +246,11 @@ impl WosRuntime {
                 return Ok(result.clone());
             }
         }
+        let kernel = self.resolver.resolve_kernel(
+            &record.process.definition_url,
+            &record.process.definition_version,
+        )?;
+        self.validate_governance_selection(&kernel)?;
         let task_index = find_task_index(&record, task_id)
             .ok_or_else(|| RuntimeError::TaskNotFound(task_id.to_string()))?;
 
@@ -452,10 +458,6 @@ impl WosRuntime {
             return Ok(result);
         }
 
-        let kernel = self.resolver.resolve_kernel(
-            &record.process.definition_url,
-            &record.process.definition_version,
-        )?;
         let accepted_artifact = build_artifact(
             &record,
             task_id,
@@ -550,6 +552,26 @@ impl WosRuntime {
                 })),
             ));
         }
+        let submission_event = PendingEvent {
+            event: "wos.task.submitted".into(),
+            actor_id: Some(actor_id.into()),
+            data: None,
+            idempotency_token: idempotency_token.map(str::to_owned),
+            timestamp: now_iso.clone(),
+            origin: None,
+        };
+        provenance.extend(self.check_governance_result(
+            crate::governance::RuntimeGovernanceResultContext {
+                kernel: &kernel,
+                prior: &prior,
+                event: &submission_event,
+                proposed_process: &record.process,
+                transitions: &[],
+                provenance: &provenance,
+                now_ms,
+                now_iso: &now_iso,
+            },
+        )?);
         super::provenance::populate_process_provenance_fields(
             &mut provenance,
             &kernel,

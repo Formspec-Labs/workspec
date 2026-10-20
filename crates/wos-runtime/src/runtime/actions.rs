@@ -101,6 +101,7 @@ impl WosRuntime {
                     .and_then(|profile| profile.bindings.get(id))
             });
             if let Some(binding) = binding {
+                self.validate_governance_output_bindings(binding)?;
                 binding
                     .validate_dispatch()
                     .map_err(RuntimeError::Integration)?;

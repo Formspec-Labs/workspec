@@ -132,7 +132,7 @@ impl WosRuntime {
         &mut self,
         capabilities: ReferenceDueProcessCapabilities,
     ) -> Result<(), RuntimeError> {
-        if self.preparation.is_some() {
+        if self.preparation.is_some() || self.generic_governance.is_some() {
             return Err(RuntimeError::Governance(RefusalCode::UnsupportedProfile));
         }
         let parsed: KernelDocument = serde_json::from_slice(&capabilities.workflow_bytes)
