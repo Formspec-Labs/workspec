@@ -167,6 +167,8 @@ State obligations:
 
 WOS runtimes MAY expose provider-native status strings to operators, but conformance and provenance MUST normalize those strings into the envelope/recipient states above before lifecycle transitions or `SignatureAffirmation` admission depend on them.
 
+`pending-seal-failure` names a subordinate incident condition after admitted signing when failure or uncertainty blocks qualified seal completion. It is not another aggregate state, recipient token or kernel state kind, and MUST NOT replace the canonical terminal meanings above. A normal asynchronous wait is not by itself a failed remote effect; a timeout or missing receipt leaves the remote outcome uncertain unless actual evidence establishes it. Admitted signatures and original effect identities remain evidence. Recovery, observability and bounded abandonment follow [Signing Adapter Catalog §3.5](signature-ports.md#35-seal-failure-recovery), without weakening the existing completion condition or current lifecycle legality.
+
 ### 2.5 Intent Capture
 
 A signature affirmation MUST have an explicit consent reference. The consent reference MUST identify the consent text, consent version, acceptance evidence path, and affirmation evidence path.
