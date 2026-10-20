@@ -9,7 +9,13 @@ use indexmap::IndexMap;
 use wos_core::model::integration::CallbackPhase;
 use wos_core::model::kernel::{ActionKind, CancellationPolicy, KernelDocument, State, StateKind};
 
-use crate::{LintDiagnostic, validation::SemanticSkip};
+use crate::LintDiagnostic;
+
+/// A refused portion of structural analysis, adapted by each validation boundary.
+pub(crate) struct CoverageGap {
+    pub path: String,
+    pub reason: String,
+}
 
 // These refusal bounds keep authoring work bounded, including concurrent state
 // combinations. They are resource limits, not workflow validity requirements.
@@ -31,17 +37,16 @@ type Configuration = Vec<usize>;
 
 fn incomplete(
     diagnostics: &mut Vec<LintDiagnostic>,
-    skipped: &mut Vec<SemanticSkip>,
+    skipped: &mut Vec<CoverageGap>,
     path: &str,
     reason: &str,
 ) {
     diagnostics.push(LintDiagnostic::t1_warning("WOS-FLOW-005", path,
         format!("Structural control-flow coverage is incomplete: {reason}; no reachability or completion conclusion was made")));
-    skipped.push(SemanticSkip::new(
-        "workflow-control-flow",
-        path,
-        reason.to_owned(),
-    ));
+    skipped.push(CoverageGap {
+        path: path.to_owned(),
+        reason: reason.to_owned(),
+    });
 }
 
 fn pointer_key(key: &str) -> String {
@@ -52,7 +57,7 @@ fn pointer_key(key: &str) -> String {
 pub(crate) fn check(
     kernel: &KernelDocument,
     diagnostics: &mut Vec<LintDiagnostic>,
-    skipped: &mut Vec<SemanticSkip>,
+    skipped: &mut Vec<CoverageGap>,
 ) {
     let mut nodes = Vec::new();
     let mut ids = HashMap::new();

@@ -85,7 +85,11 @@ fn check_workflow(
 
             check_lifecycle_initial_state_resolves_typed(&kernel, diagnostics); // K-032
             check_initial_state_keys_into_states_typed(&kernel, diagnostics); // K-016
-            super::control_flow::check(&kernel, diagnostics, skipped);
+            let mut graph_gaps = Vec::new();
+            super::control_flow::check(&kernel, diagnostics, &mut graph_gaps);
+            skipped.extend(graph_gaps.into_iter().map(|gap| {
+                crate::validation::SemanticSkip::new("workflow-control-flow", gap.path, gap.reason)
+            }));
             check_set_data_paths_typed(&kernel, diagnostics);
             check_milestone_uniqueness_typed(&kernel, diagnostics);
             check_timer_exclusivity_typed(&kernel, diagnostics);
