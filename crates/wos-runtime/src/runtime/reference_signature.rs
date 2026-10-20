@@ -3,7 +3,9 @@
 use std::sync::Arc;
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use integrity_canonical::{DigestAlgorithm, build_signed_payload};
+#[cfg(test)]
+use integrity_canonical::build_signed_payload;
+use integrity_canonical::{DigestAlgorithm, ResponseJson};
 use integrity_cose::{decode_cose_sign1, decode_protected_header};
 use integrity_signature::{
     FixedClock, KeyRef, RegistryEntry, SignatureMethodRegistry, VerificationResult, Verifier,
@@ -100,13 +102,14 @@ fn timestamp(value: &str) -> Result<u64, RefusalCode> {
 
 /// Authenticates one source envelope over the complete actual Response.
 fn verify_subject(
-    response: &Value,
+    source: &ResponseJson,
     signature: &Value,
     key: &SelectedDocumentSigningKey,
     task_id: &str,
     determination: &DeterminationState,
     now_ms: u64,
 ) -> Result<String, RefusalCode> {
+    let response = source.value();
     if text(response, "/data/determinationId")? != determination.id
         || text(response, "/data/determinationSnapshotSha256")? != determination.snapshot.sha256
         || text(response, "/data/determinationFiringRecordId")?
@@ -117,7 +120,8 @@ fn verify_subject(
     {
         return Err(RefusalCode::SignatureRejected);
     }
-    let payload = build_signed_payload(response.to_string().as_bytes(), DigestAlgorithm::Sha256)
+    let payload = source
+        .signed_payload(DigestAlgorithm::Sha256)
         .map_err(|_| RefusalCode::SignatureRejected)?;
     if text(signature, "/signedPayload/canonicalization")?
         != integrity_canonical::CANONICALIZATION_PROFILE
@@ -326,6 +330,7 @@ impl ReferenceDeterminationSignatureVerifier for SelectedDeterminationSignatureV
             }
             let signatures = match artifact
                 .response
+                .value()
                 .get("authoredSignatures")
                 .and_then(Value::as_array)
             {
@@ -451,7 +456,7 @@ mod tests {
         let (response, signature, key, determination) = signed();
         assert!(
             verify_subject(
-                &response,
+                &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
                 &signature,
                 &key,
                 "actual-task",
@@ -471,7 +476,7 @@ mod tests {
         );
         assert!(
             verify_subject(
-                &changed,
+                &integrity_canonical::ResponseJson::from_value(&changed).unwrap(),
                 &transplanted,
                 &key,
                 "actual-task",
@@ -487,7 +492,7 @@ mod tests {
         let (response, signature, key, determination) = signed();
         assert!(
             verify_subject(
-                &response,
+                &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
                 &signature,
                 &key,
                 "different-task",
@@ -512,7 +517,7 @@ mod tests {
             );
             assert!(
                 verify_subject(
-                    &changed,
+                    &integrity_canonical::ResponseJson::from_value(&changed).unwrap(),
                     &transplanted,
                     &key,
                     "actual-task",
@@ -527,7 +532,7 @@ mod tests {
         other.id = "different-determination".into();
         assert!(
             verify_subject(
-                &response,
+                &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
                 &signature,
                 &key,
                 "actual-task",

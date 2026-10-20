@@ -222,25 +222,27 @@ pub(crate) fn validate(record: &RuntimeRecord) -> Result<(), StoreError> {
                 return Err(refused());
             }
             let response = &accepted[0].response;
-            let payload = integrity_canonical::build_signed_payload(
-                response.to_string().as_bytes(),
-                integrity_canonical::DigestAlgorithm::Sha256,
-            )
-            .map_err(|_| refused())?;
+            let payload = response
+                .signed_payload(integrity_canonical::DigestAlgorithm::Sha256)
+                .map_err(|_| refused())?;
             if signature.signed_content_sha256 != format!("sha256:{}", payload.digest)
                 || response
+                    .value()
                     .pointer("/data/determinationId")
                     .and_then(serde_json::Value::as_str)
                     != Some(d.id.as_str())
                 || response
+                    .value()
                     .pointer("/data/determinationSnapshotSha256")
                     .and_then(serde_json::Value::as_str)
                     != Some(d.snapshot.sha256.as_str())
                 || response
+                    .value()
                     .pointer("/data/determinationFiringRecordId")
                     .and_then(serde_json::Value::as_str)
                     != Some(d.firing.provenance_record_id.as_str())
                 || response
+                    .value()
                     .pointer("/data/signatureTaskId")
                     .and_then(serde_json::Value::as_str)
                     != Some(signature.task_id.as_str())

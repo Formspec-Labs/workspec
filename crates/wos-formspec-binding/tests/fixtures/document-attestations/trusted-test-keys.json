@@ -1,0 +1,18 @@
+{
+  "warning": "PUBLICLY REPRODUCIBLE TEST-ONLY KEYS. NEVER TRUST OR USE IN PRODUCTION.",
+  "methodUri": "urn:formspec:sig-method:ed25519-cose-sign1@1",
+  "signers": {
+    "applicant": {
+      "publicKeyHex": "88ff578199d7fab04636ea1bae8190abf0859fe4a43d90d4066427bab3d4dd9e",
+      "publicKeyBase64": "iP9XgZnX+rBGNuobroGQq/CFn+SkPZDUBmQnurPU3Z4=",
+      "kidHex": "696839642d746573742d6170706c6963616e74",
+      "keyRefKind": "rawPublicKey"
+    },
+    "witness": {
+      "publicKeyHex": "63dc776c6a7f5d6aee32689336003b0ba8cbec9aa167edfa29e6a82edceda478",
+      "publicKeyBase64": "Y9x3bGp/XWruMmiTNgA7C6jL7JqhZ+36KeaoLtztpHg=",
+      "kidHex": "696839642d746573742d7769746e657373",
+      "keyRefKind": "rawPublicKey"
+    }
+  }
+}

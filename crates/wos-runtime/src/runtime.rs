@@ -76,8 +76,7 @@ pub use signature::{
     StaticPostureResolver,
 };
 use support::{
-    format_timestamp, impact_level_label, make_task_id, merge_case_state,
-    parse_timestamp,
+    format_timestamp, impact_level_label, make_task_id, merge_case_state, parse_timestamp,
 };
 
 const COMPLETION_EVENT_EXTENSION_KEY: &str = "x-wos-runtime-completion-event";
@@ -1921,8 +1920,9 @@ mod tests {
         fn signature_evidence(
             &self,
             _task: &ActiveTask,
-            response: &serde_json::Value,
+            response: &integrity_canonical::ResponseJson,
         ) -> Result<Option<Vec<crate::binding::SignatureEvidence>>, BindingError> {
+            let response = response.value();
             let Some(signature) = response.get("data").and_then(|data| data.get("signature"))
             else {
                 return Ok(None);
@@ -1950,6 +1950,7 @@ mod tests {
                 },
             };
             Ok(Some(vec![crate::binding::SignatureEvidence {
+                document_claims: None,
                 source_system: "formspec-test-harness".to_string(),
                 source_signature_id: "sig013-harness".to_string(),
                 signing_act_id: None,
@@ -2095,8 +2096,9 @@ mod tests {
         fn signature_evidence(
             &self,
             _task: &ActiveTask,
-            response: &serde_json::Value,
+            response: &integrity_canonical::ResponseJson,
         ) -> Result<Option<Vec<crate::binding::SignatureEvidence>>, BindingError> {
+            let response = response.value();
             let Some(signature) = response.get("data").and_then(|data| data.get("signature"))
             else {
                 return Ok(None);
@@ -2124,6 +2126,7 @@ mod tests {
                 },
             };
             Ok(Some(vec![crate::binding::SignatureEvidence {
+                document_claims: None,
                 source_system: "formspec-test-harness".to_string(),
                 source_signature_id: "sig013-harness".to_string(),
                 signing_act_id: None,
@@ -3068,7 +3071,10 @@ mod tests {
             runtime
                 .persist_task_draft(
                     &task_id,
-                    serde_json::json!({ "status": "in-progress" }),
+                    integrity_canonical::ResponseJson::from_value(
+                        &(serde_json::json!({ "status": "in-progress" })),
+                    )
+                    .unwrap(),
                     "reviewer",
                     None,
                 )
@@ -3096,12 +3102,15 @@ mod tests {
             let submission = runtime
                 .submit_task_response(
                     &task_id,
-                    serde_json::json!({
-                        "status": "completed",
-                        "definitionUrl": "urn:formspec:review",
-                        "definitionVersion": "1.0.0",
-                        "data": { "approved": true }
-                    }),
+                    integrity_canonical::ResponseJson::from_value(
+                        &(serde_json::json!({
+                            "status": "completed",
+                            "definitionUrl": "urn:formspec:review",
+                            "definitionVersion": "1.0.0",
+                            "data": { "approved": true }
+                        })),
+                    )
+                    .unwrap(),
                     "reviewer",
                     None,
                 )
@@ -5621,7 +5630,7 @@ mod tests {
         runtime
             .submit_task_response(
                 &task_id,
-                serde_json::json!({
+                integrity_canonical::ResponseJson::from_value(&(serde_json::json!({
                     "status": "completed",
                     "definitionUrl": "urn:test:formspec:signature",
                     "definitionVersion": "1.0.0",
@@ -5640,7 +5649,7 @@ mod tests {
                             "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
                         }
                     }
-                }),
+                }))).unwrap(),
                 "applicant",
                 Some(&format!("{token_prefix}-submit")),
             )
@@ -6219,12 +6228,15 @@ mod tests {
         let result = runtime
             .submit_task_response(
                 &task_id,
-                serde_json::json!({
-                    "status": "completed",
-                    "definitionUrl": "urn:formspec:review",
-                    "definitionVersion": "1.0.0",
-                    "data": { "approved": true }
-                }),
+                integrity_canonical::ResponseJson::from_value(
+                    &(serde_json::json!({
+                        "status": "completed",
+                        "definitionUrl": "urn:formspec:review",
+                        "definitionVersion": "1.0.0",
+                        "data": { "approved": true }
+                    })),
+                )
+                .unwrap(),
                 "reviewer",
                 Some("token-1"),
             )
@@ -6304,7 +6316,7 @@ mod tests {
         let err = runtime
             .submit_task_response(
                 &task.task_id,
-                serde_json::json!({
+                integrity_canonical::ResponseJson::from_value(&(serde_json::json!({
                     "status": "completed",
                     "definitionUrl": "urn:test:formspec:signature",
                     "definitionVersion": "1.0.0",
@@ -6322,7 +6334,7 @@ mod tests {
                             "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
                         }
                     }
-                }),
+                }))).unwrap(),
                 "applicant",
                 Some("sig013-harness-submit"),
             )
@@ -6380,7 +6392,7 @@ mod tests {
         let result = runtime
             .submit_task_response(
                 &task_id,
-                serde_json::json!({
+                integrity_canonical::ResponseJson::from_value(&(serde_json::json!({
                     "status": "completed",
                     "definitionUrl": "urn:test:formspec:signature",
                     "definitionVersion": "1.0.0",
@@ -6398,7 +6410,7 @@ mod tests {
                             "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
                         }
                     }
-                }),
+                }))).unwrap(),
                 "applicant",
                 Some("sig013-affirmation-submit"),
             )
@@ -6490,7 +6502,7 @@ mod tests {
         let result = runtime
             .submit_task_response(
                 &task_id,
-                serde_json::json!({
+                integrity_canonical::ResponseJson::from_value(&(serde_json::json!({
                     "status": "completed",
                     "definitionUrl": "urn:test:formspec:signature",
                     "definitionVersion": "1.0.0",
@@ -6510,7 +6522,7 @@ mod tests {
                             "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
                         }
                     }
-                }),
+                }))).unwrap(),
                 "applicant",
                 Some("sig013-receipt-submit"),
             )
@@ -6586,7 +6598,7 @@ mod tests {
         let result = runtime
             .submit_task_response(
                 &task_id,
-                serde_json::json!({
+                integrity_canonical::ResponseJson::from_value(&(serde_json::json!({
                     "status": "completed",
                     "definitionUrl": "urn:test:formspec:signature",
                     "definitionVersion": "1.0.0",
@@ -6605,7 +6617,7 @@ mod tests {
                             "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
                         }
                     }
-                }),
+                }))).unwrap(),
                 "applicant",
                 Some("sig013-admission-failed-submit"),
             )
@@ -6743,7 +6755,7 @@ mod tests {
             let result = runtime
                 .submit_task_response(
                     &task_id,
-                    serde_json::json!({
+                    integrity_canonical::ResponseJson::from_value(&(serde_json::json!({
                         "status": "completed",
                         "definitionUrl": "urn:test:formspec:signature",
                         "definitionVersion": "1.0.0",
@@ -6766,7 +6778,7 @@ mod tests {
                                 "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
                             }
                         }
-                    }),
+                    }))).unwrap(),
                     "applicant",
                     Some(&submit_token),
                 )
@@ -6889,7 +6901,7 @@ mod tests {
         let result = runtime
             .submit_task_response(
                 &task_id,
-                serde_json::json!({
+                integrity_canonical::ResponseJson::from_value(&(serde_json::json!({
                     "status": "completed",
                     "definitionUrl": "urn:test:formspec:signature",
                     "definitionVersion": "1.0.0",
@@ -6908,7 +6920,7 @@ mod tests {
                             "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
                         }
                     }
-                }),
+                }))).unwrap(),
                 "applicant",
                 Some("sig013-posture-method-submit"),
             )
@@ -7095,7 +7107,7 @@ mod tests {
         let result = runtime
             .submit_task_response(
                 &task_id,
-                serde_json::json!({
+                integrity_canonical::ResponseJson::from_value(&(serde_json::json!({
                     "status": "completed",
                     "definitionUrl": "urn:test:formspec:signature",
                     "definitionVersion": "1.0.0",
@@ -7114,7 +7126,7 @@ mod tests {
                             "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
                         }
                     }
-                }),
+                }))).unwrap(),
                 "applicant",
                 Some("sig013-posture-intent-submit"),
             )
@@ -7218,7 +7230,7 @@ mod tests {
         let result = runtime
             .submit_task_response(
                 &task_id,
-                serde_json::json!({
+                integrity_canonical::ResponseJson::from_value(&(serde_json::json!({
                     "status": "completed",
                     "definitionUrl": "urn:test:formspec:signature",
                     "definitionVersion": "1.0.0",
@@ -7237,7 +7249,7 @@ mod tests {
                             "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
                         }
                     }
-                }),
+                }))).unwrap(),
                 "applicant",
                 Some("sig013-posture-receipt-submit"),
             )
@@ -7315,12 +7327,15 @@ mod tests {
         let draft = runtime
             .persist_task_draft(
                 &task_id,
-                serde_json::json!({
-                    "status": "stopped",
-                    "definitionUrl": "urn:formspec:review",
-                    "definitionVersion": "1.0.0",
-                    "data": { "approved": false }
-                }),
+                integrity_canonical::ResponseJson::from_value(
+                    &(serde_json::json!({
+                        "status": "stopped",
+                        "definitionUrl": "urn:formspec:review",
+                        "definitionVersion": "1.0.0",
+                        "data": { "approved": false }
+                    })),
+                )
+                .unwrap(),
                 "reviewer",
                 Some("draft-token"),
             )
@@ -7414,12 +7429,15 @@ mod tests {
         runtime
             .persist_task_draft(
                 &task_id,
-                serde_json::json!({
-                    "status": "stopped",
-                    "definitionUrl": "urn:formspec:review",
-                    "definitionVersion": "1.0.0",
-                    "data": { "approved": false }
-                }),
+                integrity_canonical::ResponseJson::from_value(
+                    &(serde_json::json!({
+                        "status": "stopped",
+                        "definitionUrl": "urn:formspec:review",
+                        "definitionVersion": "1.0.0",
+                        "data": { "approved": false }
+                    })),
+                )
+                .unwrap(),
                 "reviewer",
                 None,
             )
@@ -8392,7 +8410,12 @@ mod tests {
             "data": { "approved": true }
         });
         let first = runtime
-            .submit_task_response(&task_id, response.clone(), "delegate", Some("replay-1"))
+            .submit_task_response(
+                &task_id,
+                integrity_canonical::ResponseJson::from_value(&(response.clone())).unwrap(),
+                "delegate",
+                Some("replay-1"),
+            )
             .unwrap();
         assert_eq!(authorization_checks.load(Ordering::SeqCst), 1);
         delegation_allowed.store(false, Ordering::SeqCst);
@@ -8406,7 +8429,12 @@ mod tests {
                 .is_empty()
         );
         let second = runtime
-            .submit_task_response(&task_id, response, "delegate", Some("replay-1"))
+            .submit_task_response(
+                &task_id,
+                integrity_canonical::ResponseJson::from_value(&(response)).unwrap(),
+                "delegate",
+                Some("replay-1"),
+            )
             .unwrap();
 
         assert_eq!(
@@ -8486,10 +8514,20 @@ mod tests {
             "data": { "approved": true }
         });
         let first = runtime
-            .submit_task_response(&task_id, response.clone(), "reviewer", Some("token-shared"))
+            .submit_task_response(
+                &task_id,
+                integrity_canonical::ResponseJson::from_value(&(response.clone())).unwrap(),
+                "reviewer",
+                Some("token-shared"),
+            )
             .unwrap();
         let second = runtime
-            .submit_task_response(&task_id, response, "delegate", Some("token-shared"))
+            .submit_task_response(
+                &task_id,
+                integrity_canonical::ResponseJson::from_value(&(response)).unwrap(),
+                "delegate",
+                Some("token-shared"),
+            )
             .unwrap();
 
         assert_submission_result_roundtrip(&first);
@@ -8795,12 +8833,15 @@ mod tests {
         let error = runtime
             .submit_task_response(
                 &task_id,
-                serde_json::json!({
-                    "status": "completed",
-                    "definitionUrl": "urn:formspec:review",
-                    "definitionVersion": "1.0.0",
-                    "data": { "approved": true }
-                }),
+                integrity_canonical::ResponseJson::from_value(
+                    &(serde_json::json!({
+                        "status": "completed",
+                        "definitionUrl": "urn:formspec:review",
+                        "definitionVersion": "1.0.0",
+                        "data": { "approved": true }
+                    })),
+                )
+                .unwrap(),
                 "reviewer",
                 Some("retry-token"),
             )
@@ -10559,7 +10600,7 @@ mod tests {
         let original = runtime.store.load_record(&process.process_id).unwrap();
         let original_creation = original.creation.clone();
         let task = &process.active_tasks[0].task_id;
-        let result = runtime.submit_task_response(task, serde_json::json!({"status":"reassigned","data":{"reason":"qualified reassignment","newActorId":"actor:human:successor"}}), "actor:human:original", Some("reassignment-key")).unwrap();
+        let result = runtime.submit_task_response(task, integrity_canonical::ResponseJson::from_value(&(serde_json::json!({"status":"reassigned","data":{"reason":"qualified reassignment","newActorId":"actor:human:successor"}}))).unwrap(), "actor:human:original", Some("reassignment-key")).unwrap();
         assert!(matches!(result, TaskSubmissionResult::Completed { .. }));
         let current = runtime.store.load_record(&process.process_id).unwrap();
         assert_eq!(current.creation, original_creation);
@@ -10979,9 +11020,9 @@ mod tests {
             let positive_task = positive.load_process(&positive_id).unwrap().active_tasks[0]
                 .task_id
                 .clone();
-            assert!(matches!(positive.submit_task_response(&positive_task, serde_json::json!({
+            assert!(matches!(positive.submit_task_response(&positive_task, integrity_canonical::ResponseJson::from_value(&(serde_json::json!({
                 "status":"completed","definitionUrl":"urn:formspec:review","definitionVersion":"1.0.0","data":{"approved":true}
-            }), "reviewer", Some("positive")), Ok(TaskSubmissionResult::Completed { .. })));
+            }))).unwrap(), "reviewer", Some("positive")), Ok(TaskSubmissionResult::Completed { .. })));
             assert!(calls.load(Ordering::SeqCst) > 0);
             calls.store(0, Ordering::SeqCst);
             let (mut runtime, id) = create(kernel(None, true), 10_000);
@@ -10994,7 +11035,10 @@ mod tests {
             assert!(matches!(
                 runtime.persist_task_draft(
                     &task,
-                    serde_json::json!({"status":"stopped","data":{"changed":true}}),
+                    integrity_canonical::ResponseJson::from_value(
+                        &(serde_json::json!({"status":"stopped","data":{"changed":true}}))
+                    )
+                    .unwrap(),
                     "reviewer",
                     Some("new-draft")
                 ),
@@ -11003,7 +11047,10 @@ mod tests {
             assert!(matches!(
                 runtime.submit_task_response(
                     &task,
-                    serde_json::json!({"status":"completed","data":{"changed":true}}),
+                    integrity_canonical::ResponseJson::from_value(
+                        &(serde_json::json!({"status":"completed","data":{"changed":true}}))
+                    )
+                    .unwrap(),
                     "reviewer",
                     Some("new-submit")
                 ),
@@ -11059,7 +11106,10 @@ mod tests {
             runtime
                 .persist_task_draft(
                     &task.task_id,
-                    serde_json::json!({"status":"stopped"}),
+                    integrity_canonical::ResponseJson::from_value(
+                        &(serde_json::json!({"status":"stopped"})),
+                    )
+                    .unwrap(),
                     "reviewer",
                     Some("weekend-draft"),
                 )
@@ -11112,7 +11162,10 @@ mod tests {
             runtime
                 .persist_task_draft(
                     &task,
-                    serde_json::json!({"status":"stopped"}),
+                    integrity_canonical::ResponseJson::from_value(
+                        &(serde_json::json!({"status":"stopped"})),
+                    )
+                    .unwrap(),
                     "reviewer",
                     Some("before"),
                 )
@@ -11123,7 +11176,10 @@ mod tests {
             assert!(matches!(
                 runtime.persist_task_draft(
                     &task,
-                    serde_json::json!({"status":"stopped"}),
+                    integrity_canonical::ResponseJson::from_value(
+                        &(serde_json::json!({"status":"stopped"}))
+                    )
+                    .unwrap(),
                     "reviewer",
                     Some("after")
                 ),
@@ -11140,13 +11196,21 @@ mod tests {
             runtime.clock = Box::new(FixedClock { now_ms: 10_999 });
             let body = serde_json::json!({"status":"stopped","data":{"saved":true}});
             let original = runtime
-                .persist_task_draft(&task, body.clone(), "reviewer", Some("retained-draft"))
+                .persist_task_draft(
+                    &task,
+                    integrity_canonical::ResponseJson::from_value(&(body.clone())).unwrap(),
+                    "reviewer",
+                    Some("retained-draft"),
+                )
                 .unwrap();
             assert!(matches!(
                 runtime
                     .submit_task_response(
                         &task,
-                        serde_json::json!({"status":"stopped"}),
+                        integrity_canonical::ResponseJson::from_value(
+                            &(serde_json::json!({"status":"stopped"}))
+                        )
+                        .unwrap(),
                         "reviewer",
                         Some("retained-submit")
                     )
@@ -11172,7 +11236,12 @@ mod tests {
             let before = snapshot(&runtime, &id);
             assert_eq!(
                 runtime
-                    .persist_task_draft(&task, body, "reviewer", Some("retained-draft"))
+                    .persist_task_draft(
+                        &task,
+                        integrity_canonical::ResponseJson::from_value(&(body)).unwrap(),
+                        "reviewer",
+                        Some("retained-draft")
+                    )
                     .unwrap()
                     .artifact_id,
                 original.artifact_id
@@ -11181,7 +11250,10 @@ mod tests {
                 runtime
                     .submit_task_response(
                         &task,
-                        serde_json::json!({"status":"stopped"}),
+                        integrity_canonical::ResponseJson::from_value(
+                            &(serde_json::json!({"status":"stopped"}))
+                        )
+                        .unwrap(),
                         "reviewer",
                         Some("retained-submit")
                     )
@@ -11191,7 +11263,10 @@ mod tests {
             assert!(matches!(
                 runtime.submit_task_response(
                     &task,
-                    serde_json::json!({"status":"completed"}),
+                    integrity_canonical::ResponseJson::from_value(
+                        &(serde_json::json!({"status":"completed"}))
+                    )
+                    .unwrap(),
                     "reviewer",
                     None
                 ),
@@ -11289,7 +11364,10 @@ mod tests {
             assert!(matches!(
                 runtime.persist_task_draft(
                     &task.task_id,
-                    serde_json::json!({"status":"stopped"}),
+                    integrity_canonical::ResponseJson::from_value(
+                        &(serde_json::json!({"status":"stopped"}))
+                    )
+                    .unwrap(),
                     "reviewer",
                     None
                 ),
@@ -11314,7 +11392,10 @@ mod tests {
             assert!(matches!(
                 runtime.submit_task_response(
                     &task.task_id,
-                    serde_json::json!({"status":"completed"}),
+                    integrity_canonical::ResponseJson::from_value(
+                        &(serde_json::json!({"status":"completed"}))
+                    )
+                    .unwrap(),
                     "reviewer",
                     None
                 ),
@@ -11349,7 +11430,10 @@ mod tests {
             assert!(matches!(
                 runtime.persist_task_draft(
                     &task.task_id,
-                    serde_json::json!({"status":"stopped"}),
+                    integrity_canonical::ResponseJson::from_value(
+                        &(serde_json::json!({"status":"stopped"}))
+                    )
+                    .unwrap(),
                     "reviewer",
                     None
                 ),
@@ -11389,7 +11473,10 @@ mod tests {
             runtime
                 .persist_task_draft(
                     &task,
-                    serde_json::json!({"status":"stopped"}),
+                    integrity_canonical::ResponseJson::from_value(
+                        &(serde_json::json!({"status":"stopped"})),
+                    )
+                    .unwrap(),
                     "reviewer",
                     None,
                 )
@@ -11752,7 +11839,11 @@ mod tests {
         let selection:crate::governance::GovernancePolicySelection=serde_json::from_value(serde_json::json!({"version":2,"kernel":raw,"delivery":{"targetWorkflow":"urn:test:generic-ai-composition"},"rules":{"version":2,"noticeRequirements":{},"humanDecisions":[{"transition":{"from":"open","to":"done","event":"human.completed"},"taskRef":"review","evidencePointer":"/data/governance","rules":[{"ruleId":"rule:human"}],"criteria":["retained"],"caseFieldPaths":["/retained"],"positiveFactors":[],"negativeFactors":[]}]}})).unwrap();
         let policy = crate::governance::QualifiedGovernancePolicy::qualify(selection).unwrap();
         let mut runtime = runtime_with_kernel(serde_json::from_value(raw).unwrap())
-            .with_governance_policy(policy, Default::default(), &[wos_core::model::notice_requirements::NoticeCapability::LocalSmtpTestCapture])
+            .with_governance_policy(
+                policy,
+                Default::default(),
+                &[wos_core::model::notice_requirements::NoticeCapability::LocalSmtpTestCapture],
+            )
             .unwrap();
         let id = stack_common_typeid::testing::fixture_minter().mint_process_id();
         runtime

@@ -5,7 +5,7 @@ date: 2026-05-15
 status: draft
 ---
 
-> **Partial absorption (ADR 0076 D-2).** Signature workflow semantics absorbed into the merged `schemas/wos-workflow.schema.json` `signature` embedded block — signature is no longer a separate sidecar but a load-bearing block on any DocuSign-tier workflow. Prose normative content remains here (signing flow patterns, role binding, authentication policies) until the absorption pass lands the within-block descriptions. SIG-001..SIG-012 lint rules continue to cite this document as canonical until the schema descriptions become full normative.
+> **Retained normative prose (ADR 0076 D-2 / D-8).** The `signature` block in `schemas/wos-workflow.schema.json` owns the embedded JSON shape. This document remains the normative prose owner for signing-flow semantics, role binding, authentication policies and signature conformance, with its existing section anchors preserved. Signature is not a separate sidecar; schema descriptions supplement this specification rather than replace it.
 
 
 # WOS Signature Profile v1.0
@@ -22,6 +22,8 @@ status: draft
 The WOS Signature Profile defines workflow semantics for signature ceremonies in WOS. It covers signer roles, signing order, routed signing, free-for-all signing, envelope and recipient state, witness and notary participation, reminders, expiry, decline, void, reassignment, intent capture, identity binding, document binding, and the `SignatureAffirmation` provenance record emitted when a signing act is accepted.
 
 The profile is a parallel seam. It does not add kernel actor types and does not define cryptographic certificate-of-completion bundles. Formspec captures signing and consent evidence. WOS governs the workflow semantics and emits semantic evidence. Trellis anchors that evidence and owns export-bundle composition.
+
+The [Signing Adapter Catalog](signature-ports.md) defines replaceable adapter defaults, alternatives, profile compositions and their qualification requirements. It preserves this profile's signing rules; catalog acceptance alone does not qualify an implementation.
 
 ---
 
@@ -65,7 +67,7 @@ Rights-impacting workflows frequently require signatures: benefit attestations, 
 
 ### 1.4 Relationship to the Kernel
 
-The Signature Profile targets a WOS Kernel Document through `targetWorkflow`. It binds signature roles to kernel actors by `actorId`. Those kernel actors MUST be human actors. Signing workflow states use ordinary kernel states and MAY carry profile lifecycle tags such as `awaiting-signature`.
+The Signature Profile is declared in the `signature` block of a WOS Workflow Document. The block inherits the containing workflow's identity and version; it has no independent document marker, `targetWorkflow`, or `version`. It binds signature roles to actors in that workflow by `actorId`. Those kernel actors MUST be human actors. Signing workflow states use ordinary kernel states and MAY carry profile lifecycle tags such as `awaiting-signature`.
 
 The profile does not introduce a new kernel action type. Runtime processors implement signature behavior by composing existing lifecycle transitions, task assignment, timer events, provenance emission, and `custodyHook` admission.
 
@@ -81,16 +83,14 @@ JSON syntax and data types are as defined in RFC 8259. URI syntax is as defined 
 
 ### 2.1 Signature Profile Document
 
-A Signature Profile Document MUST declare:
+The term **Signature Profile Document** denotes a WOS Workflow Document carrying a `signature` block, not an independently marked document. The containing document MUST conform to `schemas/wos-workflow.schema.json`; its `signature` block MUST declare:
 
-- `$wosSignatureProfile`
-- `targetWorkflow`
 - `roles`
 - `documents`
 - `signingFlow`
 - `evidence`
 
-The document MAY declare authentication policies, reminders, expiry, decline, void, and reassignment policy. Vendor extensions MUST use `x-` properties or the `extensions` object.
+The block MAY declare authentication policies, reminders, expiry, decline, void, and reassignment policy. Vendor extensions MUST use `x-` properties or an `extensions` object where the containing schema permits one. The block MUST NOT declare the retired `$wosSignatureProfile`, `targetWorkflow`, or independent `version` properties. The version in this specification's frontmatter identifies the prose revision; it is not an authored block version.
 
 ### 2.2 Signer Roles
 
@@ -124,15 +124,19 @@ Each signing step MUST reference a declared role by `roleId` and a declared docu
 
 ### 2.4 Lifecycle Tags
 
-The standard lifecycle tags are:
+The standard lifecycle tags are scoped views of the envelope and recipient states in [§2.4.1](#241-envelope-and-recipient-state-model). They remain profile semantics layered over kernel state/tag data, not new kernel state kinds or another transition model. A tag describes the signing obligation or ceremony in its scope; it is not a one-to-one encoding of the complete ceremony state.
 
-- `awaiting-signature`
-- `signature-complete`
-- `signature-declined`
-- `signature-expired`
-- `signature-voided`
+| Lifecycle tag | Recipient or signing-scope meaning | Envelope-state interpretation |
+|---|---|---|
+| `awaiting-signature` | An outstanding signing obligation; an active recipient assignment can be `pending` or `accessed`. The tag alone does not distinguish those states or prove dispatch or document access. | Use the actual §2.4.1 facts to distinguish `draft`, `sent` and `in-progress`; the tag alone does not establish progress. |
+| `signature-complete` | Signing is complete in the tagged scope: the applicable signer/document pairs have admitted `SignatureAffirmation` records (`signed` recipients). | For a nonterminal ceremony with signed progress, outstanding required pairs or final seal observation mean `in-progress`. `completed` requires all required pairs to be admitted **and** the final seal or equivalent closure event to be observed. `voided` and `expired` retain their §2.4.1 meanings. |
+| `signature-declined` | The affected recipient assignment is `declined`, a recipient-terminal outcome. | There is no `declined` envelope state. Apply the configured decline transition (§2.11); this tag alone neither voids nor completes the ceremony. |
+| `signature-expired` | The affected outstanding unsigned assignments (`pending` or `accessed`) have expired. Already-admitted affirmations remain evidence. | The envelope is `expired` when its configured expiry fires before completion. An expired signing scope alone does not prove that the entire ceremony expired. |
+| `signature-voided` | An authorized void cancels pending assignments and prevents further signature admission. It does not introduce a `canceled` recipient-state token. | The ceremony is `voided`; retain the authorizing actor, reason and cancellation provenance required by §2.11. |
 
-These are profile semantics layered over kernel state/tag data. They are not new kernel state kinds.
+Processors MUST apply §2.4.1's state obligations rather than infer canonical state or completion from a tag alone. In particular, a `signature-complete` tag or last-signer success is not final-seal evidence. Dispatch, access, admission and seal observations retain their distinct meanings.
+
+Reassignment needs no additional lifecycle tag: the original assignment becomes `reassigned`, a replacement assignment begins `pending`, and the original assignment edge remains auditable (§2.11). `awaiting-signature` can describe the replacement obligation without erasing the original outcome.
 
 #### 2.4.1 Envelope and Recipient State Model
 
@@ -162,6 +166,8 @@ State obligations:
 - `reassigned` is recipient-terminal for the original assignment and opens a replacement `pending` recipient assignment. Reassignment MUST preserve the original assignment edge for audit.
 
 WOS runtimes MAY expose provider-native status strings to operators, but conformance and provenance MUST normalize those strings into the envelope/recipient states above before lifecycle transitions or `SignatureAffirmation` admission depend on them.
+
+`pending-seal-failure` names a subordinate incident condition after admitted signing when failure or uncertainty blocks qualified seal completion. It is not another aggregate state, recipient token or kernel state kind, and MUST NOT replace the canonical terminal meanings above. A normal asynchronous wait is not by itself a failed remote effect; a timeout or missing receipt leaves the remote outcome uncertain unless actual evidence establishes it. Admitted signatures and original effect identities remain evidence. Recovery, observability and bounded abandonment follow [Signing Adapter Catalog §3.5](signature-ports.md#35-seal-failure-recovery), without weakening the existing completion condition or current lifecycle legality.
 
 ### 2.5 Intent Capture
 
@@ -238,7 +244,11 @@ Each `SignatureAffirmation` MUST carry a `primitiveVerification` object reportin
 
 When `status` is `deferredPendingHelper`, a non-empty `reason` MUST be present and SHOULD identify the cause (e.g. `formspec-signing-helper-pending` for the deferred case while `FORMSPEC-SIGN-HELPER-001` is unshipped). When `status` is `verified`, `reason` MAY be omitted.
 
-A future deployment posture MAY require `verified` for any signing-intent class; until that posture lands, admission accepts `verified` or `deferredPendingHelper`. The reference Formspec binding currently emits `deferredPendingHelper` with reason `formspec-signing-helper-pending` because the cryptographic primitive over the `signatureValue` COSE_Sign1 envelope has not yet shipped at the binding; downstream verifiers MUST treat the resulting `SignatureAffirmation` as "pin/consent/digest pre-checked, primitive deferred" rather than "cryptographically verified." Per ADR 0109, the method identifier consumed by posture `allowedMethods` admission and registry lookup is the COSE protected-header `method_uri` (label -65540) extracted from `signatureValue`; the binding partial-decodes the protected header without invoking the cryptographic primitive.
+A future deployment posture MAY require `verified` for any signing-intent class; until that posture lands, admission accepts `verified` or `deferredPendingHelper`. The legacy Formspec route emits `deferredPendingHelper` with reason `formspec-signing-helper-pending` unless authenticated verification-receipt evidence supplies a reached primitive result. Declared-document admission instead requires an explicitly configured source verifier, registry and trusted expected signer key, runs the actual primitive over the unchanged canonical Response bytes, and MUST refuse failed, unsupported or unavailable verification. A downstream verifier MUST distinguish deferred pre-checks from a reached cryptographic result. Per ADR 0109, the method identifier consumed by posture `allowedMethods` admission and registry lookup is the COSE protected-header `method_uri` (label -65540) extracted from `signatureValue`; the binding partial-decodes the protected header without invoking the cryptographic primitive.
+
+**Signed Formspec authority input.** WOS publishes `Response.extensions["x-wos-signer-authority"]` for a Formspec source authority assertion using the closed `SignatureSignerAuthority` shape from `wos-provenance-log.schema.json` (§2.14). Declared-document admission MUST validate this shape and bind it to the unchanged whole-Response signing bytes before applying existing authority, identity, actor authorization and posture requirements. Conflicting authority inputs MUST refuse. This assertion alone proves neither authentication nor legal authority. Absence follows the existing intent-specific rules; it does not introduce a mandatory authority claim for intents whose rules permit absence.
+
+For declared-document admission, intrinsic Formspec `Response.id` remains opaque and distinct from WOS `sourceResponseRef`. The native runtime uses the actual retained Accepted task artifact locator as that reference, and records its existing `artifactId` together with the real `signatureAffirmationId` in `TaskCompleted` details in the same atomic save. Witness resolution MUST follow this association to exact retained source response/signature/digest/selection evidence and an accepted principal record; it MUST NOT substitute a source signature identifier for a WOS record identifier. Missing, ambiguous, conflicting or unqualified principal evidence MUST refuse. This does not change the existing one-document-per-authorized-task admission unit or qualify every possible source-storage adapter.
 
 **Binding to Formspec and Trellis.** For Formspec-backed signing, WOS consumes a Formspec `authoredSignatures[*]` record and admits `SignatureAffirmation` only after `signatureId`, `signingActId`, `documentRef`, `signedPayload.digest`, signed-payload response pins, `documentHash`, `presentationHash`, `consentAccepted`, `signingIntent`, signer role, signer authority, identity, and posture checks pass. A WOS/Trellis profile MAY additionally require one `UserContentAttestationPayload` per signer/document pair under the Trellis `trellis.user-content-attestation.v1` event extension (Trellis ADR 0010 §"Wire shape") as byte-level proof. That Trellis payload corroborates bytes and chain position; it does not define Formspec signature semantics or WOS signing-intent meaning.
 
@@ -330,6 +340,8 @@ The `deploymentLocalSigningIntents` field was the original mechanism in the Post
 
 ### 2.11 Decline, Void, Expiry, and Reassignment
 
+The lifecycle tags are the scoped state views in [§2.4](#24-lifecycle-tags); the canonical envelope and recipient states and completion conditions remain in [§2.4.1](#241-envelope-and-recipient-state-model). The operations below preserve those meanings and their audit evidence.
+
 A decline MUST record signer, reason, timestamp, and document. It MUST follow the configured decline transition.
 
 A void MUST cancel pending signing steps and record the authorizing actor and reason. The cancellation records `taskFailed` provenance with `signatureStatus: "voided"`; it does not leave the signing tasks resumable and therefore does not use `taskDismissed`.
@@ -355,6 +367,8 @@ Every `SignatureAffirmation` carries a `signingIntent` URI naming its legal-effe
 The profile registers the following intent URIs. The set is **append-only**: removing a URI is a breaking profile change; adding a URI is additive (§3.5).
 
 This table is the baseline WOS signing-intent registry, not an example catalog. A Signature Profile Runtime MUST recognize every URI in this table. Deployment-local URI registration happens only through §2.13.2, and the `urn:wos:signing-intent:*` namespace is reserved to this profile.
+
+Envelope-routed signing uses this complete baseline as the default P-6 `IntentRegistry` described in the [content-attestation design memo](../../../thoughts/research/2026-05-12-content-attestation-envelope-research.md). It does not introduce an envelope-only subset or reclassify a `urn:wos:signing-intent:*` URI as deployment-local. Selecting another registry adapter does not relax this profile's recognition, namespace, authentication-method, or signer-authority requirements.
 
 | Intent URI | Meaning | Authentication-method floor (general) | Signer-authority floor (§2.14) |
 |---|---|---|---|
@@ -515,7 +529,7 @@ The Trellis Operational Companion's Posture Declaration enforces the structural 
 
 ### 3.1 Attachment Point
 
-The Signature Profile is a profile document. It attaches to a kernel workflow by `targetWorkflow` and composes with governance, AI, and advanced governance documents through the existing kernel seams.
+The Signature Profile attaches through the containing workflow's embedded `signature` block. It composes with the workflow's governance, agents, AI oversight and advanced blocks through the existing kernel seams. True deployment sidecars retain their own `targetWorkflow` references; the embedded signature block does not acquire one.
 
 ### 3.2 Formspec Composition
 
@@ -561,7 +575,7 @@ Changes specific to §2.13–§2.15:
 
 ### 4.1 Conformance Classes
 
-**Signature Profile Document.** A JSON document conforming to this specification and the Signature Profile JSON Schema.
+**Signature Profile Document.** A WOS Workflow Document whose embedded `signature` block conforms to this specification and `schemas/wos-workflow.schema.json#/$defs/Signature`. This conformance-class name is retained for existing citations; it does not introduce a standalone schema or marker.
 
 **Signature Profile Processor.** A processor that loads Signature Profile Documents, resolves profile references, and rejects invalid documents.
 
@@ -580,7 +594,7 @@ Complete is a strict superset of Core.
 
 Schema validation checks the document shape, closed enums, URI/reference field shapes, and `x-*` extension discipline. Schema validation MUST also check that any `signingIntent` value declared in a Signature Profile Document is a syntactically valid URI per RFC 3986 (the byte-level check Trellis ADR 0010 also enforces).
 
-Lint checks profile-to-kernel consistency: target workflow resolution, actor resolution, human actor binding, authentication-policy key resolution, role/document/step references, dependency cycles, FEL guard parsing, timer-event mapping, and ADR-0060 naming. Lint additionally checks: every authored `signingIntent` URI is either in §2.13.1 or in the deployment's Posture Declaration registry; every `signerAuthority.class` matches §2.14.1's closed enum (or a `x-*` class declared in the Posture Declaration); the §2.15 floor row for the declared posture is satisfied by the document's authentication policies; Formspec `authoredSignatures[*].signingIntent` equals the corresponding WOS `signingIntent` (§2.13.3 boundary 1↔2); signature steps that declare `signingIntent` use registered or deployment-local URIs.
+Lint checks consistency within the containing workflow: actor resolution, human actor binding, authentication-policy key resolution, role/document/step references, dependency cycles, FEL guard parsing, timer-event mapping, and ADR-0060 naming. Lint additionally checks: every authored `signingIntent` URI is either in §2.13.1 or in the deployment's Posture Declaration registry; every `signerAuthority.class` matches §2.14.1's closed enum (or a `x-*` class declared in the Posture Declaration); the §2.15 floor row for the declared posture is satisfied by the document's authentication policies; Formspec `authoredSignatures[*].signingIntent` equals the corresponding WOS `signingIntent` (§2.13.3 boundary 1↔2); signature steps that declare `signingIntent` use registered or deployment-local URIs.
 
 Runtime conformance checks signing behavior: sequential blocking, parallel completion, routed guard selection, envelope/recipient state normalization, expiry timers, decline paths, reassignment accountability, witness dependencies, notary/in-person authentication, missing-consent rejection, and custody append inclusion. Runtime additionally checks: the consumed Formspec authored signature verifies its `signatureId`, `signingActId`, `documentRef`, signed-payload digest, response pins, consent, document hash, `presentationHash`, and `signingIntent`; `signingIntent` is registered for the deployment at the time of admission; §2.15 floor is satisfied for the declared posture; `signerAuthority` claim is present and valid where the URI's floor demands it; `evidenceBinding.evidenceHash` algorithm is permitted by §2.7; ESIGN §7001(c) consumer-consent reference resolves under `esign` posture; any profile-required Trellis UCA verifier passes before WOS/Trellis integrity claims are made.
 

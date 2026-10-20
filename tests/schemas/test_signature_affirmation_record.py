@@ -97,6 +97,43 @@ def test_signature_affirmation_with_required_fields_is_accepted(schema):
     assert errors == [], f"valid SignatureAffirmation rejected: {errors}"
 
 
+
+@pytest.mark.parametrize("field", ["documentId", "locale"])
+def test_document_reference_requires_both_identity_keys(schema, field):
+    """The fs-n357 decision keeps both document and localized presentation identity."""
+    record = _record()
+    del record["data"]["documentRef"][field]
+
+    errors = list(_document_validator(schema).iter_errors(_log(record)))
+
+    assert any(
+        error.validator == "required"
+        and list(error.absolute_path)[-1:] == ["documentRef"]
+        for error in errors
+    ), f"documentRef without {field} must fail its identity constraint: {errors}"
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("mediaType", "application/pdf"),
+        ("presentationHash", "a" * 64),
+    ],
+)
+def test_document_reference_rejects_embedded_metadata(schema, field, value):
+    """Metadata must not create a second copy inside the signed reference."""
+    record = _record()
+    record["data"]["documentRef"][field] = value
+
+    errors = list(_document_validator(schema).iter_errors(_log(record)))
+
+    assert any(
+        error.validator == "additionalProperties"
+        and list(error.absolute_path)[-1:] == ["documentRef"]
+        for error in errors
+    ), f"embedded {field} must fail the closed documentRef constraint: {errors}"
+
+
 def test_signature_affirmation_missing_data_is_rejected(schema):
     validator = _document_validator(schema)
     record = _record()

@@ -168,8 +168,8 @@ fn rig_selected(
     runtime
         .submit_task_response(
             task,
-            json!({"status":"completed","definitionUrl":"urn:test:review","definitionVersion":"1.0.0",
-        "data":{"approved":true,"governance":decision}}),
+            integrity_canonical::ResponseJson::from_value(&(json!({"status":"completed","definitionUrl":"urn:test:review","definitionVersion":"1.0.0",
+        "data":{"approved":true,"governance":decision}}))).unwrap(),
             "actor:human:reviewer-1",
             Some("original-review"),
         )
@@ -628,8 +628,11 @@ fn actual_mapping_cannot_close_before_a_receipt_and_initial_adverse_values_refus
     let task = before.process.active_tasks[0].task_id.clone();
     let result = runtime.submit_task_response(
         &task,
-        json!({"status":"completed","definitionUrl":"urn:test:review",
-        "definitionVersion":"1.0.0","data":{"approved":true,"governance":evidence()}}),
+        integrity_canonical::ResponseJson::from_value(
+            &(json!({"status":"completed","definitionUrl":"urn:test:review",
+        "definitionVersion":"1.0.0","data":{"approved":true,"governance":evidence()}})),
+        )
+        .unwrap(),
         "actor:human:reviewer-1",
         Some("mapping-bypass"),
     );
@@ -758,8 +761,8 @@ fn submit_appeal(
         .iter()
         .find(|task| task.task_ref == task_ref)
         .unwrap();
-    runtime.submit_task_response(&task.task_id,json!({"status":"completed","definitionUrl":"urn:test:review","definitionVersion":"1.0.0",
-        "data":{"approved":true,"proposalFactsRef":original,"governance":evidence()}}),actor,Some(task_ref)).unwrap();
+    runtime.submit_task_response(&task.task_id,integrity_canonical::ResponseJson::from_value(&(json!({"status":"completed","definitionUrl":"urn:test:review","definitionVersion":"1.0.0",
+        "data":{"approved":true,"proposalFactsRef":original,"governance":evidence()}}))).unwrap(),actor,Some(task_ref)).unwrap();
 }
 
 #[test]
@@ -1106,8 +1109,8 @@ fn actual_timely_correction_uses_its_retained_artifact_and_prevents_timeout_prop
         .unwrap()
         .task_id
         .clone();
-    runtime.submit_task_response(&task,json!({"status":"completed","definitionUrl":"urn:test:review","definitionVersion":"1.0.0",
-        "data":{"approved":true,"photo":"accepted-correction"}}),"actor:human:applicant-3",Some("timely-photo")).unwrap();
+    runtime.submit_task_response(&task,integrity_canonical::ResponseJson::from_value(&(json!({"status":"completed","definitionUrl":"urn:test:review","definitionVersion":"1.0.0",
+        "data":{"approved":true,"photo":"accepted-correction"}}))).unwrap(),"actor:human:applicant-3",Some("timely-photo")).unwrap();
     let outcome = runtime.drain_once(&id).unwrap();
     assert_eq!(
         outcome.processed_event.as_deref(),
@@ -1212,7 +1215,12 @@ fn selected_mapping_requires_exact_original_artifact_response_and_pin_without_ra
             .unwrap();
         let mut decision = CapturedGovernanceDecision {
             artifact_id: artifact.artifact_id.clone(),
-            response_sha256: stack_common_hash::canonical_json_hash(&artifact.response).unwrap(),
+            response_sha256: stack_common_hash::sha256_prefixed(
+                &integrity_canonical::canonical_json_from_bytes(
+                    artifact.response.as_str().as_bytes(),
+                )
+                .unwrap(),
+            ),
             mapping_ref: mapping["ref"].as_str().unwrap().into(),
             mapping_sha256: mapping["sha256"].as_str().unwrap().into(),
             evidence: evidence(),
@@ -1560,7 +1568,7 @@ fn actual_protected_task_mapping_preserves_artifacts_tasks_replay_and_case() {
     let before_record = store.load_record(&id).unwrap();
     let task = before_record.process.active_tasks[0].task_id.clone();
     let before = saved_snapshot(&before_record);
-    let result=runtime.submit_task_response(&task,json!({"status":"completed","definitionUrl":"urn:test:review","definitionVersion":"1.0.0","data":{"approved":true,"governance":evidence()}}),"actor:human:reviewer-1",Some("protected-mapping"));
+    let result=runtime.submit_task_response(&task,integrity_canonical::ResponseJson::from_value(&(json!({"status":"completed","definitionUrl":"urn:test:review","definitionVersion":"1.0.0","data":{"approved":true,"governance":evidence()}}))).unwrap(),"actor:human:reviewer-1",Some("protected-mapping"));
     let after = saved_snapshot(&store.load_record(&id).unwrap());
     let count = effects.load(Ordering::SeqCst);
     retain_probe(

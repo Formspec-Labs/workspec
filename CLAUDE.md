@@ -48,11 +48,11 @@ WOS is a JSON-native specification for sensitive workflows — benefits adjudica
 
 WOS does NOT replace the workflow engine. Targets Temporal / Restate / Camunda / Step Functions as execution substrates; the engine handles persistence, timers, crash recovery. WOS governs the transitions that matter for rights, audit, and AI oversight.
 
-Ships as four independent release streams: `wos-kernel`, `wos-governance`, `wos-ai`, `wos-advanced`. Compliance claims reference a pair of stream versions.
+Workflow compliance claims identify `$wosWorkflow@X.Y` and the embedded blocks and conformance suites exercised. Repository package release identities remain separate build provenance; see `RELEASE-STREAMS.md`.
 
 ## Schema structure
 
-One author-time core schema, three sidecars, two runtime artifact schemas, one tooling schema. See [ADR 0076 (product-tier consolidation)](../thoughts/adr/0076-product-tier-consolidation.md).
+One author-time core schema, two sidecars, two runtime artifact schemas, one tooling schema. See [ADR 0076 (product-tier consolidation)](../thoughts/adr/0076-product-tier-consolidation.md).
 
 - **Author-time core: `wos-workflow.schema.json`.** Required: `$wosWorkflow`, `url`, `version`, `title`, `impactLevel`, `actors`, `lifecycle`. Carries the workflow lifecycle, case file, contracts, output bindings, and provenance config in one document.
 - **Optional embedded blocks** (appear when product behavior demands them; conditional schema rules + lint enforce presence):

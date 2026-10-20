@@ -605,7 +605,12 @@ fn signed_only_with_initial_case(
     runtime.drain_once(&process).unwrap();
     let (task, response) = signed_response(&runtime, &process, &signing);
     let result = runtime
-        .submit_task_response(&task, response, "actor:human:supervisor", Some("signed.1"))
+        .submit_task_response(
+            &task,
+            integrity_canonical::ResponseJson::from_value(&(response)).unwrap(),
+            "actor:human:supervisor",
+            Some("signed.1"),
+        )
         .unwrap();
     assert!(
         matches!(result, wos_runtime::TaskSubmissionResult::Completed { .. }),
@@ -657,7 +662,7 @@ fn valid_source_signature_with_deferred_normal_admission_cannot_issue_notice() {
     let result = runtime
         .submit_task_response(
             &task,
-            response,
+            integrity_canonical::ResponseJson::from_value(&(response)).unwrap(),
             "actor:human:supervisor",
             Some("deferred.1"),
         )
@@ -1127,7 +1132,7 @@ fn election_required_unspecified_choice_refuses_actual_filing() {
         runtime
             .submit_task_response(
                 &task,
-                response,
+                integrity_canonical::ResponseJson::from_value(&(response)).unwrap(),
                 "actor:human:supervisor",
                 Some("election-signature")
             )
@@ -2346,7 +2351,12 @@ fn current_access_denies_actual_determination_and_notice_before_effects_or_repla
     let (task, response) = signed_response(&runtime, &process, &signing);
     assert!(matches!(
         runtime
-            .submit_task_response(&task, response, "actor:human:supervisor", None)
+            .submit_task_response(
+                &task,
+                integrity_canonical::ResponseJson::from_value(&(response)).unwrap(),
+                "actor:human:supervisor",
+                None
+            )
             .unwrap(),
         wos_runtime::TaskSubmissionResult::Completed { .. }
     ));
@@ -2431,7 +2441,12 @@ fn a_review_role_alias_for_the_determining_human_cannot_schedule_independent_hea
     runtime.drain_once(&process).unwrap();
     let (task, response) = signed_response(&runtime, &process, &signing);
     runtime
-        .submit_task_response(&task, response, "actor:human:supervisor", None)
+        .submit_task_response(
+            &task,
+            integrity_canonical::ResponseJson::from_value(&(response)).unwrap(),
+            "actor:human:supervisor",
+            None,
+        )
         .unwrap();
     let d = runtime
         .load_reference_record(&process)
@@ -3261,7 +3276,11 @@ fn generic_and_reference_owners_refuse_both_installation_orders() {
     let reference = fixture();
     let (reference_runtime, _, _) = runtime(&reference);
     assert!(matches!(
-        reference_runtime.with_governance_policy(policy.clone(), Default::default(), &[wos_core::model::notice_requirements::NoticeCapability::LocalSmtpTestCapture]),
+        reference_runtime.with_governance_policy(
+            policy.clone(),
+            Default::default(),
+            &[wos_core::model::notice_requirements::NoticeCapability::LocalSmtpTestCapture]
+        ),
         Err(RuntimeError::GovernancePolicy(_))
     ));
     let mut generic_runtime = WosRuntime::new(
@@ -3274,7 +3293,11 @@ fn generic_and_reference_owners_refuse_both_installation_orders() {
         Time(Arc::new(AtomicU64::new(0))),
         BindingRegistry::new(),
     )
-    .with_governance_policy(policy, Default::default(), &[wos_core::model::notice_requirements::NoticeCapability::LocalSmtpTestCapture])
+    .with_governance_policy(
+        policy,
+        Default::default(),
+        &[wos_core::model::notice_requirements::NoticeCapability::LocalSmtpTestCapture],
+    )
     .unwrap();
     assert!(matches!(
         generic_runtime.configure_reference_due_process(capabilities(&reference)),

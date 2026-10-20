@@ -826,8 +826,8 @@ pub struct TaskArtifact {
     pub task_id: String,
     /// Artifact kind.
     pub kind: TaskArtifactKind,
-    /// Stored response payload.
-    pub response: serde_json::Value,
+    /// Original admitted Response text; the parsed view is never commitment input.
+    pub response: integrity_canonical::ResponseJson,
     /// Actor that created the artifact.
     pub actor_id: String,
     /// ISO 8601 persistence timestamp.
@@ -977,6 +977,9 @@ impl IntakeRecord {
 /// Errors from runtime persistence.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum StoreError {
+    /// Retained task artifacts lack valid metadata or original Response text.
+    #[error("invalid artifact evidence: {0}")]
+    InvalidArtifactEvidence(String),
     /// Record not found.
     #[error("runtime record not found: {0}")]
     NotFound(String),
@@ -1269,7 +1272,12 @@ pub struct RuntimeAuxFields {
     pub replay_entries: HashMap<ReplayKey, ReplayValue>,
 }
 
-/// Serializes non-instance fields of [`RuntimeRecord`] for auxiliary JSON storage (SBA `runtime_aux_json` shape).
+/// Serializes non-instance fields for auxiliary JSON storage.
+///
+/// Each artifact's `response` is a JSON string containing its original admitted
+/// object text. This sole representation survives Value-backed stores without
+/// rounding numbers. Old object-valued Responses cannot recover original text;
+/// decoding refuses them rather than reconstructing signed evidence.
 pub fn runtime_aux_to_json(record: &RuntimeRecord) -> serde_json::Value {
     let step_results: Vec<_> = record
         .step_results
@@ -1298,7 +1306,7 @@ pub fn runtime_aux_to_json(record: &RuntimeRecord) -> serde_json::Value {
                     "artifactId": a.artifact_id,
                     "taskId": a.task_id,
                     "kind": kind,
-                    "response": a.response,
+                    "response": a.response.as_str(),
                     "actorId": a.actor_id,
                     "recordedAt": a.recorded_at,
                 }),
@@ -1380,7 +1388,8 @@ pub fn runtime_aux_to_json(record: &RuntimeRecord) -> serde_json::Value {
 ///
 /// # Errors
 /// Returns invalid-creation evidence for missing, null, malformed, or inconsistent original metadata,
-/// or invalid replay evidence for malformed or duplicate dismissal entries.
+/// invalid replay evidence for malformed or duplicate dismissal entries, or
+/// [`StoreError::InvalidArtifactEvidence`] for malformed artifacts or lost Response text.
 pub fn runtime_aux_from_json(v: &serde_json::Value) -> Result<RuntimeAuxFields, StoreError> {
     let creation: ProcessCreationSnapshot =
         serde_json::from_value(v.get("creation").cloned().ok_or_else(|| {
@@ -1420,40 +1429,55 @@ pub fn runtime_aux_from_json(v: &serde_json::Value) -> Result<RuntimeAuxFields, 
                 .collect()
         })
         .unwrap_or_default();
-    let artifacts = v
+    // A string is the sole stored Response format: object-valued snapshots lost
+    // their original digits and cannot be upgraded into signed source evidence.
+    let artifact_map = v
         .get("artifacts")
-        .and_then(|x| x.as_object())
-        .map(|m| {
-            m.iter()
-                .filter_map(|(k, a)| {
-                    let kind = match a.get("kind").and_then(|x| x.as_str())? {
-                        "draft" => TaskArtifactKind::Draft,
-                        "accepted" => TaskArtifactKind::Accepted,
-                        _ => return None,
-                    };
-                    Some((
-                        k.clone(),
-                        TaskArtifact {
-                            artifact_id: a.get("artifactId")?.as_str()?.to_string(),
-                            task_id: a.get("taskId")?.as_str()?.to_string(),
-                            kind,
-                            response: a.get("response").cloned().unwrap_or(serde_json::json!({})),
-                            actor_id: a
-                                .get("actorId")
-                                .and_then(|x| x.as_str())
-                                .unwrap_or("")
-                                .to_string(),
-                            recorded_at: a
-                                .get("recordedAt")
-                                .and_then(|x| x.as_str())
-                                .unwrap_or("")
-                                .to_string(),
-                        },
-                    ))
-                })
-                .collect()
+        .and_then(serde_json::Value::as_object)
+        .ok_or_else(|| StoreError::InvalidArtifactEvidence("artifacts must be an object".into()))?;
+    let artifacts = artifact_map
+        .iter()
+        .map(|(key, artifact)| {
+            let invalid = |message: &str| {
+                StoreError::InvalidArtifactEvidence(format!("artifact {key}: {message}"))
+            };
+            let field = |name: &str| {
+                artifact
+                    .get(name)
+                    .and_then(serde_json::Value::as_str)
+                    .filter(|value| !value.trim().is_empty())
+                    .ok_or_else(|| invalid(&format!("missing or invalid {name}")))
+            };
+            let artifact_id = field("artifactId")?;
+            if artifact_id != key {
+                return Err(invalid("map key differs from artifactId"));
+            }
+            let kind = match field("kind")? {
+                "draft" => TaskArtifactKind::Draft,
+                "accepted" => TaskArtifactKind::Accepted,
+                _ => return Err(invalid("unknown kind")),
+            };
+            let recorded_at = field("recordedAt")?;
+            time::OffsetDateTime::parse(
+                recorded_at,
+                &time::format_description::well_known::Rfc3339,
+            )
+            .map_err(|_| invalid("recordedAt must be RFC 3339"))?;
+            let response = integrity_canonical::ResponseJson::parse(field("response")?)
+                .map_err(|error| invalid(&format!("invalid response text: {error}")))?;
+            Ok((
+                key.clone(),
+                TaskArtifact {
+                    artifact_id: artifact_id.to_owned(),
+                    task_id: field("taskId")?.to_owned(),
+                    kind,
+                    response,
+                    actor_id: field("actorId")?.to_owned(),
+                    recorded_at: recorded_at.to_owned(),
+                },
+            ))
         })
-        .unwrap_or_default();
+        .collect::<Result<HashMap<_, _>, StoreError>>()?;
     // Validate known dismissal entries before the existing permissive codecs
     // or HashMap collection can discard malformed or duplicate evidence.
     let dismissals = decode_dismissal_replays(v)?;
@@ -1753,6 +1777,82 @@ mod tests {
             crate::intake::ProcessCreationSnapshot::capture(&record.process, &kernel).unwrap(),
         );
         record
+    }
+
+    #[test]
+    fn artifact_aux_retains_exact_text_and_refuses_lost_or_malformed_source() {
+        const TEXT: &str =
+            r#"{"id":"opaque","data":{"amount":0.1234567890123456789,"large":9007199254740993}}"#;
+        let mut record = creation_record();
+        record.artifacts.insert(
+            "accepted-1".into(),
+            TaskArtifact {
+                artifact_id: "accepted-1".into(),
+                task_id: "task-1".into(),
+                kind: TaskArtifactKind::Accepted,
+                response: integrity_canonical::ResponseJson::parse(TEXT).unwrap(),
+                actor_id: "human-1".into(),
+                recorded_at: "2026-10-20T00:00:00Z".into(),
+            },
+        );
+        let aux = runtime_aux_to_json(&record);
+        assert_eq!(
+            aux["artifacts"]["accepted-1"]["response"].as_str(),
+            Some(TEXT)
+        );
+        let stored: serde_json::Value =
+            serde_json::from_slice(&serde_json::to_vec(&aux).unwrap()).unwrap();
+        let restored = runtime_aux_from_json(&stored).unwrap();
+        assert_eq!(restored.artifacts["accepted-1"].response.as_str(), TEXT);
+        assert_eq!(
+            restored.artifacts["accepted-1"]
+                .response
+                .signed_payload(integrity_canonical::DigestAlgorithm::Sha256)
+                .unwrap(),
+            record.artifacts["accepted-1"]
+                .response
+                .signed_payload(integrity_canonical::DigestAlgorithm::Sha256)
+                .unwrap()
+        );
+        for (field, bad) in [
+            ("response", serde_json::json!({"id":"lost-source"})),
+            ("response", serde_json::json!("{\"id\":1,\"id\":2}")),
+            ("response", serde_json::json!("[]")),
+            ("response", serde_json::Value::Null),
+            ("artifactId", serde_json::json!("other")),
+            ("taskId", serde_json::json!("")),
+            ("actorId", serde_json::Value::Null),
+            ("recordedAt", serde_json::json!("not-a-date")),
+            ("kind", serde_json::json!("unknown")),
+        ] {
+            let mut invalid = stored.clone();
+            invalid["artifacts"]["accepted-1"][field] = bad;
+            assert!(
+                matches!(
+                    runtime_aux_from_json(&invalid),
+                    Err(StoreError::InvalidArtifactEvidence(_))
+                ),
+                "{field}"
+            );
+        }
+        for container in [
+            serde_json::Value::Null,
+            serde_json::json!([]),
+            serde_json::json!({"bad":{}}),
+        ] {
+            let mut invalid = stored.clone();
+            invalid["artifacts"] = container;
+            assert!(matches!(
+                runtime_aux_from_json(&invalid),
+                Err(StoreError::InvalidArtifactEvidence(_))
+            ));
+        }
+        let mut missing = stored;
+        missing.as_object_mut().unwrap().remove("artifacts");
+        assert!(matches!(
+            runtime_aux_from_json(&missing),
+            Err(StoreError::InvalidArtifactEvidence(_))
+        ));
     }
 
     #[test]

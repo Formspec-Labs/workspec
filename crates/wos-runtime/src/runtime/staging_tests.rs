@@ -253,7 +253,10 @@ fn native_stage_records_actual_draft_and_preserves_rejected_outcome_and_replay()
             NativeCommandKey("draft".into()),
             NativeRuntimeCommand::TaskDraft {
                 task_id: task_id.clone(),
-                response: serde_json::json!({"status":"in-progress","data":{"photo":"draft"}}),
+                response: integrity_canonical::ResponseJson::from_value(
+                    &(serde_json::json!({"status":"in-progress","data":{"photo":"draft"}})),
+                )
+                .unwrap(),
                 actor_id: "reviewer".into(),
                 idempotency_token: "draft-token".into(),
             },
@@ -273,7 +276,10 @@ fn native_stage_records_actual_draft_and_preserves_rejected_outcome_and_replay()
             NativeCommandKey("reject".into()),
             NativeRuntimeCommand::TaskSubmit {
                 task_id,
-                response: serde_json::json!({"status":"in-progress"}),
+                response: integrity_canonical::ResponseJson::from_value(
+                    &(serde_json::json!({"status":"in-progress"})),
+                )
+                .unwrap(),
                 actor_id: "reviewer".into(),
                 idempotency_token: "submit-token".into(),
             },
@@ -758,7 +764,7 @@ fn native_stage_operation_selection_does_not_qualify_signature_extraction_or_int
         fn signature_evidence(
             &self,
             _: &wos_core::instance::ActiveTask,
-            _: &serde_json::Value,
+            _: &integrity_canonical::ResponseJson,
         ) -> Result<Option<Vec<crate::SignatureEvidence>>, crate::BindingError> {
             self.0.fetch_add(1, Ordering::SeqCst);
             Ok(None)
@@ -793,7 +799,7 @@ fn native_stage_operation_selection_does_not_qualify_signature_extraction_or_int
             NativeCommandKey("no-signing".into()),
             NativeRuntimeCommand::TaskSubmit {
                 task_id,
-                response,
+                response: integrity_canonical::ResponseJson::from_value(&response).unwrap(),
                 actor_id: "reviewer".into(),
                 idempotency_token: "signing-token".into()
             },
@@ -886,7 +892,7 @@ fn native_stage_completed_and_failed_are_successful_native_outcomes_with_saved_e
         let record = stage_created_record(&prepared_create());
         let task_id = record.process.active_tasks[0].task_id.clone();
         let prepared=runtime_with_kernel(stage_kernel()).prepare_native_command(NativeCommandKey(format!("submit-{approved}")),
-            NativeRuntimeCommand::TaskSubmit {task_id,response:serde_json::json!({"status":"completed","definitionUrl":"urn:formspec:stage-review","definitionVersion":"1.0.0","data":{"approved":approved}}),
+            NativeRuntimeCommand::TaskSubmit {task_id,response:integrity_canonical::ResponseJson::from_value(&(serde_json::json!({"status":"completed","definitionUrl":"urn:formspec:stage-review","definitionVersion":"1.0.0","data":{"approved":approved}}))).unwrap(),
                 actor_id:"reviewer".into(),idempotency_token:"actual-submit".into()},stage_snapshot(record),stage_policy()).unwrap();
         assert!(if approved {
             matches!(
@@ -1159,7 +1165,7 @@ fn native_stage_confirmed_ack_replays_after_native_completion_without_new_presen
     let completion = runtime.prepare_native_command(NativeCommandKey("complete-after-ack".into()),
         NativeRuntimeCommand::TaskSubmit {
             task_id: intent.task_id.clone(), actor_id: "reviewer".into(), idempotency_token: "complete-after-ack".into(),
-            response: serde_json::json!({"status":"completed","definitionUrl":"urn:formspec:stage-review","definitionVersion":"1.0.0","data":{"approved":true}}),
+            response: integrity_canonical::ResponseJson::from_value(&(serde_json::json!({"status":"completed","definitionUrl":"urn:formspec:stage-review","definitionVersion":"1.0.0","data":{"approved":true}}))).unwrap(),
         }, stage_snapshot(after_ack), stage_policy()).unwrap();
     assert!(matches!(
         completion.outcome(),
@@ -1286,7 +1292,7 @@ fn native_stage_dependency_selection_reaches_only_the_selected_injected_call() {
                         task_id: record.process.active_tasks[0].task_id.clone(),
                         actor_id: "native-qualified-delegate".into(),
                         idempotency_token: "qualified-delegation".into(),
-                        response: serde_json::json!({"status":"completed","definitionUrl":"urn:formspec:stage-review","definitionVersion":"1.0.0","data":{"approved":true}}),
+                        response: integrity_canonical::ResponseJson::from_value(&(serde_json::json!({"status":"completed","definitionUrl":"urn:formspec:stage-review","definitionVersion":"1.0.0","data":{"approved":true}}))).unwrap(),
                     },
                     stage_snapshot(record),
                 )
@@ -1398,7 +1404,7 @@ fn native_stage_processor_operation_selection_has_positive_counting_controls() {
                         task_id: record.process.active_tasks[0].task_id.clone(),
                         actor_id: "reviewer".into(),
                         idempotency_token: "processor-qualified".into(),
-                        response: serde_json::json!({"status":"completed","definitionUrl":"urn:formspec:stage-review","definitionVersion":"1.0.0","data":{"approved":true}}),
+                        response: integrity_canonical::ResponseJson::from_value(&(serde_json::json!({"status":"completed","definitionUrl":"urn:formspec:stage-review","definitionVersion":"1.0.0","data":{"approved":true}}))).unwrap(),
                     },
                     stage_snapshot(record),
                 )

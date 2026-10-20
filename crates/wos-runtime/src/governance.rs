@@ -670,6 +670,7 @@ impl QualifiedGovernancePolicy {
             let artifact = accepted_event_artifact(context, &binding.filed_task_ref)?;
             let proposal_ref = artifact
                 .response
+                .value()
                 .pointer(&binding.proposal_reference_pointer)
                 .and_then(Value::as_str)
                 .ok_or_else(|| refused("appeal filing lacks the original proposal reference"))?;
@@ -732,6 +733,7 @@ impl QualifiedGovernancePolicy {
             let artifact = accepted_event_artifact(context, &binding.review_task_ref)?;
             let proposal_ref = artifact
                 .response
+                .value()
                 .pointer(&binding.proposal_reference_pointer)
                 .and_then(Value::as_str)
                 .ok_or_else(|| refused("appeal review lacks original proposal reference"))?;
@@ -1177,8 +1179,10 @@ fn human_decision(
     require(human.len() == 1, "decision actor is not one resolved human")?;
     let normalized;
     let input = if let Some(mapping) = &binding.evidence_mapping {
-        let response_sha256 = stack_common_hash::canonical_json_hash(&artifact.response)
-            .map_err(|_| refused("original decision Response cannot canonicalize"))?;
+        let response_sha256 =
+            integrity_canonical::canonical_json_from_bytes(artifact.response.as_str().as_bytes())
+                .map(|bytes| stack_common_hash::sha256_prefixed(&bytes))
+                .map_err(|_| refused("original decision Response cannot canonicalize"))?;
         let matches = captured
             .decisions
             .iter()
@@ -1200,6 +1204,7 @@ fn human_decision(
     } else {
         artifact
             .response
+            .value()
             .pointer(&binding.evidence_pointer)
             .ok_or_else(|| refused("structured decision evidence missing"))?
     };

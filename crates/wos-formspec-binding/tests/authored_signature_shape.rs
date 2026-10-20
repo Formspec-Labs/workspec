@@ -58,7 +58,9 @@ fn task() -> ActiveTask {
 fn canonical_nested_signature_time_is_read_without_outer_timestamp() {
     let response = canonical_response();
     assert!(response["authoredSignatures"][0].get("signedAt").is_none());
-    let result = parse_authored_signatures(&response);
+    let result = parse_authored_signatures(
+        &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+    );
     assert!(
         result.is_ok(),
         "Canonical nested signature timestamp must parse"
@@ -71,7 +73,10 @@ fn canonical_nested_signature_time_is_read_without_outer_timestamp() {
 #[test]
 fn signature_evidence_reads_canonical_nested_signature_time() {
     let response = canonical_response();
-    let result = FormspecBinding::new(UnusedProcessor).signature_evidence(&task(), &response);
+    let result = FormspecBinding::new(UnusedProcessor).signature_evidence(
+        &task(),
+        &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+    );
     assert!(
         result.is_ok(),
         "Canonical signature must reach evidence construction"
@@ -88,15 +93,24 @@ fn signature_evidence_reads_canonical_nested_signature_time() {
 fn canonical_signature_refuses_outer_nested_intent_divergence() {
     let mut response = canonical_response();
     assert!(
-        parse_authored_signatures(&response).is_ok(),
+        parse_authored_signatures(
+            &integrity_canonical::ResponseJson::from_value(&response).unwrap()
+        )
+        .is_ok(),
         "Canonical control must parse before testing divergence"
     );
     response["authoredSignatures"][0]["signingIntent"] = "urn:test:signing-intent:foreign".into();
     assert!(
-        parse_authored_signatures(&response).is_err(),
+        parse_authored_signatures(
+            &integrity_canonical::ResponseJson::from_value(&response).unwrap()
+        )
+        .is_err(),
         "Mirrored canonical signing intent must agree"
     );
-    let result = FormspecBinding::new(UnusedProcessor).signature_evidence(&task(), &response);
+    let result = FormspecBinding::new(UnusedProcessor).signature_evidence(
+        &task(),
+        &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+    );
     assert!(
         result.is_err(),
         "Evidence reader must reject mirrored intent divergence"
@@ -126,7 +140,9 @@ fn authorized_private_response_is_borrowed_losslessly_by_signature_reader() {
         !signatures.is_empty(),
         "Authorized signature diagnostic must be nonvacuous"
     );
-    let result = parse_authored_signatures(response);
+    let result = parse_authored_signatures(
+        &integrity_canonical::ResponseJson::from_value(response).unwrap(),
+    );
     assert!(
         result.is_ok(),
         "Authorized canonical Response must parse without rewriting"
@@ -146,7 +162,10 @@ fn authorized_private_response_is_borrowed_losslessly_by_signature_reader() {
             "Reader must use canonical nested timestamp"
         );
     }
-    let evidence = FormspecBinding::new(UnusedProcessor).signature_evidence(&task(), response);
+    let evidence = FormspecBinding::new(UnusedProcessor).signature_evidence(
+        &task(),
+        &integrity_canonical::ResponseJson::from_value(response).unwrap(),
+    );
     assert!(
         evidence.is_ok(),
         "Authorized canonical Response must reach evidence construction"
@@ -169,10 +188,18 @@ fn canonical_signature_rejects_missing_nested_time_and_outer_only_time() {
         if with_outer {
             response["authoredSignatures"][0]["signedAt"] = SIGNED_AT.into();
         }
-        assert!(parse_authored_signatures(&response).is_err());
+        assert!(
+            parse_authored_signatures(
+                &integrity_canonical::ResponseJson::from_value(&response).unwrap()
+            )
+            .is_err()
+        );
         assert!(
             FormspecBinding::new(UnusedProcessor)
-                .signature_evidence(&task(), &response)
+                .signature_evidence(
+                    &task(),
+                    &integrity_canonical::ResponseJson::from_value(&response).unwrap()
+                )
                 .is_err()
         );
     }
@@ -183,10 +210,18 @@ fn canonical_signature_rejects_outer_timestamp_even_when_nested_time_agrees() {
     for outer in [json!(SIGNED_AT), Value::Null] {
         let mut response = canonical_response();
         response["authoredSignatures"][0]["signedAt"] = outer;
-        assert!(parse_authored_signatures(&response).is_err());
+        assert!(
+            parse_authored_signatures(
+                &integrity_canonical::ResponseJson::from_value(&response).unwrap()
+            )
+            .is_err()
+        );
         assert!(
             FormspecBinding::new(UnusedProcessor)
-                .signature_evidence(&task(), &response)
+                .signature_evidence(
+                    &task(),
+                    &integrity_canonical::ResponseJson::from_value(&response).unwrap()
+                )
                 .is_err()
         );
     }
@@ -199,18 +234,34 @@ fn canonical_signature_requires_nested_intent_and_nonblank_time() {
         .as_object_mut()
         .unwrap()
         .remove("signingIntent");
-    assert!(parse_authored_signatures(&missing_intent).is_err());
+    assert!(
+        parse_authored_signatures(
+            &integrity_canonical::ResponseJson::from_value(&missing_intent).unwrap()
+        )
+        .is_err()
+    );
     assert!(
         FormspecBinding::new(UnusedProcessor)
-            .signature_evidence(&task(), &missing_intent)
+            .signature_evidence(
+                &task(),
+                &integrity_canonical::ResponseJson::from_value(&missing_intent).unwrap()
+            )
             .is_err()
     );
     let mut blank_time = canonical_response();
     blank_time["authoredSignatures"][0]["signedPayload"]["signedAt"] = "".into();
-    assert!(parse_authored_signatures(&blank_time).is_err());
+    assert!(
+        parse_authored_signatures(
+            &integrity_canonical::ResponseJson::from_value(&blank_time).unwrap()
+        )
+        .is_err()
+    );
     assert!(
         FormspecBinding::new(UnusedProcessor)
-            .signature_evidence(&task(), &blank_time)
+            .signature_evidence(
+                &task(),
+                &integrity_canonical::ResponseJson::from_value(&blank_time).unwrap()
+            )
             .is_err()
     );
 }
@@ -219,7 +270,10 @@ fn canonical_signature_requires_nested_intent_and_nonblank_time() {
 fn canonical_signature_round_trip_has_one_timestamp_and_reader_preserves_response() {
     let response = canonical_response();
     let original = response.clone();
-    let parsed = parse_authored_signatures(&response).unwrap();
+    let parsed = parse_authored_signatures(
+        &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+    )
+    .unwrap();
     let encoded = serde_json::to_value(&parsed).unwrap();
     assert!(encoded[0].get("signedAt").is_none());
     assert_eq!(encoded[0]["signedPayload"]["signedAt"], SIGNED_AT);
@@ -227,7 +281,10 @@ fn canonical_signature_round_trip_has_one_timestamp_and_reader_preserves_respons
         serde_json::from_value(encoded).unwrap();
     assert_eq!(decoded, parsed);
     let evidence = FormspecBinding::new(UnusedProcessor)
-        .signature_evidence(&task(), &response)
+        .signature_evidence(
+            &task(),
+            &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+        )
         .unwrap()
         .unwrap();
     assert_eq!(evidence[0].signed_at, SIGNED_AT);

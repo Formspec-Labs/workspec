@@ -210,13 +210,15 @@ pub enum NativeRuntimeCommand {
     },
     TaskDraft {
         task_id: String,
-        response: serde_json::Value,
+        #[serde(with = "crate::response_text")]
+        response: integrity_canonical::ResponseJson,
         actor_id: String,
         idempotency_token: String,
     },
     TaskSubmit {
         task_id: String,
-        response: serde_json::Value,
+        #[serde(with = "crate::response_text")]
+        response: integrity_canonical::ResponseJson,
         actor_id: String,
         idempotency_token: String,
     },

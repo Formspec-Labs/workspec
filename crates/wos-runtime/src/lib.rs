@@ -5,6 +5,12 @@
 //! This crate owns runtime commands, atomic persistence boundaries, task
 //! lifecycle coordination, and binding dispatch. Binding-specific behavior
 //! lives in separate adapter crates.
+//!
+//! Task draft/submit commands and artifacts own Integrity `ResponseJson`, admitted
+//! from original JSON text. Semantic adapters read its parsed view; commitments
+//! read its text. Auxiliary artifacts and staged task commands encode `response`
+//! as a JSON string so buffered Value storage cannot round its numerical digits.
+//! Lost-source object snapshots refuse explicitly; this crate performs no migration.
 
 pub mod binding;
 pub mod cloudevents;
@@ -16,6 +22,7 @@ pub mod integration;
 pub mod integration_handlers;
 pub mod milestones;
 pub mod policy_decision;
+mod response_text;
 pub mod restate_fixture_support;
 pub mod runtime;
 pub mod store;

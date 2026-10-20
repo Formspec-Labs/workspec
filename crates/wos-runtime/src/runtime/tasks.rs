@@ -31,13 +31,15 @@ use super::{
 impl WosRuntime {
     /// Persists a task draft artifact.
     ///
+    /// The owning Response text survives storage and later verification unchanged.
+    ///
     /// # Errors
     /// Returns an error when authorization, task lookup, retained lifetime evidence,
     /// validation or persistence fails, or `TaskExpired` for a fresh expired task.
     pub fn persist_task_draft(
         &mut self,
         task_id: &str,
-        response: serde_json::Value,
+        response: integrity_canonical::ResponseJson,
         actor_id: &str,
         idempotency_token: Option<&str>,
     ) -> Result<PersistDraftResult, RuntimeError> {
@@ -65,6 +67,7 @@ impl WosRuntime {
         record.validate_creation()?;
         require_task_unexpired(&task, now_ms)?;
         let status = response
+            .value()
             .get("status")
             .and_then(serde_json::Value::as_str)
             .ok_or_else(|| RuntimeError::InvalidResponseStatus("missing draft status".to_string()))?
@@ -226,13 +229,16 @@ impl WosRuntime {
 
     /// Submits a completed task response.
     ///
+    /// Admit original JSON with `ResponseJson::parse`; its parsed view is used only
+    /// for semantic decisions, never for signature or retained-source commitments.
+    ///
     /// # Errors
     /// Returns an error when authorization, resolution, validation,
     /// evaluation, or persistence fails.
     pub fn submit_task_response(
         &mut self,
         task_id: &str,
-        response: serde_json::Value,
+        response: integrity_canonical::ResponseJson,
         actor_id: &str,
         idempotency_token: Option<&str>,
     ) -> Result<TaskSubmissionResult, RuntimeError> {
@@ -266,6 +272,7 @@ impl WosRuntime {
         record.validate_creation()?;
         require_task_unexpired(&task, now_ms)?;
         let status = response
+            .value()
             .get("status")
             .and_then(serde_json::Value::as_str)
             .ok_or_else(|| {
@@ -276,7 +283,7 @@ impl WosRuntime {
             if let Some(result) = self.handle_signature_non_completion(
                 &mut record,
                 task_index,
-                &response,
+                response.value(),
                 actor_id,
                 &now_iso,
                 &status,
@@ -319,7 +326,7 @@ impl WosRuntime {
             .get(binding)
             .ok_or_else(|| RuntimeError::UnsupportedBinding(binding.to_string()))?;
         self.require_native_task_binding(super::NativeTaskBindingOperation::Validate, binding)?;
-        let validation = adapter.validate_submission(&task, &response)?;
+        let validation = adapter.validate_submission(&task, response.value())?;
         let mut provenance = vec![ProvenanceRecord::task_lifecycle(
             &minter,
             ProvenanceKind::TaskResponseSubmitted,
@@ -331,7 +338,7 @@ impl WosRuntime {
             &minter,
             task_id,
             actor_id,
-            &response,
+            response.value(),
             &validation,
         ));
 
@@ -395,11 +402,24 @@ impl WosRuntime {
         } else {
             None
         };
+        // Construct the existing locator prospectively; persist only after admission.
+        let accepted_artifact = build_artifact(
+            &record,
+            task_id,
+            TaskArtifactKind::Accepted,
+            response.clone(),
+            actor_id,
+            &now_iso,
+        );
         let signature_outcome = self.signature_affirmation_for_submission(
             &record,
             &task,
-            &response,
-            signature_evidence.as_deref(),
+            super::signature::SignatureSubmissionSource {
+                response: &response,
+                signature_evidence: signature_evidence.as_deref(),
+                adapter: &*adapter,
+                accepted_artifact: &accepted_artifact,
+            },
             actor_id,
             &now_iso,
         )?;
@@ -469,20 +489,12 @@ impl WosRuntime {
             return Ok(result);
         }
 
-        let accepted_artifact = build_artifact(
-            &record,
-            task_id,
-            TaskArtifactKind::Accepted,
-            response.clone(),
-            actor_id,
-            &now_iso,
-        );
         record.artifacts.insert(
             accepted_artifact.artifact_id.clone(),
             accepted_artifact.clone(),
         );
         self.require_native_task_binding(super::NativeTaskBindingOperation::Map, binding)?;
-        let mutation = adapter.compute_case_mutation(&task, &response)?;
+        let mutation = adapter.compute_case_mutation(&task, response.value())?;
         let case_mutated = mutation
             .as_ref()
             .is_some_and(|bundle| !bundle.field_updates.is_empty());
@@ -538,16 +550,23 @@ impl WosRuntime {
                         &outcome.signer_id,
                         &outcome.signed_at,
                     )?;
+                    let mut details = serde_json::json!({
+                        "artifactId": accepted_artifact.artifact_id,
+                        "caseMutated": case_mutated,
+                    });
+                    if signature_evidence.as_ref().is_some_and(|values| {
+                        values.iter().any(|value| value.document_claims.is_some())
+                    }) {
+                        details["signatureAffirmationId"] =
+                            serde_json::Value::String(outcome.record.id.clone());
+                    }
                     provenance.push(outcome.record);
                     provenance.push(ProvenanceRecord::task_lifecycle(
                         &minter,
                         ProvenanceKind::TaskCompleted,
                         task_id,
                         Some(actor_id),
-                        Some(serde_json::json!({
-                            "artifactId": accepted_artifact.artifact_id,
-                            "caseMutated": case_mutated,
-                        })),
+                        Some(details),
                     ));
                 }
                 AdmissionOutcome::AdmissionFailed(_) => {
@@ -821,7 +840,7 @@ fn build_artifact(
     record: &RuntimeRecord,
     task_id: &str,
     kind: TaskArtifactKind,
-    response: serde_json::Value,
+    response: integrity_canonical::ResponseJson,
     actor_id: &str,
     recorded_at: &str,
 ) -> TaskArtifact {

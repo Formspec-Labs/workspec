@@ -1,0 +1,118 @@
+{
+  "$formspecResponse": "1.0",
+  "definitionUrl": "urn:test:document-attestation",
+  "definitionVersion": "1.0.0",
+  "status": "completed",
+  "data": {
+    "signature": null,
+    "confirm": null
+  },
+  "authored": "2026-10-20T19:00:00Z",
+  "validationResults": [],
+  "id": "ih9d-witness-response",
+  "author": {
+    "id": "witness",
+    "name": "Witness Test Signer"
+  },
+  "extensions": {
+    "x-wos-signer-authority": {
+      "class": "witness",
+      "evidenceBinding": {
+        "evidenceHash": "9a97685c368331e79f1d699137b400dc394f4c4bc65acf0b4817a4daadbb2f83",
+        "evidenceHashAlgorithm": "sha-256"
+      }
+    },
+    "x-formspec-document-attestations": {
+      "version": "1.0",
+      "signingActId": "opaque-witness-act",
+      "fieldPath": "confirm",
+      "signerId": "witness",
+      "signerName": "Witness Test Signer",
+      "signedAt": "2026-10-20T19:01:00Z",
+      "signingIntent": "urn:wos:signing-intent:witness-attestation",
+      "consentAccepted": true,
+      "consentTextRef": "urn:example:consent:esign:v1",
+      "consentVersion": "1.0",
+      "affirmationText": "I agree to the selected documents.",
+      "signatureProvider": "urn:example:signing-provider",
+      "ceremonyId": "urn:test:ih9d:ceremony:opaque-witness-act",
+      "attestations": [
+        {
+          "signatureId": "sig-witness",
+          "documentRef": {
+            "documentId": "terms-v2",
+            "locale": "es-US"
+          },
+          "witnessedSignatureRef": {
+            "responseId": "ih9d-legacy-principal-response",
+            "signatureId": "legacy-sig-1",
+            "signedPayloadDigest": "a73ec2d638c2d505ee0792906ccf04c02164fab9e659f69ff5cfd96afe4f1af2"
+          }
+        }
+      ],
+      "identityBinding": {
+        "method": "email-otp",
+        "assuranceLevel": "standard",
+        "providerRef": "urn:test:identity:email-otp"
+      }
+    }
+  },
+  "resolvedDocuments": [
+    {
+      "documentId": "terms-v2",
+      "locale": "es-US",
+      "source": {
+        "kind": "inline",
+        "data": "wqFIb2xhIQ=="
+      },
+      "mediaType": "text/plain; charset=utf-8",
+      "documentHash": "ffb948556a252fec4aa0601da677fda38bb2ab0be63cc9c726bebfd1b3500d62",
+      "presentationHash": "fc83aa2143f9a128991a7d52ccf2e3abb1fd7dcbf76a63c281ce9e899c383a24",
+      "pinnedAt": "2026-10-20T19:00:00Z"
+    }
+  ],
+  "authoredSignatures": [
+    {
+      "signatureId": "sig-witness",
+      "documentId": "terms-v2",
+      "signingIntent": "urn:wos:signing-intent:witness-attestation",
+      "signatureValue": "0oRYSaMBJwRRaWg5ZC10ZXN0LXdpdG5lc3M6AAEAA3gsdXJuOmZvcm1zcGVjOnNpZy1tZXRob2Q6ZWQyNTUxOS1jb3NlLXNpZ24xQDGg9lhA8w2p56CW0m9k3ODNdw1UQzEODjjVG27K2293pzdsBRJthXuIBPjlBbzMWor+wvkoiU57BBvSH/dQnSTWd9NcDQ==",
+      "signerName": "Witness Test Signer",
+      "consentAccepted": true,
+      "consentTextRef": "urn:example:consent:esign:v1",
+      "consentVersion": "1.0",
+      "affirmationText": "I agree to the selected documents.",
+      "signedPayload": {
+        "canonicalization": "formspec-response-signing-v1",
+        "digestAlgorithm": "sha-256",
+        "digest": "9c8fe7ff53c0eed84c7f1b889e284f1b7cc7d088a573da22812ce947c430f760",
+        "responseId": "ih9d-witness-response",
+        "definitionUrl": "urn:test:document-attestation",
+        "definitionVersion": "1.0.0",
+        "signedAt": "2026-10-20T19:01:00Z",
+        "signingIntent": "urn:wos:signing-intent:witness-attestation"
+      },
+      "documentHash": "ffb948556a252fec4aa0601da677fda38bb2ab0be63cc9c726bebfd1b3500d62",
+      "documentHashAlgorithm": "sha-256",
+      "signatureProvider": "urn:example:signing-provider",
+      "ceremonyId": "urn:test:ih9d:ceremony:opaque-witness-act",
+      "signerId": "witness",
+      "identityBinding": {
+        "method": "email-otp",
+        "assuranceLevel": "standard",
+        "providerRef": "urn:test:identity:email-otp"
+      },
+      "signingActId": "opaque-witness-act",
+      "documentRef": {
+        "documentId": "terms-v2",
+        "locale": "es-US"
+      },
+      "presentationHash": "fc83aa2143f9a128991a7d52ccf2e3abb1fd7dcbf76a63c281ce9e899c383a24",
+      "witnessedSignatureRef": {
+        "responseId": "ih9d-legacy-principal-response",
+        "signatureId": "legacy-sig-1",
+        "signedPayloadDigest": "a73ec2d638c2d505ee0792906ccf04c02164fab9e659f69ff5cfd96afe4f1af2"
+      }
+    }
+  ]
+}

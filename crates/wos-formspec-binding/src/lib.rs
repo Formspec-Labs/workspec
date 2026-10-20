@@ -2,11 +2,19 @@
 
 //! Formspec binding adapter for `wos-runtime`.
 
+mod document_attestations;
 pub mod selected;
+
+pub use document_attestations::DocumentSignatureVerification;
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
-use integrity_canonical::{CANONICALIZATION_PROFILE, DigestAlgorithm, build_signed_payload};
+#[cfg(test)]
+use integrity_canonical::build_signed_payload;
+use integrity_canonical::{
+    CANONICALIZATION_PROFILE, DigestAlgorithm, ResponseJson,
+    canonical_response_signed_payload_bytes, compute_digest,
+};
 use integrity_cose::{
     decode_cose_sign1, decode_cose_sign1_with_method_uri, decode_protected_header,
     sig_structure_bytes,
@@ -191,6 +199,24 @@ pub struct FormspecSignedPayloadRef {
 #[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FormspecAuthoredSignatureRef {
+    /// Shared act identifier from the committed document gesture.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signing_act_id: Option<String>,
+    /// Exact committed document and locale.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub document_ref: Option<wos_runtime::binding::SignatureDocumentRef>,
+    /// Explicit committed presentation digest.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub presentation_hash: Option<String>,
+    /// Presence distinguishes legacy absence from an explicit non-witness null.
+    #[allow(clippy::option_option)]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "document_attestations::present_witness"
+    )]
+    pub witnessed_signature_ref: Option<Option<wos_runtime::binding::SourceSignatureRef>>,
+
     /// Stable signature identifier.
     pub signature_id: String,
 
@@ -460,15 +486,21 @@ impl IntakeHandoff {
 ///
 /// The binding crate owns this Formspec-specific shape so WOS runtime and
 /// provenance code do not need to duplicate Formspec JSON field names at every
-/// boundary. Digest recomputation is a separate verifier concern; this parser
-/// checks that the signature pins agree with the Response envelope identity.
+/// boundary. The parser checks Response identity pins and recomputes their
+/// digests from original text; cryptographic verification remains a separate gate.
+///
+/// # Errors
+/// Refuses malformed signatures, unsupported digest algorithms, or mismatched
+/// Response identity pins and canonical source digests.
 pub fn parse_authored_signatures(
-    response: &serde_json::Value,
+    source: &ResponseJson,
 ) -> Result<Vec<FormspecAuthoredSignatureRef>, BindingError> {
+    let response = source.value();
     let signatures = authored_signature_refs(response)?;
     if signatures.is_empty() {
         return Ok(signatures);
     }
+    let canonical_bytes = signed_source_bytes(source)?;
     let response_id = response
         .get("id")
         .and_then(serde_json::Value::as_str)
@@ -514,14 +546,8 @@ pub fn parse_authored_signatures(
                 signature.signed_payload.digest_algorithm
             ))
         })?;
-        let signed_payload = build_signed_payload(
-            response.to_string().as_bytes(),
-            digest_algorithm,
-        )
-        .map_err(|error| {
-            BindingError::InvalidInput(format!("canonicalize Formspec signed payload: {error}"))
-        })?;
-        if signed_payload.digest != signature.signed_payload.digest {
+        let digest = compute_digest(&canonical_bytes, digest_algorithm);
+        if digest != signature.signed_payload.digest {
             return Err(BindingError::InvalidInput(
                 "authoredSignatures signedPayload.digest does not match signed Response payload"
                     .to_string(),
@@ -542,8 +568,21 @@ fn authored_signature_refs(
     })
 }
 
+fn signed_source_bytes(source: &ResponseJson) -> Result<Vec<u8>, BindingError> {
+    canonical_response_signed_payload_bytes(source.as_str().as_bytes()).map_err(|error| {
+        BindingError::InvalidInput(format!("canonicalize Formspec signed payload: {error}"))
+    })
+}
+
 fn parse_authored_signatures_for_evidence(
+    source: &ResponseJson,
+) -> Result<Vec<FormspecAuthoredSignatureEvidence>, BindingError> {
+    parse_signature_evidence_with_bytes(source.value(), &signed_source_bytes(source)?)
+}
+
+fn parse_signature_evidence_with_bytes(
     response: &serde_json::Value,
+    canonical_bytes: &[u8],
 ) -> Result<Vec<FormspecAuthoredSignatureEvidence>, BindingError> {
     let signatures = authored_signature_refs(response)?;
     if signatures.is_empty() {
@@ -603,17 +642,11 @@ fn parse_authored_signatures_for_evidence(
                 signature.signed_payload.digest_algorithm
             ))
         })?;
-        let signed_payload = build_signed_payload(
-            response.to_string().as_bytes(),
-            digest_algorithm,
-        )
-        .map_err(|error| {
-            BindingError::InvalidInput(format!("canonicalize Formspec signed payload: {error}"))
-        })?;
-        if admission_failure.is_none() && signed_payload.digest != signature.signed_payload.digest {
+        let digest = compute_digest(canonical_bytes, digest_algorithm);
+        if admission_failure.is_none() && digest != signature.signed_payload.digest {
             admission_failure = Some(evidence_divergence_failure(
                 "signedPayload.digest",
-                &signed_payload.digest,
+                &digest,
                 &signature.signed_payload.digest,
             ));
         }
@@ -1232,6 +1265,19 @@ pub trait FormspecProcessor {
         response: &serde_json::Value,
     ) -> Result<Vec<serde_json::Value>, BindingError>;
 
+    /// Validates declared-document claims against the actual selected Definition.
+    ///
+    /// # Errors
+    /// Refuses when no native paired Definition capability is available.
+    fn validate_document_attestation_response(
+        &self,
+        _response: &serde_json::Value,
+    ) -> Result<Vec<serde_json::Value>, BindingError> {
+        Err(BindingError::Unsupported(
+            "selected document Definition context unavailable".into(),
+        ))
+    }
+
     /// Validate `response.data` against the pinned Definition.
     fn validate_definition(
         &self,
@@ -1300,6 +1346,7 @@ pub trait FormspecProcessor {
 pub struct FormspecBinding<P> {
     processor: P,
     receipt_trust: ReceiptTrust,
+    document_verification: Option<DocumentSignatureVerification>,
 }
 
 impl<P> FormspecBinding<P> {
@@ -1309,11 +1356,20 @@ impl<P> FormspecBinding<P> {
     ///
     /// # Errors
     /// Refuses malformed signatures, conflicting identities or malformed explicit references.
+    /// Committed document claims are unsupported without selected Definition,
+    /// verifier and source-association context; they never fall back to legacy evidence.
     pub fn original_response_signature_evidence(
         &self,
-        response: &serde_json::Value,
+        source: &ResponseJson,
     ) -> Result<Option<Vec<SignatureEvidence>>, BindingError> {
-        let signatures = parse_authored_signatures_for_evidence(response)?;
+        let response = source.value();
+        if document_attestations::has_document_claims(response) {
+            return Err(BindingError::Unsupported(
+                "original document admission requires selected Definition/verifier/source context"
+                    .into(),
+            ));
+        }
+        let signatures = parse_authored_signatures_for_evidence(source)?;
         if signatures.is_empty() {
             return Ok(None);
         }
@@ -1385,6 +1441,7 @@ impl<P> FormspecBinding<P> {
                 ));
             }
             evidence.push(SignatureEvidence {
+                document_claims: None,
                 source_system: "formspec".to_string(),
                 source_signature_id: signature.signature_id,
                 signing_act_id: None,
@@ -1422,6 +1479,7 @@ impl<P> FormspecBinding<P> {
         Self {
             processor,
             receipt_trust: ReceiptTrust::default(),
+            document_verification: None,
         }
     }
 
@@ -1433,6 +1491,7 @@ impl<P> FormspecBinding<P> {
         Self {
             processor,
             receipt_trust: ReceiptTrust::new(trusted_receipt_signers),
+            document_verification: None,
         }
     }
 }
@@ -1553,35 +1612,71 @@ where
         self.processor.map_task_response(task, response)
     }
 
+    fn retained_document_signature_evidence(
+        &self,
+        source: &ResponseJson,
+        task_id: &str,
+    ) -> Result<Vec<SignatureEvidence>, BindingError> {
+        let response = source.value();
+        if let Some(signed_task) = response
+            .get("data")
+            .and_then(|data| data.get("signatureTaskId"))
+            && signed_task.as_str() != Some(task_id)
+        {
+            return Err(BindingError::InvalidInput(
+                "retained signed signatureTaskId differs from accepted task".into(),
+            ));
+        }
+        let evidence = self.document_signature_evidence(source)?;
+        if evidence.iter().any(|source| {
+            source.admission_failure.is_some()
+                || source.primitive_verification != SignaturePrimitiveStatus::Verified
+        }) {
+            return Err(BindingError::InvalidInput(
+                "retained document source is not verified".into(),
+            ));
+        }
+        Ok(evidence)
+    }
+
     fn signature_evidence(
         &self,
         task: &ActiveTask,
-        response: &serde_json::Value,
+        source: &ResponseJson,
     ) -> Result<Option<Vec<SignatureEvidence>>, BindingError> {
-        let signatures = parse_authored_signatures_for_evidence(response)?;
-        if signatures.is_empty() {
-            return Ok(None);
-        }
+        let response = source.value();
+        let document_claims = document_attestations::has_document_claims(response);
+        let signatures = if document_claims {
+            Vec::new()
+        } else {
+            let signatures = parse_authored_signatures_for_evidence(source)?;
+            if signatures.is_empty() {
+                return Ok(None);
+            }
+            signatures
+        };
         // The bounded native profile signs the actual task association inside
         // Response.data. Derive evidence from the real task after exact checking;
         // the closed Response schema admits no new top-level source alias.
         let signed_task = response
             .get("data")
             .and_then(|data| data.get("signatureTaskId"));
-        if let Some(value) = signed_task {
-            if value.as_str().filter(|id| !id.is_empty()) != Some(task.task_id.as_str())
+        if let Some(value) = signed_task
+            && (value.as_str().filter(|id| !id.is_empty()) != Some(task.task_id.as_str())
                 || ["sourceResponseRef", "formspecResponseRef"]
                     .iter()
                     .any(|field| {
                         response
                             .get(*field)
                             .is_some_and(|alias| alias.as_str() != Some(task.task_id.as_str()))
-                    })
-            {
-                return Err(BindingError::InvalidInput(
-                    "signed signatureTaskId does not match actual task".into(),
-                ));
-            }
+                    }))
+        {
+            return Err(BindingError::InvalidInput(
+                "signed signatureTaskId does not match actual task".into(),
+            ));
+        }
+        if document_claims {
+            return self.document_signature_evidence(source).map(Some);
         }
         let source_response_ref = signed_task.map(|_| task.task_id.clone()).or_else(|| {
             response
@@ -2286,6 +2381,41 @@ mod tests {
     }
 
     #[test]
+    fn legacy_digest_algorithms_read_the_exact_original_source() {
+        for algorithm in [
+            DigestAlgorithm::Sha256,
+            DigestAlgorithm::Sha384,
+            DigestAlgorithm::Sha512,
+        ] {
+            let mut response = signed_response();
+            response["extensions"] = serde_json::json!({"x-number":"EXACT_LEGACY_NUMBER"});
+            let source = ResponseJson::parse(
+                response
+                    .to_string()
+                    .replace("\"EXACT_LEGACY_NUMBER\"", "0.1234567890123456789"),
+            )
+            .unwrap();
+            let payload = source.signed_payload(algorithm).unwrap();
+            let mut records = source.value()["authoredSignatures"].clone();
+            records[0]["signedPayload"]["digestAlgorithm"] = algorithm.as_str().into();
+            records[0]["signedPayload"]["digest"] = payload.digest.clone().into();
+            let source = source.with_member("authoredSignatures", &records).unwrap();
+            assert!(source.as_str().contains("0.1234567890123456789"));
+            assert_eq!(
+                parse_authored_signatures(&source).unwrap()[0]
+                    .signed_payload
+                    .digest,
+                payload.digest
+            );
+            let evidence = FormspecBinding::new(StubProcessor)
+                .original_response_signature_evidence(&source)
+                .unwrap()
+                .unwrap();
+            assert_eq!(evidence[0].signed_payload_digest, payload.digest);
+        }
+    }
+
+    #[test]
     fn parse_authored_signatures_accepts_new_formspec_shape() {
         let response = signed_response();
         let expected_signed_payload_digest =
@@ -2297,7 +2427,10 @@ mod tests {
             .as_str()
             .expect("signatureValue is present")
             .to_string();
-        let signatures = parse_authored_signatures(&response).unwrap();
+        let signatures = parse_authored_signatures(
+            &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+        )
+        .unwrap();
 
         assert_eq!(signatures.len(), 1);
         assert_eq!(signatures[0].signature_id, "sig-2026-0001");
@@ -2322,7 +2455,10 @@ mod tests {
         response["authoredSignatures"][0]["signedPayload"]["digest"] =
             serde_json::Value::String(legacy_digest);
 
-        let error = parse_authored_signatures(&response).unwrap_err();
+        let error = parse_authored_signatures(
+            &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+        )
+        .unwrap_err();
         assert!(
             error
                 .to_string()
@@ -2345,7 +2481,10 @@ mod tests {
         let adapter = FormspecBinding::new(StubProcessor);
         let response = signed_response();
         let evidence = adapter
-            .signature_evidence(&formspec_task(), &response)
+            .signature_evidence(
+                &formspec_task(),
+                &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+            )
             .expect("signature evidence parses")
             .expect("signature evidence is present");
 
@@ -2382,7 +2521,10 @@ mod tests {
                 .digest
         );
         let evidence = adapter
-            .signature_evidence(&task, &response)
+            .signature_evidence(
+                &task,
+                &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+            )
             .unwrap()
             .unwrap();
         assert_eq!(
@@ -2402,7 +2544,14 @@ mod tests {
                     .unwrap()
                     .digest
             );
-            assert!(adapter.signature_evidence(&task, &changed).is_err());
+            assert!(
+                adapter
+                    .signature_evidence(
+                        &task,
+                        &integrity_canonical::ResponseJson::from_value(&changed).unwrap()
+                    )
+                    .is_err()
+            );
         }
         response["sourceResponseRef"] = serde_json::json!("conflicting-alias");
         response["authoredSignatures"][0]["signedPayload"]["digest"] = serde_json::json!(
@@ -2410,7 +2559,14 @@ mod tests {
                 .unwrap()
                 .digest
         );
-        assert!(adapter.signature_evidence(&task, &response).is_err());
+        assert!(
+            adapter
+                .signature_evidence(
+                    &task,
+                    &integrity_canonical::ResponseJson::from_value(&response).unwrap()
+                )
+                .is_err()
+        );
     }
 
     #[test]
@@ -2425,7 +2581,10 @@ mod tests {
         response["authoredSignatures"][0]["verificationReceipt"] = receipt;
 
         let evidence = adapter
-            .signature_evidence(&formspec_task(), &response)
+            .signature_evidence(
+                &formspec_task(),
+                &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+            )
             .expect("signature evidence parses")
             .expect("signature evidence is present");
 
@@ -2527,7 +2686,10 @@ mod tests {
             FormspecBinding::new_with_trusted_receipt_signers(StubProcessor, vec![trusted_signer]);
 
         let evidence = adapter
-            .signature_evidence(&formspec_task(), &response)
+            .signature_evidence(
+                &formspec_task(),
+                &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+            )
             .expect("signature evidence parses")
             .expect("signature evidence is present");
 
@@ -2557,7 +2719,10 @@ mod tests {
             serde_json::Value::String(receipt.clone());
 
         let evidence = adapter
-            .signature_evidence(&formspec_task(), &response)
+            .signature_evidence(
+                &formspec_task(),
+                &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+            )
             .expect("signature evidence parses")
             .expect("signature evidence is present");
 
@@ -2595,7 +2760,10 @@ mod tests {
         });
 
         let evidence = adapter
-            .signature_evidence(&formspec_task(), &response)
+            .signature_evidence(
+                &formspec_task(),
+                &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+            )
             .expect("signature evidence parses")
             .expect("signature evidence is present");
 
@@ -2625,7 +2793,10 @@ mod tests {
         response["authoredSignatures"][0]["verificationReceipt"] = receipt;
 
         let evidence = adapter
-            .signature_evidence(&formspec_task(), &response)
+            .signature_evidence(
+                &formspec_task(),
+                &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+            )
             .expect("signature evidence parses")
             .expect("signature evidence is present");
 
@@ -2655,7 +2826,10 @@ mod tests {
             serde_json::json!("urn:test:signature:not-cose");
 
         let evidence = adapter
-            .signature_evidence(&formspec_task(), &response)
+            .signature_evidence(
+                &formspec_task(),
+                &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+            )
             .expect("signature evidence parses")
             .expect("signature evidence is present");
 
@@ -2695,7 +2869,10 @@ mod tests {
         );
 
         let evidence = adapter
-            .signature_evidence(&formspec_task(), &response)
+            .signature_evidence(
+                &formspec_task(),
+                &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+            )
             .expect("signature evidence parses")
             .expect("signature evidence is present");
         assert_eq!(
@@ -2736,7 +2913,10 @@ mod tests {
         );
 
         let evidence = adapter
-            .signature_evidence(&formspec_task(), &response)
+            .signature_evidence(
+                &formspec_task(),
+                &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+            )
             .expect("signature evidence parses")
             .expect("signature evidence is present");
         assert_eq!(
@@ -2783,7 +2963,10 @@ mod tests {
         response["authoredSignatures"][0]["verificationReceipt"] = receipt;
 
         let evidence = adapter
-            .signature_evidence(&formspec_task(), &response)
+            .signature_evidence(
+                &formspec_task(),
+                &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+            )
             .expect("signature evidence parses")
             .expect("signature evidence is present");
 
@@ -2826,7 +3009,10 @@ mod tests {
         response["authoredSignatures"][0]["verificationReceipt"] = receipt;
 
         let evidence = adapter
-            .signature_evidence(&formspec_task(), &response)
+            .signature_evidence(
+                &formspec_task(),
+                &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+            )
             .expect("signature evidence parses")
             .expect("signature evidence is present");
 
@@ -2859,7 +3045,10 @@ mod tests {
         response["authoredSignatures"][0]["verificationReceipt"] = receipt;
 
         let evidence = adapter
-            .signature_evidence(&formspec_task(), &response)
+            .signature_evidence(
+                &formspec_task(),
+                &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+            )
             .expect("signature evidence parses")
             .expect("signature evidence is present");
 
@@ -2887,7 +3076,10 @@ mod tests {
             serde_json::json!("0oRWoQExiQEFQnNpZ25lZA==");
 
         let evidence = adapter
-            .signature_evidence(&formspec_task(), &response)
+            .signature_evidence(
+                &formspec_task(),
+                &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+            )
             .expect("signature evidence parses")
             .expect("signature evidence is present");
 
@@ -2917,7 +3109,10 @@ mod tests {
             serde_json::json!("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 
         let evidence = adapter
-            .signature_evidence(&formspec_task(), &response)
+            .signature_evidence(
+                &formspec_task(),
+                &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+            )
             .expect("signature evidence parses")
             .expect("signature evidence is present");
         let admission_failure = evidence[0]
@@ -2950,7 +3145,10 @@ mod tests {
             serde_json::json!("resp-stale");
 
         let evidence = adapter
-            .signature_evidence(&formspec_task(), &response)
+            .signature_evidence(
+                &formspec_task(),
+                &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+            )
             .expect("signature evidence parses")
             .expect("signature evidence is present");
         let admission_failure = evidence[0]
@@ -2985,7 +3183,10 @@ mod tests {
         response["authoredSignatures"][0]["signedPayload"]["responseId"] =
             serde_json::json!("resp-stale");
 
-        let error = parse_authored_signatures(&response).unwrap_err();
+        let error = parse_authored_signatures(
+            &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+        )
+        .unwrap_err();
         assert!(
             error.to_string().contains("signedPayload.responseId"),
             "unexpected error: {error}"
@@ -2997,7 +3198,9 @@ mod tests {
         let response = signed_response();
         let before = response.clone();
         let evidence = FormspecBinding::new(StubProcessor)
-            .original_response_signature_evidence(&response)
+            .original_response_signature_evidence(
+                &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+            )
             .unwrap()
             .unwrap();
         assert_eq!(
@@ -3019,7 +3222,9 @@ mod tests {
                 .digest
         );
         let evidence = FormspecBinding::new(StubProcessor)
-            .original_response_signature_evidence(&response)
+            .original_response_signature_evidence(
+                &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+            )
             .unwrap()
             .unwrap();
         assert_eq!(
@@ -3039,7 +3244,9 @@ mod tests {
                     .digest
             );
             let evidence = FormspecBinding::new(StubProcessor)
-                .original_response_signature_evidence(&response)
+                .original_response_signature_evidence(
+                    &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+                )
                 .unwrap()
                 .unwrap();
             assert_eq!(
@@ -3063,7 +3270,9 @@ mod tests {
                 response[field] = value;
                 assert!(
                     FormspecBinding::new(StubProcessor)
-                        .original_response_signature_evidence(&response)
+                        .original_response_signature_evidence(
+                            &integrity_canonical::ResponseJson::from_value(&response).unwrap()
+                        )
                         .is_err()
                 );
             }
@@ -3086,7 +3295,9 @@ mod tests {
                         .digest
                 );
                 FormspecBinding::new(StubProcessor)
-                    .original_response_signature_evidence(&response)
+                    .original_response_signature_evidence(
+                        &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+                    )
                     .unwrap()
                     .unwrap()[0]
                     .source_response_ref
@@ -3115,7 +3326,9 @@ mod tests {
             }
             assert!(
                 FormspecBinding::new(StubProcessor)
-                    .original_response_signature_evidence(&response)
+                    .original_response_signature_evidence(
+                        &integrity_canonical::ResponseJson::from_value(&response).unwrap()
+                    )
                     .is_err()
             );
         }
@@ -3127,7 +3340,9 @@ mod tests {
         response["authoredSignatures"][0]["signedPayload"]["responseId"] =
             serde_json::json!("foreign-response");
         let evidence = FormspecBinding::new(StubProcessor)
-            .original_response_signature_evidence(&response)
+            .original_response_signature_evidence(
+                &integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+            )
             .unwrap()
             .unwrap();
         assert_eq!(

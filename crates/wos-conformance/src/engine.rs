@@ -695,7 +695,7 @@ impl WorkflowEngine {
                     event_entry
                         .task_submission
                         .as_ref()
-                        .map(|submission| submission.response.clone())
+                        .map(|submission| submission.response.value().clone())
                 }),
                 before,
                 operation,
@@ -1138,13 +1138,16 @@ impl WorkflowEngine {
                 &record,
                 task,
                 &actor_id,
-                &submission.response,
+                submission.response.value(),
                 recipe,
                 adapters,
                 self.clock.now_ms(),
             )?;
             self.recipe_resolution = Some(resolution);
-            response
+            // The recipe creates and signs a new in-process Response. Direct
+            // fixture submissions below retain their admitted original text.
+            integrity_canonical::ResponseJson::from_value(&response)
+                .map_err(ConformanceError::Parse)?
         } else {
             submission.response.clone()
         };
@@ -1776,7 +1779,9 @@ fn native_task_history(
                 .ok_or_else(|| {
                     ConformanceError::Engine("completed task accepted artifact missing".into())
                 })?;
-            serde_json::json!({"artifactId":artifact.artifact_id,"taskId":artifact.task_id,"response":artifact.response,"actorId":artifact.actor_id,"recordedAt":artifact.recorded_at})
+            // Observations expose the semantic view, not reconstructed source
+            // bytes. The actual retained artifact remains ResponseJson.
+            serde_json::json!({"artifactId":artifact.artifact_id,"taskId":artifact.task_id,"response":artifact.response.value(),"actorId":artifact.actor_id,"recordedAt":artifact.recorded_at})
         } else {
             serde_json::Value::Null
         };

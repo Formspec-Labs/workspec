@@ -242,7 +242,10 @@ fn replacement_before_drain_or_task_submission_preserves_the_entire_retained_rec
     let submit = runtime
         .submit_task_response(
             &task,
-            json!({"status":"completed","data":{}}),
+            integrity_canonical::ResponseJson::from_value(
+                &(json!({"status":"completed","data":{}})),
+            )
+            .unwrap(),
             "actor:human:applicant",
             Some("changed-profile"),
         )

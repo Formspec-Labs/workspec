@@ -161,8 +161,11 @@ fn submit(
     let result = runtime
         .submit_task_response(
             &task.task_id,
-            json!({"status":"completed",
-        "definitionUrl":url,"definitionVersion":"0.2.0","data":data}),
+            integrity_canonical::ResponseJson::from_value(
+                &(json!({"status":"completed",
+        "definitionUrl":url,"definitionVersion":"0.2.0","data":data})),
+            )
+            .unwrap(),
             actor,
             Some(token),
         )
@@ -200,7 +203,7 @@ fn photo_reply_returns_review_and_decision_preserves_original_and_replay() {
     let data =
         json!({"replacementPhoto":{"digest":"new-photo"},"originalFilingRef":"filing-original"});
     assert!(runtime.submit_task_response(&photo_task.task_id,
-        json!({"status":"completed","definitionUrl":CORRECTION,"definitionVersion":"0.2.0","data":data}),
+        integrity_canonical::ResponseJson::from_value(&(json!({"status":"completed","definitionUrl":CORRECTION,"definitionVersion":"0.2.0","data":data}))).unwrap(),
         "actor:human:reviewer", Some("wrong-actor")).is_err());
     let correction = submit(
         &mut runtime,
@@ -236,7 +239,7 @@ fn photo_reply_returns_review_and_decision_preserves_original_and_replay() {
         .load_record(&process.process_id)
         .unwrap();
     let replay = runtime.submit_task_response(&photo_task.task_id,
-        json!({"status":"completed","definitionUrl":CORRECTION,"definitionVersion":"0.2.0","data":data}),
+        integrity_canonical::ResponseJson::from_value(&(json!({"status":"completed","definitionUrl":CORRECTION,"definitionVersion":"0.2.0","data":data}))).unwrap(),
         "actor:human:applicant", Some("photo-reply")).unwrap();
     match (replay, correction) {
         (

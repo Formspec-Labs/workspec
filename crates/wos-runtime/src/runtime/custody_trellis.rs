@@ -888,7 +888,7 @@ mod tests {
         fn persist_task_draft(
             &mut self,
             _task_id: &str,
-            _response: serde_json::Value,
+            _response: integrity_canonical::ResponseJson,
             _actor_id: &str,
             _idempotency_token: Option<&str>,
         ) -> Result<PersistDraftResult, RuntimeError> {
@@ -908,7 +908,7 @@ mod tests {
         fn submit_task_response(
             &mut self,
             _task_id: &str,
-            _response: serde_json::Value,
+            _response: integrity_canonical::ResponseJson,
             _actor_id: &str,
             _idempotency_token: Option<&str>,
         ) -> Result<TaskSubmissionResult, RuntimeError> {

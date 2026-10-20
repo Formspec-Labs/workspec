@@ -42,8 +42,7 @@ pub struct CaseMutationBundle {
 /// Formspec `signatureValue` — a COSE_Sign1 envelope whose protected-header
 /// `method_uri` label selects the cryptographic adapter per ADR 0109)
 /// actually executed and passed.
-/// Until the Formspec signing helper (`FORMSPEC-SIGN-HELPER-001`) ships, the
-/// reference Formspec binding emits
+/// The legacy Formspec route can emit
 /// [`SignaturePrimitiveStatus::DeferredPendingHelper`] because pin/consent/
 /// digest pre-checks have run but the primitive itself has not. `Failed`
 /// indicates the primitive was attempted and rejected; WOS admission MUST NOT
@@ -116,10 +115,51 @@ pub struct SignatureAdmissionFailure {
     pub failure_context: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
+/// Exact source document selection, preserving the authored locale spelling.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SignatureDocumentRef {
+    /// Source document identifier.
+    pub document_id: String,
+    /// Authored locale token.
+    pub locale: String,
+}
+
+/// Intrinsic source signature identity, distinct from a WOS provenance identifier.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SourceSignatureRef {
+    /// Intrinsic source Response identifier, which may be opaque.
+    pub response_id: String,
+    /// Source authored-signature identifier.
+    pub signature_id: String,
+    /// Exact source signed-payload digest.
+    pub signed_payload_digest: String,
+}
+
+/// Source-qualified document claims whose missing values cannot use legacy fallbacks.
+///
+/// Admission additionally requires verified primitive status and no failure.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DocumentSignatureClaims {
+    /// Intrinsic source Response identifier, distinct from its retained locator.
+    pub response_id: String,
+    /// Original shared signing-act identifier.
+    pub signing_act_id: String,
+    /// Exact document and locale selection.
+    pub document_ref: SignatureDocumentRef,
+    /// Explicit signed presentation digest.
+    pub presentation_hash: String,
+    /// Source principal tuple, when this signature witnesses an earlier act.
+    pub witnessed_signature_ref: Option<SourceSignatureRef>,
+}
+
 /// Binding-neutral verified signature evidence for WOS Signature Profile
 /// admission.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SignatureEvidence {
+    /// Lossless declared-document evidence; absent only for the legacy route.
+    pub document_claims: Option<DocumentSignatureClaims>,
     /// Binding or provider family that produced the verified evidence.
     pub source_system: String,
 
@@ -186,7 +226,7 @@ pub struct SignatureEvidence {
     ///
     /// Bindings that have not yet executed the cryptographic signature
     /// primitive (e.g. the reference Formspec binding while
-    /// `FORMSPEC-SIGN-HELPER-001` is unshipped) MUST emit
+    /// legacy route when no actual verification is configured) MUST emit
     /// [`SignaturePrimitiveStatus::DeferredPendingHelper`] so admission
     /// records the verification gap honestly. Bindings that have run and
     /// passed the primitive emit [`SignaturePrimitiveStatus::Verified`].
@@ -269,6 +309,20 @@ pub trait ContractBindingAdapter: Send + Sync {
         response: &serde_json::Value,
     ) -> Result<Option<CaseMutationBundle>, BindingError>;
 
+    /// Requalifies a retained source snapshot without inventing a current task.
+    ///
+    /// # Errors
+    /// Refuses when the binding cannot verify committed document evidence.
+    fn retained_document_signature_evidence(
+        &self,
+        _response: &integrity_canonical::ResponseJson,
+        _task_id: &str,
+    ) -> Result<Vec<SignatureEvidence>, BindingError> {
+        Err(BindingError::Unsupported(
+            "retained document verification unavailable".into(),
+        ))
+    }
+
     /// Extract verified signature evidence from a completed submission.
     ///
     /// Base WOS consumes this binding-neutral evidence when a Signature Profile
@@ -277,7 +331,7 @@ pub trait ContractBindingAdapter: Send + Sync {
     fn signature_evidence(
         &self,
         _task: &ActiveTask,
-        _response: &serde_json::Value,
+        _response: &integrity_canonical::ResponseJson,
     ) -> Result<Option<Vec<SignatureEvidence>>, BindingError> {
         Ok(None)
     }

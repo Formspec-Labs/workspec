@@ -54,7 +54,7 @@ impl DurableRuntime for WosRuntime {
     fn persist_task_draft(
         &mut self,
         task_id: &str,
-        response: serde_json::Value,
+        response: integrity_canonical::ResponseJson,
         actor_id: &str,
         idempotency_token: Option<&str>,
     ) -> Result<PersistDraftResult, RuntimeError> {
@@ -74,7 +74,7 @@ impl DurableRuntime for WosRuntime {
     fn submit_task_response(
         &mut self,
         task_id: &str,
-        response: serde_json::Value,
+        response: integrity_canonical::ResponseJson,
         actor_id: &str,
         idempotency_token: Option<&str>,
     ) -> Result<TaskSubmissionResult, RuntimeError> {

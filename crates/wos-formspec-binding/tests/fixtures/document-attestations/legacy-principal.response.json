@@ -1,0 +1,55 @@
+{
+  "$formspecResponse": "1.0",
+  "definitionUrl": "urn:test:document-attestation",
+  "definitionVersion": "1.0.0",
+  "status": "completed",
+  "data": {
+    "signature": null,
+    "confirm": null
+  },
+  "authored": "2026-10-20T19:00:00Z",
+  "validationResults": [],
+  "id": "ih9d-legacy-principal-response",
+  "author": {
+    "id": "applicant",
+    "name": "Applicant Test Signer"
+  },
+  "extensions": {
+    "x-wos-signer-authority": {
+      "class": "self"
+    }
+  },
+  "authoredSignatures": [
+    {
+      "signatureId": "legacy-sig-1",
+      "documentId": "terms-v2",
+      "signingIntent": "urn:wos:signing-intent:applicant-signature",
+      "signatureValue": "0oRYS6MBJwRTaWg5ZC10ZXN0LWFwcGxpY2FudDoAAQADeCx1cm46Zm9ybXNwZWM6c2lnLW1ldGhvZDplZDI1NTE5LWNvc2Utc2lnbjFAMaD2WEAV5fDUl/I4cu42p7BnMotldofHVLldfU5VaQkqEwYg6UyyOJ8PsKb9B4JM2BMYwxWTObOlQJGLM04emXWSEDUB",
+      "signerName": "Applicant Test Signer",
+      "consentAccepted": true,
+      "consentTextRef": "urn:example:consent:esign:v1",
+      "consentVersion": "1.0",
+      "affirmationText": "I agree to the selected documents.",
+      "signedPayload": {
+        "canonicalization": "formspec-response-signing-v1",
+        "digestAlgorithm": "sha-256",
+        "digest": "a73ec2d638c2d505ee0792906ccf04c02164fab9e659f69ff5cfd96afe4f1af2",
+        "responseId": "ih9d-legacy-principal-response",
+        "definitionUrl": "urn:test:document-attestation",
+        "definitionVersion": "1.0.0",
+        "signedAt": "2026-10-20T19:01:00Z",
+        "signingIntent": "urn:wos:signing-intent:applicant-signature"
+      },
+      "documentHash": "ffb948556a252fec4aa0601da677fda38bb2ab0be63cc9c726bebfd1b3500d62",
+      "documentHashAlgorithm": "sha-256",
+      "signatureProvider": "urn:example:signing-provider",
+      "ceremonyId": "ceremony-1",
+      "signerId": "applicant",
+      "identityBinding": {
+        "method": "email-otp",
+        "assuranceLevel": "standard",
+        "providerRef": "urn:test:identity:email-otp"
+      }
+    }
+  ]
+}

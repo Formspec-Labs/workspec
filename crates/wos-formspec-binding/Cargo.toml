@@ -14,6 +14,7 @@ formspec-eval = { path = "../../../formspec/crates/formspec-eval" }
 formspec-lint = { path = "../../../formspec/crates/formspec-lint" }
 integrity-canonical = { path = "../../../integrity-stack/crates/integrity-canonical" }
 integrity-cose = { path = "../../../integrity-stack/crates/integrity-cose" }
+jsonschema = { version = "0.46", default-features = false }
 integrity-signature = { path = "../../../integrity-stack/crates/integrity-signature" }
 ring = "0.17"
 serde = { version = "1", features = ["derive"] }
@@ -27,4 +28,5 @@ wos-runtime = { path = "../wos-runtime" }
 
 [dev-dependencies]
 stack-common-typeid = { workspace = true, features = ["testing"] }
+integrity-cbor = { path = "../../../integrity-stack/crates/integrity-cbor" }
 integrity-signature-ring = { path = "../../../integrity-stack/crates/integrity-signature-ring" }

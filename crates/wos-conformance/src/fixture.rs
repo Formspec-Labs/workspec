@@ -145,8 +145,8 @@ pub struct TaskSubmission {
     /// Logical task reference (matches `taskRef` in the kernel's createTask action).
     pub task_ref: String,
 
-    /// Response envelope to submit.
-    pub response: serde_json::Value,
+    /// Original Response JSON text, preserved through native submission.
+    pub response: integrity_canonical::ResponseJson,
     /// Explicit native sign act recipe; no authored generated IDs or verdicts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signature_recipe: Option<crate::reference_recipes::SignatureRecipe>,
@@ -173,4 +173,24 @@ pub struct ExpectedTransition {
 
     /// Triggering event.
     pub event: String,
+}
+
+#[cfg(test)]
+mod exact_response_tests {
+    use super::TaskSubmission;
+
+    #[test]
+    fn fixture_submission_keeps_original_response_text() {
+        let response = r#"{"status":"completed","data":{"integer":9007199254740993,"decimal":0.1234567890123456789}}"#;
+        let text = format!(r#"{{"task_ref":"review","response":{response}}}"#);
+        let fixture: TaskSubmission = serde_json::from_str(&text).unwrap();
+        assert_eq!(fixture.response.as_str(), response);
+        let restored: TaskSubmission =
+            serde_json::from_str(&serde_json::to_string(&fixture).unwrap()).unwrap();
+        assert_eq!(restored.response.as_str(), response);
+        assert!(
+            serde_json::from_value::<TaskSubmission>(serde_json::from_str(&text).unwrap()).is_err(),
+            "a parsed fixture cannot recover original numerical source text"
+        );
+    }
 }

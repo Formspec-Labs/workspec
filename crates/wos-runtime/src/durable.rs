@@ -74,13 +74,15 @@ pub trait DurableRuntime {
 
     /// Persists a task draft artifact.
     ///
+    /// Responses retain their original admitted text through storage and replay.
+    ///
     /// # Errors
     /// Returns an error when authorization, task lookup, validation, or
     /// persistence fails.
     fn persist_task_draft(
         &mut self,
         task_id: &str,
-        response: serde_json::Value,
+        response: integrity_canonical::ResponseJson,
         actor_id: &str,
         idempotency_token: Option<&str>,
     ) -> Result<PersistDraftResult, RuntimeError>;
@@ -105,13 +107,15 @@ pub trait DurableRuntime {
 
     /// Submits a completed task response.
     ///
+    /// Signature commitments read the admitted text, never its parsed numeric view.
+    ///
     /// # Errors
     /// Returns an error when authorization, resolution, validation,
     /// evaluation, or persistence fails.
     fn submit_task_response(
         &mut self,
         task_id: &str,
-        response: serde_json::Value,
+        response: integrity_canonical::ResponseJson,
         actor_id: &str,
         idempotency_token: Option<&str>,
     ) -> Result<TaskSubmissionResult, RuntimeError>;

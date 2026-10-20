@@ -338,14 +338,15 @@ fn document_identity(
     url: &str,
     version: Option<String>,
     bytes: &[u8],
-    value: &Value,
 ) -> Result<DocumentIdentity, ConformanceError> {
     Ok(DocumentIdentity {
         role: role.into(),
         url: url.into(),
         version,
         raw_sha256: digest(bytes),
-        canonical_sha256: content_digest(value)?,
+        canonical_sha256: integrity_canonical::canonical_json_from_bytes(bytes)
+            .map(|canonical| digest(&canonical))
+            .map_err(refused)?,
         definition: None,
     })
 }
@@ -472,8 +473,29 @@ pub(crate) fn prepare_replay_with_reference(
         ],
         "fixture",
     )?;
-    let mut fixture: ConformanceFixture = serde_json::from_value(fixture_value.clone())
+    // Decode Responses from original text. The Value view above validates only
+    // authoring metadata; reconstructing from it would round signed numbers.
+    let mut fixture: ConformanceFixture = serde_json::from_str(&request.fixture_json)
         .map_err(|error| refused(format!("invalid-fixture: {error}")))?;
+    let lowered_fixture_bytes =
+        if reference.is_some_and(|reference| !reference.time_advances.is_empty()) {
+            // The maintained lowerer only inserts validated event delays. Copy those
+            // metadata fields into the typed fixture without rebuilding Responses.
+            for (event, lowered) in fixture.event_sequence.iter_mut().zip(
+                fixture_value["event_sequence"]
+                    .as_array()
+                    .into_iter()
+                    .flatten(),
+            ) {
+                event.delay = lowered
+                    .get("delay")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned);
+            }
+            Some(serde_json::to_vec(&fixture).map_err(|error| refused(error.to_string()))?)
+        } else {
+            None
+        };
     if fixture.event_sequence.is_empty() {
         return Err(refused("no-scenarios: event_sequence is empty"));
     }
@@ -592,7 +614,6 @@ pub(crate) fn prepare_replay_with_reference(
         url,
         Some(version.into()),
         &request.candidate_bytes,
-        &candidate,
     )?];
     for (role, block) in [
         ("governance", "governance"),
@@ -621,7 +642,7 @@ pub(crate) fn prepare_replay_with_reference(
     for dependency in request.dependencies {
         let role = &dependency.role;
         if matches!(role.as_str(), "definition" | "mapping") {
-            let value = parse(&dependency.bytes, role)?;
+            parse(&dependency.bytes, role)?;
             let selected_version = dependency
                 .version
                 .as_ref()
@@ -638,7 +659,6 @@ pub(crate) fn prepare_replay_with_reference(
                 &dependency.url,
                 dependency.version.clone(),
                 &dependency.bytes,
-                &value,
             )?;
             identity.definition = dependency.definition.clone();
             inputs.push(identity);
@@ -781,7 +801,6 @@ pub(crate) fn prepare_replay_with_reference(
             &dependency.url,
             dependency.version,
             &dependency.bytes,
-            &value,
         )?);
         selected.insert(role.clone(), value);
     }
@@ -872,17 +891,13 @@ pub(crate) fn prepare_replay_with_reference(
         &fixture.id,
         None,
         request.fixture_json.as_bytes(),
-        &original_fixture_value,
     )?);
-    if reference.is_some_and(|reference| !reference.time_advances.is_empty()) {
-        let lowered =
-            serde_json::to_vec(&fixture_value).map_err(|error| refused(error.to_string()))?;
+    if let Some(lowered) = lowered_fixture_bytes {
         inputs.push(document_identity(
             "loweredFixture",
             &fixture.id,
             None,
             &lowered,
-            &fixture_value,
         )?);
         retained_bytes.insert(("loweredFixture".into(), fixture.id.clone(), None), lowered);
     }
@@ -1190,3 +1205,90 @@ pub use crate::reference_comparisons::{
     begin_reference_replay, compare_paired_approval_rates, compare_rendered_notice,
     paired_metric_descriptor,
 };
+
+#[cfg(test)]
+mod exact_response_preparation_tests {
+    use super::*;
+
+    #[test]
+    fn reference_preparation_retains_exact_response_in_original_and_lowered_fixture() {
+        let inputs: Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/reference-due-process-replay.json"
+        ))
+        .unwrap();
+        let mut request: ReplayRequest = serde_json::from_value(inputs["request"].clone()).unwrap();
+        let mut adapters: crate::reference_replay::ReferenceReplayAdapters =
+            serde_json::from_value(inputs["adapters"].clone()).unwrap();
+        let mut fixture: Value = serde_json::from_str(&request.fixture_json).unwrap();
+        fixture["event_sequence"][1]["task_submission"]["response"]["extensions"] =
+            json!({"x-exact-numbers":"EXACT_PREPARATION_NUMBERS"});
+        request.fixture_json = fixture.to_string().replace(
+            "\"EXACT_PREPARATION_NUMBERS\"",
+            r#"{"integer":9007199254740993,"decimal":0.1234567890123456789}"#,
+        );
+        adapters
+            .time_advances
+            .push(crate::reference_replay::NativeTimeAdvance {
+                before_event_index: 0,
+                duration: "P1D".into(),
+            });
+        let original: ConformanceFixture = serde_json::from_str(&request.fixture_json).unwrap();
+        let original_response = original.event_sequence[1]
+            .task_submission
+            .as_ref()
+            .unwrap()
+            .response
+            .as_str();
+        let prepared =
+            crate::reference_replay::prepare_reference_replay(request.clone(), adapters).unwrap();
+        let native = &prepared.prepared;
+        assert_eq!(
+            native.fixture.event_sequence[1]
+                .task_submission
+                .as_ref()
+                .unwrap()
+                .response
+                .as_str(),
+            original_response
+        );
+        assert_eq!(
+            native.fixture.event_sequence[0].delay.as_deref(),
+            Some("P1D")
+        );
+        assert_eq!(
+            native.input_bytes("fixture").unwrap(),
+            request.fixture_json.as_bytes()
+        );
+        let lowered_bytes = native.input_bytes("loweredFixture").unwrap();
+        let lowered: ConformanceFixture = serde_json::from_slice(lowered_bytes).unwrap();
+        assert_eq!(
+            lowered.event_sequence[1]
+                .task_submission
+                .as_ref()
+                .unwrap()
+                .response
+                .as_str(),
+            original_response
+        );
+        assert!(original_response.contains("9007199254740993"));
+        assert!(original_response.contains("0.1234567890123456789"));
+        for (role, bytes) in [
+            ("fixture", request.fixture_json.as_bytes()),
+            ("loweredFixture", lowered_bytes),
+        ] {
+            let identity = native
+                .inputs
+                .iter()
+                .find(|input| input.role == role)
+                .unwrap();
+            assert_eq!(identity.raw_sha256, digest(bytes));
+            let exact = integrity_canonical::canonical_json_from_bytes(bytes).unwrap();
+            assert_eq!(identity.canonical_sha256, digest(&exact));
+            assert_ne!(
+                identity.canonical_sha256,
+                content_digest(&serde_json::from_slice(bytes).unwrap()).unwrap(),
+                "parsed decimal reconstruction must differ"
+            );
+        }
+    }
+}

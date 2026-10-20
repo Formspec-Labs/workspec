@@ -367,8 +367,11 @@ impl Fixture {
             .runtime
             .submit_task_response(
                 &task.task_id,
-                json!({"status":"completed",
-            "definitionUrl":url,"definitionVersion":"0.3.0","data":data}),
+                integrity_canonical::ResponseJson::from_value(
+                    &(json!({"status":"completed",
+            "definitionUrl":url,"definitionVersion":"0.3.0","data":data})),
+                )
+                .unwrap(),
                 actor,
                 Some(token),
             )
@@ -582,8 +585,8 @@ fn expired_photo_clock_closes_late_reply_stays_closed_and_reasoned_adjudicator_r
         .into_iter()
         .find(|t| t.task_ref == "considerReopening")
         .unwrap();
-    assert!(fixture.runtime.submit_task_response(&task.task_id, json!({"status":"completed",
-        "definitionUrl":REVIEW,"definitionVersion":"0.3.0","data":{"choice":"reopen","reason":"New photo changes the decision."}}),
+    assert!(fixture.runtime.submit_task_response(&task.task_id, integrity_canonical::ResponseJson::from_value(&(json!({"status":"completed",
+        "definitionUrl":REVIEW,"definitionVersion":"0.3.0","data":{"choice":"reopen","reason":"New photo changes the decision."}}))).unwrap(),
         APPLICANT, Some("unauthorized-reopen")).is_err());
     fixture.submit(
         "considerReopening",
@@ -692,9 +695,12 @@ fn adverse_mock_checks_allow_ten_day_dispute_before_assigned_reasoned_review() {
             .runtime
             .submit_task_response(
                 &task.task_id,
-                json!({"status":"completed",
+                integrity_canonical::ResponseJson::from_value(
+                    &(json!({"status":"completed",
         "definitionUrl":REVIEW,"definitionVersion":"0.3.0",
-        "data":{"choice":"deny","reason":"Applicant cannot issue an adjudication."}}),
+        "data":{"choice":"deny","reason":"Applicant cannot issue an adjudication."}}))
+                )
+                .unwrap(),
                 APPLICANT,
                 Some("wrong-dispute-reviewer")
             )
@@ -836,8 +842,8 @@ fn lasting_notice_outage_still_allows_actual_late_photo_and_reopening_task() {
         .runtime
         .submit_task_response(
             &task.task_id,
-            json!({"status":"completed","definitionUrl":APPLICATION,"definitionVersion":"0.3.0",
-            "data":{"photo":{"digest":"late-photo"},"originalFilingRef":"filing-original"}}),
+            integrity_canonical::ResponseJson::from_value(&(json!({"status":"completed","definitionUrl":APPLICATION,"definitionVersion":"0.3.0",
+            "data":{"photo":{"digest":"late-photo"},"originalFilingRef":"filing-original"}}))).unwrap(),
             APPLICANT,
             Some("late-during-permanent-notice-outage"),
         )
@@ -925,8 +931,11 @@ fn retained_expired_photo_task_refuses_before_mutating_correction() {
     let before = fixture.current();
     let result = fixture.runtime.submit_task_response(
         &expired_task.task_id,
-        json!({"status":"completed","definitionUrl":APPLICATION,"definitionVersion":"0.3.0",
-            "data":{"photo":{"digest":"stale-task-photo"},"originalFilingRef":"filing-original"}}),
+        integrity_canonical::ResponseJson::from_value(
+            &(json!({"status":"completed","definitionUrl":APPLICATION,"definitionVersion":"0.3.0",
+            "data":{"photo":{"digest":"stale-task-photo"},"originalFilingRef":"filing-original"}})),
+        )
+        .unwrap(),
         APPLICANT,
         Some("expired-photo-response"),
     );
@@ -954,9 +963,9 @@ fn retained_expired_dispute_task_refuses_before_mutating_evidence() {
     fixture.state("awaitingReview");
     let before = fixture.current();
     let result = fixture.runtime.submit_task_response(&expired_task.task_id,
-        json!({"status":"completed","definitionUrl":"urn:formspec:demo:d1:passport-outside-data-dispute",
+        integrity_canonical::ResponseJson::from_value(&(json!({"status":"completed","definitionUrl":"urn:formspec:demo:d1:passport-outside-data-dispute",
             "definitionVersion":"0.3.0","data":{"checkRef":"mockPriorPassportCheck","response":"dispute",
-            "reason":"Stale task response","evidence":[]}}), APPLICANT, Some("expired-dispute-response"));
+            "reason":"Stale task response","evidence":[]}}))).unwrap(), APPLICANT, Some("expired-dispute-response"));
     assert!(
         result.is_err(),
         "Expired dispute task must refuse before mutation; observed {result:?}"

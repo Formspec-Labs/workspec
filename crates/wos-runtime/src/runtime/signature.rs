@@ -492,6 +492,14 @@ fn is_signature_evidence_record_kind_default(value: &str) -> bool {
     value == "signatureAffirmation"
 }
 
+/// Actual source snapshot, verification and prospective retained-artifact association.
+pub(super) struct SignatureSubmissionSource<'a> {
+    pub(super) response: &'a integrity_canonical::ResponseJson,
+    pub(super) signature_evidence: Option<&'a [VerifiedSignatureEvidence]>,
+    pub(super) adapter: &'a dyn crate::binding::ContractBindingAdapter,
+    pub(super) accepted_artifact: &'a crate::store::TaskArtifact,
+}
+
 /// Outcome of signature admission for a task submission.
 ///
 /// Carries the provenance record produced by admission alongside the verified
@@ -599,7 +607,11 @@ fn admission_failed_outcome(
     AdmissionOutcome::AdmissionFailed(SignatureAdmissionFailedOutcome {
         reason,
         evidence_bindings: EvidenceBindings {
-            response_id: task_id.to_string(),
+            response_id: signature_evidence
+                .document_claims
+                .as_ref()
+                .map_or(task_id, |claims| claims.response_id.as_str())
+                .to_string(),
             signed_payload_digest: signature_evidence.signed_payload_digest.clone(),
             signature_id: signature_evidence.source_signature_id.clone(),
             signing_intent: signature_evidence.signing_intent.clone(),
@@ -866,12 +878,18 @@ impl WosRuntime {
         &self,
         record: &RuntimeRecord,
         task: &ActiveTask,
-        response: &serde_json::Value,
-        signature_evidence: Option<&[VerifiedSignatureEvidence]>,
+        source: SignatureSubmissionSource<'_>,
         actor_id: &str,
         signed_at_default: &str,
     ) -> Result<Option<AdmissionOutcome>, RuntimeError> {
         let minter = process_minter(&record.process)?;
+        let SignatureSubmissionSource {
+            response: response_source,
+            signature_evidence,
+            adapter,
+            accepted_artifact,
+        } = source;
+        let response = response_source.value();
         if !Self::is_signature_task(task) {
             return Ok(None);
         }
@@ -1060,18 +1078,41 @@ impl WosRuntime {
             .ceremony_id
             .as_deref()
             .unwrap_or(&task.task_id);
-        let source_response_ref = signature_evidence
-            .source_response_ref
-            .as_deref()
-            .or_else(|| response_string(response, "sourceResponseRef"))
-            .or_else(|| response_string(response, "formspecResponseRef"))
-            .or(document.source_response_ref.as_deref())
-            .ok_or_else(|| {
-                RuntimeError::Signature(
-                    "signature document, response, or evidence must provide sourceResponseRef"
-                        .to_string(),
-                )
-            })?;
+        let document_claims = signature_evidence.document_claims.as_ref();
+        let source_response_ref = if let Some(claims) = document_claims {
+            if claims.response_id != response["id"].as_str().unwrap_or_default()
+                || claims.document_ref.document_id != document.id
+                || accepted_artifact.response.as_str() != response_source.as_str()
+                || accepted_artifact.task_id != task.task_id
+                || accepted_artifact.actor_id != actor_id
+                || accepted_artifact.kind != crate::store::TaskArtifactKind::Accepted
+            {
+                return Err(RuntimeError::Signature(
+                    "accepted source artifact association differs".into(),
+                ));
+            }
+            validate_source_artifact_uri(&accepted_artifact.artifact_id)?;
+            accepted_artifact.artifact_id.as_str()
+        } else {
+            signature_evidence
+                .source_response_ref
+                .as_deref()
+                .or_else(|| response_string(response, "sourceResponseRef"))
+                .or_else(|| response_string(response, "formspecResponseRef"))
+                .or(document.source_response_ref.as_deref())
+                .ok_or_else(|| {
+                    RuntimeError::Signature(
+                        "signature document, response, or evidence must provide sourceResponseRef"
+                            .to_string(),
+                    )
+                })?
+        };
+        let witnessed_signature_ref = match document_claims
+            .and_then(|claims| claims.witnessed_signature_ref.as_ref())
+        {
+            Some(principal) => Some(self.resolve_witnessed_signature(record, adapter, principal)?),
+            None => None,
+        };
 
         let (profile_ref, profile_key) = match &profile_selector {
             SignatureProfileSelector::Key(key) => (None, Some(key.as_str())),
@@ -1088,10 +1129,13 @@ impl WosRuntime {
                 role: &role.role,
                 document_id: &document.id,
                 signing_act_id,
-                document_ref: serde_json::json!({
-                    "documentId": document.id.as_str(),
-                    "locale": "und",
-                }),
+                document_ref: match document_claims {
+                    Some(claims) => serde_json::to_value(&claims.document_ref)
+                        .map_err(|error| RuntimeError::Signature(error.to_string()))?,
+                    None => {
+                        serde_json::json!({"documentId": document.id.as_str(), "locale": "und"})
+                    }
+                },
                 document_hash: &document.document_hash,
                 presentation_hash,
                 document_hash_algorithm: &document.document_hash_algorithm,
@@ -1117,7 +1161,7 @@ impl WosRuntime {
                 )
                 .map_err(|error| RuntimeError::Signature(error.to_string()))?,
                 verification_receipt: signature_evidence.verification_receipt.as_deref(),
-                witnessed_signature_ref: None,
+                witnessed_signature_ref: witnessed_signature_ref.as_deref(),
             },
         );
         let signed_at_owned = signed_at.to_string();
@@ -1817,6 +1861,125 @@ impl WosRuntime {
         Ok(())
     }
 
+    fn resolve_witnessed_signature(
+        &self,
+        record: &RuntimeRecord,
+        adapter: &dyn crate::binding::ContractBindingAdapter,
+        principal: &crate::binding::SourceSignatureRef,
+    ) -> Result<String, RuntimeError> {
+        use crate::store::TaskArtifactKind;
+        let refusal = || {
+            RuntimeError::Signature(
+                "witness principal has no unique qualified accepted artifact association".into(),
+            )
+        };
+        let mut matched = Vec::new();
+        for affirmation in record
+            .provenance_log
+            .iter()
+            .filter(|item| item.record_kind == ProvenanceKind::SignatureAffirmation)
+        {
+            let Some(data) = affirmation.data.as_ref() else {
+                continue;
+            };
+            if data["sourceSignatureSystem"] != "formspec"
+                || data["sourceSignatureId"] != principal.signature_id
+                || data["signedPayloadDigest"] != principal.signed_payload_digest
+            {
+                continue;
+            }
+            let Some(locator) = data["sourceResponseRef"].as_str() else {
+                continue;
+            };
+            let Some(artifact) = record.artifacts.get(locator) else {
+                continue;
+            };
+            if artifact.response.value()["id"] != principal.response_id {
+                continue;
+            }
+            let links: Vec<_> = record
+                .provenance_log
+                .iter()
+                .filter(|item| {
+                    item.record_kind == ProvenanceKind::TaskCompleted
+                        && item.data.as_ref().is_some_and(|d| {
+                            d["details"]["signatureAffirmationId"] == affirmation.id
+                        })
+                })
+                .collect();
+            if links.len() != 1 {
+                return Err(refusal());
+            }
+            let link = links[0];
+            let link_data = link.data.as_ref().ok_or_else(refusal)?;
+            if artifact.kind != TaskArtifactKind::Accepted
+                || artifact.artifact_id != locator
+                || link_data["taskId"] != artifact.task_id
+                || link_data["details"]["artifactId"] != locator
+                || link.actor_id.as_deref() != Some(artifact.actor_id.as_str())
+                || affirmation.actor_id.as_deref() != Some(artifact.actor_id.as_str())
+                || data["signerId"] != artifact.actor_id
+                || crate::task_process_id(&artifact.task_id).ok().as_deref()
+                    != Some(record.process.process_id.as_str())
+                || data["processId"] != record.process.process_id
+                || data["caseLedgerId"] != record.process.case_ledger_id
+                || data["primitiveVerification"]["status"] != "verified"
+            {
+                return Err(refusal());
+            }
+            validate_source_artifact_uri(locator)?;
+            let source = adapter
+                .retained_document_signature_evidence(&artifact.response, &artifact.task_id)?;
+            let candidates: Vec<_> = source
+                .iter()
+                .filter(|value| {
+                    value.source_signature_id == principal.signature_id
+                        && value.signed_payload_digest == principal.signed_payload_digest
+                })
+                .collect();
+            if candidates.len() != 1 {
+                return Err(refusal());
+            }
+            let source = candidates[0];
+            let claims = source.document_claims.as_ref().ok_or_else(refusal)?;
+            if source.primitive_verification != SignaturePrimitiveStatus::Verified
+                || source.admission_failure.is_some()
+                || claims.response_id != principal.response_id
+                || source.signer_id.as_deref() != Some(artifact.actor_id.as_str())
+                || data["documentRef"]
+                    != serde_json::to_value(&claims.document_ref).map_err(|_| refusal())?
+                || data["documentId"] != source.document_id
+                || data["documentHash"] != source.document_hash
+                || data["documentHashAlgorithm"] != source.document_hash_algorithm
+                || data["signedPayloadDigestAlgorithm"] != source.signed_payload_digest_algorithm
+                || data["signingIntent"] != source.signing_intent
+                || data["signedAt"] != source.signed_at
+                || source
+                    .signature_provider
+                    .as_ref()
+                    .is_some_and(|provider| data["signatureProvider"] != *provider)
+                || source
+                    .ceremony_id
+                    .as_ref()
+                    .is_some_and(|ceremony| data["ceremonyId"] != *ceremony)
+                || source
+                    .identity_binding
+                    .as_ref()
+                    .is_some_and(|identity| data.get("identityBinding") != Some(identity))
+                || data.get("signerAuthority") != source.signer_authority.as_ref()
+                || data["presentationHash"] != claims.presentation_hash
+                || data["signingActId"] != claims.signing_act_id
+            {
+                return Err(refusal());
+            }
+            matched.push(affirmation.id.clone());
+        }
+        if matched.len() != 1 {
+            return Err(refusal());
+        }
+        Ok(matched.remove(0))
+    }
+
     fn signature_evidence_for_submission(
         &self,
         signature_evidence: Option<&[VerifiedSignatureEvidence]>,
@@ -2124,12 +2287,38 @@ fn task_extension_str<'a>(task: &'a ActiveTask, key: &str) -> Option<&'a str> {
     task.extensions.get(key).and_then(serde_json::Value::as_str)
 }
 
+fn validate_source_artifact_uri(locator: &str) -> Result<(), RuntimeError> {
+    use std::sync::OnceLock;
+    static VALIDATOR: OnceLock<Result<jsonschema::Validator, String>> = OnceLock::new();
+    let validator =
+        VALIDATOR
+            .get_or_init(|| {
+                let schema: serde_json::Value = serde_json::from_str(include_str!(
+                    "../../../../schemas/wos-provenance-log.schema.json"
+                ))
+                .map_err(|error| error.to_string())?;
+                jsonschema::options().should_validate_formats(true)
+            .build(&schema["$defs"]["SignatureAffirmationData"]["properties"]["sourceResponseRef"])
+            .map_err(|error| error.to_string())
+            })
+            .as_ref()
+            .map_err(|_| RuntimeError::Signature("source locator schema unavailable".into()))?;
+    validator
+        .validate(&serde_json::Value::String(locator.into()))
+        .map_err(|_| {
+            RuntimeError::Signature("accepted artifact locator must be a valid source URI".into())
+        })
+}
+
 /// K-2 signing-act and presentation digests for `SignatureAffirmation` minting.
 fn signature_affirmation_k2_fields(evidence: &VerifiedSignatureEvidence) -> (&str, &str) {
-    (
-        evidence.effective_signing_act_id(),
-        evidence.effective_presentation_hash(),
-    )
+    match evidence.document_claims.as_ref() {
+        Some(claims) => (&claims.signing_act_id, &claims.presentation_hash),
+        None => (
+            evidence.effective_signing_act_id(),
+            evidence.effective_presentation_hash(),
+        ),
+    }
 }
 
 fn signature_document_id_for_task(
@@ -3369,6 +3558,7 @@ mod k2_field_binding_tests {
     #[test]
     fn given_distinct_k2_evidence_when_runtime_k2_helper_used_then_effective_fields_apply() {
         let evidence = SignatureEvidence {
+            document_claims: None,
             source_system: "test-binding".to_string(),
             source_signature_id: "source-sig-001".to_string(),
             signing_act_id: Some("signing-act-777".to_string()),
@@ -3402,6 +3592,7 @@ mod k2_field_binding_tests {
     #[test]
     fn given_distinct_k2_evidence_when_affirmation_minted_then_fields_stay_distinct() {
         let evidence = SignatureEvidence {
+            document_claims: None,
             source_system: "test-binding".to_string(),
             source_signature_id: "source-sig-001".to_string(),
             signing_act_id: Some("signing-act-777".to_string()),
