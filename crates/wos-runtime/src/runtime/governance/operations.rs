@@ -7,6 +7,79 @@ use serde_json::Value;
 use wos_core::model::due_process::*;
 use wos_core::{ProvenanceKind, ProvenanceRecord};
 
+// Literal template facts share the existing rendering context. Their only sources
+// are this determination's successful typed records and immutable snapshot.
+fn notice_facts(
+    variables: &mut serde_json::Map<String, Value>,
+    records: &[ProvenanceRecord],
+    determination: &DeterminationState,
+    snapshot: &Value,
+) -> Result<(), RefusalCode> {
+    let associated = || {
+        records.iter().filter(|record| {
+            record
+                .data
+                .as_ref()
+                .and_then(|data| data.get("relatedTransition"))
+                .and_then(Value::as_str)
+                == Some(determination.id.as_str())
+        })
+    };
+    let mut reasons =
+        associated().filter(|record| record.record_kind == ProvenanceKind::DeterminationReasoning);
+    let reason = reasons.next().ok_or(RefusalCode::ExplanationRejected)?;
+    if reasons.next().is_some() {
+        return Err(RefusalCode::ExplanationRejected);
+    }
+    let reason: DeterminationReasoningData = serde_json::from_value(
+        reason
+            .data
+            .clone()
+            .ok_or(RefusalCode::ExplanationRejected)?,
+    )
+    .map_err(|_| RefusalCode::ExplanationRejected)?;
+    if reason.evaluation.location != determination.firing.location {
+        return Err(RefusalCode::ExplanationRejected);
+    }
+    let mut insert = |name, value| {
+        if variables.insert(name, value).is_some() {
+            Err(RefusalCode::ExplanationRejected)
+        } else {
+            Ok(())
+        }
+    };
+    insert("reasonCode".into(), Value::String(reason.rule_id))?;
+    for input in &reason.evaluation.inputs {
+        insert(format!("inputs.{}", input.name), input.value.value())?;
+    }
+    for record in associated()
+        .filter(|record| record.record_kind == ProvenanceKind::DeterminationCounterfactual)
+    {
+        let counter: DeterminationCounterfactualData = serde_json::from_value(
+            record
+                .data
+                .clone()
+                .ok_or(RefusalCode::ExplanationRejected)?,
+        )
+        .map_err(|_| RefusalCode::ExplanationRejected)?;
+        if counter.original_snapshot_sha256 != determination.snapshot.sha256
+            || counter.original_evaluation != reason.evaluation
+        {
+            return Err(RefusalCode::ExplanationRejected);
+        }
+        for (index, change) in counter.alternative.changes.iter().enumerate() {
+            let original = snapshot
+                .pointer(&change.case_pointer)
+                .and_then(Scalar::from_value)
+                .ok_or(RefusalCode::ExplanationRejected)?;
+            let prefix = format!("counterfactuals.{}.changes.{index}", counter.alternative.id);
+            insert(format!("{prefix}.oldValue"), original.value())?;
+            insert(format!("{prefix}.newValue"), change.value.value())?;
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn state(record: &RuntimeRecord) -> DueProcessState {
     record
         .process
@@ -179,6 +252,7 @@ pub(super) fn apply(
                 .cloned()
                 .ok_or(RefusalCode::InvalidConfiguration)?;
             variables.insert("noticeIssuedAt".into(), Value::String(now.into()));
+            notice_facts(&mut variables, &all, &determination, &snapshot.value)?;
             let mut variants = Vec::new();
             for selection in &policy.notice.templates {
                 let template = cap
@@ -199,19 +273,29 @@ pub(super) fn apply(
                     return Err(RefusalCode::UnsupportedProfile);
                 }
                 let render = |value: &str| -> Result<String, RefusalCode> {
-                    let mut rendered = value.to_string();
-                    for (name, value) in &variables {
-                        rendered = rendered.replace(
-                            &format!("{{{{{name}}}}}"),
-                            &value
-                                .as_str()
-                                .map(str::to_string)
-                                .unwrap_or_else(|| value.to_string()),
-                        );
+                    let mut rendered = String::new();
+                    let mut remaining = value;
+                    while let Some((literal, token)) = remaining.split_once("{{") {
+                        if literal.contains("}}") {
+                            return Err(RefusalCode::UnsupportedProfile);
+                        }
+                        rendered.push_str(literal);
+                        let (name, rest) = token
+                            .split_once("}}")
+                            .ok_or(RefusalCode::UnsupportedProfile)?;
+                        let value = variables.get(name).ok_or(RefusalCode::UnsupportedProfile)?;
+                        // Bound facts are literal text, never another template.
+                        if let Some(value) = value.as_str() {
+                            rendered.push_str(value);
+                        } else {
+                            rendered.push_str(&value.to_string());
+                        }
+                        remaining = rest;
                     }
-                    if rendered.contains("{{") || rendered.contains("}}") {
+                    if remaining.contains("}}") {
                         return Err(RefusalCode::UnsupportedProfile);
                     }
+                    rendered.push_str(remaining);
                     Ok(rendered)
                 };
                 let mut body = String::new();
@@ -231,8 +315,6 @@ pub(super) fn apply(
                         return Err(RefusalCode::UnsupportedProfile);
                     }
                 }
-                // Every locale preserves the same actual dates, rights, and factual explanation.
-                body.push_str(&machine.to_string());
                 variants.push(NoticeVariant {
                     locale: selection.locale.clone(),
                     template_key: selection.template_key.clone(),

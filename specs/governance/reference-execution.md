@@ -557,6 +557,41 @@ channels and continuation instructions. Human-readable variants render those
 same facts. Identical retained inputs and issueAt MUST produce byte-identical
 content and prose. `noticeStaged` means saved local work; it is not delivery.
 
+Human-readable variants MUST express the actual specific determination,
+individualized reason code and factual input values supporting it, the meaning
+and tested values of the successful positive and isolated negative alternatives,
+and the applicable recipient, dates, appeal and continuation facts. Selected
+localized template text supplies human labels and sentences; retained native
+records supply factual scalar values. Technical determination/firing/snapshot/
+source/template/review identities MUST remain complete in `machineReadable`;
+this does not require their serialized JSON or raw hashes to be appended to
+recipient prose. Rendering MUST NOT replace individualized human facts with a
+reference to a separately retained technical record.
+
+The bounded rendering context adds these exact literal variable names:
+
+| Variable | Actual native source |
+|---|---|
+| `reasonCode` | The uniquely associated `DeterminationReasoningData.ruleId`. |
+| `inputs.<actualInputName>` | The same reasoning record's `evaluation.inputs` named scalar value. |
+| `counterfactuals.<actualAlternativeId>.changes.<index>.oldValue` | The original determination snapshot scalar at this successfully recorded change's validated case pointer. |
+| `counterfactuals.<actualAlternativeId>.changes.<index>.newValue` | This successfully recorded typed counterfactual change's scalar value. |
+
+`<index>` is the change's authored zero-based index. Dots are literal characters
+in a variable name, not path or expression evaluation. Required variables and
+`{{variableName}}` replacement use the same existing selected-template context.
+Resolve placeholders only from the authored template, once. Inserted factual
+values are literal text, even when they contain placeholder-shaped characters;
+rendering MUST NOT interpret them as additional variable references.
+Old/new values use only the uniquely associated typed native reasoning and
+counterfactual records and their referenced immutable determination snapshot.
+Missing, ambiguous, unsupported or colliding required facts MUST refuse before
+saving notice work. No mutable case state, arbitrary snapshot expansion,
+expected assertion or caller-supplied fact map may supply these values. The
+established top-level variables remain available. Complete recipient bodies
+contain selected subject/ordered sections and resolved bindings; the renderer
+MUST NOT append an unsolicited serialized copy of `machineReadable`.
+
 `fileAppeal` requires a qualified notice, standing human, accepted channel and
 timely native filing time. Channels configured together use the same operation
 and state semantics. The native filing sets hearingDeadline to filedAt plus the

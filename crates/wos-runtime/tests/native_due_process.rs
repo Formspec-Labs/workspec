@@ -131,6 +131,12 @@ fn runtime(raw: &Value) -> (WosRuntime, Time, Arc<AtomicUsize>) {
     (runtime, time, calls)
 }
 fn create(runtime: &mut WosRuntime) -> Result<String, RuntimeError> {
+    create_with_initial_case(runtime, None)
+}
+fn create_with_initial_case(
+    runtime: &mut WosRuntime,
+    initial_case_state: Option<Value>,
+) -> Result<String, RuntimeError> {
     runtime
         .create_process_with_actor_bindings(
             CreateProcessRequest {
@@ -138,7 +144,7 @@ fn create(runtime: &mut WosRuntime) -> Result<String, RuntimeError> {
                 tenant: Some("test".into()),
                 definition_url: "urn:test:reference-due".into(),
                 definition_version: "1.0.0".into(),
-                initial_case_state: None,
+                initial_case_state,
             },
             ["determiner", "supervisor", "household", "reviewer"]
                 .iter()
@@ -587,8 +593,14 @@ fn command(
         .unwrap()
 }
 fn signed_only() -> (WosRuntime, Time, String, String, Signing) {
-    let (mut runtime, time, signing) = signed_runtime();
-    let process = create(&mut runtime).unwrap();
+    signed_only_with_initial_case(signed_fixture(), None)
+}
+fn signed_only_with_initial_case(
+    raw: Value,
+    initial: Option<Value>,
+) -> (WosRuntime, Time, String, String, Signing) {
+    let (mut runtime, time, signing) = signed_runtime_with_policy(raw, DefaultRuntime::new());
+    let process = create_with_initial_case(&mut runtime, initial).unwrap();
     enqueue(&mut runtime, &process, "decide", "actor:human:determiner");
     runtime.drain_once(&process).unwrap();
     let (task, response) = signed_response(&runtime, &process, &signing);
@@ -2843,4 +2855,397 @@ fn multiple_actual_table_inputs_create_explanation_before_any_clock_retry() {
     }
     assert_eq!(saved.process.case_state["level"], 100);
     assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn issued_notice_body_contains_only_selected_recipient_content() {
+    let (runtime, _, process, _) = issued();
+    let saved = notice(&runtime, &process);
+    assert_eq!(saved.variants[0].body, "household 1970-04-01T00:00:00Z\n");
+    assert_notice_schema(&saved);
+    let bytes = STANDARD.decode(&saved.artifact_bytes_base64).unwrap();
+    assert_eq!(bytes_digest(&bytes), saved.artifact_sha256);
+    let artifact: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(artifact["machineReadable"]["kind"], "adverseDecisionNotice");
+    assert_eq!(
+        artifact["machineReadable"]["determinationId"],
+        saved.determination_id
+    );
+    assert!(
+        !artifact["machineReadable"]["explanation"]["reasoning"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    let record = runtime.load_reference_record(&process).unwrap();
+    let determination = &record
+        .process
+        .governance_state
+        .as_ref()
+        .unwrap()
+        .due_process
+        .as_ref()
+        .unwrap()
+        .determinations[0];
+    let policy = signed_fixture()["governance"]["dueProcess"]["execution"].clone();
+    assert_eq!(
+        artifact["machineReadable"],
+        json!({
+            "kind":"adverseDecisionNotice","determinationId":determination.id,
+            "firing":determination.firing,"snapshotSha256":determination.snapshot.sha256,
+            "explanation":{"transitionId":determination.id,"determination":["adverse-decision"],
+                "reasoning":[{"ruleId":"income","authority":"policy","description":"Income exceeds the selected limit.","timestamp":"1970-01-01T00:00:00Z"}],
+                "positiveCounterfactual":[{"factor":"lower-income","description":"Lower income changes the selected result.","type":"positive"}],
+                "negativeCounterfactual":[{"factor":"other-group","description":"This executed group alternative preserves the result.","type":"negative"}],
+                "assembledAt":"1970-01-01T00:00:00Z"},
+            "sourceRefs":policy["notice"]["sourceRefs"],"templates":policy["notice"]["templates"],
+            "recipient":"household","appealDeadline":"1970-04-01T00:00:00Z","effectEligibleAt":"1970-01-11T00:00:00Z",
+            "appealChannels":["phone","in-person","written"],"continuation":policy["appeal"]["continuation"]
+        })
+    );
+    assert_eq!(artifact["variants"][0]["body"], saved.variants[0].body);
+    assert_eq!(
+        bytes_digest(saved.variants[0].body.as_bytes()),
+        saved.variants[0].body_sha256
+    );
+}
+
+fn individualized_capability(signing: &Signing, raw: &Value) -> ReferenceDueProcessCapabilities {
+    let mut cap = selected_capability(signing, DeterministicNoticeTransport::new([]));
+    cap.workflow_bytes = serde_json::to_vec(raw).unwrap();
+    cap.templates = vec![serde_json::from_value(json!({"templates":{"notice":{
+        "category":"adverse-decision","localeRef":"en",
+        "requiredVariables":["reasonCode","inputs.income","counterfactuals.lower-income.changes.0.oldValue","counterfactuals.lower-income.changes.0.newValue","counterfactuals.other-group.changes.0.oldValue","counterfactuals.other-group.changes.0.newValue"],
+        "sections":[{"id":"facts","contentType":"text","content":"Reason {{reasonCode}}; income {{inputs.income}}. Tested income {{counterfactuals.lower-income.changes.0.oldValue}} to {{counterfactuals.lower-income.changes.0.newValue}} changes the result. Tested group {{counterfactuals.other-group.changes.0.oldValue}} to {{counterfactuals.other-group.changes.0.newValue}} preserves the result."}]
+    }}})).unwrap()];
+    cap
+}
+
+#[test]
+fn issued_notice_binds_actual_individual_inputs_and_tested_alternative_values() {
+    for income in [150, 200] {
+        let mut raw = signed_fixture();
+        raw["decisionTables"][0]["rows"]
+            .as_array_mut()
+            .unwrap()
+            .insert(
+                0,
+                json!({"id":"higher","inputCells":["income > 175"],"outputCells":["true"]}),
+            );
+        let mut reason = raw["governance"]["dueProcess"]["execution"]["determinations"][0]["explanation"]["reasons"][0].clone();
+        reason["rowId"] = json!("higher");
+        reason["reasonCode"] = json!("higher-income");
+        raw["governance"]["dueProcess"]["execution"]["determinations"][0]["explanation"]["reasons"]
+            .as_array_mut()
+            .unwrap()
+            .push(reason);
+        let (mut runtime, _, process, determination, signing) = signed_only_with_initial_case(
+            raw.clone(),
+            Some(json!({"income":income,"group":"a","level":100,"recipient":"household"})),
+        );
+        runtime
+            .configure_reference_due_process(individualized_capability(&signing, &raw))
+            .unwrap();
+        let result = command(
+            &mut runtime,
+            &process,
+            "issue",
+            "supervisor",
+            &determination,
+            GovernanceCommand::IssueNotice,
+        );
+        assert!(
+            matches!(result, GovernanceResult::Committed { .. }),
+            "{result:?}"
+        );
+        let saved = notice(&runtime, &process);
+        let reason = if income == 200 {
+            "higher-income"
+        } else {
+            "income"
+        };
+        assert_eq!(
+            saved.variants[0].body,
+            format!(
+                "Reason {reason}; income {income}. Tested income {income} to 50 changes the result. Tested group a to b preserves the result.\n"
+            )
+        );
+        assert_eq!(
+            bytes_digest(saved.variants[0].body.as_bytes()),
+            saved.variants[0].body_sha256
+        );
+    }
+}
+
+#[test]
+fn issued_notice_facts_preserve_original_snapshot_after_actual_case_edit() {
+    let mut raw = signed_fixture();
+    raw["lifecycle"]["states"]["pending"]["transitions"].as_array_mut().unwrap().push(json!({
+        "event":"edit","target":"pending","actor":"supervisor",
+        "actions":[{"action":"setData","path":"caseFile.income","value":999},{"action":"setData","path":"caseFile.group","value":"z"}]
+    }));
+    let (mut runtime, _, process, determination, signing) =
+        signed_only_with_initial_case(raw.clone(), None);
+    enqueue(&mut runtime, &process, "edit", "actor:human:supervisor");
+    runtime.drain_once(&process).unwrap();
+    let edited = runtime.load_process(&process).unwrap();
+    assert_eq!(edited.case_state["income"], 999);
+    assert_eq!(edited.case_state["group"], "z");
+    runtime
+        .configure_reference_due_process(individualized_capability(&signing, &raw))
+        .unwrap();
+    let result = command(
+        &mut runtime,
+        &process,
+        "issue",
+        "supervisor",
+        &determination,
+        GovernanceCommand::IssueNotice,
+    );
+    assert!(
+        matches!(result, GovernanceResult::Committed { .. }),
+        "{result:?}"
+    );
+    assert_eq!(
+        notice(&runtime, &process).variants[0].body,
+        "Reason income; income 150. Tested income 150 to 50 changes the result. Tested group a to b preserves the result.\n"
+    );
+}
+
+#[test]
+fn missing_required_individual_fact_refuses_without_saved_notice_work() {
+    for content in [
+        "required-absent",
+        "{{inputs.absent}}",
+        "{{inputs.income",
+        "unexpected }}",
+        "{{inputs.income{{recipient}}",
+    ] {
+        let (mut runtime, _, process, determination, signing) = signed_only();
+        let mut cap = individualized_capability(&signing, &signed_fixture());
+        let template = cap.templates[0].templates.get_mut("notice").unwrap();
+        if content == "required-absent" {
+            template.required_variables.push("inputs.absent".into());
+        } else {
+            template.sections[0].content = Some(content.into());
+        }
+        runtime.configure_reference_due_process(cap).unwrap();
+        let before = runtime.load_reference_record(&process).unwrap();
+        assert_eq!(
+            command(
+                &mut runtime,
+                &process,
+                "issue",
+                "supervisor",
+                &determination,
+                GovernanceCommand::IssueNotice
+            ),
+            GovernanceResult::Refused {
+                code: RefusalCode::UnsupportedProfile
+            }
+        );
+        let after = runtime.load_reference_record(&process).unwrap();
+        assert_eq!(
+            serde_json::to_value(&before.process).unwrap(),
+            serde_json::to_value(&after.process).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_value(&before.provenance_log).unwrap(),
+            serde_json::to_value(&after.provenance_log).unwrap()
+        );
+    }
+}
+
+#[test]
+fn individual_notice_facts_and_hashes_survive_failed_delivery_and_recreation() {
+    let (mut runtime, time, process, determination, signing) = signed_only();
+    let transport = DeterministicNoticeTransport::new([1]);
+    let mut cap = individualized_capability(&signing, &signed_fixture());
+    cap.notice_transport = Box::new(transport.clone());
+    runtime.configure_reference_due_process(cap).unwrap();
+    let result = command(
+        &mut runtime,
+        &process,
+        "issue",
+        "supervisor",
+        &determination,
+        GovernanceCommand::IssueNotice,
+    );
+    assert!(
+        matches!(result, GovernanceResult::Committed { .. }),
+        "{result:?}"
+    );
+    let original = notice(&runtime, &process);
+    assert!(original.receipt.is_none());
+    assert_eq!(original.attempts, 1);
+    let mut store = InMemoryStore::new();
+    store
+        .restore_record(runtime.load_reference_record(&process).unwrap())
+        .unwrap();
+    // Retry at the admitted issue instant; fresh late receipts have a separate
+    // fail-closed anchor test above and are not qualified by this test.
+    // Recreated runtime selects the ordinary template: pending work must keep
+    // its original individualized body instead of rendering that new selection.
+    let mut restored = recreated(store, time, &signing, transport);
+    restored.deliver_pending_notices(&process).unwrap();
+    let recovered = notice(&restored, &process);
+    assert!(recovered.receipt.is_some());
+    assert_eq!(
+        recovered.artifact_bytes_base64,
+        original.artifact_bytes_base64
+    );
+    assert_eq!(recovered.artifact_sha256, original.artifact_sha256);
+    assert_eq!(recovered.variants, original.variants);
+    assert_eq!(recovered.transport_key, original.transport_key);
+    assert_eq!(recovered.issue_at, original.issue_at);
+    assert_eq!(recovered.appeal_deadline, original.appeal_deadline);
+    assert_eq!(recovered.effect_eligible_at, original.effect_eligible_at);
+}
+
+#[test]
+fn malformed_or_ambiguous_retained_notice_facts_refuse_before_saved_work() {
+    for mutation in [
+        "duplicate-input",
+        "snapshot",
+        "location",
+        "missing-old",
+        "duplicate-alternative",
+    ] {
+        let (runtime, time, process, determination, signing) = signed_only();
+        let mut original = runtime.load_reference_record(&process).unwrap();
+        if mutation == "duplicate-input" || mutation == "location" {
+            let data = original
+                .provenance_log
+                .iter_mut()
+                .find(|record| {
+                    record.record_kind == wos_core::ProvenanceKind::DeterminationReasoning
+                })
+                .unwrap()
+                .data
+                .as_mut()
+                .unwrap();
+            if mutation == "duplicate-input" {
+                let input = data["evaluation"]["inputs"][0].clone();
+                data["evaluation"]["inputs"]
+                    .as_array_mut()
+                    .unwrap()
+                    .push(input);
+            } else {
+                data["evaluation"]["location"]["transitionIndex"] = json!(99);
+            }
+        } else {
+            let counter = original
+                .provenance_log
+                .iter_mut()
+                .find(|record| {
+                    record.record_kind == wos_core::ProvenanceKind::DeterminationCounterfactual
+                })
+                .unwrap();
+            if mutation == "duplicate-alternative" {
+                let mut duplicate = counter.clone();
+                duplicate.id.push_str("-duplicate");
+                original.provenance_log.push(duplicate);
+            } else {
+                let data = counter.data.as_mut().unwrap();
+                if mutation == "snapshot" {
+                    data["originalSnapshotSha256"] = json!("0".repeat(64));
+                } else {
+                    data["alternative"]["changes"][0]["casePointer"] = json!("/absent");
+                }
+            }
+        }
+        let mut store = InMemoryStore::new();
+        store.restore_record(original).unwrap();
+        let transport = DeterministicNoticeTransport::new([]);
+        let mut restored = recreated(store, time, &signing, transport.clone());
+        restored
+            .configure_reference_due_process(individualized_capability(&signing, &signed_fixture()))
+            .unwrap();
+        let before = restored.load_reference_record(&process).unwrap();
+        let result = restored.governance_operation(
+            &process,
+            "actor:human:supervisor",
+            GovernanceRequest {
+                operation_ref: "issue".into(),
+                determination_id: Some(determination),
+                idempotency_token: "malformed.issue".into(),
+                actor: GovernanceActor {
+                    declared_actor: "supervisor".into(),
+                    acting_actor: "actor:human:supervisor".into(),
+                },
+                command: GovernanceCommand::IssueNotice,
+            },
+        );
+        assert_eq!(
+            result.unwrap(),
+            GovernanceResult::Refused {
+                code: RefusalCode::ExplanationRejected
+            },
+            "{mutation}"
+        );
+        let after = restored.load_reference_record(&process).unwrap();
+        assert_eq!(
+            serde_json::to_value(&before.process).unwrap(),
+            serde_json::to_value(&after.process).unwrap(),
+            "{mutation}"
+        );
+        assert_eq!(
+            serde_json::to_value(&before.provenance_log).unwrap(),
+            serde_json::to_value(&after.provenance_log).unwrap(),
+            "{mutation}"
+        );
+    }
+}
+
+#[test]
+fn issued_notice_treats_placeholder_shaped_factual_values_as_literal_text() {
+    let literal = "{{counterfactuals.other-group.changes.0.newValue}}";
+    let raw = signed_fixture();
+    let (mut runtime, _, process, determination, signing) = signed_only_with_initial_case(
+        raw.clone(),
+        Some(json!({"income":150,"group":literal,"level":100,"recipient":"household"})),
+    );
+    let record = runtime.load_reference_record(&process).unwrap();
+    let original = record
+        .provenance_log
+        .iter()
+        .find(|record| record.id == determination)
+        .unwrap();
+    assert_eq!(
+        original.case_file_snapshot.as_ref().unwrap().value["group"],
+        literal
+    );
+    runtime
+        .configure_reference_due_process(individualized_capability(&signing, &raw))
+        .unwrap();
+    let result = command(
+        &mut runtime,
+        &process,
+        "issue",
+        "supervisor",
+        &determination,
+        GovernanceCommand::IssueNotice,
+    );
+    assert!(
+        matches!(result, GovernanceResult::Committed { .. }),
+        "{result:?}"
+    );
+    let saved = notice(&runtime, &process);
+    assert_eq!(
+        saved.variants[0].body,
+        format!(
+            "Reason income; income 150. Tested income 150 to 50 changes the result. Tested group {literal} to b preserves the result.\n"
+        )
+    );
+    let bytes = STANDARD.decode(&saved.artifact_bytes_base64).unwrap();
+    let artifact: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        artifact["machineReadable"]["snapshotSha256"],
+        original.case_file_snapshot.as_ref().unwrap().sha256
+    );
+    assert_eq!(bytes_digest(&bytes), saved.artifact_sha256);
+    assert_eq!(
+        bytes_digest(saved.variants[0].body.as_bytes()),
+        saved.variants[0].body_sha256
+    );
 }
