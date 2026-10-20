@@ -94,38 +94,88 @@ async fn mcp(candidate: &Value, tool: &str, arguments: &Value) -> Result<Value, 
         .await
         .map_err(|error| error.to_string())
 }
-fn assert_native_replay(actual: &Value, expected: &Value, id: &Value) {
-    for key in [
-        "status",
-        "passed",
-        "identity",
-        "inputs",
-        "runtimeIdentity",
-        "execution",
-        "failures",
-        "refusals",
-        "differences",
-        "trace",
-        "finalSnapshot",
-        "observationErrors",
-    ] {
-        assert_eq!(actual[key], expected[key], "{id}, {key}");
+/// Compare the whole native result after normalizing only independently minted IDs.
+///
+/// Closed locations: /initialization/result/caseLedgerId; /provenance/*/id;
+/// /attempts/*/provenance/*/id; /attempts/*/drains/*/provenance/*/id.
+/// Process/task IDs, authored payload IDs, timestamps, array order, counts, and
+/// every other field remain exact. Provenance tokens preserve repeated-ID
+/// relationships across the top-level, per-attempt, and per-drain copies.
+fn semantic_native_report(raw: &Value) -> Value {
+    let mut semantic = raw.clone();
+    if let Some(id) = semantic.pointer_mut("/initialization/result/caseLedgerId") {
+        let family = id.as_str().unwrap().rsplit_once('_').unwrap().0;
+        *id = json!(format!("{family}_<generated-case-ledger>"));
     }
-    // Every field survives transport even when provenance IDs differ across executions.
-    let keys = |value: &Value| {
-        value
-            .as_object()
-            .unwrap()
-            .keys()
-            .cloned()
-            .collect::<std::collections::BTreeSet<_>>()
-    };
+    let mut provenance_ids = std::collections::BTreeMap::new();
+    if let Some(records) = semantic.get_mut("provenance") {
+        normalize_provenance_ids(records, &mut provenance_ids);
+    }
+    if let Some(attempts) = semantic.get_mut("attempts").and_then(Value::as_array_mut) {
+        for attempt in attempts {
+            if let Some(records) = attempt.get_mut("provenance") {
+                normalize_provenance_ids(records, &mut provenance_ids);
+            }
+            if let Some(drains) = attempt.get_mut("drains").and_then(Value::as_array_mut) {
+                for drain in drains {
+                    if let Some(records) = drain.get_mut("provenance") {
+                        normalize_provenance_ids(records, &mut provenance_ids);
+                    }
+                }
+            }
+        }
+    }
+    semantic
+}
+
+fn normalize_provenance_ids(
+    records: &mut Value,
+    ids: &mut std::collections::BTreeMap<String, String>,
+) {
+    if let Some(records) = records.as_array_mut() {
+        for record in records {
+            // Only this direct native-record field changes. An id anywhere in
+            // record data or other nested structures remains untouched.
+            if let Some(value) = record.get_mut("id") {
+                let id = value.as_str().unwrap();
+                let next = ids.len();
+                let normalized = ids.entry(id.to_string()).or_insert_with(|| {
+                    let family = id.rsplit_once('_').unwrap().0;
+                    format!("{family}_<generated-provenance-{next}>")
+                });
+                *value = json!(normalized);
+            }
+        }
+    }
+}
+
+fn assert_native_replay(actual: &Value, expected: &Value, id: &Value) {
     assert_eq!(
-        keys(actual),
-        keys(expected),
-        "{id}: retain the full owning result"
+        semantic_native_report(actual),
+        semantic_native_report(expected),
+        "{id}: complete native report parity"
     );
 }
+
+/// Retain raw, unnormalized evidence when requested by the integration test run.
+fn retain_raw_parity(corpus: &str, vector: &Value, reports: &Value) {
+    if let Some(directory) = std::env::var_os("WOS_SYNTH_PARITY_EVIDENCE_DIR") {
+        let id = vector["id"].as_str().unwrap();
+        assert!(
+            id.chars().all(
+                |character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_')
+            )
+        );
+        let directory = std::path::PathBuf::from(directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(
+            directory.join(format!("{corpus}--{id}.json")),
+            serde_json::to_vec_pretty(&json!({"source":vector,"rawReports":reports})).unwrap(),
+        )
+        .unwrap();
+    }
+}
+
 fn replay_arguments(vector: &Value) -> Value {
     json!({"fixture_json":vector["fixture"].to_string(),"required_observations":vector.get("requiredObservations").cloned().unwrap_or(json!([])),
         "expected_observations":vector.get("expectations").cloned().unwrap_or(json!([])),
@@ -173,6 +223,11 @@ async fn unchanged_common_static_vectors_match_owner_mcp_adapter_and_actual_bina
         );
         assert_eq!(cli["disposition"], "blocked");
         assert_eq!(candidate, original);
+        retain_raw_parity(
+            "static-validation",
+            &json!({"id":name,"candidate":candidate}),
+            &json!({"configuration":config,"owner":expected,"mcp":native,"adapter":assessment,"cli":cli}),
+        );
     }
 }
 
@@ -206,11 +261,17 @@ fn owner_replay(vector: &Value, arguments: &Value) -> Result<Value, String> {
 
 #[tokio::test]
 async fn common_replay_and_native_ai_vectors_keep_independent_owner_results_through_binary() {
-    for corpus in [
-        include_str!("../../wos-conformance/fixtures/authoring-replay/vectors.json"),
-        include_str!("../../wos-conformance/fixtures/native-ai-replay/vectors.json"),
+    for (corpus_name, corpus_source) in [
+        (
+            "authoring-replay",
+            include_str!("../../wos-conformance/fixtures/authoring-replay/vectors.json"),
+        ),
+        (
+            "native-ai-replay",
+            include_str!("../../wos-conformance/fixtures/native-ai-replay/vectors.json"),
+        ),
     ] {
-        let corpus: Value = serde_json::from_str(corpus).unwrap();
+        let corpus: Value = serde_json::from_str(corpus_source).unwrap();
         for vector in corpus["vectors"].as_array().unwrap() {
             let candidate = &vector["candidate"];
             let original = vector.clone();
@@ -219,18 +280,34 @@ async fn common_replay_and_native_ai_vectors_keep_independent_owner_results_thro
             let owner = owner_replay(vector, &arguments);
             let mcp = mcp(candidate, "wos_run_conformance", &arguments).await;
             let output = binary_check(&candidate.to_string(), &config);
-            let tools = McpToolContext::new(serde_json::from_value(config).unwrap(), false);
+            let tools = McpToolContext::new(serde_json::from_value(config.clone()).unwrap(), false);
             let tools = match tools {
-                Err(error) => {
+                Err(wos_synth_core::ToolError::Execution(error)) => {
                     assert!(
                         owner.is_err(),
                         "{}: catalog must agree with owner refusal: {error}",
                         vector["id"]
                     );
-                    assert!(mcp.is_err());
+                    assert_eq!(
+                        mcp.as_ref().unwrap_err(),
+                        &format!("tool 'wos_run_conformance' failed: {error}")
+                    );
                     assert!(!output.status.success());
                     assert!(output.stdout.is_empty());
-                    assert!(String::from_utf8_lossy(&output.stderr).contains("invalid arguments"));
+                    assert_eq!(
+                        String::from_utf8_lossy(&output.stderr),
+                        format!("error: candidate-check host failure: {error}\n")
+                    );
+                    retain_raw_parity(
+                        corpus_name,
+                        vector,
+                        &json!({
+                            "configuration":config,"owner":{"error":owner.as_ref().unwrap_err()},
+                            "mcp":{"error":mcp.as_ref().unwrap_err()},"adapter":{"configurationError":error},
+                            "cli":{"exitCode":output.status.code(),"stderr":String::from_utf8_lossy(&output.stderr),"stdout":String::from_utf8_lossy(&output.stdout)}
+                        }),
+                    );
+                    assert_eq!(vector, &original, "literal corpus must remain unchanged");
                     continue;
                 }
                 Ok(tools) => tools,
@@ -257,15 +334,31 @@ async fn common_replay_and_native_ai_vectors_keep_independent_owner_results_thro
                 "{}",
                 vector["id"]
             );
+            retain_raw_parity(
+                corpus_name,
+                vector,
+                &json!({
+                    "configuration":config,"owner":owner,"mcp":mcp,"adapter":assessment,"cli":cli,
+                    "cliExitCode":output.status.code()
+                }),
+            );
             match owner {
                 Err(error) => {
-                    assert!(
-                        matches!(&assessment.replays[0].result, ToolResult::Error { .. }),
-                        "{}: {error}",
-                        vector["id"]
+                    let expected =
+                        format!("tool 'wos_run_conformance' failed: invalid arguments: {error}");
+                    assert_eq!(mcp.as_ref().unwrap_err(), &expected);
+                    let native_error = match &assessment.replays[0].result {
+                        ToolResult::Error { error } => error,
+                        other => panic!(
+                            "{}: expected complete preparation error, got {other:?}",
+                            vector["id"]
+                        ),
+                    };
+                    assert_eq!(native_error["message"], expected);
+                    assert_eq!(
+                        cli["replays"][0]["result"],
+                        serde_json::to_value(&assessment.replays[0].result).unwrap()
                     );
-                    assert!(mcp.is_err());
-                    assert_eq!(cli["replays"][0]["result"]["state"], "error");
                     assert!(!output.status.success());
                     assert!(
                         cli["replays"][0]["result"]["report"].is_null(),
@@ -1181,4 +1274,141 @@ fn initially_absent_case_alias_preserves_candidate_when_filesystem_is_case_insen
     let error = String::from_utf8_lossy(&result.stderr);
     assert!(error.contains("different paths"));
     assert!(!error.contains("wrote"));
+}
+
+#[tokio::test]
+async fn full_native_parity_rejects_semantic_changes_in_previously_uncompared_fields() {
+    let config = configuration(vec![json!({"fixture_json":scenario().to_string()})]);
+    let assessment = adapter(&config, false)
+        .check_candidate(&positive().to_string())
+        .await
+        .unwrap();
+    let original = completed(&assessment.replays[0].result).clone();
+    for (pointer, replacement) in [
+        ("/attempts/0/actor", json!("different-actor")),
+        (
+            "/initialization/request/processId",
+            json!("different-fixed-process"),
+        ),
+        ("/initialization/result/status", json!("unexpected-status")),
+        ("/provenance/0/timestamp", json!("2099-01-01T00:00:00Z")),
+        ("/provenance/0/data/state", json!("different-state")),
+    ] {
+        let mut changed = original.clone();
+        *changed.pointer_mut(pointer).unwrap() = replacement;
+        assert!(
+            std::panic::catch_unwind(|| assert_native_replay(&changed, &original, &json!(pointer)))
+                .is_err(),
+            "full report parity must reject semantic mutation at {pointer}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn generated_id_normalization_is_closed_and_retains_raw_relationships() {
+    let config = configuration(vec![json!({"fixture_json":scenario().to_string()})]);
+    let tools = adapter(&config, false);
+    let first = tools
+        .check_candidate(&positive().to_string())
+        .await
+        .unwrap();
+    let second = tools
+        .check_candidate(&positive().to_string())
+        .await
+        .unwrap();
+    let raw = completed(&first.replays[0].result).clone();
+    let original = raw.clone();
+    let other = completed(&second.replays[0].result);
+    assert_ne!(
+        raw["initialization"]["result"]["caseLedgerId"],
+        other["initialization"]["result"]["caseLedgerId"]
+    );
+    assert_ne!(raw["provenance"][0]["id"], other["provenance"][0]["id"]);
+    assert_eq!(
+        semantic_native_report(&raw),
+        semantic_native_report(other),
+        "independently minted native IDs are the only allowed differences"
+    );
+    assert_eq!(
+        raw, original,
+        "normalization must not modify raw retained native evidence"
+    );
+
+    let mut broken_copy = raw.clone();
+    broken_copy["attempts"][0]["provenance"][0]["id"] =
+        json!(wos_conformance::ProvenanceRecord::mint_id());
+    assert_ne!(
+        semantic_native_report(&broken_copy),
+        semantic_native_report(&raw),
+        "repeated native provenance references must retain the same relationship"
+    );
+    let mut added_payload = raw.clone();
+    added_payload["provenance"][0]["data"]["id"] = raw["provenance"][0]["id"].clone();
+    assert_eq!(
+        semantic_native_report(&added_payload)["provenance"][0]["data"]["id"],
+        raw["provenance"][0]["id"],
+        "an authored/data id is outside the closed normalization paths"
+    );
+    assert_ne!(
+        semantic_native_report(&added_payload),
+        semantic_native_report(&raw)
+    );
+    let mut changed_family = raw.clone();
+    changed_family["initialization"]["result"]["caseLedgerId"] =
+        json!("different_tenant_case_generated");
+    assert_ne!(
+        semantic_native_report(&changed_family),
+        semantic_native_report(&raw),
+        "native ID tenant/family prefixes remain semantic evidence"
+    );
+    for (pointer, replacement) in [
+        ("/attempts/0/clockMs", json!(99)),
+        (
+            "/attempts/0/drains/0/processedEvent",
+            json!("different-event"),
+        ),
+        (
+            "/attempts/0/drains/0/provenance/0/timestamp",
+            json!("2099-01-01T00:00:00Z"),
+        ),
+        (
+            "/initialization/result/definitionVersion",
+            json!("changed-version"),
+        ),
+        (
+            "/initialization/result/createdAt",
+            json!("2099-01-01T00:00:00Z"),
+        ),
+        ("/provenance/0/data/state", json!("changed-state")),
+    ] {
+        let mut changed = raw.clone();
+        *changed.pointer_mut(pointer).unwrap() = replacement;
+        assert_ne!(
+            semantic_native_report(&changed),
+            semantic_native_report(&raw),
+            "semantic mutation at {pointer} must remain visible"
+        );
+    }
+    let nullable = json!({"provenance":null,"attempts":[{"provenance":null,"drains":[]}]});
+    assert_eq!(
+        semantic_native_report(&nullable),
+        nullable,
+        "normalization must not add fields"
+    );
+    let mut missing = nullable.clone();
+    missing.as_object_mut().unwrap().remove("provenance");
+    assert_ne!(
+        semantic_native_report(&missing),
+        semantic_native_report(&nullable),
+        "missing evidence is distinct from a native null result"
+    );
+    let mut missing = nullable.clone();
+    missing["attempts"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("provenance");
+    assert_ne!(
+        semantic_native_report(&missing),
+        semantic_native_report(&nullable)
+    );
 }
