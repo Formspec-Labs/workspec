@@ -22,6 +22,6 @@ pub use governance::wos_set_impact_level;
 pub use lifecycle::{wos_add_state, wos_add_transition, wos_remove_state, wos_set_initial_state};
 pub use ping::ping;
 pub use query::{
-    wos_close_project, wos_lint, wos_list_projects, wos_preview_state_graph, wos_run_conformance,
-    wos_search,
+    wos_check_authoring, wos_close_project, wos_lint, wos_list_projects, wos_preview_state_graph,
+    wos_run_conformance, wos_search,
 };

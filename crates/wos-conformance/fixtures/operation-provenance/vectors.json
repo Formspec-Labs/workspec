@@ -40,9 +40,6 @@
             },
             "done": {
               "type": "final"
-            },
-            "pending": {
-              "type": "atomic"
             }
           }
         }
@@ -180,7 +177,16 @@
               "type": "final"
             },
             "pending": {
-              "type": "atomic"
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "fixture.finish"
+                  },
+                  "target": "done"
+                }
+              ]
             }
           }
         }
@@ -257,7 +263,16 @@
               "type": "final"
             },
             "pending": {
-              "type": "atomic"
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "fixture.finish"
+                  },
+                  "target": "done"
+                }
+              ]
             }
           }
         }
@@ -337,9 +352,6 @@
             },
             "done": {
               "type": "final"
-            },
-            "pending": {
-              "type": "atomic"
             }
           }
         },
@@ -448,9 +460,6 @@
             },
             "done": {
               "type": "final"
-            },
-            "pending": {
-              "type": "atomic"
             }
           }
         },
@@ -561,14 +570,18 @@
                       "contractRef": "validation"
                     }
                   ]
+                },
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "fixture.finish"
+                  },
+                  "target": "done"
                 }
               ]
             },
             "done": {
               "type": "final"
-            },
-            "pending": {
-              "type": "atomic"
             }
           }
         },
@@ -670,9 +683,6 @@
             },
             "done": {
               "type": "final"
-            },
-            "pending": {
-              "type": "atomic"
             }
           }
         },
@@ -755,9 +765,6 @@
             },
             "done": {
               "type": "final"
-            },
-            "pending": {
-              "type": "atomic"
             }
           }
         },
@@ -837,7 +844,16 @@
               "type": "final"
             },
             "pending": {
-              "type": "atomic"
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "fixture.finish"
+                  },
+                  "target": "done"
+                }
+              ]
             }
           }
         },
@@ -906,9 +922,6 @@
             },
             "done": {
               "type": "final"
-            },
-            "pending": {
-              "type": "atomic"
             }
           }
         }
@@ -970,9 +983,6 @@
             },
             "done": {
               "type": "final"
-            },
-            "pending": {
-              "type": "atomic"
             }
           }
         }
@@ -1050,9 +1060,6 @@
                 },
                 "done": {
                   "type": "final"
-                },
-                "pending": {
-                  "type": "atomic"
                 }
               }
             }
@@ -1093,9 +1100,6 @@
             },
             "done": {
               "type": "final"
-            },
-            "pending": {
-              "type": "atomic"
             }
           }
         }
@@ -1162,7 +1166,7 @@
               "initialState": "replacement",
               "states": {
                 "replacement": {
-                  "type": "atomic"
+                  "type": "final"
                 }
               }
             }
@@ -1224,7 +1228,19 @@
               ]
             },
             "compensating": {
-              "type": "atomic"
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "fixture.finish"
+                  },
+                  "target": "done"
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
             }
           }
         },
@@ -1337,7 +1353,19 @@
               ]
             },
             "compensating": {
-              "type": "atomic"
+              "type": "atomic",
+              "transitions": [
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "fixture.finish"
+                  },
+                  "target": "done"
+                }
+              ]
+            },
+            "done": {
+              "type": "final"
             }
           }
         },
@@ -1426,9 +1454,6 @@
             },
             "done": {
               "type": "final"
-            },
-            "pending": {
-              "type": "atomic"
             }
           }
         }

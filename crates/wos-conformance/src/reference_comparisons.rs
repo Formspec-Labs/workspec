@@ -25,7 +25,7 @@ fn refused(message: impl Into<String>) -> ConformanceError {
 fn digest(bytes: &[u8]) -> String {
     format!("sha256:{}", compute_digest(bytes, DigestAlgorithm::Sha256))
 }
-fn content_digest(value: &impl Serialize) -> Result<String, ConformanceError> {
+pub(crate) fn content_digest(value: &impl Serialize) -> Result<String, ConformanceError> {
     let value = serde_json::to_value(value).map_err(|error| refused(error.to_string()))?;
     canonical_json_bytes(&value)
         .map(|bytes| digest(&bytes))
@@ -592,6 +592,9 @@ pub struct NativeReplaySession {
     result: ReplayResult,
 }
 impl NativeReplaySession {
+    pub(crate) fn prepared(&self) -> &PreparedReferenceReplay {
+        &self.prepared
+    }
     /// Returns immutable actual execution for inspection and review.
     pub fn result(&self) -> &ReplayResult {
         &self.result

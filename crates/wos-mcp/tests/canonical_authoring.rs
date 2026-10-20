@@ -1,13 +1,16 @@
 // Rust guideline compliant 2026-02-21
 //! Canonical authoring preserves the complete workflow outside an explicit edit.
 
+#[path = "../../wos-conformance/tests/support/local_schemas.rs"]
+mod test_schemas;
+
 use serde_json::{Value, json};
 use wos_mcp::{dispatch::dispatch, registry::ProjectRegistry};
 
 fn owning_validator() -> jsonschema::Validator {
     let schema: Value =
         serde_json::from_str(include_str!("../../../schemas/wos-workflow.schema.json")).unwrap();
-    jsonschema::validator_for(&schema).unwrap()
+    test_schemas::validator(&schema)
 }
 
 fn authored_workflow() -> Value {
@@ -16,7 +19,7 @@ fn authored_workflow() -> Value {
         "title":"Preserve the complete native workflow", "impactLevel":"informational",
         "actors":[{"id":"reviewer", "type":"human", "role":"caseReviewer", "x-owner":{"id":"human-A"}},{"id":"summaryBot","type":"agent"}],
         "caseFile":{"fields":{"income":{"type":"number", "required":true, "canonicalTermRef":"urn:term:income", "dpvSensitivity":"dpv:FinancialData", "x-field":{"source":"authored"}}}},
-        "lifecycle":{"initialState":"review", "states":{"review":{"type":"atomic", "stateTimeout":"P1D", "x-state":{"retained":true}}}},
+        "lifecycle":{"initialState":"review", "states":{"review":{"type":"atomic", "stateTimeout":"P1D", "x-state":{"retained":true}, "transitions":[{"event":{"kind":"message","name":"reviewed"},"target":"done"}]},"done":{"type":"final"}}},
         "agents":[{"id":"summaryBot", "agentType":"deterministic", "modelIdentifier":"test-model", "modelVersion":"1.0.0", "x-agent":{"retained":true}}],
         "aiOversight":{"x-policy":{"retained":true}},
         "extensions":{"x-historical":{"retained":true},"x-wos-governance":{"old":true},"x-wos-ai":{"agents":[{"id":"historicalAgent"}]}},
@@ -114,7 +117,8 @@ async fn create_complete_native_workflow_export_and_reopen() {
         json!({"fields":{"url":"urn:test:incremental-workflow","version":"1.0.0","title":"Native review workflow","wosVersionPin":{"envelopeVersion":"1.0"}}}),
         json!({"action":"case_field","name":"income","definition":{"type":"number","canonicalTermRef":"urn:term:income","x-authored":{"keep":true}}}),
         json!({"action":"contract","name":"reviewForm","contract":{"binding":"formspec","ref":"urn:formspec:review","definitionVersion":"2.0.0"}}),
-        json!({"action":"state","pointer":"/lifecycle/states/review","state":{"type":"compound","initialState":"pending","states":{"pending":{"type":"atomic","x-authored":{"keep":true}},"done":{"type":"final"}}}}),
+        json!({"action":"state","pointer":"/lifecycle/states/completed","state":{"type":"final"}}),
+        json!({"action":"state","pointer":"/lifecycle/states/review","state":{"type":"compound","initialState":"pending","states":{"pending":{"type":"atomic","x-authored":{"keep":true},"transitions":[{"event":{"kind":"message","name":"reviewed"},"target":"done"}]},"done":{"type":"final"}},"transitions":[{"event":{"kind":"message","name":"finish"},"target":"completed"}]}}),
         json!({"action":"state_action","pointer":"/lifecycle/states/review/states/pending","phase":"onEntry","value":{"action":"createTask","taskRef":"reviewForm","x-task":{"keep":true}}}),
         json!({"action":"governance","value":{"dueProcess":{"scope":"true"},"reviewProtocols":[{"tags":["review"],"protocols":["independentFirst"]}],"taskCatalog":[{"id":"reviewForm","title":"Review"}]}}),
         json!({"action":"agent","value":{"id":"summaryBot","agentType":"deterministic","modelIdentifier":"native-model","modelVersion":"1.0.0","x-authored":{"keep":true}}}),

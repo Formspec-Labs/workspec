@@ -1,5 +1,8 @@
 //! Native lint diagnostics stay stable across schemas and MCP dispatch.
 
+#[path = "../../wos-conformance/tests/support/local_schemas.rs"]
+mod test_schemas;
+
 use serde_json::{Value, json};
 use wos_authoring::WosProject;
 use wos_lint::{LintDiagnostic, LintSeverity, SourceLocation, SuggestedFix, Tier};
@@ -8,28 +11,16 @@ use wos_mcp::{dispatch::dispatch, registry::ProjectRegistry};
 const TOOLING_ID: &str = "https://wos-spec.org/schemas/tooling/1.0";
 
 fn diagnostic_validators() -> Vec<jsonschema::Validator> {
-    let tooling: Value =
-        serde_json::from_str(include_str!("../../../schemas/wos-tooling.schema.json")).unwrap();
     let standalone: Value = serde_json::from_str(include_str!(
         "../../../schemas/lint/wos-lint-diagnostic.schema.json"
     ))
     .unwrap();
-    let registry = jsonschema::Registry::new()
-        .add(TOOLING_ID, tooling)
-        .unwrap()
-        .prepare()
-        .unwrap();
     [
         standalone,
         json!({"$ref": format!("{TOOLING_ID}#/$defs/lintDiagnostic__Root")}),
     ]
     .iter()
-    .map(|schema| {
-        jsonschema::options()
-            .with_registry(&registry)
-            .build(schema)
-            .unwrap()
-    })
+    .map(test_schemas::validator)
     .collect()
 }
 

@@ -933,6 +933,24 @@
                 "document_json": {
                   "type": "string",
                   "minLength": 1
+                },
+                "definition": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "version": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "url",
+                    "version"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "required": [
@@ -1092,6 +1110,259 @@
           "trace",
           "initialization",
           "observationErrors"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "x-wos-capabilities": []
+    },
+    {
+      "name": "wos_check_authoring",
+      "description": "Check one frozen project through the native static and replay owners and return their shared authoring decision. Explicit drafts remain unverified for handoff.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "validation": {
+            "type": "object",
+            "properties": {
+              "scope": {
+                "enum": [
+                  "document",
+                  "project"
+                ],
+                "default": "document"
+              },
+              "resolved_dependencies": {
+                "type": "array",
+                "default": [],
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "role": {
+                      "enum": [
+                        "definition",
+                        "mapping",
+                        "delivery",
+                        "ontology-alignment"
+                      ]
+                    },
+                    "url": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "version": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "document_json": {},
+                    "definition": {
+                      "type": "object",
+                      "properties": {
+                        "url": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "version": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": [
+                        "url",
+                        "version"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "role",
+                    "url",
+                    "version",
+                    "document_json"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [],
+            "additionalProperties": false,
+            "default": {
+              "scope": "project"
+            }
+          },
+          "replays": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "arguments": {
+                  "type": "object",
+                  "properties": {
+                    "fixture_json": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "resolved_dependencies": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "role": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "url": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "version": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "document_json": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "definition": {
+                            "type": "object",
+                            "properties": {
+                              "url": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "version": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "required": [
+                              "url",
+                              "version"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "role",
+                          "url",
+                          "document_json"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "default": []
+                    },
+                    "clock_start_ms": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 18446744073709551615,
+                      "default": 0
+                    },
+                    "required_observations": {
+                      "type": "array",
+                      "items": {
+                        "enum": [
+                          "configuration",
+                          "caseState",
+                          "stepResults",
+                          "activeTasks",
+                          "timers",
+                          "provenance",
+                          "noticeProvenance",
+                          "guards",
+                          "drains",
+                          "taskSubmission",
+                          "aiPolicy"
+                        ]
+                      },
+                      "default": []
+                    },
+                    "expected_observations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "pointer": {
+                            "type": "string"
+                          },
+                          "expected": {}
+                        },
+                        "required": [
+                          "pointer",
+                          "expected"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "default": []
+                    }
+                  },
+                  "required": [
+                    "fixture_json"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "id",
+                "arguments"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "draft_only": {
+            "type": "boolean",
+            "default": false
+          },
+          "project_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "validation": {
+            "type": "object"
+          },
+          "static_identity": {
+            "type": "string",
+            "minLength": 1
+          },
+          "static_owner_identity": {
+            "type": "object"
+          },
+          "replays": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "decision": {
+            "$ref": "https://wos-spec.org/schemas/tooling/1.0#/$defs/authoringDecision__Root"
+          }
+        },
+        "required": [
+          "validation",
+          "static_identity",
+          "static_owner_identity",
+          "replays",
+          "decision"
         ],
         "additionalProperties": false
       },

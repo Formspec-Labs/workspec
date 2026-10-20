@@ -165,6 +165,7 @@ mod tests {
                 },
             },
             replays: vec![],
+            authoring_decision: None,
             disposition: CheckDisposition::Blocked,
         }
     }

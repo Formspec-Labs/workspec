@@ -69,6 +69,9 @@ pub struct CandidateAssessment {
     pub validation: CheckRecord,
     /// Every selected scenario in request order; absence is explicit not-run.
     pub replays: Vec<CheckRecord>,
+    /// Exact shared native decision and reasons, when the native host executed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authoring_decision: Option<Value>,
     /// Narrow requested-check disposition supplied by the host.
     pub disposition: CheckDisposition,
 }

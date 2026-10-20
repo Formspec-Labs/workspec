@@ -294,6 +294,7 @@ mod tests {
                         report: serde_json::json!({"passed":true}),
                     },
                 }],
+                authoring_decision: None,
                 disposition,
             })
         }

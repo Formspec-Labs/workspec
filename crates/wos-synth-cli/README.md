@@ -50,8 +50,9 @@ Every configured scenario gets a result slot, even after another scenario fails.
 Preparation errors retain their available detail; completed native refusal reports
 retain identity, attempts, differences, initialization and trace without recoding.
 
-Checked convergence requires the owner's passing project-validation aggregate and
-every supplied replay's own passing result. Stored runtime event forms can replay
+Checked convergence consumes the shared native decision from `wos_check_authoring`.
+The assessment retains that exact decision and its reasons as `authoring_decision`,
+alongside the unchanged owner reports. Stored runtime event forms can replay
 successfully while failing the authoring schema; both results remain visible.
 `--draft-only` requests static checks alone and produces an explicit `Draft` outcome.
 Its checks file must omit replay selections. These outcomes describe requested

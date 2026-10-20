@@ -26,6 +26,7 @@ fn representative_trace() -> SynthTrace {
                 validation: CheckRecord { id:"static".into(),arguments:json!({"scope":"project"}),
                     result:ToolResult::Completed { report:json!({"validation":{"scope":"project","status":"not-run","stages":[{"name":"t1-kernel","document":null,"document_version":null,"schema_id":null,"required":true,"status":"not-run","reasons":["native conversion skip"],"diagnostics":[]}],"diagnostics":[]}}) } },
                 replays:vec![CheckRecord{id:format!("scenario-{index}"),arguments:json!({}),result}],
+                authoring_decision:Some(json!({"status":"blocked","reasons":[{"check_id":"scenario","code":"refused","blocking":true}]})),
                 disposition:CheckDisposition::Blocked,
             },
             input_tokens:10,output_tokens:5,cache_read_tokens:3,

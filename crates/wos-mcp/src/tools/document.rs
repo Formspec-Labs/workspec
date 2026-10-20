@@ -353,16 +353,33 @@ mod tests {
             }),
             json!({
                 "type": "parallel", "states": {}, "cancellationPolicy": "wait-all",
-                "regions": {"review": {"initialState": "child", "states": {"child": leaf.clone()}}}
+                "regions": {"review": {"initialState": "child", "states": {
+                    "child": {
+                        "type": "atomic", "description": null,
+                        "transitions": [{"event": {"kind": "message", "name": "reviewed"}, "target": "review_done"}]
+                    },
+                    "review_done": {"type": "final"}
+                }}}
             }),
             json!({"type": "foreach", "collection": "[1]", "body": leaf, "states": {}, "regions": {}}),
         ];
-        for state in cases {
+        for mut state in cases {
+            let mut states = serde_json::Map::new();
+            if state["type"] != "final" {
+                let event = if state["type"] == "parallel" {
+                    json!({"kind": "signal", "name": "$join", "scope": "instance"})
+                } else {
+                    json!({"kind": "message", "name": "finish"})
+                };
+                state["transitions"] = json!([{"event": event, "target": "done"}]);
+                states.insert("done".into(), json!({"type": "final"}));
+            }
+            states.insert("root".into(), state);
             let input = json!({
                 "$wosWorkflow": "1.0", "url": "urn:test:state-export", "version": "1.0.0",
                 "title": "State export regression", "impactLevel": "informational",
                 "actors": [{"id": "system", "type": "system"}],
-                "lifecycle": {"initialState": "root", "states": {"root": state}}
+                "lifecycle": {"initialState": "root", "states": states}
             });
             assert!(
                 validator.is_valid(&input),
@@ -554,7 +571,10 @@ mod tests {
             "lifecycle": {
                 "initialState": "draft",
                 "states": {
-                    "draft": { "type": "atomic" },
+                    "draft": {
+                        "type": "atomic",
+                        "transitions": [{"event": {"kind": "message", "name": "finish"}, "target": "done"}]
+                    },
                     "done": { "type": "final" }
                 }
             }
@@ -600,7 +620,10 @@ mod tests {
             "lifecycle": {
                 "initialState": "open",
                 "states": {
-                    "open": { "type": "atomic" },
+                    "open": {
+                        "type": "atomic",
+                        "transitions": [{"event": {"kind": "message", "name": "finish"}, "target": "closed"}]
+                    },
                     "closed": { "type": "final" }
                 }
             }

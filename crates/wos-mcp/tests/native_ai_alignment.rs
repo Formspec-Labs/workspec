@@ -1,6 +1,9 @@
 // Rust guideline compliant 2026-02-21
 //! Native AI editing and draft navigation have independently authored expectations.
 
+#[path = "../../wos-conformance/tests/support/local_schemas.rs"]
+mod test_schemas;
+
 use serde_json::{Value, json};
 use wos_authoring::WosProject;
 use wos_mcp::{dispatch::dispatch, errors::DispatchError, registry::ProjectRegistry};
@@ -54,7 +57,7 @@ async fn native_product_edits_export_and_reopen_without_reconstructing_agent_pol
         &mut registry,
         "wos_add_state",
         pid,
-        json!({"project_id":pid,"state_id":"open"}),
+        json!({"project_id":pid,"state_id":"open","kind":"final"}),
     )
     .await
     .unwrap();
@@ -98,7 +101,7 @@ async fn native_product_edits_export_and_reopen_without_reconstructing_agent_pol
     );
     assert!(expected["extensions"].get("x-wos-ai").is_none());
     let schema = wos_authoring::native_schema::workflow_schema();
-    let validator = jsonschema::validator_for(schema).unwrap();
+    let validator = test_schemas::validator(schema);
     let errors: Vec<_> = validator
         .iter_errors(&expected)
         .map(|error| error.to_string())

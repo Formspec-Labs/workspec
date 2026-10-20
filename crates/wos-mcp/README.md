@@ -43,6 +43,13 @@ accepts inline fixture JSON, frozen resolved dependencies, controlled clock and
 explicit observation expectations. File-based `base_dir` substitution is
 unsupported. Its evidence records both execution and observation failures.
 
+`wos_check_authoring` freezes one project snapshot, accepts `validation` arguments
+and required `replays` entries (`id`, `arguments`), and invokes the same typed
+helpers as the standalone tools once per check. Its shared native `decision`
+retains stable reasons and identifies missing, failed, refused, or stale evidence.
+`draft_only` returns an explicit unverified draft after static success. Static
+and runtime dependencies remain independently selected.
+
 ```sh
 cargo run -p wos-mcp -- --list-tools
 cargo run -p wos-mcp -- --tool-help wos_edit_workflow

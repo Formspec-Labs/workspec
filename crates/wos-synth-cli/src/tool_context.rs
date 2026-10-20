@@ -137,6 +137,7 @@ impl McpToolContext {
             intake_error: Some(error),
             replays: self
                 .not_run_replays("candidate intake failed before native project registration"),
+            authoring_decision: None,
             disposition: CheckDisposition::Blocked,
         }
     }
@@ -161,27 +162,6 @@ fn normalized_arguments(tool: &str, mut arguments: Value) -> Result<Value, ToolE
     Ok(normalized)
 }
 
-async fn execute(
-    registry: &mut ProjectRegistry,
-    tool: &str,
-    project: &str,
-    arguments: &Value,
-) -> ToolResult {
-    let mut arguments = arguments.clone();
-    arguments["project_id"] = json!(project);
-    match dispatch(registry, tool, project, arguments).await {
-        Ok(report) => ToolResult::Completed { report },
-        Err(error) => ToolResult::Error {
-            error: json!({"operation":tool,"message":error.to_string(),"detail":format!("{error:?}")}),
-        },
-    }
-}
-
-/// Interpret only the native aggregate field selected by this host stopping rule.
-fn owner_passed(result: &ToolResult, pointer: &str, expected: Value) -> bool {
-    matches!(result, ToolResult::Completed { report } if report.pointer(pointer) == Some(&expected))
-}
-
 #[async_trait]
 impl ToolContext for McpToolContext {
     async fn check_candidate(&self, document_json: &str) -> Result<CandidateAssessment, ToolError> {
@@ -203,50 +183,30 @@ impl ToolContext for McpToolContext {
             Ok(project_id) => project_id.to_string(),
             Err(error) => return Ok(self.intake_failure(json!({"operation":"register-native-candidate","message":error.to_string(),"detail":format!("{error:?}")}))),
         };
-        let validation = CheckRecord {
-            id: "static".into(),
-            arguments: self.config.validation.clone(),
-            result: execute(
-                &mut registry,
-                "wos_lint",
-                &project_id,
-                &self.config.validation,
-            )
-            .await,
-        };
-        let mut replays = vec![];
-        for scenario in &self.config.replays {
-            replays.push(CheckRecord {
-                id: scenario.id.clone(),
-                arguments: scenario.arguments.clone(),
-                result: execute(
-                    &mut registry,
-                    "wos_run_conformance",
-                    &project_id,
-                    &scenario.arguments,
-                )
-                .await,
-            });
-        }
-        let has_scenarios = !replays.is_empty();
-        if !has_scenarios {
+        let combined = dispatch(&mut registry,"wos_check_authoring",&project_id,
+            json!({"project_id":project_id,"validation":self.config.validation,"replays":self.config.replays,"draft_only":self.draft_only}))
+            .await.map_err(|error|ToolError::Execution(error.to_string()))?;
+        let validation: CheckRecord = serde_json::from_value(combined["validation"].clone())
+            .map_err(|error| ToolError::Execution(error.to_string()))?;
+        let mut replays: Vec<CheckRecord> = serde_json::from_value(combined["replays"].clone())
+            .map_err(|error| ToolError::Execution(error.to_string()))?;
+        if replays.is_empty() {
             replays = self.not_run_replays(if self.draft_only {
                 "explicit static-only draft; replay not requested"
             } else {
                 "required replay unavailable: no independent scenario supplied"
             });
         }
-        let static_passed = owner_passed(&validation.result, "/validation/status", json!("pass"));
-        let replay_passed = has_scenarios
-            && replays
-                .iter()
-                .all(|record| owner_passed(&record.result, "/passed", json!(true)));
-        let disposition = if static_passed && self.draft_only {
-            CheckDisposition::DraftOnly
-        } else if static_passed && replay_passed {
-            CheckDisposition::ChecksPassed
-        } else {
-            CheckDisposition::Blocked
+        // Presentation maps the shared result; no native pass fields are aggregated here.
+        let disposition = match combined["decision"]["status"].as_str() {
+            Some("verified") => CheckDisposition::ChecksPassed,
+            Some("draft") => CheckDisposition::DraftOnly,
+            Some("blocked") => CheckDisposition::Blocked,
+            _ => {
+                return Err(ToolError::Execution(
+                    "shared authoring decision status is absent or unsupported".into(),
+                ));
+            }
         };
         let findings = match &validation.result {
             ToolResult::Completed { report } => presentation_findings(&report["diagnostics"]),
@@ -257,6 +217,7 @@ impl ToolContext for McpToolContext {
             validation,
             replays,
             intake_error: None,
+            authoring_decision: Some(combined["decision"].clone()),
             disposition,
         })
     }
@@ -331,6 +292,7 @@ mod tests {
                 result: ToolResult::Completed { report: native },
             },
             replays: vec![],
+            authoring_decision: None,
             disposition: CheckDisposition::Blocked,
         };
         let (_, prompt, _) = wos_synth_core::prompts::build_repair_prompt(
@@ -341,17 +303,5 @@ mod tests {
         assert!(prompt.contains("PUB-LINT-001"));
         assert!(prompt.contains("/governance/findings/0"));
         assert!(prompt.contains("LINT-MATRIX.md#PUB-LINT-001"));
-        for report in [
-            json!({}),
-            json!({"passed":null}),
-            json!({"passed":"true"}),
-            json!({"passed":false}),
-        ] {
-            assert!(!owner_passed(
-                &ToolResult::Completed { report },
-                "/passed",
-                json!(true)
-            ));
-        }
     }
 }

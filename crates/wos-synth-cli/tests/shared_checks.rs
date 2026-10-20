@@ -1362,3 +1362,101 @@ async fn generated_id_normalization_is_closed_and_retains_raw_relationships() {
         semantic_native_report(&nullable)
     );
 }
+
+#[tokio::test]
+async fn combined_native_decision_and_reasons_reach_synth_and_binary_unchanged() {
+    let mut failed = scenario();
+    failed["expected_transitions"][0]["target"] = json!("wrong");
+    let mut refused = scenario();
+    refused["documents"] = json!({"kernel":"unselected.json"});
+    for (config, draft, expected_status, expected_code) in [
+        (
+            configuration(vec![json!({"fixture_json":scenario().to_string()})]),
+            false,
+            "verified",
+            None,
+        ),
+        (
+            configuration(vec![json!({"fixture_json":failed.to_string()})]),
+            false,
+            "blocked",
+            Some("failed"),
+        ),
+        (
+            configuration(vec![json!({"fixture_json":refused.to_string()})]),
+            false,
+            "blocked",
+            Some("error"),
+        ),
+        (
+            configuration(vec![]),
+            false,
+            "blocked",
+            Some("no-required-scenarios"),
+        ),
+        (
+            configuration(vec![]),
+            true,
+            "draft",
+            Some("static-only-draft"),
+        ),
+    ] {
+        let native=mcp(&positive(),"wos_check_authoring",&json!({"validation":config["validation"],"replays":config["replays"],"draft_only":draft})).await.unwrap();
+        let assessment = adapter(&config, draft)
+            .check_candidate(&positive().to_string())
+            .await
+            .unwrap();
+        assert_eq!(
+            assessment.authoring_decision.as_ref(),
+            Some(&native["decision"])
+        );
+        assert_eq!(native["decision"]["status"], expected_status);
+        if let Some(code) = expected_code {
+            assert_eq!(native["decision"]["reasons"][0]["code"], code);
+        }
+        assert_eq!(
+            assessment.disposition,
+            match expected_status {
+                "verified" => CheckDisposition::ChecksPassed,
+                "draft" => CheckDisposition::DraftOnly,
+                _ => CheckDisposition::Blocked,
+            }
+        );
+        if !draft {
+            assert_eq!(
+                binary_assessment(&binary_check(&positive().to_string(), &config))["authoring_decision"],
+                native["decision"]
+            );
+        }
+    }
+    let corpus: Value = serde_json::from_str(include_str!(
+        "../../wos-conformance/fixtures/native-ai-replay/vectors.json"
+    ))
+    .unwrap();
+    let vector = corpus["vectors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|v| v["id"] == "review-refused")
+        .unwrap();
+    let config = configuration(vec![replay_arguments(vector)]);
+    let native = mcp(&vector["candidate"], "wos_check_authoring", &config)
+        .await
+        .unwrap();
+    let assessment = adapter(&config, false)
+        .check_candidate(&vector["candidate"].to_string())
+        .await
+        .unwrap();
+    assert_eq!(
+        assessment.authoring_decision.as_ref(),
+        Some(&native["decision"])
+    );
+    assert!(
+        native["decision"]["reasons"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|reason| reason["code"] == "refused")
+    );
+    assert_eq!(assessment.disposition, CheckDisposition::Blocked);
+}

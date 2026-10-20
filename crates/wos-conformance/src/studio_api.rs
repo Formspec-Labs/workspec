@@ -8,6 +8,9 @@
 //! they establish neither
 //! hosted execution nor durable recovery. Studio consumers use this module only.
 
+/// Shared authoring evidence binding and decision.
+pub mod authoring;
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use integrity_canonical::{DigestAlgorithm, canonical_json_bytes, compute_digest};

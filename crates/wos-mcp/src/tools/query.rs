@@ -38,21 +38,56 @@ pub async fn wos_lint(
     let args = crate::catalog::validate_arguments("wos_lint", &args)?;
     let pid = require_string_arg(&args, "project_id")?;
     let project = registry.get(pid)?;
-    let scope: wos_lint::studio_api::ValidationScope =
-        serde_json::from_value(args["scope"].clone())
-            .map_err(|error| ToolError::InvalidArguments(error.to_string()))?;
-    let dependencies: Vec<wos_lint::studio_api::ResolvedDependency> =
-        serde_json::from_value(args["resolved_dependencies"].clone())
-            .map_err(|error| ToolError::InvalidArguments(error.to_string()))?;
     let candidate = project.native_snapshot();
-    let validation = wos_lint::studio_api::validate(wos_lint::studio_api::ValidationRequest {
-        candidate: &candidate,
-        dependencies: &dependencies,
+    let validation = static_check(&candidate, &args)?;
+    serialize_static(&validation)
+}
+
+fn static_request<'a>(
+    candidate: &'a Value,
+    dependencies: &'a [wos_lint::studio_api::ResolvedDependency],
+    scope: wos_lint::studio_api::ValidationScope,
+) -> wos_lint::studio_api::ValidationRequest<'a> {
+    wos_lint::studio_api::ValidationRequest {
+        candidate,
+        dependencies,
         scope,
-    });
-    let mut result = lint_summary(&validation.diagnostics);
-    result["validation"] =
-        serde_json::to_value(validation).map_err(|error| ToolError::Internal(error.to_string()))?;
+    }
+}
+fn static_selection(
+    args: &Value,
+) -> Result<
+    (
+        wos_lint::studio_api::ValidationScope,
+        Vec<wos_lint::studio_api::ResolvedDependency>,
+    ),
+    ToolError,
+> {
+    Ok((
+        serde_json::from_value(args["scope"].clone())
+            .map_err(|error| ToolError::InvalidArguments(error.to_string()))?,
+        serde_json::from_value(args["resolved_dependencies"].clone())
+            .map_err(|error| ToolError::InvalidArguments(error.to_string()))?,
+    ))
+}
+fn static_check(
+    candidate: &Value,
+    args: &Value,
+) -> Result<wos_conformance::studio_api::authoring::StaticCheck, ToolError> {
+    let (scope, dependencies) = static_selection(args)?;
+    wos_conformance::studio_api::authoring::validate_static(static_request(
+        candidate,
+        &dependencies,
+        scope,
+    ))
+    .map_err(|error| ToolError::Internal(error.to_string()))
+}
+fn serialize_static(
+    check: &wos_conformance::studio_api::authoring::StaticCheck,
+) -> Result<Value, ToolError> {
+    let mut result = lint_summary(&check.report().diagnostics);
+    result["validation"] = serde_json::to_value(check.report())
+        .map_err(|error| ToolError::Internal(error.to_string()))?;
     Ok(result)
 }
 
@@ -95,9 +130,19 @@ pub async fn wos_run_conformance(
     _project_id: &str,
     args: Value,
 ) -> Result<Value, ToolError> {
-    use wos_conformance::studio_api::{
-        ObservationExpectation, ReplayRequest, ResolvedDependency, prepare_replay, replay,
-    };
+    let args = crate::catalog::validate_arguments("wos_run_conformance", &args)?;
+    let project_id = require_string_arg(&args, "project_id")?;
+    let candidate = registry.get(project_id)?.native_snapshot();
+    let (prepared, result) = replay_check(&candidate, &args)?;
+    let _ = prepared;
+    serde_json::to_value(result).map_err(|error| ToolError::Internal(error.to_string()))
+}
+
+fn replay_request(
+    candidate: &Value,
+    args: &Value,
+) -> Result<wos_conformance::studio_api::ReplayRequest, ToolError> {
+    use wos_conformance::studio_api::{ObservationExpectation, ReplayRequest, ResolvedDependency};
     #[derive(serde::Deserialize)]
     #[serde(deny_unknown_fields)]
     struct DependencyInput {
@@ -108,12 +153,6 @@ pub async fn wos_run_conformance(
         #[serde(default)]
         definition: Option<wos_conformance::studio_api::DefinitionSelection>,
     }
-    // Direct handler callers and dispatch use the same declaration and defaults.
-    let args = crate::catalog::validate_arguments("wos_run_conformance", &args)?;
-    let project_id = require_string_arg(&args, "project_id")?;
-    let candidate = registry.get(project_id)?.native_snapshot();
-    let candidate_bytes = serde_json::to_vec(&candidate)
-        .map_err(|error| ToolError::Internal(format!("snapshot serialization failed: {error}")))?;
     let fixture_json = require_string_arg(&args, "fixture_json")?.to_string();
     let parse_error = |error: serde_json::Error| {
         ToolError::InvalidArguments(format!("invalid replay input: {error}"))
@@ -126,8 +165,9 @@ pub async fn wos_run_conformance(
         serde_json::from_value(args["expected_observations"].clone()).map_err(parse_error)?;
     let clock_start_ms: u64 =
         serde_json::from_value(args["clock_start_ms"].clone()).map_err(parse_error)?;
-    let request = ReplayRequest {
-        candidate_bytes,
+    Ok(ReplayRequest {
+        candidate_bytes: serde_json::to_vec(candidate)
+            .map_err(|error| ToolError::Internal(error.to_string()))?,
         dependencies: dependencies
             .into_iter()
             .map(|input| ResolvedDependency {
@@ -142,13 +182,113 @@ pub async fn wos_run_conformance(
         clock_start_ms,
         required_observations,
         expectations,
-    };
-    let prepared =
-        prepare_replay(request).map_err(|error| ToolError::InvalidArguments(error.to_string()))?;
+    })
+}
+fn replay_check(
+    candidate: &Value,
+    args: &Value,
+) -> Result<
+    (
+        wos_conformance::studio_api::PreparedReplay,
+        wos_conformance::studio_api::ReplayResult,
+    ),
+    ToolError,
+> {
+    use wos_conformance::studio_api::{prepare_replay, replay};
+    let prepared = prepare_replay(replay_request(candidate, args)?)
+        .map_err(|error| ToolError::InvalidArguments(error.to_string()))?;
     let result = replay(&prepared)
         .map_err(|error| ToolError::InvalidArguments(format!("replay failed: {error}")))?;
-    serde_json::to_value(result)
-        .map_err(|error| ToolError::Internal(format!("replay serialization failed: {error}")))
+    Ok((prepared, result))
+}
+
+/// Check one frozen candidate through the existing static and replay owners.
+///
+/// # Errors
+/// Returns catalog argument errors or native project lookup errors.
+pub async fn wos_check_authoring(
+    registry: &mut ProjectRegistry,
+    _project_id: &str,
+    args: Value,
+) -> Result<Value, ToolError> {
+    use wos_conformance::studio_api::authoring::*;
+    let args = crate::catalog::validate_arguments("wos_check_authoring", &args)?;
+    let pid = require_string_arg(&args, "project_id")?;
+    let candidate = registry.get(pid)?.native_snapshot();
+    let mut validation_args = args["validation"].clone();
+    validation_args["project_id"] = serde_json::json!(pid);
+    let validation_args = crate::catalog::validate_arguments("wos_lint", &validation_args)?;
+    let (scope, dependencies) = static_selection(&validation_args)?;
+    let validation = static_check(&candidate, &validation_args)?;
+    let scenarios = args["replays"].as_array().expect("catalog scenario array");
+    // Required inventory exists independently of every attempted/returned outcome.
+    let ids: Vec<String> = scenarios
+        .iter()
+        .map(|scenario| scenario["id"].as_str().expect("catalog scenario ID").into())
+        .collect();
+    let mut actual = vec![];
+    for scenario in scenarios {
+        let mut arguments = scenario["arguments"].clone();
+        arguments["project_id"] = serde_json::json!(pid);
+        let result = crate::catalog::validate_arguments("wos_run_conformance", &arguments)
+            .and_then(|args| replay_check(&candidate, &args))
+            .map_err(|source| crate::errors::DispatchError::ToolFailed {
+                tool: "wos_run_conformance".into(),
+                source,
+            });
+        actual.push(result);
+    }
+    let errors: Vec<_> = actual
+        .iter()
+        .map(|result| result.as_ref().err().map(ToString::to_string))
+        .collect();
+    let compact: Vec<_> = actual
+        .iter()
+        .map(|result| {
+            result.as_ref().ok().map(|(prepared, result)| {
+                (
+                    ReplaySelection::native(prepared),
+                    ReplayCheck::native(prepared, result),
+                )
+            })
+        })
+        .collect();
+    let evidence: Vec<_> = ids
+        .iter()
+        .zip(&compact)
+        .zip(&errors)
+        .map(|((id, compact), error)| ReplayEvidence {
+            id,
+            outcome: match compact {
+                Some((selection, check)) => ReplayOutcome::Completed { selection, check },
+                None => ReplayOutcome::Error(error.as_deref().expect("actual error")),
+            },
+        })
+        .collect();
+    let decision = decide_authoring(
+        AuthoringRequirements {
+            required_scenarios: &ids,
+            draft_only: args["draft_only"] == true,
+        },
+        StaticEvidence::Completed {
+            request: static_request(&candidate, &dependencies, scope),
+            check: &validation,
+        },
+        &evidence,
+        &[],
+    );
+    // Serialize complete native reports only after the typed shared decision.
+    let records:Vec<_>=scenarios.iter().zip(&ids).zip(&actual).map(|((scenario,id),result)| {
+        let record=match result {
+            Ok((_,report))=>serde_json::json!({"state":"completed","report":report}),
+            Err(error)=>serde_json::json!({"state":"error","error":{"operation":"wos_run_conformance","message":error.to_string(),"detail":format!("{error:?}")}}),
+        };
+        serde_json::json!({"id":id,"arguments":scenario["arguments"],"result":record})
+    }).collect();
+    Ok(
+        serde_json::json!({"validation":{"id":"static","arguments":args["validation"],"result":{"state":"completed","report":serialize_static(&validation)?}},
+        "static_identity":validation.identity(),"static_owner_identity":validation.owner_identity(),"replays":records,"decision":decision}),
+    )
 }
 
 // ── wos_preview_state_graph ───────────────────────────────────────────────────

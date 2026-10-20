@@ -1,6 +1,9 @@
 // Rust guideline compliant 2026-02-21
 //! Native authoring, query, export and exact selected-project replay integration.
 
+#[path = "../../wos-conformance/tests/support/local_schemas.rs"]
+mod test_schemas;
+
 use wos_mcp::{dispatch::dispatch, registry::ProjectRegistry};
 
 #[tokio::test]
@@ -42,7 +45,7 @@ async fn full_round_trip_with_10_plus_tool_calls() {
             &mut registry,
             "wos_add_state",
             &pid,
-            serde_json::json!({ "project_id": pid, "state_id": state_id }),
+            serde_json::json!({ "project_id": pid, "state_id": state_id, "kind": if state_id == "closed" { "final" } else { "atomic" } }),
         )
         .await
         .unwrap_or_else(|e| panic!("wos_add_state({state_id}) must succeed: {e}"));
@@ -446,7 +449,7 @@ async fn native_agents_description_survives_export_and_reopen() {
         ],
         "lifecycle": {
             "initialState": "review",
-            "states": {"review": {"type": "atomic", "transitions": [], "tags": [], "onEntry": [], "onExit": [], "extensions": {}}},
+            "states": {"review": {"type": "final", "transitions": [], "tags": [], "onEntry": [], "onExit": [], "extensions": {}}},
             "milestones": {}
         },
         "agents": [
@@ -458,7 +461,7 @@ async fn native_agents_description_survives_export_and_reopen() {
     });
     let schema: serde_json::Value =
         serde_json::from_str(include_str!("../../../schemas/wos-workflow.schema.json")).unwrap();
-    let validator = jsonschema::validator_for(&schema).unwrap();
+    let validator = test_schemas::validator(&schema);
     assert!(
         validator.is_valid(&source),
         "canonical source must satisfy workflow schema"

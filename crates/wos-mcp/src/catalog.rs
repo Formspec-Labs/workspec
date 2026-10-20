@@ -372,6 +372,34 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ],
     );
     result.push(tool("wos_run_conformance","Replay the selected current native Workflow and explicit frozen dependencies. Fixture assertions cannot replace selected documents. Mutable base_dir paths are unsupported.",replay_input,replay_output,handler!(tools::wos_run_conformance),true,&[]));
+    // Reuse the owning declarations; each nested request has no host project ID.
+    let mut validation_input = result
+        .iter()
+        .find(|tool| tool.name == "wos_lint")
+        .expect("lint declared")
+        .input
+        .clone();
+    let mut replay_arguments = result
+        .iter()
+        .find(|tool| tool.name == "wos_run_conformance")
+        .expect("replay declared")
+        .input
+        .clone();
+    for input in [&mut validation_input, &mut replay_arguments] {
+        input["properties"]
+            .as_object_mut()
+            .expect("properties")
+            .remove("project_id");
+        input["required"]
+            .as_array_mut()
+            .expect("required")
+            .retain(|field| field != "project_id");
+    }
+    validation_input["default"] = json!({"scope":"project"});
+    result.push(tool("wos_check_authoring","Check one frozen project through the native static and replay owners and return their shared authoring decision. Explicit drafts remain unverified for handoff.",
+        scoped(json!({"validation":validation_input,"replays":{"type":"array","default":[],"items":object(json!({"id":string(),"arguments":replay_arguments}),&["id","arguments"])},"draft_only":{"type":"boolean","default":false}}),&[]),
+        object(json!({"validation":{"type":"object"},"static_identity":string(),"static_owner_identity":{"type":"object"},"replays":array(json!({"type":"object"})),"decision":{"$ref":"https://wos-spec.org/schemas/tooling/1.0#/$defs/authoringDecision__Root"}}),&["validation","static_identity","static_owner_identity","replays","decision"]),
+        handler!(tools::wos_check_authoring),true,&[]));
     let metadata_fields: &'static [&'static str] = &[
         "$wosWorkflow",
         "wosVersionPin",

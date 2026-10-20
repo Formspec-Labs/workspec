@@ -1858,6 +1858,9 @@
         },
         "disposition": {
           "$ref": "#/$defs/synthTrace__CheckDisposition"
+        },
+        "authoring_decision": {
+          "$ref": "#/$defs/authoringDecision__Root"
         }
       },
       "required": [
@@ -2475,6 +2478,50 @@
           ]
         }
       }
+    },
+    "authoringDecision__Root": {
+      "type": "object",
+      "description": "Exact shared native authoring decision and ordered reasons, retained without host aggregation.",
+      "properties": {
+        "status": {
+          "enum": [
+            "verified",
+            "draft",
+            "blocked"
+          ]
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "check_id": {
+                "type": "string"
+              },
+              "code": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              },
+              "blocking": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "check_id",
+              "code",
+              "blocking"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "status",
+        "reasons"
+      ],
+      "additionalProperties": false
     }
   }
 }
