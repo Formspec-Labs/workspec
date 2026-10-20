@@ -23,6 +23,8 @@ The WOS Signature Profile defines workflow semantics for signature ceremonies in
 
 The profile is a parallel seam. It does not add kernel actor types and does not define cryptographic certificate-of-completion bundles. Formspec captures signing and consent evidence. WOS governs the workflow semantics and emits semantic evidence. Trellis anchors that evidence and owns export-bundle composition.
 
+The [Signing Adapter Catalog](signature-ports.md) defines replaceable adapter defaults, alternatives, profile compositions and their qualification requirements. It preserves this profile's signing rules; catalog acceptance alone does not qualify an implementation.
+
 ---
 
 ## Status of This Document

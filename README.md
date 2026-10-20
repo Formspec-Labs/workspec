@@ -174,6 +174,8 @@ The behavioral specs that govern processor obligations live alongside the kernel
 | Advanced Governance (L3) | [`specs/advanced/advanced-governance.md`](specs/advanced/advanced-governance.md) — DCR, equity, SMT verifiable constraints |
 | Assurance | [`specs/assurance/assurance.md`](specs/assurance/assurance.md) — assurance levels, attestation |
 
+The [Signing Adapter Catalog](specs/profiles/signature-ports.md) records P-1..P-14 defaults, alternatives and profile conformance requirements beside the Signature Profile. Its implementation-gap inventory prevents treating catalog acceptance as completed adapter or deployment qualification.
+
 The final source disposition under ADR 0076 D-8 is:
 
 - Retain [`specs/profiles/signature.md`](specs/profiles/signature.md) as the normative signing prose owner with its existing section anchors. Its JSON shape is embedded in `wos-workflow.schema.json` as `signature`.
