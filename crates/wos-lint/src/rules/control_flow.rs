@@ -319,11 +319,7 @@ pub(crate) fn check(
     }
     for (index, active) in configurations.iter().enumerate() {
         if graph[index].is_empty() && !outcomes[index] {
-            let located = active
-                .iter()
-                .copied()
-                .find(|&i| nodes[i].state.kind == StateKind::Atomic)
-                .unwrap_or(active[0]);
+            let located = finding_location(active, &nodes);
             diagnostics.push(LintDiagnostic::t1_error("WOS-FLOW-003", &nodes[located].path,
                 format!("Reachable nonfinal configuration {:?} has no possible local/inherited exit or enabled parallel join; shortest structural route {}", names(active, &nodes), route(index, &predecessor, &configurations, &nodes))));
         }
@@ -338,15 +334,29 @@ pub(crate) fn check(
                 .all(|&i| !outcomes[i] && graph[i].iter().all(|j| members.contains(j)))
         {
             let active = &configurations[first];
-            let located = active
-                .iter()
-                .copied()
-                .find(|&i| nodes[i].state.kind == StateKind::Atomic)
-                .unwrap_or(active[0]);
+            let located = finding_location(active, &nodes);
             diagnostics.push(LintDiagnostic::t1_error("WOS-FLOW-004", &nodes[located].path,
                 format!("Reachable closed configuration cycle containing {:?} has no structural route to process finality or supported regional business finality; shortest structural route {}", names(active, &nodes), route(first, &predecessor, &configurations, &nodes))));
         }
     }
+}
+
+fn finding_location(active: &[usize], nodes: &[Node<'_>]) -> usize {
+    // Prefer the stranded business state over an independent receipt loop when
+    // locating a closed configuration. The message still names all active states.
+    active
+        .iter()
+        .copied()
+        .find(|&i| {
+            nodes[i].state.kind == StateKind::Atomic && nodes[i].state.transitions.is_empty()
+        })
+        .or_else(|| {
+            active
+                .iter()
+                .copied()
+                .find(|&i| nodes[i].state.kind == StateKind::Atomic)
+        })
+        .unwrap_or(active[0])
 }
 
 fn route(
