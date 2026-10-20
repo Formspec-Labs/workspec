@@ -1,4 +1,4 @@
-//! The synthesis loop — generate → lint → repair → repeat.
+//! The synthesis loop — generate → check → repair → repeat.
 //!
 //! Pure orchestration over the [`crate::Prompter`] and [`crate::ToolContext`]
 //! traits. No network code, no provider-specific code, no IO beyond what the
@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::errors::SynthError;
 use crate::prompter::{Completion, Prompter};
 use crate::prompts::{Layer, build_generate_prompt, build_repair_prompt};
-use crate::tool_context::{CheckDisposition, LintFinding, ToolContext};
+use crate::tool_context::{CandidateAssessment, CheckDisposition, LintFinding, ToolContext};
 use crate::trace::{IterationRecord, RunInterruption, SynthTrace};
 
 /// Result of running the loop to completion (or to the iteration cap).
@@ -68,8 +68,6 @@ pub async fn synthesize(
     for index in 0..cap {
         let assessment = tools.check_candidate(&attempt).await?;
         let disposition = assessment.disposition;
-        let findings = assessment.findings.clone();
-
         trace.push(IterationRecord {
             index,
             attempt: attempt.clone(),
@@ -78,6 +76,11 @@ pub async fn synthesize(
             output_tokens: completion.output_tokens,
             cache_read_tokens: completion.cache_read_tokens,
         });
+        let assessment = &trace
+            .iterations
+            .last()
+            .expect("iteration just recorded")
+            .assessment;
 
         if disposition == CheckDisposition::DraftOnly {
             return Ok(SynthOutcome::Draft {
@@ -95,13 +98,13 @@ pub async fn synthesize(
         if index + 1 >= cap {
             return Ok(SynthOutcome::Unconverged {
                 last_attempt: attempt,
-                last_findings: findings,
+                last_findings: assessment.findings.clone(),
                 trace,
             });
         }
 
         let (next_attempt, next_completion) =
-            match repair(provider, &attempt, &findings, layer).await {
+            match repair(provider, &attempt, assessment, layer).await {
                 Ok(completion) => completion,
                 Err(error) => {
                     trace.interruption = Some(RunInterruption {
@@ -141,10 +144,10 @@ async fn generate(
 async fn repair(
     provider: &dyn Prompter,
     prior: &str,
-    findings: &[LintFinding],
+    assessment: &CandidateAssessment,
     layer: Layer,
 ) -> Result<(String, Completion), SynthError> {
-    let (system, user, anchors) = build_repair_prompt(prior, findings, layer);
+    let (system, user, anchors) = build_repair_prompt(prior, assessment, layer);
     let completion = provider.complete(&system, &user, &anchors).await?;
     let text = strip_fences(&completion.text).to_string();
     Ok((text, completion))

@@ -6,6 +6,9 @@ use wos_synth_core::{
     SynthOutcome, SynthTrace, ToolResult,
 };
 
+#[path = "../../wos-conformance/tests/support/local_schemas.rs"]
+mod test_schemas;
+
 fn representative_trace() -> SynthTrace {
     let mut trace = SynthTrace::new();
     for (index, result) in [
@@ -32,18 +35,7 @@ fn representative_trace() -> SynthTrace {
 }
 
 fn compile(schema: &Value) -> jsonschema::Validator {
-    let tooling: Value =
-        serde_json::from_str(include_str!("../../../schemas/wos-tooling.schema.json")).unwrap();
-    let registry = jsonschema::Registry::new()
-        .add("https://wos-spec.org/schemas/tooling/1.0", tooling)
-        .unwrap()
-        .prepare()
-        .unwrap();
-    jsonschema::options()
-        .with_registry(&registry)
-        .with_draft(jsonschema::Draft::Draft202012)
-        .build(schema)
-        .unwrap()
+    test_schemas::validator(schema)
 }
 
 fn schemas() -> [Value; 2] {

@@ -10,6 +10,9 @@ mod replay_semantics;
 mod test_schemas;
 use replay_semantics::semantic_native_report;
 
+#[path = "support/repair_feedback.rs"]
+mod repair_feedback;
+
 fn positive() -> Value {
     serde_json::from_str(include_str!(
         "../../wos-lint/tests/fixtures/shared-validation/positive.json"
@@ -65,7 +68,8 @@ fn actual_binary_passes_schema_valid_typed_event_candidate() {
 use clap::Parser;
 use wos_synth_cli::{Cli, Command as SynthCommand, McpToolContext, generate_with};
 use wos_synth_core::{
-    CheckDisposition, Layer, SynthOutcome, SynthTrace, ToolContext, ToolResult, synthesize,
+    CheckDisposition, Layer, Severity, SynthOutcome, SynthTrace, ToolContext, ToolResult,
+    synthesize,
 };
 
 fn configuration(arguments: Vec<Value>) -> Value {
@@ -591,7 +595,8 @@ async fn actual_generate_options_use_real_tools_beyond_session_limit_and_preserv
     };
     let provider = wos_synth_mock::MockPrompter::new();
     let mut bad = positive();
-    bad["lifecycle"]["initialState"] = json!("done");
+    // A false guard preserves structural reachability while failing actual replay.
+    bad["lifecycle"]["states"]["review"]["transitions"][0]["guard"] = json!("false");
     provider.expect_n("", bad.to_string(), 24);
     provider.expect("", positive().to_string());
     assert_eq!(
@@ -607,8 +612,12 @@ async fn actual_generate_options_use_real_tools_beyond_session_limit_and_preserv
             "pass"
         );
         assert!(
-            iteration.assessment.findings.is_empty(),
-            "real behavioral failure is independent of static findings"
+            iteration
+                .assessment
+                .findings
+                .iter()
+                .all(|finding| { matches!(finding.severity, Severity::Warning | Severity::Info) }),
+            "real behavioral failure is independent of blocking static findings"
         );
         assert_eq!(iteration.assessment.disposition, CheckDisposition::Blocked);
         assert_eq!(

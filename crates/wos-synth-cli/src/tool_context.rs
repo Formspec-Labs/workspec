@@ -322,9 +322,20 @@ mod tests {
             native["suggestedFix"]
         );
         assert_eq!(findings[0].related_docs, diagnostic.related_docs);
+        let assessment = CandidateAssessment {
+            findings,
+            intake_error: None,
+            validation: CheckRecord {
+                id: "static".into(),
+                arguments: json!({}),
+                result: ToolResult::Completed { report: native },
+            },
+            replays: vec![],
+            disposition: CheckDisposition::Blocked,
+        };
         let (_, prompt, _) = wos_synth_core::prompts::build_repair_prompt(
             "{}",
-            &findings,
+            &assessment,
             wos_synth_core::Layer::Kernel,
         );
         assert!(prompt.contains("PUB-LINT-001"));

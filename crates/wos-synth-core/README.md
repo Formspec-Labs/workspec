@@ -55,6 +55,14 @@ available error/not-run reason. The host reads the owners' aggregate results;
 findings are presentation for repair and do not decide convergence. A fresh native
 project registry belongs to each candidate check.
 
+Each repair prompt receives the latest retained assessment directly: structured
+lint findings, complete native reports and traces, scenario arguments and
+expectations, candidate identities, and explicit errors or not-run reasons.
+The provider repairs the candidate; the selected checks stay fixed and execute
+again against that candidate. Earlier successful reports cannot satisfy a later
+candidate's checks. Large reports may exceed a provider's context limit; a
+provider refusal remains `Interrupted` with the complete trace retained.
+
 `Converged` means the requested static and independent replay checks passed.
 `Draft` requires explicit static-only mode and records behavior as unchecked.
 `Interrupted` retains completed check evidence and the original repair-provider
