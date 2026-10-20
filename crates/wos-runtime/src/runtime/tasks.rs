@@ -380,11 +380,24 @@ impl WosRuntime {
         } else {
             None
         };
+        // Construct the existing locator prospectively; persist only after admission.
+        let accepted_artifact = build_artifact(
+            &record,
+            task_id,
+            TaskArtifactKind::Accepted,
+            response.clone(),
+            actor_id,
+            &now_iso,
+        );
         let signature_outcome = self.signature_affirmation_for_submission(
             &record,
             &task,
-            &response,
-            signature_evidence.as_deref(),
+            super::signature::SignatureSubmissionSource {
+                response: &response,
+                signature_evidence: signature_evidence.as_deref(),
+                adapter: &*adapter,
+                accepted_artifact: &accepted_artifact,
+            },
             actor_id,
             &now_iso,
         )?;
@@ -456,14 +469,6 @@ impl WosRuntime {
             &record.process.definition_url,
             &record.process.definition_version,
         )?;
-        let accepted_artifact = build_artifact(
-            &record,
-            task_id,
-            TaskArtifactKind::Accepted,
-            response.clone(),
-            actor_id,
-            &now_iso,
-        );
         record.artifacts.insert(
             accepted_artifact.artifact_id.clone(),
             accepted_artifact.clone(),
@@ -524,15 +529,22 @@ impl WosRuntime {
                         &outcome.signer_id,
                         &outcome.signed_at,
                     )?;
+                    let mut details = serde_json::json!({
+                        "artifactId": accepted_artifact.artifact_id,
+                        "caseMutated": case_mutated,
+                    });
+                    if signature_evidence.as_ref().is_some_and(|values| {
+                        values.iter().any(|value| value.document_claims.is_some())
+                    }) {
+                        details["signatureAffirmationId"] =
+                            serde_json::Value::String(outcome.record.id.clone());
+                    }
                     provenance.push(outcome.record);
                     provenance.push(ProvenanceRecord::task_lifecycle(
                         ProvenanceKind::TaskCompleted,
                         task_id,
                         Some(actor_id),
-                        Some(serde_json::json!({
-                            "artifactId": accepted_artifact.artifact_id,
-                            "caseMutated": case_mutated,
-                        })),
+                        Some(details),
                     ));
                 }
                 AdmissionOutcome::AdmissionFailed(_) => {
@@ -580,6 +592,8 @@ impl WosRuntime {
         self.store.save_record(record)?;
         Ok(result)
     }
+
+
 
     /// Loads a provenance window by cursor and limit.
     ///

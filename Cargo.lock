@@ -1350,6 +1350,7 @@ dependencies = [
 name = "formspec-lint"
 version = "0.2.0"
 dependencies = [
+ "base64 0.22.1",
  "csscolorparser",
  "fel-core",
  "formspec-core",
@@ -1357,6 +1358,7 @@ dependencies = [
  "semver_rs",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -6566,9 +6568,11 @@ dependencies = [
  "formspec-eval",
  "formspec-lint",
  "integrity-canonical",
+ "integrity-cbor",
  "integrity-cose",
  "integrity-signature",
  "integrity-signature-ring",
+ "jsonschema 0.46.1",
  "ring",
  "semver_rs",
  "serde",

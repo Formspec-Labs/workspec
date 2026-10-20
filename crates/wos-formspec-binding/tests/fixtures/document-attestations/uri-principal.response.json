@@ -1,0 +1,164 @@
+{
+  "$formspecResponse": "1.0",
+  "definitionUrl": "urn:test:document-attestation",
+  "definitionVersion": "1.0.0",
+  "status": "completed",
+  "data": {
+    "signature": null,
+    "confirm": null
+  },
+  "authored": "2026-10-20T19:00:00Z",
+  "validationResults": [],
+  "id": "urn:test:ih9d:response:principal",
+  "author": {
+    "id": "applicant",
+    "name": "Applicant Test Signer"
+  },
+  "extensions": {
+    "x-wos-signer-authority": {
+      "class": "self"
+    },
+    "x-formspec-document-attestations": {
+      "version": "1.0",
+      "signingActId": "uri-principal-act",
+      "fieldPath": "signature",
+      "signerId": "applicant",
+      "signerName": "Applicant Test Signer",
+      "signedAt": "2026-10-20T19:01:00Z",
+      "signingIntent": "urn:wos:signing-intent:applicant-signature",
+      "consentAccepted": true,
+      "consentTextRef": "urn:example:consent:esign:v1",
+      "consentVersion": "1.0",
+      "affirmationText": "I agree to the selected documents.",
+      "signatureProvider": "urn:example:signing-provider",
+      "ceremonyId": "urn:test:ih9d:ceremony:uri-principal-act",
+      "attestations": [
+        {
+          "signatureId": "sig-1",
+          "documentRef": {
+            "documentId": "terms-v2",
+            "locale": "es-US"
+          },
+          "witnessedSignatureRef": null
+        },
+        {
+          "signatureId": "sig-2",
+          "documentRef": {
+            "documentId": "privacy-v1",
+            "locale": "en"
+          },
+          "witnessedSignatureRef": null
+        }
+      ],
+      "identityBinding": {
+        "method": "email-otp",
+        "assuranceLevel": "standard",
+        "providerRef": "urn:test:identity:email-otp"
+      }
+    }
+  },
+  "resolvedDocuments": [
+    {
+      "documentId": "terms-v2",
+      "locale": "es-US",
+      "source": {
+        "kind": "inline",
+        "data": "wqFIb2xhIQ=="
+      },
+      "mediaType": "text/plain; charset=utf-8",
+      "documentHash": "ffb948556a252fec4aa0601da677fda38bb2ab0be63cc9c726bebfd1b3500d62",
+      "presentationHash": "fc83aa2143f9a128991a7d52ccf2e3abb1fd7dcbf76a63c281ce9e899c383a24",
+      "pinnedAt": "2026-10-20T19:00:00Z"
+    },
+    {
+      "documentId": "privacy-v1",
+      "locale": "en",
+      "source": {
+        "kind": "inline",
+        "data": "UHJpdmFjeSBub3RpY2U="
+      },
+      "mediaType": "text/plain",
+      "documentHash": "c385c344080699844442bf2dd893618a4702d5d3a3e11ed632dfad839fa2b8c4",
+      "presentationHash": "cb0dab8d5c424aac093d94df3d0a3d44e6fb8022ec3bc802f4678099f1c5210f",
+      "pinnedAt": "2026-10-20T19:00:00Z"
+    }
+  ],
+  "authoredSignatures": [
+    {
+      "signatureId": "sig-1",
+      "documentId": "terms-v2",
+      "signingIntent": "urn:wos:signing-intent:applicant-signature",
+      "signatureValue": "0oRYS6MBJwRTaWg5ZC10ZXN0LWFwcGxpY2FudDoAAQADeCx1cm46Zm9ybXNwZWM6c2lnLW1ldGhvZDplZDI1NTE5LWNvc2Utc2lnbjFAMaD2WED3bKpyR7dum5khuUdrvOOaSIh7aFd06X93IFbdreV73+0fGDF3V3jNmoFww90uuNBmM9+w6rOO1sHP0qqD+XEP",
+      "signerName": "Applicant Test Signer",
+      "consentAccepted": true,
+      "consentTextRef": "urn:example:consent:esign:v1",
+      "consentVersion": "1.0",
+      "affirmationText": "I agree to the selected documents.",
+      "signedPayload": {
+        "canonicalization": "formspec-response-signing-v1",
+        "digestAlgorithm": "sha-256",
+        "digest": "5a167d8df70485a34bc723576d9c8a03c17a293d2aa13df427e6cd94a08c2f02",
+        "responseId": "urn:test:ih9d:response:principal",
+        "definitionUrl": "urn:test:document-attestation",
+        "definitionVersion": "1.0.0",
+        "signedAt": "2026-10-20T19:01:00Z",
+        "signingIntent": "urn:wos:signing-intent:applicant-signature"
+      },
+      "documentHash": "ffb948556a252fec4aa0601da677fda38bb2ab0be63cc9c726bebfd1b3500d62",
+      "documentHashAlgorithm": "sha-256",
+      "signatureProvider": "urn:example:signing-provider",
+      "ceremonyId": "urn:test:ih9d:ceremony:uri-principal-act",
+      "signerId": "applicant",
+      "identityBinding": {
+        "method": "email-otp",
+        "assuranceLevel": "standard",
+        "providerRef": "urn:test:identity:email-otp"
+      },
+      "signingActId": "uri-principal-act",
+      "documentRef": {
+        "documentId": "terms-v2",
+        "locale": "es-US"
+      },
+      "presentationHash": "fc83aa2143f9a128991a7d52ccf2e3abb1fd7dcbf76a63c281ce9e899c383a24",
+      "witnessedSignatureRef": null
+    },
+    {
+      "signatureId": "sig-2",
+      "documentId": "privacy-v1",
+      "signingIntent": "urn:wos:signing-intent:applicant-signature",
+      "signatureValue": "0oRYS6MBJwRTaWg5ZC10ZXN0LWFwcGxpY2FudDoAAQADeCx1cm46Zm9ybXNwZWM6c2lnLW1ldGhvZDplZDI1NTE5LWNvc2Utc2lnbjFAMaD2WED3bKpyR7dum5khuUdrvOOaSIh7aFd06X93IFbdreV73+0fGDF3V3jNmoFww90uuNBmM9+w6rOO1sHP0qqD+XEP",
+      "signerName": "Applicant Test Signer",
+      "consentAccepted": true,
+      "consentTextRef": "urn:example:consent:esign:v1",
+      "consentVersion": "1.0",
+      "affirmationText": "I agree to the selected documents.",
+      "signedPayload": {
+        "canonicalization": "formspec-response-signing-v1",
+        "digestAlgorithm": "sha-256",
+        "digest": "5a167d8df70485a34bc723576d9c8a03c17a293d2aa13df427e6cd94a08c2f02",
+        "responseId": "urn:test:ih9d:response:principal",
+        "definitionUrl": "urn:test:document-attestation",
+        "definitionVersion": "1.0.0",
+        "signedAt": "2026-10-20T19:01:00Z",
+        "signingIntent": "urn:wos:signing-intent:applicant-signature"
+      },
+      "documentHash": "c385c344080699844442bf2dd893618a4702d5d3a3e11ed632dfad839fa2b8c4",
+      "documentHashAlgorithm": "sha-256",
+      "signatureProvider": "urn:example:signing-provider",
+      "ceremonyId": "urn:test:ih9d:ceremony:uri-principal-act",
+      "signerId": "applicant",
+      "identityBinding": {
+        "method": "email-otp",
+        "assuranceLevel": "standard",
+        "providerRef": "urn:test:identity:email-otp"
+      },
+      "signingActId": "uri-principal-act",
+      "documentRef": {
+        "documentId": "privacy-v1",
+        "locale": "en"
+      },
+      "presentationHash": "cb0dab8d5c424aac093d94df3d0a3d44e6fb8022ec3bc802f4678099f1c5210f",
+      "witnessedSignatureRef": null
+    }
+  ]
+}

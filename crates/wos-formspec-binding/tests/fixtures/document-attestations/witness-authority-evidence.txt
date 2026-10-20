@@ -1,0 +1,1 @@
+TEST ONLY: retained supporting bytes for the ih9d witness-authority fixture. This is asserted fixture evidence, not a qualified observation, provider identity proof, commission, legal authority or production credential.

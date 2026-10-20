@@ -334,12 +334,38 @@ impl ImmutableFormspecProcessor {
 
 impl FormspecProcessor for ImmutableFormspecProcessor {
     fn validate_envelope(&self, response: &Value) -> Result<Vec<Value>, BindingError> {
-        let result = formspec_lint::lint(response);
+        let definition = if crate::document_attestations::has_document_claims(response) {
+            match (
+                response["definitionUrl"].as_str(),
+                response["definitionVersion"].as_str(),
+            ) {
+                (Some(url), Some(version)) => {
+                    self.definitions.get(&(url.into(), version.into())).cloned()
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
+        let result = formspec_lint::lint_with_options(
+            response,
+            &LintOptions {
+                definition_document: definition,
+                ..LintOptions::default()
+            },
+        );
         if result.document_type != Some(DocumentType::Response) {
             return Err(invalid("submission must be a native Formspec Response"));
         }
         Ok(result.diagnostics.into_iter().filter(|diagnostic| diagnostic.severity == LintSeverity::Error)
             .map(|diagnostic| json!({"code":format!("{:?}",diagnostic.code),"path":diagnostic.path,"message":diagnostic.message})).collect())
+    }
+
+    fn validate_document_attestation_response(
+        &self,
+        response: &Value,
+    ) -> Result<Vec<Value>, BindingError> {
+        self.validate_envelope(response)
     }
 
     fn validate_definition(

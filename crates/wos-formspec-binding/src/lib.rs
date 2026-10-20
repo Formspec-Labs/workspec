@@ -3,6 +3,9 @@
 //! Formspec binding adapter for `wos-runtime`.
 
 pub mod selected;
+mod document_attestations;
+
+pub use document_attestations::DocumentSignatureVerification;
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
@@ -190,6 +193,20 @@ pub struct FormspecSignedPayloadRef {
 #[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FormspecAuthoredSignatureRef {
+    /// Shared act identifier from the committed document gesture.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signing_act_id: Option<String>,
+    /// Exact committed document and locale.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub document_ref: Option<wos_runtime::binding::SignatureDocumentRef>,
+    /// Explicit committed presentation digest.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub presentation_hash: Option<String>,
+    /// Presence distinguishes legacy absence from an explicit non-witness null.
+    #[allow(clippy::option_option)]
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "document_attestations::present_witness")]
+    pub witnessed_signature_ref: Option<Option<wos_runtime::binding::SourceSignatureRef>>,
+
     /// Stable signature identifier.
     pub signature_id: String,
 
@@ -1198,6 +1215,17 @@ pub trait FormspecProcessor {
         response: &serde_json::Value,
     ) -> Result<Vec<serde_json::Value>, BindingError>;
 
+    /// Validates declared-document claims against the actual selected Definition.
+    ///
+    /// # Errors
+    /// Refuses when no native paired Definition capability is available.
+    fn validate_document_attestation_response(
+        &self,
+        _response: &serde_json::Value,
+    ) -> Result<Vec<serde_json::Value>, BindingError> {
+        Err(BindingError::Unsupported("selected document Definition context unavailable".into()))
+    }
+
     /// Validate `response.data` against the pinned Definition.
     fn validate_definition(
         &self,
@@ -1266,6 +1294,7 @@ pub trait FormspecProcessor {
 pub struct FormspecBinding<P> {
     processor: P,
     receipt_trust: ReceiptTrust,
+    document_verification: Option<DocumentSignatureVerification>,
 }
 
 impl<P> FormspecBinding<P> {
@@ -1274,6 +1303,7 @@ impl<P> FormspecBinding<P> {
         Self {
             processor,
             receipt_trust: ReceiptTrust::default(),
+            document_verification: None,
         }
     }
 
@@ -1285,6 +1315,7 @@ impl<P> FormspecBinding<P> {
         Self {
             processor,
             receipt_trust: ReceiptTrust::new(trusted_receipt_signers),
+            document_verification: None,
         }
     }
 }
@@ -1405,6 +1436,27 @@ where
         self.processor.map_task_response(task, response)
     }
 
+    fn retained_document_signature_evidence(
+        &self,
+        response: &serde_json::Value,
+        task_id: &str,
+    ) -> Result<Vec<SignatureEvidence>, BindingError> {
+        if let Some(signed_task) = response
+            .get("data")
+            .and_then(|data| data.get("signatureTaskId"))
+            && signed_task.as_str() != Some(task_id)
+        {
+            return Err(BindingError::InvalidInput(
+                "retained signed signatureTaskId differs from accepted task".into(),
+            ));
+        }
+        let evidence = self.document_signature_evidence(response)?;
+        if evidence.iter().any(|source| source.admission_failure.is_some() || source.primitive_verification != SignaturePrimitiveStatus::Verified) {
+            return Err(BindingError::InvalidInput("retained document source is not verified".into()));
+        }
+        Ok(evidence)
+    }
+
     fn signature_evidence(
         &self,
         task: &ActiveTask,
@@ -1412,6 +1464,9 @@ where
     ) -> Result<Option<Vec<SignatureEvidence>>, BindingError> {
         let signatures = parse_authored_signatures_for_evidence(response)?;
         if signatures.is_empty() {
+            if document_attestations::has_document_claims(response) {
+                return self.document_signature_evidence(response).map(Some);
+            }
             return Ok(None);
         }
         // The bounded native profile signs the actual task association inside
@@ -1434,6 +1489,9 @@ where
                     "signed signatureTaskId does not match actual task".into(),
                 ));
             }
+        }
+        if document_attestations::has_document_claims(response) {
+            return self.document_signature_evidence(response).map(Some);
         }
         let source_response_ref = signed_task.map(|_| task.task_id.clone()).or_else(|| {
             response
@@ -1487,6 +1545,7 @@ where
                 ));
             }
             evidence.push(SignatureEvidence {
+                document_claims: None,
                 source_system: "formspec".to_string(),
                 source_signature_id: signature.signature_id,
                 signing_act_id: None,

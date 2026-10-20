@@ -1914,6 +1914,7 @@ mod tests {
                 },
             };
             Ok(Some(vec![crate::binding::SignatureEvidence {
+                document_claims: None,
                 source_system: "formspec-test-harness".to_string(),
                 source_signature_id: "sig013-harness".to_string(),
                 signing_act_id: None,
@@ -2088,6 +2089,7 @@ mod tests {
                 },
             };
             Ok(Some(vec![crate::binding::SignatureEvidence {
+                document_claims: None,
                 source_system: "formspec-test-harness".to_string(),
                 source_signature_id: "sig013-harness".to_string(),
                 signing_act_id: None,
