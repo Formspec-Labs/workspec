@@ -1794,13 +1794,13 @@ fn g059_no_operating_hours_skips_check() {
 // ========================================================================
 
 // G-062 / G-065 — notification template fixtures use the merged delivery
-// sidecar shape: `delivery.notificationTemplates` per ADR 0076 D-3.
+// sidecar shape: `delivery.notifications.templates` per ADR 0076 D-3.
 
 fn delivery_doc_with_notification_templates(templates: serde_json::Value) -> serde_json::Value {
     json!({
         "$wosDelivery": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
-        "notificationTemplates": templates,
+        "notifications": {"templates": templates},
     })
 }
 

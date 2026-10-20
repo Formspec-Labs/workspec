@@ -78,3 +78,11 @@ def test_transport_claims_keep_lexical_validation_separate_from_relationships():
     assert "transportResults" in state["required"]
     assert state["properties"]["transportResults"]["uniqueItems"] is True
     assert "default" not in state["properties"]["transportResults"]
+
+
+def test_protected_characteristic_selection_is_closed_and_source_bound():
+    source = {"sourceVersion": "selected-source", "sectionAnchor": "language-policy", "retainedSha256": "sha256:" + "a" * 64}
+    good = {"casePointer": "/household/primaryLanguage", "sourceRefs": [source]}
+    assert validator("ProtectedCharacteristicBinding").is_valid(good)
+    for invalid in [{**good, "casePointer": "household.language"}, {**good, "sourceRefs": []}, {**good, "sourceRefs": [None]}, {**good, "inferredFromName": True}]:
+        assert not validator("ProtectedCharacteristicBinding").is_valid(invalid)

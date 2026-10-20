@@ -231,7 +231,7 @@ pub fn validate_callback_actions(
     kernel: &super::kernel::KernelDocument,
     profile: Option<&IntegrationProfileDocument>,
 ) -> Result<(), String> {
-    use super::kernel::{Action, ActionKind, State};
+    use super::kernel::{Action, ActionKind};
     fn action(value: &Action, profile: Option<&IntegrationProfileDocument>) -> Result<(), String> {
         let binding = value
             .service_ref
@@ -253,31 +253,6 @@ pub fn validate_callback_actions(
                 }
             }
         }
-        if let Some(compensation) = &value.compensating_action {
-            action(compensation, profile)?;
-        }
-        Ok(())
-    }
-    fn state(value: &State, profile: Option<&IntegrationProfileDocument>) -> Result<(), String> {
-        for value in value.on_entry.iter().chain(value.on_exit.iter()).chain(
-            value
-                .transitions
-                .iter()
-                .flat_map(|transition| transition.actions.iter()),
-        ) {
-            action(value, profile)?;
-        }
-        for nested in value.states.values().chain(
-            value
-                .regions
-                .values()
-                .flat_map(|region| region.states.values()),
-        ) {
-            state(nested, profile)?;
-        }
-        if let Some(body) = &value.body {
-            state(body, profile)?;
-        }
         Ok(())
     }
     if let Some(profile) = profile {
@@ -285,8 +260,11 @@ pub fn validate_callback_actions(
             binding.validate_dispatch()?;
         }
     }
-    for value in kernel.lifecycle.states.values() {
-        state(value, profile)?;
-    }
-    Ok(())
+    let mut result = Ok(());
+    super::kernel::visit_actions(kernel, |_, value| {
+        if result.is_ok() {
+            result = action(value, profile);
+        }
+    });
+    result
 }

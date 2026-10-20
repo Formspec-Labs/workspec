@@ -1293,3 +1293,104 @@ fn deserialize_callback_phase<'de, D: serde::Deserializer<'de>>(
 ) -> Result<Option<super::integration::CallbackPhase>, D::Error> {
     super::integration::CallbackPhase::deserialize(deserializer).map(Some)
 }
+
+/// Visit authored states without evaluating entry actions or merging state identities.
+///
+/// Paths are canonical JSON pointers. Nested states, regions, and ForEach bodies
+/// remain distinct even when their state names repeat.
+pub fn visit_states<'a>(kernel: &'a KernelDocument, mut visitor: impl FnMut(&str, &'a State)) {
+    fn segment(value: &str) -> String {
+        value.replace('~', "~0").replace('/', "~1")
+    }
+    fn visit<'a>(state: &'a State, path: String, visitor: &mut impl FnMut(&str, &'a State)) {
+        visitor(&path, state);
+        for (name, child) in &state.states {
+            visit(child, format!("{path}/states/{}", segment(name)), visitor);
+        }
+        for (name, region) in &state.regions {
+            for (child_name, child) in &region.states {
+                visit(
+                    child,
+                    format!(
+                        "{path}/regions/{}/states/{}",
+                        segment(name),
+                        segment(child_name)
+                    ),
+                    visitor,
+                );
+            }
+        }
+        if let Some(body) = &state.body {
+            visit(body, format!("{path}/body"), visitor);
+        }
+    }
+    for (name, state) in &kernel.lifecycle.states {
+        visit(
+            state,
+            format!("/lifecycle/states/{}", segment(name)),
+            &mut visitor,
+        );
+    }
+}
+
+/// Visit every authored lifecycle action, including recursive compensation actions.
+pub fn visit_actions<'a>(kernel: &'a KernelDocument, mut visitor: impl FnMut(&str, &'a Action)) {
+    fn action<'a>(value: &'a Action, path: String, visitor: &mut impl FnMut(&str, &'a Action)) {
+        visitor(&path, value);
+        if let Some(compensation) = &value.compensating_action {
+            action(compensation, format!("{path}/compensatingAction"), visitor);
+        }
+    }
+    visit_states(kernel, |path, state| {
+        for (phase, actions) in [("onEntry", &state.on_entry), ("onExit", &state.on_exit)] {
+            for (index, value) in actions.iter().enumerate() {
+                action(value, format!("{path}/{phase}/{index}"), &mut visitor);
+            }
+        }
+        for (index, transition) in state.transitions.iter().enumerate() {
+            for (action_index, value) in transition.actions.iter().enumerate() {
+                action(
+                    value,
+                    format!("{path}/transitions/{index}/actions/{action_index}"),
+                    &mut visitor,
+                );
+            }
+        }
+    });
+}
+
+impl ContractReference {
+    /// Return a nonblank authored Formspec Definition pin, without inferring a version.
+    pub fn formspec_definition_version(&self) -> Option<&str> {
+        (self.binding == "formspec")
+            .then_some(self.definition_version.as_deref())
+            .flatten()
+            .filter(|version| !version.trim().is_empty())
+    }
+}
+
+/// Static createTask contract error independent of resolution or task presentation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TaskContractIssue {
+    /// The action names an undeclared contract key.
+    MissingContract(String),
+    /// A Formspec task contract lacks a nonblank authored Definition version.
+    MissingFormspecVersion(String),
+}
+/// Check a task's declared contract using the canonical typed action and contract.
+pub fn task_contract_issue(kernel: &KernelDocument, action: &Action) -> Option<TaskContractIssue> {
+    if action.action != ActionKind::CreateTask {
+        return None;
+    }
+    let key = action.contract_ref.as_ref()?;
+    match kernel.contracts.get(key) {
+        None => Some(TaskContractIssue::MissingContract(key.clone())),
+        Some(contract)
+            if contract.binding == "formspec"
+                && contract.formspec_definition_version().is_none() =>
+        {
+            Some(TaskContractIssue::MissingFormspecVersion(key.clone()))
+        }
+        _ => None,
+    }
+}

@@ -19,6 +19,9 @@ impl jsonschema::Retrieve for OfflineRetriever {
         uri: &jsonschema::Uri<String>,
     ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
         let text = match uri.as_str() {
+            "https://wos-spec.org/schemas/delivery/1.0" => {
+                include_str!("../../../schemas/sidecars/wos-delivery.schema.json")
+            }
             "https://wos-spec.org/schemas/wos-reference-replay.schema.json" => {
                 include_str!("../../../schemas/wos-reference-replay.schema.json")
             }
@@ -43,9 +46,9 @@ pub(crate) fn validate_reference_fragment(
 ) -> Result<(), ConformanceError> {
     static VALIDATORS: std::sync::LazyLock<BTreeMap<&'static str, jsonschema::Validator>> =
         std::sync::LazyLock::new(|| {
-            ["GovernanceRecipe", "SignatureRecipe", "NotificationTemplateDocument"].into_iter().map(|name| {
+            ["GovernanceRecipe", "SignatureRecipe", "NotificationTemplateDocument", "Delivery"].into_iter().map(|name| {
             let validator = jsonschema::options().with_retriever(OfflineRetriever)
-                .build(&serde_json::json!({"$ref":format!("https://wos-spec.org/schemas/wos-reference-replay.schema.json#/$defs/{name}")}))
+                .build(&serde_json::json!({"$ref":if name=="Delivery" {"https://wos-spec.org/schemas/delivery/1.0".to_string()}else{format!("https://wos-spec.org/schemas/wos-reference-replay.schema.json#/$defs/{name}")}}))
                 .expect("bundled native recipe schema compiles");
             (name, validator)
         }).collect()

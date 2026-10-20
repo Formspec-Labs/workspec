@@ -766,144 +766,40 @@ fn resolve_workflow(
             }
         }
     }
-    // Lifecycle actions have nested states/regions/transition actions/compensation.
-    // Follow the owning authored structure and inspect only declared action objects.
-    resolve_states(
-        &workflow["lifecycle"]["states"],
-        "/lifecycle/states",
-        workflow,
-        dependencies,
-        diagnostics,
-    );
-}
-fn resolve_states(
-    states: &Value,
-    path: &str,
-    workflow: &Value,
-    dependencies: &[&ResolvedDependency],
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    if let Some(states) = states.as_object() {
-        for (name, state) in states {
-            resolve_state(
-                state,
-                &format!("{path}/{}", pointer_token(name)),
-                workflow,
-                dependencies,
-                diagnostics,
-            );
-        }
-    }
-}
-fn resolve_state(
-    state: &Value,
-    path: &str,
-    workflow: &Value,
-    dependencies: &[&ResolvedDependency],
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    for phase in ["onEntry", "onExit"] {
-        if let Some(actions) = state[phase].as_array() {
-            for (index, action) in actions.iter().enumerate() {
-                resolve_action(
-                    action,
-                    &format!("{path}/{phase}/{index}"),
-                    workflow,
-                    dependencies,
-                    diagnostics,
-                );
+    // Schema/parse failures remain owning validation failures. Resolve native
+    // references only from typed authored actions, never action-shaped user data.
+    if let Ok(kernel) = serde_json::from_value::<wos_core::KernelDocument>(workflow.clone()) {
+        wos_core::model::kernel::visit_actions(&kernel, |path, action| {
+            if let Some(issue) = wos_core::model::kernel::task_contract_issue(&kernel, action) {
+                let message = match issue {
+                    wos_core::model::kernel::TaskContractIssue::MissingContract(key) => {
+                        format!("task contract entry {key} is not declared")
+                    }
+                    wos_core::model::kernel::TaskContractIssue::MissingFormspecVersion(_) => {
+                        "Formspec task contract requires an exact authored Definition version pin"
+                            .into()
+                    }
+                };
+                diagnostics.push(reference_error(&format!("{path}/contractRef"), message));
             }
-        }
-    }
-    if let Some(transitions) = state["transitions"].as_array() {
-        for (index, transition) in transitions.iter().enumerate() {
-            if let Some(actions) = transition["actions"].as_array() {
-                for (action_index, action) in actions.iter().enumerate() {
-                    resolve_action(
-                        action,
-                        &format!("{path}/transitions/{index}/actions/{action_index}"),
-                        workflow,
-                        dependencies,
-                        diagnostics,
-                    );
+            if action.action == wos_core::model::kernel::ActionKind::CreateTask {
+                for (field, url) in [
+                    ("prefillMappingRef", action.prefill_mapping_ref.as_ref()),
+                    ("responseMappingRef", action.response_mapping_ref.as_ref()),
+                ] {
+                    if let Some(url) = url {
+                        selected_reference(
+                            DependencyRole::Mapping,
+                            url,
+                            None,
+                            &format!("{path}/{field}"),
+                            dependencies,
+                            diagnostics,
+                        );
+                    }
                 }
             }
-        }
-    }
-    resolve_states(
-        &state["states"],
-        &format!("{path}/states"),
-        workflow,
-        dependencies,
-        diagnostics,
-    );
-    if let Some(regions) = state["regions"].as_object() {
-        for (name, region) in regions {
-            resolve_states(
-                &region["states"],
-                &format!("{path}/regions/{}/states", pointer_token(name)),
-                workflow,
-                dependencies,
-                diagnostics,
-            );
-        }
-    }
-    if let Some(body) = state.get("body") {
-        resolve_state(
-            body,
-            &format!("{path}/body"),
-            workflow,
-            dependencies,
-            diagnostics,
-        );
-    }
-}
-fn resolve_action(
-    action: &Value,
-    path: &str,
-    workflow: &Value,
-    dependencies: &[&ResolvedDependency],
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    if action["action"] == "createTask" {
-        if let Some(reference) = action["contractRef"].as_str() {
-            if workflow["contracts"].get(reference).is_none() {
-                diagnostics.push(reference_error(
-                    &format!("{path}/contractRef"),
-                    format!("task contract entry {reference} is not declared"),
-                ));
-            } else if workflow["contracts"][reference]["binding"] == "formspec"
-                && workflow["contracts"][reference]["definitionVersion"]
-                    .as_str()
-                    .is_none_or(|version| version.trim().is_empty())
-            {
-                diagnostics.push(reference_error(
-                    &format!("{path}/contractRef"),
-                    "Formspec task contract requires an exact authored Definition version pin",
-                ));
-            }
-        }
-        for field in ["prefillMappingRef", "responseMappingRef"] {
-            if let Some(url) = action[field].as_str() {
-                selected_reference(
-                    DependencyRole::Mapping,
-                    url,
-                    None,
-                    &format!("{path}/{field}"),
-                    dependencies,
-                    diagnostics,
-                );
-            }
-        }
-    }
-    if let Some(compensation) = action.get("compensatingAction") {
-        resolve_action(
-            compensation,
-            &format!("{path}/compensatingAction"),
-            workflow,
-            dependencies,
-            diagnostics,
-        );
+        });
     }
 }
 

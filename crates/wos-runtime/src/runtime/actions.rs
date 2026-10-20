@@ -13,7 +13,7 @@ use wos_core::instance::{
     ActiveTask, ActiveTaskStatus, FormspecTaskContext, PendingEvent, PendingEventOrigin,
     WorkflowProcess,
 };
-use wos_core::model::kernel::{ActionKind, ContractReference, KernelDocument, State};
+use wos_core::model::kernel::{ActionKind, ContractReference, KernelDocument, TaskContractIssue};
 use wos_core::{ProvenanceKind, ProvenanceRecord};
 
 use crate::integration::IntegrationBinding;
@@ -32,53 +32,33 @@ fn form_definition_version<'a>(
     contract_key: &str,
     contract: &'a ContractReference,
 ) -> Result<&'a str, RuntimeError> {
-    contract
-        .definition_version
-        .as_deref()
-        .filter(|version| !version.trim().is_empty())
-        .ok_or_else(|| {
-            RuntimeError::MissingMetadata(format!(
-                "formspec task contract '{contract_key}' requires definitionVersion"
-            ))
-        })
+    contract.formspec_definition_version().ok_or_else(|| {
+        RuntimeError::MissingMetadata(format!(
+            "formspec task contract '{contract_key}' requires definitionVersion"
+        ))
+    })
 }
 
 pub(super) fn validate_task_contract_pins(kernel: &KernelDocument) -> Result<(), RuntimeError> {
-    fn validate_state(state: &State, kernel: &KernelDocument) -> Result<(), RuntimeError> {
-        let actions = state.on_entry.iter().chain(&state.on_exit).chain(
-            state
-                .transitions
-                .iter()
-                .flat_map(|transition| &transition.actions),
-        );
-        for action in actions.filter(|action| action.action == ActionKind::CreateTask) {
-            if let Some(key) = &action.contract_ref {
-                let contract = kernel
-                    .contracts
-                    .get(key)
-                    .ok_or_else(|| RuntimeError::ContractNotFound(key.clone()))?;
-                if contract.binding == "formspec" {
-                    form_definition_version(key, contract)?;
-                }
-            }
+    let mut error = None;
+    wos_core::model::kernel::visit_actions(kernel, |_, action| {
+        if error.is_none() {
+            error =
+                wos_core::model::kernel::task_contract_issue(kernel, action).map(
+                    |issue| match issue {
+                        TaskContractIssue::MissingContract(key) => {
+                            RuntimeError::ContractNotFound(key)
+                        }
+                        TaskContractIssue::MissingFormspecVersion(key) => {
+                            RuntimeError::MissingMetadata(format!(
+                                "formspec task contract '{key}' requires definitionVersion"
+                            ))
+                        }
+                    },
+                );
         }
-        for child in state.states.values() {
-            validate_state(child, kernel)?;
-        }
-        for region in state.regions.values() {
-            for child in region.states.values() {
-                validate_state(child, kernel)?;
-            }
-        }
-        if let Some(body) = state.body.as_deref() {
-            validate_state(body, kernel)?;
-        }
-        Ok(())
-    }
-    for state in kernel.lifecycle.states.values() {
-        validate_state(state, kernel)?;
-    }
-    Ok(())
+    });
+    error.map_or(Ok(()), Err)
 }
 
 impl WosRuntime {

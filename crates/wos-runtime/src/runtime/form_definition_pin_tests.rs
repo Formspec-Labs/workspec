@@ -192,3 +192,38 @@ fn migration_refuses_missing_target_form_pin_without_changing_original_evidence(
         serde_json::to_value(&before.provenance_log).unwrap()
     );
 }
+
+#[test]
+fn future_compensation_contract_errors_refuse_before_persistence_or_presentation() {
+    for missing_contract in [false, true] {
+        let mut document = kernel_json();
+        document["lifecycle"]["states"]["Correction"]["onEntry"] = serde_json::json!([{
+            "action":"log", "message":"future compensated operation",
+            "compensatingAction":{"action":"createTask","taskRef":"correction","assignTo":"reviewer","contractRef":"correction"}
+        }]);
+        if missing_contract {
+            document["contracts"]
+                .as_object_mut()
+                .unwrap()
+                .remove("correction");
+        } else {
+            document["contracts"]["correction"]
+                .as_object_mut()
+                .unwrap()
+                .remove("definitionVersion");
+        }
+        let mut runtime = runtime_with_kernel(serde_json::from_value(document).unwrap());
+        let presenter = RecordingPresenter::default();
+        let presented = presenter.presented.clone();
+        runtime.presenter = Box::new(presenter);
+        let id = stack_common_typeid::mint_process_id();
+        let error = runtime.create_process(request(&id)).unwrap_err();
+        assert!(if missing_contract {
+            matches!(error, RuntimeError::ContractNotFound(_))
+        } else {
+            matches!(error, RuntimeError::MissingMetadata(_))
+        });
+        assert!(runtime.store.load_record(&id).is_err());
+        assert!(presented.lock().unwrap().is_empty());
+    }
+}

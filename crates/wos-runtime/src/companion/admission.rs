@@ -259,14 +259,17 @@ fn validate_selected(
         }
         if let Some(audit) = governance.get("audit").and_then(Value::as_object) {
             for (tier, requirements) in audit {
+                // Exact tag coverage and protected evidence are admitted by the selected native owner.
                 let implemented_native_tier = native_due_process
-                    && matches!(tier.as_str(), "reasoning" | "counterfactual")
+                    && matches!(tier.as_str(), "reasoningTier" | "counterfactualTier")
                     && requirements
                         .get("requiredForTags")
                         .and_then(Value::as_array)
                         .is_some_and(|tags| {
-                            tags.iter()
-                                .all(|tag| tag.as_str() == Some("adverse-decision"))
+                            !tags.is_empty()
+                                && tags.iter().all(|tag| {
+                                    tag.as_str().is_some_and(|tag| !tag.trim().is_empty())
+                                })
                         });
                 if nonempty_array(requirements.get("requiredForTags")) && !implemented_native_tier {
                     return Err(refuse(

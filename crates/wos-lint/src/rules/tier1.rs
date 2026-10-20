@@ -334,8 +334,8 @@ fn check_delivery(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
         check_business_calendar_value(cal, "/calendar", diagnostics);
     }
     // Notification template rules (G-062, G-065)
-    if let Some(templates) = root.get("notificationTemplates") {
-        check_notification_template_value(templates, "/notificationTemplates", diagnostics);
+    if let Some(templates) = root.pointer("/notifications/templates") {
+        check_notification_template_value(templates, "/notifications/templates", diagnostics);
     }
     // Correspondence (CM-001)
     if let Some(corr) = root.get("correspondence") {

@@ -265,6 +265,59 @@ fn refused(reason: impl Into<String>) -> ConformanceError {
     ConformanceError::Parse(format!("replay-refused: {}", reason.into()))
 }
 
+fn validate_selected_delivery(
+    value: &Value,
+    reference: Option<&crate::reference_replay::ReferenceReplayAdapters>,
+) -> Result<(), ConformanceError> {
+    crate::reference_replay::validate_reference_fragment("Delivery", value)?;
+    let diagnostics = wos_lint::lint_document(
+        &serde_json::to_string(value).map_err(|error| refused(error.to_string()))?,
+    )
+    .map_err(|error| refused(error.to_string()))?;
+    if let Some(diagnostic) = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.severity >= wos_lint::LintSeverity::Error)
+    {
+        return Err(refused(format!(
+            "selected-delivery {}: {}",
+            diagnostic.rule_id, diagnostic.message
+        )));
+    }
+    if value.get("calendar").is_some() || value.get("correspondence").is_some() {
+        return Err(refused("unsupported-reference-delivery-block"));
+    }
+    let selected: wos_core::model::notification_template::NotificationTemplateDocument =
+        serde_json::from_value(
+            value
+                .get("notifications")
+                .cloned()
+                .ok_or_else(|| refused("missing-notifications-block"))?,
+        )
+        .map_err(|error| refused(error.to_string()))?;
+    let reference = reference
+        .ok_or_else(|| refused("canonical-delivery-requires-selected-reference-templates"))?;
+    let mut templates = serde_json::Map::new();
+    for document in &reference.templates {
+        for (key, template) in &document.templates {
+            if templates
+                .insert(
+                    key.clone(),
+                    serde_json::to_value(template).map_err(|error| refused(error.to_string()))?,
+                )
+                .is_some()
+            {
+                return Err(refused("duplicate-selected-reference-template"));
+            }
+        }
+    }
+    let selected =
+        serde_json::to_value(selected.templates).map_err(|error| refused(error.to_string()))?;
+    if selected != Value::Object(templates) {
+        return Err(refused("selected-delivery-template-mismatch"));
+    }
+    Ok(())
+}
+
 fn parse(bytes: &[u8], role: &str) -> Result<Value, ConformanceError> {
     serde_json::from_slice(bytes).map_err(|error| refused(format!("invalid-json {role}: {error}")))
 }
@@ -657,7 +710,7 @@ pub(crate) fn prepare_replay_with_reference(
         } else {
             if !matches!(
                 role.as_str(),
-                "businessCalendar" | "notifications" | "postureDeclaration"
+                "businessCalendar" | "notifications" | "postureDeclaration" | "delivery"
             ) {
                 return Err(refused(format!("unsupported-dependency-role {role}")));
             }
@@ -693,6 +746,18 @@ pub(crate) fn prepare_replay_with_reference(
             {
                 return Err(refused(format!("unsupported-dependency-document {role}")));
             }
+            if role == "delivery" {
+                if selected.contains_key("notifications")
+                    || selected.contains_key("businessCalendar")
+                {
+                    return Err(refused("overlapping-delivery-selection"));
+                }
+                validate_selected_delivery(&value, reference)?;
+            } else if matches!(role.as_str(), "notifications" | "businessCalendar")
+                && selected.contains_key("delivery")
+            {
+                return Err(refused("overlapping-delivery-selection"));
+            }
             if role == "businessCalendar" && value.get("calendar").is_none() {
                 return Err(refused("missing-calendar-block"));
             }
@@ -716,6 +781,11 @@ pub(crate) fn prepare_replay_with_reference(
             &value,
         )?);
         selected.insert(role.clone(), value);
+    }
+    if reference.is_some_and(|adapters| !adapters.templates.is_empty())
+        && !selected.contains_key("delivery")
+    {
+        return Err(refused("missing-selected-delivery"));
     }
     if candidate["signature"]
         .get("posturePolicy")

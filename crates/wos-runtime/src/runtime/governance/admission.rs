@@ -5,6 +5,7 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde_json::Value;
 use std::collections::HashSet;
 use wos_core::model::due_process::*;
+use wos_core::model::governance_checks::{GovernanceChecks, GovernanceIssueKind, LifecycleIndex};
 use wos_core::model::kernel::{ActorKind, KernelDocument, Transition};
 use wos_events::provenance::CaseFileSnapshot;
 
@@ -215,11 +216,92 @@ pub(super) fn actor(
     }
     Ok(())
 }
+fn validate_audit(
+    raw: &Value,
+    lifecycle: &LifecycleIndex,
+    policy: &DueProcessExecution,
+    checks: &GovernanceChecks,
+) -> Result<(), RefusalCode> {
+    let audit = raw
+        .pointer("/governance/audit")
+        .and_then(Value::as_object)
+        .ok_or(RefusalCode::UnsupportedProfile)?;
+    if audit
+        .keys()
+        .any(|key| !matches!(key.as_str(), "reasoningTier" | "counterfactualTier"))
+    {
+        return Err(RefusalCode::UnsupportedProfile);
+    }
+    for (name, flag) in [
+        ("reasoningTier", "requireDecisionRequirements"),
+        ("counterfactualTier", "requireProtectedCharacteristics"),
+    ] {
+        let tier = audit
+            .get(name)
+            .and_then(Value::as_object)
+            .ok_or(RefusalCode::UnsupportedProfile)?;
+        if tier
+            .keys()
+            .any(|key| key != "requiredForTags" && key != flag)
+        {
+            return Err(RefusalCode::UnsupportedProfile);
+        }
+        let tags = if name == "reasoningTier" {
+            let typed = checks
+                .audit
+                .reasoning_tier
+                .as_ref()
+                .ok_or(RefusalCode::UnsupportedProfile)?;
+            if typed.require_decision_requirements {
+                return Err(RefusalCode::UnsupportedProfile);
+            }
+            &typed.required_for_tags
+        } else {
+            let typed = checks
+                .audit
+                .counterfactual_tier
+                .as_ref()
+                .ok_or(RefusalCode::UnsupportedProfile)?;
+            &typed.required_for_tags
+        };
+        for tag in tags {
+            let locations = lifecycle.transition_locations(tag);
+            if locations.is_empty()
+                || locations.iter().any(|location| {
+                    !policy
+                        .determinations
+                        .iter()
+                        .any(|binding| binding.transition == *location)
+                })
+            {
+                return Err(RefusalCode::UnboundTransition);
+            }
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn validate(
     cap: &ReferenceDueProcessCapabilities,
     kernel: &KernelDocument,
 ) -> Result<(Value, DueProcessExecution), RefusalCode> {
     let (raw, policy) = selected(cap, kernel)?;
+    let lifecycle = LifecycleIndex::new(kernel);
+    let governance = raw
+        .get("governance")
+        .ok_or(RefusalCode::InvalidConfiguration)?;
+    let checks = wos_core::model::governance_checks::check_reference_governance(
+        kernel, governance, &lifecycle,
+    );
+    if let Some(issue) = checks.issues.first() {
+        return Err(match issue.kind {
+            GovernanceIssueKind::UnknownAuditTag => RefusalCode::UnboundTransition,
+            GovernanceIssueKind::MalformedDeclaration => RefusalCode::InvalidConfiguration,
+            GovernanceIssueKind::CounterfactualInputs => RefusalCode::ExplanationRejected,
+            _ => RefusalCode::UnsupportedProfile,
+        });
+    }
+    validate_audit(&raw, &lifecycle, &policy, &checks)?;
     let due = raw
         .pointer("/governance/dueProcess")
         .ok_or(RefusalCode::InvalidConfiguration)?;
@@ -229,8 +311,6 @@ pub(crate) fn validate(
     if due.get("scope").is_some()
         || adverse.get("noticeRequired") != Some(&Value::Bool(true))
         || adverse.get("noticeTiming").and_then(Value::as_str) != Some("beforeEffective")
-        || adverse.get("explanationLevel").and_then(Value::as_str) != Some("individualized")
-        || adverse.get("counterfactualRequired") != Some(&Value::Bool(true))
         || adverse.pointer("/appealMechanism/enabled") != Some(&Value::Bool(true))
         || adverse.pointer("/appealMechanism/continuationOfServices") != Some(&Value::Bool(true))
         || adverse
@@ -362,10 +442,41 @@ pub(crate) fn validate(
             protected.push(p);
         }
         sources(cap, &d.source_refs, EvidenceRole::Source)?;
-        if d.explanation.reasons.is_empty()
-            || d.explanation.positive.is_empty()
-            || d.explanation.negative.is_empty()
-        {
+        if d.explanation.reasons.is_empty() {
+            return Err(RefusalCode::ExplanationRejected);
+        }
+        let declared = &d.explanation.protected_characteristics;
+        if declared.is_empty() || !unique(declared) {
+            return Err(RefusalCode::ExplanationRejected);
+        }
+        for (index, characteristic) in declared.iter().enumerate() {
+            if !pointer(&characteristic.case_pointer)
+                || declared[..index].iter().any(|other| {
+                    other.case_pointer == characteristic.case_pointer
+                        || other
+                            .case_pointer
+                            .starts_with(&format!("{}/", characteristic.case_pointer))
+                        || characteristic
+                            .case_pointer
+                            .starts_with(&format!("{}/", other.case_pointer))
+                })
+            {
+                return Err(RefusalCode::InvalidConfiguration);
+            }
+            sources(cap, &characteristic.source_refs, EvidenceRole::Source)?;
+            if !d.explanation.negative.iter().any(|alternative| {
+                alternative.changes.len() == 1
+                    && alternative.changes[0].case_pointer == characteristic.case_pointer
+            }) {
+                return Err(RefusalCode::ExplanationRejected);
+            }
+        }
+        if d.explanation.negative.iter().any(|alternative| {
+            alternative.changes.len() != 1
+                || !declared.iter().any(|characteristic| {
+                    characteristic.case_pointer == alternative.changes[0].case_pointer
+                })
+        }) {
             return Err(RefusalCode::ExplanationRejected);
         }
         for reason in &d.explanation.reasons {
@@ -427,41 +538,6 @@ pub(crate) fn validate(
             state_id(&raw, p)?;
         }
         sources(cap, &op.source_refs, EvidenceRole::Source)?;
-    }
-    // Audit every authored adverse location, including nested and ForEach states.
-    fn adverse_locations(value: &Value, pointer: String, out: &mut Vec<TransitionLocation>) {
-        if let Some(items) = value.get("transitions").and_then(Value::as_array) {
-            for (i, t) in items.iter().enumerate() {
-                if t.get("tags")
-                    .and_then(Value::as_array)
-                    .is_some_and(|tags| tags.iter().any(|tag| tag == "adverse-decision"))
-                {
-                    out.push(TransitionLocation {
-                        state_pointer: pointer.clone(),
-                        transition_index: i,
-                    });
-                }
-            }
-        }
-        if let Some(obj) = value.as_object() {
-            for (key, v) in obj {
-                if v.is_object() {
-                    adverse_locations(
-                        v,
-                        format!("{pointer}/{}", key.replace('~', "~0").replace('/', "~1")),
-                        out,
-                    );
-                }
-            }
-        }
-    }
-    let mut tagged = Vec::new();
-    adverse_locations(&raw, String::new(), &mut tagged);
-    if tagged
-        .iter()
-        .any(|loc| !policy.determinations.iter().any(|d| &d.transition == loc))
-    {
-        return Err(RefusalCode::UnboundTransition);
     }
     if let Some(ext) = &policy.pre_notice_extension {
         if !id(&ext.timer_id)

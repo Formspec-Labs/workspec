@@ -126,6 +126,11 @@ pub(super) fn records(
                     .pointer_mut(&change.case_pointer)
                     .ok_or(RefusalCode::ExplanationRejected)?;
                 Scalar::from_value(value).ok_or(RefusalCode::ExplanationRejected)?;
+                if kind == CounterfactualKind::Negative
+                    && digest(value) == digest(&change.value.value())
+                {
+                    return Err(RefusalCode::ExplanationRejected);
+                }
                 *value = change.value.value();
             }
             let alternate = Evaluator::evaluate_reference_alternative(

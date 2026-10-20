@@ -1781,7 +1781,64 @@
             "const": "reasoning"
           }
         }
-      }
+      },
+      "examples": [
+        {
+          "id": "default_prov_01m5bkbfjpet9v0dbryz37g4ja",
+          "recordKind": "determinationReasoning",
+          "timestamp": "1970-01-01T00:00:00Z",
+          "actorId": "actor:human:determiner",
+          "event": "wos.governance.reasoning_recorded",
+          "data": {
+            "tier": "reasoning",
+            "relatedTransition": "default_prov_01m5bkbfjke3r9p9589gy8zggh",
+            "ruleId": "income",
+            "authority": "policy",
+            "description": "Income exceeds the selected limit.",
+            "timestamp": "1970-01-01T00:00:00Z",
+            "evaluation": {
+              "location": {
+                "statePointer": "/lifecycle/states/open",
+                "transitionIndex": 0
+              },
+              "tableRef": "eligibility",
+              "inputs": [
+                {
+                  "name": "income",
+                  "value": {
+                    "kind": "number",
+                    "value": 150
+                  }
+                }
+              ],
+              "matchedRowIds": [
+                "high"
+              ],
+              "selectedRowId": "high",
+              "outputs": [
+                {
+                  "name": "adverse",
+                  "value": {
+                    "kind": "boolean",
+                    "value": true
+                  }
+                }
+              ],
+              "guardResult": true
+            },
+            "sourceRefs": [
+              {
+                "sourceVersion": "source",
+                "sectionAnchor": "policy.1",
+                "retainedSha256": "sha256:5d8f0a5e9bf4fbad2d434d5c79984183b8444d3adec71ca0b22715d4cbd0c8d9"
+              }
+            ]
+          },
+          "auditLayer": "reasoning",
+          "actorType": "human",
+          "definitionVersion": "1.0.0"
+        }
+      ]
     },
     "DeterminationCounterfactualDataRecord": {
       "type": "object",
@@ -1808,7 +1865,115 @@
             "const": "counterfactual"
           }
         }
-      }
+      },
+      "examples": [
+        {
+          "id": "default_prov_01m5bkbfjpet9v0dbs0k3ey256",
+          "recordKind": "determinationCounterfactual",
+          "timestamp": "1970-01-01T00:00:00Z",
+          "actorId": "actor:human:determiner",
+          "event": "wos.governance.counterfactual_recorded",
+          "data": {
+            "tier": "counterfactual",
+            "relatedTransition": "default_prov_01m5bkbfjke3r9p9589gy8zggh",
+            "type": "positive",
+            "factor": "lower-income",
+            "description": "Lower income changes the selected result.",
+            "alternative": {
+              "id": "lower-income",
+              "changes": [
+                {
+                  "casePointer": "/income",
+                  "value": {
+                    "kind": "number",
+                    "value": 50
+                  }
+                }
+              ],
+              "description": "Lower income changes the selected result.",
+              "sourceRefs": [
+                {
+                  "sourceVersion": "source",
+                  "sectionAnchor": "policy.1",
+                  "retainedSha256": "sha256:5d8f0a5e9bf4fbad2d434d5c79984183b8444d3adec71ca0b22715d4cbd0c8d9"
+                }
+              ]
+            },
+            "originalSnapshotSha256": "6e3e39786cdac079f89abe9e473c75d7ed13d7546bd66f98ccf7680621c17fdb",
+            "alternateSnapshotSha256": "e4557acf55451b57603c8560674bb44eab7838d0954f9e80645af7450d9ff0e5",
+            "originalEvaluation": {
+              "location": {
+                "statePointer": "/lifecycle/states/open",
+                "transitionIndex": 0
+              },
+              "tableRef": "eligibility",
+              "inputs": [
+                {
+                  "name": "income",
+                  "value": {
+                    "kind": "number",
+                    "value": 150
+                  }
+                }
+              ],
+              "matchedRowIds": [
+                "high"
+              ],
+              "selectedRowId": "high",
+              "outputs": [
+                {
+                  "name": "adverse",
+                  "value": {
+                    "kind": "boolean",
+                    "value": true
+                  }
+                }
+              ],
+              "guardResult": true
+            },
+            "alternateEvaluation": {
+              "location": {
+                "statePointer": "/lifecycle/states/open",
+                "transitionIndex": 0
+              },
+              "tableRef": "eligibility",
+              "inputs": [
+                {
+                  "name": "income",
+                  "value": {
+                    "kind": "number",
+                    "value": 50
+                  }
+                }
+              ],
+              "matchedRowIds": [
+                "low"
+              ],
+              "selectedRowId": "low",
+              "outputs": [
+                {
+                  "name": "adverse",
+                  "value": {
+                    "kind": "boolean",
+                    "value": false
+                  }
+                }
+              ],
+              "guardResult": false
+            },
+            "sourceRefs": [
+              {
+                "sourceVersion": "source",
+                "sectionAnchor": "policy.1",
+                "retainedSha256": "sha256:5d8f0a5e9bf4fbad2d434d5c79984183b8444d3adec71ca0b22715d4cbd0c8d9"
+              }
+            ]
+          },
+          "auditLayer": "counterfactual",
+          "actorType": "human",
+          "definitionVersion": "1.0.0"
+        }
+      ]
     }
   }
 }

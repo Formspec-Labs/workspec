@@ -84,6 +84,9 @@ fn fixture() -> Value {
     raw["contracts"] = json!({"sign":{"binding":"formspec","ref":"urn:test:supervisor-form","definitionVersion":"1.0.0"}});
     raw["lifecycle"]["states"]["pending"]["onEntry"] = json!([{"action":"createTask","taskRef":"supervisor-signature","assignTo":"supervisor","contractRef":"sign","extensions":{"x-wos-signature-profile-key":"signatureProfile","x-wos-signature-step-id":"supervisorSigns"}}]);
     raw["signature"] = serde_json::to_value(signature_profile()).unwrap();
+    raw["governance"]["audit"] = json!({"reasoningTier":{"requiredForTags":["determination"],"requireDecisionRequirements":false},"counterfactualTier":{"requiredForTags":["adverse-decision"],"requireProtectedCharacteristics":true}});
+    raw["governance"]["dueProcess"]["execution"]["determinations"][0]["explanation"]["protectedCharacteristics"] =
+        json!([{"casePointer":"/group","sourceRefs":[source()]}]);
     raw
 }
 fn capabilities(raw: &Value) -> ReferenceDueProcessCapabilities {
@@ -359,6 +362,9 @@ fn signed_fixture() -> Value {
         ops.push(json!({"id":id,"kind":kind,"determinationRef":"adverse","actors":[actor],"requiredStatePointers":["/lifecycle/states/noticed"],"triggerEvent":id,"transition":{"statePointer":"/lifecycle/states/noticed","transitionIndex":index},"sourceRefs":[source()]}));
     }
     raw["signature"] = serde_json::to_value(signature_profile()).unwrap();
+    raw["governance"]["audit"] = json!({"reasoningTier":{"requiredForTags":["determination"],"requireDecisionRequirements":false},"counterfactualTier":{"requiredForTags":["adverse-decision"],"requireProtectedCharacteristics":true}});
+    raw["governance"]["dueProcess"]["execution"]["determinations"][0]["explanation"]["protectedCharacteristics"] =
+        json!([{"casePointer":"/group","sourceRefs":[source()]}]);
     raw
 }
 fn form() -> Value {
@@ -2594,5 +2600,187 @@ fn delayed_child_extension_uses_parent_original_deadline_and_cumulative_cap() {
             == wos_core::ProvenanceKind::OverrideRecorded
             && p.data.as_ref()
                 == Some(&serde_json::to_value(&extension.override_record).unwrap())));
+    }
+}
+
+#[test]
+fn canonical_audit_executes_isolated_protected_change_and_actual_records() {
+    let (mut runtime, _, calls) = runtime(&fixture());
+    let process = create(&mut runtime).unwrap();
+    enqueue(&mut runtime, &process, "decide", "actor:human:determiner");
+    let drain = runtime.drain_once(&process).unwrap();
+    let counterfactual = drain
+        .provenance
+        .iter()
+        .find(|r| {
+            r.record_kind == wos_core::ProvenanceKind::DeterminationCounterfactual
+                && r.data.as_ref().unwrap()["type"] == "negative"
+        })
+        .unwrap();
+    let data = counterfactual.data.as_ref().unwrap();
+    assert_eq!(data["alternative"]["changes"][0]["casePointer"], "/group");
+    assert_ne!(
+        data["originalSnapshotSha256"],
+        data["alternateSnapshotSha256"]
+    );
+    assert_eq!(
+        data["originalEvaluation"]["outputs"],
+        data["alternateEvaluation"]["outputs"]
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn canonical_audit_rejects_unsupported_or_unbound_requirements_before_operations() {
+    for mutation in 0..12 {
+        let mut raw = fixture();
+        let explanation = "/governance/dueProcess/execution/determinations/0/explanation";
+        match mutation {
+            0 => {
+                raw["governance"].as_object_mut().unwrap().remove("audit");
+            }
+            1 => {
+                raw["governance"]["audit"]["reasoningTier"]["requiredForTags"] = json!([]);
+            }
+            2 => {
+                raw["governance"]["audit"]["counterfactualTier"]["requiredForTags"] = json!([]);
+            }
+            3 => {
+                raw["governance"]["audit"]["reasoningTier"]["requireDecisionRequirements"] =
+                    json!(true);
+            }
+            4 => {
+                raw["governance"]["audit"]["counterfactualTier"]["requireProtectedCharacteristics"] =
+                    json!(false);
+            }
+            5 => {
+                raw["governance"]["audit"]["counterfactualTier"]["unknownRequiredBehavior"] =
+                    json!(true);
+            }
+            6 => {
+                raw.pointer_mut(explanation)
+                    .unwrap()
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("protectedCharacteristics");
+            }
+            7 => {
+                raw.pointer_mut(explanation).unwrap()["protectedCharacteristics"][0]["sourceRefs"]
+                    [0]["retainedSha256"] = json!("sha256:foreign");
+            }
+            8 => {
+                raw.pointer_mut(explanation).unwrap()["negative"][0]["changes"][0]["casePointer"] =
+                    json!("/income");
+            }
+            9 => {
+                raw.pointer_mut(explanation).unwrap()["negative"][0]["changes"]
+                    .as_array_mut()
+                    .unwrap()
+                    .push(json!({"casePointer":"/income","value":{"kind":"number","value":150}}));
+            }
+            10 => {
+                raw["lifecycle"]["states"]["extra"] = json!({"type":"compound","initialState":"inner","states":{"inner":{"type":"atomic","transitions":[{"event":"extra","target":"inner","tags":["determination"]}]}}});
+            }
+            _ => {
+                raw["lifecycle"]["states"]["extra"] = json!({"type":"foreach","collection":"[1]","itemVariable":"item","body":{"id":"item-body","type":"atomic","transitions":[{"event":"extra","target":"item-body","tags":["determination"]}]}});
+            }
+        }
+        let (mut runtime, _, calls) = runtime(&fixture());
+        let result = runtime.configure_reference_due_process(capabilities(&raw));
+        if mutation >= 10 {
+            assert!(
+                matches!(
+                    result,
+                    Err(RuntimeError::Governance(RefusalCode::UnboundTransition))
+                ),
+                "wrong coverage failure for {mutation}: {result:?}"
+            );
+        } else {
+            assert!(result.is_err(), "accepted mutation {mutation}");
+        }
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+    }
+}
+#[test]
+fn protected_default_is_required_but_transition_shaped_metadata_is_not_a_state() {
+    let mut raw = fixture();
+    raw["governance"]["audit"]["counterfactualTier"]
+        .as_object_mut()
+        .unwrap()
+        .remove("requireProtectedCharacteristics");
+    raw["extensions"] = json!({"x-fixture-metadata":{"transitions":[{"tags":["determination","adverse-decision"],"event":"fake","target":"unbound"}]}});
+    let (mut runtime, _, calls) = runtime(&raw);
+    let process = create(&mut runtime).unwrap();
+    enqueue(&mut runtime, &process, "decide", "actor:human:determiner");
+    assert!(runtime.drain_once(&process).is_ok());
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+#[test]
+fn protected_noop_and_changed_outcome_refuse_without_saving_fabricated_evidence() {
+    for change in [
+        json!({"kind":"string","value":"a"}),
+        json!({"kind":"string","value":"b"}),
+    ] {
+        let mut raw = fixture();
+        raw["governance"]["dueProcess"]["execution"]["determinations"][0]["explanation"]["negative"]
+            [0]["changes"][0]["value"] = change.clone();
+        if change["value"] == "b" {
+            raw["decisionTables"][0]["inputs"]
+                .as_array_mut()
+                .unwrap()
+                .push(json!({"name":"group","type":"string"}));
+            raw["decisionTables"][0]["rows"][0]["inputCells"]
+                .as_array_mut()
+                .unwrap()
+                .push(json!("group = \"a\""));
+            raw["decisionTables"][0]["rows"][1]["inputCells"] = json!(["true", "true"]);
+            raw["lifecycle"]["states"]["open"]["transitions"][0]["guard"]["inputBindings"]["group"] =
+                json!("caseFile.group");
+        }
+        let (mut runtime, _, calls) = runtime(&raw);
+        let process = create(&mut runtime).unwrap();
+        enqueue(&mut runtime, &process, "decide", "actor:human:determiner");
+        let before = runtime.load_reference_record(&process).unwrap();
+        assert!(runtime.drain_once(&process).is_err());
+        let after = runtime.load_reference_record(&process).unwrap();
+        assert_eq!(before.provenance_log.len(), after.provenance_log.len());
+        assert_eq!(before.process.case_state, after.process.case_state);
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+    }
+}
+
+#[test]
+fn shared_static_checks_preserve_policy_versus_evidence_refusals() {
+    for (pointer, value, expected) in [
+        (
+            "/governance/dueProcess/adverseDecisionPolicy/counterfactualRequired",
+            json!(false),
+            RefusalCode::UnsupportedProfile,
+        ),
+        (
+            "/governance/dueProcess/adverseDecisionPolicy/explanationLevel",
+            json!("categorical"),
+            RefusalCode::UnsupportedProfile,
+        ),
+        (
+            "/governance/dueProcess/execution/determinations/0/explanation/positive",
+            json!([]),
+            RefusalCode::ExplanationRejected,
+        ),
+        (
+            "/governance/dueProcess/execution/determinations/0/explanation/negative",
+            json!([]),
+            RefusalCode::ExplanationRejected,
+        ),
+    ] {
+        let mut raw = fixture();
+        *raw.pointer_mut(pointer).unwrap() = value;
+        let (mut runtime, _, calls) = runtime(&fixture());
+        let result = runtime.configure_reference_due_process(capabilities(&raw));
+        assert!(
+            matches!(&result,Err(RuntimeError::Governance(actual)) if actual==&expected),
+            "wrong refusal for {pointer}: {result:?}"
+        );
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
     }
 }

@@ -7,6 +7,7 @@ pub mod business_calendar;
 pub mod decision_table;
 pub mod due_process;
 pub mod governance;
+pub mod governance_checks;
 pub mod integration;
 pub mod kernel;
 pub mod notification_template;

@@ -47,6 +47,29 @@ scope and MUST NOT claim a complete compiled dependency graph.
 The additive authored recipe, service fixture and staged comparison protocol is
 defined in [Native reference replay](reference-replay.md).
 
+### Canonical selected Delivery templates
+
+When canonical reference-replay adapters select notice templates, the request MUST
+also select one complete immutable `delivery` dependency using the maintained
+`$wosDelivery` schema. Its `targetWorkflow` MUST equal the selected workflow URL.
+The owner MUST retain the original complete bytes, role, selected locator, version
+and digests. A selected locator is external identity; it does not add an unsupported
+`url` field to the Delivery document.
+
+Template declarations live only at `notifications.templates`. Native T1 G-062/G-065
+and project T2 G-063 MUST inspect that canonical location and preserve their required
+section, duplicate-section and same-target resolution checks. Canonical schema
+validation MUST precede extraction. The complete parsed template DTO set, including
+keys, locales, content and ordered sections, MUST equal the actual selected adapter
+set. Missing, extra, duplicate or mismatched templates and overlapping Delivery plus
+legacy notification selections MUST refuse before process creation. Runtime template
+DTOs MUST NOT become a second source authority. Direct native runtime typed capability
+inputs remain a separate lower boundary and do not fabricate a Delivery document.
+
+This reference selection supports notifications only. Calendar/correspondence blocks
+remain unsupported and MUST refuse; this does not implement an additional delivery
+provider, renderer or calendar evaluator.
+
 ### Closed reference profile and notation
 
 The remainder defines profile `referenceDueProcess/1`. It proves selected
@@ -103,7 +126,9 @@ ReasonBinding = {
   sourceAuthority:"statute" | "regulation" | "policy" | "guideline",
   description: string, sourceRefs: SourceRef[]
 }
+ProtectedCharacteristicBinding = { casePointer: Pointer, sourceRefs: SourceRef[] }
 ExplanationBinding = {
+  protectedCharacteristics?: ProtectedCharacteristicBinding[],
   tableRef: Id, outputColumn: Id, beneficialOutput: Scalar,
   reasons: ReasonBinding[], positive: CaseAlternative[], negative: CaseAlternative[]
 }
@@ -138,6 +163,28 @@ alternative MUST actually preserve the original output and adverse guard result.
 No match, ambiguous match, evaluation diagnostic, unsupported value or failed
 comparison MUST produce a passing counterfactual. Alternatives and results retain
 their own snapshot digests, actual rows and outputs.
+
+The selected native profile MUST declare canonical `governance.audit.reasoningTier`
+with `requiredForTags` including `determination`, and `counterfactualTier` including
+`adverse-decision`. Every actual lifecycle transition carrying any declared required
+tag MUST be a selected native determination that produces those records. Admission
+walks only lifecycle states, nested states, parallel regions and ForEach bodies;
+transition-shaped metadata does not declare a firing location. Missing, malformed,
+empty or uncovered declarations MUST refuse before process creation.
+`requireDecisionRequirements:true` and unknown active audit requirements remain
+unsupported and MUST refuse. No obsolete flat tier or due-process aliases establish
+these requirements.
+
+`counterfactualTier.requireProtectedCharacteristics` MUST be true, including its
+canonical default. The selected explanation MUST explicitly declare nonempty,
+unique, source-backed protected case-state scalar pointers. Every negative alternative
+MUST change exactly one declared protected scalar, and the alternatives together
+MUST cover every declared scalar. Each changed value MUST differ from its actual
+retained snapshot value. Missing, foreign, no-op, joint/confounded or incomplete
+protected evidence MUST refuse. The existing evaluator MUST verify the unchanged
+adverse output for each isolated alternative. This establishes only the executed
+protected-value comparisons, without inferring a universal protected-class registry
+or population fairness.
 
 Reasoning and successful alternatives MUST be related to the actual determining
 `FiringRef.provenanceRecordId`. The owner MUST use the existing
@@ -818,7 +865,11 @@ implementation cannot close unrelated qualification obligations.
 
 Owning schemas/types MUST agree with these closed shapes before activation.
 Native admission MUST reject unsupported combinations rather than drop fields.
-Focused tests MUST prove selected Definition/Mapping causality; changing time
+Focused tests MUST prove selected Definition/Mapping causality;
+canonical audit declarations and actual lifecycle tag coverage; isolated, source-backed
+protected scalar changes with unchanged actual adverse outputs; canonical selected
+Delivery/schema/template equality with missing, foreign, duplicate, malformed and
+required-section refusal controls; changing time
 constraints under the moving native clock; duplicate-shaped/indexed and repeated
 firings; false/competing guards; all firing paths; no effect on refused preflight;
 actual verified signature/task binding; causal individualized/positive/negative

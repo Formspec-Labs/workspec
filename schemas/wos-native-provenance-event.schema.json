@@ -15,11 +15,21 @@
       "allOf": [
         {
           "if": {
-            "required": ["outcome"],
-            "properties": {"outcome": {"const": "expired"}}
+            "required": [
+              "outcome"
+            ],
+            "properties": {
+              "outcome": {
+                "const": "expired"
+              }
+            }
           },
           "then": {
-            "properties": {"recordKind": {"const": "taskFailed"}}
+            "properties": {
+              "recordKind": {
+                "const": "taskFailed"
+              }
+            }
           }
         }
       ],
@@ -33,28 +43,70 @@
       "properties": {
         "id": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Original native provenance identifier retained unchanged for correlation with the processor record and custody admission.",
+          "examples": [
+            "default_prov_01m5bkbfjke3r9p9589gy8zggh"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "timestamp": {
           "type": "string",
           "format": "date-time",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Actual processor timestamp of the original native provenance record, retained as an RFC 3339 timestamp without reinterpretation.",
+          "examples": [
+            "2026-06-01T00:00:00Z"
+          ],
+          "x-wos": {
+            "openStringKind": "timestamp"
+          }
         },
         "actorId": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Actual admitted actor identifier recorded by the processor for this native provenance occurrence when an actor is known.",
+          "examples": [
+            "actor:human:determiner"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "fromState": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Original source lifecycle state identifier recorded for this occurrence when the native event concerns a state transition.",
+          "examples": [
+            "open"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "toState": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Original target lifecycle state identifier recorded for this occurrence when the native event concerns a state transition.",
+          "examples": [
+            "pending"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "event": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Original native event label recorded for this provenance occurrence, preserved without remapping to an invented event family.",
+          "examples": [
+            "decide"
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
         },
         "actorType": {
           "type": "string",
@@ -79,19 +131,47 @@
         },
         "lifecycleState": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Actual lifecycle state identifier associated with this retained processor fact when no source and target transition pair applies.",
+          "examples": [
+            "open"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "definitionVersion": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Exact workflow definition version selected by the native processor when it recorded this original provenance occurrence.",
+          "examples": [
+            "1.0.0"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "inputDigest": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Original processor digest text for the admitted input, retained without changing its algorithm or reconstructing original bytes.",
+          "examples": [
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          ],
+          "x-wos": {
+            "openStringKind": "hash"
+          }
         },
         "outputDigest": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Original processor digest text for the actual output, retained without changing its algorithm or reconstructing output bytes.",
+          "examples": [
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          ],
+          "x-wos": {
+            "openStringKind": "hash"
+          }
         },
         "canonicalEventHash": {
           "type": "string",
@@ -104,8 +184,12 @@
         "outcome": {
           "description": "Preserves maintained native TaskFailed expiry facts. The expired literal is allowed only with TaskFailed; other outcomes retain the shared provenance outcome rules.",
           "anyOf": [
-            {"$ref": "#/$defs/ProvenanceOutcome"},
-            {"const": "expired"}
+            {
+              "$ref": "#/$defs/ProvenanceOutcome"
+            },
+            {
+              "const": "expired"
+            }
           ]
         },
         "recordKind": {

@@ -323,3 +323,388 @@ fn actual_signed_reference_recipe_reaches_applied_after_real_hearing() {
     );
     assert!(actual.attempts[1].recipe_resolution.as_ref().unwrap()["signedResponse"]["authoredSignatures"].is_array());
 }
+
+#[test]
+fn canonical_audit_project_lint_and_actual_replay_agree() {
+    use wos_lint::studio_api::{self as lint, DependencyRole, ResolvedDependency};
+    let (request, adapters) = inputs();
+    let candidate: Value = serde_json::from_slice(&request.candidate_bytes).unwrap();
+    let dependencies: Vec<_> = request
+        .dependencies
+        .iter()
+        .map(|selected| ResolvedDependency {
+            role: match selected.role.as_str() {
+                "definition" => DependencyRole::Definition,
+                "delivery" => DependencyRole::Delivery,
+                _ => panic!("unexpected fixture role"),
+            },
+            url: selected.url.clone(),
+            version: selected.version.clone().unwrap(),
+            document_json: serde_json::from_slice(&selected.bytes).unwrap(),
+            definition: None,
+        })
+        .collect();
+    let forbidden = ["G-004", "G-005", "G-014", "G-015", "G-063"];
+    let report = lint::validate(lint::ValidationRequest {
+        candidate: &candidate,
+        dependencies: &dependencies,
+        scope: lint::ValidationScope::Project,
+    });
+    assert!(
+        !report
+            .diagnostics
+            .iter()
+            .any(|d| forbidden.contains(&d.rule_id)),
+        "{report:#?}"
+    );
+    assert_eq!(report.status, lint::CheckStatus::Pass, "{report:#?}");
+    for (pointer, rule) in [
+        (
+            "/governance/dueProcess/adverseDecisionPolicy/explanationLevel",
+            "G-004",
+        ),
+        (
+            "/governance/dueProcess/execution/determinations/0/explanation/positive",
+            "G-005",
+        ),
+        (
+            "/governance/dueProcess/execution/determinations/0/explanation/negative",
+            "G-005",
+        ),
+        ("/governance/audit/reasoningTier/requiredForTags", "G-014"),
+        (
+            "/governance/audit/counterfactualTier/requiredForTags",
+            "G-015",
+        ),
+    ] {
+        let mut changed = candidate.clone();
+        *changed.pointer_mut(pointer).unwrap() = Value::Null;
+        let report = lint::validate(lint::ValidationRequest {
+            candidate: &changed,
+            dependencies: &dependencies,
+            scope: lint::ValidationScope::Project,
+        });
+        assert!(
+            report.diagnostics.iter().any(|d| d.rule_id == rule),
+            "missing {rule}: {report:#?}"
+        );
+    }
+    let without_delivery = &dependencies[..dependencies.len() - 1];
+    let report = lint::validate(lint::ValidationRequest {
+        candidate: &candidate,
+        dependencies: without_delivery,
+        scope: lint::ValidationScope::Project,
+    });
+    assert!(report.diagnostics.iter().any(|d| d.rule_id == "G-063"));
+    assert_eq!(report.scope, lint::ValidationScope::Project);
+    let prepared = prepare_reference_replay(request, adapters).unwrap();
+    assert!(replay_reference(&prepared).unwrap().passed);
+}
+
+#[test]
+fn canonical_audit_omission_and_unsupported_requirements_refuse_direct_replay() {
+    let (request, adapters) = inputs();
+    for pointer in [
+        "/governance/audit",
+        "/governance/audit/reasoningTier",
+        "/governance/audit/counterfactualTier",
+        "/governance/dueProcess/execution/determinations/0/explanation/protectedCharacteristics",
+    ] {
+        let mut request = request.clone();
+        let mut candidate: Value = serde_json::from_slice(&request.candidate_bytes).unwrap();
+        *candidate.pointer_mut(pointer).unwrap() = Value::Null;
+        request.candidate_bytes = serde_json::to_vec(&candidate).unwrap();
+        assert!(
+            prepare_reference_replay(request, adapters.clone()).is_err(),
+            "accepted missing {pointer}"
+        );
+    }
+}
+
+#[test]
+fn canonical_delivery_selection_and_actual_template_checks_refuse_substitution() {
+    use wos_lint::studio_api::{self as lint, DependencyRole, ResolvedDependency};
+    let (request, adapters) = inputs();
+    let delivery_index = request
+        .dependencies
+        .iter()
+        .position(|d| d.role == "delivery")
+        .unwrap();
+    for mutation in 0..8 {
+        let mut request = request.clone();
+        let mut adapters = adapters.clone();
+        let mut delivery: Value =
+            serde_json::from_slice(&request.dependencies[delivery_index].bytes).unwrap();
+        match mutation {
+            0 => {
+                request.dependencies.remove(delivery_index);
+            }
+            1 => {
+                delivery["targetWorkflow"] = json!("urn:fixture:other-workflow");
+            }
+            2 => {
+                adapters.templates[0]
+                    .templates
+                    .get_mut("notice")
+                    .unwrap()
+                    .sections[0]
+                    .content = Some("Substituted actual template".into());
+            }
+            3 => {
+                adapters.templates.push(adapters.templates[0].clone());
+            }
+            4 => {
+                delivery["calendar"] = json!({"timezone":"UTC","workWeek":["monday"]});
+            }
+            5 => {
+                request
+                    .dependencies
+                    .push(request.dependencies[delivery_index].clone());
+            }
+            6 => {
+                let mut overlap = request.dependencies[delivery_index].clone();
+                overlap.role = "notifications".into();
+                overlap.url = "urn:fixture:overlap".into();
+                request.dependencies.push(overlap);
+            }
+            _ => {
+                delivery["notificationTemplates"] = delivery["notifications"]["templates"].clone();
+                delivery.as_object_mut().unwrap().remove("notifications");
+            }
+        }
+        if mutation != 0 {
+            request.dependencies[delivery_index].bytes = serde_json::to_vec(&delivery).unwrap();
+        }
+        assert!(
+            prepare_reference_replay(request, adapters).is_err(),
+            "accepted delivery mutation {mutation}"
+        );
+    }
+    for (mutation, rule) in [(0, "G-062"), (1, "G-065"), (2, "G-063")] {
+        let mut delivery: Value =
+            serde_json::from_slice(&request.dependencies[delivery_index].bytes).unwrap();
+        if mutation == 0 {
+            delivery["notifications"]["templates"]["notice"]["sections"]
+                .as_array_mut()
+                .unwrap()
+                .remove(0);
+        }
+        if mutation == 1 {
+            let section = delivery["notifications"]["templates"]["notice"]["sections"][0].clone();
+            delivery["notifications"]["templates"]["notice"]["sections"]
+                .as_array_mut()
+                .unwrap()
+                .push(section);
+        }
+        if mutation == 2 {
+            delivery["targetWorkflow"] = json!("urn:fixture:other-workflow");
+        }
+        let candidate: Value = serde_json::from_slice(&request.candidate_bytes).unwrap();
+        let dependencies = [ResolvedDependency {
+            role: DependencyRole::Delivery,
+            url: request.dependencies[delivery_index].url.clone(),
+            version: "1.0.0".into(),
+            document_json: delivery,
+            definition: None,
+        }];
+        let report = lint::validate(lint::ValidationRequest {
+            candidate: &candidate,
+            dependencies: &dependencies,
+            scope: lint::ValidationScope::Project,
+        });
+        assert!(
+            report
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.rule_id == rule),
+            "missing {rule}: {report:#?}"
+        );
+    }
+}
+
+#[test]
+fn matching_delivery_and_adapter_cannot_bypass_required_section_checks() {
+    for duplicate in [false, true] {
+        let (mut request, mut adapters) = inputs();
+        let delivery_index = request
+            .dependencies
+            .iter()
+            .position(|dependency| dependency.role == "delivery")
+            .unwrap();
+        let mut delivery: Value =
+            serde_json::from_slice(&request.dependencies[delivery_index].bytes).unwrap();
+        let sections = &mut delivery["notifications"]["templates"]["notice"]["sections"];
+        if duplicate {
+            let section = sections[0].clone();
+            sections.as_array_mut().unwrap().push(section);
+        } else {
+            sections.as_array_mut().unwrap().remove(0);
+        }
+        adapters.templates[0] = serde_json::from_value(delivery["notifications"].clone()).unwrap();
+        request.dependencies[delivery_index].bytes = serde_json::to_vec(&delivery).unwrap();
+        let error = prepare_reference_replay(request, adapters)
+            .unwrap_err()
+            .to_string();
+        let expected = if duplicate { "G-065" } else { "G-062" };
+        assert!(
+            error.contains(expected),
+            "wrong direct refusal for {expected}: {error}"
+        );
+    }
+}
+
+fn project_report(request: &ReplayRequest) -> wos_lint::studio_api::ValidationReport {
+    use wos_lint::studio_api::{self as lint, DependencyRole, ResolvedDependency};
+    let candidate: Value = serde_json::from_slice(&request.candidate_bytes).unwrap();
+    let dependencies: Vec<_> = request
+        .dependencies
+        .iter()
+        .map(|selected| ResolvedDependency {
+            role: match selected.role.as_str() {
+                "definition" => DependencyRole::Definition,
+                "delivery" => DependencyRole::Delivery,
+                _ => panic!("unexpected fixture role"),
+            },
+            url: selected.url.clone(),
+            version: selected.version.clone().unwrap(),
+            document_json: serde_json::from_slice(&selected.bytes).unwrap(),
+            definition: None,
+        })
+        .collect();
+    lint::validate(lint::ValidationRequest {
+        candidate: &candidate,
+        dependencies: &dependencies,
+        scope: lint::ValidationScope::Project,
+    })
+}
+
+#[test]
+fn canonical_static_governance_failures_agree_at_lint_and_direct_preparation() {
+    let (original, adapters) = inputs();
+    for (pointer, value, rule) in [
+        (
+            "/governance/dueProcess/adverseDecisionPolicy/explanationLevel",
+            json!("categorical"),
+            "G-004",
+        ),
+        (
+            "/governance/dueProcess/adverseDecisionPolicy/counterfactualRequired",
+            json!(false),
+            "G-005",
+        ),
+        (
+            "/governance/dueProcess/execution/determinations/0/explanation/positive",
+            json!([]),
+            "G-005",
+        ),
+        (
+            "/governance/dueProcess/execution/determinations/0/explanation/negative",
+            json!([]),
+            "G-005",
+        ),
+        ("/governance/audit/reasoningTier", Value::Null, "G-014"),
+        ("/governance/audit/counterfactualTier", Value::Null, "G-015"),
+        (
+            "/governance/audit/reasoningTier/requiredForTags",
+            json!([]),
+            "G-014",
+        ),
+        (
+            "/governance/audit/reasoningTier/requiredForTags",
+            json!(["determination", "determination"]),
+            "G-014",
+        ),
+        (
+            "/governance/audit/counterfactualTier/requiredForTags",
+            json!(["adverse-decision", "absent"]),
+            "G-015",
+        ),
+        (
+            "/governance/audit/counterfactualTier/requireProtectedCharacteristics",
+            json!(false),
+            "G-015",
+        ),
+    ] {
+        let mut request = original.clone();
+        let mut candidate: Value = serde_json::from_slice(&request.candidate_bytes).unwrap();
+        *candidate.pointer_mut(pointer).unwrap() = value;
+        request.candidate_bytes = serde_json::to_vec(&candidate).unwrap();
+        let report = project_report(&request);
+        assert!(
+            report.diagnostics.iter().any(|d| d.rule_id == rule),
+            "{pointer}: {report:#?}"
+        );
+        assert!(
+            prepare_reference_replay(request, adapters.clone()).is_err(),
+            "direct preparation accepted {pointer}"
+        );
+    }
+}
+
+#[test]
+fn state_tags_cannot_satisfy_transition_audit_and_foreach_locations_stay_bound() {
+    let (original, adapters) = inputs();
+    let mut candidate: Value = serde_json::from_slice(&original.candidate_bytes).unwrap();
+    candidate["lifecycle"]["states"]["pending"]["tags"] = json!(["state-only"]);
+    candidate["governance"]["audit"]["reasoningTier"]["requiredForTags"] =
+        json!(["determination", "state-only"]);
+    let mut request = original.clone();
+    request.candidate_bytes = serde_json::to_vec(&candidate).unwrap();
+    assert!(
+        project_report(&request)
+            .diagnostics
+            .iter()
+            .any(|d| d.rule_id == "G-014")
+    );
+    assert!(prepare_reference_replay(request, adapters.clone()).is_err());
+    let mut candidate: Value = serde_json::from_slice(&original.candidate_bytes).unwrap();
+    candidate["lifecycle"]["states"]["future/~"] = json!({"type":"foreach","collection":"[1]","body":{"type":"compound","initialState":"inside/~","states":{"inside/~":{"type":"atomic","transitions":[{"event":"future","target":"done","tags":["determination","adverse-decision"]}]},"done":{"type":"final"}}}});
+    let typed: wos_core::KernelDocument = serde_json::from_value(candidate.clone()).unwrap();
+    let index = wos_core::model::governance_checks::LifecycleIndex::new(&typed);
+    assert!(
+        index
+            .transition_locations("determination")
+            .iter()
+            .any(|location| location.state_pointer
+                == "/lifecycle/states/future~1~0/body/states/inside~1~0")
+    );
+    let mut request = original;
+    request.candidate_bytes = serde_json::to_vec(&candidate).unwrap();
+    assert!(
+        !project_report(&request)
+            .diagnostics
+            .iter()
+            .any(|d| ["G-014", "G-015"].contains(&d.rule_id))
+    );
+    assert!(
+        prepare_reference_replay(request, adapters).is_err(),
+        "unselected ForEach determination admitted"
+    );
+}
+
+#[test]
+fn selected_profile_keeps_explanation_requirements_for_nonrights_or_absent_impact() {
+    let (original, adapters) = inputs();
+    for impact in [Some(json!("informational")), None] {
+        let mut candidate: Value = serde_json::from_slice(&original.candidate_bytes).unwrap();
+        if let Some(impact) = impact {
+            candidate["impactLevel"] = impact;
+        } else {
+            candidate.as_object_mut().unwrap().remove("impactLevel");
+        }
+        let mut request = original.clone();
+        request.candidate_bytes = serde_json::to_vec(&candidate).unwrap();
+        assert!(prepare_reference_replay(request, adapters.clone()).is_ok());
+        candidate["governance"]["dueProcess"]["adverseDecisionPolicy"]["explanationLevel"] =
+            json!("categorical");
+        request = original.clone();
+        request.candidate_bytes = serde_json::to_vec(&candidate).unwrap();
+        assert!(
+            !project_report(&request)
+                .diagnostics
+                .iter()
+                .any(|d| d.rule_id == "G-004")
+        );
+        assert!(prepare_reference_replay(request, adapters.clone()).is_err());
+    }
+}

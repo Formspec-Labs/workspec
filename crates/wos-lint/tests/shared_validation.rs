@@ -2,6 +2,8 @@
 //! Behavioral controls for canonical static validation and native dependencies.
 use serde_json::{Value, json};
 use wos_lint::studio_api::*;
+#[path = "../../wos-conformance/tests/support/local_schemas.rs"]
+mod local_schemas;
 
 fn fixture(name: &str) -> Value {
     serde_json::from_str(
@@ -79,18 +81,9 @@ fn root_pointer_and_native_diagnostics_match_owning_schema() {
     let result = run(&json!([]), &[], ValidationScope::Document);
     assert_eq!(result.status, CheckStatus::Fail);
     assert_eq!(result.diagnostics[0].path, "");
-    let tooling: Value =
-        serde_json::from_str(include_str!("../../../schemas/wos-tooling.schema.json")).unwrap();
-    let id = tooling["$id"].as_str().unwrap().to_owned();
-    let registry = jsonschema::Registry::new()
-        .add(id.clone(), tooling)
-        .unwrap()
-        .prepare()
-        .unwrap();
-    let validator = jsonschema::options()
-        .with_registry(&registry)
-        .build(&json!({"$ref":format!("{id}#/$defs/lintDiagnostic__Root")}))
-        .unwrap();
+    let validator = local_schemas::validator(&json!({"$ref":
+        "https://wos-spec.org/schemas/tooling/1.0#/$defs/lintDiagnostic__Root"
+    }));
     assert!(validator.is_valid(&serde_json::to_value(&result.diagnostics[0]).unwrap()));
     let mut drift = serde_json::to_value(&result.diagnostics[0]).unwrap();
     drift["path"] = json!("$.root");
@@ -616,4 +609,22 @@ fn unsupported_required_source_format_is_not_a_schema_pass() {
             .iter()
             .any(|r| r.contains("unavailable-required-format"))
     }));
+}
+
+#[test]
+fn compensation_contract_errors_keep_exact_native_action_paths() {
+    for missing_contract in [false, true] {
+        let mut input = fixture("positive");
+        input["contracts"] = json!({"form":{"binding":"formspec","ref":"urn:test:definition"}});
+        if missing_contract {
+            input["contracts"].as_object_mut().unwrap().remove("form");
+        }
+        input["lifecycle"]["states"]["review"]["onEntry"] = json!([{"action":"log","message":"future operation","compensatingAction":{"action":"createTask","taskRef":"compensation","contractRef":"form"}}]);
+        let result = run(&input, &[definition()], ValidationScope::Project);
+        assert!(
+            result.diagnostics.iter().any(|d| d.rule_id == "WOS-REF-001"
+                && d.path == "/lifecycle/states/review/onEntry/0/compensatingAction/contractRef"),
+            "{result:#?}"
+        );
+    }
 }

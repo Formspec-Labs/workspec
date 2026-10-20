@@ -96,7 +96,7 @@ use super::fel_analysis;
 /// walking the entire typed state tree for each governance document rule.
 struct KernelCollections {
     /// All tags appearing on any kernel state or transition.
-    tags: std::collections::HashSet<String>,
+    lifecycle: wos_core::model::governance_checks::LifecycleIndex,
     /// All event names referenced by kernel transitions.
     events: std::collections::HashSet<String>,
     /// All case file field names in `caseFile.fields` (as `"caseFile.<name>"`).
@@ -109,8 +109,7 @@ struct KernelCollections {
 
 impl KernelCollections {
     fn from_typed(kernel: &KernelDocument) -> Self {
-        let mut tags = std::collections::HashSet::new();
-        collect_tags_typed(&kernel.lifecycle.states, &mut tags);
+        let lifecycle = wos_core::model::governance_checks::LifecycleIndex::new(kernel);
 
         let mut events = std::collections::HashSet::new();
         collect_events_typed(&kernel.lifecycle.states, &mut events);
@@ -130,7 +129,7 @@ impl KernelCollections {
             .collect();
 
         Self {
-            tags,
+            lifecycle,
             events,
             case_fields,
             actor_ids,
@@ -168,27 +167,6 @@ fn check_outcome_code_recursive(
                 &format!("{state_path}/regions/{region_name}/states"),
                 diagnostics,
             );
-        }
-    }
-}
-
-/// Collect tags from typed state tree.
-fn collect_tags_typed(
-    states: &indexmap::IndexMap<String, State>,
-    tags: &mut std::collections::HashSet<String>,
-) {
-    for state in states.values() {
-        for tag in &state.tags {
-            tags.insert(tag.clone());
-        }
-        for transition in &state.transitions {
-            for tag in &transition.tags {
-                tags.insert(tag.clone());
-            }
-        }
-        collect_tags_typed(&state.states, tags);
-        for region in state.regions.values() {
-            collect_tags_typed(&region.states, tags);
         }
     }
 }
@@ -369,16 +347,29 @@ pub(crate) fn check_with_coverage(
                 }
                 check_due_process_for_impact_typed(&gov, kernel, diagnostics);
                 check_notice_individualized_for_rights_typed(&gov, kernel, diagnostics);
-                check_explanation_level_for_rights_typed(&gov, kernel, diagnostics);
-                check_counterfactual_for_rights_typed(&gov, kernel, diagnostics);
-                check_counterfactual_tier_for_adverse_typed(&gov, kernel, &kc.tags, diagnostics);
-                check_governance_tags_exist(&gov, &kc.tags, diagnostics);
+                for issue in wos_core::model::governance_checks::check_governance(
+                    kernel,
+                    &gov.value,
+                    &kc.lifecycle,
+                )
+                .issues
+                {
+                    diagnostics.push(LintDiagnostic::t2_error(
+                        issue.rule_id,
+                        &issue.path,
+                        issue.message,
+                    ));
+                }
+                check_governance_tags_exist(&gov, &kc.lifecycle.all_tags, diagnostics);
                 check_resolution_date_refs(&gov, &kc.case_fields, diagnostics);
-                check_continuation_of_services(&gov, &kc.tags, diagnostics);
-                check_adverse_decision_due_process(&gov, &kc.tags, diagnostics);
-                check_reasoning_tier_for_determination(&gov, &kc.tags, diagnostics);
+                check_continuation_of_services(&gov, &kc.lifecycle.all_tags, diagnostics);
+                check_adverse_decision_due_process(&gov, &kc.lifecycle.all_tags, diagnostics);
                 check_excluded_owner_override(&gov, diagnostics);
-                check_delegation_verification_on_determination(&gov, &kc.tags, diagnostics);
+                check_delegation_verification_on_determination(
+                    &gov,
+                    &kc.lifecycle.all_tags,
+                    diagnostics,
+                );
                 check_binding_resolution_date_refs(&gov, &kc.case_fields, diagnostics);
             }
 
@@ -942,7 +933,7 @@ fn check_signature_lifecycle_tags(
         "signature-expired",
         "signature-voided",
     ] {
-        if !kc.tags.contains(tag) {
+        if !kc.lifecycle.all_tags.contains(tag) {
             diagnostics.push(LintDiagnostic::t2_warning(
                 "SIG-009",
                 "/signingFlow",
@@ -1309,65 +1300,6 @@ fn check_notice_individualized_for_rights_typed(
 }
 
 // ---------------------------------------------------------------------------
-// G-004: Explanation level must be individualized for rights-impacting
-// ---------------------------------------------------------------------------
-
-/// G-004 (typed): explanationLevel MUST be 'individualized' for rights-impacting.
-fn check_explanation_level_for_rights_typed(
-    gov: &crate::document::WosDocument,
-    kernel: &KernelDocument,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    if kernel.impact_level != Some(ImpactLevel::RightsImpacting) {
-        return;
-    }
-    let level = gov
-        .value
-        .pointer("/dueProcess/explanationLevel")
-        .and_then(Value::as_str);
-    if level != Some("individualized") {
-        diagnostics.push(LintDiagnostic::t2_error(
-            "G-004",
-            "/dueProcess/explanationLevel",
-            "rights-impacting kernel requires explanationLevel 'individualized' in governance dueProcess",
-        ));
-    }
-}
-
-// ---------------------------------------------------------------------------
-// G-005: Counterfactual required for rights-impacting adverse decisions
-// ---------------------------------------------------------------------------
-
-/// G-005 (typed): Counterfactuals required for rights-impacting.
-fn check_counterfactual_for_rights_typed(
-    gov: &crate::document::WosDocument,
-    kernel: &KernelDocument,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    if kernel.impact_level != Some(ImpactLevel::RightsImpacting) {
-        return;
-    }
-    match gov.value.pointer("/dueProcess/counterfactuals") {
-        None => diagnostics.push(LintDiagnostic::t2_error(
-            "G-005",
-            "/dueProcess/counterfactuals",
-            "rights-impacting kernel requires counterfactuals section with positive and negative entries",
-        )),
-        Some(cf) => {
-            for polarity in ["positive", "negative"] {
-                if cf.get(polarity).is_none() {
-                    diagnostics.push(LintDiagnostic::t2_error(
-                        "G-005",
-                        &format!("/dueProcess/counterfactuals/{polarity}"),
-                        format!("rights-impacting adverse decision must declare '{polarity}' counterfactual"),
-                    ));
-                }
-            }
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
 // G-008: continuationOfServices requires kernel topology to support it
 // ---------------------------------------------------------------------------
 
@@ -1449,62 +1381,6 @@ fn check_governance_tags_exist(
                 ));
             }
         }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// G-014: Reasoning tier required for determination-tagged transitions
-// ---------------------------------------------------------------------------
-
-/// G-014: Governance MUST declare a reasoning tier when the kernel has any
-/// `determination`-tagged transitions.
-fn check_reasoning_tier_for_determination(
-    gov: &crate::document::WosDocument,
-    kernel_tags: &std::collections::HashSet<String>,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    if !kernel_tags.contains("determination") {
-        return;
-    }
-    let has_reasoning = gov.value.get("reasoningTier").is_some()
-        || gov.value.pointer("/provenanceTiers/reasoning").is_some();
-    if !has_reasoning {
-        diagnostics.push(LintDiagnostic::t2_error(
-            "G-014",
-            "/reasoningTier",
-            "kernel has determination-tagged transitions; governance MUST declare a reasoning tier",
-        ));
-    }
-}
-
-// ---------------------------------------------------------------------------
-// G-015: Counterfactual tier required for adverse-decision in rights-impacting
-// ---------------------------------------------------------------------------
-
-/// G-015 (typed): Counterfactual tier required for rights-impacting + adverse-decision.
-fn check_counterfactual_tier_for_adverse_typed(
-    gov: &crate::document::WosDocument,
-    kernel: &KernelDocument,
-    kernel_tags: &std::collections::HashSet<String>,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    if kernel.impact_level != Some(ImpactLevel::RightsImpacting) {
-        return;
-    }
-    if !kernel_tags.contains("adverse-decision") {
-        return;
-    }
-    let has_counterfactual = gov.value.get("counterfactualTier").is_some()
-        || gov
-            .value
-            .pointer("/provenanceTiers/counterfactual")
-            .is_some();
-    if !has_counterfactual {
-        diagnostics.push(LintDiagnostic::t2_error(
-            "G-015",
-            "/counterfactualTier",
-            "rights-impacting workflow with adverse-decision transitions MUST declare a counterfactual tier",
-        ));
     }
 }
 
@@ -1594,24 +1470,23 @@ fn notification_template_keys_for_workflow(
         if target != workflow_url && !target.is_empty() {
             continue;
         }
-        // Templates may live at .notificationTemplates or .templates.
-        for field in &["notificationTemplates", "templates"] {
-            if let Some(templates) = d.value.get(*field).and_then(Value::as_object) {
-                for k in templates.keys() {
-                    keys.insert(k.clone());
-                }
-            }
+        if let Some(templates) = d
+            .value
+            .pointer("/notifications/templates")
+            .and_then(Value::as_object)
+        {
+            keys.extend(templates.keys().cloned());
         }
     }
 
     // Legacy: accept any document in the project that matches the old
     // $wosNotificationTemplate shape (targetWorkflow + templates).
     for d in project.documents() {
-        let matches = d
-            .value
-            .get("targetWorkflow")
-            .and_then(Value::as_str)
-            .is_some_and(|t| t == workflow_url)
+        let matches = d.kind != DocumentKind::Delivery
+            && d.value
+                .get("targetWorkflow")
+                .and_then(Value::as_str)
+                .is_some_and(|t| t == workflow_url)
             && d.value.get("templates").is_some();
         if matches {
             if let Some(templates) = d.value.get("templates").and_then(Value::as_object) {

@@ -259,6 +259,7 @@ fn execute_fixture(fixture: &CaseBoundaryFixture) -> FixtureExecution {
     for spec in &fixture.processes {
         let process = workflow_process(spec, &fixture.case_ledger_id);
         let creation = ProcessCreationSnapshot {
+            reference_due_process: None,
             actor_bindings: None,
             process_id: process.process_id.clone(),
             case_ledger_id: process.case_ledger_id.clone(),

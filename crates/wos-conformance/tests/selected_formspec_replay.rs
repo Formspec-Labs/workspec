@@ -366,3 +366,138 @@ fn reverse_prefill_executes_selected_mapping_and_nested_task_pairing_is_checked(
             .contains("Mapping is not selected")
     );
 }
+
+#[test]
+fn task_pin_matrix_agrees_between_project_lint_and_direct_runtime_admission() {
+    use wos_core::traits::{DefaultRuntime, DocumentResolver};
+    use wos_core::{GovernanceDocument, KernelDocument};
+    use wos_runtime::{
+        BindingRegistry, CreateProcessRequest, RuntimeError, SystemClock, WosRuntime,
+    };
+    struct Resolver(KernelDocument);
+    impl DocumentResolver for Resolver {
+        type Error = std::io::Error;
+        fn resolve_kernel(&self, _: &str, _: &str) -> Result<KernelDocument, Self::Error> {
+            Ok(self.0.clone())
+        }
+        fn resolve_governance(&self, _: &str, _: &str) -> Result<GovernanceDocument, Self::Error> {
+            Err(std::io::Error::other("no governance selected"))
+        }
+        fn resolve_sidecar(&self, _: &str, _: Option<&str>) -> Result<Value, Self::Error> {
+            Err(std::io::Error::other("no sidecar selected"))
+        }
+    }
+    for placement in 0..6 {
+        for pin_case in 0..6 {
+            let mut candidate = workflow(false);
+            candidate["lifecycle"] =
+                json!({"initialState":"open","states":{"open":{"type":"atomic"}}});
+            let task = json!({"action":"createTask","taskRef":"future","contractRef":"form"});
+            let log = json!({"action":"log","message":"future operation","compensatingAction":{"action":"log","message":"recursive compensation","compensatingAction":task}});
+            let (state, path) = match placement {
+                0 => (
+                    json!({"type":"atomic","onEntry":[task.clone()]}),
+                    "/lifecycle/states/future~1~0/onEntry/0/contractRef",
+                ),
+                1 => (
+                    json!({"type":"atomic","onExit":[task.clone()]}),
+                    "/lifecycle/states/future~1~0/onExit/0/contractRef",
+                ),
+                2 => (
+                    json!({"type":"atomic","transitions":[{"event":"later","target":"open","actions":[task.clone()]}]}),
+                    "/lifecycle/states/future~1~0/transitions/0/actions/0/contractRef",
+                ),
+                3 => (
+                    json!({"type":"parallel","regions":{"lane/~":{"initialState":"child","states":{"child":{"type":"atomic","onEntry":[task.clone()]}}}}}),
+                    "/lifecycle/states/future~1~0/regions/lane~1~0/states/child/onEntry/0/contractRef",
+                ),
+                4 => (
+                    json!({"type":"foreach","collection":"[1]","body":{"type":"atomic","onEntry":[task.clone()]}}),
+                    "/lifecycle/states/future~1~0/body/onEntry/0/contractRef",
+                ),
+                _ => (
+                    json!({"type":"atomic","onEntry":[log]}),
+                    "/lifecycle/states/future~1~0/onEntry/0/compensatingAction/compensatingAction/contractRef",
+                ),
+            };
+            candidate["lifecycle"]["states"]["future/~"] = state;
+            match pin_case {
+                0 => {
+                    candidate["contracts"]["form"]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("definitionVersion");
+                }
+                1 => candidate["contracts"]["form"]["definitionVersion"] = json!(""),
+                2 => candidate["contracts"]["form"]["definitionVersion"] = json!("  "),
+                3 => {}
+                4 => {
+                    candidate["contracts"]["form"]["binding"] = json!("json-schema");
+                    candidate["contracts"]["form"]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("definitionVersion");
+                }
+                _ => {
+                    candidate["contracts"]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("form");
+                }
+            }
+            let typed: KernelDocument = serde_json::from_value(candidate.clone()).unwrap();
+            let selected = wos_lint::studio_api::ResolvedDependency {
+                role: wos_lint::studio_api::DependencyRole::Definition,
+                url: "urn:test:selected-definition".into(),
+                version: "1.0.0".into(),
+                document_json: definition(false),
+                definition: None,
+            };
+            let report = wos_lint::studio_api::validate(wos_lint::studio_api::ValidationRequest {
+                candidate: &candidate,
+                dependencies: &[selected],
+                scope: wos_lint::studio_api::ValidationScope::Project,
+            });
+            let invalid = pin_case < 3 || pin_case == 5;
+            assert_eq!(
+                report
+                    .diagnostics
+                    .iter()
+                    .any(|d| d.rule_id == "WOS-REF-001" && d.path == path),
+                invalid,
+                "placement{placement}/pin{pin_case}: {report:#?}"
+            );
+            let mut runtime = WosRuntime::new(
+                wos_runtime::InMemoryStore::new(),
+                Resolver(typed),
+                DefaultRuntime::new(),
+                DefaultRuntime::new(),
+                wos_conformance::StubService::null_response(),
+                DefaultRuntime::new(),
+                SystemClock,
+                BindingRegistry::new(),
+            );
+            let result = runtime.create_process(CreateProcessRequest {
+                process_id: String::new(),
+                tenant: None,
+                definition_url: "urn:test:selected-workflow".into(),
+                definition_version: "1.0.0".into(),
+                initial_case_state: None,
+            });
+            match pin_case {
+                0..=2 => assert!(
+                    matches!(result, Err(RuntimeError::MissingMetadata(_))),
+                    "placement{placement}/pin{pin_case}: {result:?}"
+                ),
+                5 => assert!(
+                    matches!(result, Err(RuntimeError::ContractNotFound(_))),
+                    "placement{placement}: {result:?}"
+                ),
+                _ => assert!(
+                    result.is_ok(),
+                    "placement{placement}/pin{pin_case}: {result:?}"
+                ),
+            }
+        }
+    }
+}

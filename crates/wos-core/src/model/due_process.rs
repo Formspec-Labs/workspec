@@ -399,10 +399,23 @@ pub struct ReasonBinding {
     pub source_refs: Vec<SourceRef>,
 }
 
+/// Explicit source-backed protected scalar selected for isolated negative evaluation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProtectedCharacteristicBinding {
+    /// Case-state JSON pointer identifying the selected protected scalar.
+    pub case_pointer: String,
+    /// Exact retained source evidence supporting this selection.
+    pub source_refs: Vec<SourceRef>,
+}
+
 /// Selected native causal explanation requirements.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExplanationBinding {
+    /// Selected protected scalars; rights-impacting execution requires isolated evidence for each.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub protected_characteristics: Vec<ProtectedCharacteristicBinding>,
     /// Retained `table_ref` value.
     pub table_ref: String,
     /// Retained `output_column` value.

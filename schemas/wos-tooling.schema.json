@@ -932,7 +932,13 @@
         "firingRecordId": {
           "type": "string",
           "minLength": 1,
-          "description": "Actual StateTransition provenance ID, absent for an unselected guard."
+          "description": "Actual native transition provenance identifier captured when this guard was selected to fire; absent for tested-only guards.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "examples": [
+            "default_prov_01m5bkbfjke3r9p9589gy8zggh"
+          ]
         },
         "decisionTable": {
           "type": "object",
@@ -946,22 +952,50 @@
           ],
           "properties": {
             "tableRef": {
-              "type": "string"
+              "type": "string",
+              "x-wos": {
+                "openStringKind": "identifier"
+              },
+              "description": "Identifier of the selected native decision table that produced this retained guard evaluation and its matched rows.",
+              "examples": [
+                "eligibility"
+              ]
             },
             "matchedRowIds": {
               "type": "array",
               "items": {
-                "type": "string"
+                "type": "string",
+                "x-wos": {
+                  "openStringKind": "identifier"
+                },
+                "description": "Exact authored row identifier retained from the actual native table matching result, before first-hit selection.",
+                "examples": [
+                  "high"
+                ]
               }
             },
             "selectedRowId": {
               "type": [
                 "null",
                 "string"
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              },
+              "description": "Exact authored row identifier selected by the actual native hit policy, absent when the guard selected no row.",
+              "examples": [
+                "high"
               ]
             },
             "outputColumn": {
-              "type": "string"
+              "type": "string",
+              "x-wos": {
+                "openStringKind": "identifier"
+              },
+              "description": "Identifier of the native decision-table output column whose actual value determined this guard result.",
+              "examples": [
+                "adverse"
+              ]
             },
             "output": {}
           },

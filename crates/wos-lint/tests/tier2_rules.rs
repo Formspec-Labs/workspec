@@ -564,7 +564,7 @@ fn g014_determination_tag_without_reasoning_tier_flagged() {
 fn g014_determination_tag_with_reasoning_tier_clean() {
     let kernel = base_kernel();
     let mut gov = base_governance();
-    gov["reasoningTier"] = json!({ "enabled": true });
+    gov["audit"] = json!({ "reasoningTier":{"requiredForTags":["determination"]} });
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(!has_rule(&diags, "G-014"), "unexpected G-014: {diags:?}");
@@ -586,7 +586,7 @@ fn g015_adverse_decision_rights_without_counterfactual_tier_flagged() {
             "negative": { "description": "..." }
         }
     });
-    gov["reasoningTier"] = json!({ "enabled": true });
+    gov["audit"] = json!({ "reasoningTier":{"requiredForTags":["determination"]} });
     // no counterfactualTier
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
@@ -1529,7 +1529,7 @@ fn g063_notice_template_key_resolves_clean() {
     let notifications = json!({
         "$wosDelivery": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
-        "templates": {
+        "notifications": {"templates": {
             "adverseTpl": {
                 "category": "adverse-decision",
                 "sections": [
@@ -1540,7 +1540,7 @@ fn g063_notice_template_key_resolves_clean() {
                 ]
             }
         }
-    });
+    }});
 
     let diags = lint_project_with_docs(vec![
         ("kernel.json", kernel),
@@ -1569,7 +1569,7 @@ fn g063_notice_template_key_runs_without_kernel() {
     let notifications = json!({
         "$wosDelivery": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
-        "templates": {
+        "notifications": {"templates": {
             "adverseTpl": {
                 "category": "adverse-decision",
                 "sections": [
@@ -1580,7 +1580,7 @@ fn g063_notice_template_key_runs_without_kernel() {
                 ]
             }
         }
-    });
+    }});
 
     let diags = lint_project_with_docs(vec![
         ("governance.json", gov),
@@ -2720,4 +2720,39 @@ fn k049_load_bearing_fixture_two_node_cycle_triggers_k049() {
         has_rule(&diags, "K-049"),
         "expected K-049 from k-049-load-bearing-two-node-cycle.json: {diags:?}"
     );
+}
+
+#[test]
+fn canonical_audit_requirements_include_foreach_body_transition_tags() {
+    for audit in [
+        json!({}),
+        json!({"reasoningTier":{"requiredForTags":[]},"counterfactualTier":{"requiredForTags":[]}}),
+    ] {
+        let mut kernel = base_kernel();
+        kernel["impactLevel"] = json!("rights-impacting");
+        kernel["lifecycle"] = json!({"initialState":"iterate","states":{"iterate":{"type":"foreach","collection":"[1]","body":{"type":"compound","initialState":"check","states":{"check":{"type":"atomic","transitions":[{"event":"decide","target":"done","tags":["determination","adverse-decision"]}]},"done":{"type":"final"}}}}}});
+        kernel["governance"] = json!({"audit":audit});
+        let diagnostics = lint_project_with_docs(vec![("kernel.json", kernel)]);
+        for rule in ["G-014", "G-015"] {
+            assert!(
+                has_rule(&diagnostics, rule),
+                "missing {rule} for actual foreach body: {diagnostics:#?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn state_only_audit_tags_do_not_create_transition_requirements() {
+    let mut kernel = base_kernel();
+    kernel["impactLevel"] = json!("rights-impacting");
+    kernel["lifecycle"] = json!({"initialState":"state","states":{"state":{"type":"atomic","tags":["determination","adverse-decision"]}}});
+    kernel["governance"] = json!({});
+    let diagnostics = lint_project_with_docs(vec![("kernel.json", kernel)]);
+    for rule in ["G-014", "G-015"] {
+        assert!(
+            !has_rule(&diagnostics, rule),
+            "state-only tag created {rule}: {diagnostics:#?}"
+        );
+    }
 }

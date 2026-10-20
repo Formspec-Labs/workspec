@@ -253,6 +253,15 @@
           "description": "Retained negative value under referenceDueProcess/1.",
           "minItems": 1,
           "uniqueItems": true
+        },
+        "protectedCharacteristics": {
+          "type": "array",
+          "description": "Explicit protected scalars; rights-impacting native admission requires isolated evidence for each.",
+          "items": {
+            "$ref": "#/$defs/ProtectedCharacteristicBinding"
+          },
+          "minItems": 1,
+          "uniqueItems": true
         }
       }
     },
@@ -2637,6 +2646,30 @@
       "type": "integer",
       "minimum": 1,
       "maximum": 36500
+    },
+    "ProtectedCharacteristicBinding": {
+      "type": "object",
+      "description": "Explicit source-backed protected scalar selected for isolated negative evaluation.",
+      "additionalProperties": false,
+      "required": [
+        "casePointer",
+        "sourceRefs"
+      ],
+      "properties": {
+        "casePointer": {
+          "$ref": "#/$defs/Pointer",
+          "description": "Case-state JSON pointer of the selected protected scalar."
+        },
+        "sourceRefs": {
+          "type": "array",
+          "description": "Exact retained sources supporting the protected scalar selection.",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
     }
   }
 }
