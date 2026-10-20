@@ -6662,9 +6662,18 @@ dependencies = [
 name = "wos-synth-cli"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "clap",
+ "jsonschema 0.46.1",
+ "same-file",
+ "serde",
  "serde_json",
+ "tempfile",
  "tokio",
+ "wos-authoring",
+ "wos-conformance",
+ "wos-lint",
+ "wos-mcp",
  "wos-synth-anthropic",
  "wos-synth-core",
  "wos-synth-mock",
@@ -6680,7 +6689,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
- "wos-lint",
 ]
 
 [[package]]

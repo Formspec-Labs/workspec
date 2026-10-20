@@ -1,103 +1,37 @@
-//! Drift test — keep `schemas/synth/wos-synth-trace.schema.json` in sync with
-//! the Rust types in `wos-synth-core::trace` and `wos-synth-core::synth_loop`.
-//!
-//! Mechanism (the simplest correct check — round-trip + validate):
-//!
-//!   1. Construct representative `SynthTrace` and `SynthOutcome` (both
-//!      `Converged` and `Unconverged` variants) values that exercise every
-//!      schema property, including the optional `conformance`,
-//!      `path`, `suggested_fix`, and `related_docs` fields.
-//!   2. Serialize each to JSON via `serde_json`.
-//!   3. Validate the JSON against the published schema using the `jsonschema`
-//!      crate. Any drift between Rust serde output and the schema surfaces
-//!      as a validation error: a renamed field violates `additionalProperties:
-//!      false`; a removed field violates the `required` array; a changed type
-//!      violates `type`.
-//!
-//! When this test fails, the fix is one of:
-//!   - The schema is wrong → update `schemas/synth/wos-synth-trace.schema.json`.
-//!   - The Rust types changed and the schema needs the matching change.
-//!   - Both are right but the test data is stale → update the test fixtures.
+//! Both trace schema views preserve complete checks and reject presentation drift.
 
-use std::path::PathBuf;
+use serde_json::{Value, json};
+use wos_synth_core::{
+    CandidateAssessment, CheckDisposition, CheckRecord, IterationRecord, LintFinding, Severity,
+    SynthOutcome, SynthTrace, ToolResult,
+};
 
-use serde_json::Value;
-
-use wos_synth_core::synth_loop::SynthOutcome;
-use wos_synth_core::tool_context::{ConformanceVerdict, LintFinding, Severity};
-use wos_synth_core::trace::{IterationRecord, SynthTrace};
-
-/// Build a `SynthTrace` that exercises every schema-defined property.
-///
-/// Two iterations:
-///   - index 0: a "dirty" attempt with one error finding, full optional fields
-///     populated (path, suggested_fix, related_docs, conformance).
-///   - index 1: a "clean" attempt with zero findings and no conformance.
 fn representative_trace() -> SynthTrace {
     let mut trace = SynthTrace::new();
-
-    trace.push(IterationRecord {
-        index: 0,
-        attempt: r#"{"$wosWorkflow":"1.0","broken":true}"#.to_string(),
-        lint_findings: vec![LintFinding {
-            rule_id: "K-001".into(),
-            severity: Severity::Error,
-            message: "state 'approved' has no outbound transition".into(),
-            path: Some("/states/approved".into()),
-            suggested_fix: Some(
-                "add property at /states/approved/type with value 'terminal'".into(),
-            ),
-            related_docs: vec![
-                "specs/kernel/spec.md#S4.2".into(),
-                "LINT-MATRIX.md#K-001".into(),
-            ],
-        }],
-        conformance: Some(ConformanceVerdict {
-            passed: false,
-            summary: "step 1: expected state 'approved', got 'rejected'".into(),
-        }),
-        input_tokens: 1500,
-        output_tokens: 450,
-        cache_read_tokens: 0,
-    });
-
-    trace.push(IterationRecord {
-        index: 1,
-        attempt: r#"{"$wosWorkflow":"1.0","clean":true}"#.to_string(),
-        lint_findings: vec![],
-        conformance: None,
-        input_tokens: 1620,
-        output_tokens: 380,
-        cache_read_tokens: 1500,
-    });
-
+    for (index, result) in [
+        ToolResult::Completed { report: json!({"passed":false,"status":"refused","identity":"native-identity","trace":{"steps":[]},"differences":[],"refusals":["native reason"]}) },
+        ToolResult::Error { error: json!({"message":"native preparation error","operation":"wos_run_conformance"}) },
+        ToolResult::NotRun { reason: "no independent scenario supplied".into() },
+    ].into_iter().enumerate() {
+        trace.push(IterationRecord {
+            index: index as u32,
+            attempt: "{}".into(),
+            assessment: CandidateAssessment {
+                findings: vec![LintFinding { rule_id:"K-001".into(),severity:Severity::Block,
+                    message:"repair".into(),path:Some("".into()),suggested_fix:Some("remove property".into()),related_docs:vec!["specs/kernel/spec.md".into()] }],
+                intake_error: (index == 2).then(|| json!({"operation":"parse-candidate","message":"unexpected EOF"})),
+                validation: CheckRecord { id:"static".into(),arguments:json!({"scope":"project"}),
+                    result:ToolResult::Completed { report:json!({"validation":{"scope":"project","status":"not-run","stages":[{"name":"t1-kernel","document":null,"document_version":null,"schema_id":null,"required":true,"status":"not-run","reasons":["native conversion skip"],"diagnostics":[]}],"diagnostics":[]}}) } },
+                replays:vec![CheckRecord{id:format!("scenario-{index}"),arguments:json!({}),result}],
+                disposition:CheckDisposition::Blocked,
+            },
+            input_tokens:10,output_tokens:5,cache_read_tokens:3,
+        });
+    }
     trace
 }
 
-/// Path to the published schema, relative to the workspace root.
-fn schema_path() -> PathBuf {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    manifest_dir
-        .parent()
-        .and_then(|crates| crates.parent())
-        .expect("workspace root is two levels above CARGO_MANIFEST_DIR")
-        .join("schemas/synth/wos-synth-trace.schema.json")
-}
-
-/// Load the published schema as `serde_json::Value`.
-fn load_published_schema() -> Value {
-    let path = schema_path();
-    let raw = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("failed to read {}: {e}", path.display()));
-    serde_json::from_str(&raw).unwrap_or_else(|e| panic!("failed to parse {}: {e}", path.display()))
-}
-
-/// Compile the published schema into a `jsonschema::Validator`.
-fn compile_schema() -> jsonschema::Validator {
-    compile_with_tooling(&load_published_schema())
-}
-
-fn compile_with_tooling(schema: &Value) -> jsonschema::Validator {
+fn compile(schema: &Value) -> jsonschema::Validator {
     let tooling: Value =
         serde_json::from_str(include_str!("../../../schemas/wos-tooling.schema.json")).unwrap();
     let registry = jsonschema::Registry::new()
@@ -109,118 +43,81 @@ fn compile_with_tooling(schema: &Value) -> jsonschema::Validator {
         .with_registry(&registry)
         .with_draft(jsonschema::Draft::Draft202012)
         .build(schema)
-        .expect("published schema and local tooling resource compile as Draft 2020-12")
+        .unwrap()
 }
 
-/// Format every validation error against `instance` for a panic message.
-fn format_errors(validator: &jsonschema::Validator, instance: &Value) -> String {
-    validator
-        .iter_errors(instance)
-        .map(|e| format!("  - at {}: {e}", e.instance_path()))
-        .collect::<Vec<_>>()
-        .join("\n")
+fn schemas() -> [Value; 2] {
+    [
+        serde_json::from_str(include_str!(
+            "../../../schemas/synth/wos-synth-trace.schema.json"
+        ))
+        .unwrap(),
+        json!({"$ref":"https://wos-spec.org/schemas/tooling/1.0#/$defs/synthTrace__SynthTrace"}),
+    ]
 }
 
 #[test]
-fn representative_trace_validates_against_published_schema() {
+fn complete_native_error_not_run_refused_trace_round_trips_in_both_views() {
     let trace = representative_trace();
-    let json = serde_json::to_value(&trace).expect("trace serializes");
-
-    let validator = compile_schema();
-    if !validator.is_valid(&json) {
-        panic!(
-            "SynthTrace serialization failed schema validation:\n{}\n\nserialized JSON:\n{}",
-            format_errors(&validator, &json),
-            serde_json::to_string_pretty(&json).unwrap(),
-        );
-    }
-}
-
-/// Build a validator that targets `/$defs/SynthOutcome` while keeping the
-/// rest of the schema (including sibling `$defs`) reachable for `$ref`
-/// resolution. We construct a synthetic root schema that hoists the
-/// published `$defs` block and `$ref`s into the SynthOutcome definition.
-fn synth_outcome_validator() -> jsonschema::Validator {
-    let published = load_published_schema();
-    let defs = published
-        .get("$defs")
-        .cloned()
-        .unwrap_or_else(|| serde_json::json!({}));
-
-    let wrapper = serde_json::json!({
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$defs": defs,
-        "$ref": "#/$defs/SynthOutcome"
-    });
-
-    compile_with_tooling(&wrapper)
-}
-
-#[test]
-fn converged_outcome_validates_against_outcome_schema() {
-    let outcome = SynthOutcome::Converged {
-        document: r#"{"$wosWorkflow":"1.0","clean":true}"#.to_string(),
-        trace: representative_trace(),
-    };
-    let json = serde_json::to_value(&outcome).expect("outcome serializes");
-
-    let validator = synth_outcome_validator();
-    if !validator.is_valid(&json) {
-        panic!(
-            "Converged outcome failed schema validation:\n{}\n\nserialized JSON:\n{}",
-            format_errors(&validator, &json),
-            serde_json::to_string_pretty(&json).unwrap(),
-        );
-    }
-}
-
-#[test]
-fn unconverged_outcome_validates_against_outcome_schema() {
-    let outcome = SynthOutcome::Unconverged {
-        last_attempt: r#"{"$wosWorkflow":"1.0","still_broken":true}"#.to_string(),
-        last_findings: vec![LintFinding {
-            rule_id: "K-001".into(),
-            severity: Severity::Error,
-            message: "state 'approved' has no outbound transition".into(),
-            path: None,
-            suggested_fix: None,
-            related_docs: vec![],
-        }],
-        trace: representative_trace(),
-    };
-    let json = serde_json::to_value(&outcome).expect("outcome serializes");
-
-    let validator = synth_outcome_validator();
-    if !validator.is_valid(&json) {
-        panic!(
-            "Unconverged outcome failed schema validation:\n{}\n\nserialized JSON:\n{}",
-            format_errors(&validator, &json),
-            serde_json::to_string_pretty(&json).unwrap(),
-        );
-    }
-}
-
-#[test]
-fn block_trace_validates_in_both_views_and_rejects_path_and_severity_drift() {
-    let mut trace = representative_trace();
-    trace.iterations[0].lint_findings[0].severity = Severity::Block;
     let value = serde_json::to_value(&trace).unwrap();
-    let canonical = compile_with_tooling(&serde_json::json!({
-        "$ref": "https://wos-spec.org/schemas/tooling/1.0#/$defs/synthTrace__SynthTrace"
-    }));
-    for validator in [compile_schema(), canonical] {
+    let roundtrip: SynthTrace = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(serde_json::to_value(roundtrip).unwrap(), value);
+    for schema in schemas() {
+        let validator = compile(&schema);
         assert!(
             validator.is_valid(&value),
-            "{}",
-            format_errors(&validator, &value)
+            "{:?}",
+            validator
+                .iter_errors(&value)
+                .map(|e| e.to_string())
+                .collect::<Vec<_>>()
         );
-        let mut invalid_severity = value.clone();
-        invalid_severity["iterations"][0]["lint_findings"][0]["severity"] =
-            serde_json::json!("fatal");
-        assert!(!validator.is_valid(&invalid_severity));
-        let mut invalid_path = value.clone();
-        invalid_path["iterations"][0]["lint_findings"][0]["path"] =
-            serde_json::json!("$.states.approved");
-        assert!(!validator.is_valid(&invalid_path));
+        let mut invalid = value.clone();
+        invalid["iterations"][0]["assessment"]["findings"][0]["severity"] = json!("fatal");
+        assert!(!validator.is_valid(&invalid));
+        let mut invalid = value.clone();
+        invalid["iterations"][0]["assessment"]["findings"][0]["path"] = json!("$.states");
+        assert!(!validator.is_valid(&invalid));
+        let mut invalid = value.clone();
+        invalid["iterations"][0]["assessment"]["validation"]["result"]["report"]["validation"]["status"] =
+            json!("invented");
+        assert!(
+            !validator.is_valid(&invalid),
+            "canonical validation schema must remain the report authority"
+        );
+    }
+}
+
+#[test]
+fn converged_draft_and_exhausted_outcomes_validate_and_round_trip() {
+    let validator = compile(
+        &json!({"$ref":"https://wos-spec.org/schemas/tooling/1.0#/$defs/synthTrace__SynthOutcome"}),
+    );
+    for outcome in [
+        SynthOutcome::Converged {
+            document: "{}".into(),
+            trace: representative_trace(),
+        },
+        SynthOutcome::Draft {
+            document: "{}".into(),
+            trace: representative_trace(),
+        },
+        SynthOutcome::Unconverged {
+            last_attempt: "{}".into(),
+            last_findings: vec![],
+            trace: representative_trace(),
+        },
+    ] {
+        let value = serde_json::to_value(outcome).unwrap();
+        assert!(
+            validator.is_valid(&value),
+            "{:?}",
+            validator
+                .iter_errors(&value)
+                .map(|e| e.to_string())
+                .collect::<Vec<_>>()
+        );
+        let roundtrip: SynthOutcome = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(roundtrip).unwrap(), value);
     }
 }

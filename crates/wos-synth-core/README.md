@@ -16,7 +16,7 @@ fold them together, do not split the provider abstraction across two crates.
 The dependency-inversion invariant is enforceable by:
 
 ```bash
-cargo tree -p wos-synth-core --edges normal | grep -E 'reqwest|tokio|anthropic'
+cargo tree -p wos-synth-core --edges normal | rg 'reqwest|tokio|anthropic|wos-lint|wos-conformance|wos-mcp'
 # expected: empty
 ```
 
@@ -43,12 +43,24 @@ motivation cites a benchmark failure must be reviewed against this rule.
 | File | Purpose |
 | --- | --- |
 | `src/prompter.rs` | `Prompter` trait + `CacheAnchor` + `Completion` types |
-| `src/tool_context.rs` | `ToolContext` trait + `LintFinding` / `Severity` types |
-| `src/tool_context/direct.rs` | `DirectToolContext` stopgap wrapping `wos-lint` |
+| `src/tool_context.rs` | One-candidate check port, complete owner evidence, and repair presentation |
 | `src/prompts.rs` | `Layer` enum + generate/repair prompt builders |
 | `src/synth_loop.rs` | Loop orchestrator |
 | `src/trace.rs` | `SynthTrace` + `IterationRecord` |
 | `src/errors.rs` | `SynthError` |
+
+The CLI host implements `ToolContext` through the shared MCP catalog. Each candidate
+retains its full native static report and every selected replay report or exact
+available error/not-run reason. The host reads the owners' aggregate results;
+findings are presentation for repair and do not decide convergence. A fresh native
+project registry belongs to each candidate check.
+
+`Converged` means the requested static and independent replay checks passed.
+`Draft` requires explicit static-only mode and records behavior as unchecked.
+`Interrupted` retains completed check evidence and the original repair-provider
+failure without inventing another candidate check or iteration.
+Neither outcome establishes publication readiness or hosted execution. See the
+[CLI configuration](../wos-synth-cli/README.md) for the normal host entry points.
 
 ## See also
 

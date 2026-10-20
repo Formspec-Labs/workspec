@@ -1,39 +1,76 @@
-//! [`ToolContext`] trait — the seam between the loop and the lint / conformance tools.
+//! Candidate-check port and complete evidence retained by the provider-independent loop.
 //!
-//! Default production implementation lives in [`crate::tool_context::direct`]
-//! (a thin wrapper over `wos-lint`). The trait exists so callers like
-//! `wos-bench` can wrap it for instrumentation, caching, or remoting without
-//! forking the loop.
+//! Hosts execute native tools and decide whether their requested checks completed.
+//! The loop stores those reports before deciding whether to repair or stop.
 
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
-pub mod direct;
-
-pub use direct::DirectToolContext;
-
-/// The set of tools the synthesis loop may invoke between LLM calls.
-///
-/// Conformance is intentionally an `Option` return today: most synthesized
-/// documents do not have an associated fixture, and conformance only becomes
-/// relevant when the caller supplies one. The seam is reserved for the
-/// future when fixture synthesis is automated.
+/// The single operation the synthesis loop needs from its tool host.
 #[async_trait]
 pub trait ToolContext: Send + Sync {
-    /// Lint the document (raw JSON) and return structured findings.
+    /// Check this exact candidate and retain every requested result.
     ///
-    /// Empty vec = clean. Non-empty = repairable problems for the loop to
-    /// feed back into the next prompt.
-    async fn lint_document(&self, document_json: &str) -> Result<Vec<LintFinding>, ToolError>;
+    /// Expected candidate/tool failures belong in the returned evidence. Reserve
+    /// errors for host failures that cannot produce an assessment.
+    ///
+    /// # Errors
+    /// Returns an error when the host cannot record an assessment.
+    async fn check_candidate(&self, document_json: &str) -> Result<CandidateAssessment, ToolError>;
+}
 
-    /// Run conformance for the document if a fixture is available.
-    ///
-    /// Returning `Ok(None)` means "no fixture supplied, skip"; the loop will
-    /// converge on lint cleanliness alone. `Ok(Some(verdict))` carries the
-    /// pass/fail and any divergence detail.
-    async fn run_conformance(
-        &self,
-        document_json: &str,
-    ) -> Result<Option<ConformanceVerdict>, ToolError>;
+/// The host's stopping decision for the requested synthesis checks.
+///
+/// This is not a publication, hosted-execution, or final readiness decision.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CheckDisposition {
+    /// Every requested static check and independently supplied replay passed.
+    ChecksPassed,
+    /// Explicit static-only draft completed; behavior remains unchecked.
+    DraftOnly,
+    /// A required check failed, refused, errored, or did not run.
+    Blocked,
+}
+
+/// Complete output or an explicit reason why no native report exists.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum ToolResult {
+    /// Untouched native tool output, including failed and refused native reports.
+    Completed { report: Value },
+    /// Exact available parser, authoring, or dispatch error detail.
+    Error { error: Value },
+    /// The operation did not execute; no passing report or identity is fabricated.
+    NotRun { reason: String },
+}
+
+/// One selected operation and its complete result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CheckRecord {
+    /// Stable host identifier, available even when preparation refuses.
+    pub id: String,
+    /// Selected tool arguments without the host-owned ephemeral project identifier.
+    pub arguments: Value,
+    /// Complete native evidence or explicit absence.
+    pub result: ToolResult,
+}
+
+/// Evidence and stopping decision for one immutable candidate.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CandidateAssessment {
+    /// Derived presentation input for the existing lint repair prompt.
+    pub findings: Vec<LintFinding>,
+    /// Native intake error when malformed/nonobject input could not be registered.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub intake_error: Option<Value>,
+    /// Full canonical static validation tool result.
+    pub validation: CheckRecord,
+    /// Every selected scenario in request order; absence is explicit not-run.
+    pub replays: Vec<CheckRecord>,
+    /// Narrow requested-check disposition supplied by the host.
+    pub disposition: CheckDisposition,
 }
 
 /// A single lint finding the loop can ask the LLM to repair.
@@ -70,23 +107,10 @@ pub enum Severity {
     Info,
 }
 
-/// Conformance result the loop can use to decide whether to keep iterating.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ConformanceVerdict {
-    /// True if the fixture passed end-to-end.
-    pub passed: bool,
-    /// Human-readable summary suitable for inclusion in a repair prompt.
-    pub summary: String,
-}
-
-/// Failures the tool surface itself can suffer (distinct from lint findings).
+/// A host failure that could not be represented as candidate evidence.
 #[derive(Debug, thiserror::Error)]
 pub enum ToolError {
-    /// Lint pipeline crashed (not the same as a lint finding).
-    #[error("lint pipeline failure: {0}")]
-    Lint(String),
-
-    /// Conformance harness crashed.
-    #[error("conformance harness failure: {0}")]
-    Conformance(String),
+    /// Host configuration or assessment transport failed.
+    #[error("candidate-check host failure: {0}")]
+    Execution(String),
 }

@@ -9,21 +9,35 @@ use serde::{Deserialize, Serialize};
 use crate::errors::SynthError;
 use crate::prompter::{Completion, Prompter};
 use crate::prompts::{Layer, build_generate_prompt, build_repair_prompt};
-use crate::tool_context::{LintFinding, Severity, ToolContext};
-use crate::trace::{IterationRecord, SynthTrace};
+use crate::tool_context::{CheckDisposition, LintFinding, ToolContext};
+use crate::trace::{IterationRecord, RunInterruption, SynthTrace};
 
 /// Result of running the loop to completion (or to the iteration cap).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "outcome", rename_all = "snake_case")]
 pub enum SynthOutcome {
-    /// All error- and block-severity findings cleared (and conformance passed if checked).
+    /// All requested synthesis checks passed, including independent replay.
     Converged {
         /// The final document as raw JSON text.
         document: String,
         /// Full loop trace.
         trace: SynthTrace,
     },
-    /// Iteration cap hit with errors or blockers still present.
+    /// Explicit static-only draft; requested static checks passed, behavior remains unchecked.
+    Draft {
+        /// The draft document as raw JSON text.
+        document: String,
+        /// Full evidence, including replay not-run.
+        trace: SynthTrace,
+    },
+    /// Provider repair failed after checks ran; their complete evidence remains available.
+    Interrupted {
+        /// Last checked candidate, unchanged by the failed provider call.
+        last_attempt: String,
+        /// Full evidence and original interruption detail.
+        trace: SynthTrace,
+    },
+    /// Iteration cap hit with required checks still incomplete or unsuccessful.
     Unconverged {
         /// Last attempt the loop produced.
         last_attempt: String,
@@ -52,25 +66,26 @@ pub async fn synthesize(
     let (mut attempt, mut completion) = generate(provider, problem, layer).await?;
 
     for index in 0..cap {
-        let findings = tools.lint_document(&attempt).await?;
-        let conformance = tools.run_conformance(&attempt).await?;
-
-        let errors_remain = findings
-            .iter()
-            .any(|f| matches!(f.severity, Severity::Error | Severity::Block));
-        let conformance_blocks = matches!(&conformance, Some(v) if !v.passed);
+        let assessment = tools.check_candidate(&attempt).await?;
+        let disposition = assessment.disposition;
+        let findings = assessment.findings.clone();
 
         trace.push(IterationRecord {
             index,
             attempt: attempt.clone(),
-            lint_findings: findings.clone(),
-            conformance: conformance.clone(),
+            assessment,
             input_tokens: completion.input_tokens,
             output_tokens: completion.output_tokens,
             cache_read_tokens: completion.cache_read_tokens,
         });
 
-        if !errors_remain && !conformance_blocks {
+        if disposition == CheckDisposition::DraftOnly {
+            return Ok(SynthOutcome::Draft {
+                document: attempt,
+                trace,
+            });
+        }
+        if disposition == CheckDisposition::ChecksPassed {
             return Ok(SynthOutcome::Converged {
                 document: attempt,
                 trace,
@@ -85,7 +100,20 @@ pub async fn synthesize(
             });
         }
 
-        let (next_attempt, next_completion) = repair(provider, &attempt, &findings, layer).await?;
+        let (next_attempt, next_completion) =
+            match repair(provider, &attempt, &findings, layer).await {
+                Ok(completion) => completion,
+                Err(error) => {
+                    trace.interruption = Some(RunInterruption {
+                        operation: "repair_provider".into(),
+                        error: error.to_string(),
+                    });
+                    return Ok(SynthOutcome::Interrupted {
+                        last_attempt: attempt,
+                        trace,
+                    });
+                }
+            };
         attempt = next_attempt;
         completion = next_completion;
     }
@@ -175,7 +203,7 @@ fn strip_fence_language(body: &str) -> &str {
 mod tests {
     use super::*;
     use crate::prompter::{CacheAnchor, PrompterError};
-    use crate::tool_context::{ConformanceVerdict, ToolError};
+    use crate::tool_context::{CandidateAssessment, CheckRecord, Severity, ToolError, ToolResult};
     use async_trait::async_trait;
     use std::collections::VecDeque;
     use std::sync::Mutex;
@@ -234,20 +262,37 @@ mod tests {
 
     #[async_trait]
     impl ToolContext for ScriptedTools {
-        async fn lint_document(&self, _doc: &str) -> Result<Vec<LintFinding>, ToolError> {
-            Ok(self
+        async fn check_candidate(&self, _doc: &str) -> Result<CandidateAssessment, ToolError> {
+            let findings = self
                 .finding_sets
                 .lock()
                 .unwrap()
                 .pop_front()
-                .unwrap_or_default())
-        }
-
-        async fn run_conformance(
-            &self,
-            _doc: &str,
-        ) -> Result<Option<ConformanceVerdict>, ToolError> {
-            Ok(None)
+                .unwrap_or_default();
+            let disposition = if findings.is_empty() {
+                CheckDisposition::ChecksPassed
+            } else {
+                CheckDisposition::Blocked
+            };
+            Ok(CandidateAssessment {
+                intake_error: None,
+                findings,
+                validation: CheckRecord {
+                    id: "static".into(),
+                    arguments: serde_json::json!({}),
+                    result: ToolResult::Completed {
+                        report: serde_json::json!({"validation":{"status":"pass"}}),
+                    },
+                },
+                replays: vec![CheckRecord {
+                    id: "scripted".into(),
+                    arguments: serde_json::json!({}),
+                    result: ToolResult::Completed {
+                        report: serde_json::json!({"passed":true}),
+                    },
+                }],
+                disposition,
+            })
         }
     }
 
@@ -329,7 +374,8 @@ mod tests {
             };
             assert_eq!(trace.iterations.len(), cap as usize);
             assert_eq!(
-                serde_json::to_value(&trace).unwrap()["iterations"][0]["lint_findings"][0]["severity"],
+                serde_json::to_value(&trace).unwrap()["iterations"][0]["assessment"]["findings"][0]
+                    ["severity"],
                 "block"
             );
         }
