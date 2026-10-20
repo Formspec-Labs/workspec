@@ -135,3 +135,49 @@ fn original_rules_schema_has_maintained_documentation_and_string_classifications
     .unwrap();
     assert!(diagnostics.is_empty(), "{diagnostics:#?}");
 }
+
+#[test]
+fn nested_clock_actual_shared_context_checks_whole_callback_and_missing_rules() {
+    for missing_rules in [false, true] {
+        let mut raw = fixture();
+        raw["integration"]["bindings"]["request"]["outputBinding"] =
+            json!({"caseFile.requestNotice":"$"});
+        raw["kernel"]["lifecycle"]["states"]["correction"]["onEntry"][0]["startAtExpression"] =
+            json!("caseFile.requestNotice.clock.governedSentAt");
+        if missing_rules {
+            raw["rules"]["timeoutDecisions"] = json!([]);
+            raw["rules"]["noticeRequirements"]["request"]["anchor"] = json!("none");
+        }
+        let rules = serde_json::from_value(raw["rules"].clone()).unwrap();
+        let profile = serde_json::from_value(raw["integration"].clone()).unwrap();
+        let report = validate_with_governance(
+            ValidationRequest {
+                candidate: &raw["kernel"],
+                dependencies: &[],
+                scope: ValidationScope::Document,
+            },
+            SelectedGovernanceContext {
+                rules: &rules,
+                integration: Some(&profile),
+            },
+        );
+        assert_eq!(
+            report.status,
+            if missing_rules {
+                CheckStatus::Fail
+            } else {
+                CheckStatus::Pass
+            },
+            "missing_rules={missing_rules}: {}",
+            serde_json::to_string_pretty(&report).unwrap()
+        );
+        if missing_rules {
+            assert!(
+                report
+                    .diagnostics
+                    .iter()
+                    .any(|d| d.rule_id == "NOTICE-GRAPH-001")
+            );
+        }
+    }
+}
