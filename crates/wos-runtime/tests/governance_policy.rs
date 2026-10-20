@@ -78,12 +78,12 @@ fn evidence() -> Value {
     })
 }
 fn selected(raw: Value) -> GovernancePolicySelection {
-    serde_json::from_value(json!({"version":1,"kernel":raw,
+    serde_json::from_value(json!({"version":2,"kernel":raw,"integration":null,
         "delivery":{"$wosDelivery":"1.0","targetWorkflow":"urn:test:governance-real-drain"},
-        "humanDecisions":[{"transition":{"from":"review","to":"decided","event":"review.completed"},
+        "rules":{"version":2,"noticeRequirements":{},"humanDecisions":[{"transition":{"from":"review","to":"decided","event":"review.completed"},
             "taskRef":"review","evidencePointer":"/data/governance","rules":[rule()],
             "criteria":["photoClear"],"caseFieldPaths":["/photo"],
-            "positiveFactors":["photoClear"],"negativeFactors":["gender"]}]}))
+            "positiveFactors":["photoClear"],"negativeFactors":["gender"]}]}}))
     .unwrap()
 }
 fn rig(
@@ -114,8 +114,15 @@ fn rig_created(
         restate_signature_fixture_bindings(),
     );
     if let Some(policy) = policy {
+        if let Some(profile) = policy.selection().integration.clone() {
+            runtime = runtime.with_integration_profile(profile);
+        }
         runtime = runtime
-            .with_governance_policy(policy.clone(), Default::default())
+            .with_governance_policy(
+                policy.clone(),
+                Default::default(),
+                &[wos_core::model::notice_requirements::NoticeCapability::LocalSmtpTestCapture],
+            )
             .unwrap();
     }
     let actor_bindings = raw["actors"]
@@ -311,10 +318,11 @@ fn selection_refuses_incomplete_coverage_foreign_delivery_and_unimplemented_due_
     ] {
         let mut selection = selected(kernel());
         match label {
-            "missing-binding" => selection.human_decisions.clear(),
+            "missing-binding" => selection.rules.human_decisions.clear(),
             "extra-binding" => selection
+                .rules
                 .human_decisions
-                .push(selection.human_decisions[0].clone()),
+                .push(selection.rules.human_decisions[0].clone()),
             "foreign-delivery" => selection.delivery["targetWorkflow"] = json!("urn:foreign"),
             "rights-impacting" => selection.kernel["impactLevel"] = json!("rights-impacting"),
             _ => unreachable!(),
@@ -386,10 +394,10 @@ fn due_selection() -> GovernancePolicySelection {
             "tags":["determination"],"actions":[{"action":"setData","path":"caseFile.caseClosed","value":false}]}]});
     raw["lifecycle"]["states"]["reopened"] = json!({"type":"final"});
     let mut selection = serde_json::to_value(selected(raw)).unwrap();
-    let mut review = selection["humanDecisions"][0].clone();
+    let mut review = selection["rules"]["humanDecisions"][0].clone();
     review["transition"] = json!({"from":"appealReview","to":"reopened","event":"appeal.reviewed"});
     review["taskRef"] = json!("appealReview");
-    selection["humanDecisions"]
+    selection["rules"]["humanDecisions"]
         .as_array_mut()
         .unwrap()
         .push(review);
@@ -400,15 +408,22 @@ fn due_selection() -> GovernancePolicySelection {
             {"id":"reasons","contentType":"text","content":"{{reason}}\n{{positiveCounterfactuals}}\n{{negativeCounterfactuals}}"},
             {"id":"appealRights","contentType":"appeal-rights","content":"Administrative reconsideration: {{appealWindow}}. This demo policy does not create a statutory hearing."},
             {"id":"appealInstructions","contentType":"action-required","content":"File through the applicant appeal task for {{appealBody}}."}]}}});
-    selection["dueProcess"] = json!({"noticeBindingId":"sendDenialNotice",
+    selection["rules"]["dueProcess"] = json!({"noticeBindingId":"sendDenialNotice",
         "effectiveTransitions":[{"from":"decided","to":"closed","event":"denial.noticeSent"}],
         "protectedEffects":[{"path":"/caseClosed","adverseValues":[true]}]});
-    selection["appeal"] = json!({"policyLabel":"demo-administrative-reconsideration",
+    selection["rules"]["appeal"] = json!({"policyLabel":"demo-administrative-reconsideration",
         "reviewBody":"the independent administrative reconsideration reviewer",
         "filingInstructions":"File through the applicant appeal task.","filedTransition":{"from":"closed","to":"appealReview","event":"appeal.filed"},
         "filedTaskRef":"appealRequest","proposalReferencePointer":"/data/proposalFactsRef",
         "reviewTaskRef":"appealReview","reviewerActor":"appealReviewer",
         "reviewTransitions":[{"from":"appealReview","to":"reopened","event":"appeal.reviewed"}]});
+    selection["rules"]["noticeRequirements"] = json!({"sendDenialNotice":{"observation":"transportAccepted","scope":"softwareFixture","anchor":"qualifiedObservation"}});
+    selection["integration"] = json!({"targetWorkflow":{"url":"urn:test:governance-real-drain","compatibleVersions":"1.0.0"},"bindings":{"sendDenialNotice":{"type":"callback","dispatchMode":"deferred","eventType":"urn:test:denial.requested","callbackEventType":"urn:test:denial.accepted"}}});
+    let decided = &mut selection["kernel"]["lifecycle"]["states"]["decided"];
+    decided["type"] = json!("compound");
+    decided["initialState"] = json!("denialWait");
+    decided["onEntry"] = json!([{"action":"invokeService","serviceRef":"sendDenialNotice","callbackPhase":"outbound"}]);
+    decided["states"] = json!({"denialWait":{"type":"atomic","transitions":[{"event":{"kind":"message","name":"denial.callback"},"target":"denialReceipt","actions":[{"action":"invokeService","serviceRef":"sendDenialNotice","callbackPhase":"inbound"},{"action":"emitEvent","eventType":"denial.noticeSent"}]}]},"denialReceipt":{"type":"final"}});
     serde_json::from_value(selection).unwrap()
 }
 
@@ -531,6 +546,7 @@ fn actual_adverse_proposal_is_deterministic_and_only_matching_retained_receipt_p
                 decisions: vec![],
                 notices: vec![receipt],
             },
+            &[wos_core::model::notice_requirements::NoticeCapability::LocalSmtpTestCapture],
         )
         .unwrap();
     runtime.drain_once(&id).unwrap();
@@ -575,6 +591,7 @@ fn mismatched_or_unretained_receipt_cannot_make_an_adverse_proposal_effective() 
                     decisions: vec![],
                     notices: vec![receipt],
                 },
+                &[wos_core::model::notice_requirements::NoticeCapability::LocalSmtpTestCapture],
             )
             .unwrap();
         assert!(
@@ -599,7 +616,7 @@ fn actual_mapping_cannot_close_before_a_receipt_and_initial_adverse_values_refus
     selection.kernel["contracts"]["review"]["responseMappingRef"] =
         json!("urn:test:actual-response-mapping");
     let mut selected = serde_json::to_value(selection).unwrap();
-    selected["dueProcess"]["protectedEffects"]
+    selected["rules"]["dueProcess"]["protectedEffects"]
         .as_array_mut()
         .unwrap()
         .push(json!({"path":"/decision","adverseValues":[true]}));
@@ -648,7 +665,11 @@ fn actual_mapping_cannot_close_before_a_receipt_and_initial_adverse_values_refus
         FixedClock,
         restate_signature_fixture_bindings(),
     )
-    .with_governance_policy(qualified.clone(), Default::default())
+    .with_governance_policy(
+        qualified.clone(),
+        Default::default(),
+        &[wos_core::model::notice_requirements::NoticeCapability::LocalSmtpTestCapture],
+    )
     .unwrap();
     let id = stack_common_typeid::testing::fixture_minter().mint_process_id();
     let result = runtime.create_process_with_actor_bindings(
@@ -716,6 +737,7 @@ fn closed_appeal_rig_with_period(
                 decisions: vec![],
                 notices: vec![receipt],
             },
+            &[wos_core::model::notice_requirements::NoticeCapability::LocalSmtpTestCapture],
         )
         .unwrap();
     runtime.drain_once(&id).unwrap();
@@ -912,12 +934,17 @@ fn timeout_rig() -> (
         .unwrap()
         .runtime_dispatch_label();
     let mut selected = serde_json::to_value(selection).unwrap();
-    selected["timeoutDecisions"] = json!([{"transition":{"from":"awaitingPhoto","to":"decided","event":event},
+    selected["rules"]["timeoutDecisions"] = json!([{"transition":{"from":"awaitingPhoto","to":"decided","event":event},
         "timerId":"photoResponse","responsePeriod":"P90D","requestNoticeBindingId":"sendPhotoRequest","correctionTaskRefs":["replacePhoto"],
         "rule":{"ruleId":"demo-original-ninety-day-photo-rule","description":"Explicit sample no-response rule; not law",
             "sourceAuthority":"policy","citation":"D1 selected demo policy P90D"},
         "reconsiderationRoute":"the retained late-photo task and authorized human reconsideration",
         "excludedFactors":["gender"]}]);
+    selected["rules"]["noticeRequirements"]["sendPhotoRequest"] = json!({"observation":"transportAccepted","scope":"softwareFixture","anchor":"qualifiedObservation"});
+    selected["integration"]["bindings"]["sendPhotoRequest"] = json!({"type":"callback","dispatchMode":"deferred","eventType":"urn:test:photo.requested","callbackEventType":"urn:test:photo.accepted","outputBinding":{"caseFile.requestSentAt":"$.sentAt"}});
+    selected["kernel"]["lifecycle"]["initialState"] = json!("requestPhoto");
+    selected["kernel"]["lifecycle"]["states"]["requestPhoto"] = json!({"type":"atomic","onEntry":[{"action":"invokeService","serviceRef":"sendPhotoRequest","callbackPhase":"outbound"}],"transitions":[{"event":{"kind":"message","name":"photo.callback"},"target":"photoNoticeRecorded","actions":[{"action":"invokeService","serviceRef":"sendPhotoRequest","callbackPhase":"inbound"},{"action":"emitEvent","eventType":"photo.periodStarts"}]}]});
+    selected["kernel"]["lifecycle"]["states"]["photoNoticeRecorded"] = json!({"type":"atomic","transitions":[{"event":{"kind":"message","name":"photo.periodStarts"},"target":"awaitingPhoto"}]});
     let selection: GovernancePolicySelection = serde_json::from_value(selected).unwrap();
     let policy = QualifiedGovernancePolicy::qualify(selection.clone()).unwrap();
     let clock = Arc::new(AtomicU64::new(original));
@@ -933,8 +960,13 @@ fn timeout_rig() -> (
         MovingClock(clock.clone()),
         restate_signature_fixture_bindings(),
     )
-    .with_governance_policy(policy.clone(), Default::default())
-    .unwrap();
+    .with_governance_policy(
+        policy.clone(),
+        Default::default(),
+        &[wos_core::model::notice_requirements::NoticeCapability::LocalSmtpTestCapture],
+    )
+    .unwrap()
+    .with_integration_profile(selection.integration.clone().unwrap());
     let process = runtime
         .create_process_with_actor_bindings(
             CreateProcessRequest {
@@ -963,6 +995,17 @@ fn timeout_rig() -> (
         )
         .unwrap();
     let id = process.process_id;
+    let request = store.load_record(&id).unwrap();
+    let subject = request
+        .process
+        .pending_callbacks
+        .keys()
+        .next()
+        .unwrap()
+        .clone();
+    runtime.enqueue_event(&id,wos_core::instance::PendingEvent{origin:None,event:"photo.callback".into(),actor_id:None,data:Some(json!({"id":"original-photo-callback","source":"urn:test:photo-provider","specversion":"1.0","type":"urn:test:photo.accepted","subject":subject,"data":{"sentAt":timestamp(original)}})),timestamp:timestamp(original),idempotency_token:None}).unwrap();
+    runtime.drain_once(&id).unwrap();
+    runtime.drain_once(&id).unwrap();
     let mut prior = store.load_record(&id).unwrap();
     let mut callback = wos_core::ProvenanceRecord::blank(
         &stack_common_typeid::testing::fixture_minter(),
@@ -1006,6 +1049,7 @@ fn timeout_rig() -> (
                 decisions: vec![],
                 notices: vec![receipt],
             },
+            &[wos_core::model::notice_requirements::NoticeCapability::LocalSmtpTestCapture],
         )
         .unwrap();
     (runtime, store, id, clock, effects)
@@ -1148,7 +1192,7 @@ fn selected_mapping_requires_exact_original_artifact_response_and_pin_without_ra
         "raw-fallback",
     ] {
         let mut selection = serde_json::to_value(selected(kernel())).unwrap();
-        selection["humanDecisions"][0]["evidenceMapping"] = mapping.clone();
+        selection["rules"]["humanDecisions"][0]["evidenceMapping"] = mapping.clone();
         let selection: GovernancePolicySelection = serde_json::from_value(selection).unwrap();
         let policy = QualifiedGovernancePolicy::qualify(selection.clone()).unwrap();
         // Real retained task acceptance remains authoritative. The producer's
@@ -1193,6 +1237,7 @@ fn selected_mapping_requires_exact_original_artifact_response_and_pin_without_ra
                     notices: vec![],
                     decisions,
                 },
+                &[wos_core::model::notice_requirements::NoticeCapability::LocalSmtpTestCapture],
             )
             .unwrap();
         let result = runtime.drain_once(&id);
@@ -1249,6 +1294,7 @@ fn generated_d1_native_policy_qualifies_exact_workflow_delivery_and_mapping_sele
     assert!(
         policy
             .selection()
+            .rules
             .human_decisions
             .iter()
             .all(|binding| binding.evidence_mapping.is_some())
@@ -1293,25 +1339,44 @@ fn selected_output_overlap_refuses_the_entire_action_list_before_any_effect() {
                 {"action":"invokeService","serviceRef":"earlier"},
                 {"action":"createTask","taskRef":"must-not-present","assignTo":"reviewer"},
                 {"action":"invokeService","serviceRef":"mapped"}]}));
-        selection.kernel["lifecycle"]["states"]["probeDone"] = json!({"type":"atomic"});
+        selection.kernel["lifecycle"]["states"]["probeDone"] = json!({"type":"final"});
         if protected != "/caseClosed" {
             selection
+                .rules
                 .due_process
                 .as_mut()
                 .unwrap()
                 .protected_effects
-                .push(wos_runtime::governance::ProtectedGovernanceEffect {
-                    path: protected.into(),
-                    adverse_values: vec![json!(true)],
-                });
+                .push(
+                    wos_core::model::governance_policy::ProtectedGovernanceEffect {
+                        path: protected.into(),
+                        adverse_values: vec![json!(true)],
+                    },
+                );
         }
+        selection.integration.as_mut().unwrap().bindings.insert("mapped".into(),serde_json::from_value(json!({"type":"request-response","interface":{"$ref":"urn:test:api"},"operation":"update","outputBinding":{target:"$.value"}})).unwrap());
+        let installed = selection.integration.clone().unwrap();
         let policy = QualifiedGovernancePolicy::qualify(selection.clone()).unwrap();
         let store = SharedInMemoryStore::default();
         let effects = Arc::new(AtomicUsize::new(0));
         let presentations = Arc::new(AtomicUsize::new(0));
-        let mut runtime=WosRuntime::new(store.clone(),Resolver(serde_json::from_value(selection.kernel).unwrap()),Presentations(presentations.clone()),DefaultRuntime::new(),OutputEffect(effects.clone()),DefaultRuntime::new(),FixedClock,restate_signature_fixture_bindings())
-            .with_governance_policy(policy,Default::default()).unwrap()
-            .with_integration_profile(serde_json::from_value(json!({"$wosIntegration":"1.0","targetWorkflow":{"url":"urn:test:governance-real-drain","compatibleVersions":"1.0.0"},"bindings":{"mapped":{"type":"request-response","interface":{"$ref":"urn:test:api"},"operation":"update","outputBinding":{target:"$.value"}}}})).unwrap());
+        let mut runtime = WosRuntime::new(
+            store.clone(),
+            Resolver(serde_json::from_value(selection.kernel).unwrap()),
+            Presentations(presentations.clone()),
+            DefaultRuntime::new(),
+            OutputEffect(effects.clone()),
+            DefaultRuntime::new(),
+            FixedClock,
+            restate_signature_fixture_bindings(),
+        )
+        .with_governance_policy(
+            policy,
+            Default::default(),
+            &[wos_core::model::notice_requirements::NoticeCapability::LocalSmtpTestCapture],
+        )
+        .unwrap()
+        .with_integration_profile(installed);
         let id = stack_common_typeid::testing::fixture_minter().mint_process_id();
         runtime
             .create_process_with_actor_bindings(
@@ -1479,14 +1544,17 @@ fn actual_protected_task_mapping_preserves_artifacts_tasks_replay_and_case() {
     selection.kernel["contracts"]["review"]["responseMappingRef"] =
         json!("urn:test:actual-response-mapping");
     selection
+        .rules
         .due_process
         .as_mut()
         .unwrap()
         .protected_effects
-        .push(wos_runtime::governance::ProtectedGovernanceEffect {
-            path: "/decision".into(),
-            adverse_values: vec![json!(true)],
-        });
+        .push(
+            wos_core::model::governance_policy::ProtectedGovernanceEffect {
+                path: "/decision".into(),
+                adverse_values: vec![json!(true)],
+            },
+        );
     let policy = QualifiedGovernancePolicy::qualify(selection.clone()).unwrap();
     let (mut runtime, store, id, effects) = rig_created(selection.kernel, Some(policy));
     let before_record = store.load_record(&id).unwrap();
@@ -1527,7 +1595,11 @@ fn foreign_kernel_policy_installation_refuses_before_creation_or_effects() {
         restate_signature_fixture_bindings(),
     );
     assert!(matches!(
-        runtime.with_governance_policy(policy, Default::default()),
+        runtime.with_governance_policy(
+            policy,
+            Default::default(),
+            &[wos_core::model::notice_requirements::NoticeCapability::LocalSmtpTestCapture]
+        ),
         Err(RuntimeError::GovernancePolicy(_))
     ));
     assert_eq!(effects.load(Ordering::SeqCst), 0);
@@ -1537,7 +1609,13 @@ fn foreign_kernel_policy_installation_refuses_before_creation_or_effects() {
 fn protected_paths_require_actual_json_pointer_escapes_at_qualification() {
     for path in ["caseClosed", "/bad~escape", "/bad~2escape", "/trailing~"] {
         let mut selection = due_selection();
-        selection.due_process.as_mut().unwrap().protected_effects[0].path = path.into();
+        selection
+            .rules
+            .due_process
+            .as_mut()
+            .unwrap()
+            .protected_effects[0]
+            .path = path.into();
         assert!(
             QualifiedGovernancePolicy::qualify(selection).is_err(),
             "{path}"

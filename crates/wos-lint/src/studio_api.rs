@@ -81,3 +81,5 @@ pub use crate::validation::{
     CheckStatus, DefinitionSelection, DependencyRole, ResolvedDependency, ValidationReport,
     ValidationRequest, ValidationScope, ValidationStage, validate,
 };
+
+pub use crate::validation::{SelectedGovernanceContext, validate_with_governance};

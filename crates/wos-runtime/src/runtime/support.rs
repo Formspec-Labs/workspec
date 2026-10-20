@@ -40,21 +40,6 @@ pub(super) fn merge_case_state(target: &mut serde_json::Value, updates: &serde_j
     }
 }
 
-pub(super) fn normalize_semver_range_expression(expression: &str) -> String {
-    expression
-        .split("||")
-        .map(|clause| {
-            let clause = clause.trim();
-            if clause.contains(',') {
-                clause.to_string()
-            } else {
-                clause.split_whitespace().collect::<Vec<_>>().join(", ")
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" || ")
-}
-
 pub(super) fn impact_level_label(level: ImpactLevel) -> String {
     match level {
         ImpactLevel::RightsImpacting => "rights-impacting",

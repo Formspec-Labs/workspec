@@ -279,6 +279,7 @@ impl WosRuntime {
             &definition_url,
             &definition_version,
         )?;
+        self.validate_governance_selection(&kernel)?;
         let mut evaluator = Evaluator::with_time_and_case_state_and_actor(
             kernel.clone(),
             &minter,

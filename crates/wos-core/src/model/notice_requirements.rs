@@ -28,12 +28,12 @@ pub struct NoticeRequirement {
 pub enum NoticeObservation {
     /// Authenticated transport acceptance, without recipient receipt authority.
     TransportAccepted,
-    /// Actual recipient receipt, requiring an installed recipient qualifier.
-    RecipientReceived,
+    /// Documented provider delivery, without a reading or acknowledgment claim.
+    ProviderDelivered,
+    /// Observed opening, without a reading or acknowledgment claim.
+    OpenObserved,
     /// Actual recipient acknowledgment, requiring its installed qualifier.
     RecipientAcknowledged,
-    /// Existing same-instant fixture receipt, only for mechanical software tests.
-    FixtureQualifiedReceipt,
 }
 
 /// Scope of notice evidence and all facts derived from it.
@@ -83,8 +83,6 @@ pub enum NoticeCapability {
     Smtp,
     /// Explicit local SMTP capture, limited to software fixture scope.
     LocalSmtpTestCapture,
-    /// Qualified fixture receipt after original work/content/time checks.
-    SoftwareFixtureReceipt,
 }
 
 /// Located declaration or selected-provider refusal.
@@ -124,30 +122,9 @@ pub fn check_notice_declaration(
     path: &str,
 ) -> Vec<NoticeRequirementIssue> {
     let mut issues = Vec::new();
-    let fixture = requirement.observation == NoticeObservation::FixtureQualifiedReceipt;
-    let recipient = matches!(
-        requirement.observation,
-        NoticeObservation::RecipientReceived | NoticeObservation::RecipientAcknowledged
-    );
-    if (fixture && requirement.scope != NoticeScope::SoftwareFixture)
-        || (recipient && requirement.scope != NoticeScope::Production)
-    {
-        issues.push(NoticeRequirementIssue {
-            rule_id: "NOTICE-001",
-            path: format!("{path}/scope"),
-            message: "fixture qualification requires softwareFixture scope; real recipient observations require production scope",
-        });
-    }
     let expected_anchor = if consequence == NoticeConsequence::OrdinaryStatus {
         NoticeAnchor::None
     } else {
-        if requirement.observation == NoticeObservation::TransportAccepted {
-            issues.push(NoticeRequirementIssue {
-                rule_id: "NOTICE-002",
-                path: format!("{path}/observation"),
-                message: "transport acceptance cannot authorize a recipient-qualified deadline, adverse effect or appeal window",
-            });
-        }
         NoticeAnchor::QualifiedObservation
     };
     if requirement.anchor != expected_anchor {
@@ -166,9 +143,9 @@ pub fn check_notice_declaration(
 /// Check declarations and actual installed capability before selected execution.
 ///
 /// Capability matching is exact: neither SMTP nor local capture satisfies any
-/// recipient observation. Fixture capability satisfies only fixture evidence in
-/// software scope. Original result, receipt association and immutable same-instant
-/// qualification remain mandatory checks in the owning adapter/runtime.
+/// other observation. Capture supports only software scope. Original result,
+/// message association and immutable observation-time checks remain mandatory
+/// in the owning adapter/runtime.
 #[must_use]
 pub fn check_notice_support(
     requirement: &NoticeRequirement,
@@ -188,10 +165,6 @@ pub fn check_notice_support(
             ) | (
                 NoticeCapability::LocalSmtpTestCapture,
                 NoticeObservation::TransportAccepted,
-                NoticeScope::SoftwareFixture
-            ) | (
-                NoticeCapability::SoftwareFixtureReceipt,
-                NoticeObservation::FixtureQualifiedReceipt,
                 NoticeScope::SoftwareFixture
             )
         )

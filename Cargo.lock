@@ -6096,6 +6096,7 @@ dependencies = [
  "indexmap 2.14.0",
  "insta",
  "jsonschema 0.46.1",
+ "semver",
  "serde",
  "serde_json",
  "stack-common-typeid",

@@ -12,10 +12,14 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use wos_core::eval::ObservedTransition;
 use wos_core::instance::{PendingEvent, WorkflowProcess};
+use wos_core::model::governance_policy::{
+    DueProcessBinding, GovernancePolicyRules, GovernanceTransition, HumanDecisionBinding,
+    TimeoutDecisionBinding,
+};
 use wos_core::{GovernanceDocument, KernelDocument, ProvenanceKind, ProvenanceRecord};
 use wos_events::governance::{
     AdverseNoticeProposal, CounterfactualEvidence, CounterfactualPolarity, DecisionEvidence,
-    ReasoningEvidence, RuleReference,
+    ReasoningEvidence,
 };
 
 use crate::runtime::RuntimeError;
@@ -45,54 +49,6 @@ pub struct RuntimeGovernanceResultContext<'a> {
     pub now_iso: &'a str,
 }
 
-/// Exact authored transition selected by a finite governance binding.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct GovernanceTransition {
-    /// Original global source state identifier.
-    pub from: String,
-    /// Original global target state identifier.
-    pub to: String,
-    /// Original authored or actual native event label.
-    pub event: String,
-}
-
-/// Human decision evidence selected from an accepted native task artifact.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct HumanDecisionBinding {
-    /// Actual transition, not a state-name approximation.
-    pub transition: GovernanceTransition,
-    /// Task declaration whose accepted artifact supplies the judgment.
-    pub task_ref: String,
-    /// JSON pointer to structured DecisionEvidence in the accepted response.
-    pub evidence_pointer: String,
-    /// Optional pinned owning Mapping applied to the unchanged accepted Response.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub evidence_mapping: Option<GovernanceEvidenceMapping>,
-    /// Exact permitted rule references from the selected source policy.
-    pub rules: Vec<RuleReference>,
-    /// Complete selected criterion identifiers.
-    pub criteria: Vec<String>,
-    /// Snapshot paths this finite policy permits as decision evidence.
-    pub case_field_paths: Vec<String>,
-    /// Controllable criterion/factor identifiers permitted for positive evidence.
-    pub positive_factors: Vec<String>,
-    /// Irrelevant factors the actual human review must explicitly exclude.
-    pub negative_factors: Vec<String>,
-}
-
-/// Immutable owning Mapping selected by the workflow's decision policy.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct GovernanceEvidenceMapping {
-    /// Existing selected Formspec Mapping reference.
-    #[serde(rename = "ref")]
-    pub reference: String,
-    /// Exact raw-file SHA-256 from the existing selected processor.
-    pub sha256: String,
-}
-
 /// Read-only normalized evidence from an exact original accepted artifact.
 ///
 /// The current binding owner applies the selected maintained Mapping outside
@@ -110,28 +66,6 @@ pub struct CapturedGovernanceDecision {
     pub mapping_sha256: String,
     /// Maintained Mapping output; validated as closed DecisionEvidence.
     pub evidence: Value,
-}
-
-/// A business-field value that cannot become adverse without its original notice.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ProtectedGovernanceEffect {
-    /// Exact JSON pointer into the actual case file.
-    pub path: String,
-    /// Finite selected values representing effective adverse treatment.
-    pub adverse_values: Vec<Value>,
-}
-
-/// Finite before-effective notice capability selected by the workflow owner.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct DueProcessBinding {
-    /// Owning delivery callback binding, independently qualified by the host.
-    pub notice_binding_id: String,
-    /// Actual transitions allowed to make the original proposal effective.
-    pub effective_transitions: Vec<GovernanceTransition>,
-    /// Complete selected adverse business writes, checked also on task Mapping.
-    pub protected_effects: Vec<ProtectedGovernanceEffect>,
 }
 
 /// A qualified historical receipt captured by the existing notice owner.
@@ -179,52 +113,6 @@ pub struct CapturedGovernanceEvidence {
     pub decisions: Vec<CapturedGovernanceDecision>,
 }
 
-/// Finite no-response rule executed from actual time and complete retained artifacts.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct TimeoutDecisionBinding {
-    /// Actual unconditional native timeout transition.
-    pub transition: GovernanceTransition,
-    /// Original retained native timer identifier.
-    pub timer_id: String,
-    /// Selected whole-calendar-day response period, such as `P90D`.
-    pub response_period: String,
-    /// Actual qualified original request-notice binding.
-    pub request_notice_binding_id: String,
-    /// Complete correction-task declarations relevant to this no-response rule.
-    pub correction_task_refs: Vec<String>,
-    /// Explicit selected demo rule; this does not assert a legal source.
-    pub rule: RuleReference,
-    /// Actual maintained late-evidence/reconsideration route described by the rule.
-    pub reconsideration_route: String,
-    /// Factors excluded by this finite rule's restricted input dependencies.
-    pub excluded_factors: Vec<String>,
-}
-
-/// Actual filing and independent human review for the selected demo appeal rule.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct AppealBinding {
-    /// Explicit selected policy label; this does not assert a legal source.
-    pub policy_label: String,
-    /// Authored name of the independent reconsideration body.
-    pub review_body: String,
-    /// Authored filing instructions included in the original notice.
-    pub filing_instructions: String,
-    /// Actual transition consuming a real applicant filing task completion.
-    pub filed_transition: GovernanceTransition,
-    /// Authored applicant filing task.
-    pub filed_task_ref: String,
-    /// Pointer to the original proposal Facts reference in its accepted artifact.
-    pub proposal_reference_pointer: String,
-    /// Authored independently assigned human review task.
-    pub review_task_ref: String,
-    /// Workflow-local declared human selected separately from the original reviewer.
-    pub reviewer_actor: String,
-    /// Exact actual review transitions, also covered by human decision bindings.
-    pub review_transitions: Vec<GovernanceTransition>,
-}
-
 /// Closed startup selection for the initial attributable human-decision slice.
 ///
 /// Only supported actual transition bindings are admitted. System timeout,
@@ -239,17 +127,10 @@ pub struct GovernancePolicySelection {
     pub kernel: Value,
     /// Exact independently selected Delivery document.
     pub delivery: Value,
-    /// Complete human determination coverage for the admitted selection.
-    pub human_decisions: Vec<HumanDecisionBinding>,
-    /// Explicit supported before-effective capability; omitted policies cannot promise it.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub due_process: Option<DueProcessBinding>,
-    /// Explicit actual no-response rules; no synthetic human evidence is created.
-    #[serde(default)]
-    pub timeout_decisions: Vec<TimeoutDecisionBinding>,
-    /// Actual independently assigned administrative reconsideration.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub appeal: Option<AppealBinding>,
+    /// Original core-owned Rules, without copied editable fields.
+    pub rules: GovernancePolicyRules,
+    /// Exact separately selected integration profile.
+    pub integration: Option<wos_core::model::integration::IntegrationProfileDocument>,
 }
 
 /// Immutable selected governance that cannot be constructed without validation.
@@ -269,11 +150,39 @@ impl QualifiedGovernancePolicy {
     /// timeout and appeal obligations must select their supported finite owners.
     pub fn qualify(selection: GovernancePolicySelection) -> Result<Self, RuntimeError> {
         require(
-            selection.version == 1,
+            selection.version == 2,
             "unsupported governance selection version",
         )?;
         let kernel: KernelDocument = serde_json::from_value(selection.kernel.clone())
             .map_err(|_| refused("invalid selected kernel"))?;
+        let rules_value = serde_json::to_value(&selection.rules)
+            .map_err(|_| refused("Rules cannot serialize"))?;
+        if let Some(error) = wos_core::model::governance_policy::rules_validator()
+            .iter_errors(&rules_value)
+            .next()
+        {
+            return Err(refused(&format!(
+                "WOS-SCHEMA-001 /rules{}: {error}",
+                error.instance_path()
+            )));
+        }
+        let analysis = wos_core::model::governance_policy::analyze_governance_policy(
+            &kernel,
+            &selection.rules,
+            selection.integration.as_ref(),
+        );
+        if let Some(issue) = analysis.flow.issues.iter().find(|i| i.is_error()) {
+            return Err(refused(&format!(
+                "{} {}: {}",
+                issue.rule_id, issue.path, issue.message
+            )));
+        }
+        if let Some(gap) = analysis.flow.gaps.first() {
+            return Err(refused(&format!(
+                "WOS-FLOW-005 {}: {}",
+                gap.path, gap.reason
+            )));
+        }
         let raw = selection
             .kernel
             .get("governance")
@@ -324,20 +233,22 @@ impl QualifiedGovernancePolicy {
             Some("rights-impacting" | "safety-impacting")
         ) || governance.due_process.is_some();
         require(
-            !requires_due_process || selection.due_process.is_some(),
+            !requires_due_process || selection.rules.due_process.is_some(),
             "required before-effective governance capability missing",
         )?;
         require(
-            selection.due_process.is_some()
-                || (selection.appeal.is_none() && selection.timeout_decisions.is_empty()),
+            selection.rules.due_process.is_some()
+                || (selection.rules.appeal.is_none()
+                    && selection.rules.timeout_decisions.is_empty()),
             "timeout or appeal capability requires before-effective selection",
         )?;
         require(
-            !selection.human_decisions.is_empty() || !selection.timeout_decisions.is_empty(),
+            !selection.rules.human_decisions.is_empty()
+                || !selection.rules.timeout_decisions.is_empty(),
             "decision bindings missing",
         )?;
         let mut seen = BTreeSet::new();
-        for binding in &selection.human_decisions {
+        for binding in &selection.rules.human_decisions {
             require(
                 seen.insert(
                     serde_json::to_string(&binding.transition)
@@ -375,11 +286,13 @@ impl QualifiedGovernancePolicy {
             collect_required_transitions(id, state, &mut declared, &mut state_ids)?;
         }
         let covered = selection
+            .rules
             .human_decisions
             .iter()
             .map(|binding| &binding.transition)
             .chain(
                 selection
+                    .rules
                     .timeout_decisions
                     .iter()
                     .map(|binding| &binding.transition),
@@ -396,7 +309,7 @@ impl QualifiedGovernancePolicy {
                 }),
             "declared determination coverage differs",
         )?;
-        for binding in &selection.human_decisions {
+        for binding in &selection.rules.human_decisions {
             if let Some(mapping) = &binding.evidence_mapping {
                 require(
                     !mapping.reference.trim().is_empty()
@@ -446,6 +359,32 @@ impl QualifiedGovernancePolicy {
         serde_json::to_value(kernel).ok() == serde_json::to_value(&self.kernel).ok()
     }
 
+    pub(crate) fn matches_integration(
+        &self,
+        profile: Option<&wos_core::model::integration::IntegrationProfileDocument>,
+    ) -> bool {
+        self.selection.integration.as_ref() == profile
+    }
+    pub(crate) fn check_notice_capabilities(
+        &self,
+        installed: &[wos_core::model::notice_requirements::NoticeCapability],
+    ) -> Result<(), RuntimeError> {
+        if let Some(issue) = wos_core::model::governance_policy::check_policy_notice_support(
+            &self.kernel,
+            &self.selection.rules,
+            self.selection.integration.as_ref(),
+            installed,
+        )
+        .first()
+        {
+            return Err(refused(&format!(
+                "{} {}: {}",
+                issue.rule_id, issue.path, issue.message
+            )));
+        }
+        Ok(())
+    }
+
     pub(crate) fn kernel(&self) -> &KernelDocument {
         &self.kernel
     }
@@ -480,6 +419,7 @@ impl QualifiedGovernancePolicy {
             .ok_or_else(|| refused("adverse explanation missing"))?;
         let appeal = self
             .selection
+            .rules
             .appeal
             .as_ref()
             .ok_or_else(|| refused("appeal selection missing"))?;
@@ -718,7 +658,7 @@ impl QualifiedGovernancePolicy {
         evidence: &CapturedGovernanceEvidence,
         decisions: &[DecisionAudit],
     ) -> Result<Vec<AppealAudit>, RuntimeError> {
-        let Some(binding) = &self.selection.appeal else {
+        let Some(binding) = &self.selection.rules.appeal else {
             return Ok(Vec::new());
         };
         let mut filed = Vec::new();
@@ -736,6 +676,7 @@ impl QualifiedGovernancePolicy {
             let (facts, proposal) = retained_proposal(context.prior, proposal_ref)?;
             let due = self
                 .selection
+                .rules
                 .due_process
                 .as_ref()
                 .ok_or_else(|| refused("appeal due-process selection missing"))?;
@@ -872,6 +813,7 @@ impl QualifiedGovernancePolicy {
         for facts in required_facts(&context)? {
             let bindings: Vec<_> = self
                 .selection
+                .rules
                 .human_decisions
                 .iter()
                 .filter(|binding| {
@@ -887,6 +829,7 @@ impl QualifiedGovernancePolicy {
                 .collect();
             let timeouts = self
                 .selection
+                .rules
                 .timeout_decisions
                 .iter()
                 .filter(|binding| transition_matches_facts(&binding.transition, facts))
@@ -901,7 +844,7 @@ impl QualifiedGovernancePolicy {
                 timeout_decision(&context, facts, timeouts[0], evidence)?
             });
         }
-        if let Some(due_process) = &self.selection.due_process {
+        if let Some(due_process) = &self.selection.rules.due_process {
             for decision in &mut decisions {
                 if decision.counterfactual.is_some() {
                     decision.reasoning.adverse_notice =
@@ -1730,7 +1673,7 @@ fn qualify_due_process(
     selection: &GovernancePolicySelection,
     kernel: &KernelDocument,
 ) -> Result<(), RuntimeError> {
-    let Some(due) = &selection.due_process else {
+    let Some(due) = &selection.rules.due_process else {
         return Ok(());
     };
     let policy = selection
@@ -1832,6 +1775,7 @@ fn qualify_due_process(
         )?;
     }
     let appeal = selection
+        .rules
         .appeal
         .as_ref()
         .ok_or_else(|| refused("independent appeal capability missing"))?;
@@ -1867,6 +1811,7 @@ fn qualify_due_process(
     for review in &appeal.review_transitions {
         require(
             selection
+                .rules
                 .human_decisions
                 .iter()
                 .filter(|human| {
@@ -1877,7 +1822,7 @@ fn qualify_due_process(
             "appeal review lacks exact human determination binding",
         )?;
     }
-    for timeout in &selection.timeout_decisions {
+    for timeout in &selection.rules.timeout_decisions {
         calendar_period_ms(&timeout.response_period)?;
         let transition = find_selected_transition(kernel, &timeout.transition)
             .ok_or_else(|| refused("timeout transition missing"))?;
@@ -2067,7 +2012,7 @@ fn require_unique_nonblank(values: &[String]) -> Result<(), RuntimeError> {
 fn require(valid: bool, code: &'static str) -> Result<(), RuntimeError> {
     if valid { Ok(()) } else { Err(refused(code)) }
 }
-fn refused(code: &'static str) -> RuntimeError {
+fn refused(code: &str) -> RuntimeError {
     RuntimeError::GovernancePolicy(code.into())
 }
 

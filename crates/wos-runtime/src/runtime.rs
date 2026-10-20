@@ -77,7 +77,7 @@ pub use signature::{
 };
 use support::{
     format_timestamp, impact_level_label, make_task_id, merge_case_state,
-    normalize_semver_range_expression, parse_timestamp,
+    parse_timestamp,
 };
 
 const COMPLETION_EVENT_EXTENSION_KEY: &str = "x-wos-runtime-completion-event";
@@ -11749,10 +11749,10 @@ mod tests {
         raw["contracts"] = serde_json::json!({"review":{"binding":"formspec","ref":"urn:test:review","definitionVersion":"1.0.0"}});
         raw["lifecycle"]["states"]["open"]["onEntry"] = serde_json::json!([{"action":"createTask","taskRef":"review","assignTo":"reviewer","contractRef":"review","completionEvent":"human.completed"}]);
         raw["lifecycle"]["states"]["open"]["transitions"].as_array_mut().unwrap().push(serde_json::json!({"event":"human.completed","target":"done","tags":["determination"]}));
-        let selection:crate::governance::GovernancePolicySelection=serde_json::from_value(serde_json::json!({"version":1,"kernel":raw,"delivery":{"targetWorkflow":"urn:test:generic-ai-composition"},"humanDecisions":[{"transition":{"from":"open","to":"done","event":"human.completed"},"taskRef":"review","evidencePointer":"/data/governance","rules":[{"ruleId":"rule:human"}],"criteria":["retained"],"caseFieldPaths":["/retained"],"positiveFactors":[],"negativeFactors":[]}]})).unwrap();
+        let selection:crate::governance::GovernancePolicySelection=serde_json::from_value(serde_json::json!({"version":2,"kernel":raw,"delivery":{"targetWorkflow":"urn:test:generic-ai-composition"},"rules":{"version":2,"noticeRequirements":{},"humanDecisions":[{"transition":{"from":"open","to":"done","event":"human.completed"},"taskRef":"review","evidencePointer":"/data/governance","rules":[{"ruleId":"rule:human"}],"criteria":["retained"],"caseFieldPaths":["/retained"],"positiveFactors":[],"negativeFactors":[]}]}})).unwrap();
         let policy = crate::governance::QualifiedGovernancePolicy::qualify(selection).unwrap();
         let mut runtime = runtime_with_kernel(serde_json::from_value(raw).unwrap())
-            .with_governance_policy(policy, Default::default())
+            .with_governance_policy(policy, Default::default(), &[wos_core::model::notice_requirements::NoticeCapability::LocalSmtpTestCapture])
             .unwrap();
         let id = stack_common_typeid::testing::fixture_minter().mint_process_id();
         runtime

@@ -1,0 +1,768 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/wos-governance-policy-rules.schema.json",
+  "type": "object",
+  "description": "Governance Rules v2 bind human decisions, notice requirements, timers and appeal routes to the selected Workflow. These declarations require graph validation and independently supplied runtime capabilities; they do not prove that an email was sent or grant provider authority.",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 2,
+      "description": "Version of this original Rules document. Version 2 selects the closed schema and its actual Workflow and IntegrationProfile association checks.",
+      "examples": [
+        2
+      ]
+    },
+    "humanDecisions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/HumanDecisionBinding"
+      },
+      "description": "Human decision bindings identify the task, transition and accepted evidence required for each covered determination.",
+      "examples": [
+        [
+          {
+            "transition": {
+              "from": "review",
+              "to": "proposal",
+              "event": "review.completed"
+            },
+            "taskRef": "review",
+            "evidencePointer": "/data/governance",
+            "rules": [
+              {
+                "ruleId": "demo-retained-review",
+                "description": "Retained demonstration rule, not a legal authority.",
+                "sourceAuthority": "policy",
+                "citation": "Test selected source"
+              }
+            ],
+            "criteria": [
+              "criterion"
+            ],
+            "caseFieldPaths": [
+              "/photo"
+            ],
+            "positiveFactors": [
+              "criterion"
+            ],
+            "negativeFactors": [
+              "gender"
+            ]
+          },
+          {
+            "transition": {
+              "from": "appealReview",
+              "to": "done",
+              "event": "appealReview.completed"
+            },
+            "taskRef": "appealReview",
+            "evidencePointer": "/data/governance",
+            "rules": [
+              {
+                "ruleId": "demo-retained-review",
+                "description": "Retained demonstration rule, not a legal authority.",
+                "sourceAuthority": "policy",
+                "citation": "Test selected source"
+              }
+            ],
+            "criteria": [
+              "criterion"
+            ],
+            "caseFieldPaths": [
+              "/photo"
+            ],
+            "positiveFactors": [
+              "criterion"
+            ],
+            "negativeFactors": [
+              "gender"
+            ]
+          }
+        ]
+      ]
+    },
+    "noticeRequirements": {
+      "type": "object",
+      "description": "Required notice observations keyed by the exact IntegrationProfile callback binding identifier. An observation declaration requires independent runtime support before use.",
+      "propertyNames": {
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "$ref": "https://wos-spec.org/schemas/wos-notice-requirements.schema.json"
+      },
+      "examples": [
+        {
+          "request": {
+            "observation": "transportAccepted",
+            "scope": "softwareFixture",
+            "anchor": "qualifiedObservation"
+          },
+          "adverse": {
+            "observation": "transportAccepted",
+            "scope": "softwareFixture",
+            "anchor": "qualifiedObservation"
+          }
+        }
+      ]
+    },
+    "dueProcess": {
+      "$ref": "#/$defs/DueProcessBinding",
+      "description": "Original notice requirement and exact transitions or case values protected before an adverse proposal can take effect.",
+      "examples": [
+        {
+          "noticeBindingId": "adverse",
+          "effectiveTransitions": [
+            {
+              "from": "proposal",
+              "to": "closed",
+              "event": "adverse.accepted"
+            }
+          ],
+          "protectedEffects": [
+            {
+              "path": "/caseClosed",
+              "adverseValues": [
+                true
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "timeoutDecisions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/TimeoutDecisionBinding"
+      },
+      "description": "No-response decisions tie actual timer transitions to the original request notice and the complete correction tasks.",
+      "examples": [
+        [
+          {
+            "transition": {
+              "from": "correction",
+              "to": "proposal",
+              "event": "$timeout.response"
+            },
+            "timerId": "response",
+            "responsePeriod": "P90D",
+            "requestNoticeBindingId": "request",
+            "correctionTaskRefs": [
+              "correction"
+            ],
+            "rule": {
+              "ruleId": "demo-retained-review",
+              "description": "Retained demonstration rule, not a legal authority.",
+              "sourceAuthority": "policy",
+              "citation": "Test selected source"
+            },
+            "reconsiderationRoute": "appealRequest",
+            "excludedFactors": [
+              "gender"
+            ]
+          }
+        ]
+      ]
+    },
+    "appeal": {
+      "$ref": "#/$defs/AppealBinding",
+      "description": "Applicant filing and independently assigned human review associated with concrete tasks and transitions in the selected Workflow.",
+      "examples": [
+        {
+          "policyLabel": "demo-reconsideration",
+          "reviewBody": "Independent reviewer",
+          "filingInstructions": "Use the appeal request task.",
+          "filedTransition": {
+            "from": "closed",
+            "to": "appealReview",
+            "event": "appealRequest.completed"
+          },
+          "filedTaskRef": "appealRequest",
+          "proposalReferencePointer": "/data/proposalFactsRef",
+          "reviewTaskRef": "appealReview",
+          "reviewerActor": "appealReviewer",
+          "reviewTransitions": [
+            {
+              "from": "appealReview",
+              "to": "done",
+              "event": "appealReview.completed"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "required": [
+    "version",
+    "humanDecisions",
+    "noticeRequirements"
+  ],
+  "$defs": {
+    "GovernanceTransition": {
+      "type": "object",
+      "description": "An exact actual transition, using global state identifiers.",
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Global identifier of the actual source state in the selected Workflow. It must resolve with the target and event to the declared transition.",
+          "examples": [
+            "review"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "to": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Global identifier of the actual target state in the selected Workflow. A matching state name alone does not establish the required transition.",
+          "examples": [
+            "proposal"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "event": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Exact authored message name or native event label consumed by this transition, such as the timer label $timeout.response.",
+          "examples": [
+            "review.completed"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        }
+      },
+      "required": [
+        "from",
+        "to",
+        "event"
+      ]
+    },
+    "GovernanceEvidenceMapping": {
+      "type": "object",
+      "description": "The exact original selected Mapping.",
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Reference selecting the maintained Formspec Mapping applied to the unchanged accepted Response when extracting decision evidence.",
+          "examples": [
+            "urn:test:decision-evidence-mapping"
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          }
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-fA-F]{64}$",
+          "description": "SHA-256 of the selected Mapping file bytes, prefixed with sha256:. The all-zero example is illustrative and does not qualify an actual file.",
+          "examples": [
+            "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          ]
+        }
+      },
+      "required": [
+        "ref",
+        "sha256"
+      ]
+    },
+    "HumanDecisionBinding": {
+      "type": "object",
+      "description": "Actual human decision coverage and permitted original evidence.",
+      "additionalProperties": false,
+      "properties": {
+        "transition": {
+          "$ref": "#/$defs/GovernanceTransition",
+          "description": "Actual determination transition covered by this human decision binding; its task and evidence must resolve in the same selected Workflow.",
+          "examples": [
+            {
+              "from": "review",
+              "to": "proposal",
+              "event": "review.completed"
+            }
+          ]
+        },
+        "taskRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Workflow-local task declaration whose accepted artifact supplies the structured human judgment for the selected transition.",
+          "examples": [
+            "review"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "evidencePointer": {
+          "type": "string",
+          "minLength": 1,
+          "description": "JSON Pointer to the structured decision evidence inside the actual accepted task artifact; this does not name an arbitrary external record.",
+          "examples": [
+            "/data/governance"
+          ],
+          "x-wos": {
+            "openStringKind": "pathExpression"
+          }
+        },
+        "evidenceMapping": {
+          "$ref": "#/$defs/GovernanceEvidenceMapping",
+          "description": "Optional immutable Formspec Mapping selected by reference and raw-file digest to extract evidence from the accepted Response.",
+          "examples": [
+            {
+              "ref": "urn:test:decision-evidence-mapping",
+              "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/RuleReference"
+          },
+          "description": "Exact rule references permitted as support for this decision by the selected policy. The references do not establish legal authority by themselves.",
+          "examples": [
+            [
+              {
+                "ruleId": "demo-retained-review",
+                "description": "Retained demonstration rule, not a legal authority.",
+                "sourceAuthority": "policy",
+                "citation": "Test selected source"
+              }
+            ]
+          ]
+        },
+        "criteria": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Complete criterion identifiers the selected human decision must address in its retained evidence Each entry retains the exact identifier or path selected by the policy.",
+            "examples": [
+              "criterion"
+            ],
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          },
+          "description": "Complete criterion identifiers the selected human decision must address in its retained evidence.",
+          "examples": [
+            [
+              "criterion"
+            ]
+          ]
+        },
+        "caseFieldPaths": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "JSON Pointers selecting case-file values that the policy permits in the retained decision-evidence snapshot Each entry retains the exact identifier or path selected by the policy.",
+            "examples": [
+              "/photo"
+            ],
+            "x-wos": {
+              "openStringKind": "pathExpression"
+            }
+          },
+          "description": "JSON Pointers selecting case-file values that the policy permits in the retained decision-evidence snapshot.",
+          "examples": [
+            [
+              "/photo"
+            ]
+          ]
+        },
+        "positiveFactors": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Controllable criterion or factor identifiers permitted in positive counterfactual evidence for the selected decision Each entry retains the exact identifier or path selected by the policy.",
+            "examples": [
+              "criterion"
+            ],
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          },
+          "description": "Controllable criterion or factor identifiers permitted in positive counterfactual evidence for the selected decision.",
+          "examples": [
+            [
+              "criterion"
+            ]
+          ]
+        },
+        "negativeFactors": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Irrelevant factor identifiers that the human review must explicitly exclude from its decision reasoning Each entry retains the exact identifier or path selected by the policy.",
+            "examples": [
+              "gender"
+            ],
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          },
+          "description": "Irrelevant factor identifiers that the human review must explicitly exclude from its decision reasoning.",
+          "examples": [
+            [
+              "gender"
+            ]
+          ]
+        }
+      },
+      "required": [
+        "transition",
+        "taskRef",
+        "evidencePointer",
+        "rules",
+        "criteria",
+        "caseFieldPaths",
+        "positiveFactors",
+        "negativeFactors"
+      ]
+    },
+    "ProtectedGovernanceEffect": {
+      "type": "object",
+      "description": "Actual finite protected adverse case values.",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "JSON Pointer to the case-file value protected from becoming adverse before its selected notice requirement is satisfied.",
+          "examples": [
+            "/caseClosed"
+          ],
+          "x-wos": {
+            "openStringKind": "pathExpression"
+          }
+        },
+        "adverseValues": {
+          "type": "array",
+          "minItems": 1,
+          "items": {},
+          "description": "Finite values representing adverse treatment at this case-file path. Declaring them protects the write; it does not authorize it.",
+          "examples": [
+            [
+              true
+            ]
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "adverseValues"
+      ]
+    },
+    "DueProcessBinding": {
+      "type": "object",
+      "description": "Original required notice and actual protected continuations.",
+      "additionalProperties": false,
+      "properties": {
+        "noticeBindingId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Exact callback binding identifier in noticeRequirements and the selected IntegrationProfile for the required adverse-decision notice.",
+          "examples": [
+            "adverse"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "effectiveTransitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GovernanceTransition"
+          },
+          "description": "Actual transitions allowed to make the original proposal effective after the selected notice requirement has been satisfied.",
+          "examples": [
+            [
+              {
+                "from": "proposal",
+                "to": "closed",
+                "event": "adverse.accepted"
+              }
+            ]
+          ]
+        },
+        "protectedEffects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ProtectedGovernanceEffect"
+          },
+          "description": "Case-file paths and adverse values subject to the same required notice, including writes produced by task Mapping.",
+          "examples": [
+            [
+              {
+                "path": "/caseClosed",
+                "adverseValues": [
+                  true
+                ]
+              }
+            ]
+          ]
+        }
+      },
+      "required": [
+        "noticeBindingId",
+        "effectiveTransitions",
+        "protectedEffects"
+      ]
+    },
+    "TimeoutDecisionBinding": {
+      "type": "object",
+      "description": "Actual no-response transition and original notice clock.",
+      "additionalProperties": false,
+      "properties": {
+        "transition": {
+          "$ref": "#/$defs/GovernanceTransition",
+          "description": "Actual unconditional timeout transition evaluated with the retained timer and complete task evidence for this no-response decision.",
+          "examples": [
+            {
+              "from": "correction",
+              "to": "proposal",
+              "event": "$timeout.response"
+            }
+          ]
+        },
+        "timerId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the actual retained native timer whose event drives this decision. Qualification checks its authored start and continuation.",
+          "examples": [
+            "response"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "responsePeriod": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Whole-calendar-day response duration, such as P90D, matched to the authored timer and anchored to the original qualifying notice observation.",
+          "examples": [
+            "P90D"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "requestNoticeBindingId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Exact callback binding identifier for the original request notice whose qualifying observation anchors this response period.",
+          "examples": [
+            "request"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "correctionTaskRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Complete correction-task declarations considered before this no-response rule can determine that the requested response is absent Each entry retains the exact identifier or path selected by the policy.",
+            "examples": [
+              "correction"
+            ],
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          },
+          "description": "Complete correction-task declarations considered before this no-response rule can determine that the requested response is absent.",
+          "examples": [
+            [
+              "correction"
+            ]
+          ]
+        },
+        "rule": {
+          "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/RuleReference",
+          "description": "Explicit selected policy rule supporting the no-response decision. The declaration does not establish an independent legal source.",
+          "examples": [
+            {
+              "ruleId": "demo-retained-review",
+              "description": "Retained demonstration rule, not a legal authority.",
+              "sourceAuthority": "policy",
+              "citation": "Test selected source"
+            }
+          ]
+        },
+        "reconsiderationRoute": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the maintained late-evidence or reconsideration route named by the selected rule and exposed by the authored workflow.",
+          "examples": [
+            "appealRequest"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "excludedFactors": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Factor identifiers excluded from the restricted inputs of this no-response rule; absence of a response does not supply those facts Each entry retains the exact identifier or path selected by the policy.",
+            "examples": [
+              "gender"
+            ],
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          },
+          "description": "Factor identifiers excluded from the restricted inputs of this no-response rule; absence of a response does not supply those facts.",
+          "examples": [
+            [
+              "gender"
+            ]
+          ]
+        }
+      },
+      "required": [
+        "transition",
+        "timerId",
+        "responsePeriod",
+        "requestNoticeBindingId",
+        "correctionTaskRefs",
+        "rule",
+        "reconsiderationRoute",
+        "excludedFactors"
+      ]
+    },
+    "AppealBinding": {
+      "type": "object",
+      "description": "Original filing and separately assigned human reconsideration.",
+      "additionalProperties": false,
+      "properties": {
+        "policyLabel": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Authored label identifying this reconsideration policy in retained evidence; the label alone does not assert legal authority.",
+          "examples": [
+            "demo-reconsideration"
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
+        },
+        "reviewBody": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable name of the independent reconsideration body included in the original notice and retained appeal information.",
+          "examples": [
+            "Independent reviewer"
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "filingInstructions": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable directions for filing an appeal through the authored applicant task, as included in the original notice.",
+          "examples": [
+            "Use the appeal request task."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "filedTaskRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Workflow-local applicant filing task whose accepted completion provides the real appeal request for the filing transition.",
+          "examples": [
+            "appealRequest"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "proposalReferencePointer": {
+          "type": "string",
+          "minLength": 1,
+          "description": "JSON Pointer to the original proposal Facts reference in the accepted appeal artifact, preserving the decision being challenged.",
+          "examples": [
+            "/data/proposalFactsRef"
+          ],
+          "x-wos": {
+            "openStringKind": "pathExpression"
+          }
+        },
+        "reviewTaskRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Workflow-local task declaration for independently assigned human reconsideration of the original proposal.",
+          "examples": [
+            "appealReview"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "reviewerActor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the declared human reviewer actor, selected separately from the original decision maker in this Workflow.",
+          "examples": [
+            "appealReviewer"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "filedTransition": {
+          "$ref": "#/$defs/GovernanceTransition",
+          "description": "Actual transition consuming completion of the applicant filing task and entering the authored appeal-review path.",
+          "examples": [
+            {
+              "from": "closed",
+              "to": "appealReview",
+              "event": "appealRequest.completed"
+            }
+          ]
+        },
+        "reviewTransitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GovernanceTransition"
+          },
+          "description": "Actual reconsideration transitions, each also covered by a human decision binding and its accepted evidence.",
+          "examples": [
+            [
+              {
+                "from": "appealReview",
+                "to": "done",
+                "event": "appealReview.completed"
+              }
+            ]
+          ]
+        }
+      },
+      "required": [
+        "policyLabel",
+        "reviewBody",
+        "filingInstructions",
+        "filedTaskRef",
+        "proposalReferencePointer",
+        "reviewTaskRef",
+        "reviewerActor",
+        "filedTransition",
+        "reviewTransitions"
+      ]
+    }
+  }
+}

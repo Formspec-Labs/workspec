@@ -1,0 +1,467 @@
+{
+  "version": 2,
+  "kernel": {
+    "$wosWorkflow": "1.0",
+    "url": "urn:test:notice-policy",
+    "version": "1.0.0",
+    "impactLevel": "rights-impacting",
+    "actors": [
+      {
+        "id": "applicant",
+        "type": "human"
+      },
+      {
+        "id": "reviewer",
+        "type": "human"
+      },
+      {
+        "id": "appealReviewer",
+        "type": "human"
+      }
+    ],
+    "contracts": {
+      "review": {
+        "binding": "formspec",
+        "ref": "urn:test:review",
+        "definitionVersion": "1.0.0"
+      }
+    },
+    "governance": {
+      "audit": {
+        "reasoningTier": {
+          "requiredForTags": [
+            "determination"
+          ]
+        },
+        "counterfactualTier": {
+          "requiredForTags": [
+            "adverse-decision"
+          ]
+        }
+      },
+      "dueProcess": {
+        "adverseDecisionPolicy": {
+          "noticeRequired": true,
+          "noticeTiming": "beforeEffective",
+          "explanationLevel": "individualized",
+          "counterfactualRequired": true,
+          "noticeTemplateKey": "denial",
+          "appealMechanism": {
+            "enabled": true,
+            "appealWindow": "P30D",
+            "reviewerRoles": [
+              "appealReviewer"
+            ],
+            "reviewerConstraint": "independentFromOriginal",
+            "continuationOfServices": false
+          }
+        }
+      }
+    },
+    "lifecycle": {
+      "initialState": "sendRequest",
+      "states": {
+        "sendRequest": {
+          "type": "atomic",
+          "onEntry": [
+            {
+              "action": "invokeService",
+              "serviceRef": "request",
+              "callbackPhase": "outbound"
+            }
+          ],
+          "transitions": [
+            {
+              "event": {
+                "kind": "message",
+                "name": "request.accepted"
+              },
+              "target": "requestObserved",
+              "actions": [
+                {
+                  "action": "invokeService",
+                  "serviceRef": "request",
+                  "callbackPhase": "inbound"
+                },
+                {
+                  "action": "emitEvent",
+                  "eventType": "request.periodStarts"
+                }
+              ]
+            }
+          ]
+        },
+        "correction": {
+          "type": "atomic",
+          "onEntry": [
+            {
+              "action": "startTimer",
+              "timerId": "response",
+              "duration": "P90D",
+              "event": {
+                "kind": "timer",
+                "timerId": "response",
+                "source": "custom"
+              },
+              "startAtExpression": "caseFile.requestSentAt"
+            },
+            {
+              "action": "createTask",
+              "taskRef": "correction",
+              "assignTo": "applicant",
+              "contractRef": "review",
+              "completionEvent": "correction.completed"
+            }
+          ],
+          "transitions": [
+            {
+              "event": {
+                "kind": "message",
+                "name": "correction.completed"
+              },
+              "target": "review",
+              "actions": [
+                {
+                  "action": "cancelTimer",
+                  "timerId": "response"
+                }
+              ]
+            },
+            {
+              "event": {
+                "kind": "timer",
+                "timerId": "response",
+                "source": "custom"
+              },
+              "target": "proposal",
+              "tags": [
+                "determination",
+                "adverse-decision"
+              ]
+            }
+          ]
+        },
+        "review": {
+          "type": "atomic",
+          "onEntry": [
+            {
+              "action": "createTask",
+              "taskRef": "review",
+              "assignTo": "reviewer",
+              "contractRef": "review",
+              "completionEvent": "review.completed"
+            }
+          ],
+          "transitions": [
+            {
+              "event": {
+                "kind": "message",
+                "name": "review.completed"
+              },
+              "target": "proposal",
+              "tags": [
+                "determination",
+                "adverse-decision"
+              ]
+            }
+          ]
+        },
+        "proposal": {
+          "type": "atomic",
+          "onEntry": [
+            {
+              "action": "invokeService",
+              "serviceRef": "adverse",
+              "callbackPhase": "outbound"
+            }
+          ],
+          "transitions": [
+            {
+              "event": {
+                "kind": "message",
+                "name": "adverse.accepted"
+              },
+              "target": "closed",
+              "actions": [
+                {
+                  "action": "invokeService",
+                  "serviceRef": "adverse",
+                  "callbackPhase": "inbound"
+                },
+                {
+                  "action": "setData",
+                  "path": "caseFile.caseClosed",
+                  "value": true
+                }
+              ]
+            }
+          ]
+        },
+        "closed": {
+          "type": "atomic",
+          "onEntry": [
+            {
+              "action": "createTask",
+              "taskRef": "appealRequest",
+              "assignTo": "applicant",
+              "contractRef": "review",
+              "completionEvent": "appealRequest.completed"
+            }
+          ],
+          "transitions": [
+            {
+              "event": {
+                "kind": "message",
+                "name": "appealRequest.completed"
+              },
+              "target": "appealReview"
+            }
+          ]
+        },
+        "appealReview": {
+          "type": "atomic",
+          "onEntry": [
+            {
+              "action": "createTask",
+              "taskRef": "appealReview",
+              "assignTo": "appealReviewer",
+              "contractRef": "review",
+              "completionEvent": "appealReview.completed"
+            }
+          ],
+          "transitions": [
+            {
+              "event": {
+                "kind": "message",
+                "name": "appealReview.completed"
+              },
+              "target": "done",
+              "tags": [
+                "determination"
+              ]
+            }
+          ]
+        },
+        "done": {
+          "type": "final"
+        },
+        "requestObserved": {
+          "type": "atomic",
+          "transitions": [
+            {
+              "event": {
+                "kind": "message",
+                "name": "request.periodStarts"
+              },
+              "target": "correction"
+            }
+          ]
+        }
+      }
+    },
+    "title": "Explicit selected notice policy controls",
+    "custody": {
+      "trustProfileRef": "urn:test:declared-custody-not-qualified",
+      "anchorRequirements": []
+    }
+  },
+  "rules": {
+    "version": 2,
+    "humanDecisions": [
+      {
+        "transition": {
+          "from": "review",
+          "to": "proposal",
+          "event": "review.completed"
+        },
+        "taskRef": "review",
+        "evidencePointer": "/data/governance",
+        "rules": [
+          {
+            "ruleId": "demo-retained-review",
+            "description": "Retained demonstration rule, not a legal authority.",
+            "sourceAuthority": "policy",
+            "citation": "Test selected source"
+          }
+        ],
+        "criteria": [
+          "criterion"
+        ],
+        "caseFieldPaths": [
+          "/photo"
+        ],
+        "positiveFactors": [
+          "criterion"
+        ],
+        "negativeFactors": [
+          "gender"
+        ]
+      },
+      {
+        "transition": {
+          "from": "appealReview",
+          "to": "done",
+          "event": "appealReview.completed"
+        },
+        "taskRef": "appealReview",
+        "evidencePointer": "/data/governance",
+        "rules": [
+          {
+            "ruleId": "demo-retained-review",
+            "description": "Retained demonstration rule, not a legal authority.",
+            "sourceAuthority": "policy",
+            "citation": "Test selected source"
+          }
+        ],
+        "criteria": [
+          "criterion"
+        ],
+        "caseFieldPaths": [
+          "/photo"
+        ],
+        "positiveFactors": [
+          "criterion"
+        ],
+        "negativeFactors": [
+          "gender"
+        ]
+      }
+    ],
+    "noticeRequirements": {
+      "request": {
+        "observation": "transportAccepted",
+        "scope": "softwareFixture",
+        "anchor": "qualifiedObservation"
+      },
+      "adverse": {
+        "observation": "transportAccepted",
+        "scope": "softwareFixture",
+        "anchor": "qualifiedObservation"
+      }
+    },
+    "dueProcess": {
+      "noticeBindingId": "adverse",
+      "effectiveTransitions": [
+        {
+          "from": "proposal",
+          "to": "closed",
+          "event": "adverse.accepted"
+        }
+      ],
+      "protectedEffects": [
+        {
+          "path": "/caseClosed",
+          "adverseValues": [
+            true
+          ]
+        }
+      ]
+    },
+    "timeoutDecisions": [
+      {
+        "transition": {
+          "from": "correction",
+          "to": "proposal",
+          "event": "$timeout.response"
+        },
+        "timerId": "response",
+        "responsePeriod": "P90D",
+        "requestNoticeBindingId": "request",
+        "correctionTaskRefs": [
+          "correction"
+        ],
+        "rule": {
+          "ruleId": "demo-retained-review",
+          "description": "Retained demonstration rule, not a legal authority.",
+          "sourceAuthority": "policy",
+          "citation": "Test selected source"
+        },
+        "reconsiderationRoute": "appealRequest",
+        "excludedFactors": [
+          "gender"
+        ]
+      }
+    ],
+    "appeal": {
+      "policyLabel": "demo-reconsideration",
+      "reviewBody": "Independent reviewer",
+      "filingInstructions": "Use the appeal request task.",
+      "filedTransition": {
+        "from": "closed",
+        "to": "appealReview",
+        "event": "appealRequest.completed"
+      },
+      "filedTaskRef": "appealRequest",
+      "proposalReferencePointer": "/data/proposalFactsRef",
+      "reviewTaskRef": "appealReview",
+      "reviewerActor": "appealReviewer",
+      "reviewTransitions": [
+        {
+          "from": "appealReview",
+          "to": "done",
+          "event": "appealReview.completed"
+        }
+      ]
+    }
+  },
+  "integration": {
+    "targetWorkflow": {
+      "url": "urn:test:notice-policy",
+      "compatibleVersions": "1.0.0"
+    },
+    "bindings": {
+      "request": {
+        "type": "callback",
+        "dispatchMode": "deferred",
+        "eventType": "urn:test:request.requested",
+        "callbackEventType": "urn:test:request.accepted",
+        "outputBinding": {
+          "caseFile.requestSentAt": "$.sentAt"
+        }
+      },
+      "adverse": {
+        "type": "callback",
+        "dispatchMode": "deferred",
+        "eventType": "urn:test:adverse.requested",
+        "callbackEventType": "urn:test:adverse.accepted",
+        "outputBinding": {
+          "caseFile.adverseSentAt": "$.sentAt"
+        }
+      }
+    }
+  },
+  "delivery": {
+    "$wosDelivery": "1.0",
+    "targetWorkflow": "urn:test:notice-policy",
+    "notifications": {
+      "templates": {
+        "denial": {
+          "category": "adverse-decision",
+          "subject": "Individualized test decision for {{caseId}}",
+          "sections": [
+            {
+              "id": "determination",
+              "contentType": "text",
+              "content": "{{determination}}"
+            },
+            {
+              "id": "reasons",
+              "contentType": "text",
+              "content": "{{reason}} {{positiveCounterfactuals}} {{negativeCounterfactuals}}"
+            },
+            {
+              "id": "appealRights",
+              "contentType": "appeal-rights",
+              "content": "Review window {{appealWindow}}."
+            },
+            {
+              "id": "appealInstructions",
+              "contentType": "action-required",
+              "content": "Apply to {{appealBody}}."
+            }
+          ]
+        }
+      }
+    }
+  }
+}

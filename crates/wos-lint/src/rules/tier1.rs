@@ -27,10 +27,19 @@ pub(crate) fn check_with_coverage(
     diagnostics: &mut Vec<LintDiagnostic>,
     skipped: &mut Vec<crate::validation::SemanticSkip>,
 ) {
+    check_with_governance(doc, diagnostics, skipped, None);
+}
+
+pub(crate) fn check_with_governance(
+    doc: &WosDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+    skipped: &mut Vec<crate::validation::SemanticSkip>,
+    context: Option<&crate::validation::SelectedGovernanceContext<'_>>,
+) {
     match doc.kind {
         // $wosWorkflow carries lifecycle, governance, agents, signature, bindings,
         // custody, advanced, assurance in one envelope (ADR 0076).
-        DocumentKind::Workflow => check_workflow(doc, diagnostics, skipped),
+        DocumentKind::Workflow => check_workflow(doc, diagnostics, skipped, context),
         // $wosDelivery carries calendar, notification templates, correspondence.
         DocumentKind::Delivery => {
             check_delivery(doc, diagnostics);
@@ -63,6 +72,7 @@ fn check_workflow(
     doc: &WosDocument,
     diagnostics: &mut Vec<LintDiagnostic>,
     skipped: &mut Vec<crate::validation::SemanticSkip>,
+    context: Option<&crate::validation::SelectedGovernanceContext<'_>>,
 ) {
     let root = &doc.value;
 
@@ -83,10 +93,25 @@ fn check_workflow(
                 );
             }
 
-            check_lifecycle_initial_state_resolves_typed(&kernel, diagnostics); // K-032
-            check_initial_state_keys_into_states_typed(&kernel, diagnostics); // K-016
             let mut graph_gaps = Vec::new();
-            super::control_flow::check(&kernel, diagnostics, &mut graph_gaps);
+            if let Some(context) = context {
+                let analysis = wos_core::model::governance_policy::analyze_governance_policy(
+                    &kernel,
+                    context.rules,
+                    context.integration,
+                );
+                super::control_flow::append(analysis.flow, diagnostics, &mut graph_gaps);
+            } else {
+                super::control_flow::check(&kernel, diagnostics, &mut graph_gaps);
+                if kernel
+                    .governance
+                    .as_ref()
+                    .and_then(|g| g.pointer("/dueProcess/adverseDecisionPolicy/noticeRequired"))
+                    == Some(&Value::Bool(true))
+                {
+                    skipped.push(crate::validation::SemanticSkip::new("selected-governance","/governance/dueProcess", "original Rules and selected IntegrationProfile were not supplied; mandatory notice associations were not checked".into()));
+                }
+            }
             skipped.extend(graph_gaps.into_iter().map(|gap| {
                 crate::validation::SemanticSkip::new("workflow-control-flow", gap.path, gap.reason)
             }));
@@ -417,29 +442,6 @@ fn check_ver_level_for_fallback_chain(root: &Value, diagnostics: &mut Vec<LintDi
 // Typed kernel checks
 // ---------------------------------------------------------------------------
 
-/// K-032: lifecycle initialState MUST resolve to a key in the relevant
-/// `states` map. ONE rule id covers TWO sites:
-///   - Root: `/lifecycle/initialState` → key in `lifecycle.states`
-///   - Compound: `<state-path>/initialState` → key in that state's `states`
-/// Consumers suppressing K-032 suppress both. Diagnostic `path` distinguishes
-/// the call site. Splitting into K-032 (root) + K-033 (compound) was
-/// considered and deferred — same normative invariant, two scope sites.
-fn check_lifecycle_initial_state_resolves_typed(
-    kernel: &KernelDocument,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    let init = kernel.lifecycle.initial_state.as_str();
-    if !kernel.lifecycle.states.contains_key(init) {
-        diagnostics.push(LintDiagnostic::t1_error(
-            "K-032",
-            "/lifecycle/initialState",
-            format!(
-                "lifecycle initialState '{init}' is not a key in lifecycle.states (Kernel S4.1)"
-            ),
-        ));
-    }
-}
-
 /// Transition `actor` MUST use the same lexical pattern as `actors[].id`
 /// (ASCII letter first; then letters, digits, `.`, `_`, `-`).
 fn transition_actor_id_syntax_valid(id: &str) -> bool {
@@ -462,57 +464,6 @@ fn check_state_type_semantics_typed(
     diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     match state.kind {
-        StateKind::Final => {
-            // K-001
-            if !state.transitions.is_empty() {
-                diagnostics.push(LintDiagnostic::t1_error(
-                    "K-001",
-                    path,
-                    "final state must not have outgoing transitions",
-                ));
-            }
-        }
-        StateKind::Compound => {
-            // K-002
-            if state.initial_state.is_none() {
-                diagnostics.push(LintDiagnostic::t1_error(
-                    "K-002",
-                    path,
-                    "compound state must declare initialState",
-                ));
-            }
-            if state.states.is_empty() {
-                diagnostics.push(LintDiagnostic::t1_error(
-                    "K-002",
-                    path,
-                    "compound state must declare substates in states map",
-                ));
-            }
-            // K-032 (same rule id as root lifecycle check): compound `initialState`
-            // MUST resolve within this state's `states` map. Diagnostic `path`
-            // distinguishes root `/lifecycle/initialState` vs compound state path.
-            if let Some(init) = state.initial_state.as_deref() {
-                if !state.states.contains_key(init) {
-                    diagnostics.push(LintDiagnostic::t1_error(
-                        "K-032",
-                        path,
-                        format!(
-                            "compound initialState '{init}' is not a key in this state's `states` map"
-                        ),
-                    ));
-                }
-            }
-        }
-        StateKind::Parallel => {
-            // K-003
-            if state.regions.is_empty() {
-                diagnostics.push(LintDiagnostic::t1_error(
-                    "K-003",
-                    path,
-                    "parallel state must declare regions",
-                ));
-            }
-        }
         StateKind::ForEach => {
             // K-FOREACH-001: foreach states MUST declare a non-empty
             // `collection` FEL expression that evaluates to an array at
@@ -546,7 +497,7 @@ fn check_state_type_semantics_typed(
                 ));
             }
         }
-        StateKind::Atomic => {}
+        StateKind::Atomic | StateKind::Final | StateKind::Compound | StateKind::Parallel => {}
     }
 
     // K-FOREACH-004: iteration fields (collection, itemVariable,
@@ -571,39 +522,9 @@ fn check_state_type_semantics_typed(
         ));
     }
 
-    // K-004: cancellationPolicy only on parallel
-    if state.cancellation_policy.is_some() && state.kind != StateKind::Parallel {
-        diagnostics.push(LintDiagnostic::t1_error(
-            "K-004",
-            path,
-            "cancellationPolicy is only valid on parallel states",
-        ));
-    }
-
-    // K-005: historyState only on compound
-    if state.history_state.is_some() && state.kind != StateKind::Compound {
-        diagnostics.push(LintDiagnostic::t1_error(
-            "K-005",
-            path,
-            "historyState is only valid on compound states",
-        ));
-    }
-
     // K-006, K-007, K-008: transition checks
     for (i, transition) in state.transitions.iter().enumerate() {
         let t_path = format!("{path}/transitions/{i}");
-
-        // K-006
-        if !all_state_ids.contains(&transition.target) {
-            diagnostics.push(LintDiagnostic::t1_error(
-                "K-006",
-                &t_path,
-                format!(
-                    "transition target '{}' does not exist in states map",
-                    transition.target
-                ),
-            ));
-        }
 
         // K-007 — `message` names must not start with `$` (reserved for other
         // TransitionEvent kinds and kernel signals). `signal` allows `$join`
@@ -636,18 +557,6 @@ fn check_state_type_semantics_typed(
                 }
                 _ => {}
             }
-        }
-
-        // K-008
-        if state.kind == StateKind::Parallel && !transition.is_parallel_join_transition() {
-            diagnostics.push(LintDiagnostic::t1_error(
-                "K-008",
-                &t_path,
-                format!(
-                    "parallel state outgoing transition must use signal '$join' (instance scope), found {:?}",
-                    transition.event
-                ),
-            ));
         }
 
         // K-031: transition.actor MUST use actors[].id lexical pattern and MUST
@@ -697,93 +606,6 @@ fn check_state_type_semantics_typed(
                 diagnostics,
             );
         }
-    }
-}
-
-/// K-016: `lifecycle.initialState` MUST key into `lifecycle.states`, and any
-/// compound state that declares `initialState` MUST point at a key in its own
-/// substate map. The schema cannot express this cross-property binding under
-/// pure Draft 2020-12 (JSON Schema has no native value-references-key
-/// keyword); lint covers the gap. Closes STUDIO-DEFER-003 Tranche B.
-fn check_initial_state_keys_into_states_typed(
-    kernel: &KernelDocument,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    let init = &kernel.lifecycle.initial_state;
-    if !kernel.lifecycle.states.contains_key(init) {
-        diagnostics.push(LintDiagnostic::t1_error(
-            "K-016",
-            "/lifecycle/initialState",
-            format!(
-                "initialState '{init}' does not exist in lifecycle.states (keys: {})",
-                kernel
-                    .lifecycle
-                    .states
-                    .keys()
-                    .cloned()
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-        ));
-    }
-    for (name, state) in &kernel.lifecycle.states {
-        check_compound_initial_state_typed(
-            state,
-            &format!("/lifecycle/states/{name}"),
-            diagnostics,
-        );
-    }
-}
-
-fn check_compound_initial_state_typed(
-    state: &State,
-    path: &str,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    if let Some(init) = &state.initial_state {
-        if !state.states.contains_key(init) {
-            diagnostics.push(LintDiagnostic::t1_error(
-                "K-016",
-                &format!("{path}/initialState"),
-                format!(
-                    "compound initialState '{init}' does not exist in this state's substates (keys: {})",
-                    state.states.keys().cloned().collect::<Vec<_>>().join(", ")
-                ),
-            ));
-        }
-    }
-    for (name, sub) in &state.states {
-        check_compound_initial_state_typed(sub, &format!("{path}/states/{name}"), diagnostics);
-    }
-    for (rname, region) in &state.regions {
-        // Region carries its own value-references-key obligation:
-        // `region.initialState` MUST key into `region.states`. Schema
-        // is silent for the same reason it's silent for the compound
-        // case, so K-016 covers it here.
-        if !region.states.contains_key(&region.initial_state) {
-            let init = &region.initial_state;
-            let keys = region.states.keys().cloned().collect::<Vec<_>>().join(", ");
-            diagnostics.push(LintDiagnostic::t1_error(
-                "K-016",
-                &format!("{path}/regions/{rname}/initialState"),
-                format!(
-                    "region initialState '{init}' does not exist in this region's states (keys: {keys})"
-                ),
-            ));
-        }
-        for (sname, sstate) in &region.states {
-            check_compound_initial_state_typed(
-                sstate,
-                &format!("{path}/regions/{rname}/states/{sname}"),
-                diagnostics,
-            );
-        }
-    }
-    // ForEach-body recursion: `state.body` is itself a `State` that
-    // may be Compound / Parallel with further nesting, including its
-    // own `initialState`. Walk it like any other sub-state.
-    if let Some(body) = &state.body {
-        check_compound_initial_state_typed(body, &format!("{path}/body"), diagnostics);
     }
 }
 
@@ -1890,7 +1712,7 @@ mod transition_actor_and_initial_state_tests {
             value,
             source: None,
         };
-        check_workflow(&doc, &mut diags, &mut Vec::new());
+        check_workflow(&doc, &mut diags, &mut Vec::new(), None);
         diags
     }
 

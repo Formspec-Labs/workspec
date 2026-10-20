@@ -268,3 +268,48 @@ pub fn validate_callback_actions(
     });
     result
 }
+
+impl IntegrationProfileDocument {
+    /// Validate the exact selected Workflow identity and compatible version.
+    ///
+    /// # Errors
+    /// Rejects foreign targets, malformed versions and excluded versions.
+    pub fn validate_target(
+        &self,
+        workflow_url: &str,
+        workflow_version: &str,
+    ) -> Result<(), String> {
+        if self.target_workflow.url != workflow_url {
+            return Err(format!(
+                "integration profile targets '{}' but Workflow uses '{workflow_url}'",
+                self.target_workflow.url
+            ));
+        }
+        if let Some(range) = self.target_workflow.compatible_versions.as_deref() {
+            let version = semver::Version::parse(workflow_version).map_err(|e| {
+                format!("Workflow version '{workflow_version}' is not valid semver: {e}")
+            })?;
+            let normalized = range
+                .split("||")
+                .map(|clause| {
+                    let clause = clause.trim();
+                    if clause.contains(',') {
+                        clause.to_owned()
+                    } else {
+                        clause.split_whitespace().collect::<Vec<_>>().join(", ")
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(" || ");
+            let requirement = semver::VersionReq::parse(&normalized).map_err(|e| {
+                format!("integration compatibleVersions '{range}' is not valid semver: {e}")
+            })?;
+            if !requirement.matches(&version) {
+                return Err(format!(
+                    "integration compatibleVersions '{range}' excludes Workflow version '{workflow_version}'"
+                ));
+            }
+        }
+        Ok(())
+    }
+}

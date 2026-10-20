@@ -86,6 +86,14 @@ pub struct ValidationRequest<'a> {
     pub scope: ValidationScope,
 }
 
+/// Exact borrowed selections for native governance association checks.
+#[derive(Debug)]
+pub struct SelectedGovernanceContext<'a> {
+    /// Original core-owned Rules; validation never rewrites them.
+    pub rules: &'a wos_core::model::governance_policy::GovernancePolicyRules,
+    /// Actual separately selected integration profile, absent when unavailable.
+    pub integration: Option<&'a wos_core::model::integration::IntegrationProfileDocument>,
+}
 /// One performed or refused check group with its owning diagnostics.
 #[derive(Debug, Clone, Serialize)]
 pub struct ValidationStage {
@@ -317,6 +325,23 @@ fn aggregate(stages: &[ValidationStage]) -> CheckStatus {
 /// ```
 #[must_use]
 pub fn validate(request: ValidationRequest<'_>) -> ValidationReport {
+    validate_inner(request, None)
+}
+/// Validate the candidate with its original selected governance inputs.
+///
+/// Uses the same core resolver and graph as direct native qualification. No
+/// provider installation, execution or callback delivery is implied.
+#[must_use]
+pub fn validate_with_governance(
+    request: ValidationRequest<'_>,
+    context: SelectedGovernanceContext<'_>,
+) -> ValidationReport {
+    validate_inner(request, Some(&context))
+}
+fn validate_inner(
+    request: ValidationRequest<'_>,
+    context: Option<&SelectedGovernanceContext<'_>>,
+) -> ValidationReport {
     let mut stages = vec![];
     let candidate_kind = kind(request.candidate);
     // Unknown/non-object candidates are tested against the author-time workflow root,
@@ -327,6 +352,27 @@ pub fn validate(request: ValidationRequest<'_>) -> ValidationReport {
         _ => &*WORKFLOW_SCHEMA,
     };
     stages.push(schema_stage("candidate-schema", request.candidate, schema));
+    if let Some(context) = context {
+        let raw = serde_json::to_value(context.rules).expect("typed Rules serialize");
+        let diagnostics = wos_core::model::governance_policy::rules_validator()
+            .iter_errors(&raw)
+            .map(|e| {
+                LintDiagnostic::t1_error(
+                    "WOS-SCHEMA-001",
+                    format!("/rules{}", e.instance_path()),
+                    e.to_string(),
+                )
+            })
+            .collect();
+        stages.push(stage("governance-rules-schema", true, diagnostics));
+        if candidate_kind != Some(DocumentKind::Workflow) {
+            stages.push(not_run(
+                "selected-governance",
+                true,
+                "selected governance requires a Workflow candidate",
+            ));
+        }
+    }
     let mut project = WosProject::default();
     if let Some(kind) = candidate_kind {
         project.push(WosDocument {
@@ -336,10 +382,11 @@ pub fn validate(request: ValidationRequest<'_>) -> ValidationReport {
         });
         let mut diagnostics = vec![];
         let mut skipped = vec![];
-        crate::rules::tier1::check_with_coverage(
+        crate::rules::tier1::check_with_governance(
             &project.documents()[0],
             &mut diagnostics,
             &mut skipped,
+            context,
         );
         stages.push(stage("t1", true, sorted_diagnostics(diagnostics)));
         append_skips(&mut stages, skipped);

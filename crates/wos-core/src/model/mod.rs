@@ -12,3 +12,6 @@ pub mod integration;
 pub mod kernel;
 pub mod notice_requirements;
 pub mod notification_template;
+
+pub mod control_flow;
+pub mod governance_policy;

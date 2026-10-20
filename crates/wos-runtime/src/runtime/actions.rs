@@ -8,7 +8,6 @@
 //! explicit before alternate durable adapters are introduced.
 
 use super::process_minter;
-use semver::{Version, VersionReq};
 use wos_core::eval::ObservedAction;
 use wos_core::instance::{
     ActiveTask, ActiveTaskStatus, FormspecTaskContext, PendingEvent, PendingEventOrigin,
@@ -25,8 +24,7 @@ use crate::store::RuntimeRecord;
 
 use super::{
     COMPLETION_EVENT_EXTENSION_KEY, FAILURE_EVENT_EXTENSION_KEY, RuntimeError, WosRuntime,
-    impact_level_label, make_task_id, normalize_semver_range_expression,
-    signature::append_signature_task_extensions,
+    impact_level_label, make_task_id, signature::append_signature_task_extensions,
 };
 
 fn form_definition_version<'a>(
@@ -383,35 +381,9 @@ impl WosRuntime {
                 .validate_dispatch()
                 .map_err(RuntimeError::Integration)?;
         }
-        if profile.target_workflow.url != instance.definition_url {
-            return Err(RuntimeError::Integration(format!(
-                "integration profile targets '{}' but instance uses '{}'",
-                profile.target_workflow.url, instance.definition_url
-            )));
-        }
-
-        if let Some(compatible_versions) = profile.target_workflow.compatible_versions.as_deref() {
-            let requested_version =
-                Version::parse(&instance.definition_version).map_err(|error| {
-                    RuntimeError::Integration(format!(
-                        "instance definition version '{}' is not valid semver: {error}",
-                        instance.definition_version
-                    ))
-                })?;
-            let normalized_versions = normalize_semver_range_expression(compatible_versions);
-            let version_req = VersionReq::parse(&normalized_versions).map_err(|error| {
-                RuntimeError::Integration(format!(
-                    "integration profile compatibleVersions '{}' is not valid semver: {error}",
-                    compatible_versions
-                ))
-            })?;
-            if !version_req.matches(&requested_version) {
-                return Err(RuntimeError::Integration(format!(
-                    "integration profile compatibleVersions '{}' do not include instance version '{}'",
-                    compatible_versions, instance.definition_version
-                )));
-            }
-        }
+        profile
+            .validate_target(&instance.definition_url, &instance.definition_version)
+            .map_err(RuntimeError::Integration)?;
 
         if kernel.url.as_deref() != Some(instance.definition_url.as_str()) {
             return Err(RuntimeError::Integration(format!(

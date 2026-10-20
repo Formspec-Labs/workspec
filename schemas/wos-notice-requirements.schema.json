@@ -7,25 +7,49 @@
   "$defs": {
     "NoticeRequirement": {
       "type": "object",
-      "required": ["observation", "scope", "anchor"],
+      "required": [
+        "observation",
+        "scope",
+        "anchor"
+      ],
       "additionalProperties": false,
       "properties": {
         "observation": {
           "type": "string",
-          "enum": ["transportAccepted", "recipientReceived", "recipientAcknowledged", "fixtureQualifiedReceipt"],
-          "examples": ["transportAccepted", "fixtureQualifiedReceipt"],
-          "description": "Required evidence meaning. Transport acceptance and local capture do not establish recipient receipt or acknowledgment. Fixture qualification has only its declared software test meaning."
+          "enum": [
+            "transportAccepted",
+            "providerDelivered",
+            "openObserved",
+            "recipientAcknowledged"
+          ],
+          "examples": [
+            "transportAccepted",
+            "providerDelivered"
+          ],
+          "description": "Exact selected observation. Sending, provider delivery, observed opening and deliberate acknowledgment do not substitute for one another. Opening does not prove reading."
         },
         "scope": {
           "type": "string",
-          "enum": ["production", "softwareFixture"],
-          "examples": ["production", "softwareFixture"],
+          "enum": [
+            "production",
+            "softwareFixture"
+          ],
+          "examples": [
+            "production",
+            "softwareFixture"
+          ],
           "description": "Scope retained in derived clock and effect evidence. Fixture qualification cannot satisfy production scope."
         },
         "anchor": {
           "type": "string",
-          "enum": ["none", "qualifiedObservation"],
-          "examples": ["none", "qualifiedObservation"],
+          "enum": [
+            "none",
+            "qualifiedObservation"
+          ],
+          "examples": [
+            "none",
+            "qualifiedObservation"
+          ],
           "description": "Ordinary informational status uses none. Consequence-bearing use requires the original immutable qualified observation. Period and calendar rules remain in their existing policy owner."
         }
       }

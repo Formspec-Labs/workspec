@@ -15,6 +15,7 @@ impl WosRuntime {
         mut self,
         policy: QualifiedGovernancePolicy,
         evidence: CapturedGovernanceEvidence,
+        installed: &[wos_core::model::notice_requirements::NoticeCapability],
     ) -> Result<Self, RuntimeError> {
         if self.preparation.is_some()
             || self.reference_due_process.is_some()
@@ -39,6 +40,7 @@ impl WosRuntime {
         if !policy.matches_kernel(&kernel) {
             return Err(refused("installed governance kernel differs"));
         }
+        policy.check_notice_capabilities(installed)?;
         self.generic_governance = Some(policy.selected(evidence));
         Ok(self)
     }
@@ -52,6 +54,9 @@ impl WosRuntime {
             if self.reference_due_process.is_some()
                 || reference_selected(kernel)
                 || !selected.policy.matches_kernel(kernel)
+                || !selected
+                    .policy
+                    .matches_integration(self.integration_profile.as_ref())
             {
                 return Err(refused(
                     "selected governance owner differs from actual kernel",
@@ -110,7 +115,7 @@ impl WosRuntime {
         let Some(selected) = &self.generic_governance else {
             return Ok(());
         };
-        let Some(due) = &selected.policy.selection().due_process else {
+        let Some(due) = &selected.policy.selection().rules.due_process else {
             return Ok(());
         };
         for target in binding.output_binding.keys() {
