@@ -151,6 +151,8 @@ When the kernel's `impactLevel` is `rights-impacting`, adverse decision explanat
 
 This is a legal and due process requirement that predates AI. It exists because an affected individual has a right to understand what they can change and what did not matter.
 
+Individualized and positive/negative counterfactual explanation requirements apply independently of the selected execution profile. `dueProcess.execution` selects the bounded `referenceDueProcess/1` configuration; general authoring validation MUST NOT require that selection solely because a workflow is rights-impacting. Omitting that selection does not establish runtime capability or waive explanation/evidence requirements, which the selected qualified execution owner MUST enforce.
+
 ### 3.5 Appeal
 
 1. An appeal MUST be reviewed by a human adjudicator independent of the original determination.

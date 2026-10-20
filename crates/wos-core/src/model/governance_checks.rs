@@ -53,7 +53,7 @@ pub enum GovernanceIssueKind {
     ExplanationLevel,
     /// The selected policy does not require counterfactual evidence.
     CounterfactualRequired,
-    /// Rights-impacting policy lacks selected counterfactual inputs.
+    /// Selected reference execution lacks required counterfactual inputs.
     CounterfactualInputs,
     /// A required audit tier is absent or does not cover its required tag.
     AuditCoverage,
@@ -98,6 +98,9 @@ pub fn check_governance(
     } else {
         Vec::new()
     };
+    if let Some(execution) = governance.pointer("/dueProcess/execution") {
+        issues.extend(execution_issues(execution));
+    }
     let reasoning = governance
         .pointer("/audit/reasoningTier")
         .cloned()
@@ -145,6 +148,14 @@ pub fn check_reference_governance(
             checks.issues.push(issue);
         }
     }
+    if governance.pointer("/dueProcess/execution").is_none() {
+        checks.issues.push(GovernanceIssue {
+            rule_id: "G-005",
+            path: "/dueProcess/execution".into(),
+            kind: GovernanceIssueKind::CounterfactualInputs,
+            message: "selected reference profile requires its execution configuration",
+        });
+    }
     checks
 }
 
@@ -160,36 +171,50 @@ fn explanation_issues(governance: &Value) -> Vec<GovernanceIssue> {
         issues.push(GovernanceIssue {rule_id:"G-004", path:"/dueProcess/adverseDecisionPolicy/explanationLevel".into(),kind:GovernanceIssueKind::ExplanationLevel,
             message:"rights-impacting kernel requires explanationLevel 'individualized' in governance dueProcess"});
     }
-    let execution = governance
-        .pointer("/dueProcess/execution")
-        .cloned()
-        .and_then(|value| serde_json::from_value::<DueProcessExecution>(value).ok());
     if !adverse
         .as_ref()
         .is_some_and(|policy| policy.counterfactual_required)
     {
         issues.push(GovernanceIssue {
             rule_id: "G-005",
-            path: "/dueProcess/execution/determinations".into(),
+            path: "/dueProcess/adverseDecisionPolicy/counterfactualRequired".into(),
             kind: GovernanceIssueKind::CounterfactualRequired,
             message: "rights-impacting policy must require counterfactual evidence",
         });
-    } else if execution
-        .as_ref()
-        .is_none_or(|execution| execution.determinations.is_empty())
-    {
-        issues.push(GovernanceIssue {rule_id:"G-005",path:"/dueProcess/execution/determinations".into(),kind:GovernanceIssueKind::CounterfactualInputs,
-            message:"rights-impacting kernel requires selected determination inputs with positive and negative counterfactuals"});
-    } else if let Some(execution) = execution {
-        for (index, determination) in execution.determinations.iter().enumerate() {
-            for (polarity, alternatives) in [
-                ("positive", &determination.explanation.positive),
-                ("negative", &determination.explanation.negative),
-            ] {
-                if alternatives.is_empty() {
-                    issues.push(GovernanceIssue {rule_id:"G-005",path:format!("/dueProcess/execution/determinations/{index}/explanation/{polarity}"),kind:GovernanceIssueKind::CounterfactualInputs,
-                    message:"rights-impacting adverse determination requires nonempty counterfactual inputs"});
-                }
+    }
+    issues
+}
+
+fn execution_issues(value: &Value) -> Vec<GovernanceIssue> {
+    let Ok(execution) = serde_json::from_value::<DueProcessExecution>(value.clone()) else {
+        return vec![GovernanceIssue {
+            rule_id: "G-005",
+            path: "/dueProcess/execution".into(),
+            kind: GovernanceIssueKind::MalformedDeclaration,
+            message: "selected reference execution must match its canonical typed configuration",
+        }];
+    };
+    let mut issues = Vec::new();
+    if execution.determinations.is_empty() {
+        issues.push(GovernanceIssue {
+            rule_id: "G-005",
+            path: "/dueProcess/execution/determinations".into(),
+            kind: GovernanceIssueKind::CounterfactualInputs,
+            message: "selected reference execution requires determination inputs with positive and negative counterfactuals",
+        });
+    }
+    for (index, determination) in execution.determinations.iter().enumerate() {
+        for (polarity, alternatives) in [
+            ("positive", &determination.explanation.positive),
+            ("negative", &determination.explanation.negative),
+        ] {
+            if alternatives.is_empty() {
+                issues.push(GovernanceIssue {
+                    rule_id: "G-005",
+                    path: format!("/dueProcess/execution/determinations/{index}/explanation/{polarity}"),
+                    kind: GovernanceIssueKind::CounterfactualInputs,
+                    message: "selected reference determination requires nonempty counterfactual inputs",
+                });
             }
         }
     }

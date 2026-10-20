@@ -65,6 +65,33 @@ fn actual_binary_passes_schema_valid_typed_event_candidate() {
     assert_eq!(report["replays"][0]["result"]["report"]["passed"], true);
 }
 
+#[test]
+fn actual_binary_preserves_general_explanation_checks_without_claiming_runtime_readiness() {
+    for (required, expected_status) in [(true, "pass"), (false, "fail")] {
+        let mut candidate: Value = serde_json::from_str(include_str!(
+            "../../wos-lint/tests/fixtures/shared-validation/rights-human.json"
+        ))
+        .unwrap();
+        candidate["governance"]["dueProcess"]["adverseDecisionPolicy"]["counterfactualRequired"] =
+            json!(required);
+        let expected = wos_lint::studio_api::validate(wos_lint::studio_api::ValidationRequest {
+            candidate: &candidate,
+            dependencies: &[],
+            scope: wos_lint::studio_api::ValidationScope::Project,
+        });
+        let output = binary_check(
+            &candidate.to_string(),
+            &json!({"validation": {"scope": "project"}, "replays": []}),
+        );
+        let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+        let validation = &report["validation"]["result"]["report"]["validation"];
+        assert_eq!(validation["status"], expected_status, "{report}");
+        assert_eq!(validation, &serde_json::to_value(expected).unwrap());
+        assert!(!output.status.success(), "execution evidence is absent");
+        assert_ne!(report["disposition"], "checks_passed");
+    }
+}
+
 use clap::Parser;
 use wos_synth_cli::{Cli, Command as SynthCommand, McpToolContext, generate_with};
 use wos_synth_core::{

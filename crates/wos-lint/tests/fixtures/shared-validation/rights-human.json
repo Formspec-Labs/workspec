@@ -1,0 +1,46 @@
+{
+  "$wosWorkflow": "1.0",
+  "url": "urn:test:human-explanation",
+  "version": "1.0.0",
+  "title": "Individualized explanation declarations",
+  "impactLevel": "rights-impacting",
+  "custody": {
+    "trustProfileRef": "urn:test:trust:explanation",
+    "anchorRequirements": []
+  },
+  "actors": [{"id": "reviewer", "type": "human"}],
+  "lifecycle": {
+    "initialState": "review",
+    "states": {
+      "review": {
+        "type": "atomic",
+        "transitions": [{
+          "event": {"kind": "message", "name": "decide"},
+          "actor": "reviewer",
+          "target": "done",
+          "tags": ["determination", "adverse-decision"]
+        }]
+      },
+      "done": {"type": "final"}
+    }
+  },
+  "governance": {
+    "dueProcess": {
+      "adverseDecisionPolicy": {
+        "noticeRequired": true,
+        "noticeTiming": "beforeEffective",
+        "explanationLevel": "individualized",
+        "counterfactualRequired": true,
+        "appealMechanism": {
+          "enabled": true,
+          "appealWindow": "P30D",
+          "continuationOfServices": false
+        }
+      }
+    },
+    "audit": {
+      "reasoningTier": {"requiredForTags": ["determination"]},
+      "counterfactualTier": {"requiredForTags": ["adverse-decision"]}
+    }
+  }
+}

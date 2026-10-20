@@ -41,6 +41,7 @@ async fn shared_api_direct_handler_and_actual_dispatch_have_identical_owning_res
     use wos_lint::studio_api::{ValidationRequest, ValidationScope, validate};
     for name in [
         "positive",
+        "rights-human",
         "stored-event",
         "invalid-pattern",
         "unresolved-reference",
