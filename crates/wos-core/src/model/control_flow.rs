@@ -88,7 +88,9 @@ pub(super) struct ActionLocation {
 }
 #[derive(Debug)]
 pub(super) struct NoticePath {
+    pub producers: Vec<ActionLocation>,
     pub actions: Vec<ActionLocation>,
+    pub after_mapping: bool,
     pub path: String,
 }
 pub(super) fn analyze_with_notice_paths(
@@ -463,27 +465,90 @@ fn check(
     // register listeners; native pending-request correlation still gates them.
     let mut association_work = 0usize;
     for path in paths {
+        let locate = |action: &ActionLocation| {
+            nodes
+                .iter()
+                .position(|node| node.path == action.state)
+                .map(|index| (index, action.transition))
+        };
         let mut locations = path
             .actions
             .iter()
-            .map(|action| {
-                nodes
-                    .iter()
-                    .position(|n| n.path == action.state)
-                    .map(|index| (index, action.transition))
-            })
+            .map(|action| locate(action).map(|v| vec![v]))
             .collect::<Option<Vec<_>>>();
+        if let Some(steps) = &mut locations {
+            match path
+                .producers
+                .iter()
+                .map(locate)
+                .collect::<Option<Vec<_>>>()
+            {
+                Some(first) if !first.is_empty() => steps.insert(0, first),
+                _ => locations = None,
+            }
+        }
         let mut possible = false;
         let mut bypass = false;
+        let mut witness = String::new();
         if let Some(locations) = locations.as_mut() {
-            locations.dedup();
-            let initial = usize::from(locations.first().is_some_and(|(node, transition)| {
+            let initial = usize::from(locations[0].iter().any(|(node, transition)| {
                 transition.is_none() && configurations[0].contains(node)
             }));
             let mut states = vec![(0, initial)];
             let mut known = HashMap::from([((0, initial), 0)]);
             let mut reverse = vec![Vec::new()];
             let mut outcomes = vec![false];
+            let mut parent = vec![None];
+            let mut seed_source = vec![None];
+            let mut bad_state = None;
+            let mut producer_occurrences = Vec::new();
+            if initial == 1 {
+                producer_occurrences.push(0);
+            }
+            // A completed earlier pair must not hide a later fresh request.
+            // Seed each real reachable occurrence using this same graph's entry
+            // semantics; converging identical configurations safely share work.
+            for (source_index, edges) in graph.iter().enumerate() {
+                for edge in edges {
+                    association_work += 1;
+                    if association_work > MAX_EDGES * MAX_DEPTH {
+                        incomplete(
+                            diagnostics,
+                            skipped,
+                            &path.path,
+                            "selected notice association work bound exceeded",
+                        );
+                        return;
+                    }
+                    let target = ids[nodes[edge.source].state.transitions[edge.transition]
+                        .target
+                        .as_str()];
+                    let exit = exit_root(edge.source, target, &nodes);
+                    if locations[0].iter().any(|&(node, phase)| match phase {
+                        Some(index) => node == edge.source && index == edge.transition,
+                        None => {
+                            configurations[edge.target].contains(&node)
+                                && (!configurations[source_index].contains(&node)
+                                    || descendant(node, exit, &nodes))
+                        }
+                    }) {
+                        let seed = (edge.target, 1);
+                        let index = if let Some(&index) = known.get(&seed) {
+                            index
+                        } else {
+                            let index = states.len();
+                            known.insert(seed, index);
+                            states.push(seed);
+                            reverse.push(Vec::new());
+                            outcomes.push(false);
+                            parent.push(None);
+                            seed_source.push(Some(source_index));
+                            index
+                        };
+                        producer_occurrences.push(index);
+                    }
+                }
+            }
             let mut cursor = 0;
             while cursor < states.len() {
                 let (i, progress) = states[cursor];
@@ -500,24 +565,29 @@ fn check(
                     cursor += 1;
                     continue;
                 }
-                for (step, &(node, transition)) in locations.iter().enumerate().skip(1) {
-                    let Some(index) = transition else {
-                        continue;
-                    };
-                    let independent = nodes.iter().any(|parent| {
-                        parent.regions.iter().any(|region| {
-                            region.as_slice() == [node] && receipt_region(region, &nodes)
-                        })
-                    });
-                    let timer = matches!(
-                        nodes[node].state.transitions[index].event,
-                        Some(super::kernel::TransitionEvent::Timer { .. })
-                    );
-                    let prerequisite = if timer { step } else { 1 };
-                    if configurations[i].contains(&node) && progress < prerequisite && !independent
-                    {
-                        bypass = true;
-                        break;
+                for (step, alternatives) in locations.iter().enumerate().skip(1) {
+                    for &(node, transition) in alternatives {
+                        let Some(index) = transition else {
+                            continue;
+                        };
+                        let independent = nodes.iter().any(|parent| {
+                            parent.regions.iter().any(|region| {
+                                region.as_slice() == [node] && receipt_region(region, &nodes)
+                            })
+                        });
+                        let timer = matches!(
+                            nodes[node].state.transitions[index].event,
+                            Some(super::kernel::TransitionEvent::Timer { .. })
+                        );
+                        let prerequisite = if timer { step } else { 1 };
+                        if configurations[i].contains(&node)
+                            && progress < prerequisite
+                            && !independent
+                        {
+                            bypass = true;
+                            bad_state = Some(cursor);
+                            break;
+                        }
                     }
                 }
                 if bypass {
@@ -537,19 +607,73 @@ fn check(
                     let matches = |(node, transition): &(usize, Option<usize>)| {
                         *node == edge.source && *transition == Some(edge.transition)
                     };
-                    if locations.iter().skip(progress + 1).any(matches)
-                        && !matches(&locations[progress])
+                    // A selected callback's explicit emitted continuation is
+                    // available after that callback, including across regions.
+                    // Unrelated external edges still expose ordinary bypasses.
+                    if progress < 2
+                        && locations[1].iter().any(|&(callback, phase)| {
+                            phase.is_some_and(|index| {
+                                nodes[callback].state.transitions[index]
+                                    .actions
+                                    .iter()
+                                    .filter(|action| action.action == ActionKind::EmitEvent)
+                                    .filter_map(|action| action.event_type.as_deref())
+                                    .any(|emitted| {
+                                        nodes[edge.source].state.transitions[edge.transition]
+                                            .event
+                                            .as_ref()
+                                            .is_some_and(|event| {
+                                                event.matches_runtime_dispatch(emitted)
+                                            })
+                                    })
+                            })
+                        })
                     {
                         continue;
                     }
-                    let mut next_progress = progress + usize::from(matches(&locations[progress]));
+                    if locations
+                        .iter()
+                        .skip(progress + 1)
+                        .any(|stage| stage.iter().any(matches))
+                        && !locations[progress].iter().any(matches)
+                    {
+                        continue;
+                    }
+                    let mut next_progress =
+                        progress + usize::from(locations[progress].iter().any(matches));
                     let transition = &nodes[edge.source].state.transitions[edge.transition];
                     let target = ids[transition.target.as_str()];
                     let exit = exit_root(edge.source, target, &nodes);
-                    while let Some(&(node, None)) = locations.get(next_progress) {
-                        let entered = configurations[edge.target].contains(&node)
-                            && (!configurations[i].contains(&node)
-                                || descendant(node, exit, &nodes));
+                    if path.after_mapping
+                        && progress == 1
+                        && next_progress == 2
+                        && locations.get(2).is_some_and(|starts| {
+                            starts.iter().any(|&(node, phase)| {
+                                phase.is_none()
+                                    && configurations[edge.target].contains(&node)
+                                    && (!configurations[i].contains(&node)
+                                        || descendant(node, exit, &nodes))
+                            })
+                        })
+                    {
+                        // Includes newly entered ancestors and their initial children,
+                        // using the exact graph/evaluator entry semantics above.
+                        bypass = true;
+                        bad_state = Some(cursor);
+                        break;
+                    }
+                    while let Some(alternatives) = locations.get(next_progress) {
+                        // Explicit elapsed starts must execute after callback output Mapping,
+                        // not on the inbound transition's own target entry.
+                        if path.after_mapping && progress == 1 && next_progress == 2 {
+                            break;
+                        }
+                        let entered = alternatives.iter().any(|&(node, phase)| {
+                            phase.is_none()
+                                && configurations[edge.target].contains(&node)
+                                && (!configurations[i].contains(&node)
+                                    || descendant(node, exit, &nodes))
+                        });
                         if !entered {
                             break;
                         }
@@ -564,6 +688,8 @@ fn check(
                         states.push(next);
                         reverse.push(Vec::new());
                         outcomes.push(false);
+                        parent.push(Some(cursor));
+                        seed_source.push(None);
                         index
                     };
                     reverse[next_index].push(cursor);
@@ -587,12 +713,63 @@ fn check(
                 good[index] = true;
                 pending.extend(reverse[index].iter().copied());
             }
-            bypass |= good.iter().any(|good| !*good);
+            if let Some(index) = good.iter().position(|good| !*good) {
+                bypass = true;
+                bad_state = bad_state.or(Some(index));
+            }
+            let mut callback_reachable = vec![false; states.len()];
+            let mut pending = states
+                .iter()
+                .enumerate()
+                .filter_map(|(index, (_, progress))| (*progress >= 2).then_some(index))
+                .collect::<Vec<_>>();
+            while let Some(index) = pending.pop() {
+                if callback_reachable[index] {
+                    continue;
+                }
+                callback_reachable[index] = true;
+                pending.extend(reverse[index].iter().copied());
+            }
+            if let Some(&index) = producer_occurrences
+                .iter()
+                .find(|&&index| !callback_reachable[index])
+            {
+                bypass = true;
+                bad_state = bad_state.or(Some(index));
+            }
+            if let Some(index) = bad_state {
+                let mut trace = vec![index];
+                while let Some(previous) = parent[*trace.last().expect("trace has a state")] {
+                    trace.push(previous);
+                }
+                trace.reverse();
+                let prefix = seed_source[trace[0]].unwrap_or(0);
+                let continuation = trace
+                    .iter()
+                    .rev()
+                    .take(16)
+                    .rev()
+                    .map(|&index| names(&configurations[states[index].0], &nodes))
+                    .collect::<Vec<_>>();
+                witness = format!(
+                    "; stage {}; structural prefix {}; selected continuation {:?}",
+                    states[index].1,
+                    route(prefix, &predecessor, &configurations, &nodes),
+                    continuation
+                );
+            }
         }
         if bypass || !possible {
-            diagnostics.push(FlowIssue::error("NOTICE-GRAPH-006",&path.path,
-                if bypass {"reachable mandatory wait lacks its required original request or timer on that path"}
-                else {"no possible run executes the complete required notice action sequence"}));
+            let message = if bypass {
+                "reachable mandatory wait lacks its required original request or timer on that path"
+            } else {
+                "no possible run executes the complete required notice action sequence"
+            };
+            diagnostics.push(FlowIssue::error(
+                "NOTICE-GRAPH-006",
+                &path.path,
+                format!("{message}{witness}"),
+            ));
         }
     }
     diagnostics.push(FlowIssue::info("WOS-FLOW-006", "/lifecycle",

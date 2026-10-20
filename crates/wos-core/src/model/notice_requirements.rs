@@ -66,6 +66,8 @@ pub enum NoticeConsequence {
     OrdinaryStatus,
     /// Response period begins at the selected original observation.
     ResponseDeadline,
+    /// An elapsed governed period begins at the original observation without a response-absence claim.
+    ElapsedPeriod,
     /// Required notice and grace authorize the original proposed adverse effect.
     AdverseEffect,
     /// Filing window uses the original adverse notice and proposal.
@@ -161,7 +163,7 @@ pub fn check_notice_support(
             (
                 NoticeCapability::Smtp,
                 NoticeObservation::TransportAccepted,
-                _
+                NoticeScope::Production
             ) | (
                 NoticeCapability::LocalSmtpTestCapture,
                 NoticeObservation::TransportAccepted,

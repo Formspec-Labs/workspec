@@ -189,6 +189,27 @@
           ]
         }
       ]
+    },
+    "noticeTimers": {
+      "type": "array",
+      "description": "Original notice-anchored elapsed periods. Each exact timer start and consuming transition must follow qualified callback Mapping; no no-response decision or missing-response claim is implied.",
+      "items": {
+        "$ref": "#/$defs/NoticeTimerBinding"
+      },
+      "examples": [
+        [
+          {
+            "transition": {
+              "from": "minimumWait",
+              "to": "review",
+              "event": "$timeout.minimum"
+            },
+            "timerId": "minimum",
+            "duration": "P10D",
+            "requestNoticeBindingId": "request"
+          }
+        ]
+      ]
     }
   },
   "required": [
@@ -762,6 +783,75 @@
         "reviewerActor",
         "filedTransition",
         "reviewTransitions"
+      ]
+    },
+    "NoticeTimerBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Explicit elapsed period anchored to one original qualified notice, independent of whether a response was received.",
+      "properties": {
+        "transition": {
+          "$ref": "#/$defs/GovernanceTransition",
+          "description": "Exact unconditional native timer transition continuing an elapsed period; this does not determine that a response is absent.",
+          "examples": [
+            {
+              "from": "minimumWait",
+              "to": "review",
+              "event": "$timeout.minimum"
+            }
+          ]
+        },
+        "timerId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the actual retained native timer whose event drives this decision. Qualification checks its authored start and continuation.",
+          "examples": [
+            "minimum"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "requestNoticeBindingId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Exact callback binding whose original qualified notice observation anchors the elapsed period.",
+          "examples": [
+            "request"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "duration": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Original whole-calendar-day elapsed duration matched to the authored native timer, without any absence-of-response condition.",
+          "examples": [
+            "P10D"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        }
+      },
+      "required": [
+        "transition",
+        "timerId",
+        "duration",
+        "requestNoticeBindingId"
+      ],
+      "examples": [
+        {
+          "transition": {
+            "from": "minimumWait",
+            "to": "review",
+            "event": "$timeout.minimum"
+          },
+          "timerId": "minimum",
+          "duration": "P10D",
+          "requestNoticeBindingId": "request"
+        }
       ]
     }
   }

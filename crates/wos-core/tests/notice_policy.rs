@@ -524,3 +524,240 @@ fn nested_clock_sibling_prefix_is_an_unrelated_ordinary_timer() {
         issues(&raw)
     );
 }
+
+fn alternative_producer_fixture() -> Value {
+    let mut raw = fixture();
+    let action = raw["kernel"]["lifecycle"]["states"]["sendRequest"]["onEntry"].take();
+    raw["kernel"]["lifecycle"]["states"]["sendRequest"]["onEntry"] = json!([]);
+    raw["kernel"]["lifecycle"]["initialState"] = json!("noticeChoice");
+    let states = &mut raw["kernel"]["lifecycle"]["states"];
+    states["noticeChoice"] = json!({"type":"atomic","transitions":[
+        {"event":{"kind":"message","name":"first"},"target":"firstSend"},
+        {"event":{"kind":"message","name":"second"},"target":"secondSend"}]});
+    for name in ["firstSend", "secondSend"] {
+        states[name] = json!({"type":"atomic","onEntry":action.clone(),"transitions":[
+            {"event":{"kind":"message","name":"wait"},"target":"sendRequest"}]});
+    }
+    raw
+}
+#[test]
+fn distinct_alternative_producers_share_one_exact_consumer() {
+    let raw = alternative_producer_fixture();
+    assert!(issues(&raw).is_empty(), "{:?}", issues(&raw));
+}
+#[test]
+fn alternative_producer_cannot_hide_a_send_without_callback_or_an_unproduced_wait() {
+    for target in ["done", "sendRequest"] {
+        let mut raw = alternative_producer_fixture();
+        if target == "done" {
+            raw["kernel"]["lifecycle"]["states"]["firstSend"]["transitions"][0]["target"] =
+                json!(target);
+        } else {
+            raw["kernel"]["lifecycle"]["states"]["noticeChoice"]["transitions"]
+                .as_array_mut()
+                .unwrap()
+                .push(json!({"event":{"kind":"message","name":"skip"},"target":target}));
+        }
+        assert!(
+            !issues(&raw).is_empty(),
+            "{target}: a good producer hid a bad branch"
+        );
+    }
+}
+fn elapsed_notice_fixture() -> Value {
+    let mut raw = fixture();
+    raw["rules"]["timeoutDecisions"] = json!([]);
+    raw["rules"]["noticeTimers"] = json!([{"transition":{"from":"minimumWait","to":"proposal","event":"$timeout.response"},
+        "timerId":"response","duration":"P90D","requestNoticeBindingId":"request"}]);
+    let states = &mut raw["kernel"]["lifecycle"]["states"];
+    let timer = states["correction"]["onEntry"]
+        .as_array_mut()
+        .unwrap()
+        .remove(0);
+    states["correction"]["transitions"]
+        .as_array_mut()
+        .unwrap()
+        .truncate(1);
+    states["review"]["transitions"][0]["target"] = json!("minimumWait");
+    states["minimumWait"] = json!({"type":"atomic","onEntry":[timer],"transitions":[
+        {"event":{"kind":"timer","timerId":"response","source":"custom"},"target":"proposal"}]});
+    raw["rules"]["humanDecisions"][0]["transition"]["to"] = json!("minimumWait");
+    raw
+}
+#[test]
+fn explicit_elapsed_period_can_start_after_a_timely_response_and_review() {
+    let raw = elapsed_notice_fixture();
+    assert!(rules_validator().is_valid(&raw["rules"]));
+    assert!(issues(&raw).is_empty(), "{:?}", issues(&raw));
+    let typed: GovernancePolicyRules = serde_json::from_value(raw["rules"].clone()).unwrap();
+    assert!(typed.timeout_decisions.is_empty());
+}
+#[test]
+fn elapsed_notice_period_requires_exact_unique_original_association() {
+    for mode in [
+        "missing",
+        "duration",
+        "duplicate",
+        "overlap",
+        "foreign-binding",
+        "physical-anchor",
+        "same-evaluation",
+        "guarded",
+    ] {
+        let mut raw = elapsed_notice_fixture();
+        match mode {
+            "missing" => raw["rules"]["noticeTimers"] = json!([]),
+            "duration" => raw["rules"]["noticeTimers"][0]["duration"] = json!("P10D"),
+            "duplicate" => {
+                let duplicate = raw["rules"]["noticeTimers"][0].clone();
+                raw["rules"]["noticeTimers"]
+                    .as_array_mut()
+                    .unwrap()
+                    .push(duplicate);
+            }
+            "overlap" => {
+                let mut old = fixture()["rules"]["timeoutDecisions"][0].clone();
+                old["transition"]["from"] = json!("minimumWait");
+                raw["rules"]["timeoutDecisions"] = json!([old]);
+            }
+            "foreign-binding" => {
+                raw["rules"]["noticeTimers"][0]["requestNoticeBindingId"] = json!("foreign")
+            }
+            "physical-anchor" => {
+                raw["kernel"]["lifecycle"]["states"]["minimumWait"]["onEntry"][0]["startAtExpression"] =
+                    json!("caseFile.requestSentAt.physical")
+            }
+            "same-evaluation" => {
+                let timer = raw["kernel"]["lifecycle"]["states"]["minimumWait"]["onEntry"].take();
+                raw["kernel"]["lifecycle"]["states"]["minimumWait"]["onEntry"] = json!([]);
+                raw["kernel"]["lifecycle"]["states"]["requestObserved"]["onEntry"] = timer;
+            }
+            "guarded" => {
+                raw["kernel"]["lifecycle"]["states"]["minimumWait"]["transitions"][0]["guard"] =
+                    json!("true")
+            }
+            _ => unreachable!(),
+        }
+        assert!(
+            !issues(&raw).is_empty(),
+            "{mode}: invalid elapsed association passed"
+        );
+    }
+}
+
+#[test]
+fn an_earlier_callback_cannot_hide_a_later_uncompletable_outbound_occurrence() {
+    let mut raw = fixture();
+    let action = raw["kernel"]["lifecycle"]["states"]["sendRequest"]["onEntry"].clone();
+    raw["kernel"]["lifecycle"]["states"]["done"] = json!({"type":"atomic","onEntry":action,
+        "transitions":[{"event":{"kind":"message","name":"finish"},"target":"finished"}]});
+    raw["kernel"]["lifecycle"]["states"]["finished"] = json!({"type":"final"});
+    assert!(
+        !issues(&raw).is_empty(),
+        "the first completed pair hid the later send with no callback route"
+    );
+}
+#[test]
+fn elapsed_timer_on_newly_entered_callback_ancestor_runs_before_mapping() {
+    let mut raw = elapsed_notice_fixture();
+    let states = &mut raw["kernel"]["lifecycle"]["states"];
+    let timer = states["minimumWait"]["onEntry"].take();
+    states["minimumWait"]["onEntry"] = json!([]);
+    let wait = states
+        .as_object_mut()
+        .unwrap()
+        .remove("minimumWait")
+        .unwrap();
+    states["minimumScope"] = json!({"type":"compound","initialState":"afterCallback","onEntry":timer,
+        "states":{"afterCallback":{"type":"atomic","transitions":[{"event":{"kind":"message","name":"later"},"target":"requestObserved"}]},"minimumWait":wait}});
+    states["sendRequest"]["transitions"][0]["target"] = json!("afterCallback");
+    // The timer-consuming state is entered only on later reentry, so an
+    // inactive-child prerequisite check alone cannot identify the first unsafe start.
+    assert!(
+        !issues(&raw).is_empty(),
+        "newly entered ancestor clock ran before callback Mapping"
+    );
+}
+
+#[test]
+fn callback_in_parallel_receipt_region_starts_business_clock_on_later_emitted_event() {
+    let mut raw = fixture();
+    let mut business = raw["kernel"]["lifecycle"]["states"].take();
+    let receipt = business["sendRequest"]["transitions"][0].clone();
+    let mut inbound = receipt;
+    inbound["target"] = json!("requestListener");
+    business["sendRequest"]["transitions"] = json!([{
+        "event":{"kind":"message","name":"request.periodStarts"},"target":"correction"
+    }]);
+    business.as_object_mut().unwrap().remove("requestObserved");
+    raw["kernel"]["lifecycle"] = json!({"initialState":"running","states":{
+        "running":{"type":"parallel","regions":{
+            "business":{"initialState":"sendRequest","states":business},
+            "receipts":{"initialState":"requestListener","states":{
+                "requestListener":{"type":"atomic","transitions":[inbound]}
+            }}
+        }}
+    }});
+    assert!(issues(&raw).is_empty(), "{:?}", issues(&raw));
+}
+
+#[test]
+fn explicit_context_child_preserves_shared_parent_entry_and_inherited_timer_owner() {
+    for context in ["Ready", "OutsidePending"] {
+        for timeout in [false, true] {
+            let kernel: KernelDocument = serde_json::from_value(json!({
+                "$wosWorkflow":"1.0","lifecycle":{"initialState":"start","states":{
+                    "start":{"type":"atomic","transitions":[
+                        {"event":{"kind":"message","name":"ready"},"target":"photoReady"},
+                        {"event":{"kind":"message","name":"outside"},"target":"photoOutsidePending"}]},
+                    "awaitingPhoto":{"type":"compound","initialState":"photoReady",
+                        "onEntry":[{"action":"startTimer","timerId":"photoResponse","duration":"P90D","event":{"kind":"timer","timerId":"photoResponse","source":"state"}}],
+                        "transitions":[{"event":{"kind":"timer","timerId":"photoResponse","source":"state"},"target":"closed"}],
+                        "states":{
+                            "photoReady":{"type":"atomic","transitions":[{"event":{"kind":"message","name":"correction"},"target":"reviewReady","actions":[{"action":"cancelTimer","timerId":"photoResponse"}]}]},
+                            "photoOutsidePending":{"type":"atomic","transitions":[{"event":{"kind":"message","name":"correction"},"target":"reviewOutsidePending","actions":[{"action":"cancelTimer","timerId":"photoResponse"}]}]}}},
+                    "reviewReady":{"type":"final"},"reviewOutsidePending":{"type":"final"},"closed":{"type":"final"}
+                }}
+            })).unwrap();
+            let mut evaluator =
+                wos_core::Evaluator::new(kernel, &stack_common_typeid::testing::fixture_minter())
+                    .unwrap();
+            evaluator
+                .process_event(
+                    if context == "Ready" {
+                        "ready"
+                    } else {
+                        "outside"
+                    },
+                    None,
+                    None,
+                )
+                .unwrap();
+            assert!(
+                evaluator
+                    .configuration()
+                    .contains(&format!("photo{context}"))
+            );
+            assert_eq!(evaluator.timers().len(), 1);
+            let timer = evaluator.timers().iter().next().unwrap();
+            assert_eq!(timer.created_in_state, "awaitingPhoto");
+            assert_eq!(timer.duration_iso, "P90D");
+            if timeout {
+                evaluator.advance_time(90 * 86_400_000, None).unwrap();
+                assert!(evaluator.configuration().contains("closed"));
+                assert_eq!(
+                    evaluator.transitions().last().unwrap().from,
+                    "awaitingPhoto"
+                );
+            } else {
+                evaluator.process_event("correction", None, None).unwrap();
+                assert!(
+                    evaluator
+                        .configuration()
+                        .contains(&format!("review{context}"))
+                );
+                assert!(evaluator.timers().is_empty());
+            }
+        }
+    }
+}

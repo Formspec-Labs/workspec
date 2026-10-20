@@ -97,6 +97,20 @@ pub struct TimeoutDecisionBinding {
     pub excluded_factors: Vec<String>,
 }
 
+/// Elapsed period anchored to an original qualified notice, without a no-response claim.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NoticeTimerBinding {
+    /// Exact transition consuming the original native timer occurrence.
+    pub transition: GovernanceTransition,
+    /// Original retained native timer identifier.
+    pub timer_id: String,
+    /// Original authored elapsed duration, without a response-absence condition.
+    pub duration: String,
+    /// Original notice whose qualified observation anchors this timer.
+    pub request_notice_binding_id: String,
+}
+
 /// Actual filing and independent human review for the selected demo appeal rule.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -136,6 +150,9 @@ pub struct GovernancePolicyRules {
     /// Actual no-response rules.
     #[serde(default)]
     pub timeout_decisions: Vec<TimeoutDecisionBinding>,
+    /// Explicit original-notice elapsed periods; these do not assert no response.
+    #[serde(default)]
+    pub notice_timers: Vec<NoticeTimerBinding>,
     /// Independently assigned appeal.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub appeal: Option<AppealBinding>,
@@ -249,6 +266,11 @@ fn notice_uses<'a>(
             .or_default()
             .push(NoticeConsequence::ResponseDeadline);
     }
+    for timer in &rules.notice_timers {
+        uses.entry(&timer.request_notice_binding_id)
+            .or_default()
+            .push(NoticeConsequence::ElapsedPeriod);
+    }
     // Only original selected notice bindings are classified as notice. Other
     // integration callbacks and their unrelated timer origins remain untouched.
     for key in rules.notice_requirements.keys() {
@@ -259,9 +281,10 @@ fn notice_uses<'a>(
                     timer_binding_reference(action, binding) != TimerBindingReference::Unrelated;
             });
             if clocked
-                && !uses
-                    .get(key.as_str())
-                    .is_some_and(|u| u.contains(&NoticeConsequence::ResponseDeadline))
+                && !uses.get(key.as_str()).is_some_and(|u| {
+                    u.contains(&NoticeConsequence::ResponseDeadline)
+                        || u.contains(&NoticeConsequence::ElapsedPeriod)
+                })
             {
                 uses.entry(key)
                     .or_default()
@@ -300,37 +323,50 @@ fn callback_actions<'a>(
     kernel::visit_states(kernel, |path, state| {
         states.insert(state_id(path), (path.to_owned(), state));
     });
+    let emitted = consumers
+        .iter()
+        .flat_map(|(_, _, consumer)| consumer.actions.iter())
+        .filter(|action| action.action == ActionKind::EmitEvent)
+        .filter_map(|action| action.event_type.as_deref())
+        .collect::<std::collections::BTreeSet<_>>();
     let mut actions = Vec::new();
-    for (_, _, consumer) in consumers {
-        if let Some((target_path, target)) = states.get(consumer.target.as_str()) {
-            // Mapping output is retained before the emitted event's next drain.
-            for emitted in consumer
-                .actions
-                .iter()
-                .filter(|a| a.action == ActionKind::EmitEvent)
-                .filter_map(|a| a.event_type.as_deref())
-            {
-                for (index, continuation) in target.transitions.iter().enumerate() {
-                    if continuation
-                        .event
-                        .as_ref()
-                        .is_some_and(|e| e.matches_runtime_dispatch(emitted))
-                    {
+    kernel::visit_states(kernel, |state_path, state| {
+        for (index, continuation) in state.transitions.iter().enumerate() {
+            if continuation.event.as_ref().is_some_and(|event| {
+                emitted
+                    .iter()
+                    .any(|emitted| event.matches_runtime_dispatch(emitted))
+            }) {
+                actions.extend(
+                    continuation
+                        .actions
+                        .iter()
+                        .map(|action| (state_path.to_owned(), Some(index), action)),
+                );
+                if let Some((next_path, _)) = states.get(continuation.target.as_str()) {
+                    // A global child target may enter its owning parents too.
+                    // These are candidates only: the shared graph checks exact
+                    // exits/entries and Mapping order before accepting a path.
+                    for (entry_path, entry) in states.values().filter(|(entry_path, _)| {
+                        next_path == entry_path
+                            || next_path.starts_with(&format!("{entry_path}/states/"))
+                            || next_path.starts_with(&format!("{entry_path}/regions/"))
+                    }) {
                         actions.extend(
-                            continuation
-                                .actions
+                            entry
+                                .on_entry
                                 .iter()
-                                .map(|a| (target_path.clone(), Some(index), a)),
+                                .map(|action| (entry_path.clone(), None, action)),
                         );
-                        if let Some((next_path, next)) = states.get(continuation.target.as_str()) {
-                            actions
-                                .extend(next.on_entry.iter().map(|a| (next_path.clone(), None, a)));
-                        }
                     }
                 }
             }
         }
-    }
+    });
+    // Several target children can enter the same original parent action.
+    // Deduplicate references, never equal-valued distinct authored actions.
+    let mut seen = std::collections::HashSet::new();
+    actions.retain(|(_, _, action)| seen.insert(std::ptr::from_ref(*action)));
     actions
 }
 /// Resolve original Rules and analyze the actual selected configuration once.
@@ -349,7 +385,10 @@ pub fn analyze_governance_policy<'a>(
             notices: Vec::new(),
         };
     }
-    if rules.notice_requirements.len() > 4096 || rules.timeout_decisions.len() > 4096 {
+    if rules.notice_requirements.len() > 4096
+        || rules.timeout_decisions.len() > 4096
+        || rules.notice_timers.len() > 4096
+    {
         return GovernancePolicyAnalysis {
             flow: control_flow::coverage_refusal(control_flow::CoverageGap {
                 path: "/rules".into(),
@@ -482,11 +521,15 @@ pub fn analyze_governance_policy<'a>(
                         })
                         .and_then(Value::as_str)
                         .is_some_and(|period| action.duration.as_deref() == Some(period));
-                if !timeout && !grace {
+                let elapsed = rules.notice_timers.iter().any(|timer| {
+                    timer.request_notice_binding_id == binding_id
+                        && action.timer_id.as_deref() == Some(timer.timer_id.as_str())
+                });
+                if !timeout && !grace && !elapsed {
                     issue(
                         &mut issues,
                         action_path,
-                        "actual notice-derived timer has no original Rules timeout or adverse grace association",
+                        "actual notice-derived timer has no original Rules timeout, elapsed-period or adverse grace association",
                     );
                 }
                 if timer_binding_reference(action, binding) != TimerBindingReference::ExactAnchor {
@@ -524,11 +567,12 @@ pub fn analyze_governance_policy<'a>(
                 }
             }
         });
-        if producers.len() != 1 {
+        let unique_producers = producers.iter().collect::<std::collections::HashSet<_>>();
+        if producers.is_empty() || unique_producers.len() != producers.len() {
             issue(
                 &mut issues,
                 &path,
-                "mandatory notice requires one unambiguous outbound action",
+                "mandatory notice requires distinct actual outbound occurrences; duplicate actions at one location are ambiguous",
             );
         }
         if consumers.len() != 1 {
@@ -538,34 +582,37 @@ pub fn analyze_governance_policy<'a>(
                 "mandatory notice requires one exact inbound callback action and message consumer",
             );
         }
-        let base = if let (
-            [(producer, producer_transition)],
-            [(consumer, consumer_transition, _)],
-        ) = (producers.as_slice(), consumers.as_slice())
-        {
-            if producer == consumer && *producer_transition == Some(*consumer_transition) {
+        let base = if let [(consumer, consumer_transition, _)] = consumers.as_slice() {
+            if producers.iter().any(|(producer, transition)| {
+                producer == consumer && *transition == Some(*consumer_transition)
+            }) {
                 issue(
                     &mut issues,
                     &path,
                     "one transition cannot establish both its fresh outbound request and its inbound receipt",
                 );
                 None
+            } else if producers.is_empty() {
+                None
             } else {
-                let actions = vec![
-                    ActionLocation {
-                        state: producer.clone(),
-                        transition: *producer_transition,
-                    },
-                    ActionLocation {
-                        state: consumer.clone(),
-                        transition: Some(*consumer_transition),
-                    },
-                ];
+                let first = producers
+                    .iter()
+                    .map(|(state, transition)| ActionLocation {
+                        state: state.clone(),
+                        transition: *transition,
+                    })
+                    .collect::<Vec<_>>();
+                let actions = vec![ActionLocation {
+                    state: consumer.clone(),
+                    transition: Some(*consumer_transition),
+                }];
                 paths.push(NoticePath {
+                    producers: first.clone(),
                     actions: actions.clone(),
+                    after_mapping: false,
                     path: path.clone(),
                 });
-                Some(actions)
+                Some((first, actions))
             }
         } else {
             None
@@ -578,6 +625,10 @@ pub fn analyze_governance_policy<'a>(
                 && !associated
                     .iter()
                     .any(|(_, _, selected)| std::ptr::eq(*selected, action))
+                && !rules.notice_timers.iter().any(|timer| {
+                    timer.request_notice_binding_id == binding_id
+                        && action.timer_id.as_deref() == Some(timer.timer_id.as_str())
+                })
             {
                 issue(
                     &mut issues,
@@ -623,11 +674,13 @@ pub fn analyze_governance_policy<'a>(
                     }
                 });
                 if emitted {
-                    if let (Some(base), [consumer]) = (&base, actual.as_slice()) {
+                    if let (Some((producers, base)), [consumer]) = (&base, actual.as_slice()) {
                         let mut actions = base.clone();
                         actions.push(consumer.clone());
                         paths.push(NoticePath {
+                            producers: producers.clone(),
                             actions,
+                            after_mapping: false,
                             path: "/rules/dueProcess/effectiveTransitions".into(),
                         });
                     }
@@ -665,7 +718,7 @@ pub fn analyze_governance_policy<'a>(
                                     })
                                     .collect::<Vec<_>>();
                                 if let [(producer, producer_transition, _)] = starts.as_slice() {
-                                    if let Some(base) = &base {
+                                    if let Some((producers, base)) = &base {
                                         let mut actions = base.clone();
                                         actions.push(ActionLocation {
                                             state: producer.clone(),
@@ -676,7 +729,9 @@ pub fn analyze_governance_policy<'a>(
                                             transition: Some(index),
                                         });
                                         paths.push(NoticePath {
+                                            producers: producers.clone(),
                                             actions,
+                                            after_mapping: true,
                                             path: "/rules/dueProcess/effectiveTransitions".into(),
                                         });
                                         timed = true;
@@ -727,7 +782,9 @@ pub fn analyze_governance_policy<'a>(
                     &timer_path,
                     "required timer or original selected callback-output anchor cannot be resolved",
                 );
-            } else if let (Some(base), [consumer]) = (&base, timer_consumers.as_slice()) {
+            } else if let (Some((producers, base)), [consumer]) =
+                (&base, timer_consumers.as_slice())
+            {
                 let mut actions = base.clone();
                 actions.push(ActionLocation {
                     state: starts[0].0.clone(),
@@ -735,9 +792,105 @@ pub fn analyze_governance_policy<'a>(
                 });
                 actions.push(consumer.clone());
                 paths.push(NoticePath {
+                    producers: producers.clone(),
                     actions,
+                    after_mapping: true,
                     path: timer_path,
                 });
+            }
+        }
+        for (index, timer) in rules
+            .notice_timers
+            .iter()
+            .enumerate()
+            .filter(|(_, timer)| timer.request_notice_binding_id == binding_id)
+        {
+            let timer_path = format!("/rules/noticeTimers/{index}");
+            let mut starts = Vec::new();
+            let mut ends = Vec::new();
+            kernel::visit_states(kernel, |state_path, state| {
+                for action in &state.on_entry {
+                    if action.action == ActionKind::StartTimer
+                        && action.timer_id.as_deref() == Some(timer.timer_id.as_str())
+                    {
+                        starts.push((
+                            ActionLocation {
+                                state: state_path.into(),
+                                transition: None,
+                            },
+                            action,
+                        ));
+                    }
+                }
+                for (transition_index, transition) in state.transitions.iter().enumerate() {
+                    for action in &transition.actions {
+                        if action.action == ActionKind::StartTimer
+                            && action.timer_id.as_deref() == Some(timer.timer_id.as_str())
+                        {
+                            starts.push((
+                                ActionLocation {
+                                    state: state_path.into(),
+                                    transition: Some(transition_index),
+                                },
+                                action,
+                            ));
+                        }
+                    }
+                    if state_id(state_path) == timer.transition.from
+                        && transition.target == timer.transition.to
+                        && transition.guard.is_none()
+                        && transition.event.as_ref().is_some_and(|event|
+                            matches!(event,TransitionEvent::Timer{timer_id,..} if timer_id == &timer.timer_id)
+                                && event.matches_runtime_dispatch(&timer.transition.event)) {
+                        ends.push(ActionLocation {state: state_path.into(), transition: Some(transition_index)});
+                    }
+                }
+            });
+            let duplicate = rules
+                .notice_timers
+                .iter()
+                .enumerate()
+                .any(|(other_index, other)| {
+                    other_index != index
+                        && (other.timer_id == timer.timer_id
+                            || other.transition == timer.transition)
+                });
+            let overlaps_timeout = rules.timeout_decisions.iter().any(|other| {
+                other.timer_id == timer.timer_id || other.transition == timer.transition
+            });
+            if let ([(start, action)], [end], Some((producers, base))) =
+                (starts.as_slice(), ends.as_slice(), &base)
+            {
+                if duplicate
+                    || overlaps_timeout
+                    || timer.duration.trim().is_empty()
+                    || action.duration.as_deref() != Some(timer.duration.as_str())
+                    || timer_binding_reference(action, binding)
+                        != TimerBindingReference::ExactAnchor
+                    || base.contains(start)
+                {
+                    issue(
+                        &mut issues,
+                        &timer_path,
+                        "elapsed notice timer is duplicated, conflicting, has a different original duration/anchor, or runs before callback Mapping",
+                    );
+                } else {
+                    let mut actions = base.clone();
+                    actions.push(start.clone());
+                    actions.push(end.clone());
+                    paths.push(NoticePath {
+                        producers: producers.clone(),
+                        actions,
+                        after_mapping: true,
+                        path: timer_path,
+                    });
+                }
+            } else {
+                issue(
+                    &mut issues,
+                    &timer_path,
+                    "elapsed notice timer must resolve one original start and one exact unconditional consuming transition",
+                );
             }
         }
     }
