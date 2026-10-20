@@ -262,3 +262,32 @@ fn replacement_before_drain_or_task_submission_preserves_the_entire_retained_rec
 fn snapshot(record: &wos_runtime::RuntimeRecord) -> Value {
     json!({"process":record.process,"provenance":record.provenance_log,"aux":wos_runtime::runtime_aux_to_json(record)})
 }
+
+#[test]
+fn nested_clock_direct_native_checks_whole_callback_and_missing_rules() {
+    for missing_rules in [false, true] {
+        let mut raw = fixture();
+        raw["integration"]["bindings"]["request"]["outputBinding"] =
+            json!({"caseFile.requestNotice":"$"});
+        raw["kernel"]["lifecycle"]["states"]["correction"]["onEntry"][0]["startAtExpression"] =
+            json!("caseFile.requestNotice.clock.governedSentAt");
+        if missing_rules {
+            raw["rules"]["timeoutDecisions"] = json!([]);
+            raw["rules"]["noticeRequirements"]["request"]["anchor"] = json!("none");
+        }
+        let result = policy(raw);
+        assert_eq!(
+            result.is_err(),
+            missing_rules,
+            "missing_rules={missing_rules}: {result:?}"
+        );
+        if let Err(error) = result {
+            assert!(
+                error
+                    .to_string()
+                    .contains("/noticeRequirements/request/anchor"),
+                "{error}"
+            );
+        }
+    }
+}

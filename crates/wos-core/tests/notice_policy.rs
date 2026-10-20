@@ -416,8 +416,12 @@ fn selected_recursive_visitors_refuse_resource_bounds_before_walking() {
 }
 #[test]
 fn callback_output_timer_cannot_run_in_the_mapping_evaluation() {
-    for on_transition in [true, false] {
-        let mut raw = fixture();
+    for (on_transition, nested) in [(true, false), (false, false), (true, true), (false, true)] {
+        let mut raw = if nested {
+            nested_clock_fixture()
+        } else {
+            fixture()
+        };
         let states = &mut raw["kernel"]["lifecycle"]["states"];
         states.as_object_mut().unwrap().remove("requestObserved");
         states["sendRequest"]["transitions"][0]["target"] = json!("correction");
@@ -437,7 +441,86 @@ fn callback_output_timer_cannot_run_in_the_mapping_evaluation() {
         }
         assert!(
             !issues(&raw).is_empty(),
-            "same-evaluation clock was qualified: transition={on_transition}"
+            "same-evaluation clock was qualified: transition={on_transition}, nested={nested}"
         );
     }
+}
+
+fn nested_clock_fixture() -> Value {
+    let mut raw = fixture();
+    raw["integration"]["bindings"]["request"]["outputBinding"] =
+        json!({"caseFile.requestNotice":"$"});
+    raw["kernel"]["lifecycle"]["states"]["correction"]["onEntry"][0]["startAtExpression"] =
+        json!("caseFile.requestNotice.clock.governedSentAt");
+    raw
+}
+#[test]
+fn nested_clock_whole_callback_has_the_exact_governed_anchor() {
+    let raw = nested_clock_fixture();
+    assert!(rules_validator().is_valid(&raw["rules"]));
+    assert!(issues(&raw).is_empty(), "{:?}", issues(&raw));
+}
+#[test]
+fn nested_clock_descendants_cannot_hide_missing_timeout_rules() {
+    for origin in [
+        "caseFile.requestNotice.clock.governedSentAt",
+        "caseFile.requestNotice.other",
+        "caseFile.requestNotice[0].clock.governedSentAt",
+        "caseFile.requestNotice[*].clock.governedSentAt",
+    ] {
+        assert!(fel_core::parser::parse(origin).is_ok(), "{origin}");
+        let mut raw = nested_clock_fixture();
+        raw["rules"]["timeoutDecisions"] = json!([]);
+        raw["rules"]["noticeRequirements"]["request"]["anchor"] = json!("none");
+        raw["kernel"]["lifecycle"]["states"]["correction"]["onEntry"][0]["startAtExpression"] =
+            json!(origin);
+        let errors = issues(&raw);
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.contains("/noticeRequirements/request/anchor")),
+            "derived clock fell through to ordinary status: {origin}: {errors:?}"
+        );
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.contains("no original Rules timeout")),
+            "missing original Rules escaped: {origin}: {errors:?}"
+        );
+    }
+}
+#[test]
+fn nested_clock_mapping_direction_and_exact_child_are_not_inferred() {
+    for (source, origin) in [
+        ("$.clock", "caseFile.requestNotice.clock.governedSentAt"),
+        ("$.other", "caseFile.requestNotice.clock.governedSentAt"),
+        ("$", "caseFile.requestNotice.sentAt"),
+        ("$", "caseFile.requestNotice.clock.other"),
+        ("$", "caseFile.requestNotice[0].clock.governedSentAt"),
+        ("$", "caseFile.requestNotice[*].clock.governedSentAt"),
+        ("$", "caseFile.requestNoticeSibling.clock.governedSentAt"),
+    ] {
+        let mut raw = nested_clock_fixture();
+        raw["integration"]["bindings"]["request"]["outputBinding"]["caseFile.requestNotice"] =
+            json!(source);
+        raw["kernel"]["lifecycle"]["states"]["correction"]["onEntry"][0]["startAtExpression"] =
+            json!(origin);
+        assert!(
+            !issues(&raw).is_empty(),
+            "inferred invalid anchor: {source}: {origin}"
+        );
+    }
+}
+#[test]
+fn nested_clock_sibling_prefix_is_an_unrelated_ordinary_timer() {
+    let mut raw = nested_clock_fixture();
+    raw["rules"]["timeoutDecisions"] = json!([]);
+    raw["rules"]["noticeRequirements"]["request"]["anchor"] = json!("none");
+    raw["kernel"]["lifecycle"]["states"]["correction"]["onEntry"][0]["startAtExpression"] =
+        json!("caseFile.requestNoticeSibling.clock.governedSentAt");
+    assert!(
+        issues(&raw).is_empty(),
+        "unrelated timer changed: {:?}",
+        issues(&raw)
+    );
 }

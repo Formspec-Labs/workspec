@@ -180,45 +180,53 @@ fn pointer(key: &str) -> String {
 fn issue(issues: &mut Vec<FlowIssue>, path: &str, message: impl Into<String>) {
     issues.push(FlowIssue::error("NOTICE-GRAPH-001", path, message));
 }
-fn timer_references_binding(
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TimerBindingReference {
+    Unrelated,
+    Unsupported,
+    ExactAnchor,
+}
+
+// Detection is broader than qualification: every mapped descendant remains
+// notice-derived, but only the original scalar or governed callback clock qualifies.
+fn timer_binding_reference(
     action: &Action,
     binding: &super::integration::IntegrationBinding,
-) -> bool {
+) -> TimerBindingReference {
     if action.action != ActionKind::StartTimer {
-        return false;
+        return TimerBindingReference::Unrelated;
     }
     let Some(expression) = action
         .start_at_expression
         .as_ref()
         .and_then(|s| fel_core::parser::parse(s).ok())
     else {
-        return false;
+        return TimerBindingReference::Unrelated;
     };
     let dependencies = fel_core::dependencies::extract_dependencies(&expression);
-    binding.output_binding.keys().any(|key| {
-        dependencies.fields.contains(&format!(
-            "caseFile.{}",
-            key.strip_prefix("caseFile.").unwrap_or(key)
-        ))
-    })
-}
-fn timer_has_exact_anchor(
-    action: &Action,
-    binding: &super::integration::IntegrationBinding,
-) -> bool {
-    action.start_at_expression.as_ref().is_some_and(|e| {
-        binding.output_binding.keys().any(|k| {
-            let expression = fel_core::parser::parse(e);
-            let selected = fel_core::parser::parse(&format!(
-                "caseFile.{}",
-                k.strip_prefix("caseFile.").unwrap_or(k)
-            ));
-            expression
-                .ok()
-                .zip(selected.ok())
-                .is_some_and(|(a, b)| a == b)
-        })
-    })
+    let mut reference = TimerBindingReference::Unrelated;
+    for (key, source) in &binding.output_binding {
+        let target = format!("caseFile.{}", key.strip_prefix("caseFile.").unwrap_or(key));
+        if !dependencies.fields.iter().any(|field| {
+            field == &target
+                || field
+                    .strip_prefix(&target)
+                    .is_some_and(|tail| tail.starts_with('.') || tail.starts_with('['))
+        }) {
+            continue;
+        }
+        reference = TimerBindingReference::Unsupported;
+        let exact_scalar = fel_core::parser::parse(&target).is_ok_and(|e| e == expression);
+        // The maintained host maps the complete callback with `$`; its clock
+        // owner authenticates this governed value separately from physical sentAt.
+        let exact_callback_clock = source == "$"
+            && fel_core::parser::parse(&format!("{target}.clock.governedSentAt"))
+                .is_ok_and(|e| e == expression);
+        if exact_scalar || exact_callback_clock {
+            return TimerBindingReference::ExactAnchor;
+        }
+    }
+    reference
 }
 fn notice_uses<'a>(
     kernel: &KernelDocument,
@@ -247,7 +255,8 @@ fn notice_uses<'a>(
         if let Some(binding) = integration.and_then(|p| p.bindings.get(key)) {
             let mut clocked = false;
             kernel::visit_actions(kernel, |_, action| {
-                clocked |= timer_references_binding(action, binding);
+                clocked |=
+                    timer_binding_reference(action, binding) != TimerBindingReference::Unrelated;
             });
             if clocked
                 && !uses
@@ -456,7 +465,7 @@ pub fn analyze_governance_policy<'a>(
             continue;
         };
         kernel::visit_actions(kernel, |action_path, action| {
-            if timer_references_binding(action, binding) {
+            if timer_binding_reference(action, binding) != TimerBindingReference::Unrelated {
                 let timeout = rules.timeout_decisions.iter().any(|t| {
                     t.request_notice_binding_id == binding_id
                         && action.timer_id.as_deref() == Some(t.timer_id.as_str())
@@ -480,7 +489,7 @@ pub fn analyze_governance_policy<'a>(
                         "actual notice-derived timer has no original Rules timeout or adverse grace association",
                     );
                 }
-                if !timer_has_exact_anchor(action, binding) {
+                if timer_binding_reference(action, binding) != TimerBindingReference::ExactAnchor {
                     issue(
                         &mut issues,
                         action_path,
@@ -565,7 +574,7 @@ pub fn analyze_governance_policy<'a>(
         kernel::visit_actions(kernel, |action_path, action| {
             // Pointer comparison identifies this actual borrowed authored node;
             // equal values in a different action list are not the same action.
-            if timer_references_binding(action, binding)
+            if timer_binding_reference(action, binding) != TimerBindingReference::Unrelated
                 && !associated
                     .iter()
                     .any(|(_, _, selected)| std::ptr::eq(*selected, action))
@@ -651,7 +660,8 @@ pub fn analyze_governance_policy<'a>(
                                         a.action == ActionKind::StartTimer
                                             && a.timer_id.as_deref() == Some(timer_id.as_str())
                                             && a.duration.as_deref() == Some(period)
-                                            && timer_has_exact_anchor(a, binding)
+                                            && timer_binding_reference(a, binding)
+                                                == TimerBindingReference::ExactAnchor
                                     })
                                     .collect::<Vec<_>>();
                                 if let [(producer, producer_transition, _)] = starts.as_slice() {
@@ -709,7 +719,8 @@ pub fn analyze_governance_policy<'a>(
                 .collect::<Vec<_>>();
             let anchored = starts.len() == 1
                 && starts[0].2.duration.as_deref() == Some(timeout.response_period.as_str())
-                && timer_has_exact_anchor(starts[0].2, binding);
+                && timer_binding_reference(starts[0].2, binding)
+                    == TimerBindingReference::ExactAnchor;
             if timer_consumers.len() != 1 || !anchored {
                 issue(
                     &mut issues,
