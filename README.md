@@ -4,7 +4,7 @@
 
 Part of [Formspec](https://formspec.org). Licensed under [Apache-2.0](../LICENSE) (specs, schemas, runtime) and [BSL 1.1](../LICENSE-BSL) (case portal — the browser-based case management UI at `/case-portal/`, formerly `/studio/`). See [LICENSING.md](../LICENSING.md) for details.
 
-WOS authors a workflow as **one merged document** with seven optional embedded blocks (governance, agents, aiOversight, signature, custody, advanced, assurance) per [ADR 0076](../thoughts/adr/0076-product-tier-consolidation.md). The single top-level marker `$wosWorkflow` pins the envelope version; compliance claims compose as `$wosWorkflow@X.Y` plus a claims map enumerating which blocks are exercised. The four release streams (`wos-kernel`, `wos-governance`, `wos-ai`, `wos-advanced`) preserve their cadence and source-path mapping for repo hygiene. See [RELEASE-STREAMS.md](RELEASE-STREAMS.md) for the claims map and [COMPATIBILITY-MATRIX.md](COMPATIBILITY-MATRIX.md) for known-good envelope versions.
+WOS authors a workflow as **one merged document** with seven optional embedded blocks (governance, agents, aiOversight, signature, custody, advanced, assurance) per [ADR 0076](../thoughts/adr/0076-product-tier-consolidation.md). The single top-level marker `$wosWorkflow` pins the envelope version; compliance claims compose as `$wosWorkflow@X.Y` plus a claims map enumerating which blocks are exercised. Repository package versions retain their build identities separately from workflow conformance. See [RELEASE-STREAMS.md](RELEASE-STREAMS.md) for the claims map and [COMPATIBILITY-MATRIX.md](COMPATIBILITY-MATRIX.md) for qualification requirements and explicitly unqualified historical stream ranges.
 
 ---
 
@@ -153,7 +153,7 @@ The spec does not give AI a separate, weaker track — agents participate under 
 
 ## Specification inventory
 
-Per [ADR 0076](../thoughts/adr/0076-product-tier-consolidation.md), the WOS schema family is consolidated to **6 files**. One author-time core (`wos-workflow.schema.json`) carries the workflow lifecycle plus seven optional embedded blocks (governance, agents, aiOversight, signature, custody, advanced, assurance). Two sidecars (`wos-delivery`, `wos-ontology-alignment`) join by `targetWorkflow` URI. Two runtime artifact schemas (`wos-process`, `wos-provenance-log`) and one tooling schema (`wos-tooling`) round out the family.
+Per [ADR 0076](../thoughts/adr/0076-product-tier-consolidation.md), the WOS document routing is consolidated to **6 schema families** (additional support resources and API schemas do not add workflow markers). One author-time core (`wos-workflow.schema.json`) carries the workflow lifecycle plus seven optional embedded blocks (governance, agents, aiOversight, signature, custody, advanced, assurance). Two sidecars (`wos-delivery`, `wos-ontology-alignment`) join by `targetWorkflow` URI. Two runtime artifact schemas (`wos-process`, `wos-provenance-log`) and one tooling schema (`wos-tooling`) round out the family.
 
 | Role | Spec | Schema |
 |---|---|---|
@@ -174,18 +174,13 @@ The behavioral specs that govern processor obligations live alongside the kernel
 | Advanced Governance (L3) | [`specs/advanced/advanced-governance.md`](specs/advanced/advanced-governance.md) — DCR, equity, SMT verifiable constraints |
 | Assurance | [`specs/assurance/assurance.md`](specs/assurance/assurance.md) — assurance levels, attestation |
 
-<details>
-<summary>Legacy spec inventory (pre-ADR 0076 — files retained as redirect stubs while citation sweep is in flight)</summary>
+The final source disposition under ADR 0076 D-8 is:
 
-The pre-consolidation 17-document framing (one document per layer + sidecar + companion + profile) is being phased out. The companion + profile docs below carry "Fully migrated" banners pointing at the post-consolidation homes; the schema files in those legacy directories are subsumed by the merged `wos-workflow.schema.json` per ADR 0076 D-6. Files retained pending citation sweep:
+- Retain [`specs/profiles/signature.md`](specs/profiles/signature.md) as the normative signing prose owner with its existing section anchors. Its JSON shape is embedded in `wos-workflow.schema.json` as `signature`.
+- Delete the former lifecycle/runtime companion files after absorption into the kernel and layer specs. `specs/companions/` and `schemas/companions/` are absent; they are not redirect stubs.
+- Delete the former integration profile file. Integration semantics live in kernel §9.2 and vendor guidance in [`docs/adapters/integration-extensions.md`](docs/adapters/integration-extensions.md).
+- Retain [`specs/profiles/semantic.md`](specs/profiles/semantic.md) as historical reference, including its declared deferred transition-vocabulary migration. The active ontology-export shape is `schemas/sidecars/wos-ontology-alignment.schema.json`; the retained prose does not restore a legacy semantic-profile marker.
 
-- [`specs/companions/lifecycle-detail.md`](specs/companions/lifecycle-detail.md) — §2-§6 absorbed into kernel §4.6/§4.7/§4.8/§4.14, §9.5, §9.7
-- [`specs/companions/runtime.md`](specs/companions/runtime.md) — §3-§15 absorbed into kernel §11/§12/§13/§16, governance §3.8/§11.4/§12.4, AI §4.6
-- [`specs/profiles/integration.md`](specs/profiles/integration.md) — §3-§7/§9 absorbed into kernel §9.2; §10/§11 relocated to `docs/adapters/integration-extensions.md`
-- [`specs/profiles/signature.md`](specs/profiles/signature.md) — content lives in `wos-workflow.schema.json` `signature` block; prose normative sections still here
-- [`specs/profiles/semantic.md`](specs/profiles/semantic.md) — schema renamed to `wos-ontology-alignment` per ADR 0076 D-3
-
-</details>
 
 ---
 

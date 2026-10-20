@@ -5,7 +5,7 @@ date: 2026-05-15
 status: draft
 ---
 
-> **Partial absorption (ADR 0076 D-2).** Signature workflow semantics absorbed into the merged `schemas/wos-workflow.schema.json` `signature` embedded block — signature is no longer a separate sidecar but a load-bearing block on any DocuSign-tier workflow. Prose normative content remains here (signing flow patterns, role binding, authentication policies) until the absorption pass lands the within-block descriptions. SIG-001..SIG-012 lint rules continue to cite this document as canonical until the schema descriptions become full normative.
+> **Retained normative prose (ADR 0076 D-2 / D-8).** The `signature` block in `schemas/wos-workflow.schema.json` owns the embedded JSON shape. This document remains the normative prose owner for signing-flow semantics, role binding, authentication policies and signature conformance, with its existing section anchors preserved. Signature is not a separate sidecar; schema descriptions supplement this specification rather than replace it.
 
 
 # WOS Signature Profile v1.0
@@ -65,7 +65,7 @@ Rights-impacting workflows frequently require signatures: benefit attestations, 
 
 ### 1.4 Relationship to the Kernel
 
-The Signature Profile targets a WOS Kernel Document through `targetWorkflow`. It binds signature roles to kernel actors by `actorId`. Those kernel actors MUST be human actors. Signing workflow states use ordinary kernel states and MAY carry profile lifecycle tags such as `awaiting-signature`.
+The Signature Profile is declared in the `signature` block of a WOS Workflow Document. The block inherits the containing workflow's identity and version; it has no independent document marker, `targetWorkflow`, or `version`. It binds signature roles to actors in that workflow by `actorId`. Those kernel actors MUST be human actors. Signing workflow states use ordinary kernel states and MAY carry profile lifecycle tags such as `awaiting-signature`.
 
 The profile does not introduce a new kernel action type. Runtime processors implement signature behavior by composing existing lifecycle transitions, task assignment, timer events, provenance emission, and `custodyHook` admission.
 
@@ -81,16 +81,14 @@ JSON syntax and data types are as defined in RFC 8259. URI syntax is as defined 
 
 ### 2.1 Signature Profile Document
 
-A Signature Profile Document MUST declare:
+The term **Signature Profile Document** denotes a WOS Workflow Document carrying a `signature` block, not an independently marked document. The containing document MUST conform to `schemas/wos-workflow.schema.json`; its `signature` block MUST declare:
 
-- `$wosSignatureProfile`
-- `targetWorkflow`
 - `roles`
 - `documents`
 - `signingFlow`
 - `evidence`
 
-The document MAY declare authentication policies, reminders, expiry, decline, void, and reassignment policy. Vendor extensions MUST use `x-` properties or the `extensions` object.
+The block MAY declare authentication policies, reminders, expiry, decline, void, and reassignment policy. Vendor extensions MUST use `x-` properties or an `extensions` object where the containing schema permits one. The block MUST NOT declare the retired `$wosSignatureProfile`, `targetWorkflow`, or independent `version` properties. The version in this specification's frontmatter identifies the prose revision; it is not an authored block version.
 
 ### 2.2 Signer Roles
 
@@ -517,7 +515,7 @@ The Trellis Operational Companion's Posture Declaration enforces the structural 
 
 ### 3.1 Attachment Point
 
-The Signature Profile is a profile document. It attaches to a kernel workflow by `targetWorkflow` and composes with governance, AI, and advanced governance documents through the existing kernel seams.
+The Signature Profile attaches through the containing workflow's embedded `signature` block. It composes with the workflow's governance, agents, AI oversight and advanced blocks through the existing kernel seams. True deployment sidecars retain their own `targetWorkflow` references; the embedded signature block does not acquire one.
 
 ### 3.2 Formspec Composition
 
@@ -563,7 +561,7 @@ Changes specific to §2.13–§2.15:
 
 ### 4.1 Conformance Classes
 
-**Signature Profile Document.** A JSON document conforming to this specification and the Signature Profile JSON Schema.
+**Signature Profile Document.** A WOS Workflow Document whose embedded `signature` block conforms to this specification and `schemas/wos-workflow.schema.json#/$defs/Signature`. This conformance-class name is retained for existing citations; it does not introduce a standalone schema or marker.
 
 **Signature Profile Processor.** A processor that loads Signature Profile Documents, resolves profile references, and rejects invalid documents.
 
@@ -582,7 +580,7 @@ Complete is a strict superset of Core.
 
 Schema validation checks the document shape, closed enums, URI/reference field shapes, and `x-*` extension discipline. Schema validation MUST also check that any `signingIntent` value declared in a Signature Profile Document is a syntactically valid URI per RFC 3986 (the byte-level check Trellis ADR 0010 also enforces).
 
-Lint checks profile-to-kernel consistency: target workflow resolution, actor resolution, human actor binding, authentication-policy key resolution, role/document/step references, dependency cycles, FEL guard parsing, timer-event mapping, and ADR-0060 naming. Lint additionally checks: every authored `signingIntent` URI is either in §2.13.1 or in the deployment's Posture Declaration registry; every `signerAuthority.class` matches §2.14.1's closed enum (or a `x-*` class declared in the Posture Declaration); the §2.15 floor row for the declared posture is satisfied by the document's authentication policies; Formspec `authoredSignatures[*].signingIntent` equals the corresponding WOS `signingIntent` (§2.13.3 boundary 1↔2); signature steps that declare `signingIntent` use registered or deployment-local URIs.
+Lint checks consistency within the containing workflow: actor resolution, human actor binding, authentication-policy key resolution, role/document/step references, dependency cycles, FEL guard parsing, timer-event mapping, and ADR-0060 naming. Lint additionally checks: every authored `signingIntent` URI is either in §2.13.1 or in the deployment's Posture Declaration registry; every `signerAuthority.class` matches §2.14.1's closed enum (or a `x-*` class declared in the Posture Declaration); the §2.15 floor row for the declared posture is satisfied by the document's authentication policies; Formspec `authoredSignatures[*].signingIntent` equals the corresponding WOS `signingIntent` (§2.13.3 boundary 1↔2); signature steps that declare `signingIntent` use registered or deployment-local URIs.
 
 Runtime conformance checks signing behavior: sequential blocking, parallel completion, routed guard selection, envelope/recipient state normalization, expiry timers, decline paths, reassignment accountability, witness dependencies, notary/in-person authentication, missing-consent rejection, and custody append inclusion. Runtime additionally checks: the consumed Formspec authored signature verifies its `signatureId`, `signingActId`, `documentRef`, signed-payload digest, response pins, consent, document hash, `presentationHash`, and `signingIntent`; `signingIntent` is registered for the deployment at the time of admission; §2.15 floor is satisfied for the declared posture; `signerAuthority` claim is present and valid where the URI's floor demands it; `evidenceBinding.evidenceHash` algorithm is permitted by §2.7; ESIGN §7001(c) consumer-consent reference resolves under `esign` posture; any profile-required Trellis UCA verifier passes before WOS/Trellis integrity claims are made.
 

@@ -37,7 +37,17 @@
         "additionalProperties": {
           "$ref": "#/$defs/PendingCallback"
         },
-        "description": "Registrations keyed by exact callback subject. Missing means empty. Deferred registrations MUST biject with pendingOutboundEvents; immediate legacy registrations need no outbound entry. Runtime checks association and immutable evidence."
+        "description": "Registrations keyed by exact callback subject. Missing means empty. Deferred registrations MUST biject with pendingOutboundEvents; immediate legacy registrations need no outbound entry. Runtime checks association and immutable evidence.",
+        "examples": [
+          {
+            "default_process_01hw7rm71vfay8vvw14d2pf2db:eligibility:default_process_01hw7rm71vfay8vvw14d2pf2db:eligibility:deferred:0": {
+              "invocationId": "default_process_01hw7rm71vfay8vvw14d2pf2db:eligibility:deferred:0",
+              "bindingId": "eligibility",
+              "expectedUntil": "2026-10-21T12:00:00Z",
+              "dispatchMode": "deferred"
+            }
+          }
+        ]
       },
       "pendingOutboundEvents": {
         "type": "object",
@@ -51,14 +61,48 @@
         "additionalProperties": {
           "$ref": "#/$defs/PendingOutboundEvent"
         },
-        "description": "Immutable deferred native requests keyed by exact callback subject. Missing means empty. Runtime checks keys, IDs, definition pins, paired callback and original provenance witness; aggregate serialized request JSON is bounded to 1 MiB, optionally tightened."
+        "description": "Immutable deferred native requests keyed by exact callback subject. Missing means empty. Runtime checks keys, IDs, definition pins, paired callback and original provenance witness; aggregate serialized request JSON is bounded to 1 MiB, optionally tightened.",
+        "examples": [
+          {
+            "default_process_01hw7rm71vfay8vvw14d2pf2db:eligibility:default_process_01hw7rm71vfay8vvw14d2pf2db:eligibility:deferred:0": {
+              "definitionUrl": "https://agency.example/workflows/eligibility",
+              "definitionVersion": "1.0.0",
+              "bindingId": "eligibility",
+              "invocationId": "default_process_01hw7rm71vfay8vvw14d2pf2db:eligibility:deferred:0",
+              "subject": "default_process_01hw7rm71vfay8vvw14d2pf2db:eligibility:default_process_01hw7rm71vfay8vvw14d2pf2db:eligibility:deferred:0",
+              "request": {
+                "id": "default_process_01hw7rm71vfay8vvw14d2pf2db:eligibility:deferred:0",
+                "source": "urn:wos:runtime",
+                "specversion": "1.0",
+                "type": "com.wos.integration.callback.request",
+                "subject": "default_process_01hw7rm71vfay8vvw14d2pf2db:eligibility:default_process_01hw7rm71vfay8vvw14d2pf2db:eligibility:deferred:0",
+                "time": "2026-10-20T12:00:00Z",
+                "datacontenttype": "application/json",
+                "data": {
+                  "personId": "person-17"
+                }
+              },
+              "bindingSnapshot": {
+                "type": "callback",
+                "dispatchMode": "deferred",
+                "callbackEventType": "com.agency.eligibility.received",
+                "inputMapping": {
+                  "personId": "$personId"
+                }
+              }
+            }
+          }
+        ]
       },
       "nextDeferredCallbackSequence": {
         "type": "integer",
         "minimum": 0,
         "maximum": 18446744073709551615,
         "default": 0,
-        "description": "Monotonic deferred invocation sequence. Missing means zero. Runtime refuses rollback, identity exhaustion and unresolved request removal without admitted receipt evidence."
+        "description": "Monotonic deferred invocation sequence. Missing means zero. Runtime refuses rollback, identity exhaustion and unresolved request removal without admitted receipt evidence.",
+        "examples": [
+          1
+        ]
       },
     "$wosProcess": {
       "type": "string",
@@ -557,19 +601,34 @@
           "invocationId": {
             "type": "string",
             "minLength": 1,
-            "pattern": "\\S"
+            "pattern": "\\S",
+            "description": "Original integration invocation identifier retained for exact correlation with the callback receipt and pending request.",
+            "examples": [
+              "default_process_01hw7rm71vfay8vvw14d2pf2db:eligibility:deferred:0"
+            ]
           },
           "bindingId": {
             "type": "string",
             "minLength": 1,
-            "pattern": "\\S"
+            "pattern": "\\S",
+            "description": "Workflow integration binding identifier that registered this callback and governs interpretation of its admitted receipt.",
+            "examples": [
+              "eligibility"
+            ]
           },
           "expectedUntil": {
             "type": [
               "string",
               "null"
             ],
-            "default": null
+            "default": null,
+            "description": "Optional authored callback expiry timestamp retained with the registration; null records that no deadline was declared.",
+            "examples": [
+              "2026-10-21T12:00:00Z"
+            ],
+            "x-wos": {
+              "openStringKind": "timestamp"
+            }
           },
           "dispatchMode": {
             "type": [
@@ -581,7 +640,11 @@
               "deferred",
               null
             ],
-            "default": null
+            "default": null,
+            "description": "Retained callback dispatch marker; null or omission preserves the immediate registration form, while deferred requires a paired outbound request.",
+            "examples": [
+              "deferred"
+            ]
           }
         },
         "description": "Existing immediate callback registration with an optional deferred marker. The maintained Rust reader permits unknown registration extensions; runtime validates association semantics."
@@ -602,6 +665,10 @@
               "arazzo-sequence",
               "tool",
               "policy-engine"
+            ],
+            "description": "Typed integration dispatch family retained from the original binding so deferred interpretation cannot change on retry.",
+            "examples": [
+              "callback"
             ]
           },
           "dispatchMode": {
@@ -610,14 +677,24 @@
               "immediate",
               "deferred"
             ],
-            "description": "Optional typed mode; omission means immediate. Explicit null is invalid. Dispatch mode is supported only for callback bindings."
+            "description": "Optional typed mode; omission means immediate. Explicit null is invalid. Dispatch mode is supported only for callback bindings.",
+            "examples": [
+              "deferred"
+            ]
           },
           "description": {
             "type": [
               "string",
               "null"
             ],
-            "default": null
+            "default": null,
+            "description": "Optional authored explanation of the integration binding, retained without affecting dispatch or request interpretation.",
+            "examples": [
+              "Check eligibility with the external service."
+            ],
+            "x-wos": {
+              "openStringKind": "prose"
+            }
           },
           "requestContract": {
             "type": [
@@ -629,7 +706,14 @@
             ],
             "properties": {
               "definitionRef": {
-                "type": "string"
+                "type": "string",
+                "description": "Formspec Definition URI identifying the retained request validation contract for this integration binding.",
+                "examples": [
+                  "https://agency.example/forms/eligibility-request"
+                ],
+                "x-wos": {
+                  "openStringKind": "uri"
+                }
               }
             }
           },
@@ -643,7 +727,14 @@
             ],
             "properties": {
               "definitionRef": {
-                "type": "string"
+                "type": "string",
+                "description": "Formspec Definition URI identifying the retained response validation contract for this integration binding.",
+                "examples": [
+                  "https://agency.example/forms/eligibility-response"
+                ],
+                "x-wos": {
+                  "openStringKind": "uri"
+                }
               }
             }
           },
@@ -651,36 +742,95 @@
             "type": "object",
             "default": {},
             "additionalProperties": {
-              "type": "string"
-            }
+              "type": "string",
+              "description": "FEL expression supplying one request input value from the current case state and integration evaluation context.",
+              "examples": [
+                "$personId"
+              ],
+              "x-wos": {
+                "openStringKind": "fel"
+              }
+            },
+            "description": "Map from request input keys to FEL expressions evaluated against case state and the integration event context.",
+            "examples": [
+              {
+                "personId": "$personId"
+              }
+            ]
           },
           "contextMapping": {
             "type": "object",
             "default": {},
             "additionalProperties": {
-              "type": "string"
-            }
+              "type": "string",
+              "description": "Authored FEL expression for one policy context value, retained as declared; current native dispatch uses inputMapping.",
+              "examples": [
+                "$personId"
+              ],
+              "x-wos": {
+                "openStringKind": "fel"
+              }
+            },
+            "description": "Retained policy-engine context map defined as FEL expressions by Kernel \u00a79.3; the current native policy handler builds input through inputMapping.",
+            "examples": [
+              {
+                "applicant": "$personId"
+              }
+            ]
           },
           "dataMapping": {
             "type": "object",
             "default": {},
             "additionalProperties": {
-              "type": "string"
-            }
+              "type": "string",
+              "description": "FEL expression supplying one emitted event data value from case state and the integration evaluation context.",
+              "examples": [
+                "$personId"
+              ],
+              "x-wos": {
+                "openStringKind": "fel"
+              }
+            },
+            "description": "Map from emitted event data keys to FEL expressions evaluated against case state and the integration event context.",
+            "examples": [
+              {
+                "personId": "$personId"
+              }
+            ]
           },
           "outputBinding": {
             "type": "object",
             "default": {},
             "additionalProperties": {
-              "type": "string"
-            }
+              "type": "string",
+              "description": "JSONPath selector for one returned output value; native resolution supports members, indexes, wildcards and slices, not filters or recursive descent.",
+              "examples": [
+                "$.status"
+              ],
+              "x-wos": {
+                "openStringKind": "pathExpression"
+              }
+            },
+            "description": "Map from case-state destination paths to JSONPath selectors evaluated against the returned integration output document.",
+            "examples": [
+              {
+                "eligibility.status": "$.status"
+              }
+            ]
           },
           "idempotencyKeyExpression": {
             "type": [
               "string",
               "null"
             ],
-            "default": null
+            "default": null,
+            "description": "Optional FEL expression used by supported integration handlers to derive an idempotency key from the original evaluation context.",
+            "examples": [
+              "$personId"
+            ],
+            "x-wos": {
+              "openStringKind": "fel"
+            }
           }
         },
         "additionalProperties": true,
@@ -739,30 +889,69 @@
         "properties": {
           "id": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Immutable native CloudEvent identifier minted from the process, binding and deferred sequence before postcommit delivery.",
+            "examples": [
+              "default_process_01hw7rm71vfay8vvw14d2pf2db:eligibility:deferred:0"
+            ],
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
           },
           "source": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "CloudEvent source retained from the binding source extension, or the runtime default when no source was authored.",
+            "examples": [
+              "urn:wos:runtime"
+            ],
+            "x-wos": {
+              "openStringKind": "uri"
+            }
           },
           "specversion": {
             "const": "1.0"
           },
           "type": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "CloudEvent event-type label retained from the binding eventType extension, or the runtime callback request default.",
+            "examples": [
+              "com.wos.integration.callback.request"
+            ],
+            "x-wos": {
+              "openStringKind": "tagLabel"
+            }
           },
           "subject": {
             "type": "string",
             "minLength": 1,
-            "pattern": "\\S"
+            "pattern": "\\S",
+            "description": "Exact callback correlation subject retained with the original request and used as the pending registration map key.",
+            "examples": [
+              "default_process_01hw7rm71vfay8vvw14d2pf2db:eligibility:default_process_01hw7rm71vfay8vvw14d2pf2db:eligibility:deferred:0"
+            ]
           },
           "time": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "RFC 3339 timestamp of original native request creation, retained unchanged for subsequent delivery and reconciliation.",
+            "examples": [
+              "2026-10-20T12:00:00Z"
+            ],
+            "x-wos": {
+              "openStringKind": "timestamp"
+            }
           },
           "datacontenttype": {
-            "type": "string"
+            "type": "string",
+            "description": "Media type describing the retained CloudEvent data; the runtime emits application/json for native callback requests.",
+            "examples": [
+              "application/json"
+            ],
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
           },
           "data": {}
         },
@@ -784,27 +973,47 @@
           "definitionUrl": {
             "type": "string",
             "minLength": 1,
-            "pattern": "\\S"
+            "pattern": "\\S",
+            "description": "Original workflow definition URL pinned when the deferred native request was created; runtime requires the current process pin to match.",
+            "examples": [
+              "https://agency.example/workflows/eligibility"
+            ]
           },
           "definitionVersion": {
             "type": "string",
             "minLength": 1,
-            "pattern": "\\S"
+            "pattern": "\\S",
+            "description": "Original workflow definition version pinned with the deferred request; runtime refuses interpretation under a changed version.",
+            "examples": [
+              "1.0.0"
+            ]
           },
           "bindingId": {
             "type": "string",
             "minLength": 1,
-            "pattern": "\\S"
+            "pattern": "\\S",
+            "description": "Original integration binding identifier retained with the immutable snapshot and paired callback registration.",
+            "examples": [
+              "eligibility"
+            ]
           },
           "invocationId": {
             "type": "string",
             "minLength": 1,
-            "pattern": "\\S"
+            "pattern": "\\S",
+            "description": "Original deferred invocation identifier, shared by the native request and paired pending callback registration.",
+            "examples": [
+              "default_process_01hw7rm71vfay8vvw14d2pf2db:eligibility:deferred:0"
+            ]
           },
           "subject": {
             "type": "string",
             "minLength": 1,
-            "pattern": "\\S"
+            "pattern": "\\S",
+            "description": "Exact original callback subject used as both pending map keys and the retained native request subject.",
+            "examples": [
+              "default_process_01hw7rm71vfay8vvw14d2pf2db:eligibility:default_process_01hw7rm71vfay8vvw14d2pf2db:eligibility:deferred:0"
+            ]
           },
           "request": {
             "$ref": "#/$defs/DeferredNativeRequest"
@@ -873,7 +1082,10 @@
         "absoluteDeadline": {
           "type": "boolean",
           "default": false,
-          "description": "True when startTimer supplied a fixed deadline. Preserved across restoration; business calendars do not recompute it."
+          "description": "True when startTimer supplied a fixed deadline. Preserved across restoration; business calendars do not recompute it.",
+          "examples": [
+            true
+          ]
         },
         "event": {
           "type": "string",
@@ -1057,7 +1269,10 @@
           "type": "string",
           "format": "date-time",
           "description": "Immutable absolute response expiry copied from the actual native timer when this task was created. Fresh drafts and responses refuse at or after this instant; committed replay remains available. Required together with expiresWithTimer (Kernel §13.2.1).",
-          "examples": ["2026-10-18T12:00:00Z"]
+          "examples": ["2026-10-18T12:00:00Z"],
+          "x-wos": {
+            "openStringKind": "timestamp"
+          }
         },
         "expiresWithTimer": {
           "type": "string",
@@ -1543,10 +1758,13 @@
           "type": "string",
           "minLength": 1,
           "pattern": "\\S",
-          "description": "Actual emitEvent ActionExecuted record ID.",
+          "description": "Identifier of the actual same-process emitEvent ActionExecuted provenance record that produced this native event.",
           "x-wos": {
             "openStringKind": "identifier"
-          }
+          },
+          "examples": [
+            "action-executed-1"
+          ]
         },
         "transitionRecordId": {
           "type": "string",
@@ -1555,7 +1773,10 @@
           "description": "Actual StateTransition record that executed the action, absent for initial entry.",
           "x-wos": {
             "openStringKind": "identifier"
-          }
+          },
+          "examples": [
+            "state-transition-1"
+          ]
         }
       }
     },
@@ -1983,7 +2204,7 @@
         "declaredActor": {
           "type": "string",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "description": "Original declared workflow-local human actor slot.",
+          "description": "Original workflow-local human actor slot resolved at admission to the retained canonical assignedActor identity.",
           "examples": [
             "reviewer"
           ]

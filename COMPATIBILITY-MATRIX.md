@@ -1,58 +1,57 @@
 # WOS Stream Compatibility Matrix
 
-This matrix lists the **known-good pairings** across WOS's four release streams.
-It is hand-authored — a row is added when a cross-stream combination has been
-tested together and recorded as a supported pairing. A combination not listed
-here is not automatically broken, but it also has not been validated as a whole.
-
-For the scope of each stream and the tag convention, see
-[`RELEASE-STREAMS.md`](RELEASE-STREAMS.md).
+Workflow conformance uses `$wosWorkflow@X.Y` plus explicit embedded-block and
+conformance-profile claims, as described in [`RELEASE-STREAMS.md`](RELEASE-STREAMS.md).
+Repository package versions identify builds; they are not separate authored
+workflow compliance versions.
 
 ## Matrix
 
-| Kernel | Governance | AI    | Advanced | Notes |
-|--------|------------|-------|----------|-------|
-| 1.0.x  | 1.0.x      | 0.5.x | 0.1.x    | Current. Treat as the sole supported combination until a second row lands. |
+The following row is retained from the former four-stream model as historical
+planning data. It has no linked exact-source or execution receipt here and is
+**not a current supported-combination claim**.
+
+| Kernel | Governance | AI | Advanced | Notes |
+|---|---|---|---|---|
+| 1.0.x | 1.0.x | 0.5.x | 0.1.x | Historical stream ranges; current compatibility unqualified by this row. |
+
+This document currently records no exact-build compatibility qualification.
+Ticket-specific test evidence remains scoped to its tested sources, artifacts
+and behavior; it does not qualify every version in these ranges.
 
 ## How to read a row
 
-Each cell is a SemVer x-range (e.g. `1.0.x` means "any 1.0 patch release").
-A row is a **claim of compatibility** — all streams at the listed versions have
-been exercised together and the combination is known to work.
+A historical SemVer range such as `1.0.x` names the proposed stream series. It
+cannot establish that every patch combination has been exercised together.
+A current qualification must identify:
 
-A vendor who implements WOS declares compliance by pinning the streams they
-consume:
+- the `$wosWorkflow` format version and embedded blocks exercised;
+- the conformance profile or suite and concrete behavior checked;
+- exact source commits and consumed artifact identities;
+- the test receipt and its result, including known limitations.
 
-> "This system is conformant with `wos-kernel@1.0 + wos-ai@0.5` under the
-> 2026-04-20 compatibility matrix row."
-
-A vendor does **not** need to pin every stream — only the ones they consume.
-A processor that is purely kernel-level claims only `wos-kernel@X.Y`.
+For example, `$wosWorkflow@1.0 [governance, signature]` identifies a claim's format
+and blocks. Evidence must still establish the claimed governance and signature
+behavior. A bare-core processor claims only the applicable core conformance;
+it does not acquire untested block support through the common format marker.
 
 ## Known-broken pairings
 
-When a combination is discovered to be incompatible, a new row is added with an
-`x-` prefix on the offending stream range — for example `x-0.6.x` in the AI
-column would mean "this governance/kernel pair is known to break when paired
-with any 0.6.x AI release." An `x-`-prefixed row is a **negative claim**: do
-not ship this combination.
-
-(No such rows exist yet.)
+No exact-build incompatibility receipts are recorded in this document. An absent
+receipt proves neither compatibility nor incompatibility. Record a discovered
+failure with its exact inputs, affected behavior and test evidence; do not infer
+a blanket failure from an untested stream range.
 
 ## Lifecycle rules
 
-1. **Additive only.** Rows are added; existing rows are not rewritten. If a
-   supported pairing later turns out to be broken, append a new `x-` row rather
-   than editing history.
-2. **CI enforcement lands with Task 4** of the [release-trains
-   plan](thoughts/plans/2026-04-16-wos-release-trains.md). Until then, this
-   matrix is hand-maintained and staleness is caught by review.
-3. **Breaking-change criteria per stream** are documented in each stream's
-   CHANGELOG header — see [`changelogs/`](changelogs/).
+1. Preserve historical rows as history with their qualification status explicit.
+2. Add current qualifications only with the evidence listed above. Source changes
+   require an impact check before an earlier receipt can qualify the new sources.
+3. Keep format conformance, package release identity and runtime adoption separate.
+   This matrix does not assert deployment or live-provider acceptance.
 
 ## References
 
-- [`RELEASE-STREAMS.md`](RELEASE-STREAMS.md) — stream → path mapping.
-- [`changelogs/`](changelogs/) — per-stream CHANGELOGs with stability commitments.
-- [Release-trains implementation plan](thoughts/plans/2026-04-16-wos-release-trains.md)
-  — full rollout, including the CI staleness checker (Task 3.2, still open).
+- [`RELEASE-STREAMS.md`](RELEASE-STREAMS.md) — workflow claims and repository release identities.
+- [ADR 0076](../thoughts/adr/0076-product-tier-consolidation.md) — accepted consolidation.
+- [Release-trains implementation plan](thoughts/plans/2026-04-16-wos-release-trains.md) — historical four-stream proposal.
