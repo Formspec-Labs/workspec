@@ -796,6 +796,9 @@ impl WosRuntime {
 #[cfg(test)]
 mod tests {
     include!("runtime/queued_event_origin_tests.rs");
+    mod compound_transition_tests {
+        include!("runtime/compound_transition_tests.rs");
+    }
     mod form_definition_pin_tests {
         include!("runtime/form_definition_pin_tests.rs");
     }

@@ -8,7 +8,7 @@
 //!
 //! Operates on typed [`KernelDocument`] models, not raw JSON.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use fel_core::{
     ast::Expr, dependencies::extract_dependencies, evaluate, fel_to_json, parse, types::Value,
@@ -31,6 +31,8 @@ use wos_events::provenance::{CaseFileSnapshot, ProvenanceLog, ProvenanceRecord};
 pub struct Configuration {
     /// Currently active leaf state identifiers.
     active: Vec<String>,
+    // Entered composite scopes are logical activation, not persisted leaves.
+    scopes: HashSet<String>,
 }
 
 impl Configuration {
@@ -39,19 +41,41 @@ impl Configuration {
         &self.active
     }
 
-    /// Whether a state is currently active.
+    /// Whether a leaf or its enclosing logical scope is active.
     pub fn contains(&self, state_id: &str) -> bool {
-        self.active.iter().any(|s| s == state_id)
+        self.active.iter().any(|s| s == state_id) || self.scopes.contains(state_id)
     }
 
     /// Add a state to the active configuration.
     pub fn enter(&mut self, state_id: String) {
-        self.active.push(state_id);
+        if !self.active.contains(&state_id) {
+            self.active.push(state_id);
+        }
+    }
+
+    fn enter_scope(&mut self, state_id: String) {
+        self.scopes.insert(state_id);
     }
 
     /// Remove a state from the active configuration.
     pub fn exit(&mut self, state_id: &str) {
         self.active.retain(|s| s != state_id);
+        self.scopes.remove(state_id);
+    }
+}
+
+/// Actual dispatch result; exited scopes invalidate work even after same-ID reentry.
+#[derive(Default)]
+struct DispatchOutcome {
+    fired: bool,
+    exited_roots: Vec<String>,
+}
+impl DispatchOutcome {
+    fn fired(exited_roots: Vec<String>) -> Self {
+        Self {
+            fired: true,
+            exited_roots,
+        }
     }
 }
 
@@ -62,6 +86,8 @@ pub struct IndexedState {
     pub pointer: String,
     /// The typed state definition.
     pub state: State,
+    /// Deterministic authored order for active leaf configuration.
+    pub document_order: usize,
     /// Parent parallel state ID, if this state lives in a region.
     pub parallel_parent: Option<String>,
     /// Region name, if this state lives in a parallel region.
@@ -125,6 +151,9 @@ pub struct Evaluator {
     /// substate configuration is saved here. On re-entry, the saved
     /// configuration is restored instead of using `initialState`.
     history_store: HashMap<String, Vec<String>>,
+
+    // Actual exits during synchronous firing/entry, discarded at its boundary.
+    exit_contexts: Vec<Vec<String>>,
 }
 
 /// Event name recorded on provenance and guard traces when a transition fires
@@ -363,6 +392,7 @@ impl Evaluator {
             action_case_states: Vec::new(),
             guard_evaluations: Vec::new(),
             history_store: HashMap::new(),
+            exit_contexts: Vec::new(),
         };
         eval.enter_state(&initial, initial_initiating_actor_id, None)?;
         Ok(eval)
@@ -399,12 +429,11 @@ impl Evaluator {
             });
         }
 
+        let config = restored_configuration(&state_index, &instance.configuration)?;
         Ok(Self {
             kernel,
             state_index,
-            config: Configuration {
-                active: instance.configuration.clone(),
-            },
+            config,
             initial_case_state: instance.case_state.clone(),
             entered_state_pointers: Vec::new(),
             case_state: case_state_from_value(&instance.case_state),
@@ -416,6 +445,7 @@ impl Evaluator {
             action_case_states: Vec::new(),
             guard_evaluations: Vec::new(),
             history_store: instance.history_store.clone(),
+            exit_contexts: Vec::new(),
         })
     }
 
@@ -545,6 +575,7 @@ impl Evaluator {
             action_case_states: Vec::new(),
             guard_evaluations: Vec::new(),
             history_store: HashMap::new(),
+            exit_contexts: Vec::new(),
         };
         evaluator
             .evaluate_transition_guard(
@@ -599,7 +630,7 @@ impl Evaluator {
         actor: Option<&str>,
         data: Option<&serde_json::Value>,
     ) -> Result<bool, EvalError> {
-        if self.try_fire_transition(event, actor, data, false)? {
+        if self.try_fire_transition(event, actor, data, false)?.fired {
             return Ok(true);
         }
 
@@ -630,6 +661,7 @@ impl Evaluator {
     /// already stable.
     pub fn rescan_on_mutation(&mut self) -> Result<bool, EvalError> {
         self.try_fire_transition(CONTINUOUS_RESCAN_EVENT, None, None, true)
+            .map(|outcome| outcome.fired)
     }
 
     // ── Transition dispatch ─────────────────────────────────────
@@ -643,7 +675,7 @@ impl Evaluator {
         actor: Option<&str>,
         event_data: Option<&serde_json::Value>,
         continuous_rescan: bool,
-    ) -> Result<bool, EvalError> {
+    ) -> Result<DispatchOutcome, EvalError> {
         let dispatch_event = if continuous_rescan {
             CONTINUOUS_RESCAN_EVENT
         } else {
@@ -653,23 +685,25 @@ impl Evaluator {
         // Route to parallel parents first.
         let parallel_parents = self.find_parallel_parents();
         for parallel_id in &parallel_parents {
-            if self.try_fire_in_parallel(
+            let outcome = self.try_fire_in_parallel(
                 parallel_id,
                 event,
                 actor,
                 event_data,
                 continuous_rescan,
-            )? {
-                return Ok(true);
+            )?;
+            if outcome.fired {
+                return Ok(outcome);
             }
         }
 
         // For each active state not inside a parallel we already handled.
-        let active_snapshot = self.config.active.clone();
+        let active_snapshot = self.active_candidates();
         for active_state in &active_snapshot {
-            if parallel_parents
-                .iter()
-                .any(|p| self.state_is_in_parallel_region(p, active_state))
+            if event != "$join"
+                && parallel_parents
+                    .iter()
+                    .any(|p| self.state_is_in_parallel_region(p, active_state))
             {
                 continue;
             }
@@ -678,6 +712,12 @@ impl Evaluator {
                 Some(s) => s.clone(),
                 None => continue,
             };
+
+            if event == "$join"
+                && (indexed.state.kind != StateKind::Parallel || !self.parallel_ready(active_state))
+            {
+                continue;
+            }
 
             for (transition_index, transition) in indexed.state.transitions.iter().enumerate() {
                 let location = TransitionLocation {
@@ -700,7 +740,7 @@ impl Evaluator {
                     continue;
                 }
 
-                self.fire_transition(
+                let exited = self.fire_transition(
                     active_state,
                     &transition.target,
                     &location,
@@ -710,11 +750,11 @@ impl Evaluator {
                     &transition.tags,
                     event_data,
                 )?;
-                return Ok(true);
+                return Ok(DispatchOutcome::fired(exited));
             }
         }
 
-        Ok(false)
+        Ok(DispatchOutcome::default())
     }
 
     /// Route an event to active states within a parallel state's regions.
@@ -725,9 +765,9 @@ impl Evaluator {
         actor: Option<&str>,
         event_data: Option<&serde_json::Value>,
         continuous_rescan: bool,
-    ) -> Result<bool, EvalError> {
+    ) -> Result<DispatchOutcome, EvalError> {
         if event == "$join" {
-            return Ok(false);
+            return Ok(DispatchOutcome::default());
         }
 
         let dispatch_event = if continuous_rescan {
@@ -738,134 +778,158 @@ impl Evaluator {
 
         let indexed = match self.state_index.get(parallel_id) {
             Some(s) => s.clone(),
-            None => return Ok(false),
+            None => return Ok(DispatchOutcome::default()),
         };
 
         let regions = indexed.state.regions.clone();
         let mut any_fired = false;
+        let mut exited_roots = Vec::new();
 
-        for (region_name, region_def) in &regions {
-            let active_in_region = self
-                .config
-                .active
-                .iter()
-                .find(|s| region_def.states.contains_key(*s))
-                .cloned();
-
-            let Some(active) = active_in_region else {
-                continue;
-            };
-
-            let state_def = match region_def.states.get(&active) {
-                Some(s) => s.clone(),
-                None => continue,
-            };
-
-            if state_def.kind == StateKind::Final {
-                continue;
+        'regions: for (region_name, _) in &regions {
+            let nested: Vec<_> = self
+                .active_candidates()
+                .into_iter()
+                .filter(|state| {
+                    self.state_index
+                        .get(state)
+                        .is_some_and(|entry| entry.state.kind == StateKind::Parallel)
+                        && self.state_is_in_region(parallel_id, region_name, state)
+                        && self
+                            .ancestors(state)
+                            .iter()
+                            .skip(1)
+                            .find(|parent| {
+                                self.state_index
+                                    .get(*parent)
+                                    .is_some_and(|entry| entry.state.kind == StateKind::Parallel)
+                            })
+                            .is_some_and(|parent| parent == parallel_id)
+                })
+                .collect();
+            let mut nested_fired = false;
+            for child in &nested {
+                let nested =
+                    self.try_fire_in_parallel(child, event, actor, event_data, continuous_rescan)?;
+                nested_fired |= nested.fired;
+                let invalidated = self.scope_exited(&nested.exited_roots, parallel_id);
+                exited_roots.extend(nested.exited_roots);
+                if invalidated || !self.config.contains(parallel_id) {
+                    return Ok(DispatchOutcome {
+                        fired: true,
+                        exited_roots,
+                    });
+                }
             }
-
-            for (transition_index, transition) in state_def.transitions.iter().enumerate() {
-                let location = TransitionLocation {
-                    state_pointer: self
-                        .state_index
-                        .get(&active)
-                        .ok_or_else(|| EvalError::StateNotFound(active.clone()))?
-                        .pointer
-                        .clone(),
-                    transition_index,
-                };
-                let event_matches =
-                    transition_matches_dispatch(transition, event, continuous_rescan);
-                if !event_matches {
-                    continue;
-                }
-                if !self.evaluate_transition_guard(
-                    transition.guard.as_ref(),
-                    &location,
-                    event_data,
-                    &active,
-                    &transition.target,
-                    dispatch_event,
-                )? {
-                    continue;
-                }
-
-                let target = transition.target.clone();
-                let case_file_snapshot = self.case_file_snapshot_for_transition(&transition.tags);
-
+            if nested_fired {
+                any_fired = true;
                 let actions_start = self.executed_actions.len();
-
-                // Execute onExit.
-                self.execute_on_exit_actions(&active, actor, event_data)?;
-
-                // Execute transition actions.
-                for action in &transition.actions {
-                    self.execute_action_in_state(action, actor, &active, event_data)?;
-                }
-
-                // Update configuration.
-                self.config.exit(&active);
-                self.enter_state(&target, actor, event_data)?;
-
-                let transition = ObservedTransition {
-                    location: location.clone(),
-                    provenance_record_id: String::new(),
-                    from: active.clone(),
-                    to: target.clone(),
-                    event: dispatch_event.to_string(),
-                    tags: transition.tags.clone(),
-                };
-                self.record_transition(transition, actor, case_file_snapshot, actions_start);
-                let transition_record_id = self
+                let firing_id = self
                     .transitions
                     .last()
-                    .expect("recorded transition")
+                    .expect("nested dispatch fired")
                     .provenance_record_id
                     .clone();
-
                 self.apply_parallel_cancellation_policy(
                     parallel_id,
                     &regions,
                     region_name,
-                    &target,
                     actor,
                     event_data,
                 )?;
-                self.bind_emitted_action_origins(actions_start, &transition_record_id);
-                any_fired = true;
-                break;
+                self.bind_emitted_action_origins(actions_start, &firing_id);
+                continue 'regions;
             }
-        }
-
-        // Check if all regions reached final (S4.8 wait-all).
-        if any_fired {
-            let all_final = regions.iter().all(|(_, region_def)| {
-                self.config.active.iter().any(|s| {
-                    region_def
-                        .states
-                        .get(s)
-                        .is_some_and(|sd| sd.kind == StateKind::Final)
+            let candidates: Vec<_> = self
+                .active_candidates()
+                .into_iter()
+                .filter(|state| {
+                    self.state_is_in_region(parallel_id, region_name, state)
+                        && !nested
+                            .iter()
+                            .any(|parent| self.is_descendant(state, parent))
                 })
-            });
-
-            if all_final {
-                // Collect all region state IDs and remove from config.
-                let region_state_ids: Vec<String> = regions
-                    .values()
-                    .flat_map(|rd| rd.states.keys().cloned())
-                    .collect();
-                self.config.active.retain(|s| !region_state_ids.contains(s));
-
-                if !self.config.contains(parallel_id) {
-                    self.config.enter(parallel_id.to_string());
+                .collect();
+            for active in candidates {
+                let state_def = self
+                    .state_index
+                    .get(&active)
+                    .ok_or_else(|| EvalError::StateNotFound(active.clone()))?
+                    .clone();
+                if state_def.state.kind == StateKind::Final {
+                    continue;
                 }
-
-                self.process_event("$join", actor, event_data)?;
+                for (transition_index, transition) in state_def.state.transitions.iter().enumerate()
+                {
+                    if !transition_matches_dispatch(transition, event, continuous_rescan) {
+                        continue;
+                    }
+                    let location = TransitionLocation {
+                        state_pointer: state_def.pointer.clone(),
+                        transition_index,
+                    };
+                    if !self.evaluate_transition_guard(
+                        transition.guard.as_ref(),
+                        &location,
+                        event_data,
+                        &active,
+                        &transition.target,
+                        dispatch_event,
+                    )? {
+                        continue;
+                    }
+                    let actions_start = self.executed_actions.len();
+                    let exited = self.fire_transition(
+                        &active,
+                        &transition.target,
+                        &location,
+                        dispatch_event,
+                        actor,
+                        &transition.actions,
+                        &transition.tags,
+                        event_data,
+                    )?;
+                    any_fired = true;
+                    let invalidated = self.scope_exited(&exited, parallel_id);
+                    exited_roots.extend(exited);
+                    // Actual exit invalidates old work even when this same ID reentered.
+                    if invalidated || !self.config.contains(parallel_id) {
+                        return Ok(DispatchOutcome {
+                            fired: true,
+                            exited_roots,
+                        });
+                    }
+                    let firing_id = self
+                        .transitions
+                        .last()
+                        .expect("recorded transition")
+                        .provenance_record_id
+                        .clone();
+                    self.apply_parallel_cancellation_policy(
+                        parallel_id,
+                        &regions,
+                        region_name,
+                        actor,
+                        event_data,
+                    )?;
+                    self.bind_emitted_action_origins(actions_start, &firing_id);
+                    continue 'regions;
+                }
             }
         }
+        // Preserve completed regional leaves unless a real parent transition exits.
+        if any_fired && self.parallel_ready(parallel_id) {
+            let joined = self.try_fire_transition("$join", actor, event_data, false)?;
+            if !joined.fired {
+                self.provenance
+                    .push(ProvenanceRecord::unmatched_event("$join", actor));
+            }
+            exited_roots.extend(joined.exited_roots);
+        }
 
-        Ok(any_fired)
+        Ok(DispatchOutcome {
+            fired: any_fired,
+            exited_roots,
+        })
     }
 
     fn apply_parallel_cancellation_policy(
@@ -873,7 +937,6 @@ impl Evaluator {
         parallel_id: &str,
         regions: &indexmap::IndexMap<String, Region>,
         fired_region_name: &str,
-        target: &str,
         actor: Option<&str>,
         event_data: Option<&serde_json::Value>,
     ) -> Result<(), EvalError> {
@@ -884,25 +947,7 @@ impl Evaluator {
         else {
             return Ok(());
         };
-        let policy = parallel_state
-            .cancellation_policy
-            .unwrap_or(CancellationPolicy::WaitAll);
-        if policy == CancellationPolicy::WaitAll {
-            return Ok(());
-        }
-
-        let Some(target_state) = self.state_index.get(target).map(|indexed| &indexed.state) else {
-            return Ok(());
-        };
-        let reached_final = target_state.kind == StateKind::Final;
-        let reached_error_final =
-            reached_final && target_state.tags.iter().any(|tag| tag == "error");
-        let should_cancel = match policy {
-            CancellationPolicy::WaitAll => false,
-            CancellationPolicy::CancelSiblings => reached_final,
-            CancellationPolicy::FailFast => reached_error_final,
-        };
-        if !should_cancel {
+        if !parallel_cancellation_triggered(parallel_state, &self.config) {
             return Ok(());
         }
 
@@ -910,17 +955,18 @@ impl Evaluator {
             if region_name == fired_region_name {
                 continue;
             }
-            let active_states: Vec<String> = self
-                .config
-                .active
-                .iter()
-                .filter(|state_id| region.states.contains_key(*state_id))
+            let active_states: Vec<String> = region
+                .states
+                .keys()
+                .filter(|state| self.config.contains(state))
                 .cloned()
                 .collect();
             for active_state in active_states {
-                self.execute_on_exit_actions(&active_state, actor, event_data)?;
+                self.execute_subtree_exit_actions(&active_state, actor, event_data)?;
                 self.cancel_timers_created_in_state_tree(&active_state, "region-cancellation");
                 self.exit_state_and_descendants(&active_state);
+                self.clear_subtree_history(&active_state, "region-cancellation");
+                self.record_region_cancellation(parallel_id, region_name, &active_state);
             }
         }
 
@@ -936,6 +982,18 @@ impl Evaluator {
         actor: Option<&str>,
         event_data: Option<&serde_json::Value>,
     ) -> Result<(), EvalError> {
+        self.exit_contexts.push(Vec::new());
+        let result = self.enter_state_inner(state_id, actor, event_data);
+        self.finish_exit_context();
+        result
+    }
+
+    fn enter_state_inner(
+        &mut self,
+        state_id: &str,
+        actor: Option<&str>,
+        event_data: Option<&serde_json::Value>,
+    ) -> Result<(), EvalError> {
         let indexed = self
             .state_index
             .get(state_id)
@@ -945,7 +1003,7 @@ impl Evaluator {
         self.entered_state_pointers.push(indexed.pointer.clone());
         match indexed.state.kind {
             StateKind::Compound => {
-                self.config.enter(state_id.to_string());
+                self.config.enter_scope(state_id.to_string());
                 self.provenance
                     .push(ProvenanceRecord::state_entered(state_id));
                 self.execute_on_entry_actions(state_id, actor, event_data)?;
@@ -963,14 +1021,17 @@ impl Evaluator {
                 Ok(())
             }
             StateKind::Parallel => {
-                self.config.enter(state_id.to_string());
+                self.config.enter_scope(state_id.to_string());
                 self.provenance
                     .push(ProvenanceRecord::state_entered(state_id));
                 self.execute_on_entry_actions(state_id, actor, event_data)?;
 
-                for (_name, region) in &indexed.state.regions {
-                    let region_initial = &region.initial_state;
-                    self.enter_state(region_initial, actor, event_data)?;
+                for region in indexed.state.regions.values() {
+                    let checkpoint = self.exit_checkpoint();
+                    self.enter_state(&region.initial_state, actor, event_data)?;
+                    if self.scope_exited_since(checkpoint, state_id) {
+                        break;
+                    }
                 }
                 Ok(())
             }
@@ -1235,21 +1296,83 @@ impl Evaluator {
         actions: &[Action],
         tags: &[String],
         event_data: Option<&serde_json::Value>,
+    ) -> Result<Vec<String>, EvalError> {
+        self.exit_contexts.push(Vec::new());
+        let result = self.fire_transition_inner(
+            source, target, location, event, actor, actions, tags, event_data,
+        );
+        let exited = self.finish_exit_context();
+        result.map(|()| exited)
+    }
+
+    fn fire_transition_inner(
+        &mut self,
+        source: &str,
+        target: &str,
+        location: &TransitionLocation,
+        event: &str,
+        actor: Option<&str>,
+        actions: &[Action],
+        tags: &[String],
+        event_data: Option<&serde_json::Value>,
     ) -> Result<(), EvalError> {
         let case_file_snapshot = self.case_file_snapshot_for_transition(tags);
         let actions_start = self.executed_actions.len();
 
-        self.execute_on_exit_actions(source, actor, event_data)?;
-
+        let (exit_root, entry_path) = self.transition_paths(source, target)?;
+        let mut cancelled_regions = Vec::new();
+        if let Some(root) = &exit_root {
+            self.execute_subtree_exit_actions(root, actor, event_data)?;
+            for scope in self
+                .active_candidates()
+                .into_iter()
+                .filter(|state| state == root || self.is_descendant(state, root))
+            {
+                if let Some(entry) = self
+                    .state_index
+                    .get(&scope)
+                    .filter(|entry| entry.state.kind == StateKind::Parallel)
+                {
+                    for (region_name, region) in &entry.state.regions {
+                        for child in region
+                            .states
+                            .keys()
+                            .filter(|state| self.config.contains(state))
+                        {
+                            cancelled_regions.push((
+                                scope.clone(),
+                                region_name.clone(),
+                                child.clone(),
+                            ));
+                        }
+                    }
+                }
+            }
+            for (_, _, root) in &cancelled_regions {
+                self.cancel_timers_created_in_state_tree(root, "region-cancellation");
+            }
+        }
         for action in actions {
             self.execute_action_in_state(action, actor, source, event_data)?;
         }
-
-        // Remove source and all its descendant states from the configuration.
-        // This handles compound/parallel state exits where substates would
-        // otherwise be orphaned.
-        self.exit_state_and_descendants(source);
-        self.enter_state(target, actor, event_data)?;
+        if let Some(root) = &exit_root {
+            self.exit_state_and_descendants(root);
+            self.exit_contexts
+                .last_mut()
+                .expect("active firing context")
+                .push(root.clone());
+        }
+        for (parallel, region, root) in cancelled_regions {
+            self.clear_subtree_history(&root, "region-cancellation");
+            self.record_region_cancellation(&parallel, &region, &root);
+        }
+        self.enter_transition_path(&entry_path, actor, event_data)?;
+        self.config.active.sort_by_key(|state| {
+            self.state_index
+                .get(state)
+                .map(|entry| entry.document_order)
+                .unwrap_or(usize::MAX)
+        });
 
         self.record_transition(
             ObservedTransition {
@@ -2604,12 +2727,11 @@ impl Evaluator {
                 // way to ensure no orphaned substates remain.
                 if let Some(history_mode) = &indexed.state.history_state {
                     self.capture_history(state_id, *history_mode);
-                    self.provenance
-                        .push(ProvenanceRecord::history_cleared(state_id, "parent-exit"));
                 }
                 let substate_ids: Vec<String> = indexed.state.states.keys().cloned().collect();
                 for sub_id in &substate_ids {
                     self.exit_state_and_descendants(sub_id);
+                    self.clear_subtree_history(sub_id, "parent-exit");
                 }
             }
             StateKind::Parallel => {
@@ -2617,6 +2739,7 @@ impl Evaluator {
                     let region_ids: Vec<String> = region.states.keys().cloned().collect();
                     for region_state_id in &region_ids {
                         self.exit_state_and_descendants(region_state_id);
+                        self.clear_subtree_history(region_state_id, "parent-exit");
                     }
                 }
             }
@@ -2719,7 +2842,12 @@ impl Evaluator {
         actor: Option<&str>,
         event_data: Option<&serde_json::Value>,
     ) -> Result<(), EvalError> {
+        let restoration_checkpoint = self.exit_checkpoint();
         for leaf_id in saved {
+            if self.scope_exited_since(restoration_checkpoint, leaf_id) {
+                continue;
+            }
+            let checkpoint = self.exit_checkpoint();
             // Collect the chain of compound ancestors between the history
             // compound and the saved leaf (exclusive of both endpoints).
             let ancestors = self.compound_ancestors_within(compound_id, leaf_id);
@@ -2736,6 +2864,19 @@ impl Evaluator {
             // Enter the saved leaf state itself.
             if !self.config.contains(leaf_id) {
                 self.enter_state(leaf_id, actor, event_data)?;
+            }
+            if self.scope_exited_since(checkpoint, compound_id) {
+                // Interrupted entry has not established a complete configuration.
+                // Preserve prior history only if no parent-exit rule cleared it.
+                let parent_exited = self.exit_contexts.last().expect("active exit context")
+                    [checkpoint..]
+                    .iter()
+                    .any(|root| self.is_descendant(compound_id, root));
+                if !parent_exited {
+                    self.history_store
+                        .insert(compound_id.into(), saved.to_vec());
+                }
+                return Ok(());
             }
         }
 
@@ -2802,7 +2943,17 @@ impl Evaluator {
                 .pointer
                 .clone(),
         );
-        self.config.enter(state_id.to_string());
+        let kind = self
+            .state_index
+            .get(state_id)
+            .expect("resolved state")
+            .state
+            .kind;
+        if matches!(kind, StateKind::Compound | StateKind::Parallel) {
+            self.config.enter_scope(state_id.to_string());
+        } else {
+            self.config.enter(state_id.to_string());
+        }
         self.provenance
             .push(ProvenanceRecord::state_entered(state_id));
         self.execute_on_entry_actions(state_id, actor, event_data)?;
@@ -2842,39 +2993,352 @@ impl Evaluator {
         }
     }
 
-    /// Find parallel states that are ancestors of active states.
-    fn find_parallel_parents(&self) -> Vec<String> {
-        let mut parents = Vec::new();
-        for (state_id, indexed) in &self.state_index {
-            if indexed.state.kind != StateKind::Parallel {
-                continue;
-            }
-            let has_active = indexed.state.regions.values().any(|region| {
-                self.config
-                    .active
-                    .iter()
-                    .any(|active| region.states.contains_key(active))
-            });
-            if has_active {
-                parents.push(state_id.clone());
+    fn execute_subtree_exit_actions(
+        &mut self,
+        root: &str,
+        actor: Option<&str>,
+        event_data: Option<&serde_json::Value>,
+    ) -> Result<(), EvalError> {
+        let mut exiting: Vec<_> = self
+            .active_candidates()
+            .into_iter()
+            .filter(|state| state == root || self.is_descendant(state, root))
+            .collect();
+        exiting.sort_by_key(|state| std::cmp::Reverse(self.ancestors(state).len()));
+        for state in exiting {
+            self.execute_on_exit_actions(&state, actor, event_data)?;
+        }
+        Ok(())
+    }
+    fn clear_subtree_history(&mut self, root: &str, reason: &str) {
+        let mut cleared: Vec<_> = self
+            .history_store
+            .keys()
+            .filter(|state| state.as_str() == root || self.is_descendant(state, root))
+            .cloned()
+            .collect();
+        cleared.sort();
+        for state in cleared {
+            self.history_store.remove(&state);
+            self.provenance
+                .push(ProvenanceRecord::history_cleared(&state, reason));
+        }
+    }
+    fn record_region_cancellation(&mut self, parallel: &str, region: &str, root: &str) {
+        // This records the actual scope exit, without inventing an authored action.
+        let mut record = ProvenanceRecord::blank(crate::ProvenanceKind::OnExit);
+        record.from_state = Some(root.into());
+        record.data = Some(
+            serde_json::json!({"parallelState":parallel,"region":region,"reason":"region-cancellation"}),
+        );
+        self.provenance.push(record);
+    }
+    fn finish_exit_context(&mut self) -> Vec<String> {
+        let exited = self.exit_contexts.pop().expect("active exit context");
+        if let Some(parent) = self.exit_contexts.last_mut() {
+            parent.extend(exited.iter().cloned());
+        }
+        exited
+    }
+    fn exit_checkpoint(&self) -> usize {
+        self.exit_contexts
+            .last()
+            .expect("active exit context")
+            .len()
+    }
+    fn scope_exited_since(&self, checkpoint: usize, scope: &str) -> bool {
+        self.scope_exited(
+            &self.exit_contexts.last().expect("active exit context")[checkpoint..],
+            scope,
+        )
+    }
+    fn scope_exited(&self, roots: &[String], scope: &str) -> bool {
+        roots
+            .iter()
+            .any(|root| scope == root || self.is_descendant(scope, root))
+    }
+    fn ancestors(&self, state: &str) -> Vec<String> {
+        let mut result = Vec::new();
+        let mut current = Some(state);
+        while let Some(state) = current {
+            result.push(state.to_owned());
+            current = self
+                .state_index
+                .get(state)
+                .and_then(|value| value.direct_parent.as_deref());
+        }
+        result
+    }
+    fn is_descendant(&self, state: &str, ancestor: &str) -> bool {
+        self.ancestors(state)
+            .iter()
+            .skip(1)
+            .any(|state| state == ancestor)
+    }
+    fn active_candidates(&self) -> Vec<String> {
+        let mut seen = HashSet::new();
+        let mut result = Vec::new();
+        for leaf in &self.config.active {
+            for state in self.ancestors(leaf) {
+                if self.config.contains(&state) && seen.insert(state.clone()) {
+                    result.push(state);
+                }
             }
         }
-        parents
+        result
     }
-
-    /// Check if a state lives in a parallel state's region.
+    fn find_parallel_parents(&self) -> Vec<String> {
+        self.active_candidates()
+            .into_iter()
+            .filter(|state| {
+                self.state_index
+                    .get(state)
+                    .is_some_and(|value| value.state.kind == StateKind::Parallel)
+                    && !self.ancestors(state).iter().skip(1).any(|parent| {
+                        self.state_index
+                            .get(parent)
+                            .is_some_and(|value| value.state.kind == StateKind::Parallel)
+                            && self.config.contains(parent)
+                    })
+            })
+            .collect()
+    }
     fn state_is_in_parallel_region(&self, parallel_id: &str, state_id: &str) -> bool {
-        self.state_index.get(parallel_id).is_some_and(|indexed| {
-            indexed
-                .state
-                .regions
-                .values()
-                .any(|region| region.states.contains_key(state_id))
+        self.is_descendant(state_id, parallel_id)
+    }
+    fn state_is_in_region(&self, parallel_id: &str, region_name: &str, state_id: &str) -> bool {
+        self.ancestors(state_id).iter().any(|state| {
+            self.state_index.get(state).is_some_and(|value| {
+                value.direct_parent.as_deref() == Some(parallel_id)
+                    && value.region_name.as_deref() == Some(region_name)
+            })
         })
+    }
+    fn parallel_ready(&self, parallel_id: &str) -> bool {
+        self.state_index.get(parallel_id).is_some_and(|value| {
+            parallel_cancellation_triggered(&value.state, &self.config)
+                || (!value.state.regions.is_empty()
+                    && value.state.regions.values().all(|region| {
+                        region.states.iter().any(|(name, state)| {
+                            state.kind == StateKind::Final && self.config.contains(name)
+                        })
+                    }))
+        })
+    }
+    fn transition_paths(
+        &self,
+        source: &str,
+        target: &str,
+    ) -> Result<(Option<String>, Vec<String>), EvalError> {
+        if !self.state_index.contains_key(target) {
+            return Err(EvalError::StateNotFound(target.into()));
+        }
+        let source_chain = self.ancestors(source);
+        let target_chain = self.ancestors(target);
+        let mut boundary = source_chain
+            .iter()
+            .find(|state| target_chain.contains(state))
+            .cloned();
+        // Kernel §4.8.6: a parallel-declared transition exits every region.
+        // Crossing orthogonal regions also reenters their common parallel scope.
+        if let Some(common) = boundary.clone().filter(|common| {
+            self.state_index
+                .get(common)
+                .is_some_and(|entry| entry.state.kind == StateKind::Parallel)
+        }) {
+            let crosses_regions = self.state_index.get(&common).is_some_and(|entry| {
+                entry.state.regions.keys().any(|region| {
+                    self.state_is_in_region(&common, region, source)
+                        && !self.state_is_in_region(&common, region, target)
+                })
+            });
+            if source == common || crosses_regions {
+                boundary = self
+                    .state_index
+                    .get(&common)
+                    .and_then(|entry| entry.direct_parent.clone());
+            }
+        }
+        // Targeting the active source or its ancestor is external reentry.
+        if source == target || self.is_descendant(source, target) {
+            boundary = self
+                .state_index
+                .get(target)
+                .and_then(|state| state.direct_parent.clone());
+        }
+        let exit_root = source_chain
+            .iter()
+            .take_while(|state| Some(*state) != boundary.as_ref())
+            .last()
+            .cloned();
+        // A parent-declared transition into another child exits that active branch.
+        let exit_root = exit_root.or_else(|| {
+            self.config
+                .active
+                .iter()
+                .find(|leaf| {
+                    self.is_descendant(leaf, source)
+                        && self.state_index.get(source).is_none_or(|entry| {
+                            entry.state.kind != StateKind::Parallel
+                                || entry.state.regions.keys().any(|region| {
+                                    self.state_is_in_region(source, region, target)
+                                        && self.state_is_in_region(source, region, leaf)
+                                })
+                        })
+                })
+                .and_then(|leaf| {
+                    self.ancestors(leaf)
+                        .into_iter()
+                        .take_while(|state| state != source)
+                        .last()
+                })
+        });
+        let mut entry: Vec<_> = target_chain
+            .into_iter()
+            .take_while(|state| Some(state) != boundary.as_ref())
+            .collect();
+        entry.reverse();
+        Ok((exit_root, entry))
+    }
+    fn enter_transition_path(
+        &mut self,
+        path: &[String],
+        actor: Option<&str>,
+        event_data: Option<&serde_json::Value>,
+    ) -> Result<(), EvalError> {
+        let Some((head, tail)) = path.split_first() else {
+            return Ok(());
+        };
+        if tail.is_empty() {
+            return self.enter_state(head, actor, event_data);
+        }
+        let state = self
+            .state_index
+            .get(head)
+            .ok_or_else(|| EvalError::StateNotFound(head.clone()))?
+            .state
+            .clone();
+        self.enter_state_direct(head, actor, event_data)?;
+        if state.kind == StateKind::Parallel {
+            for (name, region) in &state.regions {
+                let checkpoint = self.exit_checkpoint();
+                if self.state_is_in_region(head, name, &tail[0]) {
+                    self.enter_transition_path(tail, actor, event_data)?;
+                } else {
+                    self.enter_state(&region.initial_state, actor, event_data)?;
+                }
+                if self.scope_exited_since(checkpoint, head) {
+                    break;
+                }
+            }
+            Ok(())
+        } else {
+            self.enter_transition_path(tail, actor, event_data)
+        }
     }
 }
 
 // ── Module-level helpers ─────────────────────────────────────────
+
+fn restored_configuration(
+    index: &HashMap<String, IndexedState>,
+    leaves: &[String],
+) -> Result<Configuration, EvalError> {
+    let mut config = Configuration::default();
+    for leaf in leaves {
+        let state = index
+            .get(leaf)
+            .ok_or_else(|| EvalError::StateNotFound(leaf.clone()))?;
+        if matches!(state.state.kind, StateKind::Compound | StateKind::Parallel) {
+            return Err(EvalError::Internal(
+                "persisted configuration must contain active leaf states".into(),
+            ));
+        }
+        if config.active.contains(leaf) {
+            return Err(EvalError::Internal(
+                "persisted configuration contains duplicate leaves".into(),
+            ));
+        }
+        if config.active.last().is_some_and(|previous| {
+            index
+                .get(previous)
+                .is_some_and(|entry| entry.document_order >= state.document_order)
+        }) {
+            return Err(EvalError::Internal(
+                "persisted leaves must retain authored document order".into(),
+            ));
+        }
+        config.enter(leaf.clone());
+        let mut parent = state.direct_parent.as_deref();
+        while let Some(name) = parent {
+            config.enter_scope(name.into());
+            parent = index
+                .get(name)
+                .and_then(|state| state.direct_parent.as_deref());
+        }
+    }
+    let roots = index
+        .iter()
+        .filter(|(_, entry)| entry.direct_parent.is_none())
+        .filter(|(name, _)| config.contains(name))
+        .count();
+    if !leaves.is_empty() && roots != 1 {
+        return Err(EvalError::Internal(
+            "persisted configuration contains exclusive root branches".into(),
+        ));
+    }
+    for scope in &config.scopes {
+        let state = &index
+            .get(scope)
+            .ok_or_else(|| EvalError::StateNotFound(scope.clone()))?
+            .state;
+        let invalid = match state.kind {
+            StateKind::Compound => {
+                state
+                    .states
+                    .keys()
+                    .filter(|name| config.contains(name))
+                    .count()
+                    != 1
+            }
+            StateKind::Parallel => {
+                let cancelled = parallel_cancellation_triggered(state, &config);
+                state.regions.values().any(|region| {
+                    let count = region
+                        .states
+                        .keys()
+                        .filter(|name| config.contains(name))
+                        .count();
+                    count > 1 || (!cancelled && count != 1)
+                })
+            }
+            _ => true,
+        };
+        if invalid {
+            return Err(EvalError::Internal(
+                "persisted configuration has inconsistent composite branches".into(),
+            ));
+        }
+    }
+    Ok(config)
+}
+
+fn parallel_cancellation_triggered(state: &State, config: &Configuration) -> bool {
+    let policy = state
+        .cancellation_policy
+        .unwrap_or(CancellationPolicy::WaitAll);
+    state.regions.values().any(|region| {
+        region.states.iter().any(|(name, child)| {
+            config.contains(name)
+                && child.kind == StateKind::Final
+                && match policy {
+                    CancellationPolicy::WaitAll => false,
+                    CancellationPolicy::CancelSiblings => true,
+                    CancellationPolicy::FailFast => child.tags.iter().any(|tag| tag == "error"),
+                }
+        })
+    })
+}
 
 /// Build a flat state index from the typed kernel document.
 fn build_state_index(kernel: &KernelDocument) -> HashMap<String, IndexedState> {
@@ -2924,6 +3388,7 @@ fn index_states_recursive(
             IndexedState {
                 pointer: pointer.clone(),
                 state: state.clone(),
+                document_order: index.len(),
                 parallel_parent: parallel_parent.map(String::from),
                 region_name: region_name.map(String::from),
                 direct_parent: direct_parent.map(String::from),
