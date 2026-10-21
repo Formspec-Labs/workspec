@@ -28,12 +28,14 @@
     "dueProcess": {
       "adverseDecisionPolicy": {
         "noticeRequired": true,
+        "noticeTemplateKey": "adverse-decision-notice",
         "noticeTiming": "beforeEffective",
         "explanationLevel": "individualized",
         "counterfactualRequired": true,
         "appealMechanism": {
           "enabled": true,
           "appealWindow": "P30D",
+          "reviewerConstraint": "independentFromOriginal",
           "continuationOfServices": false
         }
       }

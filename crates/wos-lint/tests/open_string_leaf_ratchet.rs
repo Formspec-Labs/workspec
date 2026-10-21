@@ -36,7 +36,9 @@ const EXPECTED_OPEN_STRING_LEAVES: &[(&str, usize)] = &[
     ("schemas/sidecars/wos-ontology-alignment.schema.json", 0),
     ("schemas/synth/wos-synth-trace.schema.json", 0),
     // New native resources enter with their actual maintained inventory counts.
+    ("schemas/wos-governance-policy-rules.schema.json", 0),
     ("schemas/wos-native-provenance-event.schema.json", 0),
+    ("schemas/wos-notice-requirements.schema.json", 0),
     ("schemas/wos-reference-due-process.schema.json", 0),
     ("schemas/wos-reference-replay.schema.json", 0),
     ("schemas/wos-process.schema.json", 0),

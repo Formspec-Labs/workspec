@@ -108,6 +108,12 @@ fn check_workflow(
                     .as_ref()
                     .and_then(|g| g.pointer("/dueProcess/adverseDecisionPolicy/noticeRequired"))
                     == Some(&Value::Bool(true))
+                    && kernel
+                        .governance
+                        .as_ref()
+                        .and_then(|g| g.pointer("/dueProcess/execution/profile"))
+                        .and_then(Value::as_str)
+                        != Some("referenceDueProcess/1")
                 {
                     skipped.push(crate::validation::SemanticSkip::new("selected-governance","/governance/dueProcess", "original Rules and selected IntegrationProfile were not supplied; mandatory notice associations were not checked".into()));
                 }

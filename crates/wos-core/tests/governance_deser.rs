@@ -94,7 +94,8 @@ fn governance_new_phase2_fields() {
         "dueProcess": {
             "scope": "impactLevel = 'rights-impacting'",
             "adverseDecisionPolicy": {
-                "noticeRequired": true
+                "noticeRequired": true,
+                "noticeTemplateKey": "adverse-decision-notice"
             }
         },
         "reviewProtocols": [{

@@ -2496,16 +2496,48 @@
             "type": "object",
             "properties": {
               "check_id": {
-                "type": "string"
+                "type": "string",
+                "minLength": 1,
+                "description": "Stable identifier of the static or semantic authoring check that produced this decision reason.",
+                "examples": [
+                  "candidate-schema",
+                  "t1"
+                ],
+                "x-wos": {
+                  "openStringKind": "identifier"
+                }
               },
               "code": {
-                "type": "string"
+                "type": "string",
+                "minLength": 1,
+                "description": "Diagnostic rule identifier or stage status code recorded for this authoring decision reason.",
+                "examples": [
+                  "K-001",
+                  "not-run"
+                ],
+                "x-wos": {
+                  "openStringKind": "identifier"
+                }
               },
               "source": {
-                "type": "string"
+                "type": "string",
+                "minLength": 1,
+                "description": "JSON Pointer or source locator identifying the document path associated with this reason.",
+                "examples": [
+                  "/lifecycle/states/review",
+                  "/governance/dueProcess"
+                ],
+                "x-wos": {
+                  "openStringKind": "pathExpression"
+                }
               },
               "blocking": {
-                "type": "boolean"
+                "type": "boolean",
+                "description": "True when this reason blocks verified publication status and holds the authoring decision at draft or blocked.",
+                "examples": [
+                  true,
+                  false
+                ]
               }
             },
             "required": [

@@ -5,7 +5,9 @@ use wos_core::KernelDocument;
 use wos_core::model::governance_checks::{
     GovernanceIssueKind, LifecycleIndex, check_governance, check_reference_governance,
 };
-use wos_lint::studio_api::{CheckStatus, ValidationRequest, ValidationScope, validate};
+use wos_lint::studio_api::{
+    CheckStatus, DependencyRole, ResolvedDependency, ValidationRequest, ValidationScope, validate,
+};
 #[path = "../../wos-conformance/tests/support/local_schemas.rs"]
 mod local_schemas;
 
@@ -20,12 +22,48 @@ fn general_explanation_obligations_do_not_select_reference_execution() {
     let kernel: KernelDocument = serde_json::from_value(input.clone()).unwrap();
     let checks = check_governance(&kernel, &input["governance"], &LifecycleIndex::new(&kernel));
     assert!(checks.issues.is_empty(), "{:?}", checks.issues);
+    let delivery = ResolvedDependency {
+        role: DependencyRole::Delivery,
+        url: "urn:test:human-explanation:delivery".into(),
+        version: "1.0.0".into(),
+        document_json: json!({
+            "$wosDelivery": "1.0",
+            "targetWorkflow": "urn:test:human-explanation",
+            "version": "1.0.0",
+            "notifications": {
+                "templates": {
+                    "adverse-decision-notice": {
+                        "category": "adverse-decision",
+                        "sections": [
+                            {"id": "determination", "contentType": "structured", "content": "d"},
+                            {"id": "reasons", "contentType": "structured", "content": "r"},
+                            {"id": "appealRights", "contentType": "appeal-rights", "content": "a"},
+                            {"id": "appealInstructions", "contentType": "action-required", "content": "i"}
+                        ]
+                    }
+                }
+            }
+        }),
+        definition: None,
+    };
     let report = validate(ValidationRequest {
         candidate: &input,
-        dependencies: &[],
+        dependencies: &[delivery],
         scope: ValidationScope::Project,
     });
-    assert_eq!(report.status, CheckStatus::Pass, "{report:?}");
+    assert_eq!(report.status, CheckStatus::NotRun, "{report:?}");
+    let stage = |name: &str| {
+        report
+            .stages
+            .iter()
+            .find(|stage| stage.name == name)
+            .unwrap_or_else(|| panic!("missing stage {name}: {report:?}"))
+    };
+    assert_eq!(stage("candidate-schema").status, CheckStatus::Pass, "{report:?}");
+    assert_eq!(stage("t1").status, CheckStatus::Pass, "{report:?}");
+    assert_eq!(stage("project-resolution").status, CheckStatus::Pass, "{report:?}");
+    assert_eq!(stage("t2").status, CheckStatus::Pass, "{report:?}");
+    assert_eq!(stage("selected-governance").status, CheckStatus::NotRun, "{report:?}");
     assert_eq!(input, original);
 }
 

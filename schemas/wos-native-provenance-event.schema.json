@@ -536,7 +536,7 @@
         "description": {
           "type": "string",
           "minLength": 1,
-          "description": "Human-readable summary of the rule.",
+          "description": "Human-readable summary of what this authoritative rule requires or prohibits.",
           "examples": [
             "Annual renewal of eligibility required for continued benefit receipt."
           ],
@@ -551,7 +551,7 @@
         "citation": {
           "type": "string",
           "minLength": 1,
-          "description": "Formal citation to the source document.",
+          "description": "Formal citation to the authoritative source document in standard legal format.",
           "examples": [
             "42 CFR \u00a7 435.916"
           ],
@@ -677,12 +677,16 @@
         },
         "satisfied": {
           "type": "boolean",
-          "description": "True when the criterion was satisfied by the case facts."
+          "description": "True when the criterion was satisfied by the evaluated case facts.",
+          "examples": [
+            true,
+            false
+          ]
         },
         "detail": {
           "type": "string",
           "minLength": 1,
-          "description": "Optional human-readable detail for the criterion result.",
+          "description": "Optional human-readable detail explaining the criterion evaluation result.",
           "examples": [
             "Reported income $17,500 below SNAP threshold $20,000."
           ],
@@ -709,7 +713,7 @@
         "factor": {
           "type": "string",
           "minLength": 1,
-          "description": "Short identifier or label for the factor.",
+          "description": "Short identifier or label for the evaluated counterfactual factor.",
           "examples": [
             "incomeReduction",
             "applicantRace"
@@ -745,6 +749,7 @@
     "ReasoningEvidence": {
       "type": "object",
       "additionalProperties": false,
+      "description": "Structured Reasoning-tier provenance payload linking a determination to its facts record, snapshot digest, rules, evidence, and criteria.",
       "required": [
         "factsRecordRef",
         "snapshotSha256",
@@ -757,19 +762,44 @@
       "properties": {
         "factsRecordRef": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Identifier of the Facts-tier determination provenance record this reasoning entry explains.",
+          "examples": [
+            "default_prov_01m5bkbfjke3r9p9589gy8zggh"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "snapshotSha256": {
           "type": "string",
-          "pattern": "^[a-f0-9]{64}$"
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "Lowercase SHA-256 hex digest of the canonical case-file snapshot captured on the determination.",
+          "examples": [
+            "b19f000c0cd497b52c4a78e50641651e4b1e96931a1b1558984d69e722f73f5e"
+          ]
         },
         "sourceRef": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Originating task artifact or timeout transition reference that supplied this reasoning evidence.",
+          "examples": [
+            "review_artifact_01"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "reason": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Human-readable narrative explanation of the determination grounded in the cited rules and facts.",
+          "examples": [
+            "Application denied because submitted evidence did not satisfy the identity criterion."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         },
         "rulesApplied": {
           "type": "array",
@@ -800,6 +830,7 @@
     "CounterfactualEvidence": {
       "type": "object",
       "additionalProperties": false,
+      "description": "Structured Counterfactual-tier provenance payload recording positive and negative counterfactuals for a determination.",
       "required": [
         "factsRecordRef",
         "snapshotSha256",
@@ -810,15 +841,33 @@
       "properties": {
         "factsRecordRef": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Identifier of the Facts-tier determination provenance record this counterfactual entry accompanies.",
+          "examples": [
+            "default_prov_01m5bkbfjke3r9p9589gy8zggh"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "snapshotSha256": {
           "type": "string",
-          "pattern": "^[a-f0-9]{64}$"
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "Lowercase SHA-256 hex digest of the canonical case-file snapshot captured on the determination.",
+          "examples": [
+            "b19f000c0cd497b52c4a78e50641651e4b1e96931a1b1558984d69e722f73f5e"
+          ]
         },
         "sourceRef": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Originating task artifact or timeout transition reference that supplied this counterfactual evidence.",
+          "examples": [
+            "review_artifact_01"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "positiveCounterfactuals": {
           "type": "array",
@@ -839,6 +888,7 @@
     "AdverseNoticeProposal": {
       "type": "object",
       "additionalProperties": false,
+      "description": "Immutable adverse-decision notice proposal bound to the determination facts record and rendered notice template.",
       "required": [
         "factsRecordRef",
         "snapshotSha256",
@@ -851,30 +901,69 @@
       "properties": {
         "factsRecordRef": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Identifier of the Facts-tier determination provenance record that produced this adverse notice proposal.",
+          "examples": [
+            "default_prov_01m5bkbfjke3r9p9589gy8zggh"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "snapshotSha256": {
           "type": "string",
-          "pattern": "^[a-f0-9]{64}$"
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "Lowercase SHA-256 hex digest of the canonical case-file snapshot captured on the determination.",
+          "examples": [
+            "b19f000c0cd497b52c4a78e50641651e4b1e96931a1b1558984d69e722f73f5e"
+          ]
         },
         "templateKey": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Declared notice template identifier used to render the adverse-decision notice proposal.",
+          "examples": [
+            "adverse-decision-notice"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "templateSha256": {
           "type": "string",
-          "pattern": "^sha256:[0-9a-f]{64}$"
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Prefixed SHA-256 digest of the canonical notice template definition used for this proposal.",
+          "examples": [
+            "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          ]
         },
         "machineReadable": {
-          "type": "object"
+          "type": "object",
+          "description": "Structured machine-readable notice payload assembling reasons, rules, counterfactuals, and appeal instructions.",
+          "examples": [
+            {
+              "reason": "Application denied."
+            }
+          ]
         },
         "humanReadable": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Rendered human-readable notice text delivered to the recipient for this adverse determination.",
+          "examples": [
+            "Your application was denied because the identity criterion was not satisfied."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         },
         "contentSha256": {
           "type": "string",
-          "pattern": "^sha256:[0-9a-f]{64}$"
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Prefixed SHA-256 digest committing to the canonical machine-readable and human-readable proposal content.",
+          "examples": [
+            "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+          ]
         }
       }
     }

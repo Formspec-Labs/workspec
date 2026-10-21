@@ -246,7 +246,7 @@
         "description": {
           "type": "string",
           "minLength": 1,
-          "description": "Human-readable summary of the rule.",
+          "description": "Human-readable summary of what this authoritative rule requires or prohibits.",
           "examples": [
             "Annual renewal of eligibility required for continued benefit receipt."
           ],
@@ -261,7 +261,7 @@
         "citation": {
           "type": "string",
           "minLength": 1,
-          "description": "Formal citation to the source document.",
+          "description": "Formal citation to the authoritative source document in standard legal format.",
           "examples": [
             "42 CFR § 435.916"
           ],
@@ -359,12 +359,16 @@
         },
         "satisfied": {
           "type": "boolean",
-          "description": "True when the criterion was satisfied by the case facts."
+          "description": "True when the criterion was satisfied by the evaluated case facts.",
+          "examples": [
+            true,
+            false
+          ]
         },
         "detail": {
           "type": "string",
           "minLength": 1,
-          "description": "Optional human-readable detail for the criterion result.",
+          "description": "Optional human-readable detail explaining the criterion evaluation result.",
           "examples": [
             "Reported income $17,500 below SNAP threshold $20,000."
           ],
@@ -434,7 +438,7 @@
         "factor": {
           "type": "string",
           "minLength": 1,
-          "description": "Short identifier or label for the factor.",
+          "description": "Short identifier or label for the evaluated counterfactual factor.",
           "examples": [
             "incomeReduction",
             "applicantRace"

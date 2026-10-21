@@ -185,7 +185,10 @@ impl QualifiedGovernancePolicy {
         require(
             decision["version"] == 1
                 && decision["status"] == "qualified"
-                && decision["code"] == "date_agreement"
+                && matches!(
+                    decision["code"].as_str(),
+                    Some("date_agreement" | "observation_qualified")
+                )
                 && decision["outcomeSha256"]
                     == stack_common_hash::canonical_json_hash(&outcome)
                         .map_err(|_| refused("outcome cannot canonicalize"))?

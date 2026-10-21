@@ -2083,3 +2083,61 @@ fn protected_paths_require_actual_json_pointer_escapes_at_qualification() {
         );
     }
 }
+
+#[test]
+fn observation_qualified_clock_decision_captures_adverse_notice_without_printed_deadline() {
+    let selection = due_selection();
+    let policy = QualifiedGovernancePolicy::qualify(selection.clone()).unwrap();
+    let (mut runtime, store, id, effects) =
+        rig_selected(selection.kernel.clone(), Some(policy.clone()), evidence());
+    let proposed = proposal(&runtime.drain_once(&id).unwrap());
+    let prior_before = store.load_record(&id).unwrap();
+    let outbound = prior_before
+        .process
+        .pending_outbound_events
+        .values()
+        .find(|v| v.binding_id == "sendDenialNotice")
+        .unwrap()
+        .clone();
+    let mut input = notice_send_input(
+        wos_runtime::DeferredOutboundEvent {
+            process_id: id.clone(),
+            event: outbound,
+        },
+        &proposed.human_readable,
+        1_799_999_999_000,
+        1_799_999_999_000,
+    );
+    input.clock_decision.as_mut().unwrap()["code"] = json!("observation_qualified");
+    let input = record_notice_callback(
+        &mut runtime,
+        &store,
+        &id,
+        input,
+        "denial.callback",
+        "urn:test:denial.accepted",
+        1_800_000_000_000,
+    );
+    let prior = store.load_record(&id).unwrap();
+    let receipt = policy.capture_notice_send(&prior, input.clone()).unwrap();
+    let mut bad = input;
+    bad.clock_decision.as_mut().unwrap()["code"] = json!("unrecognized_code");
+    assert!(policy.capture_notice_send(&prior, bad).is_err());
+    let before = effects.load(Ordering::SeqCst);
+    runtime = runtime
+        .with_governance_policy(
+            policy,
+            wos_runtime::governance::CapturedGovernanceEvidence {
+                decisions: vec![],
+                notices: vec![receipt],
+            },
+            &[wos_core::model::notice_requirements::NoticeCapability::LocalSmtpTestCapture],
+        )
+        .unwrap();
+    runtime.drain_once(&id).unwrap();
+    assert_eq!(
+        store.load_record(&id).unwrap().process.case_state["caseClosed"],
+        true
+    );
+    assert_eq!(effects.load(Ordering::SeqCst), before + 1);
+}
