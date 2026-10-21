@@ -13555,7 +13555,13 @@
         "responses": {
           "200": {
             "content": {
-              "application/zip": {}
+              "application/zip": {
+                "schema": {
+                  "description": "Binary ZIP bytes returned without JSON encoding.",
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
             },
             "description": "Existing receipt-pinned archive.",
             "headers": {

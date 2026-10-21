@@ -33,4 +33,6 @@ def test_bundle_metadata_and_download_match_native_zip_export():
     openapi = json.loads((ROOT / "api/wos-public-api.openapi.json").read_text())
     content = openapi["paths"]["/api/v1/processes/{process_id}/completion-exports/{job_id}/download"]["get"]["responses"]["200"]["content"]
     assert set(content) == {"application/zip"}
-    assert content["application/zip"]["schema"] == {"type": "string", "format": "binary"}
+    schema = content["application/zip"]["schema"]
+    assert schema["type"] == "string"
+    assert schema["format"] == "binary"
