@@ -1646,6 +1646,16 @@ where
     ) -> Result<Option<Vec<SignatureEvidence>>, BindingError> {
         let response = source.value();
         let document_claims = document_attestations::has_document_claims(response);
+        if !document_claims
+            && response
+                .get("data")
+                .and_then(|data| data.get("signatureTaskId"))
+                .is_none()
+        {
+            // Ordinary signed Responses keep their Source identity; a task
+            // association is never invented or written into the signed bytes.
+            return self.original_response_signature_evidence(source);
+        }
         let signatures = if document_claims {
             Vec::new()
         } else {
@@ -1678,14 +1688,7 @@ where
         if document_claims {
             return self.document_signature_evidence(source).map(Some);
         }
-        let source_response_ref = signed_task.map(|_| task.task_id.clone()).or_else(|| {
-            response
-                .get("sourceResponseRef")
-                .or_else(|| response.get("formspecResponseRef"))
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_owned)
-        });
-        self.response_signature_evidence(response, signatures, source_response_ref)
+        self.response_signature_evidence(response, signatures, Some(task.task_id.clone()))
     }
 }
 
@@ -2507,6 +2510,86 @@ mod tests {
             "registered method_uri must not produce an admission failure"
         );
         assert!(evidence[0].verification_receipt.is_none());
+    }
+
+    #[test]
+    fn ordinary_task_signature_preserves_original_response_reference() {
+        let adapter = FormspecBinding::new(StubProcessor);
+        let response = signed_response();
+        let source = ResponseJson::parse(response.to_string()).unwrap();
+        let original = source.as_str().to_owned();
+        let evidence = adapter
+            .signature_evidence(&formspec_task(), &source)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            evidence[0].source_response_ref.as_deref(),
+            Some("urn:formspec:response:resp-2026-0001")
+        );
+        assert_eq!(source.as_str(), original);
+        assert_eq!(
+            evidence[0].source_signature_id,
+            response["authoredSignatures"][0]["signatureId"]
+                .as_str()
+                .unwrap()
+        );
+        assert_eq!(
+            evidence[0].signed_payload_digest,
+            response["authoredSignatures"][0]["signedPayload"]["digest"]
+                .as_str()
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn ordinary_task_signature_refuses_missing_identity_or_changed_signed_bytes() {
+        let adapter = FormspecBinding::new(StubProcessor);
+        for mutation in ["missing-id", "blank-id", "malformed-ref"] {
+            let mut response = signed_response();
+            match mutation {
+                "missing-id" => {
+                    response.as_object_mut().unwrap().remove("id");
+                }
+                "blank-id" => response["id"] = serde_json::json!(" "),
+                _ => response["sourceResponseRef"] = serde_json::json!(false),
+            }
+            assert!(
+                adapter
+                    .signature_evidence(
+                        &formspec_task(),
+                        &ResponseJson::parse(response.to_string()).unwrap()
+                    )
+                    .is_err(),
+                "{mutation}"
+            );
+        }
+        // Digest divergence is retained as failed evidence, never a verified claim.
+        let mut response = signed_response();
+        response["data"]["approved"] = serde_json::json!(false);
+        let source = ResponseJson::parse(response.to_string()).unwrap();
+        let evidence = adapter
+            .signature_evidence(&formspec_task(), &source)
+            .unwrap()
+            .unwrap();
+        assert!(evidence[0].admission_failure.is_some());
+        let mut response = signed_response();
+        response["authoredSignatures"][0]["signedPayload"]["responseId"] =
+            serde_json::json!("foreign-response");
+        let source = ResponseJson::parse(response.to_string()).unwrap();
+        let evidence = adapter
+            .signature_evidence(&formspec_task(), &source)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            evidence[0]
+                .admission_failure
+                .as_ref()
+                .unwrap()
+                .failure_context
+                .as_ref()
+                .unwrap()["field"],
+            "signedPayload.responseId"
+        );
     }
 
     #[test]
