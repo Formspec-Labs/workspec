@@ -69,7 +69,7 @@ Rights-impacting workflows frequently require signatures: benefit attestations, 
 
 The Signature Profile is declared in the `signature` block of a WOS Workflow Document. The block inherits the containing workflow's identity and version; it has no independent document marker, `targetWorkflow`, or `version`. It binds signature roles to actors in that workflow by `actorId`. Those kernel actors MUST be human actors. Signing workflow states use ordinary kernel states and MAY carry profile lifecycle tags such as `awaiting-signature`.
 
-The profile does not introduce a new kernel action type. Runtime processors implement signature behavior by composing existing lifecycle transitions, task assignment, timer events, provenance emission, and `custodyHook` admission.
+The profile does not introduce a new kernel action type. Runtime processors implement signature behavior by composing existing lifecycle transitions, task assignment, timer events, provenance emission, and `custodyHook` admission. A `createTask` lifecycle action selects a signing step by declaring an `extensions` object containing `x-wos-signature-step-id` (non-empty string, maximum 256 bytes) paired with either `x-wos-signature-profile-key` (package-local profile key, maximum 256 bytes) or `x-wos-signature-profile-ref` (cross-artifact profile URI, maximum 2048 bytes). These three keys are normatively published under the `x-wos-` namespace (Kernel §10.6) exclusively for `createTask` action `extensions`.
 
 ### 1.5 Notational Conventions
 

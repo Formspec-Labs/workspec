@@ -2584,22 +2584,47 @@ fn is_rights_impacting_typed(kernel: &KernelDocument) -> bool {
 // K-EXT-002: Reserved `x-wos-*` namespace
 // ---------------------------------------------------------------------------
 
-/// K-EXT-002: Warn when any key uses the reserved `x-wos-*` namespace.
+/// K-EXT-002: Warn when any key uses the reserved `x-wos-*` namespace, unless
+/// it is a normatively published WOS extension key at its published location.
 ///
 /// Per Kernel §10.6, the prefix `x-wos-` is RESERVED for future normative use
 /// by the WOS specification. Implementations and vendors MUST NOT author keys
-/// beginning with `x-wos-` until a future spec version publishes them under
-/// that namespace.
+/// beginning with `x-wos-` until a spec version publishes them under that
+/// namespace. Signature Profile §1.4 publishes `x-wos-signature-step-id`
+/// paired with `x-wos-signature-profile-key` or `x-wos-signature-profile-ref`
+/// exclusively on lifecycle `createTask` action `extensions`.
 ///
 /// The check is case-sensitive (lowercase per §10.6) and requires a non-empty
 /// suffix. The bare prefix `x-wos-` (no suffix) is malformed but not a
 /// reserved-namespace usage, so it is ignored here. Other vendor prefixes
 /// like `x-acme-` or `x-vendor-` are unaffected.
 fn check_reserved_wos_namespace(value: &Value, path: &str, diagnostics: &mut Vec<LintDiagnostic>) {
+    let published_sig_ext_paths = if path.is_empty() {
+        collect_published_signature_extension_paths(value)
+    } else {
+        std::collections::HashSet::new()
+    };
+    check_reserved_wos_namespace_inner(value, path, &published_sig_ext_paths, diagnostics);
+}
+
+fn check_reserved_wos_namespace_inner(
+    value: &Value,
+    path: &str,
+    published_sig_ext_paths: &std::collections::HashSet<String>,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
     if let Some(obj) = value.as_object() {
+        let is_published_sig_container = published_sig_ext_paths.contains(path);
         for (key, child) in obj {
             let child_path = format!("{path}/{}", json_pointer_escape(key));
-            if is_reserved_wos_key(key) {
+            let is_published_sig_key = is_published_sig_container
+                && matches!(
+                    key.as_str(),
+                    "x-wos-signature-step-id"
+                        | "x-wos-signature-profile-key"
+                        | "x-wos-signature-profile-ref"
+                );
+            if is_reserved_wos_key(key) && !is_published_sig_key {
                 diagnostics.push(LintDiagnostic::t2_warning(
                     "K-EXT-002",
                     &child_path,
@@ -2608,14 +2633,120 @@ fn check_reserved_wos_namespace(value: &Value, path: &str, diagnostics: &mut Vec
                     ),
                 ));
             }
-            check_reserved_wos_namespace(child, &child_path, diagnostics);
+            check_reserved_wos_namespace_inner(
+                child,
+                &child_path,
+                published_sig_ext_paths,
+                diagnostics,
+            );
         }
     } else if let Some(arr) = value.as_array() {
         for (i, child) in arr.iter().enumerate() {
             let child_path = format!("{path}/{i}");
-            check_reserved_wos_namespace(child, &child_path, diagnostics);
+            check_reserved_wos_namespace_inner(
+                child,
+                &child_path,
+                published_sig_ext_paths,
+                diagnostics,
+            );
         }
     }
+}
+
+const MAX_SIGNATURE_EXTENSION_DEPTH: usize = 128;
+
+fn collect_published_signature_extension_paths(root: &Value) -> std::collections::HashSet<String> {
+    let mut allowed = std::collections::HashSet::new();
+    let Some(states) = root.pointer("/lifecycle/states").and_then(Value::as_object) else {
+        return allowed;
+    };
+    let mut stack: Vec<(&Value, String, usize)> = states
+        .iter()
+        .map(|(state_id, state)| {
+            (
+                state,
+                format!("/lifecycle/states/{}", json_pointer_escape(state_id)),
+                0_usize,
+            )
+        })
+        .collect();
+
+    while let Some((state, state_path, depth)) = stack.pop() {
+        if depth > MAX_SIGNATURE_EXTENSION_DEPTH {
+            continue;
+        }
+        for list_field in ["onEntry", "onExit"] {
+            if let Some(actions) = state.get(list_field).and_then(Value::as_array) {
+                for (idx, action) in actions.iter().enumerate() {
+                    if is_valid_create_task_signature_extensions(action) {
+                        allowed.insert(format!("{state_path}/{list_field}/{idx}/extensions"));
+                    }
+                }
+            }
+        }
+        if let Some(transitions) = state.get("transitions").and_then(Value::as_array) {
+            for (t_idx, transition) in transitions.iter().enumerate() {
+                if let Some(actions) = transition.get("actions").and_then(Value::as_array) {
+                    for (a_idx, action) in actions.iter().enumerate() {
+                        if is_valid_create_task_signature_extensions(action) {
+                            allowed.insert(format!(
+                                "{state_path}/transitions/{t_idx}/actions/{a_idx}/extensions"
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(substates) = state.get("states").and_then(Value::as_object) {
+            for (sub_id, sub_state) in substates {
+                stack.push((
+                    sub_state,
+                    format!("{state_path}/states/{}", json_pointer_escape(sub_id)),
+                    depth + 1,
+                ));
+            }
+        }
+        if let Some(regions) = state.get("regions").and_then(Value::as_object) {
+            for (region_id, region) in regions {
+                let region_path =
+                    format!("{state_path}/regions/{}", json_pointer_escape(region_id));
+                if let Some(r_states) = region.get("states").and_then(Value::as_object) {
+                    for (sub_id, sub_state) in r_states {
+                        stack.push((
+                            sub_state,
+                            format!("{region_path}/states/{}", json_pointer_escape(sub_id)),
+                            depth + 1,
+                        ));
+                    }
+                }
+            }
+        }
+        if let Some(body) = state.get("body").filter(|b| b.is_object()) {
+            stack.push((body, format!("{state_path}/body"), depth + 1));
+        }
+    }
+
+    allowed
+}
+
+fn is_valid_create_task_signature_extensions(action: &Value) -> bool {
+    if action.get("action").and_then(Value::as_str) != Some("createTask") {
+        return false;
+    }
+    let Some(fields) = action.get("extensions").and_then(Value::as_object) else {
+        return false;
+    };
+    if fields.len() != 2 {
+        return false;
+    }
+    let valid_field = |key: &str, limit: usize| -> bool {
+        fields.get(key).and_then(Value::as_str).is_some_and(|v| {
+            !v.is_empty() && v.trim() == v && v.len() <= limit && !v.chars().any(char::is_control)
+        })
+    };
+    valid_field("x-wos-signature-step-id", 256)
+        && (valid_field("x-wos-signature-profile-key", 256)
+            || valid_field("x-wos-signature-profile-ref", 2048))
 }
 
 /// Test whether a key falls inside the reserved `x-wos-*` namespace.
@@ -2775,6 +2906,209 @@ mod tests {
             "expected exactly one K-EXT-002: {diags:?}"
         );
         assert_eq!(matches[0].path, "/actors/0/x-wos-trait");
+    }
+
+    #[test]
+    fn k_ext_002_published_create_task_signature_selectors_not_flagged() {
+        let doc = json!({
+            "$wosWorkflow": "1.0",
+            "lifecycle": {
+                "states": {
+                    "top": {
+                        "onEntry": [
+                            {
+                                "action": "createTask",
+                                "taskRef": "review",
+                                "extensions": {
+                                    "x-wos-signature-profile-key": "reviewProfile",
+                                    "x-wos-signature-step-id": "reviewerSigns"
+                                }
+                            }
+                        ],
+                        "onExit": [
+                            {
+                                "action": "createTask",
+                                "taskRef": "audit",
+                                "extensions": {
+                                    "x-wos-signature-profile-ref": "urn:wos:signature:audit:1",
+                                    "x-wos-signature-step-id": "auditorSigns"
+                                }
+                            }
+                        ],
+                        "transitions": [
+                            {
+                                "to": "done",
+                                "actions": [
+                                    {
+                                        "action": "createTask",
+                                        "taskRef": "witness",
+                                        "extensions": {
+                                            "x-wos-signature-profile-key": "witnessProfile",
+                                            "x-wos-signature-step-id": "witnessSigns"
+                                        }
+                                    }
+                                ]
+                            }
+                        ],
+                        "states": {
+                            "compoundChild": {
+                                "onEntry": [
+                                    {
+                                        "action": "createTask",
+                                        "taskRef": "subSign",
+                                        "extensions": {
+                                            "x-wos-signature-profile-key": "subProfile",
+                                            "x-wos-signature-step-id": "subSigns"
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        "regions": {
+                            "parallelRegion": {
+                                "states": {
+                                    "regionChild": {
+                                        "onEntry": [
+                                            {
+                                                "action": "createTask",
+                                                "taskRef": "regionSign",
+                                                "extensions": {
+                                                    "x-wos-signature-profile-key": "regionProfile",
+                                                    "x-wos-signature-step-id": "regionSigns"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        },
+                        "body": {
+                            "onEntry": [
+                                {
+                                    "action": "createTask",
+                                    "taskRef": "loopSign",
+                                    "extensions": {
+                                        "x-wos-signature-profile-key": "loopProfile",
+                                        "x-wos-signature-step-id": "loopSigns"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        });
+        let diags = run(doc);
+        assert!(
+            diags.iter().all(|d| d.rule_id != "K-EXT-002"),
+            "published createTask signature selectors must not trigger K-EXT-002: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn k_ext_002_incomplete_or_misplaced_signature_selectors_still_flagged() {
+        for invalid in [
+            // Missing step id
+            json!({
+                "$wosWorkflow": "1.0",
+                "lifecycle": {
+                    "states": {
+                        "s": {
+                            "onEntry": [{
+                                "action": "createTask",
+                                "extensions": { "x-wos-signature-profile-key": "profile" }
+                            }]
+                        }
+                    }
+                }
+            }),
+            // Missing profile key/ref
+            json!({
+                "$wosWorkflow": "1.0",
+                "lifecycle": {
+                    "states": {
+                        "s": {
+                            "onEntry": [{
+                                "action": "createTask",
+                                "extensions": { "x-wos-signature-step-id": "step1" }
+                            }]
+                        }
+                    }
+                }
+            }),
+            // Both profile-key and profile-ref (3 keys)
+            json!({
+                "$wosWorkflow": "1.0",
+                "lifecycle": {
+                    "states": {
+                        "s": {
+                            "onEntry": [{
+                                "action": "createTask",
+                                "extensions": {
+                                    "x-wos-signature-profile-key": "profile",
+                                    "x-wos-signature-profile-ref": "urn:wos:sig:1",
+                                    "x-wos-signature-step-id": "step1"
+                                }
+                            }]
+                        }
+                    }
+                }
+            }),
+            // Non-createTask action
+            json!({
+                "$wosWorkflow": "1.0",
+                "lifecycle": {
+                    "states": {
+                        "s": {
+                            "onEntry": [{
+                                "action": "emitEvent",
+                                "extensions": {
+                                    "x-wos-signature-profile-key": "profile",
+                                    "x-wos-signature-step-id": "step1"
+                                }
+                            }]
+                        }
+                    }
+                }
+            }),
+            // State-level extensions instead of createTask action extensions
+            json!({
+                "$wosWorkflow": "1.0",
+                "lifecycle": {
+                    "states": {
+                        "s": {
+                            "extensions": {
+                                "x-wos-signature-profile-key": "profile",
+                                "x-wos-signature-step-id": "step1"
+                            }
+                        }
+                    }
+                }
+            }),
+            // Empty/whitespace value
+            json!({
+                "$wosWorkflow": "1.0",
+                "lifecycle": {
+                    "states": {
+                        "s": {
+                            "onEntry": [{
+                                "action": "createTask",
+                                "extensions": {
+                                    "x-wos-signature-profile-key": " ",
+                                    "x-wos-signature-step-id": "step1"
+                                }
+                            }]
+                        }
+                    }
+                }
+            }),
+        ] {
+            let diags = run(invalid.clone());
+            assert!(
+                diags.iter().any(|d| d.rule_id == "K-EXT-002"),
+                "expected K-EXT-002 for invalid/misplaced selector in {invalid}: {diags:?}"
+            );
+        }
     }
 
     #[test]

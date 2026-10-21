@@ -46,7 +46,7 @@
   },
   "patternProperties": {
     "^x-": {
-      "$comment": "Vendor extensions per Kernel spec §10.6 (the canonical `extensions` seam — one of the six per ADR 0077). The prefix `x-wos-` is RESERVED for future normative WOS use (lint K-EXT-002 warns)."
+      "$comment": "Vendor extensions per Kernel spec §10.6 (the canonical `extensions` seam — one of the six per ADR 0077). The prefix `x-wos-` is RESERVED for normative WOS use (lint K-EXT-002 warns on unpublished or misplaced `x-wos-*` keys; Signature Profile §1.4 publishes `x-wos-signature-step-id` paired with `x-wos-signature-profile-key` or `x-wos-signature-profile-ref` on `createTask` action `extensions`)."
     }
   },
   "allOf": [

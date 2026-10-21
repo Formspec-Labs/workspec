@@ -1885,7 +1885,7 @@ Both mechanisms are equivalent in authority: a processor MUST NOT reject a docum
 
 - Keys MUST be lowercase ASCII. `X-Vendor-Foo` is REJECTED by conformant validators.
 - Keys MUST follow the shape `x-<namespace>-<name>` where `<namespace>` identifies the publisher (e.g., `x-acme-tenant-id`, `x-camunda-priority`).
-- The prefix `x-wos-` is **RESERVED** for future normative use by this specification. Implementations and vendors MUST NOT author keys beginning with `x-wos-` until a future spec version publishes them under that namespace.
+- The prefix `x-wos-` is **RESERVED** for future normative use by this specification. Implementations and vendors MUST NOT author keys beginning with `x-wos-` until a future spec version publishes them under that namespace (for example, the native signing task selectors `x-wos-signature-profile-key`, `x-wos-signature-profile-ref`, and `x-wos-signature-step-id` published on `createTask` action `extensions` by the Signature Profile §1.4).
 
 Rationale for the two-mechanism design: the `extensions` container is useful when vendor data is itself structured and opaque; sibling `x-` keys are useful when vendor data decorates specific structural elements (e.g., `x-acme-ui-label` on a single state). Forcing all vendor data into a single container loses the structural locality that makes element-level decoration valuable. Forcing all vendor data to sibling keys obscures the distinction between data intended for WOS processors and data intended for vendor tooling.
 
