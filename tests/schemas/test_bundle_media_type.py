@@ -7,8 +7,6 @@ from pathlib import Path
 import tomllib
 import zipfile
 
-from jsonschema import Draft202012Validator
-
 
 ROOT = Path(__file__).resolve().parents[2]
 VECTOR = ROOT.parent / "trellis/fixtures/vectors/export/001-two-event-chain"
@@ -32,12 +30,7 @@ def test_bundle_metadata_and_download_match_native_zip_export():
         assert package.read(manifest_members[0]) == (VECTOR / "000-manifest.cbor").read_bytes()
         assert any(name.endswith("/010-events.cbor") for name in members)
 
-    schema = json.loads((ROOT / "schemas/api/bundle.schema.json").read_text())
-    validator = Draft202012Validator(schema["$defs"]["BundleMediaType"])
-    assert not list(validator.iter_errors("application/zip")), "Outer native archive is ZIP"
-    assert list(validator.iter_errors("application/cbor")), "CBOR members do not change outer MIME type"
-
     openapi = json.loads((ROOT / "api/wos-public-api.openapi.json").read_text())
-    content = openapi["paths"]["/bundles/{urn}/download"]["get"]["responses"]["200"]["content"]
+    content = openapi["paths"]["/api/v1/processes/{process_id}/completion-exports/{job_id}/download"]["get"]["responses"]["200"]["content"]
     assert set(content) == {"application/zip"}
     assert content["application/zip"]["schema"] == {"type": "string", "format": "binary"}

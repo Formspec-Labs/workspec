@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.formspec.io/wos-api/audit/v1",
   "title": "WOS API Audit",
-  "description": "Public API resource schema for the WOS cross-case audit query surface. Distinct from `provenance.schema.json` (per-case live record stream): audit is the cross-case retrospective query for compliance investigations, statistical evidence reviews, and identity-attestation searches. Items are projected `ProvenanceRecord` instances cross-`$ref`ed from `provenance.schema.json` (the per-case shape is the audit shape — there is no second meaning of `record`). Long-running audit queries support deferred execution: submit a query, poll its status, paginate the result. Per ADR 0082 D-15 step 6, this domain pairs with `bundle.schema.json` to close the export/cross-case surface.",
+  "description": "Public API resource schema for the WOS cross-case audit query surface. Distinct from `provenance.schema.json` (per-case live record stream): audit is the cross-case retrospective query for compliance investigations, statistical evidence reviews, and identity-attestation searches. Items are projected `ProvenanceRecord` instances cross-`$ref`ed from `provenance.schema.json` (the per-case shape is the audit shape — there is no second meaning of `record`). Long-running audit queries support deferred execution: submit a query, poll its status, paginate the result. Per ADR 0082 D-15 step 6, this domain provides the cross-case query surface; current case exports use completion-exports.schema.json (ADR 0164).",
   "oneOf": [
     {
       "$ref": "#/$defs/AuditQueryRequest"

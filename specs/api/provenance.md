@@ -140,7 +140,7 @@ Per ADR 0082 Context section and the owner's greenfield-contracts memory: the ex
 
 - **Cross-case provenance.** A separate `api/audit.schema.json` will own cross-case audit queries (ADR 0082 D-1 schema list).
 - **Append / write paths.** This contract is read-only on the public API; provenance records are emitted by the runtime through internal seams (`provenanceLayer`), not by external clients.
-- **Bundle export.** Trellis-side export bundles use `api/bundle.schema.json`; this domain only surfaces the live record stream.
+- **Completion export.** Completion exports (`api/completion-exports.schema.json`, ADR 0164) deliver the native Trellis ZIP archive; this domain only surfaces the live record stream.
 - **Cursor durability across deploys.** Per ADR 0082 D-7 cursors are deploy-lifetime; clients restart pagination from the top after `WOS-1410`.
 
 ## ADR amendments

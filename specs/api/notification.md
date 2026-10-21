@@ -31,14 +31,14 @@ Optional fields are omitted when absent:
 - `actorRef`
 - `processId`
 - `taskId`
-- `bundleId` — REQUIRED when `type == bundle-completed` (conditional `if`/`then` block per ADR 0082 D-11). Points at the addressable bundle resource that transitioned to a terminal lifecycle state.
+- `bundleId` — REQUIRED on the retained `bundle-completed` arm; see its current emission status below. The closed discriminated union preserves this conditional requirement (ADR 0082 D-11).
 - `action`
 
 `action.kind` is a closed action family with `x-<vendor>-...` extension support. Resource-opening actions use `resourceId`; external-link actions use `href`.
 
 ## Bundle-completion seam
 
-`type == bundle-completed` is emitted when a case-export bundle (`bundle.schema.json`) transitions to a terminal lifecycle state — `available`, `expired`, or `failed` per `BundleStatus`. The notification's `bundleId` URN dereferences to `GET /api/v1/bundles/{urn}` for the resolved bundle metadata; clients subscribe to the notification feed instead of polling `Bundle.status` per case, and at scale the feed is the discoverable observable for bundle completion. `bundleId` is REQUIRED on this type via the conditional `if`/`then` block on `Notification` so the typed payload makes the bundle resource structurally locatable; absence on a `bundle-completed` notification is a contract bug.
+The schema retains the `bundle-completed` arm and its required `bundleId`, but the current server does not emit this arm. It names a retired case-export resource, not the loaded-workflow catalog returned by `GET /api/v1/bundles`. Current case exports use completion exports (`completion-exports.schema.json`, ADR 0164); this specification does not define a new completion notification producer or download route.
 
 ## NotificationType Taxonomy
 
@@ -46,7 +46,7 @@ The `type` field is a closed-with-vendor-extension family; vendor extensions use
 
 | Literal | Semantics | Recommended severity |
 |---|---|---|
-| `bundle-completed` | Case-export bundle reached a terminal lifecycle state (`BundleStatus`). | `info` (on `available`), `warning` (on `expired`), `critical` (on `failed`) |
+| `bundle-completed` | Retained arm for the retired case-export resource; not emitted by the current server. | Not currently emitted. |
 | `adverse-decision` | A governed determination was reached that denies, reduces, or otherwise adversely affects a claimed benefit, right, or access — triggers procedural-review and appeal-path awareness. Emitted under governance §S10.3 escalation when an adverse outcome renders. | `critical` |
 | `appeal-filed` | An interested party has initiated a formal appeal against a prior adverse determination. Emitted to the adjudication authority and any registered observers; carries `processId` of the appeal case and `actorRef` of the appellant. | `critical` |
 

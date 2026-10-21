@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.formspec.io/wos-api/kernel-summary/v1",
+  "title": "WOS API Kernel Summary",
+  "description": "Public API resource schema for `GET /api/v1/bundles`: one summary per loaded Workflow Document version (its kernel), from the document's own identity fields. Clients choose a workflow from this list and read its full bundle at `GET /api/v1/bundles/{url}`.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/KernelSummary"
+    },
+    {
+      "$ref": "#/$defs/KernelSummaryList"
+    }
+  ],
+  "$defs": {
+    "KernelSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One loaded Workflow Document version, by the identity fields the document declares.",
+      "required": [
+        "url",
+        "title",
+        "version",
+        "status",
+        "impactLevel"
+      ],
+      "properties": {
+        "url": {
+          "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/WorkflowUrl",
+          "description": "The Workflow Document's canonical URL (`url`)."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The Workflow Document's `title`.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The Workflow Document's `version`.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "status": {
+          "enum": [
+            "draft",
+            "active",
+            "deprecated"
+          ],
+          "description": "The Workflow Document's publication `status`; omitted source status is reported as `draft`. Explicit null or an unknown status is refused at ingestion."
+        },
+        "impactLevel": {
+          "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/ImpactLevel",
+          "description": "The Workflow Document's `impactLevel`."
+        }
+      },
+      "examples": [
+        {
+          "url": "urn:example:workflow:application",
+          "title": "Application review",
+          "version": "1.0.0",
+          "status": "draft",
+          "impactLevel": "operational"
+        }
+      ]
+    },
+    "KernelSummaryList": {
+      "type": "array",
+      "description": "Every loaded Workflow Document version, as `GET /api/v1/bundles` returns them.",
+      "items": {
+        "$ref": "#/$defs/KernelSummary"
+      }
+    }
+  }
+}

@@ -14,28 +14,24 @@
         }
       },
       "title": "CompletionExportRequest",
-      "description": "One actual workflow process selector for a completion request; current human credentials and retry identity remain transport inputs."
+      "description": "One actual workflow process selector for a completion export job. The current human credential is a transport input for the request only; the server mints the job identity and a signed job grant."
     },
-    "CompletionExportResult": {
+    "CompletionExportJob": {
       "oneOf": [
         {
           "properties": {
             "status": {
-              "const": "pending",
-              "description": "Closed retained completion state: pending or ready."
+              "const": "running",
+              "description": "Closed job state: running, succeeded or failed."
             },
             "processId": {
               "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ProcessPathId/oneOf/0",
               "description": "Canonical full URN of the actual workflow process."
             },
-            "requestId": {
+            "jobId": {
               "type": "string",
               "pattern": "^[0-9a-f]{32}$",
-              "description": "Retained request identity as 32 lowercase hexadecimal characters."
-            },
-            "checkpointRef": {
-              "type": "null",
-              "description": "Retained checkpoint reference when ready; null while pending."
+              "description": "Server-minted export job identity as 32 lowercase hexadecimal characters; the status and download path parameter."
             }
           },
           "type": "object",
@@ -43,29 +39,29 @@
           "required": [
             "status",
             "processId",
-            "requestId",
-            "checkpointRef"
-          ]
+            "jobId"
+          ],
+          "description": "The server holds the export and no custody receipt or failure is recorded yet. The caller can leave the page and poll later."
         },
         {
           "properties": {
             "status": {
-              "const": "ready",
-              "description": "Closed retained completion state: pending or ready."
+              "const": "succeeded",
+              "description": "Closed job state: running, succeeded or failed."
             },
             "processId": {
               "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ProcessPathId/oneOf/0",
               "description": "Canonical full URN of the actual workflow process."
             },
-            "requestId": {
+            "jobId": {
               "type": "string",
               "pattern": "^[0-9a-f]{32}$",
-              "description": "Retained request identity as 32 lowercase hexadecimal characters."
+              "description": "Server-minted export job identity as 32 lowercase hexadecimal characters; the status and download path parameter."
             },
             "checkpointRef": {
               "type": "string",
               "minLength": 1,
-              "description": "Retained checkpoint reference when ready; null while pending.",
+              "description": "Retained checkpoint reference of the receipt-pinned archive.",
               "x-wos": {
                 "openStringKind": "opaque-token"
               }
@@ -76,16 +72,73 @@
           "required": [
             "status",
             "processId",
-            "requestId",
+            "jobId",
             "checkpointRef"
-          ]
+          ],
+          "description": "The retained custody receipt for this job exists; the archive is ready at the download path."
+        },
+        {
+          "properties": {
+            "status": {
+              "const": "failed",
+              "description": "Closed job state: running, succeeded or failed."
+            },
+            "processId": {
+              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ProcessPathId/oneOf/0",
+              "description": "Canonical full URN of the actual workflow process."
+            },
+            "jobId": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{32}$",
+              "description": "Server-minted export job identity as 32 lowercase hexadecimal characters; the status and download path parameter."
+            },
+            "failureCode": {
+              "type": "string",
+              "enum": [
+                "export-forbidden",
+                "export-refused",
+                "export-conflict",
+                "export-retries-exhausted",
+                "export-receipt-missing"
+              ],
+              "description": "Stable failure code. forbidden: current permission refused or operator cancel; refused: retained evidence or qualification refused; conflict: changed inputs; retries-exhausted: server-side retries ended within the bounded window; receipt-missing: the job recorded success but custody holds no receipt (an integrity fault to report, not to retry)."
+            }
+          },
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "processId",
+            "jobId",
+            "failureCode"
+          ],
+          "description": "Retries ended or the job was refused, with a stable failure code."
         }
       ],
-      "title": "CompletionExportResult",
-      "description": "Exact retained completion request state under current caller authority. POST succeeds only when ready; status reads may return pending."
+      "title": "CompletionExportJob",
+      "description": "Durable whole-case completion export job. Exactly three states: running, succeeded, failed."
+    },
+    "CompletionExportJobList": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "jobs"
+      ],
+      "properties": {
+        "jobs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CompletionExportJob"
+          },
+          "maxItems": 50,
+          "description": "The caller's jobs for the process, newest first."
+        }
+      },
+      "title": "CompletionExportJobList",
+      "description": "Running and finished export jobs for one process and caller."
     }
   },
-  "description": "Resolve wos-common to the owning work-spec/schemas/api/_common.schema.json. POST succeeds with ready and HTTP 200. GET status may return pending. Human credentials and Idempotency-Key are transport-only.",
+  "description": "Resolve wos-common to the owning work-spec/schemas/api/_common.schema.json. POST accepts a job and returns HTTP 202 immediately; status reads report running, succeeded or failed. Human credentials are transport-only; no retry key is client-held and no bearer is stored.",
   "$id": "https://schemas.formspec.io/wos-api/completion-exports/v1",
   "title": "WOS API Browser Completion Exports",
   "oneOf": [
@@ -93,7 +146,10 @@
       "$ref": "#/$defs/CompletionExportRequest"
     },
     {
-      "$ref": "#/$defs/CompletionExportResult"
+      "$ref": "#/$defs/CompletionExportJob"
+    },
+    {
+      "$ref": "#/$defs/CompletionExportJobList"
     }
   ]
 }

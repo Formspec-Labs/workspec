@@ -1,9 +1,9 @@
 # WOS Public API Case Export Fence
 
-**Status:** Stable — shipped behavior pinned to live struct.
+**Status:** Stable — canonical schema with generated Rust binding.
 **Schema:** [`api/case-export-fence.schema.json`](../../schemas/api/case-export-fence.schema.json)
 **Schema ID:** `https://schemas.formspec.io/wos-api/case-export-fence/v1`
-**Rust authority:** [`CaseExportFence` in `workspec-server/crates/wos-server/src/http/cases.rs:146-162`](../../../workspec-server/crates/wos-server/src/http/cases.rs).
+**Rust binding:** `wos_api::types::case_export_fence::CaseExportFence`, generated from the canonical schema above (ADR 0165).
 **OpenAPI:** [`wos-public-api.openapi.json`](../../api/wos-public-api.openapi.json) (`GET /cases/{case_id}/export-fence`); registry component `CaseExportFence` in [`wos-public-api.registry.openapi.json`](../../api/wos-public-api.registry.openapi.json).
 **ADR anchors:** [ADR 0082](../../../thoughts/adr/0082-stack-public-api-contract-and-schema-discipline.md) D-4 (URN), D-12 (closed taxonomies). [ADR 0093](../../thoughts/adr/0093-case-is-its-trellis-ledger.md) D-1 (case-is-its-ledger), §5 (route surface). Trellis-side counterpart: [`trellis/specs/trellis-core.md`](../../../trellis/specs/trellis-core.md) §18.3e (`trellis-export-seal-fence-v1`).
 **Sibling spec:** [`case-view.md`](./case-view.md) — staff read-side projection over the same case ledger.
@@ -28,7 +28,7 @@ The case IS its Trellis ledger per ADR-0093 D-1. `CaseExportFence` is therefore 
 | `policySources` | array of `PolicySnapshotSource` | Provenance for the policy snapshot — the policy documents that contributed to the digest, each with `sourceKind`, `sourceRef`, `versionBinding`, `digest`. |
 | `capturedAt` | `string` (RFC 3339) | Server clock at fence acquisition. |
 
-Nested `CaseFenceEvent`, `ProcessFenceHighWater`, `PolicySnapshotSource` schemas live in the same Rust module (`workspec-server/crates/wos-server/src/http/cases.rs`) and are exported via `utoipa::ToSchema` into the OpenAPI registry alongside `CaseExportFence`.
+Nested `CaseFenceEvent`, `ProcessFenceHighWater` and `PolicySnapshotSource` definitions live in the same canonical schema and generate the corresponding `wos_api` bindings.
 
 ## Locking obligation
 
@@ -61,7 +61,7 @@ The fence is verdict-bound: there is no partial-credit admission path past a mis
 
 ## Closed taxonomies
 
-`policySources[*].sourceKind` and `versionBinding` use closed enums defined by the `PolicySnapshotSource` schema (sibling struct in the same Rust module). The `CaseExportFence` envelope itself carries no open-extension surface — vendor extensions belong on the bundle manifest, not the source fence.
+`policySources[*].sourceKind` and `versionBinding` use closed enums defined by the `PolicySnapshotSource` schema (a definition in the same canonical schema). The `CaseExportFence` envelope itself carries no open-extension surface — vendor extensions belong on the bundle manifest, not the source fence.
 
 ## Non-goals
 
@@ -72,7 +72,7 @@ The fence is verdict-bound: there is no partial-credit admission path past a mis
 
 ## References
 
-- `workspec-server/crates/wos-server/src/http/cases.rs:146-162` — Rust authority for the wire shape.
+- `schemas/api/case-export-fence.schema.json` — canonical wire shape; `wos_api::types::case_export_fence` supplies the generated binding.
 - `work-spec/api/wos-public-api.registry.openapi.json:3680` (schema), `:814` (operation), `:832` (response binding).
 - `stack-common/CLAUDE.md` — lock taxonomy, `LeaseScope::WosCaseSource` row.
 - `trellis/specs/trellis-core.md` §18.3e — substrate-side seal-fence counterpart, identity rule `trellis-export-seal-fence-v1`.

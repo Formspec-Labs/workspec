@@ -195,6 +195,9 @@ The contract projects (does not redefine) the kernel runtime model. `x-wos.mirro
 
 `HoldEntry`, `DelegationEntry`, `ReviewState`, and `RelatedCaseLink` mirror governance / kernel concepts by judgment without an exact kernel `$def` (governance §11, §12, §S5.5; kernel S5.5) and so do not carry the annotation.
 
+`HoldEntry` carries native hold fields and the selected hold policy's expected duration. Native holds have no independent identifier: the existing `DELETE /api/v1/cases/{case_id}/processes/{process_id}/holds/{hold_idx}` route addresses an entry by its index within that process. The API does not mint a hold URN.
+
+
 ## Related-case links
 
 `RelatedCaseLink` (Kernel S5.5; kernel:775) reconciles the previously-divergent kernel and API enums for `relationship`. The merged closed-with-vendor-extension taxonomy is `parent | child | sibling | predecessor | successor | appeals | appealed-by | related | supersedes` plus the `^x-[a-z]+-` vendor-extension seam. The `related` and `supersedes` literals were reserved on the kernel side and are now first-class on the API side.

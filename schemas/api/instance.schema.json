@@ -1015,18 +1015,13 @@
     "HoldEntry": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Single typed hold projection on a workflow process (governance S12). Carries the hold reason, expected duration (or the literal `indefinite` for legal-hold), and the resume trigger.",
+      "description": "Single typed hold projection on a workflow process (governance S12). Carries the hold reason, expected duration (or the literal `indefinite` for legal-hold), and the resume trigger. Native holds have no independent identifier; the existing process hold route addresses an entry by its hold_idx.",
       "required": [
-        "id",
         "holdType",
         "expectedDuration",
         "engagedAt"
       ],
       "properties": {
-        "id": {
-          "$ref": "#/$defs/WosResourceUrn",
-          "description": "Stable URN for this hold."
-        },
         "holdType": {
           "oneOf": [
             {

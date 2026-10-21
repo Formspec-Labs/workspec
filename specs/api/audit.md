@@ -19,7 +19,7 @@ Audit is the **cross-case retrospective query** surface for compliance investiga
 
 Audit reuses the per-case provenance shape. `AuditQueryResult.items` cross-`$ref`s `provenance.schema.json#/$defs/ProvenanceRecord` directly — there is no second meaning of `record`. Investigators cross-reference cases without learning a second projection.
 
-Per ADR 0082 D-15 step 6, this domain pairs with `bundle.schema.json` to close the export / cross-case API surface.
+Per ADR 0082 D-15 step 6, audit provides the cross-case query surface. Current case exports use completion exports (`completion-exports.schema.json`, ADR 0164).
 
 ## Resource Shapes
 
@@ -131,7 +131,7 @@ Per ADR 0082 Context section and the owner's greenfield-contracts memory: prior 
 - **Cross-tenant queries.** ADR 0068 D-1 substrate-boundary refuses cross-tenant reads. Federation across tenants is a future ADR slot (ADR 0068 D-5 supersession is the current pattern).
 - **Append / write paths.** Audit is read-only on the public API. Provenance records are emitted by the runtime through internal seams (`provenanceLayer`), not by external clients.
 - **Real-time streaming.** When pushed-update support arrives, it gets its own ADR (ADR 0082 Out-of-Scope: streaming). Today audit is request/response with deferred-execution support for long queries.
-- **Bundle export.** Trellis-side export bundles use `api/bundle.schema.json`; audit returns the JSON record stream, not the CBOR byte stream.
+- **Completion export.** Completion exports (`api/completion-exports.schema.json`, ADR 0164) deliver the native Trellis ZIP archive; audit returns the JSON record stream.
 - **Cursor durability across deploys.** Per ADR 0082 D-7 cursors are deploy-lifetime; clients restart pagination from the top after `WOS-1410`.
 
 ## ADR Amendments
