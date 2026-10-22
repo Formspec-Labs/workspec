@@ -956,14 +956,21 @@ pub struct CapturedIntakeSignature {
 
 enum AdmissionSubject<'a> {
     Task(&'a ActiveTask),
-    Intake { response_ref: &'a str },
+    Intake {
+        response_ref: &'a str,
+        existing: bool,
+    },
 }
 impl AdmissionSubject<'_> {
     fn response_id(&self) -> &str {
         match self {
             Self::Task(task) => &task.task_id,
-            Self::Intake { response_ref } => response_ref,
+            Self::Intake { response_ref, .. } => response_ref,
         }
+    }
+
+    fn is_existing_intake(&self) -> bool {
+        matches!(self, Self::Intake { existing: true, .. })
     }
 }
 
@@ -1170,6 +1177,7 @@ impl WosRuntime {
             record,
             AdmissionSubject::Intake {
                 response_ref: &input.source_response_ref,
+                existing,
             },
             SelectedSigningStep {
                 selector: SignatureProfileSelector::Key(selection.profile_key.clone()),
@@ -1398,6 +1406,9 @@ impl WosRuntime {
             document,
             profile,
         )?;
+        if !subject.is_existing_intake() {
+            ensure_signature_evidence_not_replayed(record, &signature_evidence)?;
+        }
         if let Some(failure) = signature_evidence.admission_failure.as_ref() {
             return Ok(Some(admission_failed_outcome(
                 subject.response_id(),
@@ -1424,20 +1435,30 @@ impl WosRuntime {
                 )),
             )));
         }
-        if signature_evidence.document_hash != document.document_hash {
-            return Ok(Some(admission_failed_outcome(
-                subject.response_id(),
-                &signature_evidence,
-                SignatureAdmissionFailedReason::EvidenceDivergence,
-                signature_evidence.signer_id.clone(),
-                signed_at_default,
-                Some(admission_failure_context(
-                    "documentHash",
-                    &document.document_hash,
-                    &signature_evidence.document_hash,
-                )),
-            )));
-        }
+        let expected_document_hash = if document.document_hash.is_empty() {
+            if !is_valid_dynamic_document_hash(&signature_evidence.document_hash) {
+                return Err(RuntimeError::Signature(
+                    "dynamic signature document hash must be a valid sha256 digest".into(),
+                ));
+            }
+            signature_evidence.document_hash.as_str()
+        } else {
+            if signature_evidence.document_hash != document.document_hash {
+                return Ok(Some(admission_failed_outcome(
+                    subject.response_id(),
+                    &signature_evidence,
+                    SignatureAdmissionFailedReason::EvidenceDivergence,
+                    signature_evidence.signer_id.clone(),
+                    signed_at_default,
+                    Some(admission_failure_context(
+                        "documentHash",
+                        &document.document_hash,
+                        &signature_evidence.document_hash,
+                    )),
+                )));
+            }
+            document.document_hash.as_str()
+        };
         if signature_evidence.document_hash_algorithm != document.document_hash_algorithm {
             return Ok(Some(admission_failed_outcome(
                 subject.response_id(),
@@ -1505,7 +1526,13 @@ impl WosRuntime {
             &signature_evidence.signing_intent,
             &identity_binding,
         )?;
-        self.ensure_document_hash_matches(record, response, &profile.evidence, document)?;
+        self.ensure_document_hash_matches(
+            record,
+            response,
+            &profile.evidence,
+            document,
+            expected_document_hash,
+        )?;
 
         let signed_at = if signature_evidence.signed_at.is_empty() {
             resolve_path(
@@ -1634,7 +1661,7 @@ impl WosRuntime {
                         serde_json::json!({"documentId": document.id.as_str(), "locale": "und"})
                     }
                 },
-                document_hash: &document.document_hash,
+                document_hash: expected_document_hash,
                 presentation_hash,
                 document_hash_algorithm: &document.document_hash_algorithm,
                 source_signature_system: &signature_evidence.source_system,
@@ -1788,6 +1815,7 @@ impl WosRuntime {
         let completion = serde_json::json!({
             "profile": selector.as_string(),
             "stepId": step.id,
+            "taskId": task.task_id,
             "roleId": step.role_id,
             "documentId": step.document_id,
             "signerId": signer_id,
@@ -1805,6 +1833,10 @@ impl WosRuntime {
         if items.iter().any(|item| {
             item.get("profile") == Some(&serde_json::Value::String(selector.as_string()))
                 && item.get("stepId") == Some(&serde_json::Value::String(step.id.clone()))
+                && item
+                    .get("taskId")
+                    .and_then(serde_json::Value::as_str)
+                    .is_none_or(|existing_task_id| existing_task_id == task.task_id)
         }) {
             return Err(RuntimeError::Signature(format!(
                 "signature step '{}' already completed",
@@ -2344,6 +2376,7 @@ impl WosRuntime {
         response: &serde_json::Value,
         evidence: &SignatureEvidence,
         document: &SignatureDocument,
+        expected_document_hash: &str,
     ) -> Result<(), RuntimeError> {
         for field in &evidence.required_fields {
             if !field.ends_with("documentHash") {
@@ -2351,7 +2384,7 @@ impl WosRuntime {
             }
             if let Some(value) = resolve_path(record, response, field)
                 && let Some(hash) = value.as_str()
-                && hash != document.document_hash
+                && hash != expected_document_hash
             {
                 return Err(RuntimeError::Signature(format!(
                     "signature document hash '{hash}' does not match profile document '{}'",
@@ -2820,6 +2853,59 @@ fn signature_affirmation_k2_fields(evidence: &VerifiedSignatureEvidence) -> (&st
             evidence.effective_presentation_hash(),
         ),
     }
+}
+
+fn is_valid_dynamic_document_hash(value: &str) -> bool {
+    let hex = value.strip_prefix("sha256:").unwrap_or(value);
+    hex.len() == 64 && hex.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+fn ensure_signature_evidence_not_replayed(
+    record: &RuntimeRecord,
+    signature_evidence: &VerifiedSignatureEvidence,
+) -> Result<(), RuntimeError> {
+    let (candidate_signing_act_id, _) = signature_affirmation_k2_fields(signature_evidence);
+    for prior in record
+        .provenance_log
+        .iter()
+        .filter(|item| item.record_kind == ProvenanceKind::SignatureAffirmation)
+    {
+        let Some(data) = prior.data.as_ref() else {
+            continue;
+        };
+        let same_source_sig = !signature_evidence.source_signature_id.is_empty()
+            && data.get("sourceSignatureSystem").and_then(serde_json::Value::as_str)
+                == Some(signature_evidence.source_system.as_str())
+            && data.get("sourceSignatureId").and_then(serde_json::Value::as_str)
+                == Some(signature_evidence.source_signature_id.as_str());
+        let same_signing_act = !candidate_signing_act_id.is_empty()
+            && data
+                .get("signingActId")
+                .and_then(serde_json::Value::as_str)
+                .filter(|v| !v.is_empty())
+                == Some(candidate_signing_act_id);
+        let same_payload_digest = !signature_evidence.signed_payload_digest.is_empty()
+            && data
+                .get("signedPayloadDigest")
+                .and_then(serde_json::Value::as_str)
+                .filter(|v| !v.is_empty())
+                == Some(signature_evidence.signed_payload_digest.as_str());
+        let same_receipt = signature_evidence
+            .verification_receipt
+            .as_deref()
+            .filter(|v| !v.is_empty())
+            .is_some_and(|receipt| {
+                data.get("verificationReceipt")
+                    .and_then(serde_json::Value::as_str)
+                    == Some(receipt)
+            });
+        if same_source_sig || same_signing_act || same_payload_digest || same_receipt {
+            return Err(RuntimeError::Signature(
+                "signature evidence already consumed".into(),
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn signature_document_id_for_task(
@@ -4171,6 +4257,353 @@ mod k2_field_binding_tests {
         assert_eq!(
             data.get("presentationHash").and_then(|v| v.as_str()),
             Some(PRESENTATION_HASH)
+        );
+    }
+
+    fn dynamic_test_profile(document_hash: &str) -> SignatureProfileDocument {
+        let mut profile = crate::restate_fixture_support::signature_runtime_fixture_profile();
+        profile.documents[0].document_hash = document_hash.to_string();
+        profile
+    }
+
+    fn signature_task(process_id: &str, seq: u64) -> ActiveTask {
+        let task_id = format!("wos-task:{process_id}:{seq}:applicant-sign");
+        let mut extensions = HashMap::new();
+        extensions.insert(
+            SIGNATURE_PROFILE_KEY_EXTENSION.to_string(),
+            serde_json::json!("inspection-profile"),
+        );
+        extensions.insert(
+            SIGNATURE_STEP_ID_EXTENSION.to_string(),
+            serde_json::json!("applicantSigns"),
+        );
+        ActiveTask {
+            declared_actor: Some("applicant".to_string()),
+            task_id,
+            task_ref: "applicant-sign".to_string(),
+            status: wos_core::instance::ActiveTaskStatus::Assigned,
+            assigned_actor: Some("applicant".to_string()),
+            contract_ref: Some("sign".to_string()),
+            binding: Some("formspec".to_string()),
+            definition_url: Some("urn:test:form".to_string()),
+            definition_version: Some("1.0.0".to_string()),
+            prefill_mapping_ref: None,
+            response_mapping_ref: None,
+            deadline: None,
+            expires_at: None,
+            expires_with_timer: None,
+            impact_level: None,
+            context: None,
+            last_validation_outcome: None,
+            created_at: "2026-05-15T12:00:00Z".to_string(),
+            updated_at: "2026-05-15T12:00:00Z".to_string(),
+            extensions,
+        }
+    }
+
+    fn test_runtime_record(process_id: &str) -> RuntimeRecord {
+        let instance = WorkflowProcess {
+            actor_bindings: None,
+            process_id: process_id.to_string(),
+            case_ledger_id: "acme_case_01hw7rm71vfay8vvw14d2pf200".to_string(),
+            tenant: "acme".to_string(),
+            definition_url: "urn:test:workflow".to_string(),
+            definition_version: "1.0.0".to_string(),
+            configuration: Vec::new(),
+            case_state: serde_json::Value::Null,
+            provenance_position: 0,
+            next_task_sequence: 0,
+            timers: Vec::new(),
+            active_tasks: Vec::new(),
+            history_store: Default::default(),
+            compensation_logs: Default::default(),
+            status: wos_core::instance::InstanceStatus::Active,
+            stalled_since: None,
+            decline_reason: None,
+            voided_by: None,
+            voided_at: None,
+            expired_at: None,
+            pending_events: Vec::new(),
+            governance_state: None,
+            volume_counters: None,
+            fired_milestones: Default::default(),
+            pending_callbacks: Default::default(),
+            pending_outbound_events: Default::default(),
+            next_deferred_callback_sequence: 0,
+            created_at: "2026-05-15T12:00:00Z".to_string(),
+            updated_at: "2026-05-15T12:00:00Z".to_string(),
+            extensions: Default::default(),
+        };
+        RuntimeRecord::new(instance)
+    }
+
+    struct NullAdapter;
+    impl crate::binding::ContractBindingAdapter for NullAdapter {
+        fn binding(&self) -> &'static str {
+            "formspec"
+        }
+        fn prepare_task(
+            &self,
+            _task: &ActiveTask,
+            _case_state: &serde_json::Value,
+        ) -> Result<crate::binding::PreparedTask, crate::binding::BindingError> {
+            Ok(crate::binding::PreparedTask { prefill_data: None })
+        }
+        fn validate_submission(
+            &self,
+            _task: &ActiveTask,
+            _response: &serde_json::Value,
+        ) -> Result<crate::binding::SubmissionValidation, crate::binding::BindingError> {
+            unreachable!()
+        }
+        fn compute_case_mutation(
+            &self,
+            _task: &ActiveTask,
+            _response: &serde_json::Value,
+        ) -> Result<Option<crate::binding::CaseMutationBundle>, crate::binding::BindingError> {
+            Ok(None)
+        }
+    }
+
+    fn test_runtime_with_profile(profile: SignatureProfileDocument) -> WosRuntime {
+        crate::restate_fixture_support::restate_signature_fixture_runtime(
+            crate::restate_fixture_support::SharedInMemoryStore::default(),
+        )
+        .with_signature_profile("inspection-profile", profile)
+    }
+
+    #[test]
+    fn signature_step_reentry_on_new_task_id_succeeds_with_fresh_evidence() {
+        let runtime = test_runtime_with_profile(dynamic_test_profile(DOC_HASH));
+        let process_id = "acme_process_01hw7rm71vfay8vvw14d2pf201";
+        let mut record = test_runtime_record(process_id);
+        let task_1 = signature_task(process_id, 1);
+        let task_2 = signature_task(process_id, 2);
+
+        runtime
+            .record_signature_completion(
+                &mut record.process,
+                &task_1,
+                "inspector",
+                "2026-05-15T12:00:00Z",
+            )
+            .expect("round 1 completion succeeds");
+        assert!(
+            runtime
+                .record_signature_completion(
+                    &mut record.process,
+                    &task_1,
+                    "inspector",
+                    "2026-05-15T12:00:00Z"
+                )
+                .is_err(),
+            "duplicate completion on the same task_id must be rejected"
+        );
+        runtime
+            .record_signature_completion(
+                &mut record.process,
+                &task_2,
+                "inspector",
+                "2026-05-15T12:05:00Z",
+            )
+            .expect("round 2 completion on a new task_id succeeds");
+    }
+
+    #[test]
+    fn signature_step_reentry_rejects_replayed_signature_evidence() {
+        let runtime = test_runtime_with_profile(dynamic_test_profile(DOC_HASH));
+        let process_id = "acme_process_01hw7rm71vfay8vvw14d2pf201";
+        let mut record = test_runtime_record(process_id);
+        let task_1 = signature_task(process_id, 1);
+        let task_2 = signature_task(process_id, 2);
+        let response = integrity_canonical::ResponseJson::from_value(&serde_json::json!({
+            "id": "resp-1",
+            "status": "completed",
+            "data": {
+                "signerId": "applicant",
+                "signatureProvider": "formspec",
+                "ceremonyId": "ceremony-sequential",
+                "identityBinding": { "method": "email-otp", "assuranceLevel": "standard" },
+                "signature": {
+                    "acceptedAt": "2026-05-15T12:00:00Z",
+                    "affirmed": true,
+                    "documentHash": DOC_HASH
+                }
+            }
+        }))
+        .unwrap();
+        let artifact = crate::store::TaskArtifact {
+            artifact_id: "urn:test:artifact:1".to_string(),
+            task_id: task_1.task_id.clone(),
+            actor_id: "applicant".to_string(),
+            kind: crate::store::TaskArtifactKind::Accepted,
+            response: response.clone(),
+            recorded_at: "2026-05-15T12:00:00Z".to_string(),
+        };
+        let evidence_1 = vec![SignatureEvidence {
+            document_claims: None,
+            source_system: "formspec".to_string(),
+            source_signature_id: "sig-round-1".to_string(),
+            signing_act_id: Some("act-round-1".to_string()),
+            presentation_hash: Some(PRESENTATION_HASH.to_string()),
+            source_response_ref: Some("urn:test:response:1".to_string()),
+            document_id: "application".to_string(),
+            signer_id: Some("applicant".to_string()),
+            signing_intent: "urn:wos:signing-intent:applicant-signature".to_string(),
+            signature_method: None,
+            signed_payload_digest: DOC_HASH.to_string(),
+            signed_payload_digest_algorithm: "sha-256".to_string(),
+            signed_at: "2026-05-15T12:00:00Z".to_string(),
+            document_hash: DOC_HASH.to_string(),
+            document_hash_algorithm: "sha-256".to_string(),
+            signature_provider: None,
+            ceremony_id: None,
+            identity_binding: None,
+            signer_authority: None,
+            primitive_verification: SignaturePrimitiveStatus::Verified,
+            verification_receipt: Some("receipt-round-1".to_string()),
+            admission_failure: None,
+        }];
+        let outcome = runtime
+            .signature_affirmation_for_submission(
+                &record,
+                &task_1,
+                SignatureSubmissionSource {
+                    response: &response,
+                    signature_evidence: Some(&evidence_1),
+                    adapter: &NullAdapter,
+                    accepted_artifact: &artifact,
+                },
+                "applicant",
+                "2026-05-15T12:00:00Z",
+            )
+            .unwrap()
+            .unwrap();
+        let AdmissionOutcome::Affirmation(affirmation) = outcome else {
+            panic!("expected affirmation");
+        };
+        record.provenance_log.push(affirmation.record);
+
+        let artifact_2 = crate::store::TaskArtifact {
+            task_id: task_2.task_id.clone(),
+            ..artifact
+        };
+        let err = runtime
+            .signature_affirmation_for_submission(
+                &record,
+                &task_2,
+                SignatureSubmissionSource {
+                    response: &response,
+                    signature_evidence: Some(&evidence_1),
+                    adapter: &NullAdapter,
+                    accepted_artifact: &artifact_2,
+                },
+                "applicant",
+                "2026-05-15T12:05:00Z",
+            )
+            .expect_err("replayed signature evidence must be rejected");
+        assert!(
+            matches!(err, RuntimeError::Signature(ref msg) if msg.contains("already consumed")),
+            "unexpected error: {err:?}"
+        );
+    }
+
+    #[test]
+    fn dynamic_empty_profile_document_hash_validates_and_records_evidence_digest() {
+        let runtime = test_runtime_with_profile(dynamic_test_profile(""));
+        let process_id = "acme_process_01hw7rm71vfay8vvw14d2pf201";
+        let record = test_runtime_record(process_id);
+        let task = signature_task(process_id, 1);
+        let dynamic_hash = format!("sha256:{DOC_HASH}");
+        let response = integrity_canonical::ResponseJson::from_value(&serde_json::json!({
+            "id": "resp-dynamic",
+            "status": "completed",
+            "data": {
+                "signerId": "applicant",
+                "signatureProvider": "formspec",
+                "ceremonyId": "ceremony-sequential",
+                "identityBinding": { "method": "email-otp", "assuranceLevel": "standard" },
+                "signature": {
+                    "acceptedAt": "2026-05-15T12:00:00Z",
+                    "affirmed": true,
+                    "documentHash": dynamic_hash
+                }
+            }
+        }))
+        .unwrap();
+        let artifact = crate::store::TaskArtifact {
+            artifact_id: "urn:test:artifact:dyn".to_string(),
+            task_id: task.task_id.clone(),
+            actor_id: "applicant".to_string(),
+            kind: crate::store::TaskArtifactKind::Accepted,
+            response: response.clone(),
+            recorded_at: "2026-05-15T12:00:00Z".to_string(),
+        };
+        let mut evidence = SignatureEvidence {
+            document_claims: None,
+            source_system: "formspec".to_string(),
+            source_signature_id: "sig-dyn-1".to_string(),
+            signing_act_id: Some("act-dyn-1".to_string()),
+            presentation_hash: Some(PRESENTATION_HASH.to_string()),
+            source_response_ref: Some("urn:test:response:dyn".to_string()),
+            document_id: "application".to_string(),
+            signer_id: Some("applicant".to_string()),
+            signing_intent: "urn:wos:signing-intent:applicant-signature".to_string(),
+            signature_method: None,
+            signed_payload_digest: DOC_HASH.to_string(),
+            signed_payload_digest_algorithm: "sha-256".to_string(),
+            signed_at: "2026-05-15T12:00:00Z".to_string(),
+            document_hash: String::new(),
+            document_hash_algorithm: "sha-256".to_string(),
+            signature_provider: None,
+            ceremony_id: None,
+            identity_binding: None,
+            signer_authority: None,
+            primitive_verification: SignaturePrimitiveStatus::Verified,
+            verification_receipt: None,
+            admission_failure: None,
+        };
+
+        assert!(
+            runtime
+                .signature_affirmation_for_submission(
+                    &record,
+                    &task,
+                    SignatureSubmissionSource {
+                        response: &response,
+                        signature_evidence: Some(std::slice::from_ref(&evidence)),
+                        adapter: &NullAdapter,
+                        accepted_artifact: &artifact,
+                    },
+                    "applicant",
+                    "2026-05-15T12:00:00Z",
+                )
+                .is_err(),
+            "empty dynamic document_hash in evidence must fail closed"
+        );
+
+        evidence.document_hash = dynamic_hash.clone();
+        let outcome = runtime
+            .signature_affirmation_for_submission(
+                &record,
+                &task,
+                SignatureSubmissionSource {
+                    response: &response,
+                    signature_evidence: Some(std::slice::from_ref(&evidence)),
+                    adapter: &NullAdapter,
+                    accepted_artifact: &artifact,
+                },
+                "applicant",
+                "2026-05-15T12:00:00Z",
+            )
+            .expect("valid dynamic document hash succeeds")
+            .expect("outcome present");
+        let AdmissionOutcome::Affirmation(affirmation) = outcome else {
+            panic!("expected affirmation");
+        };
+        assert_eq!(
+            affirmation.record.data.as_ref().unwrap()["documentHash"],
+            serde_json::json!(dynamic_hash)
         );
     }
 }
