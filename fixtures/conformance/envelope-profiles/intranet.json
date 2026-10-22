@@ -1,0 +1,372 @@
+{
+  "schemaVersion": "1.0.0",
+  "profile": "intranet",
+  "description": "Enterprise intranet / internal policy acknowledgment posture with SSO-OIDC session authentication (P-8), wos-kernel-only view tracking (P-2), telemetry-only timer policy (P-10), browser-side intranet fetch (P-11), and wos-server-only storage posture (P-1).",
+  "kernel": {
+    "envelopeId": "env-intranet-001",
+    "caseLedgerScope": "case-intranet-001",
+    "routingGroups": [
+      ["applicant"]
+    ],
+    "documents": [
+      {
+        "documentId": "internal-security-policy-ack",
+        "title": "Internal Information Security Policy v2026",
+        "locale": "en-US",
+        "contentSubKind": "rendered-html-v1",
+        "mediaType": "text/plain; charset=utf-8",
+        "inlineDataBase64": "wqFIb2xhIQ==",
+        "sha256": "ffb948556a252fec4aa0601da677fda38bb2ab0be63cc9c726bebfd1b3500d62",
+        "presentationHash": "fc83aa2143f9a128991a7d52ccf2e3abb1fd7dcbf76a63c281ce9e899c383a24",
+        "byteLength": 7
+      },
+      {
+        "documentId": "acceptable-use-attestation",
+        "title": "Acceptable Use Attestation Schedule",
+        "locale": "en-US",
+        "contentSubKind": "rendered-html-v1",
+        "mediaType": "text/plain",
+        "inlineDataBase64": "UHJpdmFjeSBub3RpY2U=",
+        "sha256": "c385c344080699844442bf2dd893618a4702d5d3a3e11ed632dfad839fa2b8c4",
+        "presentationHash": "cb0dab8d5c424aac093d94df3d0a3d44e6fb8022ec3bc802f4678099f1c5210f",
+        "byteLength": 14
+      }
+    ],
+    "recipients": [
+      {
+        "recipientId": "applicant",
+        "role": "Employee",
+        "actorId": "applicant",
+        "routingOrder": 1,
+        "requiredActs": ["review", "agree"]
+      }
+    ],
+    "signingActs": [
+      {
+        "signingActId": "01JM8IC0000000000000000501",
+        "fieldPath": "signature",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "role": "Employee",
+        "signedAt": "2026-10-20T19:01:00Z",
+        "signingIntent": "urn:wos:signing-intent:applicant-signature",
+        "ceremonyId": "ceremony-intranet-001",
+        "consentReference": "urn:example:consent:esign:v1",
+        "attestedDocumentIds": [
+          "internal-security-policy-ack"
+        ],
+        "witnessedSignatureRef": null
+      },
+      {
+        "signingActId": "01JM8IC0000000000000000502",
+        "fieldPath": "disclosureSignature",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "role": "Employee",
+        "signedAt": "2026-10-20T19:01:05Z",
+        "signingIntent": "urn:wos:signing-intent:applicant-signature",
+        "ceremonyId": "ceremony-intranet-001",
+        "consentReference": "urn:example:consent:esign:v1",
+        "attestedDocumentIds": [
+          "acceptable-use-attestation"
+        ],
+        "witnessedSignatureRef": null
+      }
+    ],
+    "sealRule": {
+      "rule": "all-required-acts-admitted",
+      "sealedAt": "2026-10-20T19:02:00Z",
+      "voided": false,
+      "voidReason": null
+    },
+    "offlineVerifiable": false
+  },
+  "ports": {
+    "P-1_documentBytesStore": {
+      "mode": "wos-server-only",
+      "selfContained": false,
+      "offlineExportDisclosure": "server-retained-no-offline-bundle"
+    },
+    "P-2_viewEvidenceCollector": {
+      "mode": "wos-kernel-only",
+      "requireScrollCompletion": false
+    },
+    "P-3_voidingPolicy": {
+      "mode": "process-claim"
+    },
+    "P-4_reassignmentAuthority": {
+      "mode": "role-based-admin",
+      "delegation": "manager-role-delegation"
+    },
+    "P-5_localeResolver": {
+      "mode": "refuse-on-mismatch",
+      "locales": ["en-US"],
+      "perSignerLocale": false
+    },
+    "P-6_intentRegistry": {
+      "mode": "canonical-baseline-plus-labeled-local",
+      "agentParticipationMode": "agent-draft-assist",
+      "humanRatificationRequired": true
+    },
+    "P-7_signerSessionPort": {
+      "mode": "opaque-bearer-idempotent"
+    },
+    "P-8_recipientIdentityProofing": {
+      "mode": "canonical-primitives",
+      "tier": "enterprise-sso-session",
+      "assuranceLevel": "SSO-OIDC"
+    },
+    "P-9_deliveryChannel": {
+      "mode": "email-and-in-app",
+      "primary": "in-app",
+      "fallback": "email"
+    },
+    "P-10_envelopeTimerPolicy": {
+      "mode": "telemetry-only",
+      "timerAnchoringMode": "ledger-clock-only",
+      "requirePerEventAnchor": false
+    },
+    "P-11_documentSourceResolver": {
+      "mode": "browser-side-intranet-fetch",
+      "allowedContentSubKinds": [
+        "rendered-html-v1",
+        "structured-fields-v1"
+      ]
+    },
+    "P-12_presentationHasher": {
+      "mode": "source-bytes-only",
+      "domainTag": "trellis-presentation-artifact-v1"
+    },
+    "P-13_envelopeVerifierFacade": {
+      "mode": "structural-plus-process",
+      "structuralInspector": "ledger_api_inspector"
+    },
+    "P-14_sealingOrchestration": {
+      "mode": "wos-resident-only",
+      "certificateTemplateRef": null
+    }
+  },
+  "definition": {
+    "$formspec": "1.0",
+    "url": "urn:test:envelope-profile:intranet",
+    "version": "1.0.0",
+    "status": "draft",
+    "title": "Enterprise Intranet Policy Attestation",
+    "documents": {
+      "internal-security-policy-ack": {
+        "defaultLocale": "en-US",
+        "variants": {
+          "en-US": {
+            "source": {
+              "kind": "inline",
+              "data": "wqFIb2xhIQ=="
+            },
+            "mediaType": "text/plain; charset=utf-8",
+            "documentHash": "ffb948556a252fec4aa0601da677fda38bb2ab0be63cc9c726bebfd1b3500d62"
+          }
+        }
+      },
+      "acceptable-use-attestation": {
+        "defaultLocale": "en-US",
+        "variants": {
+          "en-US": {
+            "source": {
+              "kind": "inline",
+              "data": "UHJpdmFjeSBub3RpY2U="
+            },
+            "mediaType": "text/plain",
+            "documentHash": "c385c344080699844442bf2dd893618a4702d5d3a3e11ed632dfad839fa2b8c4"
+          }
+        }
+      }
+    },
+    "items": [
+      {
+        "key": "signature",
+        "type": "field",
+        "label": "Employee Policy Attestation",
+        "dataType": "attachment",
+        "attests": [
+          "internal-security-policy-ack"
+        ]
+      },
+      {
+        "key": "disclosureSignature",
+        "type": "field",
+        "label": "Acceptable Use Attestation",
+        "dataType": "attachment",
+        "attests": [
+          "acceptable-use-attestation"
+        ]
+      },
+      {
+        "key": "confirm",
+        "type": "field",
+        "label": "Manager Confirmation",
+        "dataType": "boolean",
+        "attests": [
+          "internal-security-policy-ack"
+        ]
+      }
+    ]
+  },
+  "lifecycleEvents": [
+    {
+      "sequence": 0,
+      "eventType": "wos.case.created",
+      "authoredAt": "2026-10-20T19:00:00Z",
+      "data": {
+        "envelopeId": "env-intranet-001",
+        "profile": "intranet",
+        "createdBy": "operator:hr-compliance-bot"
+      }
+    },
+    {
+      "sequence": 1,
+      "eventType": "wos.envelope.documents_declared",
+      "authoredAt": "2026-10-20T19:00:05Z",
+      "data": {
+        "envelopeId": "env-intranet-001",
+        "documentIds": ["internal-security-policy-ack", "acceptable-use-attestation"]
+      }
+    },
+    {
+      "sequence": 2,
+      "eventType": "wos.recipient.authenticated",
+      "authoredAt": "2026-10-20T19:00:20Z",
+      "data": {
+        "recipientId": "applicant",
+        "proofingTier": "enterprise-sso-session",
+        "assuranceLevel": "SSO-OIDC",
+        "identityBindingRef": "identity-intranet-applicant"
+      }
+    },
+    {
+      "sequence": 3,
+      "eventType": "wos.document.view_recorded",
+      "authoredAt": "2026-10-20T19:00:45Z",
+      "data": {
+        "recipientId": "applicant",
+        "documentId": "internal-security-policy-ack",
+        "presentationHash": "fc83aa2143f9a128991a7d52ccf2e3abb1fd7dcbf76a63c281ce9e899c383a24",
+        "openedAt": "2026-10-20T19:00:25Z",
+        "completedScrollAt": null,
+        "scrollCompleted": false,
+        "dwellMs": 5000
+      }
+    },
+    {
+      "sequence": 4,
+      "eventType": "wos.document.view_recorded",
+      "authoredAt": "2026-10-20T19:00:55Z",
+      "data": {
+        "recipientId": "applicant",
+        "documentId": "acceptable-use-attestation",
+        "presentationHash": "cb0dab8d5c424aac093d94df3d0a3d44e6fb8022ec3bc802f4678099f1c5210f",
+        "openedAt": "2026-10-20T19:00:46Z",
+        "completedScrollAt": null,
+        "scrollCompleted": false,
+        "dwellMs": 3000
+      }
+    },
+    {
+      "sequence": 5,
+      "eventType": "wos.signature.affirmation.recorded",
+      "authoredAt": "2026-10-20T19:01:00Z",
+      "data": {
+        "signingActId": "01JM8IC0000000000000000501",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "role": "Employee"
+      }
+    },
+    {
+      "sequence": 6,
+      "eventType": "wos.signature.affirmation.recorded",
+      "authoredAt": "2026-10-20T19:01:05Z",
+      "data": {
+        "signingActId": "01JM8IC0000000000000000502",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "role": "Employee"
+      }
+    },
+    {
+      "sequence": 7,
+      "eventType": "wos.envelope.sealed",
+      "authoredAt": "2026-10-20T19:02:00Z",
+      "data": {
+        "envelopeId": "env-intranet-001",
+        "sealedAt": "2026-10-20T19:02:00Z"
+      }
+    }
+  ],
+  "expectedVerification": {
+    "whoSigned": [
+      {
+        "signingActId": "01JM8IC0000000000000000501",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "witnessedSignatureRef": null
+      },
+      {
+        "signingActId": "01JM8IC0000000000000000502",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "witnessedSignatureRef": null
+      }
+    ],
+    "whatWasSigned": [
+      {
+        "documentId": "internal-security-policy-ack",
+        "sha256": "ffb948556a252fec4aa0601da677fda38bb2ab0be63cc9c726bebfd1b3500d62",
+        "presentationHash": "fc83aa2143f9a128991a7d52ccf2e3abb1fd7dcbf76a63c281ce9e899c383a24"
+      },
+      {
+        "documentId": "acceptable-use-attestation",
+        "sha256": "c385c344080699844442bf2dd893618a4702d5d3a3e11ed632dfad839fa2b8c4",
+        "presentationHash": "cb0dab8d5c424aac093d94df3d0a3d44e6fb8022ec3bc802f4678099f1c5210f"
+      }
+    ],
+    "whenSigned": [
+      {
+        "signingActId": "01JM8IC0000000000000000501",
+        "signedAt": "2026-10-20T19:01:00Z",
+        "timerAnchoringMode": "ledger-clock-only"
+      },
+      {
+        "signingActId": "01JM8IC0000000000000000502",
+        "signedAt": "2026-10-20T19:01:05Z",
+        "timerAnchoringMode": "ledger-clock-only"
+      }
+    ],
+    "viewEvidence": [
+      {
+        "recipientId": "applicant",
+        "documentId": "internal-security-policy-ack",
+        "scrollCompleted": false
+      },
+      {
+        "recipientId": "applicant",
+        "documentId": "acceptable-use-attestation",
+        "scrollCompleted": false
+      }
+    ],
+    "voidStatus": {
+      "isVoided": false,
+      "isSealed": true,
+      "reason": null
+    },
+    "proofingLevels": {
+      "applicant": {
+        "tier": "enterprise-sso-session",
+        "assuranceLevel": "SSO-OIDC"
+      }
+    },
+    "exportPosture": {
+      "offlineBundleSupported": false,
+      "policyClosureRequired": false,
+      "signedActsDerivationRule": "signed-act-projection-wos-formspec-v1"
+    }
+  }
+}

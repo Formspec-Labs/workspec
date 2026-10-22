@@ -1,0 +1,459 @@
+{
+  "schemaVersion": "1.0.0",
+  "profile": "ron",
+  "description": "Remote Online Notarization (RON) posture with KBA + biometric IDV + synchronized A/V ceremony recording (P-8), per-page dwell view tracking (P-2), principal signing acts, and commissioned remote notary countersignature (K-5).",
+  "kernel": {
+    "envelopeId": "env-ron-001",
+    "caseLedgerScope": "case-ron-001",
+    "routingGroups": [
+      ["applicant"],
+      ["witness-1"]
+    ],
+    "documents": [
+      {
+        "documentId": "deed-of-trust",
+        "title": "Deed of Trust and Promissory Note",
+        "locale": "en-US",
+        "contentSubKind": "pdf-form-v1",
+        "mediaType": "text/plain; charset=utf-8",
+        "inlineDataBase64": "wqFIb2xhIQ==",
+        "sha256": "ffb948556a252fec4aa0601da677fda38bb2ab0be63cc9c726bebfd1b3500d62",
+        "presentationHash": "fc83aa2143f9a128991a7d52ccf2e3abb1fd7dcbf76a63c281ce9e899c383a24",
+        "byteLength": 7
+      },
+      {
+        "documentId": "notary-jurat-certificate",
+        "title": "Remote Online Notarization Jurat Certificate",
+        "locale": "en-US",
+        "contentSubKind": "rendered-html-v1",
+        "mediaType": "text/plain",
+        "inlineDataBase64": "UHJpdmFjeSBub3RpY2U=",
+        "sha256": "c385c344080699844442bf2dd893618a4702d5d3a3e11ed632dfad839fa2b8c4",
+        "presentationHash": "cb0dab8d5c424aac093d94df3d0a3d44e6fb8022ec3bc802f4678099f1c5210f",
+        "byteLength": 14
+      }
+    ],
+    "recipients": [
+      {
+        "recipientId": "applicant",
+        "role": "Grantor",
+        "actorId": "applicant",
+        "routingOrder": 1,
+        "requiredActs": ["review", "agree"]
+      },
+      {
+        "recipientId": "witness-1",
+        "role": "RemoteNotaryPublic",
+        "actorId": "witness-1",
+        "routingOrder": 2,
+        "requiredActs": ["witness"]
+      }
+    ],
+    "signingActs": [
+      {
+        "signingActId": "01JM8IC0000000000000000201",
+        "fieldPath": "signature",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "role": "Grantor",
+        "signedAt": "2026-10-20T19:01:00Z",
+        "signingIntent": "urn:wos:signing-intent:applicant-signature",
+        "ceremonyId": "ceremony-ron-av-001",
+        "consentReference": "urn:example:consent:esign:v1",
+        "attestedDocumentIds": [
+          "deed-of-trust"
+        ],
+        "witnessedSignatureRef": null
+      },
+      {
+        "signingActId": "01JM8IC0000000000000000202",
+        "fieldPath": "disclosureSignature",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "role": "Grantor",
+        "signedAt": "2026-10-20T19:01:05Z",
+        "signingIntent": "urn:wos:signing-intent:applicant-signature",
+        "ceremonyId": "ceremony-ron-av-001",
+        "consentReference": "urn:example:consent:esign:v1",
+        "attestedDocumentIds": [
+          "notary-jurat-certificate"
+        ],
+        "witnessedSignatureRef": null
+      },
+      {
+        "signingActId": "01JM8IC0000000000000000203",
+        "fieldPath": "confirm",
+        "signerId": "witness-1",
+        "roleId": "witness-1",
+        "role": "RemoteNotaryPublic",
+        "signedAt": "2026-10-20T19:01:30Z",
+        "signingIntent": "urn:wos:signing-intent:witness-attestation",
+        "ceremonyId": "ceremony-ron-av-001",
+        "consentReference": "urn:example:consent:esign:v1",
+        "attestedDocumentIds": [
+          "deed-of-trust"
+        ],
+        "witnessedSignatureRef": "sig-1",
+        "notaryCommission": {
+          "commissionId": "VA-RON-2026-994821",
+          "jurisdiction": "US-VA",
+          "commissionExpiresAt": "2029-12-31T23:59:59Z",
+          "avRecordingDigest": "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+        }
+      }
+    ],
+    "sealRule": {
+      "rule": "all-required-acts-and-notary-seal-admitted",
+      "sealedAt": "2026-10-20T19:02:00Z",
+      "voided": false,
+      "voidReason": null
+    },
+    "offlineVerifiable": true
+  },
+  "ports": {
+    "P-1_documentBytesStore": {
+      "mode": "two-tier-cache-then-cas",
+      "selfContained": true
+    },
+    "P-2_viewEvidenceCollector": {
+      "mode": "chain-anchored-session-summary",
+      "requireScrollCompletion": true,
+      "minPageDwellMs": 1500
+    },
+    "P-3_voidingPolicy": {
+      "mode": "process-claim"
+    },
+    "P-4_reassignmentAuthority": {
+      "mode": "originator-only",
+      "delegation": "prohibited"
+    },
+    "P-5_localeResolver": {
+      "mode": "refuse-on-mismatch",
+      "locales": ["en-US"],
+      "perSignerLocale": false
+    },
+    "P-6_intentRegistry": {
+      "mode": "canonical-baseline-plus-labeled-local",
+      "agentParticipationMode": "disabled"
+    },
+    "P-7_signerSessionPort": {
+      "mode": "signed-jwt"
+    },
+    "P-8_recipientIdentityProofing": {
+      "mode": "ron-video-vendor",
+      "tier": "kba-idv-biometric-av",
+      "assuranceLevel": "IAL2-RON",
+      "avRecordingRequired": true,
+      "notaryCommissionRequired": true
+    },
+    "P-9_deliveryChannel": {
+      "mode": "email-and-in-app",
+      "primary": "embedded-av-ceremony-session",
+      "fallback": "none"
+    },
+    "P-10_envelopeTimerPolicy": {
+      "mode": "per-event-chain-anchoring",
+      "timerAnchoringMode": "per-event-and-seal-tsa-rfc3161",
+      "tsaPolicyOid": "1.3.6.1.4.1.55555.1.2",
+      "requirePerEventAnchor": true,
+      "sealAnchorToken": "tsa-token-ron-seal-001"
+    },
+    "P-11_documentSourceResolver": {
+      "mode": "server-fetch-allowlist-and-inline",
+      "allowedContentSubKinds": [
+        "pdf-form-v1",
+        "rendered-html-v1",
+        "opaque-binary-v1"
+      ]
+    },
+    "P-12_presentationHasher": {
+      "mode": "source-bytes-only",
+      "domainTag": "trellis-presentation-artifact-v1"
+    },
+    "P-13_envelopeVerifierFacade": {
+      "mode": "structural-process-and-posture",
+      "structuralInspector": "verify_export_zip"
+    },
+    "P-14_sealingOrchestration": {
+      "mode": "async-trellis-seal",
+      "certificateTemplateRef": "urn:trellis:certificate:template:ron-notary@1"
+    }
+  },
+  "definition": {
+    "$formspec": "1.0",
+    "url": "urn:test:envelope-profile:ron",
+    "version": "1.0.0",
+    "status": "draft",
+    "title": "Remote Online Notarization Envelope Ceremony",
+    "documents": {
+      "deed-of-trust": {
+        "defaultLocale": "en-US",
+        "variants": {
+          "en-US": {
+            "source": {
+              "kind": "inline",
+              "data": "wqFIb2xhIQ=="
+            },
+            "mediaType": "text/plain; charset=utf-8",
+            "documentHash": "ffb948556a252fec4aa0601da677fda38bb2ab0be63cc9c726bebfd1b3500d62"
+          }
+        }
+      },
+      "notary-jurat-certificate": {
+        "defaultLocale": "en-US",
+        "variants": {
+          "en-US": {
+            "source": {
+              "kind": "inline",
+              "data": "UHJpdmFjeSBub3RpY2U="
+            },
+            "mediaType": "text/plain",
+            "documentHash": "c385c344080699844442bf2dd893618a4702d5d3a3e11ed632dfad839fa2b8c4"
+          }
+        }
+      }
+    },
+    "items": [
+      {
+        "key": "signature",
+        "type": "field",
+        "label": "Principal Signature",
+        "dataType": "attachment",
+        "attests": [
+          "deed-of-trust"
+        ]
+      },
+      {
+        "key": "disclosureSignature",
+        "type": "field",
+        "label": "Jurat Certificate Signature",
+        "dataType": "attachment",
+        "attests": [
+          "notary-jurat-certificate"
+        ]
+      },
+      {
+        "key": "confirm",
+        "type": "field",
+        "label": "Remote Notary Attestation",
+        "dataType": "boolean",
+        "attests": [
+          "deed-of-trust"
+        ]
+      }
+    ]
+  },
+  "lifecycleEvents": [
+    {
+      "sequence": 0,
+      "eventType": "wos.case.created",
+      "authoredAt": "2026-10-20T19:00:00Z",
+      "tsaAnchorToken": "tsa-ron-evt-0",
+      "data": {
+        "envelopeId": "env-ron-001",
+        "profile": "ron",
+        "createdBy": "operator:ron-ceremony-host"
+      }
+    },
+    {
+      "sequence": 1,
+      "eventType": "wos.envelope.documents_declared",
+      "authoredAt": "2026-10-20T19:00:05Z",
+      "tsaAnchorToken": "tsa-ron-evt-1",
+      "data": {
+        "envelopeId": "env-ron-001",
+        "documentIds": ["deed-of-trust", "notary-jurat-certificate"]
+      }
+    },
+    {
+      "sequence": 2,
+      "eventType": "wos.recipient.authenticated",
+      "authoredAt": "2026-10-20T19:00:20Z",
+      "tsaAnchorToken": "tsa-ron-evt-2",
+      "data": {
+        "recipientId": "applicant",
+        "proofingTier": "kba-idv-biometric-av",
+        "assuranceLevel": "IAL2-RON",
+        "identityBindingRef": "identity-ron-applicant",
+        "avSessionId": "av-session-ron-001"
+      }
+    },
+    {
+      "sequence": 3,
+      "eventType": "wos.recipient.authenticated",
+      "authoredAt": "2026-10-20T19:00:25Z",
+      "tsaAnchorToken": "tsa-ron-evt-3",
+      "data": {
+        "recipientId": "witness-1",
+        "proofingTier": "commissioned-notary-x509-and-av",
+        "assuranceLevel": "IAL2-RON-NOTARY",
+        "identityBindingRef": "identity-ron-notary",
+        "commissionId": "VA-RON-2026-994821"
+      }
+    },
+    {
+      "sequence": 4,
+      "eventType": "wos.document.view_recorded",
+      "authoredAt": "2026-10-20T19:00:45Z",
+      "tsaAnchorToken": "tsa-ron-evt-4",
+      "data": {
+        "recipientId": "applicant",
+        "documentId": "deed-of-trust",
+        "presentationHash": "fc83aa2143f9a128991a7d52ccf2e3abb1fd7dcbf76a63c281ce9e899c383a24",
+        "openedAt": "2026-10-20T19:00:26Z",
+        "completedScrollAt": "2026-10-20T19:00:45Z",
+        "scrollCompleted": true,
+        "dwellMs": 19000,
+        "minPageDwellMsObserved": 3200
+      }
+    },
+    {
+      "sequence": 5,
+      "eventType": "wos.document.view_recorded",
+      "authoredAt": "2026-10-20T19:00:55Z",
+      "tsaAnchorToken": "tsa-ron-evt-5",
+      "data": {
+        "recipientId": "applicant",
+        "documentId": "notary-jurat-certificate",
+        "presentationHash": "cb0dab8d5c424aac093d94df3d0a3d44e6fb8022ec3bc802f4678099f1c5210f",
+        "openedAt": "2026-10-20T19:00:46Z",
+        "completedScrollAt": "2026-10-20T19:00:55Z",
+        "scrollCompleted": true,
+        "dwellMs": 9000,
+        "minPageDwellMsObserved": 4500
+      }
+    },
+    {
+      "sequence": 6,
+      "eventType": "wos.signature.affirmation.recorded",
+      "authoredAt": "2026-10-20T19:01:00Z",
+      "tsaAnchorToken": "tsa-ron-evt-6",
+      "data": {
+        "signingActId": "01JM8IC0000000000000000201",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "role": "Grantor"
+      }
+    },
+    {
+      "sequence": 7,
+      "eventType": "wos.signature.affirmation.recorded",
+      "authoredAt": "2026-10-20T19:01:05Z",
+      "tsaAnchorToken": "tsa-ron-evt-7",
+      "data": {
+        "signingActId": "01JM8IC0000000000000000202",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "role": "Grantor"
+      }
+    },
+    {
+      "sequence": 8,
+      "eventType": "wos.signature.affirmation.recorded",
+      "authoredAt": "2026-10-20T19:01:30Z",
+      "tsaAnchorToken": "tsa-ron-evt-8",
+      "data": {
+        "signingActId": "01JM8IC0000000000000000203",
+        "signerId": "witness-1",
+        "roleId": "witness-1",
+        "role": "RemoteNotaryPublic",
+        "witnessedSignatureRef": "sig-1"
+      }
+    },
+    {
+      "sequence": 9,
+      "eventType": "wos.envelope.sealed",
+      "authoredAt": "2026-10-20T19:02:00Z",
+      "tsaAnchorToken": "tsa-token-ron-seal-001",
+      "data": {
+        "envelopeId": "env-ron-001",
+        "sealedAt": "2026-10-20T19:02:00Z",
+        "tsaAnchorToken": "tsa-token-ron-seal-001",
+        "certificateTemplateRef": "urn:trellis:certificate:template:ron-notary@1"
+      }
+    }
+  ],
+  "expectedVerification": {
+    "whoSigned": [
+      {
+        "signingActId": "01JM8IC0000000000000000201",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "witnessedSignatureRef": null
+      },
+      {
+        "signingActId": "01JM8IC0000000000000000202",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "witnessedSignatureRef": null
+      },
+      {
+        "signingActId": "01JM8IC0000000000000000203",
+        "signerId": "witness-1",
+        "roleId": "witness-1",
+        "witnessedSignatureRef": "sig-1"
+      }
+    ],
+    "whatWasSigned": [
+      {
+        "documentId": "deed-of-trust",
+        "sha256": "ffb948556a252fec4aa0601da677fda38bb2ab0be63cc9c726bebfd1b3500d62",
+        "presentationHash": "fc83aa2143f9a128991a7d52ccf2e3abb1fd7dcbf76a63c281ce9e899c383a24"
+      },
+      {
+        "documentId": "notary-jurat-certificate",
+        "sha256": "c385c344080699844442bf2dd893618a4702d5d3a3e11ed632dfad839fa2b8c4",
+        "presentationHash": "cb0dab8d5c424aac093d94df3d0a3d44e6fb8022ec3bc802f4678099f1c5210f"
+      }
+    ],
+    "whenSigned": [
+      {
+        "signingActId": "01JM8IC0000000000000000201",
+        "signedAt": "2026-10-20T19:01:00Z",
+        "timerAnchoringMode": "per-event-and-seal-tsa-rfc3161"
+      },
+      {
+        "signingActId": "01JM8IC0000000000000000202",
+        "signedAt": "2026-10-20T19:01:05Z",
+        "timerAnchoringMode": "per-event-and-seal-tsa-rfc3161"
+      },
+      {
+        "signingActId": "01JM8IC0000000000000000203",
+        "signedAt": "2026-10-20T19:01:30Z",
+        "timerAnchoringMode": "per-event-and-seal-tsa-rfc3161"
+      }
+    ],
+    "viewEvidence": [
+      {
+        "recipientId": "applicant",
+        "documentId": "deed-of-trust",
+        "scrollCompleted": true
+      },
+      {
+        "recipientId": "applicant",
+        "documentId": "notary-jurat-certificate",
+        "scrollCompleted": true
+      }
+    ],
+    "voidStatus": {
+      "isVoided": false,
+      "isSealed": true,
+      "reason": null
+    },
+    "proofingLevels": {
+      "applicant": {
+        "tier": "kba-idv-biometric-av",
+        "assuranceLevel": "IAL2-RON"
+      },
+      "witness-1": {
+        "tier": "commissioned-notary-x509-and-av",
+        "assuranceLevel": "IAL2-RON-NOTARY"
+      }
+    },
+    "exportPosture": {
+      "offlineBundleSupported": true,
+      "policyClosureRequired": true,
+      "signedActsDerivationRule": "signed-act-projection-wos-formspec-v1"
+    }
+  }
+}

@@ -6155,6 +6155,13 @@ dependencies = [
  "stack-common-typeid",
  "thiserror 2.0.18",
  "time",
+ "trellis-cddl",
+ "trellis-core",
+ "trellis-export-profile-wos",
+ "trellis-export-writer",
+ "trellis-server-ports",
+ "trellis-types",
+ "trellis-verify-wos",
  "wos-core",
  "wos-runtime",
 ]

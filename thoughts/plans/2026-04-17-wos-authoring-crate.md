@@ -1,5 +1,21 @@
 # WOS Authoring Crate — Implementation Plan
 
+**Status:** RECONCILED WITH SHIPPED IMPLEMENTATION
+
+> **Architectural Reconciliation (2026-04-20):** The historical design plan below is preserved for context. For the canonical end-to-end documentation of the shipped authoring, validation, conformance, and packaging workflow, see [`docs/wos-creation-guide.md`](../../docs/wos-creation-guide.md).
+
+## Shipped Architecture Reconciliation
+
+| Dimension | Historical Plan (Below) | Shipped Implementation (`crates/wos-authoring` & `crates/wos-mcp`) |
+|-----------|-------------------------|-------------------------------------------------------------------|
+| **Module layout** | `src/{lib.rs,project.rs,pipeline.rs,commands.rs,history.rs,handlers/*.rs}` | `src/{lib.rs,command.rs,diagnostics.rs,native_schema.rs,project.rs,raw.rs}` (`crates/wos-authoring/src/lib.rs`, `crates/wos-authoring/src/command.rs`, `crates/wos-authoring/src/diagnostics.rs`, `crates/wos-authoring/src/native_schema.rs`, `crates/wos-authoring/src/project.rs`, `crates/wos-authoring/src/raw.rs`) |
+| **State authority** | In-memory `KernelDocument` (`wos-core`) with `export()` / `export_json()` and extension-map writes (`x-wos-governance`, `x-wos-ai`) | Complete native JSON (`RawWosProject` holding `serde_json::Value`) is the single writable authority (`WosProject::native_snapshot()`) with a fallible typed runtime projection (`WosProject::typed_snapshot() -> Result<KernelDocument, AuthoringDiagnostic>`). Top-level native sections (`caseFile`, `contracts`, `governance`, `agents` with `deonticConstraints`, `aiOversight`, and root metadata fields) survive kernel mutations verbatim without lossy round-tripping or retired `x-wos-*` extension writes |
+| **Command & history model** | Separate `Pipeline` + `History` (`Vec<KernelDocument>`) returning `Result<AuthoringResultOk, ProjectError>` and `undo() -> bool` | Internal `pub(crate) enum Command` (`src/command.rs`) and `pub(crate) struct RawWosProject` implementing `pub(crate) trait IWosProjectCore` (`src/raw.rs`) with bounded full-JSON snapshots (`UNDO_DEPTH = 100`). Public mutations flow exclusively through `WosProject` (`src/project.rs`) returning `AuthoringResult` (`Result<AppliedCommand, AuthoringDiagnostic>`) and `undo() / redo() -> Result<(), AuthoringDiagnostic>` |
+| **Schema validation** | Ad-hoc field checks in individual handlers | Offline owning-schema fragment validation in `src/native_schema.rs` against bundled `schemas/wos-workflow.schema.json`, `schemas/wos-reference-due-process.schema.json`, and `schemas/wos-reference-replay.schema.json` |
+| **MCP surface** | One tool per helper across 20+ granular tools | Single executable catalog (`crates/wos-mcp/src/catalog.rs`, checked into `crates/wos-mcp/tool-catalog.json` and `crates/wos-mcp/WORKFLOW-COVERAGE.json`) exposing 20 tools: lifecycle/actor/project tools (`wos_ping`, `wos_create_kernel`, `wos_load_document`, `wos_export_document`, `wos_describe_document`, `wos_add_state`, `wos_add_transition`, `wos_set_initial_state`, `wos_remove_state`, `wos_add_actor`, `wos_add_actor_extension`, `wos_set_impact_level`, `wos_preview_state_graph`, `wos_search`, `wos_list_projects`, `wos_close_project`), unified native workflow editor `wos_edit_workflow` with 10 `action` variants (`metadata`, `case_field`, `contract`, `state`, `state_action`, `governance`, `agent`, `remove_agent`, `agent_constraint`, `ai_oversight`), and shared verification tools (`wos_lint`, `wos_run_conformance`, `wos_check_authoring`) |
+
+---
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Introduce `wos-authoring` — an intent-driven authoring API over `wos-core` — that gives tool handlers, LLM harnesses, and human-authored scripts a clean, atomic, undo-capable way to build WOS documents without touching raw types directly.

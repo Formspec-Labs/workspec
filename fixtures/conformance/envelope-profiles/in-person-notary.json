@@ -1,0 +1,452 @@
+{
+  "schemaVersion": "1.0.0",
+  "profile": "in-person-notary",
+  "description": "In-Person Electronic Notarization (IPEN / RULONA) posture with physical credential inspection (P-8), co-located dual-identity ceremony session (K-6), principal signing acts, and commissioned in-person notary countersignature (K-5).",
+  "kernel": {
+    "envelopeId": "env-ipen-001",
+    "caseLedgerScope": "case-ipen-001",
+    "routingGroups": [
+      ["applicant"],
+      ["witness-1"]
+    ],
+    "inPersonSessionBinding": {
+      "sessionId": "session-ipen-kiosk-001",
+      "hostDeviceId": "device-ipen-tablet-pa-042",
+      "principalSignerId": "applicant",
+      "attendantSignerId": "witness-1",
+      "coLocated": true
+    },
+    "documents": [
+      {
+        "documentId": "statutory-power-of-attorney",
+        "title": "Statutory Durable Power of Attorney",
+        "locale": "en-US",
+        "contentSubKind": "pdf-form-v1",
+        "mediaType": "text/plain; charset=utf-8",
+        "inlineDataBase64": "wqFIb2xhIQ==",
+        "sha256": "ffb948556a252fec4aa0601da677fda38bb2ab0be63cc9c726bebfd1b3500d62",
+        "presentationHash": "fc83aa2143f9a128991a7d52ccf2e3abb1fd7dcbf76a63c281ce9e899c383a24",
+        "byteLength": 7
+      },
+      {
+        "documentId": "ipen-acknowledgment-certificate",
+        "title": "In-Person Electronic Notarization Acknowledgment",
+        "locale": "en-US",
+        "contentSubKind": "rendered-html-v1",
+        "mediaType": "text/plain",
+        "inlineDataBase64": "UHJpdmFjeSBub3RpY2U=",
+        "sha256": "c385c344080699844442bf2dd893618a4702d5d3a3e11ed632dfad839fa2b8c4",
+        "presentationHash": "cb0dab8d5c424aac093d94df3d0a3d44e6fb8022ec3bc802f4678099f1c5210f",
+        "byteLength": 14
+      }
+    ],
+    "recipients": [
+      {
+        "recipientId": "applicant",
+        "role": "Principal",
+        "actorId": "applicant",
+        "routingOrder": 1,
+        "requiredActs": ["review", "agree"]
+      },
+      {
+        "recipientId": "witness-1",
+        "role": "InPersonNotaryPublic",
+        "actorId": "witness-1",
+        "routingOrder": 2,
+        "requiredActs": ["witness"]
+      }
+    ],
+    "signingActs": [
+      {
+        "signingActId": "01JM8IC0000000000000000401",
+        "fieldPath": "signature",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "role": "Principal",
+        "signedAt": "2026-10-20T19:01:00Z",
+        "signingIntent": "urn:wos:signing-intent:applicant-signature",
+        "ceremonyId": "ceremony-ipen-kiosk-001",
+        "consentReference": "urn:example:consent:esign:v1",
+        "attestedDocumentIds": [
+          "statutory-power-of-attorney"
+        ],
+        "witnessedSignatureRef": null
+      },
+      {
+        "signingActId": "01JM8IC0000000000000000402",
+        "fieldPath": "disclosureSignature",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "role": "Principal",
+        "signedAt": "2026-10-20T19:01:05Z",
+        "signingIntent": "urn:wos:signing-intent:applicant-signature",
+        "ceremonyId": "ceremony-ipen-kiosk-001",
+        "consentReference": "urn:example:consent:esign:v1",
+        "attestedDocumentIds": [
+          "ipen-acknowledgment-certificate"
+        ],
+        "witnessedSignatureRef": null
+      },
+      {
+        "signingActId": "01JM8IC0000000000000000403",
+        "fieldPath": "confirm",
+        "signerId": "witness-1",
+        "roleId": "witness-1",
+        "role": "InPersonNotaryPublic",
+        "signedAt": "2026-10-20T19:01:30Z",
+        "signingIntent": "urn:wos:signing-intent:witness-attestation",
+        "ceremonyId": "ceremony-ipen-kiosk-001",
+        "consentReference": "urn:example:consent:esign:v1",
+        "attestedDocumentIds": [
+          "statutory-power-of-attorney"
+        ],
+        "witnessedSignatureRef": "sig-1",
+        "notaryCommission": {
+          "commissionId": "PA-IPEN-2026-441209",
+          "jurisdiction": "US-PA",
+          "commissionExpiresAt": "2030-06-30T23:59:59Z",
+          "physicalPresenceVerified": true
+        }
+      }
+    ],
+    "sealRule": {
+      "rule": "all-required-acts-and-ipen-seal-admitted",
+      "sealedAt": "2026-10-20T19:02:00Z",
+      "voided": false,
+      "voidReason": null
+    },
+    "offlineVerifiable": true
+  },
+  "ports": {
+    "P-1_documentBytesStore": {
+      "mode": "two-tier-cache-then-cas",
+      "selfContained": true
+    },
+    "P-2_viewEvidenceCollector": {
+      "mode": "chain-anchored-session-summary",
+      "requireScrollCompletion": true
+    },
+    "P-3_voidingPolicy": {
+      "mode": "process-claim"
+    },
+    "P-4_reassignmentAuthority": {
+      "mode": "originator-only",
+      "delegation": "prohibited"
+    },
+    "P-5_localeResolver": {
+      "mode": "refuse-on-mismatch",
+      "locales": ["en-US"],
+      "perSignerLocale": false
+    },
+    "P-6_intentRegistry": {
+      "mode": "canonical-baseline-plus-labeled-local",
+      "agentParticipationMode": "disabled"
+    },
+    "P-7_signerSessionPort": {
+      "mode": "opaque-bearer-idempotent"
+    },
+    "P-8_recipientIdentityProofing": {
+      "mode": "in-person-notary-witness",
+      "tier": "in-person-credential-inspection",
+      "assuranceLevel": "IPEN-Physical-ID",
+      "notaryCommissionRequired": true,
+      "physicalPresenceAttested": true
+    },
+    "P-9_deliveryChannel": {
+      "mode": "physical-in-person",
+      "primary": "co-located-kiosk-ceremony",
+      "fallback": "none"
+    },
+    "P-10_envelopeTimerPolicy": {
+      "mode": "aggregated-delivery-history",
+      "timerAnchoringMode": "seal-tsa-rfc3161",
+      "tsaPolicyOid": "1.3.6.1.4.1.55555.1.4",
+      "requirePerEventAnchor": false,
+      "sealAnchorToken": "tsa-token-ipen-seal-001"
+    },
+    "P-11_documentSourceResolver": {
+      "mode": "server-fetch-allowlist-and-inline",
+      "allowedContentSubKinds": [
+        "pdf-form-v1",
+        "rendered-html-v1"
+      ]
+    },
+    "P-12_presentationHasher": {
+      "mode": "source-bytes-only",
+      "domainTag": "trellis-presentation-artifact-v1"
+    },
+    "P-13_envelopeVerifierFacade": {
+      "mode": "structural-plus-process",
+      "structuralInspector": "verify_export_zip"
+    },
+    "P-14_sealingOrchestration": {
+      "mode": "async-trellis-seal",
+      "certificateTemplateRef": "urn:trellis:certificate:template:ipen-notary@1"
+    }
+  },
+  "definition": {
+    "$formspec": "1.0",
+    "url": "urn:test:envelope-profile:in-person-notary",
+    "version": "1.0.0",
+    "status": "draft",
+    "title": "In-Person Electronic Notarization Ceremony",
+    "documents": {
+      "statutory-power-of-attorney": {
+        "defaultLocale": "en-US",
+        "variants": {
+          "en-US": {
+            "source": {
+              "kind": "inline",
+              "data": "wqFIb2xhIQ=="
+            },
+            "mediaType": "text/plain; charset=utf-8",
+            "documentHash": "ffb948556a252fec4aa0601da677fda38bb2ab0be63cc9c726bebfd1b3500d62"
+          }
+        }
+      },
+      "ipen-acknowledgment-certificate": {
+        "defaultLocale": "en-US",
+        "variants": {
+          "en-US": {
+            "source": {
+              "kind": "inline",
+              "data": "UHJpdmFjeSBub3RpY2U="
+            },
+            "mediaType": "text/plain",
+            "documentHash": "c385c344080699844442bf2dd893618a4702d5d3a3e11ed632dfad839fa2b8c4"
+          }
+        }
+      }
+    },
+    "items": [
+      {
+        "key": "signature",
+        "type": "field",
+        "label": "Principal Signature",
+        "dataType": "attachment",
+        "attests": [
+          "statutory-power-of-attorney"
+        ]
+      },
+      {
+        "key": "disclosureSignature",
+        "type": "field",
+        "label": "Acknowledgment Certificate Signature",
+        "dataType": "attachment",
+        "attests": [
+          "ipen-acknowledgment-certificate"
+        ]
+      },
+      {
+        "key": "confirm",
+        "type": "field",
+        "label": "In-Person Notary Acknowledgment",
+        "dataType": "boolean",
+        "attests": [
+          "statutory-power-of-attorney"
+        ]
+      }
+    ]
+  },
+  "lifecycleEvents": [
+    {
+      "sequence": 0,
+      "eventType": "wos.case.created",
+      "authoredAt": "2026-10-20T19:00:00Z",
+      "data": {
+        "envelopeId": "env-ipen-001",
+        "profile": "in-person-notary",
+        "createdBy": "operator:ipen-kiosk"
+      }
+    },
+    {
+      "sequence": 1,
+      "eventType": "wos.envelope.documents_declared",
+      "authoredAt": "2026-10-20T19:00:05Z",
+      "data": {
+        "envelopeId": "env-ipen-001",
+        "documentIds": ["statutory-power-of-attorney", "ipen-acknowledgment-certificate"]
+      }
+    },
+    {
+      "sequence": 2,
+      "eventType": "wos.recipient.authenticated",
+      "authoredAt": "2026-10-20T19:00:20Z",
+      "data": {
+        "recipientId": "applicant",
+        "proofingTier": "in-person-credential-inspection",
+        "assuranceLevel": "IPEN-Physical-ID",
+        "identityBindingRef": "identity-ipen-applicant",
+        "inspectedCredentialType": "US-PA-REAL-ID-Drivers-License"
+      }
+    },
+    {
+      "sequence": 3,
+      "eventType": "wos.recipient.authenticated",
+      "authoredAt": "2026-10-20T19:00:25Z",
+      "data": {
+        "recipientId": "witness-1",
+        "proofingTier": "in-person-notary-commission-token",
+        "assuranceLevel": "IPEN-Notary-Commission",
+        "identityBindingRef": "identity-ipen-notary",
+        "commissionId": "PA-IPEN-2026-441209"
+      }
+    },
+    {
+      "sequence": 4,
+      "eventType": "wos.document.view_recorded",
+      "authoredAt": "2026-10-20T19:00:45Z",
+      "data": {
+        "recipientId": "applicant",
+        "documentId": "statutory-power-of-attorney",
+        "presentationHash": "fc83aa2143f9a128991a7d52ccf2e3abb1fd7dcbf76a63c281ce9e899c383a24",
+        "openedAt": "2026-10-20T19:00:26Z",
+        "completedScrollAt": "2026-10-20T19:00:45Z",
+        "scrollCompleted": true,
+        "dwellMs": 19000
+      }
+    },
+    {
+      "sequence": 5,
+      "eventType": "wos.document.view_recorded",
+      "authoredAt": "2026-10-20T19:00:55Z",
+      "data": {
+        "recipientId": "applicant",
+        "documentId": "ipen-acknowledgment-certificate",
+        "presentationHash": "cb0dab8d5c424aac093d94df3d0a3d44e6fb8022ec3bc802f4678099f1c5210f",
+        "openedAt": "2026-10-20T19:00:46Z",
+        "completedScrollAt": "2026-10-20T19:00:55Z",
+        "scrollCompleted": true,
+        "dwellMs": 9000
+      }
+    },
+    {
+      "sequence": 6,
+      "eventType": "wos.signature.affirmation.recorded",
+      "authoredAt": "2026-10-20T19:01:00Z",
+      "data": {
+        "signingActId": "01JM8IC0000000000000000401",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "role": "Principal"
+      }
+    },
+    {
+      "sequence": 7,
+      "eventType": "wos.signature.affirmation.recorded",
+      "authoredAt": "2026-10-20T19:01:05Z",
+      "data": {
+        "signingActId": "01JM8IC0000000000000000402",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "role": "Principal"
+      }
+    },
+    {
+      "sequence": 8,
+      "eventType": "wos.signature.affirmation.recorded",
+      "authoredAt": "2026-10-20T19:01:30Z",
+      "data": {
+        "signingActId": "01JM8IC0000000000000000403",
+        "signerId": "witness-1",
+        "roleId": "witness-1",
+        "role": "InPersonNotaryPublic",
+        "witnessedSignatureRef": "sig-1"
+      }
+    },
+    {
+      "sequence": 9,
+      "eventType": "wos.envelope.sealed",
+      "authoredAt": "2026-10-20T19:02:00Z",
+      "data": {
+        "envelopeId": "env-ipen-001",
+        "sealedAt": "2026-10-20T19:02:00Z",
+        "tsaAnchorToken": "tsa-token-ipen-seal-001",
+        "certificateTemplateRef": "urn:trellis:certificate:template:ipen-notary@1"
+      }
+    }
+  ],
+  "expectedVerification": {
+    "whoSigned": [
+      {
+        "signingActId": "01JM8IC0000000000000000401",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "witnessedSignatureRef": null
+      },
+      {
+        "signingActId": "01JM8IC0000000000000000402",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "witnessedSignatureRef": null
+      },
+      {
+        "signingActId": "01JM8IC0000000000000000403",
+        "signerId": "witness-1",
+        "roleId": "witness-1",
+        "witnessedSignatureRef": "sig-1"
+      }
+    ],
+    "whatWasSigned": [
+      {
+        "documentId": "statutory-power-of-attorney",
+        "sha256": "ffb948556a252fec4aa0601da677fda38bb2ab0be63cc9c726bebfd1b3500d62",
+        "presentationHash": "fc83aa2143f9a128991a7d52ccf2e3abb1fd7dcbf76a63c281ce9e899c383a24"
+      },
+      {
+        "documentId": "ipen-acknowledgment-certificate",
+        "sha256": "c385c344080699844442bf2dd893618a4702d5d3a3e11ed632dfad839fa2b8c4",
+        "presentationHash": "cb0dab8d5c424aac093d94df3d0a3d44e6fb8022ec3bc802f4678099f1c5210f"
+      }
+    ],
+    "whenSigned": [
+      {
+        "signingActId": "01JM8IC0000000000000000401",
+        "signedAt": "2026-10-20T19:01:00Z",
+        "timerAnchoringMode": "seal-tsa-rfc3161"
+      },
+      {
+        "signingActId": "01JM8IC0000000000000000402",
+        "signedAt": "2026-10-20T19:01:05Z",
+        "timerAnchoringMode": "seal-tsa-rfc3161"
+      },
+      {
+        "signingActId": "01JM8IC0000000000000000403",
+        "signedAt": "2026-10-20T19:01:30Z",
+        "timerAnchoringMode": "seal-tsa-rfc3161"
+      }
+    ],
+    "viewEvidence": [
+      {
+        "recipientId": "applicant",
+        "documentId": "statutory-power-of-attorney",
+        "scrollCompleted": true
+      },
+      {
+        "recipientId": "applicant",
+        "documentId": "ipen-acknowledgment-certificate",
+        "scrollCompleted": true
+      }
+    ],
+    "voidStatus": {
+      "isVoided": false,
+      "isSealed": true,
+      "reason": null
+    },
+    "proofingLevels": {
+      "applicant": {
+        "tier": "in-person-credential-inspection",
+        "assuranceLevel": "IPEN-Physical-ID"
+      },
+      "witness-1": {
+        "tier": "in-person-notary-commission-token",
+        "assuranceLevel": "IPEN-Notary-Commission"
+      }
+    },
+    "exportPosture": {
+      "offlineBundleSupported": true,
+      "policyClosureRequired": true,
+      "signedActsDerivationRule": "signed-act-projection-wos-formspec-v1"
+    }
+  }
+}

@@ -1,0 +1,476 @@
+{
+  "schemaVersion": "1.0.0",
+  "profile": "audit-maxed",
+  "description": "Maximum-telemetry litigation-ready posture with CAS-from-intake storage (P-1), chain-anchored session view summary (P-2), orphan-marker voiding (P-3), agent-propose-human-ratify intent governance (P-6), chain-anchored session credentials (P-7), biometric passkey + IDV proofing (P-8), per-event RFC 3161 TSA anchoring (P-10), canonicalized-DOM presentation hashing (P-12), posture verifier (P-13), and synchronous sealing (P-14).",
+  "kernel": {
+    "envelopeId": "env-audit-maxed-001",
+    "caseLedgerScope": "case-audit-maxed-001",
+    "routingGroups": [
+      ["applicant"],
+      ["witness-1"]
+    ],
+    "documents": [
+      {
+        "documentId": "mergers-acquisition-closing-agreement",
+        "title": "Definitive Merger and Acquisition Closing Agreement",
+        "locale": "en-US",
+        "contentSubKind": "pdf-form-v1",
+        "mediaType": "text/plain; charset=utf-8",
+        "inlineDataBase64": "wqFIb2xhIQ==",
+        "sha256": "ffb948556a252fec4aa0601da677fda38bb2ab0be63cc9c726bebfd1b3500d62",
+        "presentationHash": "fc83aa2143f9a128991a7d52ccf2e3abb1fd7dcbf76a63c281ce9e899c383a24",
+        "byteLength": 7
+      },
+      {
+        "documentId": "closing-escrow-schedule",
+        "title": "Closing Escrow Schedule and Agent Proposal Audit Log",
+        "locale": "en-US",
+        "contentSubKind": "rendered-html-v1",
+        "mediaType": "text/plain",
+        "inlineDataBase64": "UHJpdmFjeSBub3RpY2U=",
+        "sha256": "c385c344080699844442bf2dd893618a4702d5d3a3e11ed632dfad839fa2b8c4",
+        "presentationHash": "cb0dab8d5c424aac093d94df3d0a3d44e6fb8022ec3bc802f4678099f1c5210f",
+        "byteLength": 14
+      }
+    ],
+    "recipients": [
+      {
+        "recipientId": "applicant",
+        "role": "AcquiringPrincipal",
+        "actorId": "applicant",
+        "routingOrder": 1,
+        "requiredActs": ["review", "agree"]
+      },
+      {
+        "recipientId": "witness-1",
+        "role": "AttestedClosingWitness",
+        "actorId": "witness-1",
+        "routingOrder": 2,
+        "requiredActs": ["witness"]
+      }
+    ],
+    "signingActs": [
+      {
+        "signingActId": "01JM8IC0000000000000000701",
+        "fieldPath": "signature",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "role": "AcquiringPrincipal",
+        "signedAt": "2026-10-20T19:01:00Z",
+        "signingIntent": "urn:wos:signing-intent:applicant-signature",
+        "ceremonyId": "ceremony-audit-maxed-001",
+        "consentReference": "urn:example:consent:esign:v1",
+        "attestedDocumentIds": [
+          "mergers-acquisition-closing-agreement"
+        ],
+        "witnessedSignatureRef": null,
+        "ratifiedAgentProposalId": "proposal-agent-clause-001"
+      },
+      {
+        "signingActId": "01JM8IC0000000000000000702",
+        "fieldPath": "disclosureSignature",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "role": "AcquiringPrincipal",
+        "signedAt": "2026-10-20T19:01:05Z",
+        "signingIntent": "urn:wos:signing-intent:applicant-signature",
+        "ceremonyId": "ceremony-audit-maxed-001",
+        "consentReference": "urn:example:consent:esign:v1",
+        "attestedDocumentIds": [
+          "closing-escrow-schedule"
+        ],
+        "witnessedSignatureRef": null,
+        "ratifiedAgentProposalId": "proposal-agent-clause-001"
+      },
+      {
+        "signingActId": "01JM8IC0000000000000000703",
+        "fieldPath": "confirm",
+        "signerId": "witness-1",
+        "roleId": "witness-1",
+        "role": "AttestedClosingWitness",
+        "signedAt": "2026-10-20T19:01:30Z",
+        "signingIntent": "urn:wos:signing-intent:witness-attestation",
+        "ceremonyId": "ceremony-audit-maxed-001",
+        "consentReference": "urn:example:consent:esign:v1",
+        "attestedDocumentIds": [
+          "mergers-acquisition-closing-agreement"
+        ],
+        "witnessedSignatureRef": "sig-1"
+      }
+    ],
+    "sealRule": {
+      "rule": "all-required-acts-and-witness-and-per-event-tsa-admitted",
+      "sealedAt": "2026-10-20T19:02:00Z",
+      "voided": false,
+      "voidReason": null
+    },
+    "offlineVerifiable": true
+  },
+  "ports": {
+    "P-1_documentBytesStore": {
+      "mode": "cas-from-intake",
+      "selfContained": true,
+      "longTermValidation": "LTV-A-Full-Telemetry"
+    },
+    "P-2_viewEvidenceCollector": {
+      "mode": "chain-anchored-session-summary",
+      "requireScrollCompletion": true,
+      "minPageDwellMs": 2500
+    },
+    "P-3_voidingPolicy": {
+      "mode": "orphan-marker-events"
+    },
+    "P-4_reassignmentAuthority": {
+      "mode": "delegated-recipient",
+      "delegation": "explicit-signed-poa-only"
+    },
+    "P-5_localeResolver": {
+      "mode": "negotiate-at-session-open",
+      "locales": ["en-US", "es-US", "fr-FR", "ja-JP"],
+      "perSignerLocale": true
+    },
+    "P-6_intentRegistry": {
+      "mode": "canonical-baseline-plus-labeled-local",
+      "agentParticipationMode": "agent-propose-human-ratify",
+      "agentActorId": "agent:clause-assistant-v1",
+      "humanRatificationRequired": true
+    },
+    "P-7_signerSessionPort": {
+      "mode": "chain-anchored-credential"
+    },
+    "P-8_recipientIdentityProofing": {
+      "mode": "canonical-primitives",
+      "tier": "biometric-passkey-and-idv",
+      "assuranceLevel": "IAL3-FIDO2"
+    },
+    "P-9_deliveryChannel": {
+      "mode": "email-and-in-app",
+      "primary": "authenticated-portal",
+      "fallback": "in-app"
+    },
+    "P-10_envelopeTimerPolicy": {
+      "mode": "per-event-chain-anchoring",
+      "timerAnchoringMode": "per-event-and-seal-tsa-rfc3161",
+      "tsaPolicyOid": "1.3.6.1.4.1.55555.1.99",
+      "requirePerEventAnchor": true,
+      "sealAnchorToken": "tsa-token-audit-maxed-seal-001"
+    },
+    "P-11_documentSourceResolver": {
+      "mode": "server-fetch-allowlist-and-inline",
+      "allowedContentSubKinds": [
+        "pdf-form-v1",
+        "rendered-html-v1",
+        "structured-fields-v1",
+        "opaque-binary-v1"
+      ]
+    },
+    "P-12_presentationHasher": {
+      "mode": "canonicalized-dom",
+      "domainTag": "trellis-presentation-artifact-v1"
+    },
+    "P-13_envelopeVerifierFacade": {
+      "mode": "structural-process-and-posture",
+      "structuralInspector": "verify_export_zip"
+    },
+    "P-14_sealingOrchestration": {
+      "mode": "sync-trellis-seal",
+      "certificateTemplateRef": "urn:trellis:certificate:template:audit-maxed@1"
+    }
+  },
+  "definition": {
+    "$formspec": "1.0",
+    "url": "urn:test:envelope-profile:audit-maxed",
+    "version": "1.0.0",
+    "status": "draft",
+    "title": "Audit-Maxed High-Stakes Closing Ceremony",
+    "documents": {
+      "mergers-acquisition-closing-agreement": {
+        "defaultLocale": "en-US",
+        "variants": {
+          "en-US": {
+            "source": {
+              "kind": "inline",
+              "data": "wqFIb2xhIQ=="
+            },
+            "mediaType": "text/plain; charset=utf-8",
+            "documentHash": "ffb948556a252fec4aa0601da677fda38bb2ab0be63cc9c726bebfd1b3500d62"
+          }
+        }
+      },
+      "closing-escrow-schedule": {
+        "defaultLocale": "en-US",
+        "variants": {
+          "en-US": {
+            "source": {
+              "kind": "inline",
+              "data": "UHJpdmFjeSBub3RpY2U="
+            },
+            "mediaType": "text/plain",
+            "documentHash": "c385c344080699844442bf2dd893618a4702d5d3a3e11ed632dfad839fa2b8c4"
+          }
+        }
+      }
+    },
+    "items": [
+      {
+        "key": "signature",
+        "type": "field",
+        "label": "Acquiring Principal Signature",
+        "dataType": "attachment",
+        "attests": [
+          "mergers-acquisition-closing-agreement"
+        ]
+      },
+      {
+        "key": "disclosureSignature",
+        "type": "field",
+        "label": "Escrow Schedule Signature",
+        "dataType": "attachment",
+        "attests": [
+          "closing-escrow-schedule"
+        ]
+      },
+      {
+        "key": "confirm",
+        "type": "field",
+        "label": "Attested Closing Witness Confirmation",
+        "dataType": "boolean",
+        "attests": [
+          "mergers-acquisition-closing-agreement"
+        ]
+      }
+    ]
+  },
+  "lifecycleEvents": [
+    {
+      "sequence": 0,
+      "eventType": "wos.case.created",
+      "authoredAt": "2026-10-20T19:00:00Z",
+      "tsaAnchorToken": "tsa-am-evt-0",
+      "data": {
+        "envelopeId": "env-audit-maxed-001",
+        "profile": "audit-maxed",
+        "createdBy": "operator:mna-deal-desk"
+      }
+    },
+    {
+      "sequence": 1,
+      "eventType": "wos.envelope.documents_declared",
+      "authoredAt": "2026-10-20T19:00:05Z",
+      "tsaAnchorToken": "tsa-am-evt-1",
+      "data": {
+        "envelopeId": "env-audit-maxed-001",
+        "documentIds": [
+          "mergers-acquisition-closing-agreement",
+          "closing-escrow-schedule"
+        ]
+      }
+    },
+    {
+      "sequence": 2,
+      "eventType": "wos.agent.proposal.recorded",
+      "authoredAt": "2026-10-20T19:00:12Z",
+      "tsaAnchorToken": "tsa-am-evt-2",
+      "data": {
+        "proposalId": "proposal-agent-clause-001",
+        "agentActorId": "agent:clause-assistant-v1",
+        "proposedFieldValues": {
+          "escrowHoldbackPercent": "10.0"
+        },
+        "requiresHumanRatification": true
+      }
+    },
+    {
+      "sequence": 3,
+      "eventType": "wos.recipient.authenticated",
+      "authoredAt": "2026-10-20T19:00:20Z",
+      "tsaAnchorToken": "tsa-am-evt-3",
+      "data": {
+        "recipientId": "applicant",
+        "proofingTier": "biometric-passkey-and-idv",
+        "assuranceLevel": "IAL3-FIDO2",
+        "identityBindingRef": "identity-audit-maxed-applicant"
+      }
+    },
+    {
+      "sequence": 4,
+      "eventType": "wos.recipient.authenticated",
+      "authoredAt": "2026-10-20T19:00:25Z",
+      "tsaAnchorToken": "tsa-am-evt-4",
+      "data": {
+        "recipientId": "witness-1",
+        "proofingTier": "biometric-passkey-and-idv",
+        "assuranceLevel": "IAL3-FIDO2",
+        "identityBindingRef": "identity-audit-maxed-witness"
+      }
+    },
+    {
+      "sequence": 5,
+      "eventType": "wos.document.view_recorded",
+      "authoredAt": "2026-10-20T19:00:45Z",
+      "tsaAnchorToken": "tsa-am-evt-5",
+      "data": {
+        "recipientId": "applicant",
+        "documentId": "mergers-acquisition-closing-agreement",
+        "presentationHash": "fc83aa2143f9a128991a7d52ccf2e3abb1fd7dcbf76a63c281ce9e899c383a24",
+        "openedAt": "2026-10-20T19:00:26Z",
+        "completedScrollAt": "2026-10-20T19:00:45Z",
+        "scrollCompleted": true,
+        "dwellMs": 19000,
+        "minPageDwellMsObserved": 3800,
+        "fieldFocusTelemetryCount": 14
+      }
+    },
+    {
+      "sequence": 6,
+      "eventType": "wos.document.view_recorded",
+      "authoredAt": "2026-10-20T19:00:55Z",
+      "tsaAnchorToken": "tsa-am-evt-6",
+      "data": {
+        "recipientId": "applicant",
+        "documentId": "closing-escrow-schedule",
+        "presentationHash": "cb0dab8d5c424aac093d94df3d0a3d44e6fb8022ec3bc802f4678099f1c5210f",
+        "openedAt": "2026-10-20T19:00:46Z",
+        "completedScrollAt": "2026-10-20T19:00:55Z",
+        "scrollCompleted": true,
+        "dwellMs": 9000,
+        "minPageDwellMsObserved": 4200,
+        "fieldFocusTelemetryCount": 8
+      }
+    },
+    {
+      "sequence": 7,
+      "eventType": "wos.signature.affirmation.recorded",
+      "authoredAt": "2026-10-20T19:01:00Z",
+      "tsaAnchorToken": "tsa-am-evt-7",
+      "data": {
+        "signingActId": "01JM8IC0000000000000000701",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "role": "AcquiringPrincipal",
+        "ratifiedAgentProposalId": "proposal-agent-clause-001"
+      }
+    },
+    {
+      "sequence": 8,
+      "eventType": "wos.signature.affirmation.recorded",
+      "authoredAt": "2026-10-20T19:01:05Z",
+      "tsaAnchorToken": "tsa-am-evt-8",
+      "data": {
+        "signingActId": "01JM8IC0000000000000000702",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "role": "AcquiringPrincipal",
+        "ratifiedAgentProposalId": "proposal-agent-clause-001"
+      }
+    },
+    {
+      "sequence": 9,
+      "eventType": "wos.signature.affirmation.recorded",
+      "authoredAt": "2026-10-20T19:01:30Z",
+      "tsaAnchorToken": "tsa-am-evt-9",
+      "data": {
+        "signingActId": "01JM8IC0000000000000000703",
+        "signerId": "witness-1",
+        "roleId": "witness-1",
+        "role": "AttestedClosingWitness",
+        "witnessedSignatureRef": "sig-1"
+      }
+    },
+    {
+      "sequence": 10,
+      "eventType": "wos.envelope.sealed",
+      "authoredAt": "2026-10-20T19:02:00Z",
+      "tsaAnchorToken": "tsa-token-audit-maxed-seal-001",
+      "data": {
+        "envelopeId": "env-audit-maxed-001",
+        "sealedAt": "2026-10-20T19:02:00Z",
+        "tsaAnchorToken": "tsa-token-audit-maxed-seal-001",
+        "certificateTemplateRef": "urn:trellis:certificate:template:audit-maxed@1"
+      }
+    }
+  ],
+  "expectedVerification": {
+    "whoSigned": [
+      {
+        "signingActId": "01JM8IC0000000000000000701",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "witnessedSignatureRef": null
+      },
+      {
+        "signingActId": "01JM8IC0000000000000000702",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "witnessedSignatureRef": null
+      },
+      {
+        "signingActId": "01JM8IC0000000000000000703",
+        "signerId": "witness-1",
+        "roleId": "witness-1",
+        "witnessedSignatureRef": "sig-1"
+      }
+    ],
+    "whatWasSigned": [
+      {
+        "documentId": "mergers-acquisition-closing-agreement",
+        "sha256": "ffb948556a252fec4aa0601da677fda38bb2ab0be63cc9c726bebfd1b3500d62",
+        "presentationHash": "fc83aa2143f9a128991a7d52ccf2e3abb1fd7dcbf76a63c281ce9e899c383a24"
+      },
+      {
+        "documentId": "closing-escrow-schedule",
+        "sha256": "c385c344080699844442bf2dd893618a4702d5d3a3e11ed632dfad839fa2b8c4",
+        "presentationHash": "cb0dab8d5c424aac093d94df3d0a3d44e6fb8022ec3bc802f4678099f1c5210f"
+      }
+    ],
+    "whenSigned": [
+      {
+        "signingActId": "01JM8IC0000000000000000701",
+        "signedAt": "2026-10-20T19:01:00Z",
+        "timerAnchoringMode": "per-event-and-seal-tsa-rfc3161"
+      },
+      {
+        "signingActId": "01JM8IC0000000000000000702",
+        "signedAt": "2026-10-20T19:01:05Z",
+        "timerAnchoringMode": "per-event-and-seal-tsa-rfc3161"
+      },
+      {
+        "signingActId": "01JM8IC0000000000000000703",
+        "signedAt": "2026-10-20T19:01:30Z",
+        "timerAnchoringMode": "per-event-and-seal-tsa-rfc3161"
+      }
+    ],
+    "viewEvidence": [
+      {
+        "recipientId": "applicant",
+        "documentId": "mergers-acquisition-closing-agreement",
+        "scrollCompleted": true
+      },
+      {
+        "recipientId": "applicant",
+        "documentId": "closing-escrow-schedule",
+        "scrollCompleted": true
+      }
+    ],
+    "voidStatus": {
+      "isVoided": false,
+      "isSealed": true,
+      "reason": null
+    },
+    "proofingLevels": {
+      "applicant": {
+        "tier": "biometric-passkey-and-idv",
+        "assuranceLevel": "IAL3-FIDO2"
+      },
+      "witness-1": {
+        "tier": "biometric-passkey-and-idv",
+        "assuranceLevel": "IAL3-FIDO2"
+      }
+    },
+    "exportPosture": {
+      "offlineBundleSupported": true,
+      "policyClosureRequired": true,
+      "signedActsDerivationRule": "signed-act-projection-wos-formspec-v1"
+    }
+  }
+}

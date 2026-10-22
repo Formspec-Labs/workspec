@@ -1,0 +1,390 @@
+{
+  "schemaVersion": "1.0.0",
+  "profile": "compliance-strict",
+  "description": "Regulated financial / clinical compliance posture (eIDAS QES / 21 CFR Part 11) with step-up MFA + federated OIDC identity proofing (P-8), per-event RFC 3161 TSA anchoring (P-10), orphan-marker void policy (P-3), and LTV-A offline bundle.",
+  "kernel": {
+    "envelopeId": "env-compliance-strict-001",
+    "caseLedgerScope": "case-compliance-strict-001",
+    "routingGroups": [
+      ["applicant"]
+    ],
+    "documents": [
+      {
+        "documentId": "clinical-trial-protocol-approval",
+        "title": "Clinical Trial Protocol Sign-Off (21 CFR Part 11)",
+        "locale": "en-US",
+        "contentSubKind": "pdf-form-v1",
+        "mediaType": "text/plain; charset=utf-8",
+        "inlineDataBase64": "wqFIb2xhIQ==",
+        "sha256": "ffb948556a252fec4aa0601da677fda38bb2ab0be63cc9c726bebfd1b3500d62",
+        "presentationHash": "fc83aa2143f9a128991a7d52ccf2e3abb1fd7dcbf76a63c281ce9e899c383a24",
+        "byteLength": 7
+      },
+      {
+        "documentId": "part11-electronic-signature-manifestation",
+        "title": "21 CFR Part 11 Signature Manifestation Statement",
+        "locale": "en-US",
+        "contentSubKind": "rendered-html-v1",
+        "mediaType": "text/plain",
+        "inlineDataBase64": "UHJpdmFjeSBub3RpY2U=",
+        "sha256": "c385c344080699844442bf2dd893618a4702d5d3a3e11ed632dfad839fa2b8c4",
+        "presentationHash": "cb0dab8d5c424aac093d94df3d0a3d44e6fb8022ec3bc802f4678099f1c5210f",
+        "byteLength": 14
+      }
+    ],
+    "recipients": [
+      {
+        "recipientId": "applicant",
+        "role": "PrincipalInvestigator",
+        "actorId": "applicant",
+        "routingOrder": 1,
+        "requiredActs": ["review", "agree"]
+      }
+    ],
+    "signingActs": [
+      {
+        "signingActId": "01JM8IC0000000000000000301",
+        "fieldPath": "signature",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "role": "PrincipalInvestigator",
+        "signedAt": "2026-10-20T19:01:00Z",
+        "signingIntent": "urn:wos:signing-intent:applicant-signature",
+        "ceremonyId": "ceremony-compliance-strict-001",
+        "consentReference": "urn:example:consent:esign:v1",
+        "attestedDocumentIds": [
+          "clinical-trial-protocol-approval"
+        ],
+        "witnessedSignatureRef": null
+      },
+      {
+        "signingActId": "01JM8IC0000000000000000302",
+        "fieldPath": "disclosureSignature",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "role": "PrincipalInvestigator",
+        "signedAt": "2026-10-20T19:01:05Z",
+        "signingIntent": "urn:wos:signing-intent:applicant-signature",
+        "ceremonyId": "ceremony-compliance-strict-001",
+        "consentReference": "urn:example:consent:esign:v1",
+        "attestedDocumentIds": [
+          "part11-electronic-signature-manifestation"
+        ],
+        "witnessedSignatureRef": null
+      }
+    ],
+    "sealRule": {
+      "rule": "all-required-acts-and-per-event-tsa-admitted",
+      "sealedAt": "2026-10-20T19:02:00Z",
+      "voided": false,
+      "voidReason": null
+    },
+    "offlineVerifiable": true
+  },
+  "ports": {
+    "P-1_documentBytesStore": {
+      "mode": "two-tier-cache-then-cas",
+      "selfContained": true,
+      "longTermValidation": "LTV-A"
+    },
+    "P-2_viewEvidenceCollector": {
+      "mode": "chain-anchored-session-summary",
+      "requireScrollCompletion": true,
+      "minPageDwellMs": 2000
+    },
+    "P-3_voidingPolicy": {
+      "mode": "orphan-marker-events"
+    },
+    "P-4_reassignmentAuthority": {
+      "mode": "delegated-recipient",
+      "delegation": "explicit-signed-poa-only"
+    },
+    "P-5_localeResolver": {
+      "mode": "negotiate-at-session-open",
+      "locales": ["en-US", "de-DE", "fr-FR"],
+      "perSignerLocale": true
+    },
+    "P-6_intentRegistry": {
+      "mode": "canonical-only",
+      "agentParticipationMode": "disabled"
+    },
+    "P-7_signerSessionPort": {
+      "mode": "opaque-bearer-idempotent"
+    },
+    "P-8_recipientIdentityProofing": {
+      "mode": "canonical-primitives",
+      "tier": "federated-oidc-step-up-mfa-qes",
+      "assuranceLevel": "IAL3-AAL3"
+    },
+    "P-9_deliveryChannel": {
+      "mode": "email-and-in-app",
+      "primary": "authenticated-portal",
+      "fallback": "none"
+    },
+    "P-10_envelopeTimerPolicy": {
+      "mode": "per-event-chain-anchoring",
+      "timerAnchoringMode": "per-event-and-seal-tsa-rfc3161",
+      "tsaPolicyOid": "1.3.6.1.4.1.55555.1.3",
+      "requirePerEventAnchor": true,
+      "sealAnchorToken": "tsa-token-compliance-strict-seal-001"
+    },
+    "P-11_documentSourceResolver": {
+      "mode": "server-fetch-allowlist-and-inline",
+      "allowedContentSubKinds": [
+        "pdf-form-v1",
+        "rendered-html-v1",
+        "structured-fields-v1"
+      ]
+    },
+    "P-12_presentationHasher": {
+      "mode": "canonicalized-dom",
+      "domainTag": "trellis-presentation-artifact-v1"
+    },
+    "P-13_envelopeVerifierFacade": {
+      "mode": "structural-process-and-posture",
+      "structuralInspector": "verify_export_zip"
+    },
+    "P-14_sealingOrchestration": {
+      "mode": "async-trellis-seal",
+      "certificateTemplateRef": "urn:trellis:certificate:template:compliance-strict@1"
+    }
+  },
+  "definition": {
+    "$formspec": "1.0",
+    "url": "urn:test:envelope-profile:compliance-strict",
+    "version": "1.0.0",
+    "status": "draft",
+    "title": "Compliance-Strict Regulated Signing Ceremony",
+    "documents": {
+      "clinical-trial-protocol-approval": {
+        "defaultLocale": "en-US",
+        "variants": {
+          "en-US": {
+            "source": {
+              "kind": "inline",
+              "data": "wqFIb2xhIQ=="
+            },
+            "mediaType": "text/plain; charset=utf-8",
+            "documentHash": "ffb948556a252fec4aa0601da677fda38bb2ab0be63cc9c726bebfd1b3500d62"
+          }
+        }
+      },
+      "part11-electronic-signature-manifestation": {
+        "defaultLocale": "en-US",
+        "variants": {
+          "en-US": {
+            "source": {
+              "kind": "inline",
+              "data": "UHJpdmFjeSBub3RpY2U="
+            },
+            "mediaType": "text/plain",
+            "documentHash": "c385c344080699844442bf2dd893618a4702d5d3a3e11ed632dfad839fa2b8c4"
+          }
+        }
+      }
+    },
+    "items": [
+      {
+        "key": "signature",
+        "type": "field",
+        "label": "Principal Investigator Signature",
+        "dataType": "attachment",
+        "attests": [
+          "clinical-trial-protocol-approval"
+        ]
+      },
+      {
+        "key": "disclosureSignature",
+        "type": "field",
+        "label": "Part 11 Manifestation Signature",
+        "dataType": "attachment",
+        "attests": [
+          "part11-electronic-signature-manifestation"
+        ]
+      },
+      {
+        "key": "confirm",
+        "type": "field",
+        "label": "Compliance Witness Confirmation",
+        "dataType": "boolean",
+        "attests": [
+          "clinical-trial-protocol-approval"
+        ]
+      }
+    ]
+  },
+  "lifecycleEvents": [
+    {
+      "sequence": 0,
+      "eventType": "wos.case.created",
+      "authoredAt": "2026-10-20T19:00:00Z",
+      "tsaAnchorToken": "tsa-cs-evt-0",
+      "data": {
+        "envelopeId": "env-compliance-strict-001",
+        "profile": "compliance-strict",
+        "createdBy": "operator:clinical-qms"
+      }
+    },
+    {
+      "sequence": 1,
+      "eventType": "wos.envelope.documents_declared",
+      "authoredAt": "2026-10-20T19:00:05Z",
+      "tsaAnchorToken": "tsa-cs-evt-1",
+      "data": {
+        "envelopeId": "env-compliance-strict-001",
+        "documentIds": [
+          "clinical-trial-protocol-approval",
+          "part11-electronic-signature-manifestation"
+        ]
+      }
+    },
+    {
+      "sequence": 2,
+      "eventType": "wos.recipient.authenticated",
+      "authoredAt": "2026-10-20T19:00:20Z",
+      "tsaAnchorToken": "tsa-cs-evt-2",
+      "data": {
+        "recipientId": "applicant",
+        "proofingTier": "federated-oidc-step-up-mfa-qes",
+        "assuranceLevel": "IAL3-AAL3",
+        "identityBindingRef": "identity-compliance-strict-applicant"
+      }
+    },
+    {
+      "sequence": 3,
+      "eventType": "wos.document.view_recorded",
+      "authoredAt": "2026-10-20T19:00:45Z",
+      "tsaAnchorToken": "tsa-cs-evt-3",
+      "data": {
+        "recipientId": "applicant",
+        "documentId": "clinical-trial-protocol-approval",
+        "presentationHash": "fc83aa2143f9a128991a7d52ccf2e3abb1fd7dcbf76a63c281ce9e899c383a24",
+        "openedAt": "2026-10-20T19:00:25Z",
+        "completedScrollAt": "2026-10-20T19:00:45Z",
+        "scrollCompleted": true,
+        "dwellMs": 20000,
+        "minPageDwellMsObserved": 3500
+      }
+    },
+    {
+      "sequence": 4,
+      "eventType": "wos.document.view_recorded",
+      "authoredAt": "2026-10-20T19:00:55Z",
+      "tsaAnchorToken": "tsa-cs-evt-4",
+      "data": {
+        "recipientId": "applicant",
+        "documentId": "part11-electronic-signature-manifestation",
+        "presentationHash": "cb0dab8d5c424aac093d94df3d0a3d44e6fb8022ec3bc802f4678099f1c5210f",
+        "openedAt": "2026-10-20T19:00:46Z",
+        "completedScrollAt": "2026-10-20T19:00:55Z",
+        "scrollCompleted": true,
+        "dwellMs": 9000,
+        "minPageDwellMsObserved": 4000
+      }
+    },
+    {
+      "sequence": 5,
+      "eventType": "wos.signature.affirmation.recorded",
+      "authoredAt": "2026-10-20T19:01:00Z",
+      "tsaAnchorToken": "tsa-cs-evt-5",
+      "data": {
+        "signingActId": "01JM8IC0000000000000000301",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "role": "PrincipalInvestigator"
+      }
+    },
+    {
+      "sequence": 6,
+      "eventType": "wos.signature.affirmation.recorded",
+      "authoredAt": "2026-10-20T19:01:05Z",
+      "tsaAnchorToken": "tsa-cs-evt-6",
+      "data": {
+        "signingActId": "01JM8IC0000000000000000302",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "role": "PrincipalInvestigator"
+      }
+    },
+    {
+      "sequence": 7,
+      "eventType": "wos.envelope.sealed",
+      "authoredAt": "2026-10-20T19:02:00Z",
+      "tsaAnchorToken": "tsa-token-compliance-strict-seal-001",
+      "data": {
+        "envelopeId": "env-compliance-strict-001",
+        "sealedAt": "2026-10-20T19:02:00Z",
+        "tsaAnchorToken": "tsa-token-compliance-strict-seal-001",
+        "certificateTemplateRef": "urn:trellis:certificate:template:compliance-strict@1"
+      }
+    }
+  ],
+  "expectedVerification": {
+    "whoSigned": [
+      {
+        "signingActId": "01JM8IC0000000000000000301",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "witnessedSignatureRef": null
+      },
+      {
+        "signingActId": "01JM8IC0000000000000000302",
+        "signerId": "applicant",
+        "roleId": "applicant",
+        "witnessedSignatureRef": null
+      }
+    ],
+    "whatWasSigned": [
+      {
+        "documentId": "clinical-trial-protocol-approval",
+        "sha256": "ffb948556a252fec4aa0601da677fda38bb2ab0be63cc9c726bebfd1b3500d62",
+        "presentationHash": "fc83aa2143f9a128991a7d52ccf2e3abb1fd7dcbf76a63c281ce9e899c383a24"
+      },
+      {
+        "documentId": "part11-electronic-signature-manifestation",
+        "sha256": "c385c344080699844442bf2dd893618a4702d5d3a3e11ed632dfad839fa2b8c4",
+        "presentationHash": "cb0dab8d5c424aac093d94df3d0a3d44e6fb8022ec3bc802f4678099f1c5210f"
+      }
+    ],
+    "whenSigned": [
+      {
+        "signingActId": "01JM8IC0000000000000000301",
+        "signedAt": "2026-10-20T19:01:00Z",
+        "timerAnchoringMode": "per-event-and-seal-tsa-rfc3161"
+      },
+      {
+        "signingActId": "01JM8IC0000000000000000302",
+        "signedAt": "2026-10-20T19:01:05Z",
+        "timerAnchoringMode": "per-event-and-seal-tsa-rfc3161"
+      }
+    ],
+    "viewEvidence": [
+      {
+        "recipientId": "applicant",
+        "documentId": "clinical-trial-protocol-approval",
+        "scrollCompleted": true
+      },
+      {
+        "recipientId": "applicant",
+        "documentId": "part11-electronic-signature-manifestation",
+        "scrollCompleted": true
+      }
+    ],
+    "voidStatus": {
+      "isVoided": false,
+      "isSealed": true,
+      "reason": null
+    },
+    "proofingLevels": {
+      "applicant": {
+        "tier": "federated-oidc-step-up-mfa-qes",
+        "assuranceLevel": "IAL3-AAL3"
+      }
+    },
+    "exportPosture": {
+      "offlineBundleSupported": true,
+      "policyClosureRequired": true,
+      "signedActsDerivationRule": "signed-act-projection-wos-formspec-v1"
+    }
+  }
+}

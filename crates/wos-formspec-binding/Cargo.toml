@@ -30,3 +30,10 @@ wos-runtime = { path = "../wos-runtime" }
 stack-common-typeid = { workspace = true, features = ["testing"] }
 integrity-cbor = { path = "../../../integrity-stack/crates/integrity-cbor" }
 integrity-signature-ring = { path = "../../../integrity-stack/crates/integrity-signature-ring" }
+trellis-cddl = { path = "../../../trellis/crates/trellis-cddl" }
+trellis-core = { path = "../../../trellis/crates/trellis-core" }
+trellis-export-profile-wos = { path = "../../../trellis/crates/trellis-export-profile-wos" }
+trellis-export-writer = { path = "../../../trellis/crates/trellis-export-writer" }
+trellis-server-ports = { path = "../../../trellis/crates/trellis-server-ports" }
+trellis-types.workspace = true
+trellis-verify-wos = { path = "../../../trellis/crates/trellis-verify-wos" }
