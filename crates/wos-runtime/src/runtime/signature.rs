@@ -2878,6 +2878,9 @@ fn ensure_signature_evidence_not_replayed(
                 == Some(signature_evidence.source_system.as_str())
             && data.get("sourceSignatureId").and_then(serde_json::Value::as_str)
                 == Some(signature_evidence.source_signature_id.as_str());
+        let same_document = signature_evidence.document_id.is_empty()
+            || data.get("documentId").and_then(serde_json::Value::as_str)
+                == Some(signature_evidence.document_id.as_str());
         let same_signing_act = !candidate_signing_act_id.is_empty()
             && data
                 .get("signingActId")
@@ -2899,7 +2902,9 @@ fn ensure_signature_evidence_not_replayed(
                     .and_then(serde_json::Value::as_str)
                     == Some(receipt)
             });
-        if same_source_sig || same_signing_act || same_payload_digest || same_receipt {
+        if same_source_sig
+            || (same_document && (same_signing_act || same_payload_digest || same_receipt))
+        {
             return Err(RuntimeError::Signature(
                 "signature evidence already consumed".into(),
             ));

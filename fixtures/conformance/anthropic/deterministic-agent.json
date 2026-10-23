@@ -1,0 +1,46 @@
+{
+  "$wosWorkflow": "1.0",
+  "url": "https://example.com/workflows/anthropic-deterministic",
+  "version": "1.0.0",
+  "title": "Anthropic Invoker Conformance - Deterministic Agent",
+  "impactLevel": "operational",
+  "actors": [
+    {
+      "id": "rules-engine",
+      "type": "agent"
+    }
+  ],
+  "agents": [
+    {
+      "id": "rules-engine",
+      "agentType": "deterministic",
+      "modelIdentifier": "claude-opus-4-7",
+      "modelVersion": "1.0.0",
+      "invoker": {
+        "kind": "anthropic"
+      },
+      "capabilities": [
+        {
+          "id": "validateEligibility",
+          "description": "Deterministic rule check with Anthropic invoker"
+        }
+      ]
+    }
+  ],
+  "lifecycle": {
+    "initialState": "ready",
+    "states": {
+      "ready": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "target": "complete"
+          }
+        ]
+      },
+      "complete": {
+        "type": "final"
+      }
+    }
+  }
+}

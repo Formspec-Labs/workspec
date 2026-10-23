@@ -44,7 +44,8 @@ mod provenance_tests;
 
 pub use agent::{
     AgentContext, AgentInvocationError, AgentInvoker, AgentInvokerRegistry, AgentResult, AgentTask,
-    InvokerKind, InvokerSpec, StubResponse,
+    InvokerKind, InvokerSpec, PreconditionEvaluation, StubResponse,
+    evaluate_and_emit_capability_preconditions, evaluate_capability_preconditions,
 };
 #[doc(inline)]
 pub use ai_policy::{AiPolicyError, NativeAiPolicy, load_native_ai_policy};

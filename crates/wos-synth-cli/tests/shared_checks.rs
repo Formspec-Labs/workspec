@@ -67,7 +67,31 @@ fn actual_binary_passes_schema_valid_typed_event_candidate() {
 
 #[test]
 fn actual_binary_preserves_general_explanation_checks_without_claiming_runtime_readiness() {
-    for (required, expected_status) in [(true, "pass"), (false, "fail")] {
+    let delivery = json!({
+        "role": "delivery",
+        "url": "urn:test:human-explanation-delivery",
+        "version": "1.0.0",
+        "document_json": {
+            "$wosDelivery": "1.0",
+            "targetWorkflow": "urn:test:human-explanation",
+            "notifications": {
+                "templates": {
+                    "adverse-decision-notice": {
+                        "category": "adverse-decision",
+                        "sections": [
+                            { "id": "determination", "contentType": "structured", "content": "d" },
+                            { "id": "reasons", "contentType": "structured", "content": "r" },
+                            { "id": "appealRights", "contentType": "appeal-rights", "content": "a" },
+                            { "id": "appealInstructions", "contentType": "action-required", "content": "i" }
+                        ]
+                    }
+                }
+            }
+        }
+    });
+    let resolved_deps: Vec<wos_lint::studio_api::ResolvedDependency> =
+        vec![serde_json::from_value(delivery.clone()).unwrap()];
+    for (required, expected_status) in [(true, "not-run"), (false, "fail")] {
         let mut candidate: Value = serde_json::from_str(include_str!(
             "../../wos-lint/tests/fixtures/shared-validation/rights-human.json"
         ))
@@ -76,12 +100,12 @@ fn actual_binary_preserves_general_explanation_checks_without_claiming_runtime_r
             json!(required);
         let expected = wos_lint::studio_api::validate(wos_lint::studio_api::ValidationRequest {
             candidate: &candidate,
-            dependencies: &[],
+            dependencies: &resolved_deps,
             scope: wos_lint::studio_api::ValidationScope::Project,
         });
         let output = binary_check(
             &candidate.to_string(),
-            &json!({"validation": {"scope": "project"}, "replays": []}),
+            &json!({"validation": {"scope": "project", "resolved_dependencies": [delivery]}, "replays": []}),
         );
         let report: Value = serde_json::from_slice(&output.stdout).unwrap();
         let validation = &report["validation"]["result"]["report"]["validation"];

@@ -479,7 +479,7 @@ fn task_pin_matrix_agrees_between_project_lint_and_direct_runtime_admission() {
             );
             let result = runtime.create_process(CreateProcessRequest {
                 process_id: String::new(),
-                tenant: None,
+                tenant: Some("test-tenant".into()),
                 definition_url: "urn:test:selected-workflow".into(),
                 definition_version: "1.0.0".into(),
                 initial_case_state: None,

@@ -301,6 +301,7 @@ pub enum FailureCode {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TransitionLocation {
     /// Retained `state_pointer` value.
+    #[serde(alias = "state", alias = "state_pointer")]
     pub state_pointer: String,
     /// Retained `transition_index` value.
     pub transition_index: usize,

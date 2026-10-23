@@ -34,18 +34,21 @@
     "reviewContract": {
       "binding": "formspec",
       "ref": "urn:formspec:demo:d1:passport-review",
+      "definitionVersion": "0.3.0",
       "prefillMappingRef": "urn:formspec:demo:d1:passport-review:mapping:prefill",
       "responseMappingRef": "urn:formspec:demo:d1:passport-review:mapping:case"
     },
     "correctionContract": {
       "binding": "formspec",
       "ref": "urn:formspec:demo:d1:passport-renewal",
+      "definitionVersion": "0.3.0",
       "prefillMappingRef": "urn:formspec:demo:d1:passport-renewal:mapping:correction-prefill",
       "responseMappingRef": "urn:formspec:demo:d1:passport-renewal:mapping:correction-case"
     },
     "disputeContract": {
       "binding": "formspec",
       "ref": "urn:formspec:demo:d1:passport-outside-data-dispute",
+      "definitionVersion": "0.3.0",
       "prefillMappingRef": "urn:formspec:demo:d1:passport-outside-data-dispute:mapping:prefill",
       "responseMappingRef": "urn:formspec:demo:d1:passport-outside-data-dispute:mapping:case"
     }

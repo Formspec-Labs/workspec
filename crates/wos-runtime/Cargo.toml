@@ -47,3 +47,4 @@ tokio = { version = "1", features = ["macros", "rt"] }
 trellis-export-writer = { path = "../../../trellis/crates/trellis-export-writer" }
 trellis-server = { path = "../../../trellis/crates/trellis-server", features = ["test-harness"] }
 trellis-verify-wos = { path = "../../../trellis/crates/trellis-verify-wos" }
+wos-agent-stub = { path = "../wos-agent-stub" }

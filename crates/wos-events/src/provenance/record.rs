@@ -68,6 +68,71 @@ pub struct CapabilityInvocationInput<'a> {
     pub context: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
+impl<'a> CapabilityInvocationInput<'a> {
+    /// Ergonomic constructor for a permitted capability invocation (preconditions satisfied).
+    #[must_use]
+    pub fn permitted(capability_id: &'a str, agent_id: &'a str) -> Self {
+        Self {
+            capability_id,
+            agent_id,
+            invocation_blocked: false,
+            context: None,
+        }
+    }
+
+    /// Ergonomic constructor for a permitted capability invocation with context.
+    #[must_use]
+    pub fn permitted_with_context(
+        capability_id: &'a str,
+        agent_id: &'a str,
+        context: serde_json::Map<String, serde_json::Value>,
+    ) -> Self {
+        Self {
+            capability_id,
+            agent_id,
+            invocation_blocked: false,
+            context: Some(context),
+        }
+    }
+
+    /// Ergonomic constructor for a blocked capability invocation (precondition not satisfied).
+    #[must_use]
+    pub fn blocked(
+        capability_id: &'a str,
+        agent_id: &'a str,
+        failed_precondition: Option<&'a str>,
+    ) -> Self {
+        let mut context = serde_json::Map::new();
+        if let Some(failed) = failed_precondition {
+            context.insert(
+                "failedPrecondition".to_string(),
+                serde_json::Value::String(failed.to_string()),
+            );
+        }
+        Self {
+            capability_id,
+            agent_id,
+            invocation_blocked: true,
+            context: if context.is_empty() { None } else { Some(context) },
+        }
+    }
+
+    /// Ergonomic constructor for a blocked capability invocation with context.
+    #[must_use]
+    pub fn blocked_with_context(
+        capability_id: &'a str,
+        agent_id: &'a str,
+        context: serde_json::Map<String, serde_json::Value>,
+    ) -> Self {
+        Self {
+            capability_id,
+            agent_id,
+            invocation_blocked: true,
+            context: Some(context),
+        }
+    }
+}
+
 /// Resolution payload for [`ProvenanceRecord::clock_resolved`] (ADR 0067 §3).
 ///
 /// `Paused` carries the pause-event hash at the type level so a paused
@@ -1150,6 +1215,33 @@ impl ProvenanceRecord {
             record.outcome = Some("preconditionNotSatisfied".to_string());
         }
         record
+    }
+
+    /// Create a capability invocation record for a permitted precondition check.
+    #[must_use]
+    pub fn capability_precondition_permitted(
+        minter: &TypeIdMinter,
+        capability_id: &str,
+        agent_id: &str,
+    ) -> Self {
+        Self::capability_invocation(
+            minter,
+            CapabilityInvocationInput::permitted(capability_id, agent_id),
+        )
+    }
+
+    /// Create a capability invocation record for a blocked precondition check.
+    #[must_use]
+    pub fn capability_precondition_blocked(
+        minter: &TypeIdMinter,
+        capability_id: &str,
+        agent_id: &str,
+        failed_precondition: Option<&str>,
+    ) -> Self {
+        Self::capability_invocation(
+            minter,
+            CapabilityInvocationInput::blocked(capability_id, agent_id, failed_precondition),
+        )
     }
 
     /// Create a contract validation record emitted by runtime task flows.

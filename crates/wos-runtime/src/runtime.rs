@@ -3,6 +3,7 @@
 //! Runtime command surface for WOS processors.
 
 mod actions;
+mod agent_invocation;
 pub(crate) mod actor_bindings;
 mod custody_trellis;
 mod drain;
@@ -585,6 +586,7 @@ where
 
 trait PresentTasksDyn {
     fn present_task(&mut self, context: &FormspecTaskContext) -> Result<(), RuntimeError>;
+    #[allow(dead_code)]
     fn dismiss_task(&mut self, task_id: &str, reason: &str) -> Result<(), RuntimeError>;
 }
 
@@ -686,6 +688,7 @@ where
 pub struct WosRuntime {
     reference_due_process: Option<governance::ReferenceDueProcessCapabilities>,
     generic_governance: Option<crate::governance::SelectedGovernancePolicy>,
+    controlled_governance: bool,
     preparation: Option<staging::PreparationState>,
     #[cfg(test)]
     preparation_fault_at_write: Option<usize>,
@@ -756,6 +759,7 @@ impl WosRuntime {
         Self {
             reference_due_process: None,
             generic_governance: None,
+            controlled_governance: false,
             preparation: None,
             #[cfg(test)]
             preparation_fault_at_write: None,
@@ -808,6 +812,13 @@ impl WosRuntime {
     /// Attach an Integration Profile document for `invokeService` bindings.
     pub fn with_integration_profile(mut self, profile: IntegrationProfileDocument) -> Self {
         self.integration_profile = Some(profile);
+        self
+    }
+
+    /// Allows execution of workflows with determination or adverse-decision transitions
+    /// under a controlled runtime without installing a separate generic governance policy.
+    pub fn with_controlled_governance(mut self) -> Self {
+        self.controlled_governance = true;
         self
     }
 

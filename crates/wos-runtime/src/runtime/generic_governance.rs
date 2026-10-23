@@ -93,11 +93,18 @@ impl WosRuntime {
         context: RuntimeGovernanceResultContext<'_>,
     ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
         self.validate_governance_selection(context.kernel)?;
-        if reference_selected(context.kernel) {
+        if reference_selected(context.kernel) || self.controlled_governance {
             return Ok(Vec::new());
         }
         let result = if let Some(selected) = &self.generic_governance {
             selected.check_result(context)?
+        } else if context.kernel.governance.is_none()
+            && context
+                .kernel
+                .impact_level
+                .is_some_and(|lvl| !lvl.requires_due_process())
+        {
+            return Ok(Vec::new());
         } else {
             crate::governance::GovernanceResult::without_required_governance(context)?
         };

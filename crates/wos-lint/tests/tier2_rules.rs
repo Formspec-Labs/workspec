@@ -1939,7 +1939,7 @@ fn ai026_escalation_with_expiry_clean() {
 
 #[test]
 fn ai026_no_escalation_rules_skips_check() {
-    let mut source = native_ai_workflow();
+    let source = native_ai_workflow();
     let diagnostics = lint_project_with_docs(vec![("kernel.json", source)]);
     assert_eq!(
         has_rule(&diagnostics, "WOS-AI-NATIVE-001"),

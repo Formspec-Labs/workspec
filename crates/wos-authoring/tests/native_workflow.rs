@@ -73,8 +73,7 @@ fn explicit_native_state_edit_preserves_siblings_and_failed_payload_is_atomic() 
 fn native_source_remains_editable_when_runtime_model_cannot_represent_it() {
     let mut original = source();
     original["maxRelationshipEventDepth"] = json!(4_294_967_296_u64);
-    let validator =
-        jsonschema::validator_for(wos_authoring::native_schema::workflow_schema()).unwrap();
+    let validator = wos_authoring::native_schema::workflow_validator().unwrap();
     assert!(validator.is_valid(&original));
     let mut project = WosProject::from_native_document(original.clone()).unwrap();
     assert!(project.typed_snapshot().is_err());
@@ -151,7 +150,7 @@ fn shadowed_state_workflow() -> Value {
 fn removing_root_state_preserves_shadowed_nested_state_targets_and_metadata() {
     let source = shadowed_state_workflow();
     assert!(
-        jsonschema::validator_for(wos_authoring::native_schema::workflow_schema())
+        wos_authoring::native_schema::workflow_validator()
             .unwrap()
             .is_valid(&source)
     );

@@ -218,6 +218,69 @@ impl WosRuntime {
                         continue;
                     }
 
+                    if service_ref.starts_with("agent:") {
+                        let stripped = &service_ref["agent:".len()..];
+                        let parts: Vec<&str> = stripped.split(&['/', ':'][..]).collect();
+                        if parts.len() == 2 {
+                            let agent_id = parts[0];
+                            let capability_id = parts[1];
+                            let task_inputs: std::collections::HashMap<String, serde_json::Value> =
+                                match observed.action.data.as_ref() {
+                                    Some(serde_json::Value::Object(map)) => map
+                                        .iter()
+                                        .map(|(k, v)| (k.clone(), v.clone()))
+                                        .collect(),
+                                    _ => std::collections::HashMap::new(),
+                                };
+                            let decision = self.invoke_agent_for_record(
+                                record,
+                                kernel,
+                                agent_id,
+                                capability_id,
+                                wos_core::agent::AgentTask {
+                                    capability_id: capability_id.to_string(),
+                                    prompt: None,
+                                    inputs: task_inputs,
+                                    correlation_key: observed.action.idempotency_key.clone(),
+                                },
+                            )?;
+                            if decision.invocation_blocked {
+                                // Precondition failed: skipped invocation per AI §3.3.1
+                                continue;
+                            }
+                            if let Some(res) = decision.result {
+                                provenance.push(ProvenanceRecord {
+                                    id: ProvenanceRecord::mint_id(&minter),
+                                    record_kind: ProvenanceKind::StepResultPersisted,
+                                    timestamp: now_iso.to_string(),
+                                    actor_id: Some(agent_id.to_string()),
+                                    from_state: None,
+                                    to_state: None,
+                                    event: None,
+                                    data: Some(serde_json::json!({
+                                        "serviceRef": service_ref,
+                                        "output": res.output,
+                                        "confidenceReport": res.confidence_report,
+                                        "citations": res.citations,
+                                    })),
+                                    audit_layer: None,
+                                    actor_type: Some("agent".to_string()),
+                                    lifecycle_state: None,
+                                    definition_version: None,
+                                    inputs: Vec::new(),
+                                    outputs: Vec::new(),
+                                    input_digest: None,
+                                    output_digest: None,
+                                    canonical_event_hash: None,
+                                    transition_tags: Vec::new(),
+                                    case_file_snapshot: None,
+                                    outcome: Some("completed".to_string()),
+                                });
+                            }
+                            continue;
+                        }
+                    }
+
                     self.refuse_native_plain_service(&service_ref)?;
                     if observed.action.callback_phase.is_some() {
                         return Err(RuntimeError::Integration(

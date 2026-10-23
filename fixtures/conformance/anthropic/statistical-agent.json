@@ -1,0 +1,46 @@
+{
+  "$wosWorkflow": "1.0",
+  "url": "https://example.com/workflows/anthropic-statistical",
+  "version": "1.0.0",
+  "title": "Anthropic Invoker Conformance - Statistical Agent",
+  "impactLevel": "operational",
+  "actors": [
+    {
+      "id": "scorer",
+      "type": "agent"
+    }
+  ],
+  "agents": [
+    {
+      "id": "scorer",
+      "agentType": "statistical",
+      "modelIdentifier": "claude-opus-4-7",
+      "modelVersion": "1.0.0",
+      "invoker": {
+        "kind": "anthropic"
+      },
+      "capabilities": [
+        {
+          "id": "scoreRisk",
+          "description": "Statistical assessment with Anthropic invoker"
+        }
+      ]
+    }
+  ],
+  "lifecycle": {
+    "initialState": "ready",
+    "states": {
+      "ready": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "target": "complete"
+          }
+        ]
+      },
+      "complete": {
+        "type": "final"
+      }
+    }
+  }
+}

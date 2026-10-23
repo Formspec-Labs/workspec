@@ -116,4 +116,15 @@ impl DurableRuntime for WosRuntime {
     ) -> Result<(), RuntimeError> {
         WosRuntime::apply_custody_receipt(self, process_id, record_id, receipt)
     }
+
+    fn invoke_agent(
+        &mut self,
+        process_id: &str,
+        agent_id: &str,
+        capability_id: &str,
+        task: wos_core::agent::AgentTask,
+    ) -> Result<crate::durable::AgentInvocationDecision, RuntimeError> {
+        WosRuntime::invoke_agent(self, process_id, agent_id, capability_id, task)
+    }
 }
+

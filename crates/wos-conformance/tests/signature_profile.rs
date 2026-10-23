@@ -27,8 +27,9 @@ fn assert_signature_fixture_passes(name: &str) {
     .unwrap_or_else(|error| panic!("signature fixture {name} errored: {error}"));
     assert!(
         result.passed,
-        "signature fixture {name} failed:\n{}",
-        result.failures.join("\n")
+        "signature fixture {name} failed:\nfailures: {:?}\nobservation_errors: {:?}",
+        result.failures,
+        result.observation_errors
     );
 }
 

@@ -27,6 +27,7 @@ struct Fixture {
     id: String,
     rule: String,
     #[serde(default)]
+    #[allow(dead_code)]
     description: String,
     #[serde(default)]
     inline_documents: InlineDocuments,

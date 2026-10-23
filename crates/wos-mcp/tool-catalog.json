@@ -2563,16 +2563,48 @@
                       "type": "object",
                       "properties": {
                         "check_id": {
-                          "type": "string"
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Stable identifier of the static or semantic authoring check that produced this decision reason.",
+                          "examples": [
+                            "candidate-schema",
+                            "t1"
+                          ],
+                          "x-wos": {
+                            "openStringKind": "identifier"
+                          }
                         },
                         "code": {
-                          "type": "string"
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Diagnostic rule identifier or stage status code recorded for this authoring decision reason.",
+                          "examples": [
+                            "K-001",
+                            "not-run"
+                          ],
+                          "x-wos": {
+                            "openStringKind": "identifier"
+                          }
                         },
                         "source": {
-                          "type": "string"
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "JSON Pointer or source locator identifying the document path associated with this reason.",
+                          "examples": [
+                            "/lifecycle/states/review",
+                            "/governance/dueProcess"
+                          ],
+                          "x-wos": {
+                            "openStringKind": "pathExpression"
+                          }
                         },
                         "blocking": {
-                          "type": "boolean"
+                          "type": "boolean",
+                          "description": "True when this reason blocks verified publication status and holds the authoring decision at draft or blocked.",
+                          "examples": [
+                            true,
+                            false
+                          ]
                         }
                       },
                       "required": [
@@ -2883,6 +2915,903 @@
         ],
         "$defs": {
           "wosCanonical0": {
+            "$id": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json",
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$defs": {
+              "DueProcessExecution": {
+                "type": "object",
+                "description": "Closed DueProcessExecution shape from Governance native reference execution.",
+                "additionalProperties": false,
+                "required": [
+                  "profile",
+                  "determinations",
+                  "operations",
+                  "notice",
+                  "appeal",
+                  "limits"
+                ],
+                "properties": {
+                  "profile": {
+                    "$ref": "#/$defs/ReferenceProfile",
+                    "description": "Retained profile value under referenceDueProcess/1."
+                  },
+                  "determinations": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/DeterminationBinding"
+                    },
+                    "description": "Retained determinations value under referenceDueProcess/1.",
+                    "minItems": 1,
+                    "uniqueItems": true
+                  },
+                  "operations": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/OperationBinding"
+                    },
+                    "description": "Retained operations value under referenceDueProcess/1.",
+                    "minItems": 1,
+                    "uniqueItems": true
+                  },
+                  "notice": {
+                    "$ref": "#/$defs/NoticePolicy",
+                    "description": "Retained notice value under referenceDueProcess/1."
+                  },
+                  "appeal": {
+                    "$ref": "#/$defs/AppealPolicy",
+                    "description": "Retained appeal value under referenceDueProcess/1."
+                  },
+                  "preNoticeExtension": {
+                    "$ref": "#/$defs/ExtensionPolicy",
+                    "description": "Retained preNoticeExtension value under referenceDueProcess/1."
+                  },
+                  "limits": {
+                    "$ref": "#/$defs/Limits",
+                    "description": "Retained limits value under referenceDueProcess/1."
+                  }
+                }
+              },
+              "Limits": {
+                "type": "object",
+                "description": "Closed Limits shape from Governance native reference execution.",
+                "additionalProperties": false,
+                "required": [
+                  "maxDeterminations",
+                  "maxNotices",
+                  "maxAppeals",
+                  "maxOperations",
+                  "maxOutstandingNoticeWork",
+                  "maxTransportAttempts",
+                  "maxNoticeBytes"
+                ],
+                "properties": {
+                  "maxDeterminations": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Retained maxDeterminations value under referenceDueProcess/1.",
+                    "maximum": 100000
+                  },
+                  "maxNotices": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Retained maxNotices value under referenceDueProcess/1.",
+                    "maximum": 100000
+                  },
+                  "maxAppeals": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Retained maxAppeals value under referenceDueProcess/1.",
+                    "maximum": 100000
+                  },
+                  "maxOperations": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Retained maxOperations value under referenceDueProcess/1.",
+                    "maximum": 100000
+                  },
+                  "maxOutstandingNoticeWork": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Retained maxOutstandingNoticeWork value under referenceDueProcess/1.",
+                    "maximum": 100000
+                  },
+                  "maxTransportAttempts": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Retained maxTransportAttempts value under referenceDueProcess/1.",
+                    "maximum": 100000
+                  },
+                  "maxNoticeBytes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Retained maxNoticeBytes value under referenceDueProcess/1.",
+                    "maximum": 10485760
+                  }
+                }
+              },
+              "ExtensionPolicy": {
+                "type": "object",
+                "description": "Closed ExtensionPolicy shape from Governance native reference execution.",
+                "additionalProperties": false,
+                "required": [
+                  "timerId",
+                  "allowedStatePointers",
+                  "maxCumulativeCalendarDays",
+                  "sourceRefs"
+                ],
+                "properties": {
+                  "timerId": {
+                    "$ref": "#/$defs/Id",
+                    "description": "Retained timerId value under referenceDueProcess/1."
+                  },
+                  "allowedStatePointers": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/Pointer"
+                    },
+                    "description": "Retained allowedStatePointers value under referenceDueProcess/1.",
+                    "minItems": 1,
+                    "uniqueItems": true
+                  },
+                  "maxCumulativeCalendarDays": {
+                    "$ref": "#/$defs/Days"
+                  },
+                  "sourceRefs": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/SourceRef"
+                    },
+                    "description": "Retained sourceRefs value under referenceDueProcess/1.",
+                    "minItems": 1,
+                    "uniqueItems": true
+                  }
+                }
+              },
+              "SourceRef": {
+                "type": "object",
+                "description": "Closed SourceRef shape from Governance native reference execution.",
+                "additionalProperties": false,
+                "required": [
+                  "sourceVersion",
+                  "sectionAnchor",
+                  "retainedSha256"
+                ],
+                "properties": {
+                  "sourceVersion": {
+                    "$ref": "#/$defs/Id",
+                    "description": "Retained sourceVersion value under referenceDueProcess/1."
+                  },
+                  "sectionAnchor": {
+                    "type": "string",
+                    "description": "Retained sectionAnchor value under referenceDueProcess/1.",
+                    "minLength": 1,
+                    "maxLength": 1024
+                  },
+                  "retainedSha256": {
+                    "$ref": "#/$defs/Digest",
+                    "description": "Retained retainedSha256 value under referenceDueProcess/1."
+                  }
+                }
+              },
+              "Digest": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              "Id": {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "Days": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 36500
+              },
+              "Pointer": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?:/(?:[^~]|~[01])*)+$"
+              },
+              "AppealPolicy": {
+                "type": "object",
+                "description": "Closed AppealPolicy shape from Governance native reference execution.",
+                "additionalProperties": false,
+                "required": [
+                  "channels",
+                  "standingActors",
+                  "reviewerActors",
+                  "excludedDeterminationActors",
+                  "hearingDeadline",
+                  "continuation",
+                  "sourceRefs"
+                ],
+                "properties": {
+                  "channels": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/Channel"
+                    },
+                    "description": "Retained channels value under referenceDueProcess/1.",
+                    "minItems": 1,
+                    "uniqueItems": true
+                  },
+                  "standingActors": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/Id"
+                    },
+                    "description": "Retained standingActors value under referenceDueProcess/1.",
+                    "minItems": 1,
+                    "uniqueItems": true
+                  },
+                  "reviewerActors": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/Id"
+                    },
+                    "description": "Retained reviewerActors value under referenceDueProcess/1.",
+                    "minItems": 1,
+                    "uniqueItems": true
+                  },
+                  "excludedDeterminationActors": {
+                    "$ref": "#/$defs/ExcludedDeterminationActors",
+                    "description": "Retained excludedDeterminationActors value under referenceDueProcess/1."
+                  },
+                  "hearingDeadline": {
+                    "$ref": "#/$defs/HearingDeadline",
+                    "description": "Retained hearingDeadline value under referenceDueProcess/1."
+                  },
+                  "continuation": {
+                    "$ref": "#/$defs/ContinuationPolicy",
+                    "description": "Retained continuation value under referenceDueProcess/1."
+                  },
+                  "sourceRefs": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/SourceRef"
+                    },
+                    "description": "Retained sourceRefs value under referenceDueProcess/1.",
+                    "minItems": 1,
+                    "uniqueItems": true
+                  }
+                }
+              },
+              "ContinuationPolicy": {
+                "type": "object",
+                "description": "Closed ContinuationPolicy shape from Governance native reference execution.",
+                "additionalProperties": false,
+                "required": [
+                  "choice",
+                  "scope",
+                  "endsOn"
+                ],
+                "properties": {
+                  "choice": {
+                    "$ref": "#/$defs/ContinuationChoicePolicy",
+                    "description": "Retained choice value under referenceDueProcess/1."
+                  },
+                  "scope": {
+                    "$ref": "#/$defs/ContinuationScope",
+                    "description": "Retained scope value under referenceDueProcess/1."
+                  },
+                  "endsOn": {
+                    "$ref": "#/$defs/ContinuationEnd",
+                    "description": "Retained endsOn value under referenceDueProcess/1."
+                  }
+                }
+              },
+              "ContinuationEnd": {
+                "type": "string",
+                "enum": [
+                  "dispositionOrHouseholdTermination"
+                ]
+              },
+              "ContinuationScope": {
+                "type": "string",
+                "enum": [
+                  "currentLevel"
+                ]
+              },
+              "ContinuationChoicePolicy": {
+                "type": "string",
+                "enum": [
+                  "electionRequired",
+                  "defaultUnlessWaived"
+                ]
+              },
+              "HearingDeadline": {
+                "type": "object",
+                "description": "Closed HearingDeadline shape from Governance native reference execution.",
+                "additionalProperties": false,
+                "required": [
+                  "calendarDays",
+                  "purpose"
+                ],
+                "properties": {
+                  "calendarDays": {
+                    "$ref": "#/$defs/Days"
+                  },
+                  "purpose": {
+                    "$ref": "#/$defs/HearingPurpose",
+                    "description": "Retained purpose value under referenceDueProcess/1."
+                  }
+                }
+              },
+              "HearingPurpose": {
+                "type": "string",
+                "enum": [
+                  "hearingHeld"
+                ]
+              },
+              "ExcludedDeterminationActors": {
+                "type": "string",
+                "enum": [
+                  "determinerAndSupervisor"
+                ]
+              },
+              "Channel": {
+                "type": "string",
+                "enum": [
+                  "phone",
+                  "in-person",
+                  "written"
+                ]
+              },
+              "NoticePolicy": {
+                "type": "object",
+                "description": "Closed NoticePolicy shape from Governance native reference execution.",
+                "additionalProperties": false,
+                "required": [
+                  "recipientPointer",
+                  "deliveryChannel",
+                  "templates",
+                  "evidenceClass",
+                  "appealAnchor",
+                  "graceAnchor",
+                  "sourceRefs"
+                ],
+                "properties": {
+                  "recipientPointer": {
+                    "$ref": "#/$defs/Pointer",
+                    "description": "Retained recipientPointer value under referenceDueProcess/1."
+                  },
+                  "deliveryChannel": {
+                    "$ref": "#/$defs/DeliveryChannel",
+                    "description": "Retained deliveryChannel value under referenceDueProcess/1."
+                  },
+                  "templates": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/NoticeTemplateSelection"
+                    },
+                    "description": "Retained templates value under referenceDueProcess/1.",
+                    "minItems": 1,
+                    "uniqueItems": true
+                  },
+                  "evidenceClass": {
+                    "$ref": "#/$defs/EvidenceClass",
+                    "description": "Retained evidenceClass value under referenceDueProcess/1."
+                  },
+                  "appealAnchor": {
+                    "$ref": "#/$defs/AppealAnchor",
+                    "description": "Retained appealAnchor value under referenceDueProcess/1."
+                  },
+                  "graceAnchor": {
+                    "$ref": "#/$defs/GraceAnchor",
+                    "description": "Retained graceAnchor value under referenceDueProcess/1."
+                  },
+                  "sourceRefs": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/SourceRef"
+                    },
+                    "description": "Retained sourceRefs value under referenceDueProcess/1.",
+                    "minItems": 1,
+                    "uniqueItems": true
+                  }
+                }
+              },
+              "GraceAnchor": {
+                "type": "string",
+                "enum": [
+                  "qualifiedReceipt"
+                ]
+              },
+              "AppealAnchor": {
+                "type": "string",
+                "enum": [
+                  "noticeIssued"
+                ]
+              },
+              "EvidenceClass": {
+                "type": "string",
+                "enum": [
+                  "fixtureQualifiedReceipt"
+                ]
+              },
+              "NoticeTemplateSelection": {
+                "type": "object",
+                "description": "Closed NoticeTemplateSelection shape from Governance native reference execution.",
+                "additionalProperties": false,
+                "required": [
+                  "locale",
+                  "templateKey",
+                  "review"
+                ],
+                "properties": {
+                  "locale": {
+                    "type": "string",
+                    "description": "Retained locale value under referenceDueProcess/1."
+                  },
+                  "templateKey": {
+                    "$ref": "#/$defs/Id",
+                    "description": "Retained templateKey value under referenceDueProcess/1."
+                  },
+                  "review": {
+                    "$ref": "#/$defs/ReviewRef",
+                    "description": "Retained review value under referenceDueProcess/1."
+                  }
+                }
+              },
+              "ReviewRef": {
+                "type": "object",
+                "description": "Closed ReviewRef shape from Governance native reference execution.",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "sha256"
+                ],
+                "properties": {
+                  "id": {
+                    "$ref": "#/$defs/Id",
+                    "description": "Retained id value under referenceDueProcess/1."
+                  },
+                  "sha256": {
+                    "$ref": "#/$defs/Digest",
+                    "description": "Retained sha256 value under referenceDueProcess/1."
+                  }
+                }
+              },
+              "DeliveryChannel": {
+                "type": "string",
+                "enum": [
+                  "mail",
+                  "portal"
+                ]
+              },
+              "OperationBinding": {
+                "type": "object",
+                "description": "Closed OperationBinding shape from Governance native reference execution.",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "kind",
+                  "determinationRef",
+                  "actors",
+                  "requiredStatePointers",
+                  "triggerEvent",
+                  "transition",
+                  "sourceRefs"
+                ],
+                "properties": {
+                  "id": {
+                    "$ref": "#/$defs/Id",
+                    "description": "Retained id value under referenceDueProcess/1."
+                  },
+                  "kind": {
+                    "$ref": "#/$defs/OperationKind",
+                    "description": "Retained kind value under referenceDueProcess/1."
+                  },
+                  "determinationRef": {
+                    "$ref": "#/$defs/Id",
+                    "description": "Retained determinationRef value under referenceDueProcess/1."
+                  },
+                  "actors": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/Id"
+                    },
+                    "description": "Retained actors value under referenceDueProcess/1.",
+                    "minItems": 1,
+                    "uniqueItems": true
+                  },
+                  "requiredStatePointers": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/Pointer"
+                    },
+                    "description": "Retained requiredStatePointers value under referenceDueProcess/1.",
+                    "minItems": 1,
+                    "uniqueItems": true
+                  },
+                  "triggerEvent": {
+                    "type": "string",
+                    "description": "Retained triggerEvent value under referenceDueProcess/1."
+                  },
+                  "transition": {
+                    "$ref": "#/$defs/TransitionLocation",
+                    "description": "Retained transition value under referenceDueProcess/1."
+                  },
+                  "sourceRefs": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/SourceRef"
+                    },
+                    "description": "Retained sourceRefs value under referenceDueProcess/1.",
+                    "minItems": 1,
+                    "uniqueItems": true
+                  }
+                }
+              },
+              "TransitionLocation": {
+                "type": "object",
+                "description": "Closed TransitionLocation shape from Governance native reference execution.",
+                "additionalProperties": false,
+                "required": [
+                  "statePointer",
+                  "transitionIndex"
+                ],
+                "properties": {
+                  "statePointer": {
+                    "$ref": "#/$defs/Pointer",
+                    "description": "Retained statePointer value under referenceDueProcess/1."
+                  },
+                  "transitionIndex": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Retained transitionIndex value under referenceDueProcess/1."
+                  }
+                }
+              },
+              "OperationKind": {
+                "type": "string",
+                "enum": [
+                  "issueNotice",
+                  "fileAppeal",
+                  "scheduleHearing",
+                  "holdHearing",
+                  "recordDisposition",
+                  "requestServiceTermination",
+                  "extendPreNoticeWindow",
+                  "applyAdverseEffect"
+                ]
+              },
+              "DeterminationBinding": {
+                "type": "object",
+                "description": "Closed DeterminationBinding shape from Governance native reference execution.",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "transition",
+                  "pendingStatePointer",
+                  "appliedStatePointers",
+                  "servicePointers",
+                  "signatureTaskRef",
+                  "explanation",
+                  "sourceRefs"
+                ],
+                "properties": {
+                  "id": {
+                    "$ref": "#/$defs/Id",
+                    "description": "Retained id value under referenceDueProcess/1."
+                  },
+                  "transition": {
+                    "$ref": "#/$defs/TransitionLocation",
+                    "description": "Retained transition value under referenceDueProcess/1."
+                  },
+                  "pendingStatePointer": {
+                    "$ref": "#/$defs/Pointer",
+                    "description": "Retained pendingStatePointer value under referenceDueProcess/1."
+                  },
+                  "appliedStatePointers": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/Pointer"
+                    },
+                    "description": "Retained appliedStatePointers value under referenceDueProcess/1.",
+                    "minItems": 1,
+                    "uniqueItems": true
+                  },
+                  "servicePointers": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/Pointer"
+                    },
+                    "description": "Retained servicePointers value under referenceDueProcess/1.",
+                    "minItems": 1,
+                    "uniqueItems": true
+                  },
+                  "signatureTaskRef": {
+                    "$ref": "#/$defs/Id",
+                    "description": "Retained signatureTaskRef value under referenceDueProcess/1."
+                  },
+                  "explanation": {
+                    "$ref": "#/$defs/ExplanationBinding",
+                    "description": "Retained explanation value under referenceDueProcess/1."
+                  },
+                  "sourceRefs": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/SourceRef"
+                    },
+                    "description": "Retained sourceRefs value under referenceDueProcess/1.",
+                    "minItems": 1,
+                    "uniqueItems": true
+                  }
+                }
+              },
+              "ExplanationBinding": {
+                "type": "object",
+                "description": "Closed ExplanationBinding shape from Governance native reference execution.",
+                "additionalProperties": false,
+                "required": [
+                  "tableRef",
+                  "outputColumn",
+                  "beneficialOutput",
+                  "reasons",
+                  "positive",
+                  "negative"
+                ],
+                "properties": {
+                  "tableRef": {
+                    "$ref": "#/$defs/Id",
+                    "description": "Retained tableRef value under referenceDueProcess/1."
+                  },
+                  "outputColumn": {
+                    "$ref": "#/$defs/Id",
+                    "description": "Retained outputColumn value under referenceDueProcess/1."
+                  },
+                  "beneficialOutput": {
+                    "$ref": "#/$defs/Scalar",
+                    "description": "Retained beneficialOutput value under referenceDueProcess/1."
+                  },
+                  "reasons": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/ReasonBinding"
+                    },
+                    "description": "Retained reasons value under referenceDueProcess/1.",
+                    "minItems": 1,
+                    "uniqueItems": true
+                  },
+                  "positive": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/CaseAlternative"
+                    },
+                    "description": "Retained positive value under referenceDueProcess/1.",
+                    "minItems": 1,
+                    "uniqueItems": true
+                  },
+                  "negative": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/CaseAlternative"
+                    },
+                    "description": "Retained negative value under referenceDueProcess/1.",
+                    "minItems": 1,
+                    "uniqueItems": true
+                  },
+                  "protectedCharacteristics": {
+                    "type": "array",
+                    "description": "Explicit protected scalars; rights-impacting native admission requires isolated evidence for each.",
+                    "items": {
+                      "$ref": "#/$defs/ProtectedCharacteristicBinding"
+                    },
+                    "minItems": 1,
+                    "uniqueItems": true
+                  }
+                }
+              },
+              "ProtectedCharacteristicBinding": {
+                "type": "object",
+                "description": "Explicit source-backed protected scalar selected for isolated negative evaluation.",
+                "additionalProperties": false,
+                "required": [
+                  "casePointer",
+                  "sourceRefs"
+                ],
+                "properties": {
+                  "casePointer": {
+                    "$ref": "#/$defs/Pointer",
+                    "description": "Case-state JSON pointer of the selected protected scalar."
+                  },
+                  "sourceRefs": {
+                    "type": "array",
+                    "description": "Exact retained sources supporting the protected scalar selection.",
+                    "items": {
+                      "$ref": "#/$defs/SourceRef"
+                    },
+                    "minItems": 1,
+                    "uniqueItems": true
+                  }
+                }
+              },
+              "CaseAlternative": {
+                "type": "object",
+                "description": "Closed CaseAlternative shape from Governance native reference execution.",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "changes",
+                  "description",
+                  "sourceRefs"
+                ],
+                "properties": {
+                  "id": {
+                    "$ref": "#/$defs/Id",
+                    "description": "Retained id value under referenceDueProcess/1."
+                  },
+                  "changes": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/CaseChange"
+                    },
+                    "description": "Retained changes value under referenceDueProcess/1.",
+                    "minItems": 1,
+                    "uniqueItems": true
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Retained description value under referenceDueProcess/1.",
+                    "minLength": 1,
+                    "maxLength": 4096
+                  },
+                  "sourceRefs": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/SourceRef"
+                    },
+                    "description": "Retained sourceRefs value under referenceDueProcess/1.",
+                    "minItems": 1,
+                    "uniqueItems": true
+                  }
+                }
+              },
+              "CaseChange": {
+                "type": "object",
+                "description": "Closed CaseChange shape from Governance native reference execution.",
+                "additionalProperties": false,
+                "required": [
+                  "casePointer",
+                  "value"
+                ],
+                "properties": {
+                  "casePointer": {
+                    "$ref": "#/$defs/Pointer",
+                    "description": "Retained casePointer value under referenceDueProcess/1."
+                  },
+                  "value": {
+                    "$ref": "#/$defs/Scalar",
+                    "description": "Retained value value under referenceDueProcess/1."
+                  }
+                }
+              },
+              "Scalar": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "description": "Closed String variant.",
+                    "additionalProperties": false,
+                    "required": [
+                      "kind",
+                      "value"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "const": "string"
+                      },
+                      "value": {
+                        "description": "Retained value value under referenceDueProcess/1.",
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "description": "Closed Number variant.",
+                    "additionalProperties": false,
+                    "required": [
+                      "kind",
+                      "value"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "const": "number"
+                      },
+                      "value": {
+                        "description": "Retained value value under referenceDueProcess/1.",
+                        "type": "number"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "description": "Closed Boolean variant.",
+                    "additionalProperties": false,
+                    "required": [
+                      "kind",
+                      "value"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "const": "boolean"
+                      },
+                      "value": {
+                        "description": "Retained value value under referenceDueProcess/1.",
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                ]
+              },
+              "ReasonBinding": {
+                "type": "object",
+                "description": "Closed ReasonBinding shape from Governance native reference execution.",
+                "additionalProperties": false,
+                "required": [
+                  "tableRef",
+                  "rowId",
+                  "reasonCode",
+                  "sourceAuthority",
+                  "description",
+                  "sourceRefs"
+                ],
+                "properties": {
+                  "tableRef": {
+                    "$ref": "#/$defs/Id",
+                    "description": "Retained tableRef value under referenceDueProcess/1."
+                  },
+                  "rowId": {
+                    "type": "string",
+                    "description": "Retained rowId value under referenceDueProcess/1.",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "reasonCode": {
+                    "$ref": "#/$defs/Id",
+                    "description": "Retained reasonCode value under referenceDueProcess/1."
+                  },
+                  "sourceAuthority": {
+                    "$ref": "#/$defs/SourceAuthority",
+                    "description": "Retained sourceAuthority value under referenceDueProcess/1."
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Retained description value under referenceDueProcess/1.",
+                    "minLength": 1,
+                    "maxLength": 4096
+                  },
+                  "sourceRefs": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/SourceRef"
+                    },
+                    "description": "Retained sourceRefs value under referenceDueProcess/1.",
+                    "minItems": 1,
+                    "uniqueItems": true
+                  }
+                }
+              },
+              "SourceAuthority": {
+                "type": "string",
+                "enum": [
+                  "statute",
+                  "regulation",
+                  "policy",
+                  "guideline"
+                ]
+              },
+              "ReferenceProfile": {
+                "type": "string",
+                "enum": [
+                  "referenceDueProcess/1"
+                ]
+              }
+            }
+          },
+          "wosCanonical1": {
             "$id": "https://wos-spec.org/schemas/wos-workflow.schema.json",
             "$schema": "https://json-schema.org/draft/2020-12/schema",
             "properties": {
@@ -5039,13 +5968,15 @@
                 "description": "Embedded due-process, review, and pipeline governance. Required for rights-impacting and safety-impacting impactLevel. Was wos-workflow-governance.schema.json plus wos-policy-parameters.schema.json plus wos-due-process.schema.json plus wos-assertion-gate.schema.json.",
                 "properties": {
                   "dueProcess": {
+                    "$ref": "#/$defs/DueProcess",
                     "type": "object",
                     "$comment": "Notice, opportunity to be heard, appeal mechanism, adverse-decision policy.",
                     "description": "Due-process policy block covering notice, explanation, appeal, counterfactual, and continuation-of-services requirements.",
                     "examples": [
                       {
                         "adverseDecisionPolicy": {
-                          "noticeRequired": true
+                          "noticeRequired": true,
+                          "noticeTemplateKey": "adverseDecisionNotice"
                         }
                       }
                     ]
@@ -5718,6 +6649,248 @@
                     "x-wos": {
                       "openStringKind": "prose"
                     }
+                  }
+                }
+              },
+              "DueProcess": {
+                "type": "object",
+                "patternProperties": {
+                  "^x-": {
+                    "$comment": "Vendor extensions per Kernel spec §10.6"
+                  }
+                },
+                "additionalProperties": false,
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "FEL expression that determines when this due process policy applies (Runtime Companion S8.2). Evaluated against the evaluation context. When absent, the policy applies unconditionally.",
+                    "examples": [
+                      "impactLevel = 'rights-impacting'"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "fel"
+                    }
+                  },
+                  "adverseDecisionPolicy": {
+                    "$ref": "#/$defs/AdverseDecisionPolicy",
+                    "description": "Policy governing adverse decisions: denial, reduction, termination, or other unfavorable determinations."
+                  },
+                  "execution": {
+                    "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/DueProcessExecution",
+                    "description": "Explicit native referenceDueProcess/1 configuration. Requires admitted original sources, actors, actual signature subject verification, and qualified fixture transport."
+                  }
+                }
+              },
+              "AdverseDecisionPolicy": {
+                "type": "object",
+                "patternProperties": {
+                  "^x-": {
+                    "$comment": "Vendor extensions per Kernel spec §10.6"
+                  }
+                },
+                "additionalProperties": false,
+                "properties": {
+                  "noticeRequired": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "When true, affected individuals MUST receive notice before an adverse decision takes effect (Governance S3.2). The notice MUST include: the specific determination, individualized factual basis, appeal rights, and (if Layer 2 active) AI assistance disclosure.",
+                    "examples": [
+                      true,
+                      false
+                    ]
+                  },
+                  "noticeTiming": {
+                    "type": "string",
+                    "enum": [
+                      "beforeEffective",
+                      "onEffective",
+                      "afterEffective"
+                    ],
+                    "description": "When notice is delivered relative to the adverse decision taking effect.",
+                    "examples": [
+                      "beforeEffective"
+                    ]
+                  },
+                  "noticeGracePeriod": {
+                    "type": "string",
+                    "pattern": "^P(?:\\d+BD|(?!$)(?:\\d+Y)?(?:\\d+M)?(?:\\d+W)?(?:\\d+D)?(?:T(?=\\d)(?:\\d+H)?(?:\\d+M)?(?:\\d+S)?)?)$",
+                    "description": "ISO 8601 duration defining the minimum delay between notice delivery and the decision taking effect. Only meaningful when noticeTiming is 'beforeEffective'. MUST match the supported ISO 8601 duration grammar (for example, `P30D`, `PT12H`, or `P2W`). As a WOS extension, the `P<N>BD` form (e.g., `P20BD`) denotes N business days resolved against an attached Business Calendar sidecar; statutory deadlines like FOIA's 20-business-day response use this form.",
+                    "examples": [
+                      "P30D",
+                      "P14D",
+                      "PT12H",
+                      "P20BD"
+                    ]
+                  },
+                  "noticeTemplateKey": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Notification Template key for deterministic adverse-decision notice formatting. Key convention: plain string key into the Notification Template sidecar's template map, not a URI. When noticeRequired is true and an adverse-decision transition fires, the processor renders the human-readable notice from this template and emits a machine-readable `adverseDecisionNotice` artifact from the same case-file snapshot, transition, policy, and appeal inputs.",
+                    "examples": [
+                      "adverseDecisionNotice",
+                      "benefitTerminationNotice"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "tagLabel"
+                    }
+                  },
+                  "explanationLevel": {
+                    "type": "string",
+                    "enum": [
+                      "individualized",
+                      "categorical",
+                      "aggregate"
+                    ],
+                    "description": "Level of explanation provided with adverse decisions (Governance S3.3). 'individualized': REQUIRED for rights-impacting. 'categorical': RECOMMENDED for operational. 'aggregate': minimum for informational.",
+                    "examples": [
+                      "individualized"
+                    ]
+                  },
+                  "counterfactualRequired": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "When true, adverse decision explanations MUST include positive and negative counterfactuals (Governance S3.4). REQUIRED when impactLevel is 'rights-impacting'.",
+                    "examples": [
+                      true,
+                      false
+                    ]
+                  },
+                  "appealMechanism": {
+                    "$ref": "#/$defs/AppealMechanism",
+                    "description": "Appeal mechanism configuration (Governance S3.5)."
+                  }
+                },
+                "if": {
+                  "properties": {
+                    "noticeRequired": {
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "noticeRequired"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "noticeTemplateKey"
+                  ]
+                }
+              },
+              "AppealMechanism": {
+                "type": "object",
+                "required": [
+                  "reviewerConstraint"
+                ],
+                "patternProperties": {
+                  "^x-": {
+                    "$comment": "Vendor extensions per Kernel spec §10.6"
+                  }
+                },
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "When true, an appeal pathway is available for adverse decisions. When false, no appeal mechanism is configured and adverse decisions are final at the workflow level.",
+                    "examples": [
+                      true,
+                      false
+                    ]
+                  },
+                  "appealWindow": {
+                    "type": "string",
+                    "pattern": "^P(?:\\d+BD|(?!$)(?:\\d+Y)?(?:\\d+M)?(?:\\d+W)?(?:\\d+D)?(?:T(?=\\d)(?:\\d+H)?(?:\\d+M)?(?:\\d+S)?)?)$",
+                    "description": "ISO 8601 duration defining the filing window during which an appeal can be submitted after notice of adverse decision is received. MUST match the supported ISO 8601 duration grammar, for example `P30D`, `P60D`, or `PT12H`. As a WOS extension, the `P<N>BD` form (e.g., `P20BD`) denotes N business days resolved against an attached Business Calendar sidecar.",
+                    "examples": [
+                      "P30D",
+                      "P60D",
+                      "P20BD"
+                    ]
+                  },
+                  "reviewerConstraint": {
+                    "type": "string",
+                    "enum": [
+                      "independentFromOriginal",
+                      "differentUnit",
+                      "differentAgency",
+                      "externalPanel"
+                    ],
+                    "description": "Constraint on appeal reviewers. MUST be independent of the original determination (Governance S3.5). Values mirror `AppealRouting.independenceConstraint` in the Due Process Config sidecar so processors can apply a single independence policy across both authoring inputs and runtime routing. `independentFromOriginal`: reviewer is any actor distinct from the original decision-maker. `differentUnit`: reviewer is in a different organizational unit. `differentAgency`: reviewer is in a different agency. `externalPanel`: reviewer is an external panel (e.g., administrative law judge).",
+                    "examples": [
+                      "independentFromOriginal",
+                      "differentUnit",
+                      "externalPanel"
+                    ],
+                    "x-lm": {
+                      "critical": true,
+                      "intent": "Closes the appeal-reviewer independence vocabulary so structurally-invalid documents fail at schema validation rather than during downstream linting"
+                    }
+                  },
+                  "reviewerRoles": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Role identifier eligible to review appeals under this mechanism.",
+                      "examples": [
+                        "humanAdjudicator",
+                        "appealAdjudicator",
+                        "independentReviewer"
+                      ],
+                      "x-wos": {
+                        "openStringKind": "identifier"
+                      }
+                    },
+                    "description": "Roles eligible to review appeals. The processor uses this list to validate reviewer assignments during appeal routing.",
+                    "examples": [
+                      [
+                        "humanAdjudicator"
+                      ],
+                      [
+                        "appealAdjudicator",
+                        "seniorCaseworker"
+                      ]
+                    ]
+                  },
+                  "continuationOfServices": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "When true, the workflow MUST maintain current service levels during the appeal window (Governance S3.6). Prevents deprivation of benefits while appeal is pending. The exact services maintained are defined by `continuationPolicyRef` when present, or by `continuationScope` as a fallback.",
+                    "examples": [
+                      true,
+                      false
+                    ]
+                  },
+                  "continuationPolicyRef": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Reference to a `ContinuationPolicy.id` declared in the targeted Due Process Config sidecar (Governance §3.6). When present AND `continuationOfServices` is true, the named policy's `scope` + `duration` define exactly what services are maintained and for how long — replacing the looser `continuationScope` string. The processor MUST resolve the ref against ContinuationPolicy entries in any Due Process Config sidecar targeting this governance document; an unresolvable ref MUST emit a configuration warning in provenance and fall back to `continuationScope` if present.",
+                    "examples": [
+                      "benefitTerminationContinuation",
+                      "benefitReductionContinuation"
+                    ],
+                    "x-lm": {
+                      "critical": true,
+                      "intent": "Resolves continuationOfServices to a typed ContinuationPolicy by id — replaces the loose continuationScope string when present"
+                    },
+                    "x-wos": {
+                      "openStringKind": "identifier"
+                    }
+                  },
+                  "continuationScope": {
+                    "type": "string",
+                    "enum": [
+                      "currentLevel",
+                      "reducedLevel",
+                      "emergencyOnly"
+                    ],
+                    "description": "Scope of services maintained during the appeal window. Determines what the individual continues to receive while their appeal is pending. Values mirror `ContinuationPolicy.scope` in the Due Process Config sidecar — the loose string fallback resolves to the same vocabulary as the typed `continuationPolicyRef` target. `currentLevel`: maintain services at their pre-decision level. `reducedLevel`: maintain at a reduced but non-zero level. `emergencyOnly`: maintain only emergency-tier services. Used as a fallback when `continuationPolicyRef` is absent or unresolvable (Governance §3.6).",
+                    "examples": [
+                      "currentLevel",
+                      "reducedLevel",
+                      "emergencyOnly"
+                    ]
                   }
                 }
               },

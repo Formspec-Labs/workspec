@@ -6,7 +6,9 @@
 //! WOS runtime. Concrete adapters can implement the trait directly, while the
 //! current `WosRuntime` remains the reference in-memory adapter.
 
+use serde::{Deserialize, Serialize};
 use wos_core::ProvenanceRecord;
+use wos_core::agent::{AgentResult, AgentTask};
 use wos_core::instance::{PendingEvent, WorkflowProcess};
 
 use crate::intake::{IntakeAcceptanceDecision, IntakeAcceptanceRequest};
@@ -15,6 +17,36 @@ use crate::runtime::{
     TaskSubmissionResult,
 };
 use wos_events::custody::{CustodyAppendContext, CustodyAppendInput, CustodyAppendReceipt};
+
+/// Decision and outcome from an agent capability invocation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentInvocationDecision {
+    /// True when preconditions or policy blocked invocation.
+    pub invocation_blocked: bool,
+    /// Outcome literal; "preconditionNotSatisfied" when blocked by preconditions.
+    pub outcome: Option<String>,
+    /// Result from the agent invoker if invocation proceeded.
+    pub result: Option<AgentResult>,
+    /// Provenance record ID of the emitted capabilityInvocation record.
+    pub provenance_record_id: String,
+}
+
+/// Executes agent invocations against durable workflow processes (ADR 0064).
+pub trait AgentRuntime {
+    /// Invokes an agent capability after evaluating FEL preconditions and input rights.
+    /// Emits `capabilityInvocation` provenance records per AI §3.3.1.
+    ///
+    /// # Errors
+    /// Returns an error when process lookup, kernel resolution, or invocation fails.
+    fn invoke_agent(
+        &mut self,
+        process_id: &str,
+        agent_id: &str,
+        capability_id: &str,
+        task: AgentTask,
+    ) -> Result<AgentInvocationDecision, RuntimeError>;
+}
 
 /// Executes durable WOS runtime commands.
 ///
@@ -166,4 +198,21 @@ pub trait DurableRuntime {
         record_id: &str,
         receipt: CustodyAppendReceipt,
     ) -> Result<(), RuntimeError>;
+
+    /// Invokes an agent capability after verifying capability selection,
+    /// evaluating FEL preconditions, checking required input rights, and validating input.
+    /// Emits `capabilityInvocation` provenance records per AI §3.3.1.
+    ///
+    /// # Errors
+    /// Returns an error when process lookup, kernel resolution, or invocation fails.
+    fn invoke_agent(
+        &mut self,
+        _process_id: &str,
+        _agent_id: &str,
+        _capability_id: &str,
+        _task: AgentTask,
+    ) -> Result<AgentInvocationDecision, RuntimeError> {
+        Err(RuntimeError::Evaluator("agent invocation not implemented".into()))
+    }
 }
+

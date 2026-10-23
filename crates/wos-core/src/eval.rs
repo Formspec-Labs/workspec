@@ -175,6 +175,7 @@ pub struct ObservedTransition {
     /// Exact authored transition selected by native evaluation.
     pub location: TransitionLocation,
     /// Actual StateTransition provenance record created for this firing.
+    #[serde(alias = "provenanceRecordId")]
     pub provenance_record_id: String,
     /// Source state.
     pub from: String,
@@ -2811,6 +2812,11 @@ impl Evaluator {
                 // way to ensure no orphaned substates remain.
                 if let Some(history_mode) = &indexed.state.history_state {
                     self.capture_history(state_id, *history_mode);
+                    self.provenance.push(ProvenanceRecord::history_cleared(
+                        &self.minter,
+                        state_id,
+                        "parent-exit",
+                    ));
                 }
                 let substate_ids: Vec<String> = indexed.state.states.keys().cloned().collect();
                 for sub_id in &substate_ids {

@@ -24,11 +24,13 @@
     "reviewContract": {
       "binding": "formspec",
       "ref": "urn:formspec:demo:d1:passport-review",
+      "definitionVersion": "0.2.0",
       "responseMappingRef": "urn:formspec:demo:d1:passport-review:mapping:case"
     },
     "correctionContract": {
       "binding": "formspec",
       "ref": "urn:formspec:demo:d1:passport-photo-correction",
+      "definitionVersion": "0.2.0",
       "responseMappingRef": "urn:formspec:demo:d1:passport-photo-correction:mapping:case",
       "prefillMappingRef": "urn:formspec:demo:d1:passport-photo-correction:mapping:prefill"
     }

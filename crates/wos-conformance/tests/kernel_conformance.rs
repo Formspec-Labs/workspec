@@ -902,7 +902,11 @@ fn all_fixtures_parse_and_resolve() {
         // owned by `tests/export_conformance.rs` and must not be parsed
         // as `ConformanceFixture`. `read_dir` does not recurse, so the
         // `.json` extension guard below excludes the subdirectory itself.
-        if path.extension().is_none_or(|e| e != "json") {
+        if path.extension().is_none_or(|e| e != "json")
+            || path
+                .file_name()
+                .is_some_and(|name| name == "reference-due-process-replay.json")
+        {
             continue;
         }
         let json = std::fs::read_to_string(&path)

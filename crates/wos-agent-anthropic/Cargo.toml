@@ -2,12 +2,16 @@
 name = "wos-agent-anthropic"
 version.workspace = true
 edition.workspace = true
-description = "Anthropic SDK AgentInvoker adapter for WOS (skeleton; ADR 0064)"
+description = "Anthropic SDK AgentInvoker adapter for WOS (ADR 0064)"
 license.workspace = true
 repository.workspace = true
 
 [dependencies]
 wos-core = { path = "../wos-core" }
+anthropic-sdk = "0.1.5"
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "sync"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [dev-dependencies]
-serde_json = "1"
+

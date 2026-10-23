@@ -30,21 +30,12 @@ pub fn fragment_reference(pointer: &str) -> Value {
     json!({"$ref":format!("{}#{pointer}", workflow_schema()["$id"].as_str().expect("owning schema has an id"))})
 }
 
-/// Validate a payload against one owning-schema fragment.
-///
-/// # Errors
-/// Returns a diagnostic for an unknown fragment or invalid payload.
-pub fn validate_fragment(pointer: &str, value: &Value) -> Result<(), AuthoringDiagnostic> {
-    if workflow_schema().pointer(pointer).is_none() {
-        return Err(AuthoringDiagnostic::error(
-            pointer,
-            "unknown owning schema fragment",
-        ));
-    }
+/// Create an offline registry with bundled schema resources.
+pub fn offline_registry() -> jsonschema::Registry<'static> {
     let id = workflow_schema()["$id"]
         .as_str()
         .expect("owning schema has an id");
-    let registry = jsonschema::Registry::new()
+    jsonschema::Registry::new()
         .retriever(OfflineRetriever)
         .add(id, workflow_schema().clone())
         .expect("bundled schema resource is valid")
@@ -70,7 +61,29 @@ pub fn validate_fragment(pointer: &str, value: &Value) -> Result<(), AuthoringDi
         )
         .expect("bundled replay resource is valid")
         .prepare()
-        .expect("bundled schema references resolve");
+        .expect("bundled schema references resolve")
+}
+
+/// Create an offline validator for the Workflow schema, resolving references to bundled schemas.
+pub fn workflow_validator() -> Result<jsonschema::Validator, jsonschema::ValidationError<'static>> {
+    let registry = offline_registry();
+    jsonschema::options()
+        .with_registry(&registry)
+        .build(workflow_schema())
+}
+
+/// Validate a payload against one owning-schema fragment.
+///
+/// # Errors
+/// Returns a diagnostic for an unknown fragment or invalid payload.
+pub fn validate_fragment(pointer: &str, value: &Value) -> Result<(), AuthoringDiagnostic> {
+    if workflow_schema().pointer(pointer).is_none() {
+        return Err(AuthoringDiagnostic::error(
+            pointer,
+            "unknown owning schema fragment",
+        ));
+    }
+    let registry = offline_registry();
     let validator = jsonschema::options()
         .with_registry(&registry)
         .build(&fragment_reference(pointer))

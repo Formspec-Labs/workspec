@@ -227,6 +227,12 @@ fn build_trace_from_result(
                 .iter()
                 .filter(|g| g.event == transition.event && g.source_state == transition.from)
                 .cloned()
+                .map(|mut g| {
+                    g.location = None;
+                    g.firing_record_id = None;
+                    g.decision_table = None;
+                    g
+                })
                 .collect(),
             policies_applied: policy_applications_for_event(&result.provenance, &transition.event),
             delta,

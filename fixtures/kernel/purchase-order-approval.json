@@ -47,9 +47,6 @@
             },
             "target": "approved",
             "guard": "caseFile.amount <= 50000",
-            "tags": [
-              "determination"
-            ],
             "description": "Manager approves the purchase order (under $50k threshold)"
           },
           {
@@ -67,9 +64,6 @@
               "name": "reject"
             },
             "target": "rejected",
-            "tags": [
-              "determination"
-            ],
             "description": "Manager rejects the purchase order"
           }
         ]
@@ -82,20 +76,14 @@
               "kind": "message",
               "name": "approve"
             },
-            "target": "approved",
-            "tags": [
-              "determination"
-            ]
+            "target": "approved"
           },
           {
             "event": {
               "kind": "message",
               "name": "reject"
             },
-            "target": "rejected",
-            "tags": [
-              "determination"
-            ]
+            "target": "rejected"
           }
         ]
       },

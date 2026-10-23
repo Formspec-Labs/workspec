@@ -361,6 +361,8 @@ mod tests {
         let doc = serde_json::json!({
             "$wosWorkflow": "1.0",
             "url": "urn:formspec:test:spike-smoke:1.0.0",
+            "version": "1.0.0",
+            "title": "Spike smoke",
             "actors": [{ "id": "operator", "type": "human" }],
             "impactLevel": "operational",
             "lifecycle": {
@@ -380,6 +382,8 @@ mod tests {
         let doc = serde_json::json!({
             "$wosWorkflow": "1.0",
             "url": "urn:formspec:test:spike-broken:1.0.0",
+            "version": "1.0.0",
+            "title": "Spike broken",
             "actors": [{ "id": "operator", "type": "human" }],
             "impactLevel": "operational",
             "lifecycle": {

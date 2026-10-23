@@ -45,6 +45,12 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+pub mod preconditions;
+pub use preconditions::{
+    PreconditionEvaluation, evaluate_and_emit_capability_preconditions,
+    evaluate_capability_preconditions,
+};
+
 use crate::model::ai::{
     AgentDeclaration, ConfidenceReport, Metadata, deserialize_optional_present,
 };

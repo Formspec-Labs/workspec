@@ -35,7 +35,7 @@ pub use binding::{
 };
 pub use companion::ReferenceCompanionPolicy;
 #[doc(inline)]
-pub use durable::DurableRuntime;
+pub use durable::{AgentInvocationDecision, AgentRuntime, DurableRuntime};
 pub use intake::{
     AutoCreatePublicIntakePolicy, IntakeAcceptanceAdapter, IntakeAcceptanceDecision,
     IntakeAcceptanceOutcome, IntakeAcceptancePolicy, IntakeAcceptanceRegistry,

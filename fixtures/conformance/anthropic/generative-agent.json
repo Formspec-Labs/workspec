@@ -1,0 +1,46 @@
+{
+  "$wosWorkflow": "1.0",
+  "url": "https://example.com/workflows/anthropic-generative",
+  "version": "1.0.0",
+  "title": "Anthropic Invoker Conformance - Generative Agent",
+  "impactLevel": "operational",
+  "actors": [
+    {
+      "id": "synthesizer",
+      "type": "agent"
+    }
+  ],
+  "agents": [
+    {
+      "id": "synthesizer",
+      "agentType": "generative",
+      "modelIdentifier": "claude-opus-4-7",
+      "modelVersion": "1.0.0",
+      "invoker": {
+        "kind": "anthropic"
+      },
+      "capabilities": [
+        {
+          "id": "generateSummary",
+          "description": "Generative text synthesis with Anthropic invoker"
+        }
+      ]
+    }
+  ],
+  "lifecycle": {
+    "initialState": "ready",
+    "states": {
+      "ready": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "target": "complete"
+          }
+        ]
+      },
+      "complete": {
+        "type": "final"
+      }
+    }
+  }
+}

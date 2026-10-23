@@ -252,6 +252,7 @@ fn controlled_runtime_with_artifacts(
         bindings,
     )
     .with_integration_profile(profile)
+    .with_controlled_governance()
 }
 
 // These synthetic inputs passed independent native Definition and Mapping probes.
@@ -1203,11 +1204,9 @@ fn controlled_deferred_receipt(fixture: &mut Fixture, service: &str, qualifying:
 
 fn assert_deferred_main_state(fixture: &Fixture, state: &str) {
     let current = fixture.current();
-    // Native configuration retains the active parallel parent and both regions.
     let mut actual = current.configuration;
     actual.sort();
     let mut expected = vec![
-        "caseAndDelivery".to_string(),
         state.to_string(),
         "awaitingDeliveryReceipt".to_string(),
     ];

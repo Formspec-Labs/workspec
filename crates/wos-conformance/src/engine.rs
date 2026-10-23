@@ -1751,6 +1751,12 @@ fn native_task_history(
                         .and_then(|data| data.get("taskId"))
                         .and_then(serde_json::Value::as_str)
                         == Some(task_id)
+                    && item
+                        .data
+                        .as_ref()
+                        .and_then(|data| data.pointer("/details/signatureStatus"))
+                        .and_then(serde_json::Value::as_str)
+                        != Some("reassigned")
             })
             .collect();
         if completions.len() > 1 || (active.is_some() && !completions.is_empty()) {

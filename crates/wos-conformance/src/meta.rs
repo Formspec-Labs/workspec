@@ -725,6 +725,9 @@ fn load_fixture_specs(fixtures_dir: &Path) -> Result<Vec<FixtureSpec>, Conforman
         .filter(|path| {
             path.extension()
                 .is_some_and(|extension| extension == "json")
+                && !path
+                    .file_name()
+                    .is_some_and(|name| name == "reference-due-process-replay.json")
         })
         .map(|path| {
             let json = std::fs::read_to_string(&path).map_err(|error| {

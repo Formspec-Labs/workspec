@@ -1,0 +1,79 @@
+{
+  "$wosWorkflow": "1.0",
+  "url": "https://example.com/workflows/preconditions-permitted",
+  "version": "1.0.0",
+  "title": "Capability Preconditions Conformance - Permitted",
+  "impactLevel": "operational",
+  "actors": [
+    {
+      "id": "adjudicator",
+      "type": "agent"
+    }
+  ],
+  "agents": [
+    {
+      "id": "adjudicator",
+      "agentType": "deterministic",
+      "modelIdentifier": "claude-opus-4-7",
+      "modelVersion": "1.0.0",
+      "invoker": {
+        "kind": "stub",
+        "responses": [
+          {
+            "capabilityId": "evaluateClaim",
+            "output": {
+              "eligible": true,
+              "benefitTier": "TierA"
+            },
+            "confidenceReport": {
+              "overall": 1.0,
+              "method": "declared"
+            },
+            "citations": []
+          }
+        ]
+      },
+      "capabilities": [
+        {
+          "id": "evaluateClaim",
+          "description": "Evaluates claim when prerequisites are satisfied",
+          "preconditions": [
+            "caseFile.claimAmount > 0",
+            "caseFile.applicantVerified == true"
+          ]
+        }
+      ]
+    }
+  ],
+  "lifecycle": {
+    "initialState": "draft",
+    "states": {
+      "draft": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "event": "startAssessment",
+            "target": "assess"
+          }
+        ]
+      },
+      "assess": {
+        "type": "atomic",
+        "onEntry": [
+          {
+            "action": "invokeService",
+            "serviceRef": "agent:adjudicator/evaluateClaim"
+          }
+        ],
+        "transitions": [
+          {
+            "target": "completed"
+          }
+        ]
+      },
+      "completed": {
+        "type": "final"
+      }
+    }
+  }
+}
