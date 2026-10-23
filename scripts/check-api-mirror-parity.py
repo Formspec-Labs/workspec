@@ -230,6 +230,21 @@ def compare(
         if key in mirror_node or key in source_node:
             mirror_val = mirror_node.get(key, "<absent>")
             source_val = source_node.get(key, "<absent>")
+            if key == "type":
+                if (
+                    mirror_val == "string"
+                    and source_val == "<absent>"
+                    and isinstance(source_node.get("enum"), list)
+                    and all(isinstance(x, str) for x in source_node["enum"])
+                ):
+                    continue
+                if (
+                    source_val == "string"
+                    and mirror_val == "<absent>"
+                    and isinstance(mirror_node.get("enum"), list)
+                    and all(isinstance(x, str) for x in mirror_node["enum"])
+                ):
+                    continue
             if canonical(mirror_val) != canonical(source_val):
                 yield (
                     f"{path or '<root>'}/{key}: divergence\n"
@@ -386,6 +401,26 @@ def resolve_source_def(
 ) -> dict:
     """Resolve a `$defs/Name` (or deeper) path string against `source_root`.
     Raises `MirrorViolation` with `<unresolved-mirror>` path on miss."""
+    # DeonticConstraint was refactored into closed oneOf branches in wos-workflow.schema.json,
+    # where each branch carries properties.kind.const.
+    if ref_path == "$defs/DeonticConstraint/properties/kind":
+        deontic = source_root.get("$defs", {}).get("DeonticConstraint", {})
+        if "oneOf" in deontic and isinstance(deontic["oneOf"], list):
+            kinds = []
+            for branch in deontic["oneOf"]:
+                if (
+                    isinstance(branch, dict)
+                    and "properties" in branch
+                    and "kind" in branch["properties"]
+                ):
+                    kind_prop = branch["properties"]["kind"]
+                    if "const" in kind_prop:
+                        kinds.append(kind_prop["const"])
+                    elif "enum" in kind_prop and isinstance(kind_prop["enum"], list):
+                        kinds.extend(kind_prop["enum"])
+            if kinds:
+                return {"enum": kinds}
+
     parts = ref_path.split("/")
     target: Any = source_root
     for part in parts:

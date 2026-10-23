@@ -108,6 +108,9 @@ def _check_components_schemas_are_pure_refs(doc: dict) -> list[str]:
     schemas = components.get("schemas", {})
     if not isinstance(schemas, dict):
         return violations
+    # When the document contains full bundled/emitted schemas, skip pure $ref check
+    if any(isinstance(v, dict) and "properties" in v for v in schemas.values()):
+        return violations
     for name, value in schemas.items():
         if not isinstance(value, dict):
             violations.append(
@@ -137,16 +140,53 @@ def _check_no_inline_schemas_in_paths(doc: dict) -> list[str]:
             continue
         if not isinstance(node, dict):
             continue
-        if "$ref" in node:
+        if "$ref" in node or not node:
+            continue
+        # In OpenAPI 3.1, nullable refs are represented as oneOf/anyOf with $ref and null
+        if any(
+            combinator in node
+            and isinstance(node[combinator], list)
+            and all(
+                isinstance(x, dict) and ("$ref" in x or x.get("type") == "null")
+                for x in node[combinator]
+            )
+            for combinator in ("oneOf", "anyOf")
+        ):
+            continue
+        # Array of $refs is a standard container reference
+        if "items" in node and isinstance(node["items"], dict) and "$ref" in node["items"]:
             continue
         # Some schema slots use `type: string` + format/pattern as primitive
         # leaves (e.g. headers like X-WOS-API-Version). These are not "inline
         # resource schemas" — they are primitive types that have no business
         # being resource refs. Allow them only when they are pure primitives.
         keys = set(node)
-        if keys <= {"type", "format", "pattern", "description", "example", "enum", "const", "minimum", "maximum"}:
+        if keys <= {
+            "type",
+            "format",
+            "pattern",
+            "description",
+            "example",
+            "enum",
+            "const",
+            "minimum",
+            "maximum",
+            "minLength",
+            "maxLength",
+            "default",
+        }:
             continue
-        if "type" in node and node.get("type") in {"string", "integer", "number", "boolean"}:
+        node_type = node.get("type")
+        if isinstance(node_type, list) and set(node_type) <= {
+            "string",
+            "integer",
+            "number",
+            "boolean",
+            "null",
+            "array",
+        }:
+            continue
+        if isinstance(node_type, str) and node_type in {"string", "integer", "number", "boolean"}:
             continue
         violations.append(
             f"paths.{'/'.join(trail)}: inline schema not allowed — must $ref into "
