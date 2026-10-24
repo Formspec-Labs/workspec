@@ -1841,6 +1841,59 @@
         ],
         "type": "object"
       },
+      "CaseEventAppendReceipt": {
+        "additionalProperties": false,
+        "description": "Receipt returned after a direct case-ledger append commits.",
+        "properties": {
+          "caseLedgerId": {
+            "$ref": "#/components/schemas/WosResourceUrn",
+            "description": "Durable governed case-ledger URN that received the direct append."
+          },
+          "eventHash": {
+            "description": "Hash-chain digest for the appended event.",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "eventId": {
+            "description": "Identifier of the provenance row the append produced: the event id the Trellis substrate assigned (`CaseViewEvent.eventId` of the same row).",
+            "minLength": 1,
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          },
+          "sequence": {
+            "description": "Monotonic sequence number assigned within the case ledger's event stream.",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "caseLedgerId",
+          "eventId",
+          "eventHash",
+          "sequence"
+        ],
+        "type": "object"
+      },
+      "CaseEventAppendRequest": {
+        "additionalProperties": false,
+        "description": "Request body for `POST /api/v1/cases/{case_id}/events`, the direct case-ledger append surface. The case must already exist in the admitted scope, created through application Start or accepted intake. Registered existing-case WOS event literals run relationship authorization and append only after an allow decision plus event-contract validation. The retry token is the `Idempotency-Key` header, scoped to `(scope, case_id, key)`; the acting principal is the bearer's, never a body field.",
+        "properties": {
+          "data": {
+            "description": "Optional event-contract data. `caseRef` and `caseLedgerId` are supplied from the path for generic direct appends and must match if present. The concrete event contract validates the payload before persistence."
+          },
+          "event": {
+            "description": "Registered WOS event literal. The reference server refuses direct `wos.kernel.case_created` requests and appends existing-case literals only after relationship authorization allows and the direct writer can enforce the event contract.",
+            "pattern": "^wos\\.(kernel|governance|assurance)\\.[a-z][a-z0-9_]*$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event"
+        ],
+        "type": "object"
+      },
       "CaseExportFence": {
         "additionalProperties": false,
         "description": "WOS-side source fence for a case-export attempt. Captures the current case-ledger and policy/config high-water marks before downstream bundle assembly.",
@@ -11011,6 +11064,93 @@
         }
       }
     },
+    "/api/v1/cases/{case_id}/events": {
+      "post": {
+        "operationId": "submit_case_event",
+        "parameters": [
+          {
+            "description": "Case ledger identifier, bare or `urn:wos:`.",
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Opaque token; keep its exact bytes across retries of the same request.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseEventAppendRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseEventAppendReceipt"
+                }
+              }
+            },
+            "description": "Case-ledger event append receipt"
+          },
+          "202": {
+            "description": "Original accepted append is pending; follow its receiptUrl"
+          },
+          "400": {
+            "description": "Invalid event contract, unregistered literal or missing Idempotency-Key"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Caller lacks append eligibility or the case relationship"
+          },
+          "404": {
+            "description": "Case ledger not found"
+          },
+          "409": {
+            "description": "The Idempotency-Key names another request, or the original window expired"
+          },
+          "503": {
+            "description": "The integrity substrate refused the append, or the durable owner is unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [
+              "wos.case.events.append"
+            ]
+          }
+        ],
+        "summary": "Appends one registered event to an existing case ledger through the durable Case owner\n(fs-xgxt); the `Idempotency-Key` is the append's retry token.",
+        "tags": [
+          "cases"
+        ],
+        "x-access": {
+          "detail": [
+            "wos.case.events.append"
+          ],
+          "kind": "scope"
+        },
+        "x-max-request-bytes": 2097152
+      }
+    },
     "/api/v1/cases/{case_id}/export-fence": {
       "get": {
         "operationId": "get_case_export_fence",
@@ -11941,6 +12081,19 @@
               }
             }
           },
+          "400": {
+            "description": "Missing Idempotency-Key",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
           "404": {
             "description": "Case/process binding not found",
             "headers": {
@@ -12102,7 +12255,7 @@
             }
           },
           "409": {
-            "description": "The process is not active, the target is not the selected workflow, or the key's body differs (`WOS-1409`)",
+            "description": "The process is not active or has queued events, the target is not the selected workflow, or the key's body differs (`WOS-1409`)",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -12372,6 +12525,32 @@
               }
             }
           },
+          "202": {
+            "description": "Original accepted command is pending; follow its receiptUrl",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing Idempotency-Key",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
           "404": {
             "description": "Case/process binding not found",
             "headers": {
@@ -12488,8 +12667,21 @@
               }
             }
           },
+          "202": {
+            "description": "Original accepted command is pending; follow its receiptUrl",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
           "400": {
-            "description": "The workflow requires a reason",
+            "description": "Missing Idempotency-Key, or the workflow requires a reason",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -12861,8 +13053,21 @@
               }
             }
           },
+          "202": {
+            "description": "Original accepted command is pending; follow its receiptUrl",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
           "400": {
-            "description": "The workflow requires a reason",
+            "description": "Missing Idempotency-Key, or the workflow requires a reason",
             "headers": {
               "Cache-Control": {
                 "schema": {
