@@ -87,12 +87,19 @@ def _build_registry() -> tuple[Registry, dict[str, dict[str, Any]]]:
                 resources.append(
                     (file_alias, DRAFT202012.create_resource(schema))
                 )
-    # Unmarked reusable profile resources are referenced by canonical schemas.
-    for rel in ["wos-reference-due-process.schema.json", "wos-reference-replay.schema.json"]:
-        path = SCHEMAS_ROOT / rel
-        if path.exists():
-            schema = _load_schema(rel)
-            resources.append((schema["$id"], DRAFT202012.create_resource(schema)))
+    # Unmarked non-API schemas (reusable profile resources such as the reference
+    # due-process and notice-requirement schemas) are referenced by canonical
+    # schemas and by each other; register every one that declares an `$id`.
+    registered = {uri for uri, _ in resources}
+    for path in sorted(SCHEMAS_ROOT.rglob("*.schema.json")):
+        rel = path.relative_to(SCHEMAS_ROOT).as_posix()
+        if rel.startswith("api/"):
+            continue
+        schema = _load_schema(rel)
+        schema_id = schema.get("$id")
+        if schema_id and schema_id not in registered:
+            registered.add(schema_id)
+            resources.append((schema_id, DRAFT202012.create_resource(schema)))
     registry = Registry().with_resources(resources)
     return registry, by_marker
 
@@ -110,6 +117,21 @@ def registry() -> Registry:
 def schemas_by_marker() -> dict[str, dict[str, Any]]:
     """Session-wide map: `$wos*` marker → loaded schema dict."""
     return _SCHEMAS_BY_MARKER
+
+
+@pytest.fixture(scope="session")
+def schemas_for_examples(schemas_by_marker: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Every non-API `schemas/**/*.schema.json` (the walk the Rust ratchet uses),
+    keyed by marker when classified, else by relative path."""
+    seen = {s.get("$id") for s in schemas_by_marker.values()}
+    out = dict(schemas_by_marker)
+    for path in sorted(SCHEMAS_ROOT.rglob("*.schema.json")):
+        rel = path.relative_to(SCHEMAS_ROOT).as_posix()
+        schema = json.loads(path.read_text())
+        if rel.startswith("api/") or schema.get("$id") in seen:
+            continue
+        out[rel] = schema
+    return out
 
 
 @pytest.fixture(scope="session")

@@ -994,6 +994,10 @@
     },
     "InstanceStatus": {
       "$comment": "Name-promoted alias of the runtime instance-status enum, originally inlined at `wos-process.schema.json#/properties/status` (ADR 0070 D-5 — `stalled` reframed as a reserved `InstanceStatus` variant). Lifted to `$defs` so the public API projection in `schemas/api/instance.schema.json#/$defs/LifecycleState` (ADR 0082 D-13 gate 6) and any future consumer can `$ref` a stable target. Closed enum: `active` accepts events; `suspended` is paused; `migrating` is mid-version-change; `completed`/`terminated` are irreversible terminal states; `stalled` exhausted the commit retry budget and is recoverable via operator intervention.",
+      "description": "Lifecycle state of a running workflow instance: active accepts events, suspended is paused, migrating is mid-version-change, completed and terminated are irreversible terminal states, and stalled exhausted the commit retry budget and is recoverable by an operator.",
+      "examples": [
+        "active"
+      ],
       "enum": [
         "active",
         "suspended",
@@ -2174,7 +2178,8 @@
         {
           "intakeValidation": {
             "binding": "formspec",
-            "ref": "https://agency.gov/contracts/intake-1.0.json"
+            "ref": "https://agency.gov/contracts/intake-1.0.json",
+            "definitionVersion": "1.0.0"
           }
         }
       ]

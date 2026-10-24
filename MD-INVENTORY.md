@@ -491,7 +491,7 @@ Research directive/RFP that prompted the landscape study — >50 standards acros
 
 **Spec maturity ladder:** Canonical specs under `specs/` are at v1.0.0-draft.1 unless marked otherwise. Signature Profile is a newer draft profile added by WOS-T4. The core layers (kernel + profiles + governance + advanced + ai + companions) are Canonical Draft; sidecars compose with them.
 
-**Implementation progress (crates):** wos-core + wos-lint + wos-conformance + wos-runtime + wos-export + wos-formspec-binding are ✅ Implemented. wos-assurance + wos-mcp + wos-authoring + wos-synth-spike are 🟡 In-Progress. wos-synth-core/anthropic/mock/cli + wos-bench are 🔴 Queued.
+**Implementation progress (crates):** wos-core + wos-lint + wos-conformance + wos-runtime + wos-export + wos-formspec-binding are ✅ Implemented. wos-assurance + wos-mcp + wos-authoring are 🟡 In-Progress. wos-synth-core/anthropic/mock/cli + wos-bench are 🔴 Queued.
 
 **Active planning clusters (April 2026):**
 

@@ -94,13 +94,12 @@
         "id": {
           "type": "string",
           "minLength": 1,
-          "description": "Original native provenance identifier retained unchanged for correlation with the processor record and custody admission.",
+          "description": "Original native provenance identifier retained unchanged for correlation with the processor record and custody admission: a record-family TypeID (`prov`, `gov`, `ai`, `assurance` or an `x-` vendor family) of the process tenant.",
           "examples": [
             "default_prov_01m5bkbfjke3r9p9589gy8zggh"
           ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
+          "pattern": "^[a-z][a-z0-9-]*_(prov|gov|ai|assurance|x-[a-z0-9-]+)_[0-7][0-9a-hjkmnp-tv-z]{25}$",
+          "format": "wos-record-typeid"
         },
         "timestamp": {
           "type": "string",

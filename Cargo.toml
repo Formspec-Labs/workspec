@@ -8,7 +8,6 @@ members = [
     "crates/wos-formspec-binding",
     "crates/wos-export",
     # wos-server* crates relocated to workspec-server (chore 3.2)
-    "crates/wos-synth-spike",
     "crates/wos-synth-core",
     "crates/wos-synth-mock",
     "crates/wos-synth-anthropic",

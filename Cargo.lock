@@ -6351,19 +6351,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wos-synth-spike"
-version = "0.1.0"
-dependencies = [
- "anthropic-sdk",
- "clap",
- "serde_json",
- "thiserror 2.0.18",
- "tokio",
- "wos-conformance",
- "wos-lint",
-]
-
-[[package]]
 name = "writeable"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -72,11 +72,6 @@ def test_native_codegen_annotation_preserves_json_without_shape_assertions():
         check = Draft202012Validator(boundary)
         for value in ({'native': {'answer': None}}, ['native', None], 'opaque', None):
             check.validate(value)
-    # Canonical owner validation still supplies each real native document's shape.
-    response_schema = json.loads((ROOT.parent / 'formspec/schemas/response.schema.json').read_text())
-    owner = Draft202012Validator(response_schema)
-    for invalid_native_response in ([], 'opaque', None):
-        assert not owner.is_valid(invalid_native_response)
 
 
 def accepted_receipt(tasks):

@@ -140,8 +140,8 @@ pub enum LintError {
     /// JSON was well-formed but carried no `$wos*` document-type marker.
     /// Promoted from a `LintError::Parse` substring sentinel
     /// (`"no recognized $wos* document type marker found"`) so downstream
-    /// crates (`wos-synth-spike`, future synth providers) can match on
-    /// the variant instead of substring-matching the message.
+    /// crates (synth providers) can match on the variant instead of
+    /// substring-matching the message.
     #[error("no recognized $wos* document type marker found")]
     MissingMarker,
 

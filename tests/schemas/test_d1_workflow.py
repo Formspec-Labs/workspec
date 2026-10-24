@@ -1,4 +1,4 @@
-"""Historical D1 authoring evidence, intake pins and current-schema refusal."""
+"""Historical D1 authoring evidence and current-schema refusal."""
 import hashlib
 import json
 import runpy
@@ -12,27 +12,19 @@ def _artifact():
     return json.loads((WOS_SPEC_ROOT / 'examples/d1-passport.workflow.json').read_text())
 
 
-def test_historical_workflow_has_precise_schema_refusal_and_native_intake_pins():
-    artifact = _artifact()
+def test_historical_workflow_has_precise_schema_refusal():
     schema = json.loads((WOS_SPEC_ROOT / 'schemas/wos-workflow.schema.json').read_text())
-    errors = list(Draft202012Validator(schema).iter_errors(artifact))
+    errors = list(Draft202012Validator(schema).iter_errors(_artifact()))
     # Retained original bytes are evidence, not a current supported workflow.
     # Current positive coverage lives in the native model/reference fixtures.
+    # The binding to the formspec-studio intake bytes is checked at the stack
+    # root (scripts/test_work_spec_cross_stack.py): work-spec CI checks out
+    # work-spec alone, and a public lower layer must not read a private one.
     assert len(errors) == 1, '\n'.join(str(error) for error in errors)
     error, = errors
     assert error.validator == 'additionalProperties'
     assert list(error.absolute_path) == ['governance', 'dueProcess']
     assert "'explanationLevel'" in error.message
-    source = WOS_SPEC_ROOT.parent / 'formspec-studio/demo-authoring/outputs/d1/v0.1.6'
-    definition_path = source / 'passport-renewal/passport-renewal.definition.json'
-    definition = json.loads(definition_path.read_text())
-    receipt = json.loads((source / 'receipts/server-definition-hash-v0.1.6.json').read_text())
-    assert artifact['intake'] == {'mode': 'publicIntake', 'contractRef': definition['url'], 'contractVersion': definition['version']}
-    assert definition['version'] == '0.1.6'
-    pin = artifact['extensions']['x-d1-definition-pin']
-    assert pin['definitionHash'] == receipt['definition_hash']
-    assert pin['rawDefinitionHash'] == 'sha256:' + hashlib.sha256(definition_path.read_bytes()).hexdigest()
-    assert pin['definitionHash'] != pin['rawDefinitionHash']
 
 
 def test_historical_initial_review_is_human_without_placeholder_form_or_decision():

@@ -2,7 +2,9 @@
 
 # Variables
 CARGO = cargo
-PYTEST = python3 -m pytest
+# Plugin autoload off: the schema tests need only pytest + jsonschema (as in CI);
+# a globally installed pytest11 plugin with a broken dependency otherwise aborts collection.
+PYTEST = PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest
 
 # Targets
 .PHONY: all build test test-core lint clean help \

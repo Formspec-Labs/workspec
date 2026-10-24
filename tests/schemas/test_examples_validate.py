@@ -119,7 +119,7 @@ def _is_validatable_subschema(node: dict[str, Any]) -> bool:
 
 def test_every_schema_example_validates_against_its_fragment(
     registry: Registry,
-    schemas_by_marker: dict[str, dict[str, Any]],
+    schemas_for_examples: dict[str, dict[str, Any]],
 ) -> None:
     """Every `examples[i]` MUST validate against the sub-schema that declares it.
 
@@ -131,7 +131,7 @@ def test_every_schema_example_validates_against_its_fragment(
     """
     failures: list[str] = []
 
-    for marker, schema in schemas_by_marker.items():
+    for marker, schema in schemas_for_examples.items():
         for pointer, sub_schema in _walk_schema_with_pointer(schema):
             examples = sub_schema.get("examples")
             if not isinstance(examples, list) or not examples:
@@ -140,7 +140,7 @@ def test_every_schema_example_validates_against_its_fragment(
                 continue
             try:
                 validator = _validator_for_fragment(
-                    marker, pointer, sub_schema, registry, schemas_by_marker
+                    marker, pointer, sub_schema, registry, schemas_for_examples
                 )
             except Exception as e:
                 failures.append(

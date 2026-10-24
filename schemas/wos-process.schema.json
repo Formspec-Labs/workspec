@@ -698,6 +698,7 @@
             }
           },
           "requestContract": {
+            "description": "Optional contract naming the definition that validates the outbound request body; null when the binding declares none.",
             "type": [
               "object",
               "null"
@@ -719,6 +720,7 @@
             }
           },
           "responseContract": {
+            "description": "Optional contract naming the definition that validates the inbound response or receipt; null when the binding declares none.",
             "type": [
               "object",
               "null"

@@ -2296,7 +2296,7 @@ Two conformant bindings are defined:
 
 WOS processors MUST delegate contract evaluation to a conformant contract processor. For Formspec bindings, this means a Formspec-conformant processor (Core S1.4). The WOS processor provides orchestration context; the contract processor provides Definition evaluation.
 
-For Formspec-backed tasks, a ContractReference MAY also declare `prefillMappingRef` and `responseMappingRef`. `prefillMappingRef` identifies the Mapping document used to populate the task's initial Response. `responseMappingRef` identifies the Mapping document used by Runtime Companion S15 to project a completed Response into case state. When no `responseMappingRef` is supplied, Runtime Companion S15 forbids automatic host-defined Response-to-case projection.
+For Formspec-backed tasks, a ContractReference that backs a `createTask` action MUST declare `definitionVersion`, the exact version of the Definition named by `ref` (pin rules in S13.2), and MAY also declare `prefillMappingRef` and `responseMappingRef`. `prefillMappingRef` identifies the Mapping document used to populate the task's initial Response. `responseMappingRef` identifies the Mapping document used by Runtime Companion S15 to project a completed Response into case state. When no `responseMappingRef` is supplied, Runtime Companion S15 forbids automatic host-defined Response-to-case projection.
 
 ---
 
