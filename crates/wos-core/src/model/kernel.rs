@@ -438,6 +438,24 @@ pub struct Lifecycle {
     /// Named milestones.
     #[serde(default)]
     pub milestones: HashMap<String, Milestone>,
+
+    /// Policy for the `suspend` instance operation (Kernel S11.3).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub suspend: Option<LifecycleOperationPolicy>,
+
+    /// Policy for the `terminate` instance operation (Kernel S11.3).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminate: Option<LifecycleOperationPolicy>,
+}
+
+/// Workflow policy for one instance operation (Kernel S11.3): the workflow, not the caller,
+/// decides what the operation requires.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LifecycleOperationPolicy {
+    /// The operation is refused unless the request carries a non-empty reason.
+    #[serde(default)]
+    pub reason_required: bool,
 }
 
 /// A lifecycle state (Kernel S4.3).

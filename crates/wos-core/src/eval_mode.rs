@@ -237,6 +237,8 @@ mod tests {
                 initial_state: "waiting".to_string(),
                 states,
                 milestones: HashMap::new(),
+                suspend: None,
+                terminate: None,
             },
             case_file: Some(CaseFile {
                 fields: {
@@ -324,6 +326,8 @@ mod tests {
                 initial_state: "waiting".to_string(),
                 states,
                 milestones: HashMap::new(),
+                suspend: None,
+                terminate: None,
             },
             ..continuous_kernel()
         };
@@ -404,6 +408,8 @@ mod tests {
                 initial_state: "loop".to_string(),
                 states,
                 milestones: HashMap::new(),
+                suspend: None,
+                terminate: None,
             },
             case_file: None,
             contracts: HashMap::new(),
@@ -479,6 +485,8 @@ mod tests {
                 initial_state: "loop".to_string(),
                 states,
                 milestones: HashMap::new(),
+                suspend: None,
+                terminate: None,
             },
             case_file: None,
             contracts: HashMap::new(),

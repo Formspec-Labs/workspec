@@ -1288,6 +1288,29 @@
             "draft",
             "pending"
           ]
+        },
+        "suspend": {
+          "$ref": "#/$defs/LifecycleOperationPolicy",
+          "description": "Policy for the `suspend` instance operation (Kernel §11.3). Absent means the defaults: a reason is optional."
+        },
+        "terminate": {
+          "$ref": "#/$defs/LifecycleOperationPolicy",
+          "description": "Policy for the `terminate` instance operation (Kernel §11.3). Absent means the defaults: a reason is optional."
+        }
+      }
+    },
+    "LifecycleOperationPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Workflow policy for one instance operation of Kernel §11.3. The workflow, not the caller, decides what the operation requires.",
+      "properties": {
+        "reasonRequired": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, the processor refuses the operation unless the request carries a non-empty `reason`. The reason stays optional on the wire (`ProcessLifecycleRequest.reason`); this policy requires it for this workflow's cases.",
+          "examples": [
+            true
+          ]
         }
       }
     },

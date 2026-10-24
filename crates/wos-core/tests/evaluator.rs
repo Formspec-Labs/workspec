@@ -31,6 +31,8 @@ fn minimal_kernel(initial: &str, states: IndexMap<String, State>) -> KernelDocum
             initial_state: initial.to_string(),
             states,
             milestones: HashMap::new(),
+            suspend: None,
+            terminate: None,
         },
         case_file: None,
         contracts: HashMap::new(),

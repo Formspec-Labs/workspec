@@ -1946,6 +1946,8 @@ A conformant processor MUST support the following operations on WorkflowProcess:
 
 Every operation produces at least one provenance record. A `processEvent` that fires a transition produces the transition provenance defined in Kernel S4.7 and Kernel S8.2.
 
+The reason of `suspend` and `terminate` is optional unless the workflow requires it. `lifecycle.suspend.reasonRequired` and `lifecycle.terminate.reasonRequired` (`LifecycleOperationPolicy`, default `false`) make the processor refuse that operation on the workflow's cases when the request carries no non-empty reason. The caller cannot waive the policy, and the processor reads it from the Workflow Document that governs the instance.
+
 ### 11.4 Intake Acceptance
 
 The `create` operation allocates runtime state. It does not, by itself, establish a governed case. Intake acceptance is a separate host operation: the processor consumes a Formspec `IntakeHandoff`, records intake provenance, and only then decides whether the handoff attaches to an existing governed case or births a new one. In a public-intake flow, `instanceCreated` and the `caseCreated` record kind MAY both occur, but they remain distinct records with distinct meanings.
