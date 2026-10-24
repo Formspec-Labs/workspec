@@ -4,11 +4,12 @@
 
 **Date:** 2026-05-01
 **Production state authority refined:** 2026-10-08. This decision does not qualify the implementation or convert historical fixture state.
+**Amended:** 2026-10-16 by stack [ADR 0164](../../../thoughts/adr/0164-export-jobs-on-restate.md) (D3: export-job outcomes) and by stack [ADR 0167](../../../thoughts/adr/0167-wos-runtime-on-restate.md) (D1, D2, D4: WOS runs on Restate).
 
 ## Context
 
 - [`work-spec/crates/wos-server/VISION.md`](../crates/wos-server/VISION.md) §IV Story 2 positions **`runtime-restate`** as the production durable execution adapter and **`runtime-local`** as the test / conformance oracle; conformance SHOULD eventually agree across both.
-- **WS-094** in [`work-spec/crates/wos-server/TODO.md`](../crates/wos-server/TODO.md) tracks the `wos-server-runtime-restate` crate: **in-memory** [`RuntimeOps`](../../crates/wos-server-ports/src/runtime.rs) plus **ingress** to the `WosInstance` VO (durable handlers / Restate journal for that path). CI **`wos-restate-ingress-smoke`** exercises create/load/probe against a pinned Restate Server (**2026-05-01**). **Still open on the row:** `SeamAccess` / task APIs / `migrate_instance`, and PLN-0333 three-way conformance vs `runtime-local` + retry/stall acceptance.
+- **WS-094** in [`work-spec/crates/wos-server/TODO.md`](../crates/wos-server/TODO.md) tracks the `wos-server-runtime-restate` crate: **in-memory** [`RuntimeOps`](../../crates/wos-server-ports/src/runtime.rs) plus **ingress** to the `WosInstance` VO (durable handlers / Restate journal for that path). CI **`wos-restate-ingress-smoke`** exercises create/load/probe against a pinned Restate Server (**2026-05-01**). **Still open on the row:** `SeamAccess` / task APIs / `migrate_instance`, and PLN-0333 three-way conformance vs `runtime-local` + retry/stall acceptance. *Historical:* stack [ADR 0167](../../../thoughts/adr/0167-wos-runtime-on-restate.md) deletes `RuntimeOps` and `WosInstance`; the live sequencing is its §5 (P, U0, U1).
 - The **WOS-T3 spike** ([`thoughts/reviews/2026-04-21-wos-t3-durable-runtime-temporal-restate-spike.md`](../reviews/2026-04-21-wos-t3-durable-runtime-temporal-restate-spike.md)) chose **Restate first** for production Rust durability because the official **[`restate-sdk`](https://docs.rs/restate-sdk/latest/restate_sdk/)** exposes durable handlers, virtual objects, workflows, journaling, timers, and awakeables aligned with WOS command semantics.
 - **Failure / compensation vocabulary** for cross-stack alignment remains repo-root [**ADR 0070**](../../../thoughts/adr/0070-stack-failure-and-compensation.md); this ADR does not fork those definitions — it binds how the Restate adapter surfaces **retry vs terminal** behavior at the WOS boundary.
 - **Normative adapter obligations** (processor-visible “MUST” rules) live in the working spec: [`thoughts/specs/2026-05-01-wos-restate-durable-runtime-adapter-spec.md`](../specs/2026-05-01-wos-restate-durable-runtime-adapter-spec.md) (promotion into canonical `work-spec/specs/` is optional and gated on ratification workflow, not required for WS-094 execution).
@@ -23,11 +24,15 @@
 
 **Rejected for v1 default:** A single global **Service** without keyed serialization — would require external locking to match WOS ordering. **Workflow** as the *sole* representation of an instance remains a **future ADR slot** if a product line needs `run`-once lifecycle with different fault domains; the spike noted workflows as an alternative mapping.
 
+**Amendment (stack ADR 0167, 2026-10-16):** The object is `WosCase`, keyed by scope key plus `caseLedgerId`, not `process_id`, because the governed transaction locks a case's processes and intake records together. It holds no state; Postgres stays the only writer (D3). The `WosInstance` K/V object is deleted ([ADR 0167](../../../thoughts/adr/0167-wos-runtime-on-restate.md) §1.2).
+
 ### D2 — Process topology: Axum `wos-server` and Restate `HttpServer` are distinct
 
 **Decision:** The **`restate_sdk`** worker exposes services through **`HttpServer`** / `Endpoint` on a **configurable bind address** (sidecar or co-process). **`wos-server`** Axum remains the operator HTTP surface; it **invokes** Restate via the **ingress URL** (HTTP client) or in-process client where the SDK allows — exact wiring is an implementation detail fixed in the [execution plan](../plans/2026-05-01-wos-restate-ws094-execution.md).
 
 **Rationale:** Matches Restate’s documented serving model ([*Serving*](https://docs.rs/restate-sdk/latest/restate_sdk/#restate-rust-sdk)) and avoids merging two HTTP stacks into one listener without a ratified reverse-proxy story.
+
+**Amendment (stack ADR 0167, 2026-10-16):** `wos-server` hosts the one Restate endpoint (`WosCase`, `WosNotices` and ADR 0164's export services) on its own listener, distinct from Axum; the separate `wos-restate-worker` binary is deleted ([ADR 0167](../../../thoughts/adr/0167-wos-runtime-on-restate.md) §1.5).
 
 ### D3 — One committed operational authority and separate execution/custody stores
 
@@ -39,11 +44,15 @@ All production mutations MUST use one maintained admitted native executor. Curre
 
 **Rationale:** One operational record supports atomic task/case changes, delivery intents and command recovery. Execution journals provide replay and scheduling; canonical custody remains a separately admitted Trellis boundary. The former SQL query-view decision is superseded for this selected production adapter. Historical K/V fixtures remain test evidence, not an alternative production authority or an authorization to convert existing objects.
 
+**Amendment (stack ADR 0164, 2026-10-16):** Completion export-job outcomes are failure codes and execution references, not operational process state. They MAY live in Restate virtual-object state. The durable export result (the retained request and its receipt) stays in WOS custody, which owns success.
+
 ### D4 — `RuntimeOps` ↔ `DurableRuntime` / `WosRuntime` bridge
 
 **Decision:** Production path **embeds** [`WosRuntime`](../../crates/wos-runtime/src/runtime.rs) (or calls through **`DurableRuntime`** where the type bound is already satisfied) **inside** exclusive Virtual Object handlers that perform **journal-safe** steps only. The admitted executor reads and commits the D3 PostgreSQL operational record; **non-deterministic** I/O uses the SDK’s journaled APIs ([*Journaling Results*](https://docs.rs/restate-sdk/latest/restate_sdk/#restate-rust-sdk), state APIs). The existing **`RestateRuntimeAdapter`** may remain the **`RuntimeOps`** façade that forwards to ingress **until** in-process embedding is proven stable.
 
 **Rationale:** Reuses kernel evaluation, bindings, and provenance stamping already centralized in `wos-runtime`; duplicating semantics in raw handlers would rot.
+
+**Amendment (stack ADR 0167, 2026-10-16):** Replaced. No handler embeds `WosRuntime` or keeps a K/V record, and the `RestateRuntimeAdapter` ingress façade is deleted. `WosCase.execute` runs the governed executor in one `ctx.run`, then plans follow-ups from the committed case; `CaseRuntime` and `CaseStep` replace `RuntimeOps` ([ADR 0167](../../../thoughts/adr/0167-wos-runtime-on-restate.md) §1.2, §1.6).
 
 ### D5 — Errors: terminal vs retryable
 
@@ -51,7 +60,7 @@ All production mutations MUST use one maintained admitted native executor. Curre
 
 ## Consequences
 
-- Executable work is sequenced in [`thoughts/plans/2026-05-01-wos-restate-ws094-execution.md`](../plans/2026-05-01-wos-restate-ws094-execution.md) and tracked in **WS-094**; parent [**PLN-0333**](../../../PLANNING.md) continues to index this ADR + WS-094.
+- Executable work is sequenced in [`thoughts/plans/2026-05-01-wos-restate-ws094-execution.md`](../plans/2026-05-01-wos-restate-ws094-execution.md) and tracked in **WS-094**; parent [**PLN-0333**](../../../PLANNING.md) continues to index this ADR + WS-094. *Superseded:* the live sequencing is stack [ADR 0167](../../../thoughts/adr/0167-wos-runtime-on-restate.md) §5 (P, then U0, then U1 = WS-104); the WS-094 plan is historical.
 - **`restate-sdk`** becomes a normal dependency of `wos-server-runtime-restate` once Phase 0 of the plan lands; Restate Server version pairing is pinned in the execution plan.
 - Promotion of [`thoughts/specs/2026-05-01-wos-restate-durable-runtime-adapter-spec.md`](../specs/2026-05-01-wos-restate-durable-runtime-adapter-spec.md) into `work-spec/specs/` is **out of scope** for this ADR unless a separate doc-ratification pass is opened.
 
