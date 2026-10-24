@@ -15,13 +15,33 @@ WOS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FLOWSPEC_SERVER_ROOT="$(cd "$WOS_ROOT/../workspec-server" && pwd)"
 cd "$WOS_ROOT"
 
-RESTATE_IMAGE="${WOS_RESTATE_SERVER_IMAGE:-docker.restate.dev/restatedev/restate:1.6.2}"
+RESTATE_IMAGE="${WOS_RESTATE_SERVER_IMAGE:-docker.restate.dev/restatedev/restate:1.7.13}"
 NAME="${WOS_RESTATE_DOCKER_NAME:-wos-restate-ci-$$}"
 
+# Request identity (ADR 0164 section 1.3): Restate signs its requests with a throwaway Ed25519 key and
+# the worker verifies them. The private key stays in this temp dir (never printed).
+KEY_DIR="$(mktemp -d)"
+"$(dirname "$0")/restate_identity_key.sh" "$KEY_DIR"
+chmod 0644 "$KEY_DIR/request-identity.pem" # throwaway key; the container user must read the bind mount
+WOS_RESTATE_REQUEST_IDENTITY_KEYS="$(cat "$KEY_DIR/request-identity.pub")"
+export WOS_RESTATE_REQUEST_IDENTITY_KEYS
+
+# WOS_RESTATE_ALWAYS_REPLAY=1: inactivity timeout 0 makes Restate suspend and replay at every await.
+REPLAY_ENV=()
+if [[ "${WOS_RESTATE_ALWAYS_REPLAY:-}" == "1" ]]; then
+  REPLAY_ENV=(-e RESTATE_WORKER__INVOKER__INACTIVITY_TIMEOUT=0m)
+fi
+
 docker rm -f "$NAME" >/dev/null 2>&1 || true
+# Published on 127.0.0.1 only. This is the loopback-only exception to the closed Restate plane: the
+# worker and the ignored ingress tests run on the host, so they need ingress (8080) and admin (9070);
+# the node port (5122) is not published. Restate reaches the host worker via host.docker.internal.
 docker run -d --name "$NAME" \
   --add-host=host.docker.internal:host-gateway \
-  -p 8080:8080 -p 9070:9070 -p 5122:5122 \
+  -p 127.0.0.1:8080:8080 -p 127.0.0.1:9070:9070 \
+  -v "$KEY_DIR/request-identity.pem:/run/request-identity.pem:ro" \
+  -e RESTATE_WORKER__INVOKER__REQUEST_IDENTITY_PRIVATE_KEY_PEM_FILE=/run/request-identity.pem \
+  ${REPLAY_ENV[@]+"${REPLAY_ENV[@]}"} \
   "$RESTATE_IMAGE" \
   --node-name=wos-ci-node
 
@@ -32,6 +52,7 @@ cleanup() {
   fi
   docker stop "$NAME" >/dev/null 2>&1 || true
   docker rm "$NAME" >/dev/null 2>&1 || true
+  rm -rf "$KEY_DIR"
 }
 trap cleanup EXIT
 
