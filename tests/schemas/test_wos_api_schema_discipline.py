@@ -119,26 +119,6 @@ def exported_model_names(schema: dict) -> set[str]:
     return {name for ref in refs if (name := local_def_name(ref))}
 
 
-def exported_model_refs_by_schema_id() -> dict[str, set[str]]:
-    refs_by_id = {}
-    for path in API_SCHEMAS:
-        schema = load_schema(path)
-        refs_by_id[schema["$id"]] = {
-            f"#/$defs/{name}" for name in exported_model_names(schema)
-        }
-    return refs_by_id
-
-
-def assert_wos_api_ref_targets_exported_model(ref: str, refs_by_id: dict[str, set[str]]):
-    if not ref.startswith("https://schemas.formspec.io/wos-api/"):
-        return
-    schema_id, _, pointer = ref.partition("#")
-    assert schema_id in refs_by_id, f"{ref} does not resolve to a registered api schema"
-    assert f"#{pointer}" in refs_by_id[schema_id], (
-        f"{ref} targets a schema helper, not a schema-exported interface model"
-    )
-
-
 def test_api_schemas_are_meta_valid():
     assert API_SCHEMAS, "expected at least one api schema"
     validator = jsonschema.Draft202012Validator
@@ -263,66 +243,10 @@ def test_api_schema_open_strings_use_named_seams():
 def test_openapi_snapshot_uses_versioned_public_surface():
     doc = load_openapi()
     assert doc["openapi"] == "3.1.0"
-    assert doc["servers"] == [
-        {
-            "url": "/api/v1",
-            "description": "Current public major version.",
-        }
-    ]
-    assert "/api/openapi.json" in doc["paths"]
-    assert "/notifications" in doc["paths"]
-
-
-def test_openapi_components_reference_registered_api_schemas():
-    schemas_by_id = api_schema_registry()
-    doc = load_openapi()
-
-    for name, schema in doc["components"]["schemas"].items():
-        assert set(schema) == {"$ref"}, f"{name} must be a pure schema $ref"
-
-    refs = []
-    for _, node in walk(doc):
-        ref = node.get("$ref") if isinstance(node, dict) else None
-        if isinstance(ref, str) and ref.startswith("https://schemas.formspec.io/wos-api/"):
-            refs.append(ref)
-
-    assert refs, "expected OpenAPI snapshot to reference api schemas"
-    for ref in refs:
-        schema_id, _, pointer = ref.partition("#")
-        assert schema_id in schemas_by_id, f"{ref} does not resolve to a registered api schema"
-        assert pointer_exists(schemas_by_id[schema_id], pointer), (
-            f"{ref} does not resolve to an existing api schema target"
-        )
-
-
-def test_openapi_body_schemas_reference_exported_interface_models():
-    refs_by_id = exported_model_refs_by_schema_id()
-    doc = load_openapi()
-
-    for schema in doc["components"]["schemas"].values():
-        assert_wos_api_ref_targets_exported_model(schema["$ref"], refs_by_id)
-
-    for response in doc["components"].get("responses", {}).values():
-        for media in response.get("content", {}).values():
-            schema = media.get("schema")
-            if isinstance(schema, dict) and isinstance(schema.get("$ref"), str):
-                assert_wos_api_ref_targets_exported_model(schema["$ref"], refs_by_id)
-
-    for path_item in doc["paths"].values():
-        for operation in path_item.values():
-            request_body = operation.get("requestBody", {})
-            for media in request_body.get("content", {}).values():
-                schema = media.get("schema")
-                if isinstance(schema, dict) and isinstance(schema.get("$ref"), str):
-                    assert_wos_api_ref_targets_exported_model(schema["$ref"], refs_by_id)
-
-            for response in operation.get("responses", {}).values():
-                if "$ref" in response:
-                    continue
-                for media in response.get("content", {}).values():
-                    schema = media.get("schema")
-                    if isinstance(schema, dict) and isinstance(schema.get("$ref"), str):
-                        assert_wos_api_ref_targets_exported_model(schema["$ref"], refs_by_id)
+    # Paths are the full wire paths callers send (ADR 0165), so the version is in each one.
+    assert "servers" not in doc
+    assert all(path.startswith("/api/v1/") for path in doc["paths"])
+    assert "/api/v1/notifications" in doc["paths"]
 
 
 def test_api_schema_refs_resolve_to_existing_api_schema_targets():

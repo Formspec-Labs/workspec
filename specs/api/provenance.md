@@ -90,7 +90,7 @@ The following existing definitions remain structural mirrors of their Workflow s
 | `FactsRecordKind` | `wos-workflow.schema.json#/$defs/FactsTierRecord.recordKind` (kernel S8) |
 | `outcome` literals | `wos-workflow.schema.json#/$defs/ProvenanceOutcome` (kernel S8.2.2) |
 
-Each mirrored definition links back to its kernel source in its `description`. CI (ADR 0082 D-13 gate 4) catches divergence: when the kernel definition changes, the API mirror must follow in the same PR or `oasdiff` flags a breaking change.
+Each mirrored definition links back to its kernel source in its `description`. CI (ADR 0082 D-13 gate 6, `scripts/check-api-mirror-parity.py`) catches divergence: when the kernel definition changes, the API mirror must follow in the same PR or the parity check fails.
 
 ## Endpoints
 
