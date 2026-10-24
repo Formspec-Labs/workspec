@@ -1154,83 +1154,30 @@ fn check_notification_template_value(
     }
 }
 
-/// G-062: Adverse-decision category requires four section classes (NT S4.4).
-///
-/// Uses **heuristic** id / `contentType` checks (canonical ids such as `determination`,
-/// `reasons`, `appealRights`, `appealInstructions`, and `contentType: appeal-rights`).
-/// Templates that satisfy the spec with different ids may need schema-only validation or
-/// expanded matchers if false negatives appear in real documents.
+/// G-062: An adverse-decision template carries each required section
+/// (Notification Template §4.4), through the shared wos-core predicate the
+/// runtime admits with. Repeated ids are G-065's to report.
 fn check_adverse_decision_template_sections(
     template: &Value,
     path: &str,
     diagnostics: &mut Vec<LintDiagnostic>,
 ) {
+    use wos_core::model::notice_requirements::{
+        AdverseNoticeTemplateIssue, adverse_notice_template_issues,
+    };
     if template.get("category").and_then(Value::as_str) != Some("adverse-decision") {
         return;
     }
-    for missing in missing_adverse_notice_sections(template) {
+    for issue in adverse_notice_template_issues(template) {
+        if matches!(issue, AdverseNoticeTemplateIssue::RepeatedSection(_)) {
+            continue;
+        }
         diagnostics.push(LintDiagnostic::t1_error(
             "G-062",
             path,
-            format!("adverse-decision template MUST include {missing}"),
+            format!("adverse-decision template {issue}"),
         ));
     }
-}
-
-/// The four adverse-notice section classes a template lacks (NT S4.4), whatever
-/// its category: G-062 checks adverse-decision templates, G-003 the template a
-/// rights-impacting adverse policy selects. A template without sections lacks all four.
-pub(super) fn missing_adverse_notice_sections(template: &Value) -> Vec<&'static str> {
-    let mut has_determination = false;
-    let mut has_reason_codes = false;
-    let mut has_appeal_rights = false;
-    let mut has_appeal_instructions = false;
-
-    for sec in template
-        .get("sections")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-    {
-        let id = sec
-            .get("id")
-            .and_then(Value::as_str)
-            .map(str::to_lowercase)
-            .unwrap_or_default();
-        let ct = sec.get("contentType").and_then(Value::as_str).unwrap_or("");
-
-        if id == "determination" {
-            has_determination = true;
-        }
-        if matches!(id.as_str(), "reasons" | "reasoncodes" | "reason") {
-            has_reason_codes = true;
-        }
-        if ct == "appeal-rights" || id == "appealrights" {
-            has_appeal_rights = true;
-        }
-        if id == "appealinstructions" {
-            has_appeal_instructions = true;
-        }
-    }
-
-    [
-        (has_determination, "a section with id 'determination'"),
-        (
-            has_reason_codes,
-            "reason code coverage (section id 'reasons', 'reasonCodes', or 'reason')",
-        ),
-        (
-            has_appeal_rights,
-            "appeal rights (section id 'appealRights' or contentType 'appeal-rights')",
-        ),
-        (
-            has_appeal_instructions,
-            "a section with id 'appealInstructions'",
-        ),
-    ]
-    .into_iter()
-    .filter_map(|(present, name)| (!present).then_some(name))
-    .collect()
 }
 
 /// G-065: Section `id` values unique within each template.

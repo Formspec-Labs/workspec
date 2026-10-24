@@ -296,7 +296,9 @@ pub(crate) fn validate(
     if let Some(issue) = checks.issues.first() {
         return Err(match issue.kind {
             GovernanceIssueKind::UnknownAuditTag => RefusalCode::UnboundTransition,
-            GovernanceIssueKind::MalformedDeclaration => RefusalCode::InvalidConfiguration,
+            GovernanceIssueKind::MalformedDeclaration | GovernanceIssueKind::DueProcessMissing => {
+                RefusalCode::InvalidConfiguration
+            }
             GovernanceIssueKind::CounterfactualInputs => RefusalCode::ExplanationRejected,
             _ => RefusalCode::UnsupportedProfile,
         });

@@ -339,7 +339,6 @@ pub(crate) fn check_with_coverage(
             check_sla_escalation_step_ids(&gov, diagnostics);
 
             if let (Some(kernel), Some(kc)) = (&typed_kernel, kernel_collections.as_ref()) {
-                check_due_process_for_impact(&gov, kernel, diagnostics);
                 // Decoding runs validate_governance, so a typed policy is an admitted block
                 // (Tier1 reports a refused one as WOS-GOVERNANCE-SHAPE-001).
                 if let Some(policy) = &typed_gov {
@@ -1257,34 +1256,13 @@ fn check_fail_fast_recursive_typed(
 }
 
 // ---------------------------------------------------------------------------
-// G-001: Due process required for rights/safety-impacting
-// ---------------------------------------------------------------------------
-
-/// G-001: Governance MUST declare `dueProcess` for rights/safety-impacting kernels.
-///
-/// Presence is checked on the authored block, so a block the schema refuses
-/// still reports a missing `dueProcess`.
-fn check_due_process_for_impact(
-    gov: &crate::document::WosDocument,
-    kernel: &KernelDocument,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    if is_rights_or_safety_impacting_typed(kernel) && gov.value.get("dueProcess").is_none() {
-        diagnostics.push(LintDiagnostic::t2_error(
-            "G-001",
-            "/governance/dueProcess",
-            "kernel impactLevel is rights/safety-impacting; governance MUST declare a dueProcess section",
-        ));
-    }
-}
-
-// ---------------------------------------------------------------------------
 // G-003: The selected adverse notice template must carry individualized content
 // ---------------------------------------------------------------------------
 
 /// G-003: For a rights-impacting workflow, the template that
-/// `dueProcess.adverseDecisionPolicy.noticeTemplateKey` selects MUST cover the
-/// four adverse-notice section classes (the G-062 classes, whatever its category).
+/// `dueProcess.adverseDecisionPolicy.noticeTemplateKey` selects MUST be an
+/// adverse-decision template carrying each required section exactly once: the
+/// shared wos-core predicate the runtime refuses with.
 fn check_notice_individualized_for_rights_typed(
     policy: &wos_core::GovernanceDocument,
     gov: &crate::document::WosDocument,
@@ -1312,11 +1290,12 @@ fn check_notice_individualized_for_rights_typed(
         if name != key {
             continue;
         }
-        for missing in super::tier1::missing_adverse_notice_sections(template) {
+        for issue in wos_core::model::notice_requirements::adverse_notice_template_issues(template)
+        {
             diagnostics.push(LintDiagnostic::t2_warning(
                 "G-003",
                 "/governance/dueProcess/adverseDecisionPolicy/noticeTemplateKey",
-                format!("referenced adverse notice template must include {missing}"),
+                format!("selected adverse notice template {issue}"),
             ));
         }
     }

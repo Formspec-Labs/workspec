@@ -207,7 +207,7 @@ Templates with category `adverse-decision` MUST include sections that address th
 4. Instructions for filing an appeal.
 5. Whether services continue during the appeal period (when `continuationOfServices` is configured in the governance document).
 
-A processor MUST reject an `adverse-decision` template that does not include sections addressing items 1-4. Item 5 is required only when the governance document configures `continuationOfServices`.
+Items 1-4 are the sections whose `id` is, respectively, `determination`, `reasons`, `appealRights` and `appealInstructions`. Each of these ids appears exactly once; another id or a `contentType` does not satisfy an item. A processor MUST reject an `adverse-decision` template that lacks any of these sections or repeats one, and MUST reject a `noticeTemplateKey` that selects a template outside the `adverse-decision` category. Item 5 is required only when the governance document configures `continuationOfServices`.
 
 ---
 

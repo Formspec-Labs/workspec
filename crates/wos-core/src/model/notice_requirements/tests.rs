@@ -173,3 +173,45 @@ fn notice_requirements_adverse_timing_remains_before_effective() {
         );
     }
 }
+
+#[test]
+fn adverse_notice_template_requires_each_canonical_section_exactly_once() {
+    let template = |sections: Value| json!({"category": "adverse-decision", "sections": sections});
+    let complete = json!([
+        {"id": "determination"}, {"id": "reasons"},
+        {"id": "appealRights"}, {"id": "appealInstructions"}
+    ]);
+    assert!(adverse_notice_template_issues(&template(complete.clone())).is_empty());
+
+    // Aliases and content types do not stand in for the canonical ids.
+    let aliased = json!([
+        {"id": "determination"}, {"id": "reasonCodes"},
+        {"id": "rights", "contentType": "appeal-rights"}, {"id": "appealInstructions"}
+    ]);
+    assert_eq!(
+        adverse_notice_template_issues(&template(aliased)),
+        [
+            AdverseNoticeTemplateIssue::MissingSection("reasons"),
+            AdverseNoticeTemplateIssue::MissingSection("appealRights"),
+        ]
+    );
+    let mut repeated = complete.clone();
+    repeated
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"id": "reasons"}));
+    assert_eq!(
+        adverse_notice_template_issues(&template(repeated)),
+        [AdverseNoticeTemplateIssue::RepeatedSection("reasons")]
+    );
+    assert_eq!(
+        adverse_notice_template_issues(&json!({"category": "adverse-decision"})),
+        [AdverseNoticeTemplateIssue::NoSections]
+    );
+    assert_eq!(
+        adverse_notice_template_issues(
+            &json!({"category": "hold-notification", "sections": complete})
+        ),
+        [AdverseNoticeTemplateIssue::NotAdverseDecision]
+    );
+}

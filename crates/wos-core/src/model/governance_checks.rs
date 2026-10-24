@@ -50,6 +50,8 @@ impl LifecycleIndex {
 /// Reason a static declaration fails independently of runtime evidence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GovernanceIssueKind {
+    /// A rights- or safety-impacting workflow declares no due-process policy.
+    DueProcessMissing,
     /// Required adverse notice lacks explicit before-effect timing.
     NoticeTiming,
     /// Rights-impacting policy lacks individualized explanations.
@@ -96,11 +98,22 @@ pub fn check_governance(
     lifecycle: &LifecycleIndex,
 ) -> GovernanceChecks {
     let rights = kernel.impact_level == Some(ImpactLevel::RightsImpacting);
-    let mut issues = if rights {
-        explanation_issues(governance)
-    } else {
-        Vec::new()
-    };
+    let mut issues = Vec::new();
+    if kernel
+        .impact_level
+        .is_some_and(ImpactLevel::requires_due_process)
+        && governance.get("dueProcess").is_none()
+    {
+        issues.push(GovernanceIssue {
+            rule_id: "G-001",
+            path: "/dueProcess".into(),
+            kind: GovernanceIssueKind::DueProcessMissing,
+            message: "kernel impactLevel is rights/safety-impacting; governance MUST declare a dueProcess section",
+        });
+    }
+    if rights {
+        issues.extend(explanation_issues(governance));
+    }
     if kernel
         .impact_level
         .is_some_and(ImpactLevel::requires_due_process)

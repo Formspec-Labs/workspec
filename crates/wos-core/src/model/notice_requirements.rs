@@ -98,6 +98,73 @@ pub struct NoticeRequirementIssue {
     pub message: &'static str,
 }
 
+/// Section ids an adverse-decision notice template carries, each exactly once
+/// (Notification Template §4.4 items 1–4).
+pub const ADVERSE_NOTICE_SECTIONS: [&str; 4] = [
+    "determination",
+    "reasons",
+    "appealRights",
+    "appealInstructions",
+];
+
+/// Why a Delivery template cannot serve as an adverse-decision notice.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AdverseNoticeTemplateIssue {
+    /// The template's `category` is not `adverse-decision`.
+    NotAdverseDecision,
+    /// The template declares no `sections` array.
+    NoSections,
+    /// No section carries this required id.
+    MissingSection(&'static str),
+    /// More than one section carries this required id.
+    RepeatedSection(&'static str),
+}
+
+impl std::fmt::Display for AdverseNoticeTemplateIssue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotAdverseDecision => f.write_str("is not in the adverse-decision category"),
+            Self::NoSections => f.write_str("declares no sections"),
+            Self::MissingSection(id) => write!(f, "lacks a section with id '{id}'"),
+            Self::RepeatedSection(id) => write!(f, "repeats the section with id '{id}'"),
+        }
+    }
+}
+
+/// Checks one Delivery template against Notification Template §4.4 items 1–4.
+///
+/// This is the one owner of the section rule: runtime admission refuses on any
+/// issue, and lint reports the same issues, so a template lint accepts is one
+/// the runtime admits. Ids match exactly; aliases do not satisfy a section.
+#[must_use]
+pub fn adverse_notice_template_issues(
+    template: &serde_json::Value,
+) -> Vec<AdverseNoticeTemplateIssue> {
+    let mut issues = Vec::new();
+    if template.get("category").and_then(serde_json::Value::as_str) != Some("adverse-decision") {
+        issues.push(AdverseNoticeTemplateIssue::NotAdverseDecision);
+    }
+    let Some(sections) = template
+        .get("sections")
+        .and_then(serde_json::Value::as_array)
+    else {
+        issues.push(AdverseNoticeTemplateIssue::NoSections);
+        return issues;
+    };
+    for id in ADVERSE_NOTICE_SECTIONS {
+        match sections
+            .iter()
+            .filter(|section| section.get("id").and_then(serde_json::Value::as_str) == Some(id))
+            .count()
+        {
+            0 => issues.push(AdverseNoticeTemplateIssue::MissingSection(id)),
+            1 => {}
+            _ => issues.push(AdverseNoticeTemplateIssue::RepeatedSection(id)),
+        }
+    }
+    issues
+}
+
 /// Check adverse notice timing independently of provider installation.
 #[must_use]
 pub fn check_adverse_notice_timing(

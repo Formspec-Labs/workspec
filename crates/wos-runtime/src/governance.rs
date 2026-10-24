@@ -1822,27 +1822,17 @@ fn qualify_due_process(
         .pointer("/notifications/templates")
         .and_then(|all| all.get(key))
         .ok_or_else(|| refused("canonical adverse template key is unknown"))?;
-    require(
-        template["category"] == "adverse-decision",
-        "selected notice category differs",
-    )?;
-    let sections = template["sections"]
-        .as_array()
-        .ok_or_else(|| refused("adverse notice sections missing"))?;
-    for required in [
-        "determination",
-        "reasons",
-        "appealRights",
-        "appealInstructions",
-    ] {
-        require(
-            sections
-                .iter()
-                .filter(|section| section["id"] == required)
-                .count()
-                == 1,
-            "required selected notice section missing or ambiguous",
-        )?;
+    if let Some(issue) =
+        wos_core::model::notice_requirements::adverse_notice_template_issues(template).first()
+    {
+        use wos_core::model::notice_requirements::AdverseNoticeTemplateIssue as Issue;
+        return Err(refused(match issue {
+            Issue::NotAdverseDecision => "selected notice category differs",
+            Issue::NoSections => "adverse notice sections missing",
+            Issue::MissingSection(_) | Issue::RepeatedSection(_) => {
+                "required selected notice section missing or ambiguous"
+            }
+        }));
     }
     require(
         !due.notice_binding_id.trim().is_empty()
