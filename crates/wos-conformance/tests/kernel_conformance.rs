@@ -6,6 +6,9 @@
 //! and asserts the result passes.  Fixtures exercise flat lifecycle, guard evaluation,
 //! parallel dual-blind review, compound state, and timer-based transitions.
 
+#[path = "support/due_process.rs"]
+mod due_process;
+
 use wos_conformance::run_fixture;
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -82,11 +85,7 @@ fn assert_historical_due_process_refused(name: &str) {
     let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let source =
         std::fs::read_to_string(root.join("fixtures/historical-provenance").join(name)).unwrap();
-    let error = run_fixture(&source, root.join("tests/fixtures").to_str().unwrap()).unwrap_err();
-    assert!(
-        matches!(error, wos_conformance::ConformanceError::UnsupportedOperation(ref reason) if reason.contains("/governance/dueProcess")),
-        "{name}: {error}"
-    );
+    due_process::assert_refused(name, &source, &root.join("tests/fixtures"), run_fixture);
 }
 
 // ── Purchase Order Approval (flat lifecycle, guard evaluation) ───

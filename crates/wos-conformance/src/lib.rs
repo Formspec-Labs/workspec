@@ -491,22 +491,6 @@ mod runner_trace_tests {
         assert_eq!(trace.outcome, Outcome::Pass);
     }
 
-    /// Original Medicaid bytes require due-process work absent from this route.
-    #[test]
-    fn trace_medicaid_happy_path_refuses_required_due_process() {
-        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let json = std::fs::read_to_string(
-            root.join("fixtures/historical-provenance/medicaid-happy-path.json"),
-        )
-        .unwrap();
-        let error = run_fixture_with_trace(&json, root.join("tests/fixtures").to_str().unwrap())
-            .unwrap_err();
-        assert!(
-            matches!(error, ConformanceError::UnsupportedOperation(ref reason) if reason.contains("/governance/dueProcess")),
-            "{error}"
-        );
-    }
-
     /// §5.3 policy-application extractor: DeonticEvaluation with a
     /// ruleId data field surfaces as a structured PolicyApplication on
     /// the step whose event matches. Non-policy provenance kinds and

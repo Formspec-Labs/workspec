@@ -13,6 +13,9 @@
 //! AI-041-negative-fallback-cycle is excluded because it has no `kernel`
 //! document; it is a lint-only fixture that the runtime engine cannot execute.
 
+#[path = "support/due_process.rs"]
+mod due_process;
+
 use wos_conformance::{ConformanceTrace, run_fixture_with_trace, slugify};
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -106,10 +109,21 @@ fn assert_historical_due_process_refuses(name: &str) {
             .join(name),
     )
     .unwrap();
-    let error = run_fixture_with_trace(&source, root.to_str().unwrap()).unwrap_err();
-    assert!(
-        matches!(error, wos_conformance::ConformanceError::UnsupportedOperation(ref reason) if reason.contains("/governance/dueProcess")),
-        "{name}: {error}"
+    due_process::assert_refused(name, &source, &root, run_fixture_with_trace);
+}
+
+/// Original Medicaid bytes require due-process work absent from the traced route.
+#[test]
+fn trace_medicaid_happy_path_refuses_required_due_process() {
+    let root = workspace_root().join("crates/wos-conformance");
+    let name = "medicaid-happy-path.json";
+    let source =
+        std::fs::read_to_string(root.join("fixtures/historical-provenance").join(name)).unwrap();
+    due_process::assert_refused(
+        name,
+        &source,
+        &root.join("tests/fixtures"),
+        run_fixture_with_trace,
     );
 }
 
