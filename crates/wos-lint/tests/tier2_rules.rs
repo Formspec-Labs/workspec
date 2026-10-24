@@ -447,18 +447,7 @@ fn g001_rights_impacting_with_due_process_clean() {
     let mut kernel = base_kernel();
     kernel["impactLevel"] = json!("rights-impacting");
     let mut gov = base_governance();
-    gov["dueProcess"] = json!({
-        "notice": {
-            "determinationField": "status",
-            "reasonCodes": ["RC-01"],
-            "appealInstructions": "See form XYZ"
-        },
-        "explanationLevel": "individualized",
-        "counterfactuals": {
-            "positive": { "description": "If income was higher..." },
-            "negative": { "description": "Because income is below..." }
-        }
-    });
+    gov["dueProcess"] = json!({"adverseDecisionPolicy": {"explanationLevel": "individualized", "counterfactualRequired": true}});
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(!has_rule(&diags, "G-001"), "unexpected G-001: {diags:?}");
@@ -473,9 +462,7 @@ fn g004_explanation_not_individualized_for_rights_flagged() {
     let mut kernel = base_kernel();
     kernel["impactLevel"] = json!("rights-impacting");
     let mut gov = base_governance();
-    gov["dueProcess"] = json!({
-        "explanationLevel": "general"
-    });
+    gov["dueProcess"] = json!({"adverseDecisionPolicy": {"explanationLevel": "categorical"}});
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-004"), "expected G-004: {diags:?}");
@@ -490,31 +477,23 @@ fn g005_missing_counterfactuals_for_rights_flagged() {
     let mut kernel = base_kernel();
     kernel["impactLevel"] = json!("rights-impacting");
     let mut gov = base_governance();
-    gov["dueProcess"] = json!({
-        "explanationLevel": "individualized"
-        // missing counterfactuals
-    });
+    gov["dueProcess"] = json!({"adverseDecisionPolicy": {"explanationLevel": "individualized"}});
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-005"), "expected G-005: {diags:?}");
 }
 
 #[test]
-fn g005_missing_positive_counterfactual_flagged() {
+fn g005_false_counterfactual_required_flagged() {
     let mut kernel = base_kernel();
     kernel["impactLevel"] = json!("rights-impacting");
     let mut gov = base_governance();
-    gov["dueProcess"] = json!({
-        "explanationLevel": "individualized",
-        "counterfactuals": {
-            "negative": { "description": "Because..." }
-        }
-    });
+    gov["dueProcess"] = json!({"adverseDecisionPolicy": {"explanationLevel": "individualized", "counterfactualRequired": false}});
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(
         has_rule(&diags, "G-005"),
-        "expected G-005 for missing positive: {diags:?}"
+        "expected G-005 for false counterfactualRequired: {diags:?}"
     );
 }
 
@@ -541,7 +520,7 @@ fn g009_adverse_policy_without_kernel_tag_flagged() {
     }
 
     let mut gov = base_governance();
-    gov["adverseDecisionPolicy"] = json!({ "enabled": true });
+    gov["dueProcess"] = json!({ "adverseDecisionPolicy": {} });
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-009"), "expected G-009: {diags:?}");
@@ -579,13 +558,7 @@ fn g015_adverse_decision_rights_without_counterfactual_tier_flagged() {
     let mut kernel = base_kernel();
     kernel["impactLevel"] = json!("rights-impacting");
     let mut gov = base_governance();
-    gov["dueProcess"] = json!({
-        "explanationLevel": "individualized",
-        "counterfactuals": {
-            "positive": { "description": "..." },
-            "negative": { "description": "..." }
-        }
-    });
+    gov["dueProcess"] = json!({"adverseDecisionPolicy": {"explanationLevel": "individualized", "counterfactualRequired": true}});
     gov["audit"] = json!({ "reasoningTier":{"requiredForTags":["determination"]} });
     // no counterfactualTier
 
@@ -1280,8 +1253,7 @@ fn ag017_safety_impacting_skips_shadow_mode_check() {
 }
 
 // ========================================================================
-// G-003: Notice MUST include determinationField, reasonCodes, appealInstructions
-//        when kernel is rights-impacting.
+// G-003: Policy-selected adverse notice must cover individualized section classes.
 // ========================================================================
 
 #[test]
@@ -1289,15 +1261,15 @@ fn g003_rights_impacting_notice_missing_fields_flagged() {
     let mut kernel = base_kernel();
     kernel["impactLevel"] = json!("rights-impacting");
     let mut gov = base_governance();
-    gov["dueProcess"] = json!({
-        "explanationLevel": "individualized",
-        "notice": {
-            // Missing determinationField, reasonCodes, appealInstructions.
-            "method": "mail"
-        }
-    });
-
-    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
+    gov["dueProcess"] = json!({"adverseDecisionPolicy": {"noticeRequired": true, "noticeTemplateKey": "adverseTpl"}});
+    let delivery = json!({"$wosDelivery":"1.0", "targetWorkflow":"https://example.com/workflow/test", "notifications": {"templates": {
+        "adverseTpl": {"category":"adverse-decision", "sections": [{ "id": "determination" }] }
+    }}});
+    let diags = lint_project_with_docs(vec![
+        ("kernel.json", kernel),
+        ("governance.json", gov),
+        ("delivery.json", delivery),
+    ]);
     assert!(has_rule(&diags, "G-003"), "expected G-003: {diags:?}");
     assert_eq!(severity_of(&diags, "G-003"), Some(LintSeverity::Warning));
 }
@@ -1307,38 +1279,34 @@ fn g003_rights_impacting_notice_with_all_fields_clean() {
     let mut kernel = base_kernel();
     kernel["impactLevel"] = json!("rights-impacting");
     let mut gov = base_governance();
-    gov["dueProcess"] = json!({
-        "explanationLevel": "individualized",
-        "notice": {
-            "determinationField": "caseFile.determination",
-            "reasonCodes": ["R-001", "R-002"],
-            "appealInstructions": "You have the right to appeal within 30 days."
-        }
-    });
-
-    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
+    gov["dueProcess"] = json!({"adverseDecisionPolicy": {"noticeRequired": true, "noticeTemplateKey": "adverseTpl"}});
+    let delivery = json!({"$wosDelivery":"1.0", "targetWorkflow":"https://example.com/workflow/test", "notifications": {"templates": {
+        "adverseTpl": {"category":"adverse-decision", "sections": [{"id":"determination"},{"id":"reasons"},{"id":"appealRights"},{"id":"appealInstructions"}]}
+    }}});
+    let diags = lint_project_with_docs(vec![
+        ("kernel.json", kernel),
+        ("governance.json", gov),
+        ("delivery.json", delivery),
+    ]);
     assert!(!has_rule(&diags, "G-003"), "unexpected G-003: {diags:?}");
 }
 
 #[test]
 fn g003_operational_impact_skips_check() {
-    // Non-rights-impacting kernel should not trigger G-003 even with sparse notice.
-    let kernel = base_kernel(); // impactLevel: "operational"
+    let mut kernel = base_kernel();
+
     let mut gov = base_governance();
-    gov["dueProcess"] = json!({
-        "notice": {}
-    });
-
-    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
-    assert!(
-        !has_rule(&diags, "G-003"),
-        "unexpected G-003 for operational: {diags:?}"
-    );
+    gov["dueProcess"] = json!({"adverseDecisionPolicy": {"noticeRequired": true, "noticeTemplateKey": "adverseTpl"}});
+    let delivery = json!({"$wosDelivery":"1.0", "targetWorkflow":"https://example.com/workflow/test", "notifications": {"templates": {
+        "adverseTpl": {"category":"adverse-decision", "sections": []}
+    }}});
+    let diags = lint_project_with_docs(vec![
+        ("kernel.json", kernel),
+        ("governance.json", gov),
+        ("delivery.json", delivery),
+    ]);
+    assert!(!has_rule(&diags, "G-003"), "unexpected G-003: {diags:?}");
 }
-
-// ========================================================================
-// G-008: continuationOfServices requires hold-tagged state in kernel.
-// ========================================================================
 
 #[test]
 fn g008_continuation_of_services_without_hold_tag_flagged() {
@@ -1347,9 +1315,7 @@ fn g008_continuation_of_services_without_hold_tag_flagged() {
     // Remove the hold tag from holdState.
     kernel["lifecycle"]["states"]["holdState"]["tags"] = json!([]);
     let mut gov = base_governance();
-    gov["dueProcess"] = json!({
-        "continuationOfServices": true
-    });
+    gov["dueProcess"] = json!({"adverseDecisionPolicy": {"appealMechanism": {"reviewerConstraint": "independentFromOriginal", "continuationOfServices": true}}});
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-008"), "expected G-008: {diags:?}");
@@ -1360,9 +1326,7 @@ fn g008_continuation_of_services_without_hold_tag_flagged() {
 fn g008_continuation_of_services_with_hold_tag_clean() {
     let kernel = base_kernel(); // has holdState with tags: ["hold"]
     let mut gov = base_governance();
-    gov["dueProcess"] = json!({
-        "continuationOfServices": true
-    });
+    gov["dueProcess"] = json!({"adverseDecisionPolicy": {"appealMechanism": {"reviewerConstraint": "independentFromOriginal", "continuationOfServices": true}}});
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(!has_rule(&diags, "G-008"), "unexpected G-008: {diags:?}");
@@ -1372,9 +1336,7 @@ fn g008_continuation_of_services_with_hold_tag_clean() {
 fn g008_no_continuation_skips_check() {
     let kernel = base_kernel();
     let mut gov = base_governance();
-    gov["dueProcess"] = json!({
-        "continuationOfServices": false
-    });
+    gov["dueProcess"] = json!({"adverseDecisionPolicy": {"appealMechanism": {"reviewerConstraint": "independentFromOriginal", "continuationOfServices": false}}});
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(
@@ -1508,10 +1470,10 @@ fn g060_calendar_different_workflow_skips_mandatory_sla_check() {
 fn g063_notice_template_key_without_sidecar_flagged() {
     let kernel = base_kernel();
     let mut gov = base_governance();
-    gov["dueProcess"] = json!({
+    gov["dueProcess"] = json!({"adverseDecisionPolicy": {
         "noticeRequired": true,
         "noticeTemplateKey": "missingTemplate"
-    });
+    }});
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-063"), "expected G-063: {diags:?}");
@@ -1522,10 +1484,10 @@ fn g063_notice_template_key_without_sidecar_flagged() {
 fn g063_notice_template_key_resolves_clean() {
     let kernel = base_kernel();
     let mut gov = base_governance();
-    gov["dueProcess"] = json!({
+    gov["dueProcess"] = json!({"adverseDecisionPolicy": {
         "noticeRequired": true,
         "noticeTemplateKey": "adverseTpl"
-    });
+    }});
     let notifications = json!({
         "$wosDelivery": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
@@ -1562,10 +1524,10 @@ fn g063_no_template_refs_skips_check() {
 #[test]
 fn g063_notice_template_key_runs_without_kernel() {
     let mut gov = base_governance();
-    gov["dueProcess"] = json!({
+    gov["dueProcess"] = json!({"adverseDecisionPolicy": {
         "noticeRequired": true,
         "noticeTemplateKey": "adverseTpl"
-    });
+    }});
     let notifications = json!({
         "$wosDelivery": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
@@ -1592,10 +1554,10 @@ fn g063_notice_template_key_runs_without_kernel() {
 #[test]
 fn g063_notice_template_key_without_kernel_missing_sidecar_flagged() {
     let mut gov = base_governance();
-    gov["dueProcess"] = json!({
+    gov["dueProcess"] = json!({"adverseDecisionPolicy": {
         "noticeRequired": true,
         "noticeTemplateKey": "orphanRef"
-    });
+    }});
 
     let diags = lint_project_with_docs(vec![("governance.json", gov)]);
     assert!(has_rule(&diags, "G-063"), "expected G-063: {diags:?}");

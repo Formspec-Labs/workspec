@@ -2531,7 +2531,41 @@
             "critical": true,
             "intent": "Respondent-facing record-lifecycle affordance config per ADR-0066 D-6.2; pairs with `amendmentTaxonomy` (correctable.kernelMode -> taxonomy literal; withdrawable.postDeterminationIntent -> 'rescission'); FW-0034 design dependency, FW-0038 build dependency"
           }
+        },
+        "audit": {
+          "$ref": "#/$defs/AuditConfig",
+          "description": "Structured reasoning and counterfactual audit requirements for tagged decisions.",
+          "examples": [
+            {
+              "reasoningTier": {},
+              "counterfactualTier": {}
+            }
+          ]
         }
+      },
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "adverseDecisionPolicy"
+            ]
+          },
+          {
+            "required": [
+              "reasoningTier"
+            ]
+          },
+          {
+            "required": [
+              "counterfactualTier"
+            ]
+          },
+          {
+            "required": [
+              "provenanceTiers"
+            ]
+          }
+        ]
       }
     },
     "RecordLifecyclePolicy": {
@@ -8078,7 +8112,7 @@
             "differentAgency",
             "externalPanel"
           ],
-          "description": "Constraint on appeal reviewers. MUST be independent of the original determination (Governance S3.5). Values mirror `AppealRouting.independenceConstraint` in the Due Process Config sidecar so processors can apply a single independence policy across both authoring inputs and runtime routing. `independentFromOriginal`: reviewer is any actor distinct from the original decision-maker. `differentUnit`: reviewer is in a different organizational unit. `differentAgency`: reviewer is in a different agency. `externalPanel`: reviewer is an external panel (e.g., administrative law judge).",
+          "description": "Constraint on appeal reviewers. MUST be independent of the original determination (Governance S3.5). This is the canonical embedded appeal-mechanism declaration, not a reference to a separate AppealRouting document. `independentFromOriginal`: reviewer is any actor distinct from the original decision-maker. `differentUnit`: reviewer is in a different organizational unit. `differentAgency`: reviewer is in a different agency. `externalPanel`: reviewer is an external panel (e.g., administrative law judge).",
           "examples": [
             "independentFromOriginal",
             "differentUnit",
@@ -8127,14 +8161,14 @@
         "continuationPolicyRef": {
           "type": "string",
           "minLength": 1,
-          "description": "Reference to a `ContinuationPolicy.id` declared in the targeted Due Process Config sidecar (Governance §3.6). When present AND `continuationOfServices` is true, the named policy's `scope` + `duration` define exactly what services are maintained and for how long — replacing the looser `continuationScope` string. The processor MUST resolve the ref against ContinuationPolicy entries in any Due Process Config sidecar targeting this governance document; an unresolvable ref MUST emit a configuration warning in provenance and fall back to `continuationScope` if present.",
+          "description": "Identifier of a continuation policy selected by the deployment (Governance §3.6). The canonical schema defines no ContinuationPolicy collection or standalone Due Process Config document; structural acceptance of this identifier does not establish resolution or enforcement support. An unresolvable reference requires a configuration warning in provenance. When continuationOfServices is true, the selected policy or a supported continuationScope must supply an enforceable service scope; otherwise configuration must fail.",
           "examples": [
             "benefitTerminationContinuation",
             "benefitReductionContinuation"
           ],
           "x-lm": {
             "critical": true,
-            "intent": "Resolves continuationOfServices to a typed ContinuationPolicy by id — replaces the loose continuationScope string when present"
+            "intent": "Names a selected continuation policy without defining a separate policy document or resolver; runtime capability must be qualified independently"
           },
           "x-wos": {
             "openStringKind": "identifier"
@@ -8147,7 +8181,7 @@
             "reducedLevel",
             "emergencyOnly"
           ],
-          "description": "Scope of services maintained during the appeal window. Determines what the individual continues to receive while their appeal is pending. Values mirror `ContinuationPolicy.scope` in the Due Process Config sidecar — the loose string fallback resolves to the same vocabulary as the typed `continuationPolicyRef` target. `currentLevel`: maintain services at their pre-decision level. `reducedLevel`: maintain at a reduced but non-zero level. `emergencyOnly`: maintain only emergency-tier services. Used as a fallback when `continuationPolicyRef` is absent or unresolvable (Governance §3.6).",
+          "description": "Scope of services maintained during the appeal window. Determines what the individual continues to receive while their appeal is pending. These are the canonical embedded continuationScope values, not a declaration of a separate ContinuationPolicy collection. `currentLevel`: maintain services at their pre-decision level. `reducedLevel`: maintain at a reduced but non-zero level. `emergencyOnly`: maintain only emergency-tier services. Used as a fallback when `continuationPolicyRef` is absent or unresolvable (Governance §3.6).",
           "examples": [
             "currentLevel",
             "reducedLevel",

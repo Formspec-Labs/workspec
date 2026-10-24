@@ -1,11 +1,7 @@
 """Validate the native historical timer anchor at every lifecycle action site."""
 import copy
-import json
-from pathlib import Path
 
 import pytest
-
-ROOT = Path(__file__).resolve().parents[2]
 
 
 def workflow():
@@ -68,6 +64,7 @@ def test_generic_anchored_clock_validates(validators):
     validators["$wosWorkflow"].validate(workflow())
 
 
-def test_legacy_lifecycle_action_shapes_remain_valid(validators):
-    doc = json.loads((ROOT / "examples/d1-passport-correction.workflow.json").read_text())
+def test_unanchored_timer_remains_valid(validators):
+    doc = workflow()
+    del doc["lifecycle"]["states"]["waiting"]["onEntry"][0]["startAtExpression"]
     validators["$wosWorkflow"].validate(doc)

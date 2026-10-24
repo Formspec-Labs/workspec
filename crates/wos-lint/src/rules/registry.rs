@@ -1544,6 +1544,16 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         suggested_fix: None,
     },
     RuleMetadata {
+        id: "WOS-GOVERNANCE-SHAPE-001",
+        tier: Tier::T1,
+        severity: LintSeverity::Error,
+        summary: "Governance MUST validate against its owning schema and typed model.",
+        fixtures: &[],
+        graduation: Graduation::Draft,
+        spec_ref: None,
+        suggested_fix: None,
+    },
+    RuleMetadata {
         id: "WOS-SIDECAR-TARGET-001",
         tier: Tier::T1,
         severity: LintSeverity::Error,

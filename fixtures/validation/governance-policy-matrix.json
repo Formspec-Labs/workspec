@@ -1,0 +1,1003 @@
+{
+  "cases": [
+    {
+      "id": "canonical-default-tags",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeTemplateKey": "adverse",
+            "explanationLevel": "individualized",
+            "counterfactualRequired": true,
+            "appealMechanism": {
+              "enabled": true,
+              "reviewerConstraint": "independentFromOriginal",
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits"
+            }
+          }
+        },
+        "audit": {
+          "reasoningTier": {},
+          "counterfactualTier": {}
+        }
+      },
+      "structurallyValid": true,
+      "expectedRules": [],
+      "delivery": "complete",
+      "hold": true
+    },
+    {
+      "id": "explicit-tag-coverage",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeTemplateKey": "adverse",
+            "explanationLevel": "individualized",
+            "counterfactualRequired": true,
+            "appealMechanism": {
+              "enabled": true,
+              "reviewerConstraint": "independentFromOriginal",
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits"
+            }
+          }
+        },
+        "audit": {
+          "reasoningTier": {
+            "requiredForTags": [
+              "determination",
+              "adverse-decision"
+            ]
+          },
+          "counterfactualTier": {
+            "requiredForTags": [
+              "adverse-decision"
+            ]
+          }
+        }
+      },
+      "structurallyValid": true,
+      "expectedRules": [],
+      "delivery": "complete",
+      "hold": true
+    },
+    {
+      "id": "nested-extensions-and-open-standard-fields",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeTemplateKey": "adverse",
+            "explanationLevel": "individualized",
+            "counterfactualRequired": true,
+            "appealMechanism": {
+              "enabled": true,
+              "reviewerConstraint": "independentFromOriginal",
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits",
+              "x-review": {
+                "retained": [
+                  1,
+                  false,
+                  "original"
+                ]
+              }
+            },
+            "x-review": {
+              "retained": [
+                1,
+                false,
+                "original"
+              ]
+            }
+          },
+          "x-review": {
+            "retained": [
+              1,
+              false,
+              "original"
+            ]
+          }
+        },
+        "audit": {
+          "reasoningTier": {
+            "x-review": {
+              "retained": [
+                1,
+                false,
+                "original"
+              ]
+            }
+          },
+          "counterfactualTier": {
+            "x-review": {
+              "retained": [
+                1,
+                false,
+                "original"
+              ]
+            }
+          },
+          "x-review": {
+            "retained": [
+              1,
+              false,
+              "original"
+            ]
+          }
+        },
+        "recordLifecycle": {
+          "correctable": {
+            "enabled": true,
+            "correctableFieldSet": [
+              "/applicant/email",
+              "/applicant/phone"
+            ],
+            "kernelMode": "correction"
+          }
+        },
+        "amendmentTaxonomy": [
+          "correction"
+        ]
+      },
+      "structurallyValid": true,
+      "expectedRules": [],
+      "delivery": "complete",
+      "hold": true
+    },
+    {
+      "id": "governance-null",
+      "governance": null,
+      "structurallyValid": false,
+      "expectedRules": [],
+      "delivery": "complete",
+      "hold": true
+    },
+    {
+      "id": "governance-array",
+      "governance": [],
+      "structurallyValid": false,
+      "expectedRules": [],
+      "delivery": "complete",
+      "hold": true
+    },
+    {
+      "id": "due-process-null",
+      "governance": {
+        "dueProcess": null,
+        "audit": {
+          "reasoningTier": {},
+          "counterfactualTier": {}
+        }
+      },
+      "structurallyValid": false,
+      "expectedRules": [],
+      "delivery": "complete",
+      "hold": true
+    },
+    {
+      "id": "audit-null",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeTemplateKey": "adverse",
+            "explanationLevel": "individualized",
+            "counterfactualRequired": true,
+            "appealMechanism": {
+              "enabled": true,
+              "reviewerConstraint": "independentFromOriginal",
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits"
+            }
+          }
+        },
+        "audit": null
+      },
+      "structurallyValid": false,
+      "expectedRules": [],
+      "delivery": "complete",
+      "hold": true
+    },
+    {
+      "id": "unknown-nested-field",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeTemplateKey": "adverse",
+            "explanationLevel": "individualized",
+            "counterfactualRequired": true,
+            "appealMechanism": {
+              "enabled": true,
+              "reviewerConstraint": "independentFromOriginal",
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits"
+            },
+            "counterfactualText": "invented"
+          }
+        },
+        "audit": {
+          "reasoningTier": {},
+          "counterfactualTier": {}
+        }
+      },
+      "structurallyValid": false,
+      "expectedRules": [],
+      "delivery": "complete",
+      "hold": true
+    },
+    {
+      "id": "obsolete-adverseDecisionPolicy",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeTemplateKey": "adverse",
+            "explanationLevel": "individualized",
+            "counterfactualRequired": true,
+            "appealMechanism": {
+              "enabled": true,
+              "reviewerConstraint": "independentFromOriginal",
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits"
+            }
+          }
+        },
+        "audit": {
+          "reasoningTier": {},
+          "counterfactualTier": {}
+        },
+        "adverseDecisionPolicy": {}
+      },
+      "structurallyValid": false,
+      "expectedRules": [],
+      "delivery": "complete",
+      "hold": true
+    },
+    {
+      "id": "obsolete-reasoningTier",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeTemplateKey": "adverse",
+            "explanationLevel": "individualized",
+            "counterfactualRequired": true,
+            "appealMechanism": {
+              "enabled": true,
+              "reviewerConstraint": "independentFromOriginal",
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits"
+            }
+          }
+        },
+        "audit": {
+          "reasoningTier": {},
+          "counterfactualTier": {}
+        },
+        "reasoningTier": {}
+      },
+      "structurallyValid": false,
+      "expectedRules": [],
+      "delivery": "complete",
+      "hold": true
+    },
+    {
+      "id": "obsolete-counterfactualTier",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeTemplateKey": "adverse",
+            "explanationLevel": "individualized",
+            "counterfactualRequired": true,
+            "appealMechanism": {
+              "enabled": true,
+              "reviewerConstraint": "independentFromOriginal",
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits"
+            }
+          }
+        },
+        "audit": {
+          "reasoningTier": {},
+          "counterfactualTier": {}
+        },
+        "counterfactualTier": {}
+      },
+      "structurallyValid": false,
+      "expectedRules": [],
+      "delivery": "complete",
+      "hold": true
+    },
+    {
+      "id": "obsolete-provenanceTiers",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeTemplateKey": "adverse",
+            "explanationLevel": "individualized",
+            "counterfactualRequired": true,
+            "appealMechanism": {
+              "enabled": true,
+              "reviewerConstraint": "independentFromOriginal",
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits"
+            }
+          }
+        },
+        "audit": {
+          "reasoningTier": {},
+          "counterfactualTier": {}
+        },
+        "provenanceTiers": {}
+      },
+      "structurallyValid": false,
+      "expectedRules": [],
+      "delivery": "complete",
+      "hold": true
+    },
+    {
+      "id": "obsolete-flat-explanation",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeTemplateKey": "adverse",
+            "explanationLevel": "individualized",
+            "counterfactualRequired": true,
+            "appealMechanism": {
+              "enabled": true,
+              "reviewerConstraint": "independentFromOriginal",
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits"
+            }
+          },
+          "explanationLevel": "individualized"
+        },
+        "audit": {
+          "reasoningTier": {},
+          "counterfactualTier": {}
+        }
+      },
+      "structurallyValid": false,
+      "expectedRules": [],
+      "delivery": "complete",
+      "hold": true
+    },
+    {
+      "id": "invalid-explanation-enum",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeTemplateKey": "adverse",
+            "explanationLevel": "general",
+            "counterfactualRequired": true,
+            "appealMechanism": {
+              "enabled": true,
+              "reviewerConstraint": "independentFromOriginal",
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits"
+            }
+          }
+        },
+        "audit": {
+          "reasoningTier": {},
+          "counterfactualTier": {}
+        }
+      },
+      "structurallyValid": false,
+      "expectedRules": [],
+      "delivery": "complete",
+      "hold": true
+    },
+    {
+      "id": "invalid-appeal-reviewer",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeTemplateKey": "adverse",
+            "explanationLevel": "individualized",
+            "counterfactualRequired": true,
+            "appealMechanism": {
+              "enabled": true,
+              "reviewerConstraint": "originalReviewer",
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits"
+            }
+          }
+        },
+        "audit": {
+          "reasoningTier": {},
+          "counterfactualTier": {}
+        }
+      },
+      "structurallyValid": false,
+      "expectedRules": [],
+      "delivery": "complete",
+      "hold": true
+    },
+    {
+      "id": "missing-appeal-reviewer",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeTemplateKey": "adverse",
+            "explanationLevel": "individualized",
+            "counterfactualRequired": true,
+            "appealMechanism": {
+              "enabled": true,
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits"
+            }
+          }
+        },
+        "audit": {
+          "reasoningTier": {},
+          "counterfactualTier": {}
+        }
+      },
+      "structurallyValid": false,
+      "expectedRules": [],
+      "delivery": "complete",
+      "hold": true
+    },
+    {
+      "id": "notice-missing-template",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "explanationLevel": "individualized",
+            "counterfactualRequired": true,
+            "appealMechanism": {
+              "enabled": true,
+              "reviewerConstraint": "independentFromOriginal",
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits"
+            }
+          }
+        },
+        "audit": {
+          "reasoningTier": {},
+          "counterfactualTier": {}
+        }
+      },
+      "structurallyValid": false,
+      "expectedRules": [],
+      "delivery": "complete",
+      "hold": true
+    },
+    {
+      "id": "false-counterfactual",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeTemplateKey": "adverse",
+            "explanationLevel": "individualized",
+            "counterfactualRequired": false,
+            "appealMechanism": {
+              "enabled": true,
+              "reviewerConstraint": "independentFromOriginal",
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits"
+            }
+          }
+        },
+        "audit": {
+          "reasoningTier": {},
+          "counterfactualTier": {}
+        }
+      },
+      "structurallyValid": true,
+      "expectedRules": [
+        "G-005"
+      ],
+      "delivery": "complete",
+      "hold": true
+    },
+    {
+      "id": "missing-counterfactual",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeTemplateKey": "adverse",
+            "explanationLevel": "individualized",
+            "appealMechanism": {
+              "enabled": true,
+              "reviewerConstraint": "independentFromOriginal",
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits"
+            }
+          }
+        },
+        "audit": {
+          "reasoningTier": {},
+          "counterfactualTier": {}
+        }
+      },
+      "structurallyValid": true,
+      "expectedRules": [
+        "G-005"
+      ],
+      "delivery": "complete",
+      "hold": true
+    },
+    {
+      "id": "categorical-explanation",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeTemplateKey": "adverse",
+            "explanationLevel": "categorical",
+            "counterfactualRequired": true,
+            "appealMechanism": {
+              "enabled": true,
+              "reviewerConstraint": "independentFromOriginal",
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits"
+            }
+          }
+        },
+        "audit": {
+          "reasoningTier": {},
+          "counterfactualTier": {}
+        }
+      },
+      "structurallyValid": true,
+      "expectedRules": [
+        "G-004"
+      ],
+      "delivery": "complete",
+      "hold": true
+    },
+    {
+      "id": "explicit-empty-reasoning-tags",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeTemplateKey": "adverse",
+            "explanationLevel": "individualized",
+            "counterfactualRequired": true,
+            "appealMechanism": {
+              "enabled": true,
+              "reviewerConstraint": "independentFromOriginal",
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits"
+            }
+          }
+        },
+        "audit": {
+          "reasoningTier": {
+            "requiredForTags": []
+          },
+          "counterfactualTier": {}
+        }
+      },
+      "structurallyValid": true,
+      "expectedRules": [
+        "G-014"
+      ],
+      "delivery": "complete",
+      "hold": true
+    },
+    {
+      "id": "counterfactual-tags-miss-adverse",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeTemplateKey": "adverse",
+            "explanationLevel": "individualized",
+            "counterfactualRequired": true,
+            "appealMechanism": {
+              "enabled": true,
+              "reviewerConstraint": "independentFromOriginal",
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits"
+            }
+          }
+        },
+        "audit": {
+          "reasoningTier": {},
+          "counterfactualTier": {
+            "requiredForTags": [
+              "determination"
+            ]
+          }
+        }
+      },
+      "structurallyValid": true,
+      "expectedRules": [
+        "G-015"
+      ],
+      "delivery": "complete",
+      "hold": true
+    },
+    {
+      "id": "missing-reasoning-tier",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeTemplateKey": "adverse",
+            "explanationLevel": "individualized",
+            "counterfactualRequired": true,
+            "appealMechanism": {
+              "enabled": true,
+              "reviewerConstraint": "independentFromOriginal",
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits"
+            }
+          }
+        },
+        "audit": {
+          "counterfactualTier": {}
+        }
+      },
+      "structurallyValid": true,
+      "expectedRules": [
+        "G-014"
+      ],
+      "delivery": "complete",
+      "hold": true
+    },
+    {
+      "id": "missing-counterfactual-tier",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeTemplateKey": "adverse",
+            "explanationLevel": "individualized",
+            "counterfactualRequired": true,
+            "appealMechanism": {
+              "enabled": true,
+              "reviewerConstraint": "independentFromOriginal",
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits"
+            }
+          }
+        },
+        "audit": {
+          "reasoningTier": {}
+        }
+      },
+      "structurallyValid": true,
+      "expectedRules": [
+        "G-015"
+      ],
+      "delivery": "complete",
+      "hold": true
+    },
+    {
+      "id": "missing-due-process",
+      "governance": {
+        "audit": {
+          "reasoningTier": {},
+          "counterfactualTier": {}
+        }
+      },
+      "structurallyValid": true,
+      "expectedRules": [
+        "G-001",
+        "G-004",
+        "G-005"
+      ],
+      "delivery": "complete",
+      "hold": true
+    },
+    {
+      "id": "missing-delivery",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeTemplateKey": "adverse",
+            "explanationLevel": "individualized",
+            "counterfactualRequired": true,
+            "appealMechanism": {
+              "enabled": true,
+              "reviewerConstraint": "independentFromOriginal",
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits"
+            }
+          }
+        },
+        "audit": {
+          "reasoningTier": {},
+          "counterfactualTier": {}
+        }
+      },
+      "structurallyValid": true,
+      "expectedRules": [
+        "G-063"
+      ],
+      "delivery": "absent",
+      "hold": true
+    },
+    {
+      "id": "incomplete-referenced-template",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeTemplateKey": "adverse",
+            "explanationLevel": "individualized",
+            "counterfactualRequired": true,
+            "appealMechanism": {
+              "enabled": true,
+              "reviewerConstraint": "independentFromOriginal",
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits"
+            }
+          }
+        },
+        "audit": {
+          "reasoningTier": {},
+          "counterfactualTier": {}
+        }
+      },
+      "structurallyValid": true,
+      "expectedRules": [
+        "G-003",
+        "G-062"
+      ],
+      "delivery": "incomplete",
+      "hold": true
+    },
+    {
+      "id": "wrong-category-incomplete-template",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeTemplateKey": "adverse",
+            "explanationLevel": "individualized",
+            "counterfactualRequired": true,
+            "appealMechanism": {
+              "enabled": true,
+              "reviewerConstraint": "independentFromOriginal",
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits"
+            }
+          }
+        },
+        "audit": {
+          "reasoningTier": {},
+          "counterfactualTier": {}
+        }
+      },
+      "structurallyValid": true,
+      "expectedRules": [
+        "G-003"
+      ],
+      "delivery": "wrong-category",
+      "hold": true
+    },
+    {
+      "id": "missing-template-sections",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeTemplateKey": "adverse",
+            "explanationLevel": "individualized",
+            "counterfactualRequired": true,
+            "appealMechanism": {
+              "enabled": true,
+              "reviewerConstraint": "independentFromOriginal",
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits"
+            }
+          }
+        },
+        "audit": {
+          "reasoningTier": {},
+          "counterfactualTier": {}
+        }
+      },
+      "structurallyValid": true,
+      "expectedRules": [
+        "G-003",
+        "G-062"
+      ],
+      "delivery": "no-sections",
+      "hold": true
+    },
+    {
+      "id": "continuation-without-hold-topology",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeTemplateKey": "adverse",
+            "explanationLevel": "individualized",
+            "counterfactualRequired": true,
+            "appealMechanism": {
+              "enabled": true,
+              "reviewerConstraint": "independentFromOriginal",
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits"
+            }
+          }
+        },
+        "audit": {
+          "reasoningTier": {},
+          "counterfactualTier": {}
+        }
+      },
+      "structurallyValid": true,
+      "expectedRules": [
+        "G-008"
+      ],
+      "delivery": "complete",
+      "hold": false
+    },
+    {
+      "id": "unknown-referenced-template",
+      "governance": {
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeTemplateKey": "missing",
+            "explanationLevel": "individualized",
+            "counterfactualRequired": true,
+            "appealMechanism": {
+              "enabled": true,
+              "reviewerConstraint": "independentFromOriginal",
+              "continuationOfServices": true,
+              "continuationPolicyRef": "maintainBenefits"
+            }
+          }
+        },
+        "audit": {
+          "reasoningTier": {},
+          "counterfactualTier": {}
+        }
+      },
+      "structurallyValid": true,
+      "expectedRules": [
+        "G-063"
+      ],
+      "delivery": "complete",
+      "hold": true
+    }
+  ],
+  "deliveries": {
+    "complete": {
+      "document": {
+        "$wosDelivery": "1.0",
+        "targetWorkflow": "https://example.test/governance-matrix",
+        "notifications": {
+          "templates": {
+            "adverse": {
+              "category": "adverse-decision",
+              "sections": [
+                {
+                  "id": "determination",
+                  "contentType": "structured",
+                  "content": "Specific determination."
+                },
+                {
+                  "id": "reasons",
+                  "contentType": "structured",
+                  "content": "Individual factual reasons."
+                },
+                {
+                  "id": "appealRights",
+                  "contentType": "appeal-rights",
+                  "content": "Appeal rights and filing deadline."
+                },
+                {
+                  "id": "appealInstructions",
+                  "contentType": "action-required",
+                  "content": "How to file an appeal."
+                }
+              ]
+            }
+          }
+        }
+      },
+      "structurallyValid": true
+    },
+    "absent": {
+      "document": null,
+      "structurallyValid": true
+    },
+    "incomplete": {
+      "document": {
+        "$wosDelivery": "1.0",
+        "targetWorkflow": "https://example.test/governance-matrix",
+        "notifications": {
+          "templates": {
+            "adverse": {
+              "category": "adverse-decision",
+              "sections": [
+                {
+                  "id": "determination",
+                  "contentType": "structured",
+                  "content": "Specific determination."
+                }
+              ]
+            }
+          }
+        }
+      },
+      "structurallyValid": true
+    },
+    "wrong-category": {
+      "document": {
+        "$wosDelivery": "1.0",
+        "targetWorkflow": "https://example.test/governance-matrix",
+        "notifications": {
+          "templates": {
+            "adverse": {
+              "category": "hold-notification",
+              "sections": [
+                {
+                  "id": "determination",
+                  "contentType": "structured",
+                  "content": "Specific determination."
+                }
+              ]
+            }
+          }
+        }
+      },
+      "structurallyValid": true
+    },
+    "no-sections": {
+      "document": {
+        "$wosDelivery": "1.0",
+        "targetWorkflow": "https://example.test/governance-matrix",
+        "notifications": {
+          "templates": {
+            "adverse": {
+              "category": "adverse-decision"
+            }
+          }
+        }
+      },
+      "structurallyValid": false
+    }
+  }
+}

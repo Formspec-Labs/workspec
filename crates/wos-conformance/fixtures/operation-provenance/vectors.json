@@ -690,6 +690,7 @@
           "dueProcess": {
             "adverseDecisionPolicy": {
               "noticeRequired": true,
+              "noticeTemplateKey": "adverseDecisionNotice",
               "noticeTiming": "beforeEffective",
               "noticeGracePeriod": "P1D"
             }
@@ -772,6 +773,7 @@
           "dueProcess": {
             "adverseDecisionPolicy": {
               "noticeRequired": true,
+              "noticeTemplateKey": "adverseDecisionNotice",
               "noticeTiming": "beforeEffective",
               "noticeGracePeriod": "P1D"
             }
@@ -860,7 +862,8 @@
         "governance": {
           "dueProcess": {
             "adverseDecisionPolicy": {
-              "noticeRequired": true
+              "noticeRequired": true,
+              "noticeTemplateKey": "adverseDecisionNotice"
             }
           }
         }

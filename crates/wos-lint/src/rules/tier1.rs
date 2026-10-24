@@ -166,6 +166,16 @@ fn check_governance_block(
     diagnostics: &mut Vec<LintDiagnostic>,
     skipped: &mut Vec<crate::validation::SemanticSkip>,
 ) {
+    // A block its owning schema refuses is reported once here. The raw-value checks
+    // below still locate their specific findings; the canonical policy rules (Tier2
+    // G-001/G-003/G-008/G-009) read only an admitted block.
+    if let Err(error) = wos_core::model::governance::validate_governance(gov) {
+        diagnostics.push(LintDiagnostic::t1_error(
+            "WOS-GOVERNANCE-SHAPE-001",
+            &format!("/governance{}", error.path()),
+            error.to_string(),
+        ));
+    }
     // --- Hold policies (G-055) ---
     if let Some((holds, base_path)) = gov
         .get("holds")
@@ -1158,16 +1168,30 @@ fn check_adverse_decision_template_sections(
     if template.get("category").and_then(Value::as_str) != Some("adverse-decision") {
         return;
     }
-    let Some(sections) = template.get("sections").and_then(Value::as_array) else {
-        return;
-    };
+    for missing in missing_adverse_notice_sections(template) {
+        diagnostics.push(LintDiagnostic::t1_error(
+            "G-062",
+            path,
+            format!("adverse-decision template MUST include {missing}"),
+        ));
+    }
+}
 
+/// The four adverse-notice section classes a template lacks (NT S4.4), whatever
+/// its category: G-062 checks adverse-decision templates, G-003 the template a
+/// rights-impacting adverse policy selects. A template without sections lacks all four.
+pub(super) fn missing_adverse_notice_sections(template: &Value) -> Vec<&'static str> {
     let mut has_determination = false;
     let mut has_reason_codes = false;
     let mut has_appeal_rights = false;
     let mut has_appeal_instructions = false;
 
-    for sec in sections {
+    for sec in template
+        .get("sections")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
         let id = sec
             .get("id")
             .and_then(Value::as_str)
@@ -1189,34 +1213,24 @@ fn check_adverse_decision_template_sections(
         }
     }
 
-    if !has_determination {
-        diagnostics.push(LintDiagnostic::t1_error(
-            "G-062",
-            path,
-            "adverse-decision template MUST include a section with id 'determination'",
-        ));
-    }
-    if !has_reason_codes {
-        diagnostics.push(LintDiagnostic::t1_error(
-            "G-062",
-            path,
-            "adverse-decision template MUST include reason code coverage (section id 'reasons', 'reasonCodes', or 'reason')",
-        ));
-    }
-    if !has_appeal_rights {
-        diagnostics.push(LintDiagnostic::t1_error(
-            "G-062",
-            path,
-            "adverse-decision template MUST include appeal rights (section id 'appealRights' or contentType 'appeal-rights')",
-        ));
-    }
-    if !has_appeal_instructions {
-        diagnostics.push(LintDiagnostic::t1_error(
-            "G-062",
-            path,
-            "adverse-decision template MUST include a section with id 'appealInstructions'",
-        ));
-    }
+    [
+        (has_determination, "a section with id 'determination'"),
+        (
+            has_reason_codes,
+            "reason code coverage (section id 'reasons', 'reasonCodes', or 'reason')",
+        ),
+        (
+            has_appeal_rights,
+            "appeal rights (section id 'appealRights' or contentType 'appeal-rights')",
+        ),
+        (
+            has_appeal_instructions,
+            "a section with id 'appealInstructions'",
+        ),
+    ]
+    .into_iter()
+    .filter_map(|(present, name)| (!present).then_some(name))
+    .collect()
 }
 
 /// G-065: Section `id` values unique within each template.

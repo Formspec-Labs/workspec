@@ -187,7 +187,7 @@ A response deadline, adverse-effect grace period or appeal window MUST retain on
 
 When the appeal mechanism's `continuationOfServices` property is `true`, the workflow MUST include topology that freezes adverse impacts and maintains current service levels during the appeal window. This is a structural workflow requirement, not a policy preference.
 
-The exact services maintained — and for how long — are declared by `AppealMechanism.continuationPolicyRef`, which resolves to a `ContinuationPolicy.id` in the targeted Due Process Config material (`schemas/wos-workflow.schema.json`, `governance.dueProcess` and its `$defs`; ADR 0076 merged due-process into the author-time workflow document). The processor MUST resolve the reference against ContinuationPolicy entries in any Due Process Config sidecar targeting this governance document. An unresolvable reference MUST emit a configuration warning in provenance; the processor MAY then fall back to the looser `AppealMechanism.continuationScope` string when present, or to implementation-defined behavior. When `continuationOfServices` is true and neither `continuationPolicyRef` nor `continuationScope` resolves, the processor MUST emit a configuration error — silently shipping a workflow that promises continuation without specifying its scope is a due-process failure.
+The embedded `AppealMechanism` declares continuation through `continuationOfServices`, optional `continuationPolicyRef`, and optional `continuationScope` (`schemas/wos-workflow.schema.json#/$defs/AppealMechanism`). The canonical schema defines no `ContinuationPolicy` collection or standalone Due Process Config document. A `continuationPolicyRef` names a policy selected by the deployment; accepting the string does not establish that a processor can resolve or enforce it. An unresolvable reference MUST emit a configuration warning in provenance; the processor MAY then use `continuationScope` when supported. When `continuationOfServices` is true and neither the selected policy nor `continuationScope` supplies an enforceable service scope, the processor MUST emit a configuration error. The declaration alone does not fulfill the continuation promise.
 
 ### 3.7 Governance Attachment
 
@@ -897,23 +897,17 @@ Lint rule **G-064 `assertion-library-resolution`** checks that: (a) every `asser
 
 ## 15. Appeal Routing
 
-> **Source.** Absorbed from the standalone WOS Due Process Config spec (`due-process-config.md`, retired). The schema surface lives at `Governance.dueProcess` in `wos-workflow.schema.json`. Notice templates are canonically authored in the Notification Template sidecar (`notification-template.md`); `noticeTemplateKey` (Governance §3.1) and `notificationTemplateKey` (Governance §12.2) both resolve through that sidecar.
+> **Canonical location.** Due process is embedded at `governance.dueProcess` in `schemas/wos-workflow.schema.json`. The former standalone Due Process Config document is retired. Notification templates live at `notifications.templates` in a `$wosDelivery` sidecar (Delivery §3).
 
-### 15.1 Properties
+### 15.1 Due Process Fields
 
-| Property | Type | Required | Description |
-|----------|------|----------|-------------|
-| `explanationTemplates` | array of ExplanationTemplate | OPTIONAL | Templates for decision explanations. |
-| `appealRouting` | AppealRouting | OPTIONAL | Detailed appeal routing configuration. |
-| `continuationPolicies` | array of ContinuationPolicy | OPTIONAL | Detailed continuation-of-service policies. |
+The `DueProcess` object admits `scope` and `adverseDecisionPolicy`, plus `x-` extensions. Appeal configuration belongs at `governance.dueProcess.adverseDecisionPolicy.appealMechanism`.
 
-### 15.2 Appeal Routing
+The historical `explanationTemplates`, `appealRouting`, and `continuationPolicies` collections are not fields of the canonical schema. Authors MUST NOT place them in `governance.dueProcess` or invent a retired sidecar to carry them.
 
-| Property | Type | Required | Description |
-|----------|------|----------|-------------|
-| `defaultReviewerPool` | string | OPTIONAL | Default pool of eligible appeal reviewers. |
-| `independenceConstraint` | string | REQUIRED | How independence from the original determination is ensured. |
-| `escalationPath` | array of string | OPTIONAL | Ordered escalation path if initial appeal review is contested. |
+### 15.2 Appeal Mechanism
+
+`AppealMechanism` admits `enabled`, `appealWindow`, `reviewerConstraint`, `reviewerRoles`, `continuationOfServices`, `continuationPolicyRef`, and `continuationScope`, plus `x-` extensions. `reviewerConstraint` is required and selects `independentFromOriginal`, `differentUnit`, `differentAgency`, or `externalPanel`; see §3.5. Continuation declarations retain the requirements and capability limits in §3.6. A structurally admitted declaration does not establish runtime support for reviewer routing or continuation.
 
 ---
 

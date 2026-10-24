@@ -21,8 +21,8 @@ fn well_formed_json_without_wos_marker_is_missing_marker() {
 /// Malformed JSON stays `Parse` so the missing-marker channel stays specific.
 #[test]
 fn malformed_json_is_parse_not_missing_marker() {
-    let err = wos_lint::lint_document("not json at all")
-        .expect_err("lint must fail on non-JSON input");
+    let err =
+        wos_lint::lint_document("not json at all").expect_err("lint must fail on non-JSON input");
 
     assert!(matches!(err, LintError::Parse(_)), "got: {err:?}");
 }

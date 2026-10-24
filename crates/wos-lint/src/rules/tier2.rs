@@ -254,6 +254,9 @@ pub(crate) fn check_with_coverage(
     for wf in project.of_kind(DocumentKind::Workflow) {
         // Promote governance block to a synthetic governance-shaped document.
         if let Some(gov_block) = wf.value.get("governance") {
+            // Admission examines the original authored block, before dispatcher scaffolding;
+            // Tier1 reports a refused block (WOS-GOVERNANCE-SHAPE-001).
+            let admitted = wos_core::model::governance::validate_governance(gov_block).is_ok();
             // Build a doc value that the governance rule functions expect:
             // they look for top-level fields like "targetWorkflow", "dueProcess",
             // "holdPolicies", "delegations", etc.
@@ -345,8 +348,20 @@ pub(crate) fn check_with_coverage(
                     check_hold_resume_triggers_typed(tg, &kc.events, diagnostics);
                     check_sub_delegation_depth_typed(tg, diagnostics);
                 }
-                check_due_process_for_impact_typed(&gov, kernel, diagnostics);
-                check_notice_individualized_for_rights_typed(&gov, kernel, diagnostics);
+                // Canonical policy rules read the typed policy of an admitted block only.
+                if let Some(policy) = typed_gov.as_ref().filter(|_| admitted) {
+                    check_due_process_for_impact_typed(policy, kernel, diagnostics);
+                    check_notice_individualized_for_rights_typed(
+                        policy,
+                        &gov,
+                        kernel,
+                        project,
+                        diagnostics,
+                    );
+                    check_continuation_of_services(policy, &kc.lifecycle.all_tags, diagnostics);
+                    check_adverse_decision_due_process(policy, &kc.lifecycle.all_tags, diagnostics);
+                }
+                // Issue paths are relative to the embedded block; diagnostics locate the workflow.
                 for issue in wos_core::model::governance_checks::check_governance(
                     kernel,
                     &gov.value,
@@ -356,14 +371,12 @@ pub(crate) fn check_with_coverage(
                 {
                     diagnostics.push(LintDiagnostic::t2_error(
                         issue.rule_id,
-                        &issue.path,
+                        &format!("/governance{}", issue.path),
                         issue.message,
                     ));
                 }
                 check_governance_tags_exist(&gov, &kc.lifecycle.all_tags, diagnostics);
                 check_resolution_date_refs(&gov, &kc.case_fields, diagnostics);
-                check_continuation_of_services(&gov, &kc.lifecycle.all_tags, diagnostics);
-                check_adverse_decision_due_process(&gov, &kc.lifecycle.all_tags, diagnostics);
                 check_excluded_owner_override(&gov, diagnostics);
                 check_delegation_verification_on_determination(
                     &gov,
@@ -1253,47 +1266,58 @@ fn check_fail_fast_recursive_typed(
 
 /// G-001 (typed): Governance MUST declare `dueProcess` for rights/safety-impacting kernels.
 fn check_due_process_for_impact_typed(
-    gov: &crate::document::WosDocument,
+    policy: &wos_core::GovernanceDocument,
     kernel: &KernelDocument,
     diagnostics: &mut Vec<LintDiagnostic>,
 ) {
-    if !is_rights_or_safety_impacting_typed(kernel) {
-        return;
-    }
-    if gov.value.get("dueProcess").is_none() {
+    if is_rights_or_safety_impacting_typed(kernel) && policy.due_process.is_none() {
         diagnostics.push(LintDiagnostic::t2_error(
             "G-001",
-            "/dueProcess",
+            "/governance/dueProcess",
             "kernel impactLevel is rights/safety-impacting; governance MUST declare a dueProcess section",
         ));
     }
 }
 
 // ---------------------------------------------------------------------------
-// G-003: Notice content must be individualized for rights-impacting
+// G-003: The selected adverse notice template must carry individualized content
 // ---------------------------------------------------------------------------
 
-/// G-003 (typed): Notice must declare individualized content fields for rights-impacting.
+/// G-003: For a rights-impacting workflow, the template that
+/// `dueProcess.adverseDecisionPolicy.noticeTemplateKey` selects MUST cover the
+/// four adverse-notice section classes (the G-062 classes, whatever its category).
 fn check_notice_individualized_for_rights_typed(
+    policy: &wos_core::GovernanceDocument,
     gov: &crate::document::WosDocument,
     kernel: &KernelDocument,
+    project: &WosProject,
     diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     if kernel.impact_level != Some(ImpactLevel::RightsImpacting) {
         return;
     }
-    let Some(notice) = gov.value.pointer("/dueProcess/notice") else {
+    let Some(key) = policy
+        .due_process
+        .as_ref()
+        .and_then(|due| due.adverse_decision_policy.as_ref())
+        .and_then(|adverse| adverse.notice_template_key.as_deref())
+    else {
         return;
     };
-    let path = "/dueProcess/notice";
-    for field in ["determinationField", "reasonCodes", "appealInstructions"] {
-        if notice.get(field).is_none() {
+    let target = gov
+        .value
+        .get("targetWorkflow")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    for (name, template) in notification_templates_for_workflow(project, target) {
+        if name != key {
+            continue;
+        }
+        for missing in super::tier1::missing_adverse_notice_sections(template) {
             diagnostics.push(LintDiagnostic::t2_warning(
                 "G-003",
-                path,
-                format!(
-                    "rights-impacting notice must declare '{field}' for individualized content"
-                ),
+                "/governance/dueProcess/adverseDecisionPolicy/noticeTemplateKey",
+                format!("referenced adverse notice template must include {missing}"),
             ));
         }
     }
@@ -1303,27 +1327,26 @@ fn check_notice_individualized_for_rights_typed(
 // G-008: continuationOfServices requires kernel topology to support it
 // ---------------------------------------------------------------------------
 
-/// G-008: When `continuationOfServices` is true, the kernel MUST have at
-/// least one `hold`-tagged state (a static proxy for topology support).
+/// G-008: When the appeal mechanism declares `continuationOfServices`, the
+/// kernel MUST have at least one `hold`-tagged state (a static proxy for
+/// topology support).
 ///
 /// Full freeze-during-appeal enforcement is a runtime property (T3).
 fn check_continuation_of_services(
-    gov: &crate::document::WosDocument,
+    policy: &wos_core::GovernanceDocument,
     kernel_tags: &std::collections::HashSet<String>,
     diagnostics: &mut Vec<LintDiagnostic>,
 ) {
-    let declared = gov
-        .value
-        .pointer("/dueProcess/continuationOfServices")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
-    if !declared {
-        return;
-    }
-    if !kernel_tags.contains("hold") {
+    let declared = policy
+        .due_process
+        .as_ref()
+        .and_then(|due| due.adverse_decision_policy.as_ref())
+        .and_then(|adverse| adverse.appeal_mechanism.as_ref())
+        .is_some_and(|appeal| appeal.continuation_of_services);
+    if declared && !kernel_tags.contains("hold") {
         diagnostics.push(LintDiagnostic::t2_warning(
             "G-008",
-            "/dueProcess/continuationOfServices",
+            "/governance/dueProcess/adverseDecisionPolicy/appealMechanism/continuationOfServices",
             "continuationOfServices is true but kernel has no state tagged 'hold'; topology may not support service continuation during appeal",
         ));
     }
@@ -1333,22 +1356,23 @@ fn check_continuation_of_services(
 // G-009: adverse-decision tag transitions must enforce due process policy
 // ---------------------------------------------------------------------------
 
-/// G-009: When governance declares an `adverseDecisionPolicy`, the kernel
-/// MUST have at least one transition tagged `adverse-decision`.
+/// G-009: When governance declares `dueProcess.adverseDecisionPolicy`, the
+/// kernel MUST have at least one transition tagged `adverse-decision`.
 ///
 /// The runtime enforcement side of this rule is T3.
 fn check_adverse_decision_due_process(
-    gov: &crate::document::WosDocument,
+    policy: &wos_core::GovernanceDocument,
     kernel_tags: &std::collections::HashSet<String>,
     diagnostics: &mut Vec<LintDiagnostic>,
 ) {
-    if gov.value.get("adverseDecisionPolicy").is_none() {
-        return;
-    }
-    if !kernel_tags.contains("adverse-decision") {
+    let declared = policy
+        .due_process
+        .as_ref()
+        .is_some_and(|due| due.adverse_decision_policy.is_some());
+    if declared && !kernel_tags.contains("adverse-decision") {
         diagnostics.push(LintDiagnostic::t2_error(
             "G-009",
-            "/adverseDecisionPolicy",
+            "/governance/dueProcess/adverseDecisionPolicy",
             "governance declares adverseDecisionPolicy but kernel has no transition tagged 'adverse-decision'",
         ));
     }
@@ -1451,53 +1475,36 @@ fn business_calendar_targets_workflow(project: &WosProject, workflow_url: &str) 
     })
 }
 
-/// Template keys declared in Notification Template blocks for `workflow_url`.
+/// `(key, template)` pairs declared in Notification Template blocks for `workflow_url`.
 ///
-/// After ADR 0076, templates live inside `$wosDelivery.notificationTemplates`.
-fn notification_template_keys_for_workflow(
-    project: &WosProject,
+/// After ADR 0076, templates live inside `$wosDelivery.notifications.templates`;
+/// a legacy `$wosNotificationTemplate`-shaped document (`targetWorkflow` +
+/// `templates`) is still read.
+fn notification_templates_for_workflow<'a>(
+    project: &'a WosProject,
     workflow_url: &str,
-) -> std::collections::HashSet<String> {
-    let mut keys = std::collections::HashSet::new();
-
-    // Delivery sidecars.
-    for d in project.of_kind(DocumentKind::Delivery) {
+) -> Vec<(&'a str, &'a Value)> {
+    let mut templates = Vec::new();
+    for d in project.documents() {
         let target = d
             .value
             .get("targetWorkflow")
             .and_then(Value::as_str)
             .unwrap_or("");
-        if target != workflow_url && !target.is_empty() {
-            continue;
-        }
-        if let Some(templates) = d
-            .value
-            .pointer("/notifications/templates")
-            .and_then(Value::as_object)
-        {
-            keys.extend(templates.keys().cloned());
-        }
-    }
-
-    // Legacy: accept any document in the project that matches the old
-    // $wosNotificationTemplate shape (targetWorkflow + templates).
-    for d in project.documents() {
-        let matches = d.kind != DocumentKind::Delivery
-            && d.value
-                .get("targetWorkflow")
-                .and_then(Value::as_str)
-                .is_some_and(|t| t == workflow_url)
-            && d.value.get("templates").is_some();
-        if matches {
-            if let Some(templates) = d.value.get("templates").and_then(Value::as_object) {
-                for k in templates.keys() {
-                    keys.insert(k.clone());
-                }
-            }
+        let catalog = if d.kind == DocumentKind::Delivery {
+            (target == workflow_url || target.is_empty())
+                .then(|| d.value.pointer("/notifications/templates"))
+                .flatten()
+        } else {
+            (target == workflow_url)
+                .then(|| d.value.get("templates"))
+                .flatten()
+        };
+        if let Some(catalog) = catalog.and_then(Value::as_object) {
+            templates.extend(catalog.iter().map(|(key, value)| (key.as_str(), value)));
         }
     }
-
-    keys
+    templates
 }
 
 /// Collect `(jsonPath, keyValue)` for notification-template catalog surfaces:
@@ -1591,12 +1598,16 @@ fn check_notification_template_refs(
     };
 
     let mut refs = Vec::new();
-    collect_governance_template_refs(&gov.value, "", &mut refs);
+    collect_governance_template_refs(&gov.value, "/governance", &mut refs);
     if refs.is_empty() {
         return;
     }
 
-    let keys = notification_template_keys_for_workflow(project, target_wf);
+    let keys: std::collections::HashSet<&str> =
+        notification_templates_for_workflow(project, target_wf)
+            .into_iter()
+            .map(|(key, _)| key)
+            .collect();
 
     if keys.is_empty() {
         for (path, r) in refs {
@@ -1612,7 +1623,7 @@ fn check_notification_template_refs(
     }
 
     for (path, r) in refs {
-        if !keys.contains(&r) {
+        if !keys.contains(r.as_str()) {
             diagnostics.push(LintDiagnostic::t2_error(
                 "G-063",
                 &path,
