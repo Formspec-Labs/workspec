@@ -52,7 +52,7 @@
         "type": "atomic",
         "transitions": [
           {
-            "event": "startAssessment",
+            "event": {"kind": "message", "name": "startAssessment"},
             "target": "assess"
           }
         ]

@@ -20,6 +20,13 @@ FIXTURES_ROOT = WOS_SPEC_ROOT / "fixtures"
 ALL_FIXTURES = sorted(p for p in FIXTURES_ROOT.rglob("*.json") if p.is_file())
 AUXILIARY_FIXTURES = frozenset(
     {
+        "conformance/envelope-profiles/audit-maxed.json",
+        "conformance/envelope-profiles/basic-esign.json",
+        "conformance/envelope-profiles/compliance-strict.json",
+        "conformance/envelope-profiles/in-person-notary.json",
+        "conformance/envelope-profiles/intranet.json",
+        "conformance/envelope-profiles/ron.json",
+        "conformance/envelope-profiles/single-locale.json",
         "conformance/expected-traces/ai-auto-001-escalation-expiry-revocation.json",
         "conformance/expected-traces/ai-auto-002-drift-alert-demotion.json",
         "conformance/expected-traces/g-030-hold-resume.json",
@@ -32,6 +39,7 @@ AUXILIARY_FIXTURES = frozenset(
         "kernel/custody-hook/provenance-state-transition/record.json",
         "kernel/invalid-documents.json",
         "kernel/purchase-order-provenance.json",
+        "validation/governance-policy-matrix.json",
     }
 )
 FIXTURE_MARKERS = {
