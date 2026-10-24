@@ -254,9 +254,6 @@ pub(crate) fn check_with_coverage(
     for wf in project.of_kind(DocumentKind::Workflow) {
         // Promote governance block to a synthetic governance-shaped document.
         if let Some(gov_block) = wf.value.get("governance") {
-            // Admission examines the original authored block, before dispatcher scaffolding;
-            // Tier1 reports a refused block (WOS-GOVERNANCE-SHAPE-001).
-            let admitted = wos_core::model::governance::validate_governance(gov_block).is_ok();
             // Build a doc value that the governance rule functions expect:
             // they look for top-level fields like "targetWorkflow", "dueProcess",
             // "holdPolicies", "delegations", etc.
@@ -338,19 +335,18 @@ pub(crate) fn check_with_coverage(
 
             // G-023 / G-060 / G-063 / G-066 need governance + project sidecars.
             check_sla_business_calendar(&gov, project, diagnostics);
-            check_notification_template_refs(&gov, project, diagnostics);
+            check_notification_template_refs(&gov, gov_block, project, diagnostics);
             check_sla_escalation_step_ids(&gov, diagnostics);
 
             if let (Some(kernel), Some(kc)) = (&typed_kernel, kernel_collections.as_ref()) {
-                if let Some(tg) = &typed_gov {
-                    check_delegation_actors_exist_typed(tg, kernel, diagnostics);
-                    check_hold_policies_attach_to_hold_states_typed(tg, kernel, diagnostics);
-                    check_hold_resume_triggers_typed(tg, &kc.events, diagnostics);
-                    check_sub_delegation_depth_typed(tg, diagnostics);
-                }
-                // Canonical policy rules read the typed policy of an admitted block only.
-                if let Some(policy) = typed_gov.as_ref().filter(|_| admitted) {
-                    check_due_process_for_impact_typed(policy, kernel, diagnostics);
+                check_due_process_for_impact(&gov, kernel, diagnostics);
+                // Decoding runs validate_governance, so a typed policy is an admitted block
+                // (Tier1 reports a refused one as WOS-GOVERNANCE-SHAPE-001).
+                if let Some(policy) = &typed_gov {
+                    check_delegation_actors_exist_typed(policy, kernel, diagnostics);
+                    check_hold_policies_attach_to_hold_states_typed(policy, kernel, diagnostics);
+                    check_hold_resume_triggers_typed(policy, &kc.events, diagnostics);
+                    check_sub_delegation_depth_typed(policy, diagnostics);
                     check_notice_individualized_for_rights_typed(
                         policy,
                         &gov,
@@ -1264,13 +1260,16 @@ fn check_fail_fast_recursive_typed(
 // G-001: Due process required for rights/safety-impacting
 // ---------------------------------------------------------------------------
 
-/// G-001 (typed): Governance MUST declare `dueProcess` for rights/safety-impacting kernels.
-fn check_due_process_for_impact_typed(
-    policy: &wos_core::GovernanceDocument,
+/// G-001: Governance MUST declare `dueProcess` for rights/safety-impacting kernels.
+///
+/// Presence is checked on the authored block, so a block the schema refuses
+/// still reports a missing `dueProcess`.
+fn check_due_process_for_impact(
+    gov: &crate::document::WosDocument,
     kernel: &KernelDocument,
     diagnostics: &mut Vec<LintDiagnostic>,
 ) {
-    if is_rights_or_safety_impacting_typed(kernel) && policy.due_process.is_none() {
+    if is_rights_or_safety_impacting_typed(kernel) && gov.value.get("dueProcess").is_none() {
         diagnostics.push(LintDiagnostic::t2_error(
             "G-001",
             "/governance/dueProcess",
@@ -1514,11 +1513,7 @@ fn collect_governance_template_refs(value: &Value, base: &str, out: &mut Vec<(St
     match value {
         Value::Object(map) => {
             for (k, v) in map {
-                let p = if base.is_empty() {
-                    format!("/{k}")
-                } else {
-                    format!("{base}/{k}")
-                };
+                let p = format!("{base}/{k}");
                 if (k == "notificationTemplateKey"
                     || k == "noticeTemplateKey"
                     || k == "templateKey")
@@ -1588,8 +1583,13 @@ fn check_sla_business_calendar(
 /// G-063: `templateKey`, `notificationTemplateKey`, and `noticeTemplateKey`
 /// MUST resolve to a template key in a Notification Template sidecar for the
 /// same `targetWorkflow`.
+///
+/// References are collected from the authored block, not the dispatcher's
+/// scaffolded copy (which duplicates hold policies under `holdPolicies`), so each
+/// reference is reported once at its authored path.
 fn check_notification_template_refs(
     gov: &crate::document::WosDocument,
+    authored: &Value,
     project: &WosProject,
     diagnostics: &mut Vec<LintDiagnostic>,
 ) {
@@ -1598,7 +1598,7 @@ fn check_notification_template_refs(
     };
 
     let mut refs = Vec::new();
-    collect_governance_template_refs(&gov.value, "/governance", &mut refs);
+    collect_governance_template_refs(authored, "/governance", &mut refs);
     if refs.is_empty() {
         return;
     }

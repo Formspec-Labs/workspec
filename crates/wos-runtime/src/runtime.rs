@@ -6910,29 +6910,38 @@ mod tests {
                 )
                 .unwrap(),
             );
+            let error = runtime
+                .submit_task_response(
+                    &task_id,
+                    canonical(&response),
+                    "applicant",
+                    Some(&format!("foreign-binding-{actor}")),
+                )
+                .unwrap_err();
             assert!(
-                runtime
-                    .submit_task_response(
-                        &task_id,
-                        canonical(&response),
-                        "applicant",
-                        Some("foreign-binding")
-                    )
-                    .is_err()
+                error
+                    .to_string()
+                    .contains("qualified signer association differs"),
+                "{error}"
             );
             assert!(!affirmed(&runtime));
         }
         // Without a captured signer the Response's own signer cannot stand in for the actor.
         runtime.captured_signature_signer = None;
+        let error = runtime
+            .submit_task_response(
+                &task_id,
+                canonical(&response),
+                "applicant",
+                Some("missing-binding"),
+            )
+            .unwrap_err();
         assert!(
-            runtime
-                .submit_task_response(
-                    &task_id,
-                    canonical(&response),
-                    "applicant",
-                    Some("missing-binding")
-                )
-                .is_err()
+            error
+                .to_string()
+                .contains("no verified signature evidence matched")
+                && error.to_string().contains("signer 'applicant'"),
+            "{error}"
         );
         assert!(!affirmed(&runtime));
 

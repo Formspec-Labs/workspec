@@ -1293,7 +1293,7 @@ fn g003_rights_impacting_notice_with_all_fields_clean() {
 
 #[test]
 fn g003_operational_impact_skips_check() {
-    let mut kernel = base_kernel();
+    let kernel = base_kernel();
 
     let mut gov = base_governance();
     gov["dueProcess"] = json!({"adverseDecisionPolicy": {"noticeRequired": true, "noticeTemplateKey": "adverseTpl"}});

@@ -5,6 +5,8 @@ on:
     paths:
       - "schemas/**"
       - "fixtures/**"
+      - "api/**"
+      - "examples/**"
       - "specs/**/*.md"
       - "tests/**"
       - "scripts/**"
@@ -15,6 +17,8 @@ on:
     paths:
       - "schemas/**"
       - "fixtures/**"
+      - "api/**"
+      - "examples/**"
       - "specs/**/*.md"
       - "tests/**"
       - "scripts/**"

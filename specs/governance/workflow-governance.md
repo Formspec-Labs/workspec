@@ -901,7 +901,7 @@ Lint rule **G-064 `assertion-library-resolution`** checks that: (a) every `asser
 
 ### 15.1 Due Process Fields
 
-The `DueProcess` object admits `scope` and `adverseDecisionPolicy`, plus `x-` extensions. Appeal configuration belongs at `governance.dueProcess.adverseDecisionPolicy.appealMechanism`.
+The `DueProcess` object admits `scope`, `adverseDecisionPolicy` and `execution` (the selected native due-process profile), plus `x-` extensions. Appeal configuration belongs at `governance.dueProcess.adverseDecisionPolicy.appealMechanism`.
 
 The historical `explanationTemplates`, `appealRouting`, and `continuationPolicies` collections are not fields of the canonical schema. Authors MUST NOT place them in `governance.dueProcess` or invent a retired sidecar to carry them.
 
