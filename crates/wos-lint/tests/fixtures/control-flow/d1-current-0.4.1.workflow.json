@@ -1,0 +1,1273 @@
+{
+  "$wosWorkflow": "1.0",
+  "actors": [
+    {
+      "description": "Jordan, the demo Adjudicator selected through qualified host actor binding; may review and reasonedly reopen, while actual current host permission remains required.",
+      "extensions": {},
+      "id": "adjudicator",
+      "type": "human"
+    },
+    {
+      "description": null,
+      "extensions": {},
+      "id": "intakeService",
+      "type": "system"
+    },
+    {
+      "id": "applicant",
+      "type": "human",
+      "description": "Original applicant selected by the host for a photo-only correction task.",
+      "extensions": {}
+    },
+    {
+      "id": "deliveryService",
+      "type": "system",
+      "description": "Configured notification delivery adapter; qualifying receipts must identify actual sent notices."
+    },
+    {
+      "id": "auditor",
+      "type": "human",
+      "description": "Authorized offline export verifier; no authority to decide or reopen cases."
+    },
+    {
+      "id": "appealReviewer",
+      "type": "human",
+      "description": "Separately assigned independent administrative reviewer; never the original decision maker, applicant or read-only auditor."
+    }
+  ],
+  "contracts": {
+    "reviewContract": {
+      "binding": "formspec",
+      "ref": "urn:formspec:demo:d1:passport-review",
+      "definitionVersion": "0.4.1",
+      "prefillMappingRef": "urn:formspec:demo:d1:passport-review:mapping:prefill",
+      "responseMappingRef": "urn:formspec:demo:d1:passport-review:mapping:case"
+    },
+    "correctionContract": {
+      "binding": "formspec",
+      "ref": "urn:formspec:demo:d1:passport-renewal",
+      "definitionVersion": "0.3.0",
+      "prefillMappingRef": "urn:formspec:demo:d1:passport-renewal:mapping:correction-prefill",
+      "responseMappingRef": "urn:formspec:demo:d1:passport-renewal:mapping:correction-case"
+    },
+    "disputeContract": {
+      "binding": "formspec",
+      "ref": "urn:formspec:demo:d1:passport-outside-data-dispute",
+      "definitionVersion": "0.4.0",
+      "prefillMappingRef": "urn:formspec:demo:d1:passport-outside-data-dispute:mapping:prefill",
+      "responseMappingRef": "urn:formspec:demo:d1:passport-outside-data-dispute:mapping:case"
+    },
+    "appealRequestContract": {
+      "binding": "formspec",
+      "ref": "urn:formspec:demo:d1:passport-appeal-request",
+      "definitionVersion": "0.4.0",
+      "responseMappingRef": "urn:formspec:demo:d1:passport-appeal-request:mapping:case"
+    },
+    "appealReviewContract": {
+      "binding": "formspec",
+      "ref": "urn:formspec:demo:d1:passport-appeal-review",
+      "definitionVersion": "0.4.0",
+      "responseMappingRef": "urn:formspec:demo:d1:passport-appeal-review:mapping:case"
+    }
+  },
+  "custody": {
+    "anchorRequirements": []
+  },
+  "decisionTables": [],
+  "description": "New immutable native candidate. The selected policy requires actual attributable decisions, qualified original delivery before adverse effects and independent reconsideration. Authoring establishes none of those runtime outcomes. Existing 90-day photo and 10-day outside-data periods remain. The 30-day administrative filing rule is explicitly demonstration policy, not law.",
+  "governance": {
+    "dueProcess": {
+      "adverseDecisionPolicy": {
+        "noticeRequired": true,
+        "noticeTiming": "beforeEffective",
+        "noticeTemplateKey": "d1IndividualizedAdverseEn",
+        "explanationLevel": "individualized",
+        "counterfactualRequired": true,
+        "appealMechanism": {
+          "enabled": true,
+          "appealWindow": "P30D",
+          "reviewerConstraint": "independentFromOriginal",
+          "reviewerRoles": [
+            "appealReviewer"
+          ],
+          "continuationOfServices": false
+        }
+      }
+    },
+    "taskCatalog": [
+      {
+        "id": "reviewApplication",
+        "pattern": "reviewApplication",
+        "title": "Review passport application and record an action",
+        "description": "Review immutable original evidence and any photo correction. Request a new photo, approve or deny with an individualized reason.",
+        "verifiable": "partially",
+        "verificationMethod": "Compare the reason with retained original evidence and any separately accepted correction."
+      },
+      {
+        "id": "replacePhoto",
+        "pattern": "replacePhoto",
+        "title": "Replace the requested passport photo",
+        "description": "Submit only a replacement photo linked to the original filing. Prior application answers remain visible through the qualified retained-evidence reader and cannot be edited by this task.",
+        "verifiable": "partially",
+        "verificationMethod": "Compare the accepted replacement photo and original filing association."
+      },
+      {
+        "id": "disputeOutsideData",
+        "pattern": "disputeOutsideData",
+        "title": "Respond to the outside-data notice",
+        "description": "Read source, time and result of the two explicit mock checks; dispute an adverse result within the separate 10-calendar-day sample period.",
+        "verifiable": "partially",
+        "verificationMethod": "Retain the notice, qualifying sent receipt, response and reviewer reason; do not claim confirmation from unavailable data."
+      },
+      {
+        "id": "attachLatePhoto",
+        "pattern": "attachLatePhoto",
+        "title": "Attach a late requested photo to the closed case",
+        "description": "Use the exact application Definition and retained original data. Accepting late evidence keeps the case closed and does not reopen it.",
+        "verifiable": "partially",
+        "verificationMethod": "Retain late accepted response, source association, original answers and unchanged closed status."
+      },
+      {
+        "id": "considerReopening",
+        "pattern": "considerReopening",
+        "title": "Record whether to reopen the closed case",
+        "description": "Jordan as an authorized Adjudicator records an individualized reason before reopening; no applicant or integration role may perform this decision.",
+        "verifiable": "partially",
+        "verificationMethod": "Verify actual actor authority, completed reviewer task, nonblank reason and retained decision evidence."
+      },
+      {
+        "id": "fileAppeal",
+        "pattern": "fileAppeal",
+        "title": "File an administrative reconsideration request",
+        "description": "D1 demonstration policy: actual retained original notice, attributable filing and independent current authorized human review are required.",
+        "verifiable": "partially",
+        "verificationMethod": "Check the actual original proposal, qualified receipt, immutable filing deadline, actual assigned human and retained individual reasons."
+      },
+      {
+        "id": "reviewAppeal",
+        "pattern": "reviewAppeal",
+        "title": "Independently reconsider the original decision",
+        "description": "D1 demonstration policy: actual retained original notice, attributable filing and independent current authorized human review are required.",
+        "verifiable": "partially",
+        "verificationMethod": "Check the actual original proposal, qualified receipt, immutable filing deadline, actual assigned human and retained individual reasons."
+      },
+      {
+        "id": "reviewReturnedApplication",
+        "pattern": "reviewReturnedApplication",
+        "title": "Review the accepted correction and retained original application",
+        "description": "Review immutable original evidence and any photo correction. Request a new photo, approve or deny with an individualized reason.",
+        "verifiable": "partially",
+        "verificationMethod": "Compare the reason with retained original evidence and any separately accepted correction."
+      }
+    ],
+    "audit": {
+      "reasoningTier": {
+        "requiredForTags": [
+          "determination"
+        ]
+      },
+      "counterfactualTier": {
+        "requiredForTags": [
+          "adverse-decision"
+        ]
+      }
+    }
+  },
+  "impactLevel": "rights-impacting",
+  "intake": {
+    "contractRef": "urn:formspec:demo:d1:passport-renewal",
+    "contractVersion": "0.3.0",
+    "mode": "publicIntake",
+    "initialCaseMappingRef": "urn:formspec:demo:d1:passport-renewal:mapping:initial-case"
+  },
+  "lifecycle": {
+    "initialState": "caseAndDelivery",
+    "states": {
+      "caseAndDelivery": {
+        "type": "parallel",
+        "description": "Main case decisions and receipt ingress progress independently. The receipt region stays active for unresolved and later receipts; main finality does not imply whole-process completion. Terminal receipt-region policy remains owner-qualified.",
+        "regions": {
+          "case": {
+            "initialState": "automaticChecks",
+            "states": {
+              "automaticChecks": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "setData",
+                    "path": "caseFile.displayStatus",
+                    "value": "In Process"
+                  },
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "mockPriorPassportCheck"
+                  },
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "mockSsnCheck"
+                  },
+                  {
+                    "action": "emitEvent",
+                    "eventType": "checks.completed"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "checks.completed"
+                    },
+                    "target": "outsideDataNoticePending",
+                    "guard": "caseFile.priorPassportCheck.adverse = true or caseFile.ssnCheck.adverse = true"
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "checks.completed"
+                    },
+                    "target": "awaitingReview",
+                    "guard": "caseFile.priorPassportCheck.adverse = false and caseFile.ssnCheck.adverse = false"
+                  }
+                ]
+              },
+              "outsideDataNoticePending": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "sendOutsideDataNotice",
+                    "callbackPhase": "outbound"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "outsideData.noticeSent"
+                    },
+                    "target": "outsideDataDisputeWindow"
+                  }
+                ]
+              },
+              "outsideDataDisputeWindow": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "startTimer",
+                    "timerId": "outsideDataDispute",
+                    "duration": "P10D",
+                    "event": {
+                      "kind": "timer",
+                      "timerId": "outsideDataDispute",
+                      "source": "state"
+                    },
+                    "startAtExpression": "caseFile.outsideDataNotice.clock.governedSentAt"
+                  },
+                  {
+                    "action": "createTask",
+                    "taskRef": "disputeOutsideData",
+                    "assignTo": "applicant",
+                    "contractRef": "disputeContract",
+                    "completionEvent": "outsideData.disputeReceived",
+                    "expiresWithTimer": "outsideDataDispute",
+                    "extensions": {
+                      "x-wos-signature-profile-key": "outside-data-response",
+                      "x-wos-signature-step-id": "disputeOutsideData"
+                    }
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "outsideData.disputeReceived"
+                    },
+                    "target": "awaitingDisputeReview",
+                    "actions": [
+                      {
+                        "action": "cancelTimer",
+                        "timerId": "outsideDataDispute"
+                      }
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "timer",
+                      "timerId": "outsideDataDispute",
+                      "source": "state"
+                    },
+                    "target": "awaitingReview"
+                  }
+                ],
+                "tags": [
+                  "hold"
+                ]
+              },
+              "awaitingDisputeReview": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "setData",
+                    "path": "caseFile.displayStatus",
+                    "value": "In Process"
+                  },
+                  {
+                    "action": "createTask",
+                    "taskRef": "reviewApplication",
+                    "assignTo": "adjudicator",
+                    "contractRef": "reviewContract",
+                    "completionEvent": "review.completed",
+                    "extensions": {
+                      "x-wos-signature-profile-key": "staff-review",
+                      "x-wos-signature-step-id": "reviewerSigns"
+                    }
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "review.completed"
+                    },
+                    "target": "photoNoticePending",
+                    "guard": "caseFile.reviewChoice = 'sendBackPhoto' and trim(caseFile.reviewReason) != ''"
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "review.completed"
+                    },
+                    "target": "approvalNoticePending",
+                    "guard": "caseFile.reviewChoice = 'approve' and trim(caseFile.reviewReason) != ''",
+                    "tags": [
+                      "determination"
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "review.completed"
+                    },
+                    "target": "outsideDataMinimumPending",
+                    "guard": "caseFile.reviewChoice = 'deny' and trim(caseFile.reviewReason) != '' and (caseFile.priorPassportCheck.adverse = true or caseFile.ssnCheck.adverse = true) and caseFile.outsideDataNotice.sentAt != null",
+                    "tags": [
+                      "determination",
+                      "adverse-decision"
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "review.completed"
+                    },
+                    "target": "denialDecisionRecorded",
+                    "guard": "caseFile.reviewChoice = 'deny' and trim(caseFile.reviewReason) != '' and caseFile.priorPassportCheck.adverse = false and caseFile.ssnCheck.adverse = false",
+                    "tags": [
+                      "determination",
+                      "adverse-decision"
+                    ]
+                  }
+                ],
+                "tags": [
+                  "hold"
+                ]
+              },
+              "awaitingReview": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "setData",
+                    "path": "caseFile.displayStatus",
+                    "value": "In Process"
+                  },
+                  {
+                    "action": "createTask",
+                    "taskRef": "reviewApplication",
+                    "assignTo": "adjudicator",
+                    "contractRef": "reviewContract",
+                    "completionEvent": "review.completed",
+                    "extensions": {
+                      "x-wos-signature-profile-key": "staff-review",
+                      "x-wos-signature-step-id": "reviewerSigns"
+                    }
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "review.completed"
+                    },
+                    "target": "photoNoticePending",
+                    "guard": "caseFile.reviewChoice = 'sendBackPhoto' and trim(caseFile.reviewReason) != ''"
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "review.completed"
+                    },
+                    "target": "approvalNoticePending",
+                    "guard": "caseFile.reviewChoice = 'approve' and trim(caseFile.reviewReason) != ''",
+                    "tags": [
+                      "determination"
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "review.completed"
+                    },
+                    "target": "outsideDataMinimumPending",
+                    "guard": "caseFile.reviewChoice = 'deny' and trim(caseFile.reviewReason) != '' and (caseFile.priorPassportCheck.adverse = true or caseFile.ssnCheck.adverse = true) and caseFile.outsideDataNotice.sentAt != null",
+                    "tags": [
+                      "determination",
+                      "adverse-decision"
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "review.completed"
+                    },
+                    "target": "denialDecisionRecorded",
+                    "guard": "caseFile.reviewChoice = 'deny' and trim(caseFile.reviewReason) != '' and caseFile.priorPassportCheck.adverse = false and caseFile.ssnCheck.adverse = false",
+                    "tags": [
+                      "determination",
+                      "adverse-decision"
+                    ]
+                  }
+                ]
+              },
+              "photoNoticePending": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "setData",
+                    "path": "caseFile.reviewerQueueStatus",
+                    "value": "Waiting on applicant"
+                  },
+                  {
+                    "action": "setData",
+                    "path": "caseFile.requestedItems",
+                    "value": [
+                      "photo"
+                    ]
+                  },
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "sendPhotoRequestNotice",
+                    "callbackPhase": "outbound"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "photo.noticeSent"
+                    },
+                    "target": "awaitingPhoto"
+                  }
+                ],
+                "tags": [
+                  "hold"
+                ]
+              },
+              "awaitingPhoto": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "setData",
+                    "path": "caseFile.displayStatus",
+                    "value": "Waiting for you"
+                  },
+                  {
+                    "action": "startTimer",
+                    "timerId": "photoResponse",
+                    "duration": "P90D",
+                    "event": {
+                      "kind": "timer",
+                      "timerId": "photoResponse",
+                      "source": "state"
+                    },
+                    "startAtExpression": "caseFile.photoRequestNotice.clock.governedSentAt"
+                  },
+                  {
+                    "action": "createTask",
+                    "taskRef": "replacePhoto",
+                    "assignTo": "applicant",
+                    "contractRef": "correctionContract",
+                    "completionEvent": "photoCorrection.completed",
+                    "expiresWithTimer": "photoResponse",
+                    "extensions": {
+                      "x-wos-signature-profile-key": "photo-correction",
+                      "x-wos-signature-step-id": "replacePhoto"
+                    }
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "photoCorrection.completed"
+                    },
+                    "target": "returnedReview",
+                    "actions": [
+                      {
+                        "action": "cancelTimer",
+                        "timerId": "photoResponse"
+                      }
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "timer",
+                      "timerId": "photoResponse",
+                      "source": "state"
+                    },
+                    "target": "noResponseClosedNoticePending",
+                    "tags": [
+                      "determination",
+                      "adverse-decision"
+                    ]
+                  }
+                ],
+                "tags": [
+                  "hold"
+                ]
+              },
+              "returnedReview": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "setData",
+                    "path": "caseFile.displayStatus",
+                    "value": "Information Received, In Process Again"
+                  },
+                  {
+                    "action": "setData",
+                    "path": "caseFile.reviewerQueueStatus",
+                    "value": "Information Received, In Process Again"
+                  },
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "sendInformationReceivedNotice",
+                    "callbackPhase": "outbound"
+                  },
+                  {
+                    "action": "createTask",
+                    "taskRef": "reviewReturnedApplication",
+                    "assignTo": "adjudicator",
+                    "contractRef": "reviewContract",
+                    "completionEvent": "review.completed",
+                    "extensions": {
+                      "x-wos-signature-profile-key": "staff-returned-review",
+                      "x-wos-signature-step-id": "returnedReviewerSigns"
+                    }
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "review.completed"
+                    },
+                    "target": "photoNoticePending",
+                    "guard": "caseFile.reviewChoice = 'sendBackPhoto' and trim(caseFile.reviewReason) != ''"
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "review.completed"
+                    },
+                    "target": "approvalNoticePending",
+                    "guard": "caseFile.reviewChoice = 'approve' and trim(caseFile.reviewReason) != ''",
+                    "tags": [
+                      "determination"
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "review.completed"
+                    },
+                    "target": "outsideDataMinimumPending",
+                    "guard": "caseFile.reviewChoice = 'deny' and trim(caseFile.reviewReason) != '' and (caseFile.priorPassportCheck.adverse = true or caseFile.ssnCheck.adverse = true) and caseFile.outsideDataNotice.sentAt != null",
+                    "tags": [
+                      "determination",
+                      "adverse-decision"
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "review.completed"
+                    },
+                    "target": "denialDecisionRecorded",
+                    "guard": "caseFile.reviewChoice = 'deny' and trim(caseFile.reviewReason) != '' and caseFile.priorPassportCheck.adverse = false and caseFile.ssnCheck.adverse = false",
+                    "tags": [
+                      "determination",
+                      "adverse-decision"
+                    ]
+                  }
+                ]
+              },
+              "approvalNoticePending": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "sendApprovalNotice",
+                    "callbackPhase": "outbound"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "approval.noticeSent"
+                    },
+                    "target": "approved"
+                  }
+                ]
+              },
+              "denialNoticePending": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "sendDenialNotice",
+                    "callbackPhase": "outbound"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "denial.noticeSent"
+                    },
+                    "target": "denied",
+                    "actions": [
+                      {
+                        "action": "setData",
+                        "path": "caseFile.decision",
+                        "value": "denied"
+                      },
+                      {
+                        "action": "setData",
+                        "path": "caseFile.caseClosed",
+                        "value": true
+                      },
+                      {
+                        "action": "setData",
+                        "path": "caseFile.displayStatus",
+                        "value": "Denied"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "closedForNoResponse": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "createTask",
+                    "taskRef": "attachLatePhoto",
+                    "assignTo": "applicant",
+                    "contractRef": "correctionContract",
+                    "completionEvent": "latePhoto.completed",
+                    "extensions": {
+                      "x-wos-signature-profile-key": "late-photo",
+                      "x-wos-signature-step-id": "attachLatePhoto"
+                    }
+                  },
+                  {
+                    "action": "createTask",
+                    "taskRef": "fileAppeal",
+                    "assignTo": "applicant",
+                    "contractRef": "appealRequestContract",
+                    "completionEvent": "appeal.filed",
+                    "extensions": {
+                      "x-wos-signature-profile-key": "appeal-request",
+                      "x-wos-signature-step-id": "fileAppeal"
+                    }
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "latePhoto.completed"
+                    },
+                    "target": "closedWithLateEvidence"
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "appeal.reopenRequested"
+                    },
+                    "target": "reopened"
+                  }
+                ]
+              },
+              "closedWithLateEvidence": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "setData",
+                    "path": "caseFile.caseClosed",
+                    "value": true
+                  },
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "sendLateEvidenceReceivedNotice",
+                    "callbackPhase": "outbound"
+                  },
+                  {
+                    "action": "createTask",
+                    "taskRef": "considerReopening",
+                    "assignTo": "adjudicator",
+                    "contractRef": "reviewContract",
+                    "completionEvent": "reopening.completed",
+                    "extensions": {
+                      "x-wos-signature-profile-key": "reopening-review",
+                      "x-wos-signature-step-id": "considerReopening"
+                    }
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "reopening.completed"
+                    },
+                    "target": "reopened",
+                    "guard": "caseFile.reviewChoice = 'reopen' and trim(caseFile.reviewReason) != ''",
+                    "actor": "adjudicator",
+                    "tags": [
+                      "determination"
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "appeal.reopenRequested"
+                    },
+                    "target": "reopened"
+                  }
+                ]
+              },
+              "reopened": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "setData",
+                    "path": "caseFile.caseClosed",
+                    "value": false
+                  },
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "sendReopenedNotice",
+                    "callbackPhase": "outbound"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "reopening.noticeSent"
+                    },
+                    "target": "returnedReview"
+                  }
+                ]
+              },
+              "approved": {
+                "type": "final"
+              },
+              "denied": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "createTask",
+                    "taskRef": "fileAppeal",
+                    "assignTo": "applicant",
+                    "contractRef": "appealRequestContract",
+                    "completionEvent": "appeal.filed",
+                    "extensions": {
+                      "x-wos-signature-profile-key": "appeal-request",
+                      "x-wos-signature-step-id": "fileAppeal"
+                    }
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "appeal.reopenRequested"
+                    },
+                    "target": "reopened"
+                  }
+                ]
+              },
+              "noResponseClosedNoticePending": {
+                "type": "atomic",
+                "description": "Retain a no-response proposal only. A real qualified original notice must arrive before the adverse effect.",
+                "onEntry": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "sendDenialNotice",
+                    "callbackPhase": "outbound"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "denial.noticeSent"
+                    },
+                    "target": "closedForNoResponse",
+                    "actions": [
+                      {
+                        "action": "setData",
+                        "path": "caseFile.decision",
+                        "value": "deniedForNoResponse"
+                      },
+                      {
+                        "action": "setData",
+                        "path": "caseFile.caseClosed",
+                        "value": true
+                      },
+                      {
+                        "action": "setData",
+                        "path": "caseFile.displayStatus",
+                        "value": "Denied for no response"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "outsideDataMinimumPending": {
+                "type": "atomic",
+                "description": "A reasoned adverse denial remains a proposal until the full ten-day period from actual qualifying outside-data notice has elapsed. Accepted dispute response cancels only its response clock.",
+                "onEntry": [
+                  {
+                    "action": "setData",
+                    "path": "caseFile.displayStatus",
+                    "value": "In Process"
+                  },
+                  {
+                    "action": "startTimer",
+                    "timerId": "outsideDataMinimumPeriod",
+                    "duration": "P10D",
+                    "event": {
+                      "kind": "timer",
+                      "timerId": "outsideDataMinimumPeriod",
+                      "source": "custom",
+                      "firesAs": "outsideData.minimumPeriodElapsed"
+                    },
+                    "startAtExpression": "caseFile.outsideDataNotice.clock.governedSentAt"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "timer",
+                      "timerId": "outsideDataMinimumPeriod",
+                      "source": "custom",
+                      "firesAs": "outsideData.minimumPeriodElapsed"
+                    },
+                    "target": "denialNoticePending"
+                  }
+                ],
+                "tags": [
+                  "hold"
+                ]
+              },
+              "denialDecisionRecorded": {
+                "type": "atomic",
+                "description": "The actual reviewer proposal is already retained; dispatch that exact proposal without closing the case.",
+                "onEntry": [
+                  {
+                    "action": "emitEvent",
+                    "eventType": "decision.denialProposed"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "decision.denialProposed"
+                    },
+                    "target": "denialNoticePending"
+                  }
+                ]
+              }
+            }
+          },
+          "delivery": {
+            "initialState": "awaitingDeliveryReceipt",
+            "states": {
+              "awaitingDeliveryReceipt": {
+                "type": "atomic",
+                "onEntry": [],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "delivery.sendOutsideDataNotice.receipt"
+                    },
+                    "target": "awaitingDeliveryReceipt",
+                    "actions": [
+                      {
+                        "action": "invokeService",
+                        "serviceRef": "sendOutsideDataNotice",
+                        "callbackPhase": "inbound"
+                      },
+                      {
+                        "action": "emitEvent",
+                        "eventType": "outsideData.noticeSent"
+                      }
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "delivery.sendPhotoRequestNotice.receipt"
+                    },
+                    "target": "awaitingDeliveryReceipt",
+                    "actions": [
+                      {
+                        "action": "invokeService",
+                        "serviceRef": "sendPhotoRequestNotice",
+                        "callbackPhase": "inbound"
+                      },
+                      {
+                        "action": "emitEvent",
+                        "eventType": "photo.noticeSent"
+                      }
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "delivery.sendApprovalNotice.receipt"
+                    },
+                    "target": "awaitingDeliveryReceipt",
+                    "actions": [
+                      {
+                        "action": "invokeService",
+                        "serviceRef": "sendApprovalNotice",
+                        "callbackPhase": "inbound"
+                      },
+                      {
+                        "action": "emitEvent",
+                        "eventType": "approval.noticeSent"
+                      }
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "delivery.sendDenialNotice.receipt"
+                    },
+                    "target": "awaitingDeliveryReceipt",
+                    "actions": [
+                      {
+                        "action": "invokeService",
+                        "serviceRef": "sendDenialNotice",
+                        "callbackPhase": "inbound"
+                      },
+                      {
+                        "action": "emitEvent",
+                        "eventType": "denial.noticeSent"
+                      }
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "delivery.sendNoResponseNotice.receipt"
+                    },
+                    "target": "awaitingDeliveryReceipt",
+                    "actions": [
+                      {
+                        "action": "invokeService",
+                        "serviceRef": "sendNoResponseNotice",
+                        "callbackPhase": "inbound"
+                      },
+                      {
+                        "action": "emitEvent",
+                        "eventType": "noResponse.noticeSent"
+                      }
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "delivery.sendInformationReceivedNotice.receipt"
+                    },
+                    "target": "awaitingDeliveryReceipt",
+                    "actions": [
+                      {
+                        "action": "invokeService",
+                        "serviceRef": "sendInformationReceivedNotice",
+                        "callbackPhase": "inbound"
+                      }
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "delivery.sendLateEvidenceReceivedNotice.receipt"
+                    },
+                    "target": "awaitingDeliveryReceipt",
+                    "actions": [
+                      {
+                        "action": "invokeService",
+                        "serviceRef": "sendLateEvidenceReceivedNotice",
+                        "callbackPhase": "inbound"
+                      }
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "delivery.sendReopenedNotice.receipt"
+                    },
+                    "target": "awaitingDeliveryReceipt",
+                    "actions": [
+                      {
+                        "action": "invokeService",
+                        "serviceRef": "sendReopenedNotice",
+                        "callbackPhase": "inbound"
+                      },
+                      {
+                        "action": "emitEvent",
+                        "eventType": "reopening.noticeSent"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "administrativeReconsideration": {
+            "initialState": "appealAvailable",
+            "states": {
+              "appealAvailable": {
+                "type": "atomic",
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "appeal.filed"
+                    },
+                    "target": "appealReview"
+                  }
+                ]
+              },
+              "appealReview": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "createTask",
+                    "taskRef": "reviewAppeal",
+                    "assignTo": "appealReviewer",
+                    "contractRef": "appealReviewContract",
+                    "completionEvent": "appeal.reviewed",
+                    "extensions": {
+                      "x-wos-signature-profile-key": "appeal-review",
+                      "x-wos-signature-step-id": "reviewAppeal"
+                    }
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "appeal.reviewed"
+                    },
+                    "target": "appealGrantRecorded",
+                    "guard": "caseFile.appealReviewChoice = 'reopen'",
+                    "tags": [
+                      "determination"
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "appeal.reviewed"
+                    },
+                    "target": "appealNoticePending",
+                    "guard": "caseFile.appealReviewChoice = 'sustain'",
+                    "tags": [
+                      "determination",
+                      "adverse-decision"
+                    ]
+                  }
+                ]
+              },
+              "appealNoticePending": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "sendDenialNotice",
+                    "callbackPhase": "outbound"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "denial.noticeSent"
+                    },
+                    "target": "appealClosed",
+                    "actions": [
+                      {
+                        "action": "setData",
+                        "path": "caseFile.caseClosed",
+                        "value": true
+                      },
+                      {
+                        "action": "setData",
+                        "path": "caseFile.appealSustained",
+                        "value": true
+                      }
+                    ]
+                  }
+                ]
+              },
+              "appealClosed": {
+                "type": "final"
+              },
+              "appealGrantRecorded": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "setData",
+                    "path": "caseFile.caseClosed",
+                    "value": false
+                  },
+                  {
+                    "action": "emitEvent",
+                    "eventType": "appeal.reopenRequested"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "provenance": {
+    "tier": "facts"
+  },
+  "status": "draft",
+  "title": "D1 governed passport demonstration: actual evidence, notice and independent review",
+  "url": "urn:wos:demo:d1:passport-complete",
+  "version": "0.4.1",
+  "caseFile": {
+    "fields": {
+      "reviewChoice": {
+        "type": "string"
+      },
+      "reviewReason": {
+        "type": "string"
+      },
+      "originalFilingRef": {
+        "type": "string"
+      },
+      "originalAnswers": {
+        "type": "object"
+      },
+      "originalPhoto": {
+        "type": "object"
+      },
+      "correctionFilingRef": {
+        "type": "string"
+      },
+      "correctionPhoto": {
+        "type": "object"
+      },
+      "priorPassportCheck": {
+        "type": "object"
+      },
+      "ssnCheck": {
+        "type": "object"
+      },
+      "photoRequestNotice": {
+        "type": "object"
+      },
+      "outsideDataNotice": {
+        "type": "object"
+      },
+      "decisionNotice": {
+        "type": "object"
+      },
+      "noResponseNotice": {
+        "type": "object"
+      },
+      "displayStatus": {
+        "type": "string"
+      },
+      "reviewerQueueStatus": {
+        "type": "string"
+      },
+      "requestedItems": {
+        "type": "array"
+      },
+      "caseClosed": {
+        "type": "boolean"
+      },
+      "decision": {
+        "type": "string"
+      },
+      "decisionReason": {
+        "type": "string"
+      },
+      "preferredLanguage": {
+        "type": "string"
+      },
+      "referenceNumber": {
+        "type": "string"
+      },
+      "dispute": {
+        "type": "object"
+      },
+      "whatChanged": {
+        "type": "object"
+      },
+      "informationReceivedNotice": {
+        "type": "object"
+      },
+      "lateEvidenceNotice": {
+        "type": "object"
+      },
+      "reopenedNotice": {
+        "type": "object"
+      },
+      "verificationBundle": {
+        "type": "object"
+      },
+      "appealProposalFactsRef": {
+        "type": "string"
+      },
+      "appealReason": {
+        "type": "string"
+      },
+      "appealReviewChoice": {
+        "type": "string"
+      },
+      "appealReviewReason": {
+        "type": "string"
+      },
+      "appealEvidence": {
+        "type": "object"
+      },
+      "appealSustained": {
+        "type": "boolean"
+      }
+    }
+  }
+}

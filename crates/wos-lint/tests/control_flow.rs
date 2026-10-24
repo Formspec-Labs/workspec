@@ -337,3 +337,55 @@ fn concurrent_configuration_bound_is_explicit_and_suppresses_findings() {
         "WOS-FLOW-002" | "WOS-FLOW-003" | "WOS-FLOW-004" | "WOS-FLOW-006"
     )));
 }
+
+/// The admin appeal branch of the selected D1 workflows is neither a final nor a
+/// supported permanent inbound receipt region: lint reports the stranded state
+/// and does not turn the supported topology into an analysis refusal. These are
+/// retained authored bytes; their refusal is preserved, not exempted.
+fn assert_stranded_appeal_branch_reported(source: &str) {
+    let diagnostics = lint_document(source).unwrap();
+    let graph: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.rule_id.starts_with("WOS-FLOW-"))
+        .collect();
+    assert!(
+        graph.iter().any(|d| d.rule_id == "WOS-FLOW-004"
+            && d.path
+                == "/lifecycle/states/caseAndDelivery/regions/administrativeReconsideration/states/appealGrantRecorded"
+            && d.message.contains("appealGrantRecorded")),
+        "{graph:?}"
+    );
+    assert!(
+        !graph.iter().any(|d| d.rule_id == "WOS-FLOW-005"),
+        "supported topology must not become an analysis refusal: {graph:?}"
+    );
+    assert!(
+        graph.iter().any(|d| d.rule_id == "WOS-FLOW-007"),
+        "{graph:?}"
+    );
+}
+
+#[test]
+fn selected_d1_0_4_1_workflow_reports_its_stranded_appeal_branch() {
+    // formspec-studio demo-authoring/outputs/d1-full/v0.4.1/passport-governed.workflow.json,
+    // SHA-256 53c33d2f103c0964f1abab5d163ffeac4dd2eaec64532f5855c8d974e153bba1.
+    assert_stranded_appeal_branch_reported(include_str!(
+        "fixtures/control-flow/d1-current-0.4.1.workflow.json"
+    ));
+}
+
+#[test]
+#[ignore = "requires WOS_GOVERNANCE_ARTIFACT_DIR=<formspec-studio>/demo-authoring/outputs/d1-full/v0.4.0"]
+fn selected_d1_0_4_0_workflow_reports_its_stranded_appeal_branch() {
+    // Studio owns the authored bytes, SHA-256
+    // 61fc6f275f77f14eb705a9754ee0f4230eab571078036613f701e829d1255133.
+    let directory = std::path::PathBuf::from(
+        std::env::var("WOS_GOVERNANCE_ARTIFACT_DIR")
+            .expect("select the authored D1 v0.4.0 directory"),
+    );
+    let source =
+        std::fs::read_to_string(directory.join("passport-governed.workflow.json")).unwrap();
+    let value: Value = serde_json::from_str(&source).unwrap();
+    assert_eq!(value["version"], "0.4.0", "select the v0.4.0 directory");
+    assert_stranded_appeal_branch_reported(&source);
+}
