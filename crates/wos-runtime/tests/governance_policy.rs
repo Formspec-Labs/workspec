@@ -1736,22 +1736,24 @@ fn selected_mapping_requires_exact_original_artifact_response_and_pin_without_ra
 }
 
 #[test]
-#[ignore = "requires explicit WOS_GOVERNANCE_ARTIFACT_DIR authored D1 selection"]
+#[ignore = "requires WOS_GOVERNANCE_ARTIFACT_DIR naming the deployed D1 seed package directory"]
 fn generated_d1_native_policy_qualifies_exact_workflow_delivery_and_mapping_selection() {
     let directory = std::path::PathBuf::from(
-        std::env::var("WOS_GOVERNANCE_ARTIFACT_DIR").expect("select exact authored D1 directory"),
+        std::env::var("WOS_GOVERNANCE_ARTIFACT_DIR").expect("select the D1 seed package directory"),
     );
     let read = |name: &str| -> Value {
         serde_json::from_slice(&std::fs::read(directory.join(name)).unwrap()).unwrap()
     };
-    let kernel = read("passport-governed.workflow.json");
-    let delivery = read("passport-governed.delivery.json");
-    let mut selected = read("passport-governed.policy.json");
-    selected["kernel"] = kernel;
-    selected["delivery"] = delivery;
-    let policy = QualifiedGovernancePolicy::qualify(serde_json::from_value(selected).unwrap())
-        .expect("actual authored selection must qualify");
-    assert_eq!(policy.selection().kernel["version"], "0.4.6");
+    // Selected as the reference host selects it: each document is read on its
+    // own, and the Rules document is never merged with the Workflow or Delivery.
+    let policy = QualifiedGovernancePolicy::qualify(GovernancePolicySelection {
+        version: 2,
+        kernel: read("workflow.json"),
+        delivery: read("delivery.json"),
+        rules: serde_json::from_value(read("governance-policy.json")).unwrap(),
+        integration: Some(serde_json::from_value(read("integration.json")).unwrap()),
+    })
+    .expect("deployed D1 seed selection must qualify");
     assert!(
         policy
             .selection()
