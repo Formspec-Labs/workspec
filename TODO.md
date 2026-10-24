@@ -301,33 +301,6 @@ Stream: D. Release-train tooling + wos-bench synthesis benchmark. Lower priority
 
 Close the gaps between authoring a WOS workflow and running the exact exported result. The supported process is: requirements and reviewed scenarios → native authoring → canonical schema/project checks → real WOS replay → explicit review/repair → verified export/reopen → actual host execution. Reuse ADR 0065's existing MCP/synthesis work and the current Policy Studio authoring model.
 
-**P1 — high-leverage:**
-
-- **WOS creation: qualify author-to-runtime journeys with real behavioral tests** · `fs-6r3f` · P1
-   blocked-by WOS authoring: bind verification and export to the exact… `fs-rbn7`, ADR 0065: verify the full authoring flow through a real MCP… `fs-d79a`, Align counterfactual authoring checks with the selected… `fs-k6k9`, Align initial-case Mapping validation with protected intake… `fs-iif8`, Detect unreachable workflow states, nonfinal dead ends and… `fs-8371`, Complete the D1 appeal branch after a granted… `fs-xyv7`, Align notice evidence and deadline requirements across WOS… `fs-hltb` · links Automated D1 export end-to-end test on a real-size seeded… `fs-ipgs`, ADR 0080 — Governed Output-Commit Pipeline residue (~20%… `fs-t9h8`, Reconcile the AI behavioral spec, native Workflow schema… `fs-k07m`, WOS appeals route and applicant appeal UI `fs-79hi`…
-
-   Prove the complete creation process: requirements and reviewed scenarios, native authoring, validation, runtime replay, export/reopen, actual host admission and execution. Use the artifact produced by the supported tools with real Formspec evaluation and mapping; canned conformance responses cannot qualify this path.
-
-   **Acceptance:**
-     - 1.
-     - A documented repeatable command takes a reviewed creation request/scenario set through supported MCP/CLI authoring operations and Policy Studio compile/replay to exact verified exports.
-     - Reuse the shared native-check and deterministic trace-informed repair proof from fs-uqpw/fs-563r and native Studio replay proof from fs-8qbf; fs-d79a must establish the real-client path, and fs-rbn7 must bind exact tested/exported inputs.
-     - Preserve tool transcripts, artifact identities and failure-stage results.
-     - Live-provider generation guidance, quality and measurements remain unqualified under deferred fs-xkui and are not prerequisites for this supported author-to-host journey. 2.
-     - Admit the exported candidate unchanged through maintained server configuration/publication APIs in an isolated test environment.
-     - Exercise actual Formspec engine validation, actual Mapping, task creation/completion and selected runtime storage/authorization; no test-side reconstruction or manual policy patch. 3.
-     - Independently reviewed scenarios cover approval, denial with required notice, missing information and correction, unauthorized action, deadline handling, and retry/restart.
-     - Assert actual case state, tasks, notices and retained provenance/evidence for the supported path.
-     - Timer tests may control the owning clock; durable restart/retry requires the real selected durable service. 4.
-     - Include a real rendered respondent/staff interaction for the representative journey and a deliberately broken guard/mapping/expectation control proving the suite detects wrong behavior.
-     - Test doubles are declared individually and cannot replace the Formspec/WOS/durable behavior being qualified. 5.
-     - CI runs deterministic validation/replay and an explicitly selected service-backed integration lane; unavailable required services produce not-run/failure rather than green.
-     - Retain exact revisions, native exits, transcripts/traces and artifact hashes with bounded diagnostics. 6.
-     - The creation guide names supported operations, review points, commands, emitted artifacts and observed limitations.
-     - Each claimed scenario has current evidence; historical D1 success, lint-only passes and local memory-backed adapters are not promoted to fresh end-to-end proof.
-
-**P3 — sustaining:**
-
 - **ADR-0065 — Synth provider + schema hygiene (#65k/l/m + Anthropic cache marker)** `[5/3/3]=15` · `fs-s5wm` · P3
    links WOS-SYNTH-ANTHROPIC-CACHE-001 — Wire CacheAnchor to… `fs-6n85`
 
@@ -360,27 +333,9 @@ Close the gaps between authoring a WOS workflow and running the exact exported r
      - Update the spike findings with bounded conclusions and the actual supported route.
      - Studio consumers expose semantic repairs for explicit reviewer choice as required by scenario-authoring.md.
 
-**P4 — backlog / trigger-gated:**
-
-- **ADR 0065: document the supported creation process and reconcile old plans** · `fs-k63f` · P4
-
-   Reconcile historical authoring/MCP/synth plans with shipped source and document the supported end-to-end creation process. This remains independently actionable: current gaps can be documented before implementation completes.
-
-   **Acceptance:**
-     - 1.
-     - Reconcile thoughts/plans/2026-04-17-wos-authoring-crate.md with actual raw.rs/command.rs/project.rs or retain a precise remaining-gap map.
-     - Mark verified landed plan steps or freeze obsolete checkboxes with an explicit pointer to current tickets. 2.
-     - The guide explains required inputs, review/scenario preparation, native edits, schema/project checks, real replay, repair/review, export/reopen and host admission.
-     - Show supported commands/API entry points and resulting artifacts. 3.
-     - Clearly distinguish draft, statically valid, behaviorally verified and host-qualified results.
-     - Describe unsupported operations and not-run checks without implying completion. 4.
-     - Link generated tool documentation and the maintained runnable example; no handwritten duplicate list of tool schemas/actions.
-     - Keep prose aligned when the epic's final acceptance is executed. 5.
-     - Existing pending implementation tickets remain open with their own evidence requirements.
-     - This documentation ticket has no hard dependency on fs-uqpw; updating docs does not implement or qualify that seam.
-
 **Recently closed (kept for traceability; archive when stale):**
 
+- ~~**WOS creation: qualify author-to-runtime journeys with real behavioral tests**~~ `fs-6r3f` · CLOSED — Prove the complete creation process: requirements and reviewed scenarios, native authoring, validation, runtime replay, export/reopen, actual host admission and execution.
 - ~~**ADR 0065: verify the full authoring flow through a real MCP client**~~ `fs-d79a` · CLOSED — Exercise the shipped wos-mcp binary through an actual MCP host/client.
 - ~~**Align initial-case Mapping validation with protected intake handoff context**~~ `fs-iif8` · CLOSED — Actual new shared project validation rejects the maintained D1 initial-case Mapping with five E1110 findings because it validates handoff.responseRef, response.data,…
 - ~~**WOS authoring: bind verification and export to the exact tested artifacts**~~ `fs-rbn7` · CLOSED — A successful check is useful only for the workflow and dependencies that were actually tested.
@@ -391,6 +346,7 @@ Close the gaps between authoring a WOS workflow and running the exact exported r
 - ~~**Replace event-hint provenance with evidence from completed native operations**~~ `fs-pzju` · CLOSED — During fs-k07m review, the shared reference companion was found to call wos-core/src/event_handler.rs branches that manufacture non-AI success records from ordinary event hints:…
 - ~~**WOS authoring: current-spec edits through one declarative MCP tool catalog**~~ `fs-rxgc` · CLOSED — WOS authoring still writes governance and AI content into x-wos-governance/x-wos-ai while the current Workflow schema defines native fields.
 - ~~**ADR 0065: share MCP tool execution with synthesis and the CLI**~~ `fs-uqpw` · CLOSED — Complete the existing production ToolContext seam using the same catalog, handlers, canonical validation and replay used by MCP.
+- ~~**ADR 0065: document the supported creation process and reconcile old plans**~~ `fs-k63f` · CLOSED — Reconcile historical authoring/MCP/synth plans with shipped source and document the supported end-to-end creation process.
 
 <!-- tk:end -->
 ### Behavioral / governance (1.0 scope under minutes-not-days)
