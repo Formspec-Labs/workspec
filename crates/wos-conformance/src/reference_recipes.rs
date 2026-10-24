@@ -8,8 +8,9 @@ use integrity_signature::{
     FixedClock, KeyRef, RegistryEntry, SignatureMethodRegistry, VerificationResult, Verifier,
     VerifyRequest,
 };
-use integrity_signature_ring::{InProcessReceiptSigner, RingVerifier, RingVerifierConfig};
-use ring::signature::KeyPair;
+use integrity_signature_ring::{
+    InProcessEd25519Key, InProcessReceiptSigner, RingVerifier, RingVerifierConfig,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -282,14 +283,13 @@ pub(crate) fn resolve_signature(
         }
         data.insert(field.into(), json!(value));
     }
-    let source_pair =
-        ring::signature::Ed25519KeyPair::from_pkcs8(&decode(&capability.pkcs8_base64)?)
-            .map_err(|_| fail("invalid fixture source private key"))?;
-    let receipt_pair =
-        ring::signature::Ed25519KeyPair::from_pkcs8(&decode(&capability.receipt_pkcs8_base64)?)
+    let source_signing_key = InProcessEd25519Key::from_pkcs8(&decode(&capability.pkcs8_base64)?)
+        .map_err(|_| fail("invalid fixture source private key"))?;
+    let receipt_signing_key =
+        InProcessEd25519Key::from_pkcs8(&decode(&capability.receipt_pkcs8_base64)?)
             .map_err(|_| fail("invalid fixture receipt private key"))?;
-    if source_pair.public_key().as_ref() != decode(&key.public_key_base64)?
-        || receipt_pair.public_key().as_ref() != decode(&receipt_key.public_key_base64)?
+    if source_signing_key.public_key_bytes() != decode(&key.public_key_base64)?
+        || receipt_signing_key.public_key_bytes() != decode(&receipt_key.public_key_base64)?
     {
         return Err(fail("fixture private/public keys differ"));
     }
@@ -299,18 +299,13 @@ pub(crate) fn resolve_signature(
         .map_err(|error| fail(error.to_string()))?;
     let payload = build_signed_payload(unsigned.to_string().as_bytes(), DigestAlgorithm::Sha256)
         .map_err(fail)?;
-    let protected = integrity_cose::detached_signature_protected_header(
-        -8,
+    let cose = source_signing_key.sign_detached_cose_sign1(
         &decode(&key.kid_base64)?,
         &key.method_uri,
-    );
-    let signature = source_pair.sign(&integrity_cose::sig_structure_bytes(
-        &protected,
         &payload.canonical_bytes,
-    ));
-    let cose = integrity_cose::encode_cose_sign1(&protected, None, signature.as_ref());
-    let signer = InProcessReceiptSigner::new_with_identity(
-        receipt_pair,
+    );
+    let signer = InProcessReceiptSigner::from_key_with_identity(
+        receipt_signing_key,
         Some(&decode(&receipt_key.kid_base64)?),
         receipt_key.id.clone(),
         receipt_key.method_uri.clone(),

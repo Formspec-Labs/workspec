@@ -3,7 +3,7 @@
 use crate::ConformanceError;
 use crate::studio_api::{PreparedReplay, ReplayRequest, ReplayResult};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use ring::signature::KeyPair;
+use integrity_signature_ring::InProcessEd25519Key;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -153,14 +153,13 @@ fn validate_adapters(adapters: &ReferenceReplayAdapters) -> Result<(), Conforman
             .iter()
             .find(|key| key.id == capability.receipt_signer_ref)
             .ok_or_else(|| invalid("missing selected receipt key".into()))?;
-        let document_pair =
-            ring::signature::Ed25519KeyPair::from_pkcs8(&decode(&capability.pkcs8_base64)?)
-                .map_err(|_| invalid("invalid document private key".into()))?;
-        let receipt_pair =
-            ring::signature::Ed25519KeyPair::from_pkcs8(&decode(&capability.receipt_pkcs8_base64)?)
+        let document_key = InProcessEd25519Key::from_pkcs8(&decode(&capability.pkcs8_base64)?)
+            .map_err(|_| invalid("invalid document private key".into()))?;
+        let receipt_key =
+            InProcessEd25519Key::from_pkcs8(&decode(&capability.receipt_pkcs8_base64)?)
                 .map_err(|_| invalid("invalid receipt private key".into()))?;
-        if document_pair.public_key().as_ref() != decode(&key.public_key_base64)?
-            || receipt_pair.public_key().as_ref() != decode(&receipt.public_key_base64)?
+        if document_key.public_key_bytes() != decode(&key.public_key_base64)?
+            || receipt_key.public_key_bytes() != decode(&receipt.public_key_base64)?
         {
             return Err(invalid(
                 "selected fixture private/public key mismatch".into(),

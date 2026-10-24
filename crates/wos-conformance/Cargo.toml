@@ -63,8 +63,6 @@ serde_json = "1"
 [dependencies]
 jsonschema = { version = "0.46", default-features = false }
 base64 = "0.22"
-ring = "0.17"
-integrity-cose = { path = "../../../integrity-stack/crates/integrity-cose" }
 integrity-signature = { path = "../../../integrity-stack/crates/integrity-signature" }
 integrity-signature-ring = { path = "../../../integrity-stack/crates/integrity-signature-ring" }
 integrity-canonical = { path = "../../../integrity-stack/crates/integrity-canonical" }
