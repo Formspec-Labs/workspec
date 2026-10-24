@@ -486,10 +486,6 @@
           "$ref": "#/$defs/LifecycleState",
           "description": "Filter to cases in the supplied lifecycle posture. Repeating the query parameter narrows to a posture set."
         },
-        "actionNeeded": {
-          "type": "boolean",
-          "description": "When true, restrict results to cases where at least one applicant-owed task is `pending` or `drafted`."
-        },
         "cursor": {
           "type": "string",
           "minLength": 1,
@@ -509,7 +505,7 @@
     "ApplicantCaseSummaryPage": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Cursor-paginated applicant case page (ADR 0082 D-7). Default ordering is `updatedAt` descending so applicants see their most recently active cases first.",
+      "description": "Cursor-paginated applicant case page (ADR 0082 D-7). Ordering is case id descending (creation order, newest first), which is keyset-stable. A page may be short or empty while `hasMore` is true; clients MUST follow `hasMore`, not page length.",
       "required": [
         "items",
         "hasMore"

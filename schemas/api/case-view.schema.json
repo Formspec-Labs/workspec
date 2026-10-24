@@ -97,33 +97,15 @@
     "CaseEventAppendRequest": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Request body for `POST /api/v1/cases/{case_id}/events`, the direct case-ledger append surface. `wos.kernel.case_created` opens a new ledger; registered post-ledger WOS event literals run relationship authorization and append only after an allow decision plus event-contract validation.",
+      "description": "Request body for `POST /api/v1/cases/{case_id}/events`, the direct case-ledger append surface. The case must already exist in the admitted scope, created through application Start or accepted intake. Registered existing-case WOS event literals run relationship authorization and append only after an allow decision plus event-contract validation. The retry token is the `Idempotency-Key` header, scoped to `(scope, case_id, key)`; the acting principal is the bearer's, never a body field.",
       "required": [
-        "event",
-        "actorId",
-        "idempotencyToken"
+        "event"
       ],
       "properties": {
         "event": {
           "type": "string",
           "pattern": "^wos\\.(kernel|governance|assurance)\\.[a-z][a-z0-9_]*$",
-          "description": "Registered WOS event literal. The reference server persists `wos.kernel.case_created` before ledger creation and persists post-ledger literals only after relationship authorization allows and the direct writer can enforce the event contract."
-        },
-        "actorId": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Actor identifier for the direct append. Greenfield callers SHOULD supply the canonical `ActorRef`; legacy storage adapters may still preserve the opaque actor identifier that signed the append.",
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
-        },
-        "idempotencyToken": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Replay token scoped to `(tenant, token)` for pre-ledger creation and `(case_id, token)` for post-ledger direct append.",
-          "x-wos": {
-            "openStringKind": "opaque-token"
-          }
+          "description": "Registered WOS event literal. The reference server refuses direct `wos.kernel.case_created` requests and appends existing-case literals only after relationship authorization allows and the direct writer can enforce the event contract."
         },
         "data": {
           "description": "Optional event-contract data. `caseRef` and `caseLedgerId` are supplied from the path for generic direct appends and must match if present. The concrete event contract validates the payload before persistence."
@@ -147,8 +129,11 @@
         },
         "eventId": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9-]*_prov_[0-9a-hjkmnp-tv-z]{26}$",
-          "description": "TypeID of the provenance row produced by the append."
+          "minLength": 1,
+          "description": "Identifier of the provenance row the append produced: the event id the Trellis substrate assigned (`CaseViewEvent.eventId` of the same row).",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "eventHash": {
           "type": "string",

@@ -2545,7 +2545,7 @@
         },
         "withdrawable": {
           "$ref": "#/$defs/WithdrawableAffordance",
-          "description": "Respondent-facing withdrawal affordance per ADR-0066 D-6.2 `withdraw` row. Resolves to two axis cells per case-lifecycle-state at emission time (D-6.1.1): pre-determination emits `TerminateInstanceRequest { terminationKind: applicant-withdrawn }` (applicant authority); post-determination emits intent + ISSUER decides whether to emit kernel `rescission` (issuer authority, not respondent). When `postDeterminationIntent` is configured, `amendmentTaxonomy` MUST contain `\"rescission\"` and `requiresIssuerAcceptance` MUST be true; enforced by spec, lint candidate."
+          "description": "Respondent-facing withdrawal affordance per ADR-0066 D-6.2 `withdraw` row. Resolves to two axis cells per case-lifecycle-state at emission time (D-6.1.1): pre-determination emits a kernel `terminate` (Kernel S11.3) (applicant authority); post-determination emits intent + ISSUER decides whether to emit kernel `rescission` (issuer authority, not respondent). When `postDeterminationIntent` is configured, `amendmentTaxonomy` MUST contain `\"rescission\"` and `requiresIssuerAcceptance` MUST be true; enforced by spec, lint candidate."
         },
         "disputable": {
           "$ref": "#/$defs/DisputableAffordance",
@@ -2699,7 +2699,7 @@
     },
     "WithdrawableAffordance": {
       "type": "object",
-      "description": "Per-act configuration for the respondent `withdraw` affordance per ADR-0066 D-6.2 + FW-0034 design §6.3. The affordance has TWO emission shapes resolved at runtime per case-lifecycle-state (D-6.1.1 meta-dimension): pre-determination is a direct `TerminateInstanceRequest { terminationKind: applicant-withdrawn }` (applicant authority; no kernel mode consumed); post-determination emits `response.withdrawn` with `rescissionRequested: true` and the ISSUER decides whether to emit the kernel `rescission` event (issuer authority -- authority-ladder integrity per ADR-0066 D-6.7). The respondent runtime carries intent; the kernel-mode emission belongs to issuer governance.",
+      "description": "Per-act configuration for the respondent `withdraw` affordance per ADR-0066 D-6.2 + FW-0034 design §6.3. The affordance has TWO emission shapes resolved at runtime per case-lifecycle-state (D-6.1.1 meta-dimension): pre-determination is a direct kernel `terminate` (Kernel S11.3) (applicant authority; no kernel mode consumed); post-determination emits `response.withdrawn` with `rescissionRequested: true` and the ISSUER decides whether to emit the kernel `rescission` event (issuer authority -- authority-ladder integrity per ADR-0066 D-6.7). The respondent runtime carries intent; the kernel-mode emission belongs to issuer governance.",
       "additionalProperties": false,
       "required": [
         "enabled",
@@ -2728,7 +2728,7 @@
         "preDeterminationKernelMode": {
           "type": "string",
           "const": "applicant-withdrawn",
-          "description": "Routes the pre-determination withdraw to a `TerminateInstanceRequest { terminationKind: applicant-withdrawn }` per `work-spec/specs/api/instance.md:131` -- the `TerminationKind` reserved literal. No kernel amendment-taxonomy mode is consumed at the pre-determination boundary; termination is its own first-class instance-API verb.",
+          "description": "Routes the pre-determination withdraw to a kernel `terminate` (Kernel S11.3; `POST /api/v1/cases/{case_id}/processes/{process_id}/terminate`, `work-spec/specs/api/instance.md`). No kernel amendment-taxonomy mode is consumed at the pre-determination boundary; termination is its own first-class instance-API verb.",
           "examples": [
             "applicant-withdrawn"
           ]

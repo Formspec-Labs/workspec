@@ -8,9 +8,6 @@
       "$ref": "#/$defs/WorkflowProcess"
     },
     {
-      "$ref": "#/$defs/CaseLedgerProjection"
-    },
-    {
       "$ref": "#/$defs/WorkflowProcessWithIncludes"
     },
     {
@@ -69,15 +66,6 @@
     },
     {
       "$ref": "#/$defs/PerInstanceCorrelationResult"
-    },
-    {
-      "$ref": "#/$defs/SuspendInstanceRequest"
-    },
-    {
-      "$ref": "#/$defs/ResumeInstanceRequest"
-    },
-    {
-      "$ref": "#/$defs/TerminateInstanceRequest"
     },
     {
       "$ref": "#/$defs/MigrateInstanceRequest"
@@ -699,44 +687,6 @@
         }
       }
     },
-    "CaseLedgerProjection": {
-      "type": "object",
-      "additionalProperties": false,
-      "description": "Durable case-ledger projection returned by `GET /api/v1/cases/{case_id}`. Unlike `WorkflowProcess`, this resource is keyed by the governed case ledger and may have zero workflow processes when the case was created through the direct genesis append surface.",
-      "required": [
-        "caseLedgerId",
-        "eventCount",
-        "processCount",
-        "processes"
-      ],
-      "properties": {
-        "caseLedgerId": {
-          "$ref": "#/$defs/WosResourceUrn",
-          "description": "Durable governed case-ledger URN (`urn:wos:<tenant>_case_<ulid>`)."
-        },
-        "eventCount": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Count of direct case-ledger provenance events keyed by this case ledger. Process-routed provenance remains attached to each workflow process."
-        },
-        "latestEvent": {
-          "$ref": "#/$defs/CaseLedgerEventSummary",
-          "description": "Latest direct case-ledger event when the case has a direct provenance chain. Absent for process-only cases."
-        },
-        "processCount": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Number of workflow runtime processes currently bound to this durable case ledger."
-        },
-        "processes": {
-          "type": "array",
-          "description": "Workflow process projections bound to this case ledger. Empty for a direct case-ledger genesis with no process started yet.",
-          "items": {
-            "$ref": "#/$defs/WorkflowProcess"
-          }
-        }
-      }
-    },
     "DelegationEntry": {
       "type": "object",
       "additionalProperties": false,
@@ -1324,7 +1274,7 @@
     "WorkflowProcessCreateRequest": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Request body for `POST /api/v1/cases/{case_id}/processes` in the reference server. Servers create or accept the process identifier, bind it to the durable case ledger, pin `definitionVersion` when supplied, and set the initial `caseState` from `initialCaseState` when present.",
+      "description": "Request body for `POST /api/v1/cases/{case_id}/processes` on an existing case in the admitted scope. The server mints the process identifier, binds it to the case, pins `definitionVersion` when supplied, and sets the initial `caseState` from `initialCaseState` when present. Caller-selected identifiers and tenant values are refused.",
       "required": [
         "definitionUrl"
       ],
@@ -1340,15 +1290,6 @@
           "x-wos": {
             "openStringKind": "identifier"
           }
-        },
-        "processId": {
-          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ProcessPathId",
-          "description": "Optional caller-supplied workflow process TypeID or WOS process URN. When omitted, the server allocates a new process TypeID for the supplied case ledger."
-        },
-        "tenant": {
-          "type": "string",
-          "pattern": "^[a-z][a-z0-9-]{0,62}$",
-          "description": "Explicit deployment tenant for this instance (ADR 0068 D-1.1). When omitted, the server resolves it from `X-WOS-Tenant`."
         },
         "initialCaseState": {
           "$ref": "#/$defs/CaseStateValue",
@@ -1404,10 +1345,9 @@
     "EventSubmissionRequest": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Request body for workflow input submission through `POST /api/v1/cases/{case_id}/processes/{process_id}/inputs` (Kernel S4.9 + S11.3 `processEvent`). Submits an authored event for evaluation against the running process; the server runs the kernel transition algorithm and returns the resulting `EvaluationResult` plus the post-evaluation `lifecycleState`. The `Idempotency-Key` HTTP header is REQUIRED (ADR 0082 D-16); a repeat request within the retention window returns the original `EventSubmissionResponse` unchanged. Submissions to a process whose `lifecycleState` is not `active` (Kernel S11.5) are rejected with `WOS-1409`.",
+      "description": "Request body for workflow input submission through `POST /api/v1/cases/{case_id}/processes/{process_id}/inputs` (Kernel S4.9 + S11.3 `processEvent`). Submits an authored event for evaluation against the running process; the server runs the kernel transition algorithm and returns the resulting `EvaluationResult` plus the post-evaluation `lifecycleState`. The `Idempotency-Key` HTTP header is REQUIRED (ADR 0082 D-16); a repeat request within the retention window returns the original `EventSubmissionResponse` unchanged. Submissions to a process whose `lifecycleState` is not `active` (Kernel S11.5) are rejected with `WOS-1409`. The acting principal is the bearer's, never a body field.",
       "required": [
-        "eventName",
-        "actorRef"
+        "eventName"
       ],
       "properties": {
         "eventName": {
@@ -1417,23 +1357,6 @@
         "payload": {
           "$ref": "#/$defs/CaseStateValue",
           "description": "Optional event payload, carried as the same opaque-shaped JSON value used for `caseState`. Workflow-defined: validated by the server against the workflow's declared event-payload schema (when present, per Kernel S4.10) before evaluation; rejection is `WOS-1422`. Reusing `CaseStateValue` keeps the wire envelope closed at the API boundary while the per-payload shape stays workflow-driven."
-        },
-        "actorRef": {
-          "$ref": "#/$defs/ActorRef",
-          "description": "Actor URN authoring this event submission (ADR 0082 D-9). REQUIRED -- every mutation carries an actor for Facts-tier provenance (Kernel S3 + S8.2)."
-        },
-        "occurredAt": {
-          "type": "string",
-          "format": "date-time",
-          "description": "Optional client-asserted UTC RFC 3339 timestamp at which the originating real-world event occurred. The server records this verbatim on the resulting `stateTransition` record but uses its own clock for kernel time semantics (ADR 0069). Omitted when the caller has no out-of-band timing claim."
-        },
-        "correlationKey": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Optional cross-case correlation identifier the server uses to fan out related-instance events (Kernel S9.4). When omitted the server uses the instance's stored `correlationKey` from `WorkflowProcess.correlationKey`.",
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
         }
       }
     },
@@ -1487,7 +1410,7 @@
         "correlationKey": {
           "type": "string",
           "minLength": 1,
-          "description": "Cross-case correlation identifier this fan-out group is keyed on (Kernel S9.4). Equals the resolved correlation key the server used -- either the request's explicit `correlationKey` or the instance's stored `WorkflowProcess.correlationKey` when the request omitted one.",
+          "description": "Cross-case correlation identifier this fan-out group is keyed on (Kernel S9.4). Equals the instance's stored `WorkflowProcess.correlationKey`.",
           "x-wos": {
             "openStringKind": "identifier"
           }
@@ -1569,7 +1492,7 @@
         "evaluatedAt": {
           "type": "string",
           "format": "date-time",
-          "description": "UTC RFC 3339 timestamp at which the kernel evaluation completed (ADR 0069). Drawn from the server clock, not from the caller's `occurredAt`."
+          "description": "UTC RFC 3339 timestamp at which the kernel evaluation completed (ADR 0069). Drawn from the server clock."
         },
         "provenanceRecordId": {
           "$ref": "#/$defs/WosResourceUrn",
@@ -1640,112 +1563,10 @@
         "$ref": "#/$defs/RuntimeDrainStep"
       }
     },
-    "SuspendInstanceRequest": {
-      "type": "object",
-      "additionalProperties": false,
-      "description": "Request body for `POST /api/v1/cases/{case_id}/processes/{process_id}/suspend` (Kernel S11.3 `suspend`). Sets `lifecycleState` to `suspended` and produces an `instanceSuspended` Facts-tier provenance record. The `Idempotency-Key` HTTP header is REQUIRED (ADR 0082 D-16); a repeat request within the retention window returns the original `WorkflowProcess` unchanged. Submissions to an instance whose `lifecycleState` is not `active` are rejected with `WOS-1409`.",
-      "required": [
-        "reason",
-        "actorRef"
-      ],
-      "properties": {
-        "reason": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 4096,
-          "description": "Operator-supplied prose reason for the suspension. Length-bounded to keep the wire envelope predictable; surfaced verbatim on the `instanceSuspended` Facts-tier provenance record.",
-          "x-wos": {
-            "openStringKind": "prose"
-          }
-        },
-        "actorRef": {
-          "$ref": "#/$defs/ActorRef",
-          "description": "Actor URN authorizing the suspension (ADR 0082 D-9). REQUIRED -- every lifecycle-control mutation carries an actor."
-        },
-        "holdUntil": {
-          "$ref": "#/$defs/ExpirableTimestamp",
-          "description": "Optional UTC RFC 3339 timestamp (or the `never` sentinel) at which the suspension is intended to lift. The server uses this to surface an expected resume time on `WorkflowProcessHoldList`; it does NOT auto-resume -- `POST /api/v1/cases/{case_id}/processes/{process_id}/resume` is still required (Kernel S11.3 `resume`). Omitted when no expected lift is known."
-        }
-      }
-    },
-    "ResumeInstanceRequest": {
-      "type": "object",
-      "additionalProperties": false,
-      "description": "Request body for `POST /api/v1/cases/{case_id}/processes/{process_id}/resume` (Kernel S11.3 `resume`). Sets `lifecycleState` from `suspended` back to `active` and produces an `instanceResumed` Facts-tier provenance record. Pending events queued during the suspension are evaluated in delivery order after the status flip (Kernel S11.5). The `Idempotency-Key` HTTP header is REQUIRED (ADR 0082 D-16); a repeat request within the retention window returns the original `WorkflowProcess` unchanged. Submissions to an instance whose `lifecycleState` is not `suspended` are rejected with `WOS-1409`.",
-      "required": [
-        "actorRef"
-      ],
-      "properties": {
-        "actorRef": {
-          "$ref": "#/$defs/ActorRef",
-          "description": "Actor URN authorizing the resume (ADR 0082 D-9). REQUIRED."
-        },
-        "justification": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 4096,
-          "description": "Optional operator-supplied prose recording why the suspension is being lifted. Length-bounded; surfaced verbatim on the `instanceResumed` Facts-tier provenance record. Omitted when no separate justification is needed beyond the actor identity.",
-          "x-wos": {
-            "openStringKind": "prose"
-          }
-        }
-      }
-    },
-    "TerminationKind": {
-      "description": "Closed-with-vendor-extension classifier for an irreversible `terminate` operation (Kernel S11.3). Reserved literals: `policy-violation` (a governance check determined the case must end without completion); `applicant-withdrawn` (the applicant or authorized agent withdrew the underlying request); `duplicate` (the case was identified as a duplicate of another and the canonical instance carries the work); `error` (the case entered an unrecoverable error posture); `administrative` (operator-initiated closure for a reason outside the other literals). Vendor extensions MUST use an `x-` prefix per ADR 0082 D-12.",
-      "oneOf": [
-        {
-          "enum": [
-            "policy-violation",
-            "applicant-withdrawn",
-            "duplicate",
-            "error",
-            "administrative"
-          ]
-        },
-        {
-          "type": "string",
-          "pattern": "^x-[a-z][a-z0-9-]*$"
-        }
-      ],
-      "examples": [
-        "applicant-withdrawn",
-        "duplicate"
-      ]
-    },
-    "TerminateInstanceRequest": {
-      "type": "object",
-      "additionalProperties": false,
-      "description": "Request body for `POST /api/v1/cases/{case_id}/processes/{process_id}/terminate` (Kernel S11.3 `terminate`). Sets `lifecycleState` to `terminated` (irreversible per Kernel S11.5) and produces an `instanceTerminated` Facts-tier provenance record. The `Idempotency-Key` HTTP header is REQUIRED (ADR 0082 D-16); a repeat request within the retention window returns the original `WorkflowProcess` unchanged. Submissions to an instance whose `lifecycleState` is `completed` or already `terminated` are rejected with `WOS-1409`.",
-      "required": [
-        "reason",
-        "terminationKind",
-        "actorRef"
-      ],
-      "properties": {
-        "reason": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 4096,
-          "description": "Operator-supplied prose reason for the termination. Length-bounded; surfaced verbatim on the `instanceTerminated` Facts-tier provenance record. The `terminationKind` is the machine-readable classifier; `reason` is the free-prose explanation.",
-          "x-wos": {
-            "openStringKind": "prose"
-          }
-        },
-        "terminationKind": {
-          "$ref": "#/$defs/TerminationKind",
-          "description": "Closed-with-vendor-extension machine-readable classifier (ADR 0082 D-12)."
-        },
-        "actorRef": {
-          "$ref": "#/$defs/ActorRef",
-          "description": "Actor URN authorizing the termination (ADR 0082 D-9). REQUIRED."
-        }
-      }
-    },
     "ProcessLifecycleRequest": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Optional request envelope for ADR 0093 dual-identity case/process lifecycle routes (`POST /api/v1/cases/{case_id}/processes/{process_id}/suspend|resume|terminate`). These routes validate the case/process binding before applying the lifecycle mutation; the wire body carries only an optional operator rationale. The canonical process-scoped lifecycle contracts with full actor and idempotency requirements remain `SuspendInstanceRequest`, `ResumeInstanceRequest`, and `TerminateInstanceRequest` on the primary instance routes per Kernel S11.3.",
+      "description": "Optional request envelope for ADR 0093 dual-identity case/process lifecycle routes (`POST /api/v1/cases/{case_id}/processes/{process_id}/suspend|resume|terminate`). These routes validate the case/process binding before applying the lifecycle mutation; the actor is the bearer's principal and the body carries only an optional operator rationale, which the workflow may require (`lifecycle.suspend.reasonRequired`, `lifecycle.terminate.reasonRequired`, Kernel S11.3).",
       "properties": {
         "reason": {
           "type": "string",

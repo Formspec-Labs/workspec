@@ -79,7 +79,6 @@ Supporting modules handle the rule families that are shared across processors:
 - `ContractValidator`: Formspec or schema validation for contracts
 - `ExternalService`: controlled service invocation for `invokeService`
 - `AccessControl`: actor transition and read permissions
-- `ProvenanceSigner`: signing and verification of provenance records
 - `ReportRenderer`: rendering human-readable explanations
 - `EventQueue`: per-instance queue operations
 - `ActionExecutor`: host-managed actions such as task creation

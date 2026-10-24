@@ -664,7 +664,7 @@
       },
       "ApplicantCaseSummaryPage": {
         "additionalProperties": false,
-        "description": "Cursor-paginated applicant case page (ADR 0082 D-7). Default ordering is `updatedAt` descending so applicants see their most recently active cases first.",
+        "description": "Cursor-paginated applicant case page (ADR 0082 D-7). Ordering is case id descending (creation order, newest first), which is keyset-stable. A page may be short or empty while `hasMore` is true; clients MUST follow `hasMore`, not page length.",
         "properties": {
           "cursor": {
             "description": "Opaque token for the next page. Omitted when hasMore is false.",
@@ -2885,7 +2885,7 @@
             }
           },
           "factor": {
-            "description": "Short identifier or label for the factor.",
+            "description": "Short identifier or label for the evaluated counterfactual factor.",
             "examples": [
               "incomeReduction",
               "applicantRace"
@@ -3026,7 +3026,7 @@
             }
           },
           "detail": {
-            "description": "Optional human-readable detail for the criterion result.",
+            "description": "Optional human-readable detail explaining the criterion evaluation result.",
             "examples": [
               "Reported income $17,500 below SNAP threshold $20,000."
             ],
@@ -3037,7 +3037,11 @@
             }
           },
           "satisfied": {
-            "description": "True when the criterion was satisfied by the case facts.",
+            "description": "True when the criterion was satisfied by the evaluated case facts.",
+            "examples": [
+              true,
+              false
+            ],
             "type": "boolean"
           }
         },
@@ -6821,7 +6825,7 @@
         "description": "Reference to an authoritative rule applied in a decision. Mirrors `wos-workflow.schema.json#/$defs/RuleReference` (governance S6.2). Inlined at the API layer so codegen does not need a cross-schema resolver; structurally aligned so the API projection is byte-compatible with the kernel definition.",
         "properties": {
           "citation": {
-            "description": "Formal citation to the source document.",
+            "description": "Formal citation to the authoritative source document in standard legal format.",
             "examples": [
               "42 CFR § 435.916"
             ],
@@ -6832,7 +6836,7 @@
             }
           },
           "description": {
-            "description": "Human-readable summary of the rule.",
+            "description": "Human-readable summary of what this authoritative rule requires or prohibits.",
             "examples": [
               "Annual renewal of eligibility required for continued benefit receipt."
             ],
@@ -8462,7 +8466,7 @@
       },
       "WorkflowProcessCreateRequest": {
         "additionalProperties": false,
-        "description": "Request body for `POST /api/v1/cases/{case_id}/processes` in the reference server. Servers create or accept the process identifier, bind it to the durable case ledger, pin `definitionVersion` when supplied, and set the initial `caseState` from `initialCaseState` when present.",
+        "description": "Request body for `POST /api/v1/cases/{case_id}/processes` on an existing case in the admitted scope. The server mints the process identifier, binds it to the case, pins `definitionVersion` when supplied, and sets the initial `caseState` from `initialCaseState` when present. Caller-selected identifiers and tenant values are refused.",
         "properties": {
           "definitionUrl": {
             "$ref": "#/components/schemas/WorkflowUrl",
@@ -8479,15 +8483,6 @@
           "initialCaseState": {
             "$ref": "#/components/schemas/CaseStateValue",
             "description": "Optional initial case-state object applied to the newly bound process."
-          },
-          "processId": {
-            "$ref": "#/components/schemas/ProcessPathId",
-            "description": "Optional caller-supplied workflow process TypeID or WOS process URN. When omitted, the server allocates a new process TypeID for the supplied case ledger."
-          },
-          "tenant": {
-            "description": "Explicit deployment tenant for this instance (ADR 0068 D-1.1). When omitted, the server resolves it from `X-WOS-Tenant`.",
-            "pattern": "^[a-z][a-z0-9-]{0,62}$",
-            "type": "string"
           }
         },
         "required": [
@@ -8704,18 +8699,6 @@
       "get": {
         "operationId": "applicant_list_cases",
         "parameters": [
-          {
-            "description": "When true, restrict results to cases where at least one applicant-owed task is `pending` or `drafted`.",
-            "in": "query",
-            "name": "actionNeeded",
-            "required": false,
-            "schema": {
-              "type": [
-                "boolean",
-                "null"
-              ]
-            }
-          },
           {
             "description": "Opaque resume token returned by the previous page (ADR 0082 D-7).",
             "in": "query",

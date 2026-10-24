@@ -98,7 +98,7 @@ Default scope is the **calling applicant's** cases and tasks — the server filt
 
 ## Pagination
 
-`GET /api/v1/applicant/cases`, `GET /api/v1/applicant/cases/{id}/tasks`, and `GET /api/v1/applicant/notifications` use cursor pagination per `api/pagination.schema.json`. Cursors are opaque, single-use within the issuing deploy. Cursor expiry returns `410 Gone` with `WOS-1410` (ADR 0082 D-7). No `total`, `page`, or `pageSize` echo.
+`GET /api/v1/applicant/cases`, `GET /api/v1/applicant/cases/{id}/tasks`, and `GET /api/v1/applicant/notifications` use cursor pagination per `api/pagination.schema.json`. Cursors are opaque, single-use within the issuing deploy. Cursor expiry returns `410 Gone` with `WOS-1410` (ADR 0082 D-7). No `total`, `page`, or `pageSize` echo. `GET /api/v1/applicant/cases` orders by case id descending (creation order, newest first). A page may be short or empty while `hasMore` is true because filters apply within a page; clients MUST follow `hasMore`, not page length.
 
 The `ApplicantCaseDetail.openTasks`, `recentNotifications`, and `statusTimeline` arrays are NOT paginated — they are bounded by server-side cap (typically 20 items each). Clients fetch the full list via the dedicated subresource endpoints when the case has more.
 
@@ -106,7 +106,7 @@ The `ApplicantCaseDetail.openTasks`, `recentNotifications`, and `statusTimeline`
 
 All non-2xx responses use `application/problem+json` per ADR 0082 D-8 and `api/error.schema.json`. Domain-relevant codes from the registry:
 
-- `WOS-1403`: applicant scope filter rejected — for example a staff principal calling `/api/v1/applicant/cases` for another applicant's URN.
+- `WOS-1403`: the principal lacks the operation scope the route requires (for example a token without case read). Never used for another applicant's case: that is `WOS-1404`.
 - `WOS-1404`: case URN does not exist or is not visible to the calling applicant.
 - `WOS-1410`: cursor expired.
 - `WOS-1422`: request failed schema validation.

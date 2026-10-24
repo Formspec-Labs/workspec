@@ -24,7 +24,7 @@ The `audienceProjection` block is the **only** allowed asymmetry between replay-
 
 `caseLedgerId` is the durable case-ledger URN. `processes` is an array of workflow process URNs (not full process projections — those live at the sibling subresource route). `events` is the merged time-ordered provenance stream across direct-append rows (no `processId`) and process-emitted rows (with `processId`). `status` is the closed `CaseStatus` rollup. `lastUpdated` is the RFC 3339 UTC timestamp of the most recent event in the merged stream.
 
-N:1 (N workflow processes per one case ledger) is supported from day one per CBR §3. The `processes` array MAY hold zero entries when the case was created via the direct-append surface (`POST /api/v1/cases/{case_id}/events` with `wos.kernel.case_created`) and no workflow has been started yet — `status` is `genesis` in this case.
+N:1 (N workflow processes per one case ledger) is supported from day one per CBR §3. The `processes` array MAY hold zero entries when server-owned intake has established case genesis and no workflow has been started yet — `status` is `genesis` in this case.
 
 ## Identifiers
 
@@ -39,11 +39,13 @@ N:1 (N workflow processes per one case ledger) is supported from day one per CBR
 
 `GET /api/v1/cases/{case_id}` returns the staff `CaseView` projection. Returns `404` (`WOS-1404`) when no workflow process is bound to the case ledger AND no direct-append provenance row exists at that ledger URN. Returns `400` when `case_id` is not a valid case TypeID or `urn:wos:` case URN.
 
+`POST /api/v1/cases/{case_id}/events` requires an existing case in the admitted scope. Application Start and accepted intake own creation and mint its ID; direct `wos.kernel.case_created` requests are refused. Existing-case appends require relationship authorization and retain replay under `(scope, case_id, Idempotency-Key)`. Missing and foreign-scope cases return `404` before mutation.
+
 The applicant-audience route at `GET /api/v1/applicant/cases/{id}` returns a different shape (`ApplicantCaseDetail`) and is documented in [`applicant.md`](./applicant.md).
 
 The case-scoped process subresource routes — `GET /api/v1/cases/{case_id}/processes/{process_id}` and its lifecycle/provenance siblings — return the full `WorkflowProcess` projection from [`instance.md`](./instance.md). The case view intentionally does NOT inline full process bodies (ADR-0082 D-3 subresource discipline).
 
-`POST /api/v1/cases/{case_id}/events` is the direct case-ledger append surface. `CaseEventAppendRequest` carries the registered WOS event literal, actor identifier, idempotency token, and optional event-contract data; `CaseEventAppendReceipt` returns the committed case ledger, provenance event id, hash, and sequence.
+`POST /api/v1/cases/{case_id}/events` is the direct case-ledger append surface. `CaseEventAppendRequest` carries the registered WOS event literal and optional event-contract data; the retry token is the REQUIRED `Idempotency-Key` header and the actor is the bearer's principal. `CaseEventAppendReceipt` returns the committed case ledger, provenance event id, hash, and sequence, and nothing else: the server's stored replay record stays internal.
 
 ## Pagination
 
