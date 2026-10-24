@@ -1584,10 +1584,17 @@ impl WosRuntime {
             .signature_provider
             .as_deref()
             .unwrap_or(&signature_evidence.source_system);
-        let ceremony_id = signature_evidence
-            .ceremony_id
-            .as_deref()
-            .unwrap_or(subject.response_id());
+        // A task's own identifier names its ceremony; original intake evidence must
+        // carry the Source ceremony it was signed in.
+        let ceremony_id = match (signature_evidence.ceremony_id.as_deref(), &subject) {
+            (Some(ceremony_id), _) => ceremony_id,
+            (None, AdmissionSubject::Task(task)) => task.task_id.as_str(),
+            (None, AdmissionSubject::Intake { .. }) => {
+                return Err(RuntimeError::Signature(
+                    "original intake evidence lacks ceremony identity".into(),
+                ));
+            }
+        };
         let document_claims = signature_evidence.document_claims.as_ref();
         let source_response_ref = if let Some(claims) = document_claims {
             let (_, accepted_artifact) = source.task_context.ok_or_else(|| {

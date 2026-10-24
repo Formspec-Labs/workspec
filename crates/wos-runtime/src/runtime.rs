@@ -5655,6 +5655,34 @@ mod tests {
         assert!(matches!(err, RuntimeError::MigrationRejected(_)));
     }
 
+    #[test]
+    fn captured_source_oidc_login_requires_complete_original_owner_facts() {
+        let response =
+            integrity_canonical::ResponseJson::from_value(&serde_json::json!({})).unwrap();
+        for index in 0..5 {
+            let mut fields = [
+                "https://issuer.example.test",
+                "subject",
+                "client",
+                "source-ownership",
+                "selected-oidc",
+            ];
+            fields[index] = "";
+            let capture = CapturedSignatureSigner::new(
+                "response",
+                "actor:human:person",
+                "oidc:person",
+                &response,
+            )
+            .unwrap();
+            assert!(
+                capture
+                    .with_source_oidc_login(fields[0], fields[1], fields[2], fields[3], fields[4])
+                    .is_err()
+            );
+        }
+    }
+
     fn original_signing_runtime() -> (
         WosRuntime,
         IntakeAcceptanceRequest,
@@ -5804,8 +5832,9 @@ mod tests {
             "foreign-subject",
             "foreign-actor",
             "changed-response",
+            "missing-ceremony",
         ] {
-            let (mut runtime, request, response, evidence, calls) = original_signing_runtime();
+            let (mut runtime, request, response, mut evidence, calls) = original_signing_runtime();
             let mut captured_request = request.clone();
             let mut captured_response = response.clone();
             match failure {
@@ -5832,6 +5861,7 @@ mod tests {
                 "wrong-request" => {
                     captured_request.document["handoffId"] = serde_json::json!("foreign")
                 }
+                "missing-ceremony" => evidence[0].ceremony_id = None,
                 "changed-response" => {
                     let mut raw = response.value().clone();
                     raw["changed"] = serde_json::json!(true);
@@ -6795,6 +6825,232 @@ mod tests {
                 "reason": "test-harness-no-signature-primitive"
             })
         );
+    }
+
+    #[test]
+    fn submit_task_response_signature_binds_the_captured_source_signer() {
+        let (kernel, profile) = sig013_harness_documents();
+        let mut runtime = runtime_with_kernel_sig013_harness(kernel.clone())
+            .with_signature_profile("signatureProfile", profile);
+        let process_id = test_process_id("case-sig013-captured-signer");
+        runtime
+            .create_process(CreateProcessRequest {
+                process_id: process_id.to_string(),
+                tenant: None,
+                definition_url: kernel.url.clone().unwrap(),
+                definition_version: kernel.version.clone().unwrap(),
+                initial_case_state: None,
+            })
+            .expect("create_process");
+        runtime
+            .enqueue_event(
+                process_id,
+                PendingEvent {
+                    origin: None,
+                    event: "start".to_string(),
+                    actor_id: Some("applicant".to_string()),
+                    data: None,
+                    timestamp: String::new(),
+                    idempotency_token: Some("sig013-captured-signer-start".to_string()),
+                },
+            )
+            .expect("enqueue start");
+        runtime
+            .drain_until_idle(process_id)
+            .expect("drain after start");
+        let task_id = runtime
+            .load_process(process_id)
+            .expect("load instance")
+            .active_tasks
+            .iter()
+            .find(|t| t.task_ref == "applicantTask")
+            .expect("applicantTask from signature onEntry")
+            .task_id
+            .clone();
+        let response = serde_json::json!({
+            "status": "completed",
+            "definitionUrl": "urn:test:formspec:signature",
+            "definitionVersion": "1.0.0",
+            "data": {
+                "signerId": "oidc:task-applicant",
+                "signatureProvider": "formspec",
+                "ceremonyId": "ceremony-sequential",
+                "identityBinding": {"method": "email-otp", "assuranceLevel": "standard"},
+                "signature": {
+                    "acceptedAt": "2026-04-22T12:00:00Z",
+                    "affirmed": true,
+                    "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                }
+            }
+        });
+        let canonical = |value: &serde_json::Value| {
+            integrity_canonical::ResponseJson::from_value(value).unwrap()
+        };
+        let affirmed = |runtime: &WosRuntime| {
+            runtime
+                .store
+                .load_record(process_id)
+                .unwrap()
+                .provenance_log
+                .iter()
+                .any(|row| row.record_kind == wos_core::ProvenanceKind::SignatureAffirmation)
+        };
+
+        // A signer captured for another task or native actor is refused before any affirmation.
+        for (subject, actor) in [
+            ("foreign-task", "applicant"),
+            (task_id.as_str(), "foreign-actor"),
+        ] {
+            runtime.captured_signature_signer = Some(
+                CapturedSignatureSigner::new(
+                    subject,
+                    actor,
+                    "oidc:task-applicant",
+                    &canonical(&response),
+                )
+                .unwrap(),
+            );
+            assert!(
+                runtime
+                    .submit_task_response(
+                        &task_id,
+                        canonical(&response),
+                        "applicant",
+                        Some("foreign-binding")
+                    )
+                    .is_err()
+            );
+            assert!(!affirmed(&runtime));
+        }
+        // Without a captured signer the Response's own signer cannot stand in for the actor.
+        runtime.captured_signature_signer = None;
+        assert!(
+            runtime
+                .submit_task_response(
+                    &task_id,
+                    canonical(&response),
+                    "applicant",
+                    Some("missing-binding")
+                )
+                .is_err()
+        );
+        assert!(!affirmed(&runtime));
+
+        // An original OIDC login is low assurance; it never satisfies a stronger policy.
+        let bind = |value: &serde_json::Value| {
+            CapturedSignatureSigner::new(
+                &task_id,
+                "applicant",
+                "oidc:task-applicant",
+                &canonical(value),
+            )
+            .unwrap()
+            .with_source_oidc_login(
+                "https://issuer.example.test",
+                "task-person",
+                "selected-client",
+                "source-ownership",
+                "selected-oidc",
+            )
+            .unwrap()
+        };
+        let mut without_explicit = response.clone();
+        without_explicit["data"]
+            .as_object_mut()
+            .unwrap()
+            .remove("identityBinding");
+        runtime.captured_signature_signer = Some(bind(&without_explicit));
+        let error = runtime
+            .submit_task_response(
+                &task_id,
+                canonical(&without_explicit),
+                "applicant",
+                Some("low-oidc-method"),
+            )
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("identity method 'oidc' does not satisfy policy"),
+            "{error}"
+        );
+        let policy = runtime.signature_profiles[0]
+            .profile
+            .authentication_policies[0]
+            .clone();
+        runtime.signature_profiles[0]
+            .profile
+            .authentication_policies[0]
+            .method = serde_json::from_value(serde_json::json!("oidc")).unwrap();
+        runtime.signature_profiles[0]
+            .profile
+            .authentication_policies[0]
+            .assurance_level = "high".into();
+        let error = runtime
+            .submit_task_response(
+                &task_id,
+                canonical(&without_explicit),
+                "applicant",
+                Some("low-oidc-assurance"),
+            )
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("identity assurance 'low' is below policy"),
+            "{error}"
+        );
+        runtime.signature_profiles[0]
+            .profile
+            .authentication_policies[0] = policy;
+        let mut explicit_none = response.clone();
+        explicit_none["data"]["identityBinding"] =
+            serde_json::json!({"method": "none", "assuranceLevel": "low"});
+        runtime.captured_signature_signer = Some(bind(&explicit_none));
+        let error = runtime
+            .submit_task_response(
+                &task_id,
+                canonical(&explicit_none),
+                "applicant",
+                Some("explicit-none"),
+            )
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("identity method 'none' does not satisfy policy"),
+            "{error}"
+        );
+        assert!(!affirmed(&runtime));
+
+        // The captured signer, not the native actor, is the affirmation's signer.
+        runtime.captured_signature_signer = Some(bind(&response));
+        let result = runtime
+            .submit_task_response(
+                &task_id,
+                canonical(&response),
+                "applicant",
+                Some("sig013-captured-signer-submit"),
+            )
+            .expect("signature admission should complete");
+        assert!(
+            matches!(result, TaskSubmissionResult::Completed { .. }),
+            "expected completed submission, got {result:?}"
+        );
+        let record = runtime.store.load_record(process_id).expect("load record");
+        let affirmation = record
+            .provenance_log
+            .iter()
+            .find(|record| record.record_kind == wos_core::ProvenanceKind::SignatureAffirmation)
+            .expect("signature affirmation provenance must be appended");
+        let data = affirmation
+            .data
+            .as_ref()
+            .expect("signature affirmation carries data");
+        assert_eq!(data["signerId"], serde_json::json!("oidc:task-applicant"));
+        assert_eq!(affirmation.actor_id.as_deref(), Some("applicant"));
+        assert_eq!(data["identityBinding"]["method"], "email-otp");
+        assert_eq!(data["identityBinding"]["assuranceLevel"], "standard");
     }
 
     #[test]
