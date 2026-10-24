@@ -6,9 +6,29 @@
 //! fixture without data loss. Each test loads a fixture, deserializes
 //! it, and asserts key structural properties.
 
+use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
-use wos_core::KernelDocument;
+use wos_core::model::governance_checks::{GovernanceIssueKind, LifecycleIndex, check_governance};
+use wos_core::model::notice_requirements::adverse_notice_template_issues;
+use wos_core::{GovernanceDocument, KernelDocument};
+
+/// Rights-impacting workflow fixtures whose `governance.dueProcess` replaced the
+/// retired `noticeRequirements` / `appealProcess` stub with canonical Governance §3.
+const DUE_PROCESS_FIXTURES: [&str; 9] = [
+    "kernel/autonomy-caps.json",
+    "kernel/benefits-adjudication.json",
+    "kernel/case-relationship-appeal.json",
+    "kernel/dcr-zone.json",
+    "kernel/deontic-enforcement.json",
+    "kernel/due-process.json",
+    "kernel/hold-resume-lifecycle.json",
+    "kernel/medicaid-redetermination.json",
+    "validation/foia-kernel-llm-test.json",
+];
+
+/// The retired stub's `minDaysBeforeDecision: 10`, as Governance §3.2 notice grace.
+const NOTICE_GRACE_PERIOD: &str = "P10D";
 
 fn workspace_root() -> PathBuf {
     let manifest_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -37,6 +57,98 @@ fn load_fixture(name: &str) -> KernelDocument {
         .unwrap_or_else(|e| panic!("failed to read fixture {}: {e}", path.display()));
     serde_json::from_str(&json)
         .unwrap_or_else(|e| panic!("failed to deserialize fixture {name}: {e}"))
+}
+
+/// Returns the one Delivery template `key` names for the workflow at `url`.
+fn notice_template(url: &str, key: &str) -> Value {
+    let dir = workspace_root().join("fixtures/sidecars");
+    let mut found = Vec::new();
+    for entry in fs::read_dir(&dir).expect("fixtures/sidecars is readable") {
+        let path = entry.expect("sidecar entry").path();
+        let sidecar: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap())
+            .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        if sidecar.get("$wosDelivery").is_some()
+            && sidecar.get("targetWorkflow").and_then(Value::as_str) == Some(url)
+            && let Some(template) = sidecar.pointer(&format!("/notifications/templates/{key}"))
+        {
+            found.push(template.clone());
+        }
+    }
+    assert_eq!(
+        found.len(),
+        1,
+        "{url}: exactly one template '{key}' resolves"
+    );
+    found.pop().unwrap()
+}
+
+/// Asserts the canonical due-process meaning of a migrated workflow fixture.
+///
+/// The stub required notice at least ten days before an adverse decision and
+/// appeal review independent of the original decider. Canonically that is a
+/// before-effect notice with a grace period and an enabled appeal whose
+/// reviewer is independent, plus the individualized counterfactual
+/// explanation rights-impacting work requires and a resolving notice template.
+fn assert_canonical_due_process(rel: &str) {
+    let path = workspace_root().join("fixtures").join(rel);
+    let kernel: KernelDocument = serde_json::from_str(&fs::read_to_string(&path).unwrap())
+        .unwrap_or_else(|e| panic!("{rel}: {e}"));
+    assert_eq!(
+        kernel.impact_level,
+        Some(wos_core::ImpactLevel::RightsImpacting)
+    );
+    let block = kernel
+        .governance
+        .clone()
+        .expect("rights-impacting embeds governance");
+    // Decoding runs the owning schema, so a retired key refuses here.
+    let governance: GovernanceDocument =
+        serde_json::from_value(block.clone()).unwrap_or_else(|e| panic!("{rel}: {e}"));
+    let declaration_issues: Vec<_> =
+        check_governance(&kernel, &block, &LifecycleIndex::new(&kernel))
+            .issues
+            .into_iter()
+            .filter(|issue| {
+                matches!(
+                    issue.kind,
+                    GovernanceIssueKind::DueProcessMissing
+                        | GovernanceIssueKind::NoticeTiming
+                        | GovernanceIssueKind::ExplanationLevel
+                        | GovernanceIssueKind::CounterfactualRequired
+                )
+            })
+            .map(|issue| issue.path)
+            .collect();
+    assert!(
+        declaration_issues.is_empty(),
+        "{rel}: {declaration_issues:?}"
+    );
+    let policy = governance
+        .due_process
+        .and_then(|due| due.adverse_decision_policy)
+        .unwrap_or_else(|| panic!("{rel}: adverseDecisionPolicy"));
+    assert!(policy.notice_required, "{rel}: notice is required");
+    assert_eq!(
+        policy.notice_grace_period.as_deref(),
+        Some(NOTICE_GRACE_PERIOD)
+    );
+    let appeal = policy.appeal_mechanism.expect("appealMechanism");
+    assert!(appeal.enabled, "{rel}: appeal is available");
+    assert_eq!(
+        appeal.reviewer_constraint.as_deref(),
+        Some("independentFromOriginal")
+    );
+    let key = policy.notice_template_key.expect("noticeTemplateKey");
+    let template = notice_template(kernel.url.as_deref().expect("workflow url"), &key);
+    let issues = adverse_notice_template_issues(&template);
+    assert!(issues.is_empty(), "{rel}: template '{key}': {issues:?}");
+}
+
+#[test]
+fn rights_impacting_fixtures_declare_canonical_due_process() {
+    for rel in DUE_PROCESS_FIXTURES {
+        assert_canonical_due_process(rel);
+    }
 }
 
 #[test]

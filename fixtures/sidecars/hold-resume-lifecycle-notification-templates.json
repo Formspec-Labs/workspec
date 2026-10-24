@@ -1,0 +1,46 @@
+{
+  "$wosDelivery": "1.0",
+  "targetWorkflow": "https://test.wos-spec.org/workflows/hold-resume-lifecycle",
+  "notifications": {
+    "templates": {
+      "adverseDecisionNotice": {
+        "category": "adverse-decision",
+        "description": "Adverse decision notice for the Hold/Resume Lifecycle Test fixture: individualized determination and reasons, and the right to an independent appeal (Governance §3.2, §3.5).",
+        "subject": "Notice of Decision - Case {{caseId}}",
+        "sections": [
+          {
+            "id": "determination",
+            "contentType": "structured",
+            "title": "Decision",
+            "content": "Your case has been decided: {{determination}}."
+          },
+          {
+            "id": "reasons",
+            "contentType": "structured",
+            "title": "Reason(s) for This Decision",
+            "content": "This decision rests on the specific facts of your case:\n\n{{reasonCodes}}"
+          },
+          {
+            "id": "appealRights",
+            "contentType": "appeal-rights",
+            "title": "Your Right to Appeal",
+            "content": "You may appeal this decision by {{appealDeadline}}. An adjudicator who was not involved in the original decision will review your appeal."
+          },
+          {
+            "id": "appealInstructions",
+            "contentType": "action-required",
+            "title": "How to File an Appeal",
+            "content": "Submit a written appeal to {{appealAddress}} by {{appealDeadline}}."
+          }
+        ],
+        "requiredVariables": [
+          "caseId",
+          "determination",
+          "reasonCodes",
+          "appealDeadline",
+          "appealAddress"
+        ]
+      }
+    }
+  }
+}

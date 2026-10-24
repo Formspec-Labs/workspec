@@ -113,11 +113,17 @@
   },
   "governance": {
     "dueProcess": {
-      "noticeRequirements": {
-        "minDaysBeforeDecision": 10
-      },
-      "appealProcess": {
-        "independentReviewRequired": true
+      "adverseDecisionPolicy": {
+        "noticeRequired": true,
+        "noticeTiming": "beforeEffective",
+        "noticeGracePeriod": "P10D",
+        "noticeTemplateKey": "adverseDecisionNotice",
+        "explanationLevel": "individualized",
+        "counterfactualRequired": true,
+        "appealMechanism": {
+          "enabled": true,
+          "reviewerConstraint": "independentFromOriginal"
+        }
       }
     }
   },
