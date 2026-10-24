@@ -76,8 +76,9 @@ pub use wos_events::provenance::{
     CapabilityInvocationInput, CaseFileSnapshot, ClockResolvedInput, ClockResolvedResolution,
     ClockSkewObservedInput, ClockStartedInput, CommitAttemptFailureInput, CommitFailureKind,
     ConfigurationWarningInput, CorrectionAuthorizedInput, DeterminationAmendedInput,
-    DeterminationRescindedInput, IdentityAttestationInput, InstanceMigratedInput, KeyRebindError,
-    KeyRebindInput, MigrationPinChangedInput, ProvenanceAuditTier, ProvenanceKind, ProvenanceLog,
-    ProvenanceRecord, ReinstatedInput, RescissionAuthorizedInput, SignatureAdmissionFailedInput,
+    DeterminationRescindedInput, IdentityAttestationInput, InstanceLifecycleInput,
+    InstanceMigratedInput, KeyRebindError, KeyRebindInput, LifecycleControl,
+    MigrationPinChangedInput, ProvenanceAuditTier, ProvenanceKind, ProvenanceLog, ProvenanceRecord,
+    ReinstatedInput, RescissionAuthorizedInput, SignatureAdmissionFailedInput,
     SignatureAffirmationInput, WOS_CANONICAL_EVENT_LITERALS, audit_layer_for_kind,
 };

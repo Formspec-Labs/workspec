@@ -193,6 +193,7 @@ fn workflow_process(spec: &ProcessSpec, case_ledger_id: &str) -> WorkflowProcess
         compensation_logs: Default::default(),
         status: InstanceStatus::Active,
         stalled_since: None,
+        resumed_at: None,
         decline_reason: None,
         voided_by: None,
         voided_at: None,

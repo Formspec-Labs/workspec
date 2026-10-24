@@ -37,6 +37,10 @@ impl WosRuntime {
         let now_ms = self.clock.now_ms();
         let now_iso = format_timestamp(now_ms)?;
         let mut record = self.store.load_record(process_id)?;
+        super::process::require_status(
+            &record.process,
+            super::process::StatusUse::Evaluate("event processing"),
+        )?;
         let prior = record.clone();
         let minter = process_minter(&record.process)?;
         let mut appended_provenance =

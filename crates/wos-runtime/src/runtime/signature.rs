@@ -4331,6 +4331,7 @@ mod k2_field_binding_tests {
             compensation_logs: Default::default(),
             status: wos_core::instance::InstanceStatus::Active,
             stalled_since: None,
+            resumed_at: None,
             decline_reason: None,
             voided_by: None,
             voided_at: None,

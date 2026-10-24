@@ -2162,6 +2162,7 @@ mod tests {
             compensation_logs: Default::default(),
             status: InstanceStatus::Active,
             stalled_since: None,
+            resumed_at: None,
             decline_reason: None,
             voided_by: None,
             voided_at: None,

@@ -28,6 +28,128 @@ use super::{
     format_timestamp, populate_provenance_record_fields, stamp_custody_receipt, stamp_provenance,
 };
 
+/// What an operation does to an instance, for the Kernel S11.5 status table.
+#[derive(Debug, Clone, Copy)]
+pub enum StatusUse {
+    /// Evaluates events, fires deadlines or acts on tasks: the named operation.
+    Evaluate(&'static str),
+    /// Queues an event without evaluating it.
+    Queue,
+    /// Changes the governing definition (Kernel S11.2).
+    Migrate,
+    /// Suspends, resumes or terminates (Kernel S11.3).
+    Lifecycle(wos_core::LifecycleControl),
+}
+
+/// Whether `status` admits `operation` (Kernel S11.3, S11.5): suspend needs `active`, resume
+/// needs `suspended`, terminate needs `active` or `suspended`; a suspended instance evaluates
+/// nothing but may queue; a completed or otherwise final instance admits nothing. Other
+/// statuses keep every operation. Records of work already committed (custody receipts,
+/// presentation outcomes) are not operations on the instance and are never gated.
+#[must_use]
+pub fn status_admits(status: InstanceStatus, operation: StatusUse) -> bool {
+    use wos_core::LifecycleControl as Control;
+    match (status, operation) {
+        (InstanceStatus::Active, StatusUse::Lifecycle(control)) => control != Control::Resume,
+        (InstanceStatus::Suspended, StatusUse::Lifecycle(control)) => control != Control::Suspend,
+        (_, StatusUse::Lifecycle(_)) => false,
+        (InstanceStatus::Suspended, use_) => matches!(use_, StatusUse::Queue),
+        (
+            InstanceStatus::Completed
+            | InstanceStatus::Terminated
+            | InstanceStatus::Declined
+            | InstanceStatus::Voided
+            | InstanceStatus::Expired,
+            _,
+        ) => false,
+        (InstanceStatus::Active | InstanceStatus::Migrating | InstanceStatus::Stalled, _) => true,
+    }
+}
+
+/// Refuses what the instance's status forbids ([`status_admits`]).
+///
+/// # Errors
+/// Returns [`RuntimeError::InstanceStatusConflict`] naming the status and the operation.
+pub fn require_status(process: &WorkflowProcess, operation: StatusUse) -> Result<(), RuntimeError> {
+    use wos_core::LifecycleControl as Control;
+    if status_admits(process.status, operation) {
+        return Ok(());
+    }
+    let operation = match operation {
+        StatusUse::Evaluate(name) => name,
+        StatusUse::Queue => "queueing an event",
+        StatusUse::Migrate => "migration",
+        StatusUse::Lifecycle(Control::Suspend) => "suspend",
+        StatusUse::Lifecycle(Control::Resume) => "resume",
+        StatusUse::Lifecycle(Control::Terminate) => "terminate",
+    };
+    Err(RuntimeError::InstanceStatusConflict {
+        status: serde_json::to_value(process.status)
+            .ok()
+            .and_then(|value| value.as_str().map(str::to_owned))
+            .unwrap_or_default(),
+        operation,
+    })
+}
+
+/// Returns the operation's non-blank reason, refusing its absence when the governing
+/// workflow's `lifecycle.<operation>.reasonRequired` asks for one (Kernel S11.3; resume
+/// takes no reason). The workflow, not the caller, decides.
+///
+/// # Errors
+/// Returns [`RuntimeError::LifecycleReasonRequired`] for a required but blank or absent reason.
+pub fn require_lifecycle_reason<'a>(
+    kernel: &wos_core::KernelDocument,
+    control: wos_core::LifecycleControl,
+    reason: Option<&'a str>,
+) -> Result<Option<&'a str>, RuntimeError> {
+    use wos_core::LifecycleControl as Control;
+    let reason = reason.filter(|reason| !reason.trim().is_empty());
+    let (policy, operation) = match control {
+        Control::Suspend => (kernel.lifecycle.suspend, "suspend"),
+        Control::Terminate => (kernel.lifecycle.terminate, "terminate"),
+        Control::Resume => (None, "resume"),
+    };
+    if policy.is_some_and(|policy| policy.reason_required) && reason.is_none() {
+        return Err(RuntimeError::LifecycleReasonRequired(operation));
+    }
+    Ok(reason)
+}
+
+/// Refuses an instance that has queued events or a due timer or task expiry at `now_ms`: an
+/// inline evaluation would take queued work's turn or fire a deadline its own wakeup owns.
+///
+/// # Errors
+/// Returns [`RuntimeError::InstanceStatusConflict`] with status `busy`.
+pub fn require_idle(process: &WorkflowProcess, now_ms: u64) -> Result<(), RuntimeError> {
+    if process.pending_events.is_empty() && !deadline_due(process, now_ms)? {
+        return Ok(());
+    }
+    Err(RuntimeError::InstanceStatusConflict {
+        status: "busy".into(),
+        operation: "an inline evaluation while queued work or a due deadline is pending",
+    })
+}
+
+/// Whether a timer or task expiry is due at `now_ms` (what the next drain would fire).
+fn deadline_due(process: &WorkflowProcess, now_ms: u64) -> Result<bool, RuntimeError> {
+    for timer in &process.timers {
+        if super::parse_timestamp(&timer.deadline)? <= now_ms {
+            return Ok(true);
+        }
+    }
+    for task in &process.active_tasks {
+        let expiry = crate::store::validate_task_lifetime(
+            task.expires_at.as_deref(),
+            task.expires_with_timer.as_deref(),
+        )?;
+        if expiry.is_some_and(|expiry| now_ms >= expiry) {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 fn apply_migration_map(
     case_state: &mut serde_json::Value,
     map: &MigrationMap,
@@ -324,6 +446,7 @@ impl WosRuntime {
             compensation_logs: Default::default(),
             status: InstanceStatus::Active,
             stalled_since: None,
+            resumed_at: None,
             decline_reason: None,
             voided_by: None,
             voided_at: None,
@@ -521,10 +644,86 @@ impl WosRuntime {
         if event.timestamp.is_empty() {
             event.timestamp = format_timestamp(self.clock.now_ms())?;
         }
+        require_status(&record.process, StatusUse::Queue)?;
         record.process.pending_events.push(event);
         record.process.updated_at = format_timestamp(self.clock.now_ms())?;
         self.store.save_record(record.clone())?;
         Ok(())
+    }
+
+    /// Evaluates one external event now (Kernel S11.3 `processEvent`) and returns that step.
+    ///
+    /// The instance must be `active`, with no queued event and no due timer or task expiry:
+    /// the submitted event is then the one evaluated, earlier queued work keeps its own
+    /// durable continuation, and deadlines keep their own owner.
+    ///
+    /// # Errors
+    /// Returns [`RuntimeError::InstanceStatusConflict`] for a non-active, busy or overdue
+    /// instance, and the enqueue and drain errors otherwise.
+    pub fn process_event(
+        &mut self,
+        process_id: &str,
+        event: PendingEvent,
+    ) -> Result<super::DrainOnceResult, RuntimeError> {
+        let record = self.store.load_record(process_id)?;
+        require_status(&record.process, StatusUse::Evaluate("event processing"))?;
+        require_idle(&record.process, self.clock.now_ms())?;
+        self.enqueue_event(process_id, event)?;
+        self.drain_once(process_id)
+    }
+
+    /// Suspends, resumes or terminates an instance (Kernel S11.3) under the S11.5 table, and
+    /// records the operation's Facts-tier record with its actor and reason.
+    ///
+    /// # Errors
+    /// Returns [`RuntimeError::InstanceStatusConflict`] when the status forbids the
+    /// operation, [`RuntimeError::LifecycleReasonRequired`] when the governing workflow
+    /// requires a reason the request lacks, and resolution or persistence errors.
+    pub fn control_lifecycle(
+        &mut self,
+        process_id: &str,
+        control: wos_core::LifecycleControl,
+        actor_id: &str,
+        reason: Option<&str>,
+    ) -> Result<WorkflowProcess, RuntimeError> {
+        use wos_core::LifecycleControl as Control;
+        let now_iso = format_timestamp(self.clock.now_ms())?;
+        let mut record = self.store.load_record(process_id)?;
+        require_status(&record.process, StatusUse::Lifecycle(control))?;
+        let kernel = self.resolver.resolve_kernel(
+            &record.process.definition_url,
+            &record.process.definition_version,
+        )?;
+        let reason = require_lifecycle_reason(&kernel, control, reason)?;
+        let minter = process_minter(&record.process)?;
+        let mut appended = vec![ProvenanceRecord::instance_lifecycle(
+            &minter,
+            wos_core::InstanceLifecycleInput {
+                control,
+                actor_id,
+                reason,
+            },
+        )];
+        record.process.status = match control {
+            Control::Suspend => InstanceStatus::Suspended,
+            Control::Resume => InstanceStatus::Active,
+            Control::Terminate => InstanceStatus::Terminated,
+        };
+        if control == Control::Resume {
+            record.process.resumed_at = Some(now_iso.clone());
+        }
+        super::provenance::populate_process_provenance_fields(
+            &mut appended,
+            &kernel,
+            &record.process,
+        )?;
+        stamp_provenance(&mut appended, &now_iso);
+        record.process.updated_at = now_iso;
+        record.provenance_log.extend(appended);
+        record.process.provenance_position = record.provenance_log.len() as u64;
+        let process = record.process.clone();
+        self.store.save_record(record)?;
+        Ok(process)
     }
 
     /// Load ADR-0061 custody append inputs by provenance-log window.
@@ -610,6 +809,7 @@ impl WosRuntime {
         let now_ms = self.clock.now_ms();
         let now_iso = format_timestamp(now_ms)?;
         let mut record = self.store.load_record(process_id)?;
+        require_status(&record.process, StatusUse::Migrate)?;
         let minter = process_minter(&record.process)?;
         if record.process.definition_version == target_definition_version {
             return Ok(MigrationOutcome {
@@ -617,6 +817,14 @@ impl WosRuntime {
                 previous_definition_version: record.process.definition_version.clone(),
                 new_definition_version: target_definition_version.to_string(),
                 migration_map,
+            });
+        }
+        // Queued events were accepted under the source version; their continuations stay
+        // pinned to it, so a version change waits for the queue to drain.
+        if !record.process.pending_events.is_empty() {
+            return Err(RuntimeError::InstanceStatusConflict {
+                status: "busy".into(),
+                operation: "migration while queued events are pending",
             });
         }
 

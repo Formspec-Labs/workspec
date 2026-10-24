@@ -415,6 +415,40 @@ impl std::fmt::Display for KeyRebindError {
 
 impl std::error::Error for KeyRebindError {}
 
+/// One lifecycle-control operation on a running instance (Kernel S11.3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LifecycleControl {
+    /// `active` → `suspended`; no events are processed until resumed.
+    Suspend,
+    /// `suspended` → `active`; queued events are processed in delivery order.
+    Resume,
+    /// `active` | `suspended` → `terminated`; irreversible.
+    Terminate,
+}
+
+impl LifecycleControl {
+    /// The Facts-tier record the operation emits when it commits (Kernel S11.3).
+    #[must_use]
+    pub const fn record_kind(self) -> ProvenanceKind {
+        match self {
+            Self::Suspend => ProvenanceKind::InstanceSuspended,
+            Self::Resume => ProvenanceKind::InstanceResumed,
+            Self::Terminate => ProvenanceKind::InstanceTerminated,
+        }
+    }
+}
+
+/// Lifecycle-control provenance input (Kernel S11.3).
+pub struct InstanceLifecycleInput<'a> {
+    /// The operation that committed.
+    pub control: LifecycleControl,
+    /// The acting principal.
+    pub actor_id: &'a str,
+    /// The operator's reason, when one was given.
+    pub reason: Option<&'a str>,
+}
+
 /// Instance-migrated provenance input (Kernel S11.2, ADR 0083).
 pub struct InstanceMigratedInput<'a> {
     /// Definition version before migration.
@@ -2014,6 +2048,18 @@ impl ProvenanceRecord {
         let mut record = Self::blank(minter, ProvenanceKind::AuthorizationRejected);
         record.actor_id = Some(input.attempted_actor_id.to_string());
         record.data = Some(serde_json::Value::Object(data));
+        record
+    }
+
+    /// Create an `instanceSuspended`, `instanceResumed` or `instanceTerminated` record
+    /// (Kernel S11.3); `data.reason` carries the operator's reason when one was given.
+    #[must_use]
+    pub fn instance_lifecycle(minter: &TypeIdMinter, input: InstanceLifecycleInput<'_>) -> Self {
+        let mut record = Self::blank(minter, input.control.record_kind());
+        record.actor_id = Some(input.actor_id.to_string());
+        record.data = input
+            .reason
+            .map(|reason| serde_json::json!({ "reason": reason }));
         record
     }
 

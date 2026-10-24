@@ -58,6 +58,10 @@ impl WosRuntime {
                 return Ok(result.clone());
             }
         }
+        super::process::require_status(
+            &record.process,
+            super::process::StatusUse::Evaluate("task work"),
+        )?;
         let task_index = find_task_index(&record, task_id)
             .ok_or_else(|| RuntimeError::TaskNotFound(task_id.to_string()))?;
 
@@ -181,6 +185,10 @@ impl WosRuntime {
                 "dismissal already recorded; retry the original operation key".into(),
             ));
         }
+        super::process::require_status(
+            &record.process,
+            super::process::StatusUse::Evaluate("task work"),
+        )?;
         let task_index = find_task_index(&record, task_id)
             .ok_or_else(|| RuntimeError::TaskNotFound(task_id.to_string()))?;
         self.require_native_dependency(super::NativeReadOnlyDependency::AccessControl)?;
@@ -263,6 +271,10 @@ impl WosRuntime {
             &record.process.definition_version,
         )?;
         self.validate_governance_selection(&kernel)?;
+        super::process::require_status(
+            &record.process,
+            super::process::StatusUse::Evaluate("task work"),
+        )?;
         let task_index = find_task_index(&record, task_id)
             .ok_or_else(|| RuntimeError::TaskNotFound(task_id.to_string()))?;
 

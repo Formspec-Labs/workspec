@@ -33,6 +33,10 @@ pub use staging::{
 };
 
 #[doc(inline)]
+pub use process::{
+    StatusUse, require_idle, require_lifecycle_reason, require_status, status_admits,
+};
+#[doc(inline)]
 pub use tasks::task_process_id;
 
 use std::any::Any;
@@ -491,6 +495,17 @@ pub enum RuntimeError {
     #[error("migration rejected: {0}")]
     MigrationRejected(String),
 
+    /// The instance's status forbids the operation (Kernel S11.5 status table).
+    #[error("a `{status}` instance refuses {operation}")]
+    InstanceStatusConflict {
+        status: String,
+        operation: &'static str,
+    },
+
+    /// The governing workflow requires a non-empty reason for the operation (Kernel S11.3).
+    #[error("this case's workflow requires a reason to {0} it")]
+    LifecycleReasonRequired(&'static str),
+
     /// The referenced provenance record was not found.
     #[error("provenance record not found: {0}")]
     ProvenanceRecordNotFound(String),
@@ -910,6 +925,9 @@ mod tests {
     }
     mod native_stage_tests {
         include!("runtime/staging_tests.rs");
+    }
+    mod lifecycle_control_tests {
+        include!("runtime/lifecycle_control_tests.rs");
     }
     use super::*;
     use crate::store::ReplayValue;

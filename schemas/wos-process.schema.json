@@ -400,6 +400,18 @@
       },
       "minLength": 1
     },
+    "resumedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339 timestamp of the instance's last `resume` (Kernel S11.3); absent until the instance is first resumed. A durable adapter keys post-resume deadline wakeups by it, so a deadline whose wakeup was refused while the instance was suspended is scheduled afresh after resume.",
+      "examples": [
+        "2026-10-24T15:00:00Z"
+      ],
+      "x-wos": {
+        "openStringKind": "timestamp"
+      },
+      "minLength": 1
+    },
     "declineReason": {
       "type": "string",
       "description": "Reason provided when a signer or participant declined the envelope. REQUIRED when status is `declined`; absent otherwise.",

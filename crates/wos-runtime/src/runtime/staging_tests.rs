@@ -1444,3 +1444,48 @@ fn native_stage_processor_operation_selection_has_positive_counting_controls() {
         }
     }
 }
+
+#[test]
+fn native_stage_lifecycle_control_returns_its_change_and_gates_later_evaluation() {
+    let record = stage_created_record(&prepared_create());
+    let process_id = record.process.process_id.clone();
+    let suspend = NativeRuntimeCommand::Lifecycle {
+        process_id: process_id.clone(),
+        control: wos_core::LifecycleControl::Suspend,
+        actor_id: "actor:human:reviewer".into(),
+        reason: Some("hold".into()),
+        idempotency_token: "suspend-token".into(),
+    };
+    let prepared = runtime_with_kernel(stage_kernel())
+        .prepare_native_command(
+            NativeCommandKey("suspend-1".into()),
+            suspend,
+            stage_snapshot(record),
+            stage_policy(),
+        )
+        .expect("prepared suspend");
+    let NativeRuntimeOutcome::LifecycleChanged(process) = prepared.outcome() else {
+        panic!("suspend returns the changed process");
+    };
+    assert_eq!(process.status, wos_core::instance::InstanceStatus::Suspended);
+    let [NativeProcessChange::Replace { before, after }] = prepared.process_changes() else {
+        panic!("suspend replaces exactly its process");
+    };
+    assert_eq!(before.process.status, wos_core::instance::InstanceStatus::Active);
+    assert_eq!(
+        after.provenance_log.last().map(|record| record.record_kind),
+        Some(ProvenanceKind::InstanceSuspended)
+    );
+    let refused = runtime_with_kernel(stage_kernel()).prepare_native_command(
+        NativeCommandKey("drain-1".into()),
+        NativeRuntimeCommand::DrainOnce { process_id },
+        stage_snapshot(after.clone()),
+        stage_policy(),
+    );
+    assert!(matches!(
+        refused,
+        Err(NativePreparationFailure::Refused {
+            error: RuntimeError::InstanceStatusConflict { .. }
+        })
+    ));
+}

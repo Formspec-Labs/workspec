@@ -61,6 +61,16 @@ fn kernel_version_role(role: &str) -> Option<&str> {
     role.strip_prefix("kernel@")
 }
 
+/// The lifecycle-control fixture operations, named like `$migrate`.
+fn lifecycle_control(event: &str) -> Option<wos_core::LifecycleControl> {
+    match event {
+        "$suspend" => Some(wos_core::LifecycleControl::Suspend),
+        "$resume" => Some(wos_core::LifecycleControl::Resume),
+        "$terminate" => Some(wos_core::LifecycleControl::Terminate),
+        _ => None,
+    }
+}
+
 fn native_runtime_error(error: RuntimeError) -> ConformanceError {
     match error {
         RuntimeError::UnsupportedAction(reason) => ConformanceError::UnsupportedOperation(reason),
@@ -664,6 +674,8 @@ impl WorkflowEngine {
                     "migration",
                     self.process_migration_event(event_entry).map(|_| ()),
                 )
+            } else if let Some(control) = lifecycle_control(&event_entry.event) {
+                ("lifecycle", self.process_lifecycle_event(control, event_entry))
             } else if event_entry.governance_operation.is_some()
                 || event_entry.governance_recipe.is_some()
             {
@@ -1169,6 +1181,29 @@ impl WorkflowEngine {
         // Submission provenance is read from the native log by finish_attempt;
         // do not manufacture a DrainOnceResult for a non-drain operation.
         self.drain_runtime_until_idle()
+    }
+
+    /// Runs a `$suspend`, `$resume` or `$terminate` fixture operation (Kernel S11.3) as the
+    /// entry's actor with `data.reason`, if any.
+    fn process_lifecycle_event(
+        &mut self,
+        control: wos_core::LifecycleControl,
+        event_entry: &crate::fixture::EventEntry,
+    ) -> Result<(), ConformanceError> {
+        let reason = event_entry
+            .data
+            .as_ref()
+            .and_then(|data| data.get("reason"))
+            .and_then(serde_json::Value::as_str);
+        self.runtime
+            .control_lifecycle(
+                CONFORMANCE_INSTANCE_ID,
+                control,
+                event_entry.actor.as_deref().unwrap_or("operator"),
+                reason,
+            )
+            .map(|_| ())
+            .map_err(native_runtime_error)
     }
 
     fn process_migration_event(

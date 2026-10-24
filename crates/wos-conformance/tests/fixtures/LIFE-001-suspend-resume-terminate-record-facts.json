@@ -1,0 +1,109 @@
+{
+  "id": "LIFE-001-suspend-resume-terminate-record-facts",
+  "rule": "K-S11.3",
+  "description": "Kernel S11.3/S11.5: suspend and resume return an instance to evaluation and terminate ends it; each operation records its Facts-tier lifecycle record with the acting operator and its reason.",
+  "documents": {
+    "kernel": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosWorkflow": "1.0",
+      "url": "urn:test:lifecycle-control",
+      "version": "1.0.0",
+      "actors": [
+        {
+          "id": "worker",
+          "type": "human"
+        },
+        {
+          "id": "operator",
+          "type": "human"
+        }
+      ],
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "advance",
+                "target": "review"
+              }
+            ]
+          },
+          "review": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "close",
+                "target": "done"
+              }
+            ]
+          },
+          "done": {
+            "type": "final"
+          }
+        }
+      },
+      "contracts": {}
+    }
+  },
+  "event_sequence": [
+    {
+      "event": "$suspend",
+      "actor": "operator",
+      "data": {
+        "reason": "awaiting documents"
+      }
+    },
+    {
+      "event": "$resume",
+      "actor": "operator"
+    },
+    {
+      "event": "advance",
+      "actor": "worker"
+    },
+    {
+      "event": "close",
+      "actor": "worker"
+    },
+    {
+      "event": "$terminate",
+      "actor": "operator",
+      "data": {
+        "reason": "case withdrawn"
+      }
+    }
+  ],
+  "expected_transitions": [
+    {
+      "from": "open",
+      "target": "review",
+      "event": "advance"
+    },
+    {
+      "from": "review",
+      "target": "done",
+      "event": "close"
+    }
+  ],
+  "expected_provenance": [
+    {
+      "recordKind": "instanceSuspended",
+      "data": {
+        "reason": "awaiting documents"
+      }
+    },
+    {
+      "recordKind": "instanceResumed"
+    },
+    {
+      "recordKind": "instanceTerminated",
+      "data": {
+        "reason": "case withdrawn"
+      }
+    }
+  ]
+}

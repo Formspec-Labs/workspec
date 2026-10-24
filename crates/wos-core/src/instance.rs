@@ -97,6 +97,12 @@ pub struct WorkflowProcess {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stalled_since: Option<String>,
 
+    /// RFC3339 timestamp of the instance's last `resume` (Kernel S11.3); absent until first
+    /// resumed. A durable adapter keys post-resume deadline wakeups by it, so a deadline
+    /// whose wakeup was refused while suspended is scheduled afresh.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resumed_at: Option<String>,
+
     /// Reason provided when a signer or participant declined the envelope.
     /// MUST be populated when `status == Declined`; otherwise omitted.
     #[serde(default, skip_serializing_if = "Option::is_none")]

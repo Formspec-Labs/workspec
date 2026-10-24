@@ -9,8 +9,8 @@
 use super::process_minter;
 use super::staging_store::StageStore;
 use super::{
-    CreateProcessRequest, DismissTaskResult, DrainOnceResult, PersistDraftResult, RuntimeError,
-    TaskSubmissionResult, WosRuntime,
+    CreateProcessRequest, DismissTaskResult, DrainOnceResult, MigrationMap, MigrationOutcome,
+    PersistDraftResult, RuntimeError, TaskSubmissionResult, WosRuntime,
 };
 use crate::intake::{
     IntakeAcceptanceDecision, IntakeAcceptanceRequest, IntakeRecordStatus, ProcessAllocation,
@@ -177,7 +177,7 @@ pub struct NativeRuntimeSnapshot {
     pub intake_records: Vec<IntakeRecord>,
     pub complete_case_membership: Vec<CaseProcessMembership>,
 }
-/// One owning command; migration and external delivery are unsupported.
+/// One owning command; external delivery is unsupported.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(
     rename_all = "camelCase",
@@ -237,6 +237,27 @@ pub enum NativeRuntimeCommand {
         intent: PendingNativePresentationIntent,
         invocation: NativePresentationInvocationOutcome,
     },
+    /// Suspends, resumes or terminates the process (Kernel S11.3).
+    Lifecycle {
+        process_id: String,
+        control: wos_core::LifecycleControl,
+        actor_id: String,
+        reason: Option<String>,
+        idempotency_token: String,
+    },
+    /// Evaluates one external event now (Kernel S11.3 `processEvent`).
+    ProcessEvent {
+        process_id: String,
+        event: PendingEvent,
+    },
+    /// Moves the process to another version of its workflow (Kernel S11.2).
+    Migrate {
+        process_id: String,
+        target_definition_version: String,
+        migration_map: MigrationMap,
+        actor_id: String,
+        idempotency_token: String,
+    },
 }
 /// Actual native result captured inside the consuming preparation entry point.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -252,6 +273,11 @@ pub enum NativeRuntimeOutcome {
     TaskDismissed(DismissTaskResult),
     CustodyReceiptApplied,
     PresentationAcknowledged(NativePresentationAcknowledgement),
+    /// The process after the lifecycle-control operation committed.
+    LifecycleChanged(WorkflowProcess),
+    /// The evaluation step that consumed the submitted event.
+    EventProcessed(DrainOnceResult),
+    Migrated(MigrationOutcome),
 }
 /// Coalesced writes preserve the actual captured prior record.
 #[derive(Debug, Clone)]
@@ -658,6 +684,42 @@ impl WosRuntime {
                 Ok(NativeRuntimeOutcome::PresentationAcknowledged(
                     self.acknowledge_prepared_presentation(intent, invocation)?,
                 ))
+            }
+            NativeRuntimeCommand::Lifecycle {
+                process_id,
+                control,
+                actor_id,
+                reason,
+                idempotency_token,
+            } => {
+                require_token(idempotency_token)?;
+                Ok(NativeRuntimeOutcome::LifecycleChanged(self.control_lifecycle(
+                    process_id,
+                    *control,
+                    actor_id,
+                    reason.as_deref(),
+                )?))
+            }
+            NativeRuntimeCommand::ProcessEvent { process_id, event } => {
+                require_token(event.idempotency_token.as_deref().unwrap_or_default())?;
+                Ok(NativeRuntimeOutcome::EventProcessed(
+                    self.process_event(process_id, event.clone())?,
+                ))
+            }
+            NativeRuntimeCommand::Migrate {
+                process_id,
+                target_definition_version,
+                migration_map,
+                actor_id,
+                idempotency_token,
+            } => {
+                require_token(idempotency_token)?;
+                Ok(NativeRuntimeOutcome::Migrated(self.migrate(
+                    process_id,
+                    target_definition_version,
+                    migration_map.clone(),
+                    Some(actor_id),
+                )?))
             }
         }
     }
