@@ -99,6 +99,16 @@ def test_process_declares_omitted_defaults_and_real_pending_maps(validators):
     assert schema["properties"]["nextDeferredCallbackSequence"]["default"] == 0
 
 
+def test_d1_authored_action_sites_validate(validators):
+    # The maintained 0.3.0 workflow is the deferred lifecycle: notices advance on receipts.
+    doc = json.loads((ROOT / "examples/d1-passport-complete.workflow.json").read_text())
+    validators["$wosWorkflow"].validate(doc)
+    # A mutation at the actual receipt-region site is rejected by the owning schema.
+    receipt = doc["lifecycle"]["states"]["caseAndDelivery"]["regions"]["delivery"]["states"]["awaitingDeliveryReceipt"]
+    receipt["transitions"][0]["actions"][0]["action"] = "setData"
+    assert not validators["$wosWorkflow"].is_valid(doc)
+
+
 def test_historical_deferred_d1_refuses_old_governance_and_retains_callback_action_shape(validators):
     # Historical authored bytes stay immutable; this is not a fresh D1 qualification.
     doc = json.loads((ROOT / "examples/d1-passport-complete-deferred.workflow.json").read_text())

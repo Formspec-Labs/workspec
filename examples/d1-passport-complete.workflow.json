@@ -60,7 +60,9 @@
   "description": "Source-grounded candidate for automatic mock checks, outside-data dispute, reasoned review, same-filed-form photo correction, notice-based response window, automatic no-response closure, late evidence and reasoned reopening. Native scenario qualification is required; this document does not assert delivered notices, protected-field enforcement, processing-clock pause/resume or sealed export support.",
   "governance": {
     "dueProcess": {
-      "explanationLevel": "individualized"
+      "adverseDecisionPolicy": {
+        "explanationLevel": "individualized"
+      }
     },
     "taskCatalog": [
       {
@@ -109,643 +111,780 @@
   "intake": {
     "contractRef": "urn:formspec:demo:d1:passport-renewal",
     "contractVersion": "0.3.0",
-    "mode": "publicIntake"
+    "mode": "publicIntake",
+    "initialCaseMappingRef": "urn:formspec:demo:d1:passport-renewal:mapping:initial-case"
   },
   "lifecycle": {
-    "initialState": "automaticChecks",
+    "initialState": "caseAndDelivery",
     "states": {
-      "automaticChecks": {
-        "type": "atomic",
-        "onEntry": [
-          {
-            "action": "setData",
-            "path": "caseFile.displayStatus",
-            "value": "In Process"
-          },
-          {
-            "action": "invokeService",
-            "serviceRef": "mockPriorPassportCheck"
-          },
-          {
-            "action": "invokeService",
-            "serviceRef": "mockSsnCheck"
-          },
-          {
-            "action": "emitEvent",
-            "eventType": "checks.completed"
-          }
-        ],
-        "transitions": [
-          {
-            "event": {
-              "kind": "message",
-              "name": "checks.completed"
-            },
-            "target": "outsideDataNoticePending",
-            "guard": "caseFile.priorPassportCheck.adverse = true or caseFile.ssnCheck.adverse = true"
-          },
-          {
-            "event": {
-              "kind": "message",
-              "name": "checks.completed"
-            },
-            "target": "awaitingReview",
-            "guard": "caseFile.priorPassportCheck.adverse = false and caseFile.ssnCheck.adverse = false"
-          }
-        ]
-      },
-      "outsideDataNoticePending": {
-        "type": "atomic",
-        "onEntry": [
-          {
-            "action": "invokeService",
-            "serviceRef": "sendOutsideDataNotice"
-          },
-          {
-            "action": "emitEvent",
-            "eventType": "outsideData.noticeDeliveryAttempted"
-          }
-        ],
-        "transitions": [
-          {
-            "event": {
-              "kind": "message",
-              "name": "outsideData.noticeDeliveryAttempted"
-            },
-            "target": "outsideDataDisputeWindow",
-            "guard": "caseFile.outsideDataNotice.qualifying = true"
-          }
-        ]
-      },
-      "outsideDataDisputeWindow": {
-        "type": "atomic",
-        "onEntry": [
-          {
-            "action": "startTimer",
-            "timerId": "outsideDataDispute",
-            "duration": "P10D",
-            "event": {
-              "kind": "timer",
-              "timerId": "outsideDataDispute",
-              "source": "state"
-            },
-            "startAtExpression": "caseFile.outsideDataNotice.sentAt"
-          },
-          {
-            "action": "createTask",
-            "taskRef": "disputeOutsideData",
-            "assignTo": "applicant",
-            "contractRef": "disputeContract",
-            "completionEvent": "outsideData.disputeReceived",
-            "expiresWithTimer": "outsideDataDispute"
-          }
-        ],
-        "transitions": [
-          {
-            "event": {
-              "kind": "message",
-              "name": "outsideData.disputeReceived"
-            },
-            "target": "awaitingDisputeReview",
-            "actions": [
-              {
-                "action": "cancelTimer",
-                "timerId": "outsideDataDispute"
+      "caseAndDelivery": {
+        "type": "parallel",
+        "description": "Main case decisions and receipt ingress progress independently. The receipt region stays active for unresolved and later receipts; main finality does not imply whole-process completion. Terminal receipt-region policy remains owner-qualified.",
+        "regions": {
+          "case": {
+            "initialState": "automaticChecks",
+            "states": {
+              "automaticChecks": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "setData",
+                    "path": "caseFile.displayStatus",
+                    "value": "In Process"
+                  },
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "mockPriorPassportCheck"
+                  },
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "mockSsnCheck"
+                  },
+                  {
+                    "action": "emitEvent",
+                    "eventType": "checks.completed"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "checks.completed"
+                    },
+                    "target": "outsideDataNoticePending",
+                    "guard": "caseFile.priorPassportCheck.adverse = true or caseFile.ssnCheck.adverse = true"
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "checks.completed"
+                    },
+                    "target": "awaitingReview",
+                    "guard": "caseFile.priorPassportCheck.adverse = false and caseFile.ssnCheck.adverse = false"
+                  }
+                ]
+              },
+              "outsideDataNoticePending": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "sendOutsideDataNotice",
+                    "callbackPhase": "outbound"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "outsideData.noticeSent"
+                    },
+                    "target": "outsideDataDisputeWindow"
+                  }
+                ]
+              },
+              "outsideDataDisputeWindow": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "startTimer",
+                    "timerId": "outsideDataDispute",
+                    "duration": "P10D",
+                    "event": {
+                      "kind": "timer",
+                      "timerId": "outsideDataDispute",
+                      "source": "state"
+                    },
+                    "startAtExpression": "caseFile.outsideDataNotice.clock.governedSentAt"
+                  },
+                  {
+                    "action": "createTask",
+                    "taskRef": "disputeOutsideData",
+                    "assignTo": "applicant",
+                    "contractRef": "disputeContract",
+                    "completionEvent": "outsideData.disputeReceived",
+                    "expiresWithTimer": "outsideDataDispute"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "outsideData.disputeReceived"
+                    },
+                    "target": "awaitingDisputeReview",
+                    "actions": [
+                      {
+                        "action": "cancelTimer",
+                        "timerId": "outsideDataDispute"
+                      }
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "timer",
+                      "timerId": "outsideDataDispute",
+                      "source": "state"
+                    },
+                    "target": "awaitingReview"
+                  }
+                ],
+                "tags": [
+                  "hold"
+                ]
+              },
+              "awaitingDisputeReview": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "setData",
+                    "path": "caseFile.displayStatus",
+                    "value": "In Process"
+                  },
+                  {
+                    "action": "createTask",
+                    "taskRef": "reviewApplication",
+                    "assignTo": "adjudicator",
+                    "contractRef": "reviewContract",
+                    "completionEvent": "review.completed"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "review.completed"
+                    },
+                    "target": "photoNoticePending",
+                    "guard": "caseFile.reviewChoice = 'sendBackPhoto' and trim(caseFile.reviewReason) != ''"
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "review.completed"
+                    },
+                    "target": "approvalNoticePending",
+                    "guard": "caseFile.reviewChoice = 'approve' and trim(caseFile.reviewReason) != ''"
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "review.completed"
+                    },
+                    "target": "outsideDataMinimumPending",
+                    "guard": "caseFile.reviewChoice = 'deny' and trim(caseFile.reviewReason) != '' and (caseFile.priorPassportCheck.adverse = true or caseFile.ssnCheck.adverse = true) and caseFile.outsideDataNotice.sentAt != null"
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "review.completed"
+                    },
+                    "target": "denialDecisionRecorded",
+                    "guard": "caseFile.reviewChoice = 'deny' and trim(caseFile.reviewReason) != '' and caseFile.priorPassportCheck.adverse = false and caseFile.ssnCheck.adverse = false"
+                  }
+                ],
+                "tags": [
+                  "hold"
+                ]
+              },
+              "awaitingReview": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "setData",
+                    "path": "caseFile.displayStatus",
+                    "value": "In Process"
+                  },
+                  {
+                    "action": "createTask",
+                    "taskRef": "reviewApplication",
+                    "assignTo": "adjudicator",
+                    "contractRef": "reviewContract",
+                    "completionEvent": "review.completed"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "review.completed"
+                    },
+                    "target": "photoNoticePending",
+                    "guard": "caseFile.reviewChoice = 'sendBackPhoto' and trim(caseFile.reviewReason) != ''"
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "review.completed"
+                    },
+                    "target": "approvalNoticePending",
+                    "guard": "caseFile.reviewChoice = 'approve' and trim(caseFile.reviewReason) != ''"
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "review.completed"
+                    },
+                    "target": "outsideDataMinimumPending",
+                    "guard": "caseFile.reviewChoice = 'deny' and trim(caseFile.reviewReason) != '' and (caseFile.priorPassportCheck.adverse = true or caseFile.ssnCheck.adverse = true) and caseFile.outsideDataNotice.sentAt != null"
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "review.completed"
+                    },
+                    "target": "denialDecisionRecorded",
+                    "guard": "caseFile.reviewChoice = 'deny' and trim(caseFile.reviewReason) != '' and caseFile.priorPassportCheck.adverse = false and caseFile.ssnCheck.adverse = false"
+                  }
+                ]
+              },
+              "photoNoticePending": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "setData",
+                    "path": "caseFile.reviewerQueueStatus",
+                    "value": "Waiting on applicant"
+                  },
+                  {
+                    "action": "setData",
+                    "path": "caseFile.requestedItems",
+                    "value": [
+                      "photo"
+                    ]
+                  },
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "sendPhotoRequestNotice",
+                    "callbackPhase": "outbound"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "photo.noticeSent"
+                    },
+                    "target": "awaitingPhoto"
+                  }
+                ],
+                "tags": [
+                  "hold"
+                ]
+              },
+              "awaitingPhoto": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "setData",
+                    "path": "caseFile.displayStatus",
+                    "value": "Waiting for you"
+                  },
+                  {
+                    "action": "startTimer",
+                    "timerId": "photoResponse",
+                    "duration": "P90D",
+                    "event": {
+                      "kind": "timer",
+                      "timerId": "photoResponse",
+                      "source": "state"
+                    },
+                    "startAtExpression": "caseFile.photoRequestNotice.clock.governedSentAt"
+                  },
+                  {
+                    "action": "createTask",
+                    "taskRef": "replacePhoto",
+                    "assignTo": "applicant",
+                    "contractRef": "correctionContract",
+                    "completionEvent": "photoCorrection.completed",
+                    "expiresWithTimer": "photoResponse"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "photoCorrection.completed"
+                    },
+                    "target": "returnedReview",
+                    "actions": [
+                      {
+                        "action": "cancelTimer",
+                        "timerId": "photoResponse"
+                      }
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "timer",
+                      "timerId": "photoResponse",
+                      "source": "state"
+                    },
+                    "target": "noResponseClosedNoticePending"
+                  }
+                ],
+                "tags": [
+                  "hold"
+                ]
+              },
+              "returnedReview": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "setData",
+                    "path": "caseFile.displayStatus",
+                    "value": "Information Received, In Process Again"
+                  },
+                  {
+                    "action": "setData",
+                    "path": "caseFile.reviewerQueueStatus",
+                    "value": "Information Received, In Process Again"
+                  },
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "sendInformationReceivedNotice",
+                    "callbackPhase": "outbound"
+                  },
+                  {
+                    "action": "createTask",
+                    "taskRef": "reviewApplication",
+                    "assignTo": "adjudicator",
+                    "contractRef": "reviewContract",
+                    "completionEvent": "review.completed"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "review.completed"
+                    },
+                    "target": "photoNoticePending",
+                    "guard": "caseFile.reviewChoice = 'sendBackPhoto' and trim(caseFile.reviewReason) != ''"
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "review.completed"
+                    },
+                    "target": "approvalNoticePending",
+                    "guard": "caseFile.reviewChoice = 'approve' and trim(caseFile.reviewReason) != ''"
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "review.completed"
+                    },
+                    "target": "outsideDataMinimumPending",
+                    "guard": "caseFile.reviewChoice = 'deny' and trim(caseFile.reviewReason) != '' and (caseFile.priorPassportCheck.adverse = true or caseFile.ssnCheck.adverse = true) and caseFile.outsideDataNotice.sentAt != null"
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "review.completed"
+                    },
+                    "target": "denialDecisionRecorded",
+                    "guard": "caseFile.reviewChoice = 'deny' and trim(caseFile.reviewReason) != '' and caseFile.priorPassportCheck.adverse = false and caseFile.ssnCheck.adverse = false"
+                  }
+                ]
+              },
+              "approvalNoticePending": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "sendApprovalNotice",
+                    "callbackPhase": "outbound"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "approval.noticeSent"
+                    },
+                    "target": "approved"
+                  }
+                ]
+              },
+              "denialNoticePending": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "sendDenialNotice",
+                    "callbackPhase": "outbound"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "denial.noticeSent"
+                    },
+                    "target": "denied"
+                  }
+                ]
+              },
+              "closedForNoResponse": {
+                "type": "atomic",
+                "onEntry": [],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "latePhoto.completed"
+                    },
+                    "target": "closedWithLateEvidence"
+                  }
+                ]
+              },
+              "closedWithLateEvidence": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "setData",
+                    "path": "caseFile.caseClosed",
+                    "value": true
+                  },
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "sendLateEvidenceReceivedNotice",
+                    "callbackPhase": "outbound"
+                  },
+                  {
+                    "action": "createTask",
+                    "taskRef": "considerReopening",
+                    "assignTo": "adjudicator",
+                    "contractRef": "reviewContract",
+                    "completionEvent": "reopening.completed"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "reopening.completed"
+                    },
+                    "target": "reopened",
+                    "guard": "caseFile.reviewChoice = 'reopen' and trim(caseFile.reviewReason) != ''",
+                    "actor": "adjudicator"
+                  }
+                ]
+              },
+              "reopened": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "setData",
+                    "path": "caseFile.caseClosed",
+                    "value": false
+                  },
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "sendReopenedNotice",
+                    "callbackPhase": "outbound"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "reopening.noticeSent"
+                    },
+                    "target": "returnedReview"
+                  }
+                ]
+              },
+              "approved": {
+                "type": "final"
+              },
+              "denied": {
+                "type": "final"
+              },
+              "noResponseClosedNoticePending": {
+                "type": "atomic",
+                "description": "Case is closed and late-evidence task retained before the separate notification attempt. The persisted internal event is an intent, not a sent-notice witness.",
+                "onEntry": [
+                  {
+                    "action": "setData",
+                    "path": "caseFile.decision",
+                    "value": "deniedForNoResponse"
+                  },
+                  {
+                    "action": "setData",
+                    "path": "caseFile.decisionReason",
+                    "value": "No requested photo response was accepted within 90 calendar days from the qualifying notice."
+                  },
+                  {
+                    "action": "setData",
+                    "path": "caseFile.displayStatus",
+                    "value": "Denied for no response"
+                  },
+                  {
+                    "action": "setData",
+                    "path": "caseFile.caseClosed",
+                    "value": true
+                  },
+                  {
+                    "action": "createTask",
+                    "taskRef": "attachLatePhoto",
+                    "assignTo": "applicant",
+                    "contractRef": "correctionContract",
+                    "completionEvent": "latePhoto.completed"
+                  },
+                  {
+                    "action": "emitEvent",
+                    "eventType": "noResponse.noticeRequested"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "noResponse.noticeRequested"
+                    },
+                    "target": "closedForNoResponse",
+                    "actions": [
+                      {
+                        "action": "invokeService",
+                        "serviceRef": "sendNoResponseNotice",
+                        "callbackPhase": "outbound"
+                      }
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "latePhoto.completed"
+                    },
+                    "target": "closedWithLateEvidence"
+                  }
+                ]
+              },
+              "outsideDataMinimumPending": {
+                "type": "atomic",
+                "description": "A reasoned adverse denial remains a proposal until the full ten-day period from actual qualifying outside-data notice has elapsed. Accepted dispute response cancels only its response clock.",
+                "onEntry": [
+                  {
+                    "action": "setData",
+                    "path": "caseFile.displayStatus",
+                    "value": "In Process"
+                  },
+                  {
+                    "action": "startTimer",
+                    "timerId": "outsideDataMinimumPeriod",
+                    "duration": "P10D",
+                    "event": {
+                      "kind": "timer",
+                      "timerId": "outsideDataMinimumPeriod",
+                      "source": "custom",
+                      "firesAs": "outsideData.minimumPeriodElapsed"
+                    },
+                    "startAtExpression": "caseFile.outsideDataNotice.clock.governedSentAt"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "timer",
+                      "timerId": "outsideDataMinimumPeriod",
+                      "source": "custom",
+                      "firesAs": "outsideData.minimumPeriodElapsed"
+                    },
+                    "target": "denialDecisionRecorded"
+                  }
+                ],
+                "tags": [
+                  "hold"
+                ]
+              },
+              "denialDecisionRecorded": {
+                "type": "atomic",
+                "description": "Records the effective reasoned denial before its separate notice attempt. The accepted reviewReason remains the individualized decision reason without a fabricated dynamic setData copy.",
+                "onEntry": [
+                  {
+                    "action": "setData",
+                    "path": "caseFile.decision",
+                    "value": "denied"
+                  },
+                  {
+                    "action": "setData",
+                    "path": "caseFile.caseClosed",
+                    "value": true
+                  },
+                  {
+                    "action": "setData",
+                    "path": "caseFile.displayStatus",
+                    "value": "Denied"
+                  },
+                  {
+                    "action": "emitEvent",
+                    "eventType": "decision.denialRecorded"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "decision.denialRecorded"
+                    },
+                    "target": "denialNoticePending",
+                    "tags": [
+                      "determination",
+                      "adverse-decision"
+                    ]
+                  }
+                ]
               }
-            ]
+            }
           },
-          {
-            "event": {
-              "kind": "timer",
-              "timerId": "outsideDataDispute",
-              "source": "state"
-            },
-            "target": "awaitingReview"
-          }
-        ],
-        "tags": [
-          "hold"
-        ]
-      },
-      "awaitingDisputeReview": {
-        "type": "atomic",
-        "onEntry": [
-          {
-            "action": "setData",
-            "path": "caseFile.displayStatus",
-            "value": "In Process"
-          },
-          {
-            "action": "createTask",
-            "taskRef": "reviewApplication",
-            "assignTo": "adjudicator",
-            "contractRef": "reviewContract",
-            "completionEvent": "review.completed"
-          }
-        ],
-        "transitions": [
-          {
-            "event": {
-              "kind": "message",
-              "name": "review.completed"
-            },
-            "target": "photoNoticePending",
-            "guard": "caseFile.reviewChoice = 'sendBackPhoto' and trim(caseFile.reviewReason) != ''"
-          },
-          {
-            "event": {
-              "kind": "message",
-              "name": "review.completed"
-            },
-            "target": "approvalNoticePending",
-            "guard": "caseFile.reviewChoice = 'approve' and trim(caseFile.reviewReason) != ''"
-          },
-          {
-            "event": {
-              "kind": "message",
-              "name": "review.completed"
-            },
-            "target": "outsideDataMinimumPending",
-            "guard": "caseFile.reviewChoice = 'deny' and trim(caseFile.reviewReason) != '' and (caseFile.priorPassportCheck.adverse = true or caseFile.ssnCheck.adverse = true) and caseFile.outsideDataNotice.qualifying = true"
-          },
-          {
-            "event": {
-              "kind": "message",
-              "name": "review.completed"
-            },
-            "target": "denialDecisionRecorded",
-            "guard": "caseFile.reviewChoice = 'deny' and trim(caseFile.reviewReason) != '' and caseFile.priorPassportCheck.adverse = false and caseFile.ssnCheck.adverse = false"
-          }
-        ],
-        "tags": [
-          "hold"
-        ]
-      },
-      "awaitingReview": {
-        "type": "atomic",
-        "onEntry": [
-          {
-            "action": "setData",
-            "path": "caseFile.displayStatus",
-            "value": "In Process"
-          },
-          {
-            "action": "createTask",
-            "taskRef": "reviewApplication",
-            "assignTo": "adjudicator",
-            "contractRef": "reviewContract",
-            "completionEvent": "review.completed"
-          }
-        ],
-        "transitions": [
-          {
-            "event": {
-              "kind": "message",
-              "name": "review.completed"
-            },
-            "target": "photoNoticePending",
-            "guard": "caseFile.reviewChoice = 'sendBackPhoto' and trim(caseFile.reviewReason) != ''"
-          },
-          {
-            "event": {
-              "kind": "message",
-              "name": "review.completed"
-            },
-            "target": "approvalNoticePending",
-            "guard": "caseFile.reviewChoice = 'approve' and trim(caseFile.reviewReason) != ''"
-          },
-          {
-            "event": {
-              "kind": "message",
-              "name": "review.completed"
-            },
-            "target": "outsideDataMinimumPending",
-            "guard": "caseFile.reviewChoice = 'deny' and trim(caseFile.reviewReason) != '' and (caseFile.priorPassportCheck.adverse = true or caseFile.ssnCheck.adverse = true) and caseFile.outsideDataNotice.qualifying = true"
-          },
-          {
-            "event": {
-              "kind": "message",
-              "name": "review.completed"
-            },
-            "target": "denialDecisionRecorded",
-            "guard": "caseFile.reviewChoice = 'deny' and trim(caseFile.reviewReason) != '' and caseFile.priorPassportCheck.adverse = false and caseFile.ssnCheck.adverse = false"
-          }
-        ]
-      },
-      "photoNoticePending": {
-        "type": "atomic",
-        "onEntry": [
-          {
-            "action": "setData",
-            "path": "caseFile.reviewerQueueStatus",
-            "value": "Waiting on applicant"
-          },
-          {
-            "action": "setData",
-            "path": "caseFile.requestedItems",
-            "value": [
-              "photo"
-            ]
-          },
-          {
-            "action": "invokeService",
-            "serviceRef": "sendPhotoRequestNotice"
-          },
-          {
-            "action": "emitEvent",
-            "eventType": "photo.noticeDeliveryAttempted"
-          }
-        ],
-        "transitions": [
-          {
-            "event": {
-              "kind": "message",
-              "name": "photo.noticeDeliveryAttempted"
-            },
-            "target": "awaitingPhoto",
-            "guard": "caseFile.photoRequestNotice.qualifying = true"
-          }
-        ],
-        "tags": [
-          "hold"
-        ]
-      },
-      "awaitingPhoto": {
-        "type": "atomic",
-        "onEntry": [
-          {
-            "action": "setData",
-            "path": "caseFile.displayStatus",
-            "value": "Waiting for you"
-          },
-          {
-            "action": "startTimer",
-            "timerId": "photoResponse",
-            "duration": "P90D",
-            "event": {
-              "kind": "timer",
-              "timerId": "photoResponse",
-              "source": "state"
-            },
-            "startAtExpression": "caseFile.photoRequestNotice.sentAt"
-          },
-          {
-            "action": "createTask",
-            "taskRef": "replacePhoto",
-            "assignTo": "applicant",
-            "contractRef": "correctionContract",
-            "completionEvent": "photoCorrection.completed",
-            "expiresWithTimer": "photoResponse"
-          }
-        ],
-        "transitions": [
-          {
-            "event": {
-              "kind": "message",
-              "name": "photoCorrection.completed"
-            },
-            "target": "returnedReview",
-            "actions": [
-              {
-                "action": "cancelTimer",
-                "timerId": "photoResponse"
+          "delivery": {
+            "initialState": "awaitingDeliveryReceipt",
+            "states": {
+              "awaitingDeliveryReceipt": {
+                "type": "atomic",
+                "onEntry": [],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "delivery.sendOutsideDataNotice.receipt"
+                    },
+                    "target": "awaitingDeliveryReceipt",
+                    "actions": [
+                      {
+                        "action": "invokeService",
+                        "serviceRef": "sendOutsideDataNotice",
+                        "callbackPhase": "inbound"
+                      },
+                      {
+                        "action": "emitEvent",
+                        "eventType": "outsideData.noticeSent"
+                      }
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "delivery.sendPhotoRequestNotice.receipt"
+                    },
+                    "target": "awaitingDeliveryReceipt",
+                    "actions": [
+                      {
+                        "action": "invokeService",
+                        "serviceRef": "sendPhotoRequestNotice",
+                        "callbackPhase": "inbound"
+                      },
+                      {
+                        "action": "emitEvent",
+                        "eventType": "photo.noticeSent"
+                      }
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "delivery.sendApprovalNotice.receipt"
+                    },
+                    "target": "awaitingDeliveryReceipt",
+                    "actions": [
+                      {
+                        "action": "invokeService",
+                        "serviceRef": "sendApprovalNotice",
+                        "callbackPhase": "inbound"
+                      },
+                      {
+                        "action": "emitEvent",
+                        "eventType": "approval.noticeSent"
+                      }
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "delivery.sendDenialNotice.receipt"
+                    },
+                    "target": "awaitingDeliveryReceipt",
+                    "actions": [
+                      {
+                        "action": "invokeService",
+                        "serviceRef": "sendDenialNotice",
+                        "callbackPhase": "inbound"
+                      },
+                      {
+                        "action": "emitEvent",
+                        "eventType": "denial.noticeSent"
+                      }
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "delivery.sendNoResponseNotice.receipt"
+                    },
+                    "target": "awaitingDeliveryReceipt",
+                    "actions": [
+                      {
+                        "action": "invokeService",
+                        "serviceRef": "sendNoResponseNotice",
+                        "callbackPhase": "inbound"
+                      }
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "delivery.sendInformationReceivedNotice.receipt"
+                    },
+                    "target": "awaitingDeliveryReceipt",
+                    "actions": [
+                      {
+                        "action": "invokeService",
+                        "serviceRef": "sendInformationReceivedNotice",
+                        "callbackPhase": "inbound"
+                      }
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "delivery.sendLateEvidenceReceivedNotice.receipt"
+                    },
+                    "target": "awaitingDeliveryReceipt",
+                    "actions": [
+                      {
+                        "action": "invokeService",
+                        "serviceRef": "sendLateEvidenceReceivedNotice",
+                        "callbackPhase": "inbound"
+                      }
+                    ]
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "delivery.sendReopenedNotice.receipt"
+                    },
+                    "target": "awaitingDeliveryReceipt",
+                    "actions": [
+                      {
+                        "action": "invokeService",
+                        "serviceRef": "sendReopenedNotice",
+                        "callbackPhase": "inbound"
+                      },
+                      {
+                        "action": "emitEvent",
+                        "eventType": "reopening.noticeSent"
+                      }
+                    ]
+                  }
+                ]
               }
-            ]
-          },
-          {
-            "event": {
-              "kind": "timer",
-              "timerId": "photoResponse",
-              "source": "state"
-            },
-            "target": "noResponseClosedNoticePending"
+            }
           }
-        ],
-        "tags": [
-          "hold"
-        ]
-      },
-      "returnedReview": {
-        "type": "atomic",
-        "onEntry": [
-          {
-            "action": "setData",
-            "path": "caseFile.displayStatus",
-            "value": "Information Received, In Process Again"
-          },
-          {
-            "action": "setData",
-            "path": "caseFile.reviewerQueueStatus",
-            "value": "Information Received, In Process Again"
-          },
-          {
-            "action": "invokeService",
-            "serviceRef": "sendInformationReceivedNotice"
-          },
-          {
-            "action": "createTask",
-            "taskRef": "reviewApplication",
-            "assignTo": "adjudicator",
-            "contractRef": "reviewContract",
-            "completionEvent": "review.completed"
-          }
-        ],
-        "transitions": [
-          {
-            "event": {
-              "kind": "message",
-              "name": "review.completed"
-            },
-            "target": "photoNoticePending",
-            "guard": "caseFile.reviewChoice = 'sendBackPhoto' and trim(caseFile.reviewReason) != ''"
-          },
-          {
-            "event": {
-              "kind": "message",
-              "name": "review.completed"
-            },
-            "target": "approvalNoticePending",
-            "guard": "caseFile.reviewChoice = 'approve' and trim(caseFile.reviewReason) != ''"
-          },
-          {
-            "event": {
-              "kind": "message",
-              "name": "review.completed"
-            },
-            "target": "outsideDataMinimumPending",
-            "guard": "caseFile.reviewChoice = 'deny' and trim(caseFile.reviewReason) != '' and (caseFile.priorPassportCheck.adverse = true or caseFile.ssnCheck.adverse = true) and caseFile.outsideDataNotice.qualifying = true"
-          },
-          {
-            "event": {
-              "kind": "message",
-              "name": "review.completed"
-            },
-            "target": "denialDecisionRecorded",
-            "guard": "caseFile.reviewChoice = 'deny' and trim(caseFile.reviewReason) != '' and caseFile.priorPassportCheck.adverse = false and caseFile.ssnCheck.adverse = false"
-          }
-        ]
-      },
-      "approvalNoticePending": {
-        "type": "atomic",
-        "onEntry": [
-          {
-            "action": "invokeService",
-            "serviceRef": "sendApprovalNotice"
-          },
-          {
-            "action": "emitEvent",
-            "eventType": "approval.noticeDeliveryAttempted"
-          }
-        ],
-        "transitions": [
-          {
-            "event": {
-              "kind": "message",
-              "name": "approval.noticeDeliveryAttempted"
-            },
-            "target": "approved",
-            "guard": "caseFile.decisionNotice.qualifying = true"
-          }
-        ]
-      },
-      "denialNoticePending": {
-        "type": "atomic",
-        "onEntry": [
-          {
-            "action": "invokeService",
-            "serviceRef": "sendDenialNotice"
-          },
-          {
-            "action": "emitEvent",
-            "eventType": "denial.noticeDeliveryAttempted"
-          }
-        ],
-        "transitions": [
-          {
-            "event": {
-              "kind": "message",
-              "name": "denial.noticeDeliveryAttempted"
-            },
-            "target": "denied",
-            "guard": "caseFile.decisionNotice.qualifying = true"
-          }
-        ]
-      },
-      "closedForNoResponse": {
-        "type": "atomic",
-        "onEntry": [],
-        "transitions": [
-          {
-            "event": {
-              "kind": "message",
-              "name": "latePhoto.completed"
-            },
-            "target": "closedWithLateEvidence"
-          }
-        ]
-      },
-      "closedWithLateEvidence": {
-        "type": "atomic",
-        "onEntry": [
-          {
-            "action": "setData",
-            "path": "caseFile.caseClosed",
-            "value": true
-          },
-          {
-            "action": "invokeService",
-            "serviceRef": "sendLateEvidenceReceivedNotice"
-          },
-          {
-            "action": "createTask",
-            "taskRef": "considerReopening",
-            "assignTo": "adjudicator",
-            "contractRef": "reviewContract",
-            "completionEvent": "reopening.completed"
-          }
-        ],
-        "transitions": [
-          {
-            "event": {
-              "kind": "message",
-              "name": "reopening.completed"
-            },
-            "target": "reopened",
-            "guard": "caseFile.reviewChoice = 'reopen' and trim(caseFile.reviewReason) != ''",
-            "actor": "adjudicator"
-          }
-        ]
-      },
-      "reopened": {
-        "type": "atomic",
-        "onEntry": [
-          {
-            "action": "setData",
-            "path": "caseFile.caseClosed",
-            "value": false
-          },
-          {
-            "action": "invokeService",
-            "serviceRef": "sendReopenedNotice"
-          },
-          {
-            "action": "emitEvent",
-            "eventType": "reopening.noticeDeliveryAttempted"
-          }
-        ],
-        "transitions": [
-          {
-            "event": {
-              "kind": "message",
-              "name": "reopening.noticeDeliveryAttempted"
-            },
-            "guard": "caseFile.reopenedNotice.qualifying = true",
-            "target": "returnedReview"
-          }
-        ]
-      },
-      "approved": {
-        "type": "final"
-      },
-      "denied": {
-        "type": "final"
-      },
-      "noResponseClosedNoticePending": {
-        "type": "atomic",
-        "description": "Case is closed and late-evidence task retained before the separate notification attempt. The persisted internal event is an intent, not a sent-notice witness.",
-        "onEntry": [
-          {
-            "action": "setData",
-            "path": "caseFile.decision",
-            "value": "deniedForNoResponse"
-          },
-          {
-            "action": "setData",
-            "path": "caseFile.decisionReason",
-            "value": "No requested photo response was accepted within 90 calendar days from the qualifying notice."
-          },
-          {
-            "action": "setData",
-            "path": "caseFile.displayStatus",
-            "value": "Denied for no response"
-          },
-          {
-            "action": "setData",
-            "path": "caseFile.caseClosed",
-            "value": true
-          },
-          {
-            "action": "createTask",
-            "taskRef": "attachLatePhoto",
-            "assignTo": "applicant",
-            "contractRef": "correctionContract",
-            "completionEvent": "latePhoto.completed"
-          },
-          {
-            "action": "emitEvent",
-            "eventType": "noResponse.noticeRequested"
-          }
-        ],
-        "transitions": [
-          {
-            "event": {
-              "kind": "message",
-              "name": "noResponse.noticeRequested"
-            },
-            "target": "closedForNoResponse",
-            "actions": [
-              {
-                "action": "invokeService",
-                "serviceRef": "sendNoResponseNotice"
-              }
-            ]
-          },
-          {
-            "event": {
-              "kind": "message",
-              "name": "latePhoto.completed"
-            },
-            "target": "closedWithLateEvidence"
-          }
-        ]
-      },
-      "outsideDataMinimumPending": {
-        "type": "atomic",
-        "description": "A reasoned adverse denial remains a proposal until the full ten-day period from actual qualifying outside-data notice has elapsed. Accepted dispute response cancels only its response clock.",
-        "onEntry": [
-          {
-            "action": "setData",
-            "path": "caseFile.displayStatus",
-            "value": "In Process"
-          },
-          {
-            "action": "startTimer",
-            "timerId": "outsideDataMinimumPeriod",
-            "duration": "P10D",
-            "event": {
-              "kind": "timer",
-              "timerId": "outsideDataMinimumPeriod",
-              "source": "custom",
-              "firesAs": "outsideData.minimumPeriodElapsed"
-            },
-            "startAtExpression": "caseFile.outsideDataNotice.sentAt"
-          }
-        ],
-        "transitions": [
-          {
-            "event": {
-              "kind": "timer",
-              "timerId": "outsideDataMinimumPeriod",
-              "source": "custom",
-              "firesAs": "outsideData.minimumPeriodElapsed"
-            },
-            "target": "denialDecisionRecorded"
-          }
-        ],
-        "tags": [
-          "hold"
-        ]
-      },
-      "denialDecisionRecorded": {
-        "type": "atomic",
-        "description": "Records the effective reasoned denial before its separate notice attempt. The accepted reviewReason remains the individualized decision reason without a fabricated dynamic setData copy.",
-        "onEntry": [
-          {
-            "action": "setData",
-            "path": "caseFile.decision",
-            "value": "denied"
-          },
-          {
-            "action": "setData",
-            "path": "caseFile.caseClosed",
-            "value": true
-          },
-          {
-            "action": "setData",
-            "path": "caseFile.displayStatus",
-            "value": "Denied"
-          },
-          {
-            "action": "emitEvent",
-            "eventType": "decision.denialRecorded"
-          }
-        ],
-        "transitions": [
-          {
-            "event": {
-              "kind": "message",
-              "name": "decision.denialRecorded"
-            },
-            "target": "denialNoticePending",
-            "tags": [
-              "determination",
-              "adverse-decision"
-            ]
-          }
-        ]
+        }
       }
-    },
-    "milestones": {}
+    }
   },
   "provenance": {
     "tier": "facts"
@@ -790,6 +929,9 @@
         "type": "object"
       },
       "decisionNotice": {
+        "type": "object"
+      },
+      "noResponseNotice": {
         "type": "object"
       },
       "displayStatus": {

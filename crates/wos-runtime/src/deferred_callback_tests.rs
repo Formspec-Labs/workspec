@@ -53,7 +53,7 @@ mod deferred_callback_acceptance {
     fn receipt(record: &RuntimeRecord) -> serde_json::Value {
         let subject = record.process.pending_callbacks.keys().next().unwrap();
         serde_json::json!({"id":"receipt-own-identity","source":"urn:test:receipt","specversion":"1.0",
-            "type":"com.example.receipt","subject":subject,"data":{"qualifying":true,"sentAt":"2024-03-09T16:00:00Z"}})
+            "type":"com.example.receipt","subject":subject,"data":{"sentAt":"2024-03-09T16:00:00Z","delivery":{"status":"accepted"}}})
     }
 
     fn enqueue(runtime: &mut WosRuntime, id: &str, data: serde_json::Value) {
@@ -97,7 +97,10 @@ mod deferred_callback_acceptance {
         enqueue(&mut runtime, &id, receipt(&before));
         runtime.drain_once(&id).unwrap();
         let after = runtime.store.load_record(&id).unwrap();
-        assert_eq!(after.process.case_state["receipt"]["qualifying"], true);
+        assert_eq!(
+            after.process.case_state["receipt"]["sentAt"],
+            "2024-03-09T16:00:00Z"
+        );
         // The self transition creates a NEW outbound request on entry, not reuse.
         assert_eq!(after.process.pending_callbacks.len(), 1);
         assert_ne!(
@@ -430,7 +433,7 @@ mod deferred_callback_acceptance {
         let mut selected = profile();
         let binding = selected.bindings.get_mut("notice").unwrap();
         binding.output_binding = HashMap::from([
-            ("caseFile.first".into(), "$.qualifying".into()),
+            ("caseFile.first".into(), "$.sentAt".into()),
             ("caseFile.last".into(), "$.missing".into()),
         ]);
         let (mut runtime, id, calls) = fixture_with_profile(selected);

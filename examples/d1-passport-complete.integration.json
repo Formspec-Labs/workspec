@@ -30,123 +30,147 @@
       "idempotencyKeyExpression": "caseFile.originalFilingRef & '-mockSsnCheck'"
     },
     "sendOutsideDataNotice": {
-      "type": "request-response",
-      "description": "Configured O-13 delivery port. A qualifying receipt identifies persisted actual notice delivery; rendering/enqueue alone must return qualifying=false.",
-      "inputMapping": {
+      "type": "callback",
+      "description": "Controlled candidate deferred delivery intent. Runtime persists native request without calling provider; owner must qualify actual receipt and delivery aggregation.",
+      "outputBinding": {
+        "caseFile.outsideDataNotice": "$"
+      },
+      "dispatchMode": "deferred",
+      "eventType": "com.wos.demo.d1.delivery.request",
+      "callbackEventType": "com.wos.demo.d1.delivery.receipt",
+      "dataMapping": {
         "referenceNumber": "caseFile.referenceNumber",
         "preferredLanguage": "caseFile.preferredLanguage",
         "reason": "caseFile.priorPassportCheck.result & ' / ' & caseFile.ssnCheck.result",
         "originalFilingRef": "caseFile.originalFilingRef",
         "templateKey": "if caseFile.preferredLanguage = 'es-US' then 'd1OutsideDataDisputeEsUS' else 'd1OutsideDataDisputeEnUS'",
         "noticeContext": "caseFile"
-      },
-      "outputBinding": {
-        "caseFile.outsideDataNotice": "$"
       }
     },
     "sendPhotoRequestNotice": {
-      "type": "request-response",
-      "description": "Configured O-13 delivery port. A qualifying receipt identifies persisted actual notice delivery; rendering/enqueue alone must return qualifying=false.",
-      "inputMapping": {
+      "type": "callback",
+      "description": "Controlled candidate deferred delivery intent. Runtime persists native request without calling provider; owner must qualify actual receipt and delivery aggregation.",
+      "outputBinding": {
+        "caseFile.photoRequestNotice": "$"
+      },
+      "dispatchMode": "deferred",
+      "eventType": "com.wos.demo.d1.delivery.request",
+      "callbackEventType": "com.wos.demo.d1.delivery.receipt",
+      "dataMapping": {
         "referenceNumber": "caseFile.referenceNumber",
         "preferredLanguage": "caseFile.preferredLanguage",
         "reason": "caseFile.reviewReason",
         "originalFilingRef": "caseFile.originalFilingRef",
         "templateKey": "if caseFile.preferredLanguage = 'es-US' then 'd1PhotoRequestEsUS' else 'd1PhotoRequestEnUS'",
         "noticeContext": "caseFile"
-      },
-      "outputBinding": {
-        "caseFile.photoRequestNotice": "$"
       }
     },
     "sendApprovalNotice": {
-      "type": "request-response",
-      "description": "Configured O-13 delivery port. A qualifying receipt identifies persisted actual notice delivery; rendering/enqueue alone must return qualifying=false.",
-      "inputMapping": {
+      "type": "callback",
+      "description": "Controlled candidate deferred delivery intent. Runtime persists native request without calling provider; owner must qualify actual receipt and delivery aggregation.",
+      "outputBinding": {
+        "caseFile.decisionNotice": "$"
+      },
+      "dispatchMode": "deferred",
+      "eventType": "com.wos.demo.d1.delivery.request",
+      "callbackEventType": "com.wos.demo.d1.delivery.receipt",
+      "dataMapping": {
         "referenceNumber": "caseFile.referenceNumber",
         "preferredLanguage": "caseFile.preferredLanguage",
         "reason": "caseFile.reviewReason",
         "originalFilingRef": "caseFile.originalFilingRef",
         "templateKey": "if caseFile.preferredLanguage = 'es-US' then 'd1ApprovedEsUS' else 'd1ApprovedEnUS'",
         "noticeContext": "caseFile"
-      },
-      "outputBinding": {
-        "caseFile.decisionNotice": "$"
       }
     },
     "sendDenialNotice": {
-      "type": "request-response",
-      "description": "Configured O-13 delivery port. A qualifying receipt identifies persisted actual notice delivery; rendering/enqueue alone must return qualifying=false.",
-      "inputMapping": {
+      "type": "callback",
+      "description": "Controlled candidate deferred delivery intent. Runtime persists native request without calling provider; owner must qualify actual receipt and delivery aggregation.",
+      "outputBinding": {
+        "caseFile.decisionNotice": "$"
+      },
+      "dispatchMode": "deferred",
+      "eventType": "com.wos.demo.d1.delivery.request",
+      "callbackEventType": "com.wos.demo.d1.delivery.receipt",
+      "dataMapping": {
         "referenceNumber": "caseFile.referenceNumber",
         "preferredLanguage": "caseFile.preferredLanguage",
         "reason": "caseFile.reviewReason",
         "originalFilingRef": "caseFile.originalFilingRef",
         "templateKey": "if caseFile.preferredLanguage = 'es-US' then 'd1DeniedEsUS' else 'd1DeniedEnUS'",
         "noticeContext": "caseFile"
-      },
-      "outputBinding": {
-        "caseFile.decisionNotice": "$"
       }
     },
     "sendNoResponseNotice": {
-      "type": "request-response",
-      "description": "Configured O-13 delivery port. A qualifying receipt identifies persisted actual notice delivery; rendering/enqueue alone must return qualifying=false.",
-      "inputMapping": {
+      "type": "callback",
+      "description": "Controlled candidate deferred delivery intent. Runtime persists native request without calling provider; owner must qualify actual receipt and delivery aggregation.",
+      "outputBinding": {
+        "caseFile.noResponseNotice": "$"
+      },
+      "dispatchMode": "deferred",
+      "eventType": "com.wos.demo.d1.delivery.request",
+      "callbackEventType": "com.wos.demo.d1.delivery.receipt",
+      "dataMapping": {
         "referenceNumber": "caseFile.referenceNumber",
         "preferredLanguage": "caseFile.preferredLanguage",
         "reason": "caseFile.reviewReason",
         "originalFilingRef": "caseFile.originalFilingRef",
         "templateKey": "if caseFile.preferredLanguage = 'es-US' then 'd1NoResponseDeniedEsUS' else 'd1NoResponseDeniedEnUS'",
         "noticeContext": "caseFile"
-      },
-      "outputBinding": {
-        "caseFile.decisionNotice": "$"
       }
     },
     "sendInformationReceivedNotice": {
-      "type": "request-response",
-      "description": "Configured O-13 delivery port. A qualifying receipt identifies persisted actual notice delivery; rendering/enqueue alone must return qualifying=false.",
-      "inputMapping": {
+      "type": "callback",
+      "description": "Controlled candidate deferred delivery intent. Runtime persists native request without calling provider; owner must qualify actual receipt and delivery aggregation.",
+      "outputBinding": {
+        "caseFile.informationReceivedNotice": "$"
+      },
+      "dispatchMode": "deferred",
+      "eventType": "com.wos.demo.d1.delivery.request",
+      "callbackEventType": "com.wos.demo.d1.delivery.receipt",
+      "dataMapping": {
         "referenceNumber": "caseFile.referenceNumber",
         "preferredLanguage": "caseFile.preferredLanguage",
         "reason": "caseFile.reviewReason",
         "originalFilingRef": "caseFile.originalFilingRef",
         "templateKey": "if caseFile.preferredLanguage = 'es-US' then 'd1InformationReceivedEsUS' else 'd1InformationReceivedEnUS'",
         "noticeContext": "caseFile"
-      },
-      "outputBinding": {
-        "caseFile.informationReceivedNotice": "$"
       }
     },
     "sendLateEvidenceReceivedNotice": {
-      "type": "request-response",
-      "description": "Configured O-13 delivery port. A qualifying receipt identifies persisted actual notice delivery; rendering/enqueue alone must return qualifying=false.",
-      "inputMapping": {
+      "type": "callback",
+      "description": "Controlled candidate deferred delivery intent. Runtime persists native request without calling provider; owner must qualify actual receipt and delivery aggregation.",
+      "outputBinding": {
+        "caseFile.lateEvidenceNotice": "$"
+      },
+      "dispatchMode": "deferred",
+      "eventType": "com.wos.demo.d1.delivery.request",
+      "callbackEventType": "com.wos.demo.d1.delivery.receipt",
+      "dataMapping": {
         "referenceNumber": "caseFile.referenceNumber",
         "preferredLanguage": "caseFile.preferredLanguage",
         "reason": "caseFile.reviewReason",
         "originalFilingRef": "caseFile.originalFilingRef",
         "templateKey": "if caseFile.preferredLanguage = 'es-US' then 'd1LateEvidenceReceivedEsUS' else 'd1LateEvidenceReceivedEnUS'",
         "noticeContext": "caseFile"
-      },
-      "outputBinding": {
-        "caseFile.lateEvidenceNotice": "$"
       }
     },
     "sendReopenedNotice": {
-      "type": "request-response",
-      "description": "Configured O-13 delivery port. A qualifying receipt identifies persisted actual notice delivery; rendering/enqueue alone must return qualifying=false.",
-      "inputMapping": {
+      "type": "callback",
+      "description": "Controlled candidate deferred delivery intent. Runtime persists native request without calling provider; owner must qualify actual receipt and delivery aggregation.",
+      "outputBinding": {
+        "caseFile.reopenedNotice": "$"
+      },
+      "dispatchMode": "deferred",
+      "eventType": "com.wos.demo.d1.delivery.request",
+      "callbackEventType": "com.wos.demo.d1.delivery.receipt",
+      "dataMapping": {
         "referenceNumber": "caseFile.referenceNumber",
         "preferredLanguage": "caseFile.preferredLanguage",
         "reason": "caseFile.reviewReason",
         "originalFilingRef": "caseFile.originalFilingRef",
         "templateKey": "if caseFile.preferredLanguage = 'es-US' then 'd1ReopenedEsUS' else 'd1ReopenedEnUS'",
         "noticeContext": "caseFile"
-      },
-      "outputBinding": {
-        "caseFile.reopenedNotice": "$"
       }
     },
     "buildOfflineVerificationBundle": {
