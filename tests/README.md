@@ -24,10 +24,10 @@ the parent Formspec monorepo). If running in an isolated environment:
 python3 -m pip install "jsonschema[format]" pytest
 ```
 
-Then, from the `work-spec/` root (or the parent monorepo):
+Then run the project's own target, which also runs the CI `check-*` gates and
+disables globally installed pytest plugins that can abort collection:
 
 ```bash
-python3 -m pytest tests/schemas/ -v
-# or from the parent formspec/ repo:
-python3 -m pytest work-spec/tests/schemas/ -v
+make python-test                  # from work-spec/
+make -C work-spec python-test     # from the formspec-stack root
 ```
