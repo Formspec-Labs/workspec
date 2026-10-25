@@ -6,11 +6,22 @@ Schema `$def` shipped with a fixed `recordKind` literal but no matching
 `ProvenanceKind` variant in Rust, leaving the schema MUST unfulfillable
 from the typed Rust path.
 
-**Forward direction (enforced).** For every `$def` under any schema in
-`work-spec/schemas/` whose `properties.recordKind.const` (or single-element
-`enum`) pins a literal string, that literal MUST equal the camelCase
-serialization of some `ProvenanceKind` variant in
+**Forward direction (enforced).** For every subschema, at any depth, of any
+schema in `work-spec/schemas/` (`$defs`, `properties`, `allOf`, `if`/`then`,
+...) whose `properties.recordKind.const` (or single-element `enum`) pins a
+literal string, that literal MUST equal the camelCase serialization of some
+`ProvenanceKind` variant in
 `work-spec/crates/wos-events/src/provenance/kind.rs`. Mismatch fails CI.
+
+**Required pins (enforced).** Every registry kind marked `schemaValidated`
+with no `eventLiteral` MUST be pinned by at least one schema. Records
+dispatch on `event` (registry `admissionContract.dispatchField`; `recordKind`
+is the legacy field), so a kind with an event literal keys its overlay on
+`event` and needs no pin, but a kind without one can only key on
+`recordKind`. Zero pins is therefore legitimate only when the registry lists
+no such kind. This keeps the forward direction from going silently vacuous,
+as it did from a318d12d, when overlays moved to `event` dispatch and the
+old `$defs`-only walk stopped finding any pin.
 
 **D26 event-literal direction (enforced).** Every `eventLiteral` row in
 `schemas/record-kind-registry.json` MUST equal what
@@ -21,7 +32,7 @@ so the table is the Rust source of truth this script parses. This keeps the
 registry's admission/event-type surface as a checked mirror of it.
 
 **Reverse direction (informational, intentionally not enforced).** The
-script also lists variants that have *no* schema `$def` binding them. Most
+script also lists variants that have *no* schema pin binding them. Most
 variants are runtime-emitted without a schema-pinned record shape today, so
 enforcing reverse-direction parity would require a per-kind `$def` build-out
 that is out of scope for this lint. The list is printed for visibility so
@@ -35,10 +46,10 @@ Usage:
                                                        [--strict]
 
 `--strict` upgrades reverse-direction informational warnings to errors.
-Default (no `--strict`) only enforces forward direction.
+Default (no `--strict`) enforces every direction except reverse.
 
-Exits 0 on clean tree, 1 on any forward-direction violation (or any
-violation if `--strict`), 2 on usage error.
+Exits 0 on clean tree, 1 on any enforced violation (or any unbound variant
+if `--strict`), 2 on usage error.
 """
 
 from __future__ import annotations
@@ -148,9 +159,8 @@ def extract_canonical_event_literals(kind_rs: Path) -> dict[str, str]:
     return mappings
 
 
-def extract_registry_event_literals(registry_path: Path) -> dict[str, str]:
+def extract_registry_event_literals(registry: dict) -> dict[str, str]:
     """Return recordKind literal -> eventLiteral from the registry JSON."""
-    registry = json.loads(registry_path.read_text(encoding="utf-8"))
     event_literals: dict[str, str] = {}
     for entry in registry.get("recordKinds", []):
         literal = entry.get("literal")
@@ -160,98 +170,54 @@ def extract_registry_event_literals(registry_path: Path) -> dict[str, str]:
     return event_literals
 
 
-def iter_def_record_kind_consts(
-    schema: dict, schema_path: Path
-) -> Iterable[tuple[str, str]]:
-    """Yield (def_name, literal) for each `$def` that pins `recordKind` to a
-    fixed string via `properties.recordKind.const` or single-element
-    `enum`. Walks `$defs` recursively.
+def extract_registry_pin_required(registry: dict) -> set[str]:
+    """Return recordKind literals the registry marks `schemaValidated` with
+    no `eventLiteral`. Records dispatch on `event`
+    (`admissionContract.dispatchField`), so a kind without an event literal
+    can key its payload overlay only on `recordKind`: each needs a pin."""
+    return {
+        entry["literal"]
+        for entry in registry.get("recordKinds", [])
+        if entry.get("schemaValidated") is True and "eventLiteral" not in entry
+    }
 
-    A `$def` may pin the literal in either:
-      - `properties.recordKind.const = "literal"`
-      - `properties.recordKind.enum = ["literal"]` (single element)
 
-    Both are treated as a hard wire-shape pin.
-    """
+# JSON Schema keywords whose values are instance data, not subschemas.
+INSTANCE_VALUE_KEYWORDS = frozenset({"const", "enum", "default", "examples"})
 
-    def walk(defs: dict, prefix: str = "") -> Iterable[tuple[str, str]]:
-        for name, body in defs.items():
-            if not isinstance(body, dict):
-                continue
-            qualified = f"{prefix}{name}" if prefix else name
 
-            # Dive into nested `$defs` (rare, but valid JSON Schema).
-            nested = body.get("$defs")
-            if isinstance(nested, dict):
-                yield from walk(nested, prefix=f"{qualified}/")
+def pinned_record_kind(subschema: dict) -> str | None:
+    """Return the literal `subschema` pins `properties.recordKind` to through
+    `const` or a one-value `enum`; both are a hard wire-shape pin."""
+    properties = subschema.get("properties")
+    record_kind = properties.get("recordKind") if isinstance(properties, dict) else None
+    if not isinstance(record_kind, dict):
+        return None
+    const = record_kind.get("const")
+    if isinstance(const, str):
+        return const
+    enum = record_kind.get("enum")
+    if isinstance(enum, list) and len(enum) == 1 and isinstance(enum[0], str):
+        return enum[0]
+    return None
 
-            properties = body.get("properties")
-            if not isinstance(properties, dict):
-                continue
-            record_kind = properties.get("recordKind")
-            if not isinstance(record_kind, dict):
-                continue
 
-            # Direct const.
-            const_val = record_kind.get("const")
-            if isinstance(const_val, str):
-                yield (qualified, const_val)
-                continue
-
-            # Single-element enum.
-            enum_val = record_kind.get("enum")
-            if isinstance(enum_val, list) and len(enum_val) == 1:
-                literal = enum_val[0]
-                if isinstance(literal, str):
-                    yield (qualified, literal)
-                    continue
-
-            # if/then guards: many schemas pin `recordKind` inside
-            # `allOf[].if.properties.recordKind.const` to fire conditional
-            # `then` requirements. Capture those too — they're equivalent
-            # to declaring a record-shape $def with that recordKind, just
-            # expressed as a constraint instead of a positional $def.
-        # Walk allOf branches at this level for if/then recordKind pins.
-
-    # Walk allOf entries that pin recordKind via if-blocks. This catches the
-    # `CapabilityInvocationRecord`-style `allOf[0].if.properties.recordKind.const`
-    # pattern even when the discriminator is hidden inside a guard.
-    def walk_if_pins(
-        node: dict, anchor: str = "<root>"
-    ) -> Iterable[tuple[str, str]]:
-        if not isinstance(node, dict):
-            return
-        all_of = node.get("allOf")
-        if isinstance(all_of, list):
-            for branch in all_of:
-                if not isinstance(branch, dict):
-                    continue
-                if_block = branch.get("if")
-                if isinstance(if_block, dict):
-                    if_props = if_block.get("properties")
-                    if isinstance(if_props, dict):
-                        rk = if_props.get("recordKind")
-                        if isinstance(rk, dict):
-                            const_val = rk.get("const")
-                            if isinstance(const_val, str):
-                                yield (anchor, const_val)
-                            enum_val = rk.get("enum")
-                            if (
-                                isinstance(enum_val, list)
-                                and len(enum_val) == 1
-                                and isinstance(enum_val[0], str)
-                            ):
-                                yield (anchor, enum_val[0])
-
-    defs = schema.get("$defs")
-    if isinstance(defs, dict):
-        yield from walk(defs)
-        for def_name, def_body in defs.items():
-            if isinstance(def_body, dict):
-                yield from walk_if_pins(def_body, anchor=def_name)
-
-    # Top-level if/then is rare but possible.
-    yield from walk_if_pins(schema, anchor="<top>")
+def iter_record_kind_pins(node: object, pointer: str = "") -> Iterable[tuple[str, str]]:
+    """Yield (JSON Pointer, literal) for every subschema at any depth that
+    pins `recordKind`: under `$defs`, `properties`, `allOf`/`anyOf`/`oneOf`,
+    `if`/`then`/`else`, `items`, and the rest. Instance-valued keywords are
+    not descended into, because their contents are data, not schemas."""
+    if isinstance(node, dict):
+        literal = pinned_record_kind(node)
+        if literal is not None:
+            yield (pointer or "/", literal)
+        for key, child in node.items():
+            if key not in INSTANCE_VALUE_KEYWORDS:
+                escaped = key.replace("~", "~0").replace("/", "~1")
+                yield from iter_record_kind_pins(child, f"{pointer}/{escaped}")
+    elif isinstance(node, list):
+        for index, child in enumerate(node):
+            yield from iter_record_kind_pins(child, f"{pointer}/{index}")
 
 
 def main() -> int:
@@ -290,9 +256,10 @@ def main() -> int:
     variants = extract_variants(kind_rs)
     variant_camel = {to_camel_case(v) for v in variants}
     canonical_event_literals = extract_canonical_event_literals(kind_rs)
-    registry_event_literals = extract_registry_event_literals(registry_path)
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    registry_event_literals = extract_registry_event_literals(registry)
 
-    # Collect every (schema_path, def_name, literal) triple.
+    # Collect every (schema_path, JSON Pointer, literal) pin.
     bindings: list[tuple[Path, str, str]] = []
     for schema_path in sorted(schemas_root.rglob("*.json")):
         try:
@@ -300,16 +267,15 @@ def main() -> int:
         except (OSError, json.JSONDecodeError) as exc:
             print(f"warning: could not parse {schema_path}: {exc}", file=sys.stderr)
             continue
-        if not isinstance(schema, dict):
-            continue
-        for def_name, literal in iter_def_record_kind_consts(schema, schema_path):
-            bindings.append((schema_path, def_name, literal))
+        for pointer, literal in iter_record_kind_pins(schema):
+            bindings.append((schema_path, pointer, literal))
 
     # Forward-direction check: every literal must have a matching variant.
-    forward_violations: list[tuple[Path, str, str]] = []
-    for schema_path, def_name, literal in bindings:
-        if literal not in variant_camel:
-            forward_violations.append((schema_path, def_name, literal))
+    forward_violations = [
+        (schema_path, pointer, literal)
+        for schema_path, pointer, literal in bindings
+        if literal not in variant_camel
+    ]
 
     missing_registry_events = sorted(
         (literal, event_literal)
@@ -328,8 +294,10 @@ def main() -> int:
         and canonical_event_literals[literal] != event_literal
     )
 
-    # Reverse-direction report (informational by default).
     bound_literals = {literal for (_, _, literal) in bindings}
+    unpinned_required = sorted(extract_registry_pin_required(registry) - bound_literals)
+
+    # Reverse-direction report (informational by default).
     unbound_variants = sorted(v for v in variants if to_camel_case(v) not in bound_literals)
 
     # Print findings.
@@ -338,13 +306,27 @@ def main() -> int:
             "FAIL: schema `recordKind` literals without a matching ProvenanceKind variant:",
             file=sys.stderr,
         )
-        for schema_path, def_name, literal in forward_violations:
+        for schema_path, pointer, literal in forward_violations:
             rel = schema_path.relative_to(root)
             print(
-                f"  {rel} $defs/{def_name}: literal {literal!r} is not a "
+                f"  {rel}#{pointer}: literal {literal!r} is not a "
                 f"ProvenanceKind variant under serde(rename_all=\"camelCase\"). "
                 f"Add the variant to {kind_rs.relative_to(root)}, classify "
-                f"it in audit_tier.rs, or remove the $def's `recordKind` pin.",
+                f"it in audit_tier.rs, or remove the `recordKind` pin.",
+                file=sys.stderr,
+            )
+
+    if unpinned_required:
+        print(
+            f"FAIL: {len(bindings)} schema `recordKind` pins found, but these "
+            "registry kinds are schemaValidated with no eventLiteral, so their "
+            "payload overlay can only key on `recordKind` and no schema pins it:",
+            file=sys.stderr,
+        )
+        for literal in unpinned_required:
+            print(
+                f"  {literal}: restore its schema `recordKind` pin, or correct "
+                "its registry schemaValidated/eventLiteral fields.",
                 file=sys.stderr,
             )
 
@@ -382,7 +364,7 @@ def main() -> int:
     if unbound_variants:
         msg = (
             f"INFO: {len(unbound_variants)} of {len(variants)} ProvenanceKind "
-            "variants have no schema $def pinning `recordKind` to their "
+            "variants have no schema pinning `recordKind` to their "
             "camelCase literal. Most variants are runtime-emitted without a "
             "schema-pinned record shape — this is informational, not a "
             "failure. Variants without binding (sample of up to 10):"
@@ -398,6 +380,7 @@ def main() -> int:
 
     if (
         forward_violations
+        or unpinned_required
         or missing_registry_events
         or stale_registry_events
         or mismatched_registry_events
