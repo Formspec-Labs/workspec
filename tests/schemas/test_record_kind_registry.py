@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+import runpy
 from pathlib import Path
 
 
@@ -17,11 +18,9 @@ PROVENANCE_LOG_PATH = WOS_SPEC_ROOT / "schemas" / "wos-provenance-log.schema.jso
 PROVENANCE_KIND_RS = (
     WOS_SPEC_ROOT / "crates" / "wos-events" / "src" / "provenance" / "kind.rs"
 )
+PARITY_SCRIPT = WOS_SPEC_ROOT / "scripts" / "check-recordkind-parity.py"
 EVENT_LITERAL_RE = re.compile(
     r"^wos\.(kernel|governance|ai|assurance)\.[a-z][a-z0-9]*(?:_[a-z0-9]+)*$"
-)
-CANONICAL_EVENT_LITERAL_RE = re.compile(
-    r'^\s*Self::([A-Z][A-Za-z0-9]*)\s*=>\s*Some\("([^"]+)"\),\s*$'
 )
 
 
@@ -49,35 +48,11 @@ def _camel_to_snake(value: str) -> str:
     return re.sub(r"(?<!^)([A-Z])", r"_\1", value).lower()
 
 
-def _pascal_to_camel(value: str) -> str:
-    return value[:1].lower() + value[1:]
-
-
 def _canonical_event_literals_from_rust() -> dict[str, str]:
-    """Mirror `ProvenanceKind::canonical_event_literal` (substrate macro table)."""
-    text = PROVENANCE_KIND_RS.read_text()
-    mappings: dict[str, str] = {}
-    in_macro = False
-    for line in text.splitlines():
-        if "define_canonical_substrate_events! {" in line:
-            in_macro = True
-            continue
-        if in_macro and line.strip() == "}":
-            break
-        if not in_macro:
-            continue
-        match = re.match(r'^\s*"([^"]+)"\s*=>\s*([A-Za-z0-9_]+)\s*,\s*$', line)
-        if match:
-            event_literal, rust_variant = match.groups()
-            mappings[_pascal_to_camel(rust_variant)] = event_literal
-    if mappings:
-        return mappings
-    for line in text.splitlines():
-        match = CANONICAL_EVENT_LITERAL_RE.match(line)
-        if match:
-            rust_variant, event_literal = match.groups()
-            mappings[_pascal_to_camel(rust_variant)] = event_literal
-    return mappings
+    """`ProvenanceKind::canonical_event_literal()` rows, read by the CI parity
+    script's parser so this test and the CI gate cannot drift apart."""
+    parity = runpy.run_path(str(PARITY_SCRIPT))
+    return parity["extract_canonical_event_literals"](PROVENANCE_KIND_RS)
 
 
 def _record_kind_const_from_guard(guard: dict) -> str | None:

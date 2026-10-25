@@ -13,10 +13,12 @@ serialization of some `ProvenanceKind` variant in
 `work-spec/crates/wos-events/src/provenance/kind.rs`. Mismatch fails CI.
 
 **D26 event-literal direction (enforced).** Every `eventLiteral` row in
-`schemas/record-kind-registry.json` MUST equal the matching
-`ProvenanceKind::canonical_event_literal()` match arm, and every match arm
-MUST appear in the registry. This keeps the registry's admission/event-type
-surface as a checked mirror of the Rust source of truth.
+`schemas/record-kind-registry.json` MUST equal what
+`ProvenanceKind::canonical_event_literal()` returns, and every kind it
+returns a literal for MUST appear in the registry. Both directions of that
+mapping read the `define_canonical_substrate_events!` table in `kind.rs`,
+so the table is the Rust source of truth this script parses. This keeps the
+registry's admission/event-type surface as a checked mirror of it.
 
 **Reverse direction (informational, intentionally not enforced).** The
 script also lists variants that have *no* schema `$def` binding them. Most
@@ -53,10 +55,14 @@ from typing import Iterable
 # skipped. Variants are PascalCase identifiers ending in `,`.
 VARIANT_LINE = re.compile(r"^\s*([A-Z][A-Za-z0-9]*)\s*,\s*$")
 
-# Match `Self::Variant => Some("wos.layer.event_literal"),` lines inside
-# `ProvenanceKind::canonical_event_literal`.
-CANONICAL_EVENT_LITERAL_LINE = re.compile(
-    r'^\s*Self::([A-Z][A-Za-z0-9]*)\s*=>\s*Some\("([^"]+)"\),\s*$'
+# The `define_canonical_substrate_events! { ... }` invocation (not its
+# `macro_rules!` definition) and its `"wos.layer.event_literal" => Variant,`
+# rows, one per line.
+CANONICAL_EVENT_TABLE_START = re.compile(
+    r"^\s*define_canonical_substrate_events!\s*\{\s*$"
+)
+CANONICAL_EVENT_TABLE_ROW = re.compile(
+    r'^\s*"([^"]+)"\s*=>\s*([A-Z][A-Za-z0-9]*)\s*,\s*$'
 )
 
 # `pub enum ProvenanceKind {` start line.
@@ -101,14 +107,44 @@ def extract_variants(kind_rs: Path) -> list[str]:
 
 
 def extract_canonical_event_literals(kind_rs: Path) -> dict[str, str]:
-    """Return camelCase recordKind -> event literal from Rust source."""
-    text = kind_rs.read_text(encoding="utf-8")
+    """Return camelCase recordKind -> event literal from the
+    `define_canonical_substrate_events!` table behind
+    `ProvenanceKind::canonical_event_literal()`.
+
+    Every line inside the table must be a row, blank, or a `//` comment. A
+    missing, empty, or reshaped table exits here as parser drift, so it is
+    never misreported as every registry row being stale.
+    """
+    lines = kind_rs.read_text(encoding="utf-8").splitlines()
+    start = next(
+        (i for i, line in enumerate(lines) if CANONICAL_EVENT_TABLE_START.match(line)),
+        None,
+    )
+    if start is None:
+        raise SystemExit(
+            f"error: no `define_canonical_substrate_events! {{` table in {kind_rs}; "
+            "point this parser at whatever canonical_event_literal() reads now."
+        )
     mappings: dict[str, str] = {}
-    for line in text.splitlines():
-        match = CANONICAL_EVENT_LITERAL_LINE.match(line)
-        if match:
-            variant, event_literal = match.groups()
-            mappings[to_camel_case(variant)] = event_literal
+    for line in lines[start + 1 :]:
+        stripped = line.strip()
+        if stripped == "}":
+            break
+        if not stripped or stripped.startswith("//"):
+            continue
+        match = CANONICAL_EVENT_TABLE_ROW.match(line)
+        if not match:
+            raise SystemExit(
+                f"error: unparsed line in define_canonical_substrate_events! "
+                f"in {kind_rs}: {stripped!r}; expected one "
+                '`"wos.layer.event_literal" => Variant,` row per line.'
+            )
+        event_literal, variant = match.groups()
+        mappings[to_camel_case(variant)] = event_literal
+    if not mappings:
+        raise SystemExit(
+            f"error: parsed 0 rows from define_canonical_substrate_events! in {kind_rs}."
+        )
     return mappings
 
 
@@ -381,7 +417,7 @@ def main() -> int:
         f"{len(variants)} ProvenanceKind variants under "
         f"{schemas_root.relative_to(root)}; forward-direction parity holds. "
         f"Registry event literals match {len(canonical_event_literals)} "
-        "canonical_event_literal() arms."
+        "canonical_event_literal() rows."
     )
     return 0
 
