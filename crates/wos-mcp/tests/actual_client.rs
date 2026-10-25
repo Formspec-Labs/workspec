@@ -132,6 +132,42 @@ async fn compare_dispatch(evidence: &Path) {
     write_json(&evidence.join("dispatch-parity.json"), &json!(compared));
 }
 
+/// Names the uv binary that bootstrapped the official client's offline cache.
+///
+/// uv versions its cache buckets (for example `wheels-v5` and `wheels-v6`), so
+/// a different uv can miss what the bootstrap cached; the offline run uses the
+/// uv that filled the cache. The work-spec Makefile exports this for its
+/// bootstrap and test targets; root CI pins the version with
+/// `astral-sh/setup-uv`. Unset, it is `uv` on `PATH`.
+const UV_VARIABLE: &str = "WOS_MCP_UV";
+
+/// Tells a developer how to fill the offline cache this test requires.
+const BOOTSTRAP: &str = "run `make -C work-spec wos-mcp-client-bootstrap` with the same WOS_MCP_UV";
+
+/// Returns the selected uv once it syncs the locked client script offline.
+///
+/// A refused offline sync means the cache lacks the locked dependencies, which
+/// this check reports apart from an SDK failure without matching uv's wording.
+///
+/// # Panics
+///
+/// Panics when uv cannot start or cannot sync the script offline.
+async fn bootstrapped_uv(script: &Path) -> std::ffi::OsString {
+    let uv = std::env::var_os(UV_VARIABLE).unwrap_or_else(|| "uv".into());
+    let synced = Command::new(&uv)
+        .args(["sync", "--offline", "--locked", "--script"])
+        .arg(script)
+        .output()
+        .await
+        .unwrap_or_else(|error| panic!("{UV_VARIABLE}={uv:?} cannot run ({error}); {BOOTSTRAP}"));
+    assert!(
+        synced.status.success(),
+        "{UV_VARIABLE}={uv:?} has no offline cache for the locked official client; {BOOTSTRAP}:\n{}",
+        String::from_utf8_lossy(&synced.stderr)
+    );
+    uv
+}
+
 #[tokio::test]
 async fn official_sdk_authoring_failure_repair_and_exact_reopen() {
     let temporary = tempfile::tempdir().unwrap();
@@ -176,10 +212,12 @@ async fn official_sdk_authoring_failure_repair_and_exact_reopen() {
         )
         .unwrap();
     }
-    let mut command = Command::new("uv");
+    let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/support/official_client.py");
+    let uv = bootstrapped_uv(&script).await;
+    let mut command = Command::new(&uv);
     command
         .args(["run", "--offline", "--locked", "--script"])
-        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/support/official_client.py"))
+        .arg(&script)
         .arg("--binary")
         .arg(env!("CARGO_BIN_EXE_wos-mcp"))
         .arg("--inputs")
@@ -191,7 +229,7 @@ async fn official_sdk_authoring_failure_repair_and_exact_reopen() {
         .kill_on_drop(true);
     let mut child = command
         .spawn()
-        .expect("uv prerequisite: bootstrap the locked official-client script as documented");
+        .unwrap_or_else(|error| panic!("{UV_VARIABLE}={uv:?} cannot run ({error}); {BOOTSTRAP}"));
     // The driver bounds and cleans its server processes; this bound also covers uv.
     let status = timeout(Duration::from_secs(150), child.wait()).await;
     let status = match status {

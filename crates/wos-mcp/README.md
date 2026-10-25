@@ -52,13 +52,17 @@ and runtime dependencies remain independently selected.
 
 The supported client qualification uses the official Python `mcp==2.2.0` SDK
 over stdio with normal negotiation and output validation. Bootstrap its locked
-test environment once, then run the Cargo-owned journey offline:
+test environment once (network on first run; `make rust-test` runs it first),
+then run the Cargo-owned journey offline:
 
 ```sh
-uv sync --script crates/wos-mcp/tests/support/official_client.py --locked
+make wos-mcp-client-bootstrap
 WOS_MCP_CLIENT_EVIDENCE=/tmp/wos-mcp-client \
   cargo nextest run -p wos-mcp --test actual_client
 ```
+
+Both read `WOS_MCP_UV` (default `uv`): uv versions its cache buckets, so the
+offline run uses the uv that filled the cache. Root CI pins its version.
 
 The test selects `CARGO_BIN_EXE_wos-mcp`, exercises discovery, native edits,
 selected Definition/Mapping validation, reviewed failure/repair, and export into
@@ -67,8 +71,9 @@ its metaschema, resolves every schema reference locally, and exercises accepted
 and refused actor kinds. It compares the same calls with Rust dispatch and
 retains complete native reports, exact selected requests, process stderr, SDK
 lock/binary identities and source revisions in the evidence directory. Without
-the environment variable it uses a temporary directory, retained on client
-failure. Missing `uv` or locked dependencies fail the test explicitly.
+`WOS_MCP_CLIENT_EVIDENCE` it uses a temporary directory, retained on client
+failure. A uv that cannot start or cannot sync the locked script offline fails
+the test before the client runs, naming the bootstrap target.
 
 The observed client negotiation selects `2024-11-05`. Successful calls include
 the same native value as text and `structuredContent`; discovery includes the

@@ -6,11 +6,16 @@ PYTHON = python3
 # Plugin autoload off: the schema tests need only pytest + jsonschema (as in CI);
 # a globally installed pytest11 plugin with a broken dependency otherwise aborts collection.
 PYTEST = PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 $(PYTHON) -m pytest
+# The uv that fills and then reads the wos-mcp official client's offline cache
+# (crates/wos-mcp/tests/actual_client.rs reads it); uv versions its cache buckets,
+# so both use one binary. Root CI pins its version with setup-uv.
+WOS_MCP_UV ?= uv
+export WOS_MCP_UV
 
 # Targets
 .PHONY: all build test test-core lint clean help \
 	rust-build rust-test rust-check \
-	python-test \
+	python-test wos-mcp-client-bootstrap \
 	postgres-up postgres-down \
 	restate-ingress-smoke
 
@@ -32,7 +37,8 @@ help:
 	@echo ""
 	@echo "Parent Rust Targets (wos-spec workspace):"
 	@echo "  rust-build           Build all parent Rust crates"
-	@echo "  rust-test            Run all parent Rust tests"
+	@echo "  rust-test            Run all parent Rust tests (runs wos-mcp-client-bootstrap first)"
+	@echo "  wos-mcp-client-bootstrap  Fill WOS_MCP_UV's cache for the wos-mcp official client (network on first run)"
 	@echo "  rust-check           Run cargo check on the parent workspace"
 	@echo ""
 	@echo "Parent Python Targets:"
@@ -63,7 +69,11 @@ test: rust-test python-test
 # loop; root CI `make test-wos-spec` intentionally stays aligned with full `test`.
 test-core: rust-test python-test
 
-rust-test:
+# Fills the uv cache from tests/support/official_client.py.lock; the test then runs it offline.
+wos-mcp-client-bootstrap:
+	$(WOS_MCP_UV) sync --script crates/wos-mcp/tests/support/official_client.py --locked
+
+rust-test: wos-mcp-client-bootstrap
 	@echo "Running Rust workspace tests (nextest)."
 	@echo "Note: discovery for large integration binaries can take a while before PASS lines appear."
 	$(CARGO) nextest run --workspace --no-fail-fast
