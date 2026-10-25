@@ -71,8 +71,7 @@ fn run() -> Result<u8, String> {
 
     // --generate-matrix: write LINT-MATRIX.md and exit.
     if options.generate_matrix {
-        let commit_sha = resolve_commit_sha();
-        let matrix_content = render_matrix(&report, &commit_sha);
+        let matrix_content = render_matrix(&report);
         let out_path = options
             .matrix_out
             .as_deref()
@@ -105,27 +104,6 @@ fn run() -> Result<u8, String> {
     }
 
     Ok(EXIT_OK)
-}
-
-/// Resolve a commit SHA for the matrix header.
-///
-/// Priority:
-/// 1. `WOS_REGEN_COMMIT` environment variable (for CI).
-/// 2. `git rev-parse HEAD` subprocess.
-/// 3. Fallback literal `"unknown"`.
-fn resolve_commit_sha() -> String {
-    if let Ok(sha) = std::env::var("WOS_REGEN_COMMIT") {
-        if !sha.trim().is_empty() {
-            return sha.trim().to_string();
-        }
-    }
-    let output = std::process::Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .output();
-    match output {
-        Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout).trim().to_string(),
-        _ => "unknown".to_string(),
-    }
 }
 
 // ── CLI option parsing ────────────────────────────────────────────────────────

@@ -548,29 +548,29 @@ pub fn render_json(report: &CoverageReport) -> Result<String, serde_json::Error>
 
 /// Render the unified rule registry as a regenerated `LINT-MATRIX.md`.
 ///
-/// The output has the same header shape as the current `LINT-MATRIX.md` and
-/// lists every rule from both registries in id-sorted order. Each row includes:
-/// `rule-id | tier | graduation | category | summary | fixture evidence`.
+/// The output lists every rule from both registries in id-sorted order. Each
+/// row includes: `rule-id | tier | graduation | category | summary | fixture
+/// evidence`.
 ///
-/// `commit_sha` is embedded in the regeneration header comment; pass the
-/// value of the `WOS_REGEN_COMMIT` environment variable (or `git rev-parse HEAD`)
-/// from the caller.
-pub fn render_matrix(report: &CoverageReport, commit_sha: &str) -> String {
-    let mut out = String::new();
-
-    // ── File header ────────────────────────────────────────────────────────
+/// The header stamps the SHA-256 of the rendered matrix below it, so the
+/// bytes are a pure function of the registries and fixtures the generator
+/// reads: local and CI regeneration agree, and any registry change moves the
+/// stamp. (A commit stamp could never match the commit that carries it.)
+pub fn render_matrix(report: &CoverageReport) -> String {
+    let body = render_matrix_body(report);
+    let digest = integrity_canonical::compute_digest(
+        body.as_bytes(),
+        integrity_canonical::DigestAlgorithm::Sha256,
+    );
     let t1_count = report.rules.iter().filter(|r| r.tier == "T1").count();
     let t2_count = report.rules.iter().filter(|r| r.tier == "T2").count();
     let t3_count = report.rules.iter().filter(|r| r.tier == "T3").count();
-
-    out.push_str("# WOS Verification Matrix\n");
-    out.push('\n');
-    out.push_str(&format!(
-        "> **Regenerated from code registries** (commit `{commit_sha}`). \
+    format!(
+        "# WOS Verification Matrix\n\n\
+         > **Regenerated from code registries** (sha256 `{digest}` of the matrix below). \
          {total} rules across {t1} T1 / {t2} T2 / {t3} T3 \
-         ({lb} LoadBearing, {stable} Stable, {tested} Tested, {draft} Draft).\
-         \n",
-        commit_sha = commit_sha,
+         ({lb} LoadBearing, {stable} Stable, {tested} Tested, {draft} Draft).\n\
+         {body}",
         total = report.summary.total,
         t1 = t1_count,
         t2 = t2_count,
@@ -579,7 +579,15 @@ pub fn render_matrix(report: &CoverageReport, commit_sha: &str) -> String {
         stable = report.summary.stable,
         tested = report.summary.tested,
         draft = report.summary.draft,
-    ));
+    )
+}
+
+/// Render everything below the `LINT-MATRIX.md` header line.
+fn render_matrix_body(report: &CoverageReport) -> String {
+    let mut out = String::new();
+    let t1_count = report.rules.iter().filter(|r| r.tier == "T1").count();
+    let t2_count = report.rules.iter().filter(|r| r.tier == "T2").count();
+    let t3_count = report.rules.iter().filter(|r| r.tier == "T3").count();
     out.push('\n');
 
     // Box diagram.
@@ -792,6 +800,37 @@ mod tests {
             spec_ref: None,
             suggested_fix: None,
         }
+    }
+
+    // ── render_matrix ─────────────────────────────────────────────────────
+
+    #[test]
+    fn matrix_stamps_the_digest_of_the_rendered_registry() {
+        let registry = |summary: &'static str| -> &'static [RuleMetadata] {
+            Box::leak(
+                vec![RuleMetadata {
+                    summary,
+                    ..make_rule("A-001", Graduation::Draft)
+                }]
+                .into_boxed_slice(),
+            )
+        };
+        let report = compute_coverage(&[registry("first summary")], None);
+        let matrix = render_matrix(&report);
+        let body = render_matrix_body(&report);
+        let digest = integrity_canonical::compute_digest(
+            body.as_bytes(),
+            integrity_canonical::DigestAlgorithm::Sha256,
+        );
+        assert!(matrix.ends_with(&body), "{matrix}");
+        assert!(matrix.contains(&format!("sha256 `{digest}`")), "{matrix}");
+        // No environment or repository state enters the bytes.
+        assert_eq!(matrix, render_matrix(&report));
+        let changed = render_matrix(&compute_coverage(&[registry("second summary")], None));
+        assert!(
+            !changed.contains(&digest),
+            "a registry change must move the stamp"
+        );
     }
 
     // ── rule_category ─────────────────────────────────────────────────────

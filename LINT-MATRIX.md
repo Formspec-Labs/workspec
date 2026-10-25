@@ -1,6 +1,6 @@
 # WOS Verification Matrix
 
-> **Regenerated from code registries** (commit `4f1c5ac1cd9a852628993c168c919cff67482337`). 144 rules across 58 T1 / 77 T2 / 9 T3 (1 LoadBearing, 0 Stable, 20 Tested, 123 Draft).
+> **Regenerated from code registries** (sha256 `205793cf7597d26ec840991aac861f866e4d0e14a16474086c9b54c5be8ed2ee` of the matrix below). 144 rules across 58 T1 / 77 T2 / 9 T3 (1 LoadBearing, 0 Stable, 20 Tested, 123 Draft).
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
