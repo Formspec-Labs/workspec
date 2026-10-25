@@ -199,21 +199,21 @@
     }
   },
   "signature": {
-    "description": "Requester signs first, then the counterparty. Each signer affirms the consent text at consentTextRef: \"I have authority to bind my organization to this agreement.\"",
+    "description": "Requester signs first, then the counterparty. Each signer binds their organization, so each step uses the agent-as-officer signing intent, whose floor is OIDC authentication and an as-officer-of signer-authority claim (Signature Profile §2.13.1, §2.14). Each signer affirms the consent text at consentTextRef: \"I have authority to bind my organization to this agreement.\"",
     "roles": [
       {
         "id": "requesterSigner",
         "role": "signer",
         "actorId": "requester",
         "required": true,
-        "authenticationPolicyKey": "emailOtp"
+        "authenticationPolicyKey": "organizationOidc"
       },
       {
         "id": "counterpartySigner",
         "role": "signer",
         "actorId": "counterparty",
         "required": true,
-        "authenticationPolicyKey": "emailOtp"
+        "authenticationPolicyKey": "organizationOidc"
       }
     ],
     "documents": [
@@ -226,9 +226,9 @@
     ],
     "authenticationPolicies": [
       {
-        "key": "emailOtp",
-        "method": "email-otp",
-        "assuranceLevel": "standard"
+        "key": "organizationOidc",
+        "method": "oidc",
+        "assuranceLevel": "aal2"
       }
     ],
     "signingFlow": {
@@ -238,13 +238,13 @@
           "id": "requesterSigns",
           "roleId": "requesterSigner",
           "documentId": "mutualNda",
-          "signingIntent": "urn:wos:signing-intent:applicant-signature"
+          "signingIntent": "urn:wos:signing-intent:agent-as-officer"
         },
         {
           "id": "counterpartySigns",
           "roleId": "counterpartySigner",
           "documentId": "mutualNda",
-          "signingIntent": "urn:wos:signing-intent:counter-signature",
+          "signingIntent": "urn:wos:signing-intent:agent-as-officer",
           "dependsOn": [
             "requesterSigns"
           ]
@@ -267,8 +267,8 @@
         "affirmationPath": "response.signature.affirmed"
       },
       "identityBinding": {
-        "method": "email-otp",
-        "assuranceLevel": "standard"
+        "method": "oidc",
+        "assuranceLevel": "aal2"
       },
       "custodyHookEligible": true
     },
