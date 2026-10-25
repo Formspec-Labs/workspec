@@ -11,6 +11,7 @@ on:
       - "tests/**"
       - "scripts/**"
       - "pyproject.toml"
+      - "Makefile"
       - ".github/workflows/schema-regression.yml"
   push:
     branches: [main]
@@ -23,6 +24,7 @@ on:
       - "tests/**"
       - "scripts/**"
       - "pyproject.toml"
+      - "Makefile"
       - ".github/workflows/schema-regression.yml"
 
 jobs:
@@ -41,11 +43,6 @@ jobs:
       - name: Install dependencies
         run: python -m pip install --upgrade pip "jsonschema[format]" pytest
 
-      - name: Run schema regression suite
-        run: python -m pytest tests/schemas/ -v
-
-      - name: Enforce ADR 0077 canonical seam vocabulary
-        run: python scripts/check-canonical-seams.py
-
-      - name: Enforce ProvenanceKind schema↔enum parity (audit Gap 1 preventative)
-        run: python scripts/check-recordkind-parity.py
+      # The Python gate list lives in the Makefile's python-test target, shared with local runs.
+      - name: Run schema regression suite and check-* gates
+        run: make python-test

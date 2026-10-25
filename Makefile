@@ -2,9 +2,10 @@
 
 # Variables
 CARGO = cargo
+PYTHON = python3
 # Plugin autoload off: the schema tests need only pytest + jsonschema (as in CI);
 # a globally installed pytest11 plugin with a broken dependency otherwise aborts collection.
-PYTEST = PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest
+PYTEST = PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 $(PYTHON) -m pytest
 
 # Targets
 .PHONY: all build test test-core lint clean help \
@@ -35,7 +36,7 @@ help:
 	@echo "  rust-check           Run cargo check on the parent workspace"
 	@echo ""
 	@echo "Parent Python Targets:"
-	@echo "  python-test          Run parent Python schema-conformance tests"
+	@echo "  python-test          Run Python schema-conformance tests and check-* gates (as CI)"
 	@echo ""
 	@echo "Postgres (integration tests):"
 	@echo "  postgres-up          docker compose up (port 5433, user postgres / wostest)"
@@ -83,8 +84,11 @@ postgres-down:
 restate-ingress-smoke:
 	bash scripts/restate_ingress_smoke.sh
 
+# The one list of Python gates: .github/workflows/schema-regression.yml runs this target.
 python-test:
 	$(PYTEST) tests/schemas -q
+	$(PYTHON) scripts/check-canonical-seams.py
+	$(PYTHON) scripts/check-recordkind-parity.py
 
 # Studio (Authoring) and Case Portal extracted to sibling repos on 2026-05-04.
 # Their build/test/lint/clean live in those repos' own Makefiles.
