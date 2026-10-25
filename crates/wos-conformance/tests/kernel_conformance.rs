@@ -61,42 +61,48 @@ fn assert_retired_fixture_refused(name: &str) {
     );
 }
 
-/// Historical bytes remain evidence of unsupported declarations or absent native effects.
-fn assert_retired_provenance_not_supported(name: &str) {
+/// The first refusal a retired fixture reaches can mask its own family's refusal.
+/// Each masked family is still reached directly by
+/// `each_admission_refusal_is_reached_directly`.
+///
+/// Migrated rights-impacting kernels with adverse transitions refuse at
+/// `DUE_PROCESS`; those without them refuse at `NOTICE_REQUIRED` (fs-hltb).
+const DUE_PROCESS: &str = "/governance/dueProcess";
+const NOTICE_REQUIRED: &str = "/governance/dueProcess/adverseDecisionPolicy/noticeRequired";
+const PIPELINES: &str = "/governance/pipelines";
+const COMPENSABLE: &str = "/execution/compensable";
+
+fn retired_provenance(
+    name: &str,
+) -> Result<wos_conformance::ConformanceResult, wos_conformance::ConformanceError> {
     let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let source =
         std::fs::read_to_string(root.join("fixtures/historical-provenance").join(name)).unwrap();
-    match run_fixture(&source, root.join("tests/fixtures").to_str().unwrap()) {
-        Ok(result) => assert!(
-            !result.passed,
-            "retired {name} must not establish positive support"
-        ),
-        Err(error) => assert!(
-            matches!(
-                error,
-                wos_conformance::ConformanceError::UnsupportedOperation(_)
-            ),
-            "{name}: {error}"
-        ),
-    }
+    run_fixture(&source, root.join("tests/fixtures").to_str().unwrap())
 }
-
-/// Migrated rights-impacting kernels declare required notice, which the reference
-/// route refuses before any later operation (fs-hltb). That refusal masks the
-/// DCR-zone and companion-conflict refusals these historical fixtures reached
-/// before; `constraint_zones_refuse_without_governance` and
-/// `conflicting_governance_companion_refuses` still reach them directly.
-const NOTICE_REQUIRED: &str = "/governance/dueProcess/adverseDecisionPolicy/noticeRequired";
 
 /// Historical bytes refuse at `pointer`, the first unsupported operation they reach.
 fn assert_retired_provenance_refused_at(name: &str, pointer: &str) {
-    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let source =
-        std::fs::read_to_string(root.join("fixtures/historical-provenance").join(name)).unwrap();
-    assert_refused_at(
-        name,
-        run_fixture(&source, root.join("tests/fixtures").to_str().unwrap()),
-        pointer,
+    assert_refused_at(name, retired_provenance(name), pointer);
+}
+
+/// Historical bytes run natively but lack the synthetic record they expected.
+///
+/// The retired event-hint route fabricated this record; no native owner emits
+/// it, so the only failure must be that one missing expectation.
+fn assert_retired_provenance_lacks(name: &str, record_kind: &str) {
+    let result = retired_provenance(name).unwrap_or_else(|error| panic!("{name}: {error}"));
+    assert!(
+        !result.passed,
+        "retired {name} must not establish positive support"
+    );
+    assert_eq!(result.failures.len(), 1, "{name}: {:?}", result.failures);
+    assert!(
+        result.failures[0]
+            .starts_with("expected_provenance[0]: no actual provenance record matched")
+            && result.failures[0].contains(&format!("\"record_kind\":\"{record_kind}\"")),
+        "{name}: {:?}",
+        result.failures
     );
 }
 
@@ -106,14 +112,23 @@ fn assert_refused_at(
     result: Result<wos_conformance::ConformanceResult, wos_conformance::ConformanceError>,
     pointer: &str,
 ) {
+    assert_refused_with(name, result, &format!("{pointer}: "));
+}
+
+/// Asserts `result` is an unsupported-operation refusal whose reason starts with `prefix`.
+fn assert_refused_with(
+    name: &str,
+    result: Result<wos_conformance::ConformanceResult, wos_conformance::ConformanceError>,
+    prefix: &str,
+) {
     match result {
         Err(wos_conformance::ConformanceError::UnsupportedOperation(reason)) => assert!(
-            reason.starts_with(&format!("{pointer}: ")),
-            "{name}: expected refusal at {pointer}, got {reason}"
+            reason.starts_with(prefix),
+            "{name}: expected refusal {prefix:?}, got {reason}"
         ),
-        Err(error) => panic!("{name}: expected refusal at {pointer}, got {error}"),
+        Err(error) => panic!("{name}: expected refusal {prefix:?}, got {error}"),
         Ok(result) => panic!(
-            "{name}: expected refusal at {pointer}, ran with passed={}",
+            "{name}: expected refusal {prefix:?}, ran with passed={}",
             result.passed
         ),
     }
@@ -488,43 +503,47 @@ fn ag016_review_ground_truth_retired_input_refused() {
 /// G-002: Notice before adverse decision takes effect (WG S3.2).
 #[test]
 fn g002_notice_before_adverse() {
-    assert_retired_provenance_not_supported("g-002-notice-before-adverse.json");
+    assert_retired_provenance_refused_at("g-002-notice-before-adverse.json", DUE_PROCESS);
 }
 
 /// G-006: Appeal reviewed by independent adjudicator (WG S3.5).
 #[test]
 fn g006_appeal_independent_reviewer() {
-    assert_retired_provenance_not_supported("g-006-appeal-independent-reviewer.json");
+    assert_retired_provenance_refused_at("g-006-appeal-independent-reviewer.json", DUE_PROCESS);
 }
 
 /// G-007: Appeal filing produces provenance record (WG S3.5).
 #[test]
 fn g007_appeal_provenance() {
-    assert_retired_provenance_not_supported("g-007-appeal-provenance.json");
+    assert_retired_provenance_refused_at("g-007-appeal-provenance.json", DUE_PROCESS);
 }
 
 /// G-010: independentFirst enforces recording before recommendation visible (WG S4.2).
 #[test]
 fn g010_independent_first() {
-    assert_retired_provenance_not_supported("g-010-independent-first.json");
+    // Due process refuses first and masks this fixture's own family.
+    assert_retired_provenance_refused_at("g-010-independent-first.json", DUE_PROCESS);
 }
 
 /// G-016: Configurable percentage randomly selected for quality review (WG S7.1).
 #[test]
 fn g016_review_sampling() {
-    assert_retired_provenance_not_supported("g-016-review-sampling.json");
+    // Due process refuses first and masks this fixture's own family.
+    assert_retired_provenance_refused_at("g-016-review-sampling.json", DUE_PROCESS);
 }
 
 /// G-017: Reviewer MUST NOT be original decision-maker (WG S7.2).
 #[test]
 fn g017_reviewer_separation() {
-    assert_retired_provenance_not_supported("g-017-reviewer-separation.json");
+    // Due process refuses first and masks this fixture's own family.
+    assert_retired_provenance_refused_at("g-017-reviewer-separation.json", DUE_PROCESS);
 }
 
 /// G-018: Override requires structured rationale, authority, evidence (WG S7.3).
 #[test]
 fn g018_override_rationale() {
-    assert_retired_provenance_not_supported("g-018-override-rationale.json");
+    // Due process refuses first and masks this fixture's own family.
+    assert_retired_provenance_refused_at("g-018-override-rationale.json", DUE_PROCESS);
 }
 
 /// Historical external-policy input refuses; the original operation remains unsupported.
@@ -538,43 +557,47 @@ fn ai045_independent_first_suppression_retired_input_refused() {
 /// G-012: Pipeline stage records inputs, outputs, gate results in provenance (WG S5.5).
 #[test]
 fn g012_pipeline_stage_provenance() {
-    assert_retired_provenance_not_supported("g-012-pipeline-stage-provenance.json");
+    assert_retired_provenance_refused_at("g-012-pipeline-stage-provenance.json", PIPELINES);
 }
 
 /// G-013: Pipeline risk profile determined by weakest gate (WG S5.5).
 #[test]
 fn g013_weakest_link_risk() {
-    assert_retired_provenance_not_supported("g-013-weakest-link-risk.json");
+    assert_retired_provenance_refused_at("g-013-weakest-link-risk.json", PIPELINES);
 }
 
 /// G-019: Override records are immutable provenance entries (WG S7.3).
 #[test]
 fn g019_override_immutable() {
-    assert_retired_provenance_not_supported("g-019-override-immutable.json");
+    // Due process refuses first and masks this fixture's own family.
+    assert_retired_provenance_refused_at("g-019-override-immutable.json", DUE_PROCESS);
 }
 
 /// G-020: Rejection records gate, input, threshold, what would pass (WG S8.2).
 #[test]
 fn g020_rejection_detail() {
-    assert_retired_provenance_not_supported("g-020-rejection-detail.json");
+    assert_retired_provenance_refused_at("g-020-rejection-detail.json", PIPELINES);
 }
 
 /// G-021: All task state transitions recorded in provenance (WG S10.1).
 #[test]
 fn g021_task_provenance() {
-    assert_retired_provenance_not_supported("g-021-task-provenance.json");
+    // Due process refuses first and masks this fixture's own family.
+    assert_retired_provenance_refused_at("g-021-task-provenance.json", DUE_PROCESS);
 }
 
 /// G-032: Temporal resolution selects most recent entry before resolution date (WG S13.2).
 #[test]
 fn g032_temporal_resolution() {
-    assert_retired_provenance_not_supported("g-032-temporal-resolution.json");
+    // Pipelines refuse first and mask this fixture's own family.
+    assert_retired_provenance_refused_at("g-032-temporal-resolution.json", PIPELINES);
 }
 
 /// G-049: Processor MUST NOT alter resolution based on bindingType (PP S1.5.4).
 #[test]
 fn g049_binding_type_neutral() {
-    assert_retired_provenance_not_supported("g-049-binding-type-neutral.json");
+    // Pipelines refuse first and mask this fixture's own family.
+    assert_retired_provenance_refused_at("g-049-binding-type-neutral.json", PIPELINES);
 }
 
 // ── Batch 8: Compensation ───────────────────────────────────────
@@ -582,31 +605,31 @@ fn g049_binding_type_neutral() {
 /// K-027: Compensation log is append-only (Kernel S9.5, LCD S5.2).
 #[test]
 fn k027_compensation_log_append_only() {
-    assert_retired_provenance_not_supported("k-027-compensation-log-append-only.json");
+    assert_retired_provenance_refused_at("k-027-compensation-log-append-only.json", COMPENSABLE);
 }
 
 /// K-039: Compensation in reverse of forward completion order (LCD S5.4).
 #[test]
 fn k039_compensation_reverse_order() {
-    assert_retired_provenance_not_supported("k-039-compensation-reverse-order.json");
+    assert_retired_provenance_refused_at("k-039-compensation-reverse-order.json", COMPENSABLE);
 }
 
 /// K-040: Pivot step excluded from compensation (LCD S5.5).
 #[test]
 fn k040_pivot_no_compensation() {
-    assert_retired_provenance_not_supported("k-040-pivot-no-compensation.json");
+    assert_retired_provenance_refused_at("k-040-pivot-no-compensation.json", COMPENSABLE);
 }
 
 /// K-041: Inner scope compensation does not trigger outer (LCD S5.8).
 #[test]
 fn k041_inner_scope_boundary() {
-    assert_retired_provenance_not_supported("k-041-inner-scope-boundary.json");
+    assert_retired_provenance_refused_at("k-041-inner-scope-boundary.json", COMPENSABLE);
 }
 
 /// K-042: $compensation.complete event processed like any event (LCD S5.9).
 #[test]
 fn k042_compensation_complete_event() {
-    assert_retired_provenance_not_supported("k-042-compensation-complete-event.json");
+    assert_retired_provenance_refused_at("k-042-compensation-complete-event.json", COMPENSABLE);
 }
 
 // ── Batch 9: Delegation runtime ─────────────────────────────────
@@ -614,13 +637,15 @@ fn k042_compensation_complete_event() {
 /// G-025: Determinations without valid delegation are conformance errors (WG S11.4).
 #[test]
 fn g025_delegation_required() {
-    assert_retired_provenance_not_supported("g-025-delegation-required.json");
+    // Due process refuses first and masks this fixture's own family.
+    assert_retired_provenance_refused_at("g-025-delegation-required.json", DUE_PROCESS);
 }
 
 /// G-026: Delegation used referenced in provenance record (WG S11.4).
 #[test]
 fn g026_delegation_in_provenance() {
-    assert_retired_provenance_not_supported("g-026-delegation-in-provenance.json");
+    // Due process refuses first and masks this fixture's own family.
+    assert_retired_provenance_refused_at("g-026-delegation-in-provenance.json", DUE_PROCESS);
 }
 
 // ── Batch 10: Agent provenance + fallback ───────────────────────
@@ -702,7 +727,11 @@ fn ai040_terminal_fallback_retired_input_refused() {
 /// K-023: Non-terminal instances resume after crash (Kernel S9.1, G1).
 #[test]
 fn k023_crash_recovery() {
-    assert_retired_provenance_not_supported("k-023-crash-recovery.json");
+    assert_refused_with(
+        "k-023-crash-recovery.json",
+        retired_provenance("k-023-crash-recovery.json"),
+        "$restart requires an owning operation",
+    );
 }
 
 /// K-024: Non-deterministic output persisted before advancing state (Kernel S9.1, G3).
@@ -714,7 +743,7 @@ fn k024_persist_before_advance() {
 /// K-026: IdempotencyKey deduplicates invocations (Kernel S9.3).
 #[test]
 fn k026_idempotency_dedup() {
-    assert_retired_provenance_not_supported("k-026-idempotency-dedup.json");
+    assert_retired_provenance_lacks("k-026-idempotency-dedup.json", "idempotencyDedup");
 }
 
 /// K-028: Instance migration produces provenance (Kernel S9.6).
@@ -769,7 +798,10 @@ fn ag003_zone_satisfaction() {
 /// K-018: Case relationship changes produce provenance (Kernel S5.5).
 #[test]
 fn k018_relationship_change_provenance() {
-    assert_retired_provenance_not_supported("k-018-relationship-change-provenance.json");
+    assert_retired_provenance_lacks(
+        "k-018-relationship-change-provenance.json",
+        "relationshipChanged",
+    );
 }
 
 /// Historical external-policy input refuses; the original operation remains unsupported.
@@ -819,7 +851,8 @@ fn g061_expired_calendar_ignored() {
 /// G-064: Processor does not send notification when required variables missing (NT S5.3).
 #[test]
 fn g064_notification_missing_variables() {
-    assert_retired_provenance_not_supported("g-064-notification-missing-variables.json");
+    // Due process refuses first and masks this fixture's own family.
+    assert_retired_provenance_refused_at("g-064-notification-missing-variables.json", DUE_PROCESS);
 }
 
 // ── Guard evaluation unit tests ──────────────────────────────────
@@ -969,31 +1002,227 @@ fn operational_kernel(blocks: serde_json::Value) -> serde_json::Value {
     kernel
 }
 
-/// Advanced §3 DCR execution still refuses when no required notice masks it.
+/// Every refusal row of the reference companion admission, reached directly.
+///
+/// Each case carries exactly one trigger on an operational kernel (or the
+/// rights-impacting one due process needs), so no earlier row masks it. The
+/// historical fixtures pinned above reach only the first refusal they hit.
 #[test]
-fn constraint_zones_refuse_without_governance() {
-    let kernel = operational_kernel(serde_json::json!({"advanced": {"constraintZones": [{
+fn each_admission_refusal_is_reached_directly() {
+    use serde_json::json;
+    let zone = json!([{
         "id": "investigationZone",
         "activities": [{"id": "collectEvidence", "initialIncluded": true, "initialPending": true}],
         "relations": []
-    }]}}));
-    assert_refused_at(
-        "dcr",
-        run_inline(kernel, serde_json::json!({})),
-        "/advanced/constraintZones",
-    );
-}
-
-/// A selected governance companion that differs from the embedded block refuses.
-#[test]
-fn conflicting_governance_companion_refuses() {
-    let kernel = operational_kernel(serde_json::json!({"governance": {"reviewProtocols": []}}));
-    let companion = serde_json::json!({"$wosWorkflow": "1.0", "governance": {}});
-    assert_refused_at(
-        "conflict",
-        run_inline(kernel, serde_json::json!({"governance": companion})),
-        "/governance",
-    );
+    }]);
+    let table = json!({"threshold": {"values": [{"effectiveFrom": "2026-01-01", "value": 1}]}});
+    let adverse_lifecycle = json!({"initialState": "open", "states": {
+        "open": {"type": "atomic", "transitions": [
+            {"event": {"kind": "message", "name": "deny"}, "target": "done", "tags": ["adverse-decision"]}
+        ]},
+        "done": {"type": "final"}
+    }});
+    let governance = |block: serde_json::Value| json!({"governance": block});
+    let envelope = |key: &str, block: serde_json::Value| json!({"$wosWorkflow": "1.0", key: block});
+    let cases = [
+        (
+            "compensation",
+            json!({"execution": {"compensable": true}}),
+            json!({}),
+            "/execution/compensable",
+        ),
+        (
+            "governance conflict",
+            governance(json!({"reviewProtocols": []})),
+            json!({"governance": envelope("governance", json!({}))}),
+            "/governance",
+        ),
+        (
+            "due process",
+            json!({"impactLevel": "rights-impacting", "lifecycle": adverse_lifecycle}),
+            json!({}),
+            "/governance/dueProcess",
+        ),
+        (
+            "embedded parameters",
+            governance(json!({"policyParameters": {"parameters": table}})),
+            json!({}),
+            "/governance/policyParameters/parameters",
+        ),
+        (
+            "companion parameters",
+            json!({}),
+            json!({"policyParameters": envelope("governance", json!({"parameters": table}))}),
+            "/companions/policyParameters/parameters",
+        ),
+        (
+            "due-process scope",
+            governance(json!({"dueProcess": {"scope": "true"}})),
+            json!({}),
+            "/governance/dueProcess/scope",
+        ),
+        (
+            "required notice",
+            governance(json!({"dueProcess": {"adverseDecisionPolicy": {"noticeRequired": true}}})),
+            json!({}),
+            NOTICE_REQUIRED,
+        ),
+        (
+            "counterfactuals",
+            governance(
+                json!({"dueProcess": {"adverseDecisionPolicy": {"counterfactualRequired": true}}}),
+            ),
+            json!({}),
+            "/governance/dueProcess/adverseDecisionPolicy/counterfactualRequired",
+        ),
+        (
+            "individualized explanation",
+            governance(
+                json!({"dueProcess": {"adverseDecisionPolicy": {"explanationLevel": "individualized"}}}),
+            ),
+            json!({}),
+            "/governance/dueProcess/adverseDecisionPolicy/explanationLevel",
+        ),
+        (
+            "appeal",
+            governance(
+                json!({"dueProcess": {"adverseDecisionPolicy": {"appealMechanism": {"enabled": true}}}}),
+            ),
+            json!({}),
+            "/governance/dueProcess/adverseDecisionPolicy/appealMechanism",
+        ),
+        (
+            "continuation",
+            governance(
+                json!({"dueProcess": {"adverseDecisionPolicy": {"appealMechanism": {"continuationOfServices": true}}}}),
+            ),
+            json!({}),
+            "/governance/dueProcess/adverseDecisionPolicy/appealMechanism",
+        ),
+        (
+            "review protocols",
+            governance(
+                json!({"reviewProtocols": [{"tags": ["review"], "protocols": ["dualBlind"]}]}),
+            ),
+            json!({}),
+            "/governance/reviewProtocols/0",
+        ),
+        (
+            "pipelines",
+            governance(json!({"pipelines": [{"id": "intake"}]})),
+            json!({}),
+            PIPELINES,
+        ),
+        (
+            "delegations",
+            governance(json!({"delegations": [{"id": "delegated"}]})),
+            json!({}),
+            "/governance/delegations",
+        ),
+        (
+            "hold policies",
+            governance(json!({"holdPolicies": [{"holdType": "pending"}]})),
+            json!({}),
+            "/governance/holdPolicies",
+        ),
+        (
+            "typed holds",
+            governance(json!({"holds": {"policies": [{"holdType": "pending"}]}})),
+            json!({}),
+            "/governance/holds/policies",
+        ),
+        (
+            "escalation",
+            governance(json!({"escalationLevels": [{"id": "supervisor"}]})),
+            json!({}),
+            "/governance/escalationLevels",
+        ),
+        (
+            "review sampling",
+            governance(json!({"qualityControls": {"reviewSampling": {"rate": 0.1}}})),
+            json!({}),
+            "/governance/qualityControls/reviewSampling/rate",
+        ),
+        (
+            "separation of duties",
+            governance(
+                json!({"qualityControls": {"separationOfDuties": {"scope": "sameInstance"}}}),
+            ),
+            json!({}),
+            "/governance/qualityControls/separationOfDuties/scope",
+        ),
+        (
+            "delegation authority",
+            governance(json!({"delegation": {"authority": "determination"}})),
+            json!({}),
+            "/governance/delegation/authority",
+        ),
+        (
+            "delegation depth",
+            governance(json!({"delegation": {"maxDepth": 1}})),
+            json!({}),
+            "/governance/delegation/maxDepth",
+        ),
+        (
+            "hold type",
+            governance(json!({"holds": {"holdType": "pending"}})),
+            json!({}),
+            "/governance/holds/holdType",
+        ),
+        (
+            "override authority",
+            governance(
+                json!({"qualityControls": {"overrideAuthority": {"requireStructuredRationale": true}}}),
+            ),
+            json!({}),
+            "/governance/qualityControls/overrideAuthority",
+        ),
+        (
+            "audit tier",
+            governance(json!({"audit": {"reasoningTier": {"requiredForTags": ["determination"]}}})),
+            json!({}),
+            "/governance/audit/reasoningTier",
+        ),
+        (
+            "task SLA",
+            governance(
+                json!({"taskCatalog": [{"pattern": "review", "slaDefinitions": [{"id": "decision"}]}]}),
+            ),
+            json!({}),
+            "/governance/taskCatalog/0",
+        ),
+        (
+            "advanced conflict",
+            json!({"advanced": {}}),
+            json!({"advanced": envelope("advanced", json!({"constraintZones": zone}))}),
+            "/advanced",
+        ),
+        (
+            "embedded constraint zones",
+            json!({"advanced": {"constraintZones": zone}}),
+            json!({}),
+            "/advanced/constraintZones",
+        ),
+        (
+            "companion constraint zones",
+            json!({}),
+            json!({"advanced": envelope("advanced", json!({"constraintZones": zone}))}),
+            "/advanced/constraintZones",
+        ),
+        (
+            "verifiable constraints",
+            json!({"advanced": {"verifiableConstraints": [{"constraintRef": "noDetermination"}]}}),
+            json!({}),
+            "/advanced/verifiableConstraints",
+        ),
+    ];
+    for (name, blocks, companions, pointer) in cases {
+        assert_refused_at(
+            name,
+            run_inline(operational_kernel(blocks), companions),
+            pointer,
+        );
+    }
 }
 
 // ── Fixture parse validation ────────────────────────────────────
