@@ -66,11 +66,6 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
 
       - name: Verify LINT-MATRIX.md is up to date
-        run: |
-          cargo run -p wos-conformance --bin wos-rule-coverage -- --generate-matrix --matrix-out /tmp/LINT-MATRIX-fresh.md
-          if ! diff -q LINT-MATRIX.md /tmp/LINT-MATRIX-fresh.md > /dev/null 2>&1; then
-            echo "LINT-MATRIX.md is stale. Run: cargo run -p wos-conformance --bin wos-rule-coverage -- --generate-matrix" >&2
-            diff LINT-MATRIX.md /tmp/LINT-MATRIX-fresh.md || true
-            exit 1
-          fi
-          echo "LINT-MATRIX.md is up to date."
+        # The test renders the registries and requires LINT-MATRIX.md to equal
+        # them; on failure it prints the one regeneration command.
+        run: cargo nextest run -p wos-conformance --test lint_matrix

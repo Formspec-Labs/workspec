@@ -546,31 +546,36 @@ pub fn render_json(report: &CoverageReport) -> Result<String, serde_json::Error>
     serde_json::to_string_pretty(report)
 }
 
+/// The coverage report over both rule registries and `fixtures_dir`.
+///
+/// `wos-rule-coverage --generate-matrix` and the `lint_matrix` test both
+/// render `LINT-MATRIX.md` from this one report.
+pub fn unified_coverage(fixtures_dir: &Path) -> CoverageReport {
+    compute_coverage(
+        &[wos_lint::all_lint_rules(), crate::rules::all_rules()],
+        Some(fixtures_dir),
+    )
+}
+
 /// Render the unified rule registry as a regenerated `LINT-MATRIX.md`.
 ///
 /// The output lists every rule from both registries in id-sorted order. Each
 /// row includes: `rule-id | tier | graduation | category | summary | fixture
-/// evidence`.
-///
-/// The header stamps the SHA-256 of the rendered matrix below it, so the
-/// bytes are a pure function of the registries and fixtures the generator
-/// reads: local and CI regeneration agree, and any registry change moves the
-/// stamp. (A commit stamp could never match the commit that carries it.)
+/// evidence`. The bytes are a pure function of the report, so the
+/// `lint_matrix` test can require the committed file to equal them.
 pub fn render_matrix(report: &CoverageReport) -> String {
-    let body = render_matrix_body(report);
-    let digest = integrity_canonical::compute_digest(
-        body.as_bytes(),
-        integrity_canonical::DigestAlgorithm::Sha256,
-    );
+    let mut out = String::new();
     let t1_count = report.rules.iter().filter(|r| r.tier == "T1").count();
     let t2_count = report.rules.iter().filter(|r| r.tier == "T2").count();
     let t3_count = report.rules.iter().filter(|r| r.tier == "T3").count();
-    format!(
-        "# WOS Verification Matrix\n\n\
-         > **Regenerated from code registries** (sha256 `{digest}` of the matrix below). \
+
+    out.push_str("# WOS Verification Matrix\n\n");
+    out.push_str(&format!(
+        "> **Generated from the code registries** by \
+         `cargo run -p wos-conformance --bin wos-rule-coverage -- --generate-matrix`; \
+         the `lint_matrix` test fails when this file drifts. \
          {total} rules across {t1} T1 / {t2} T2 / {t3} T3 \
-         ({lb} LoadBearing, {stable} Stable, {tested} Tested, {draft} Draft).\n\
-         {body}",
+         ({lb} LoadBearing, {stable} Stable, {tested} Tested, {draft} Draft).\n",
         total = report.summary.total,
         t1 = t1_count,
         t2 = t2_count,
@@ -579,15 +584,7 @@ pub fn render_matrix(report: &CoverageReport) -> String {
         stable = report.summary.stable,
         tested = report.summary.tested,
         draft = report.summary.draft,
-    )
-}
-
-/// Render everything below the `LINT-MATRIX.md` header line.
-fn render_matrix_body(report: &CoverageReport) -> String {
-    let mut out = String::new();
-    let t1_count = report.rules.iter().filter(|r| r.tier == "T1").count();
-    let t2_count = report.rules.iter().filter(|r| r.tier == "T2").count();
-    let t3_count = report.rules.iter().filter(|r| r.tier == "T3").count();
+    ));
     out.push('\n');
 
     // Box diagram.
@@ -800,37 +797,6 @@ mod tests {
             spec_ref: None,
             suggested_fix: None,
         }
-    }
-
-    // ── render_matrix ─────────────────────────────────────────────────────
-
-    #[test]
-    fn matrix_stamps_the_digest_of_the_rendered_registry() {
-        let registry = |summary: &'static str| -> &'static [RuleMetadata] {
-            Box::leak(
-                vec![RuleMetadata {
-                    summary,
-                    ..make_rule("A-001", Graduation::Draft)
-                }]
-                .into_boxed_slice(),
-            )
-        };
-        let report = compute_coverage(&[registry("first summary")], None);
-        let matrix = render_matrix(&report);
-        let body = render_matrix_body(&report);
-        let digest = integrity_canonical::compute_digest(
-            body.as_bytes(),
-            integrity_canonical::DigestAlgorithm::Sha256,
-        );
-        assert!(matrix.ends_with(&body), "{matrix}");
-        assert!(matrix.contains(&format!("sha256 `{digest}`")), "{matrix}");
-        // No environment or repository state enters the bytes.
-        assert_eq!(matrix, render_matrix(&report));
-        let changed = render_matrix(&compute_coverage(&[registry("second summary")], None));
-        assert!(
-            !changed.contains(&digest),
-            "a registry change must move the stamp"
-        );
     }
 
     // ── rule_category ─────────────────────────────────────────────────────

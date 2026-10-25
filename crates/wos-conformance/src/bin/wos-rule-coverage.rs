@@ -32,11 +32,7 @@
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use wos_conformance::{
-    coverage::{compute_coverage, render_json, render_matrix, render_text},
-    rules::all_rules,
-};
-use wos_lint::all_lint_rules;
+use wos_conformance::coverage::{render_json, render_matrix, render_text, unified_coverage};
 
 const EXIT_OK: u8 = 0;
 const EXIT_STRICT_VIOLATION: u8 = 1;
@@ -60,14 +56,13 @@ fn run() -> Result<u8, String> {
         return Ok(EXIT_OK);
     }
 
-    let registries: &[&'static [wos_lint::RuleMetadata]] = &[all_lint_rules(), all_rules()];
     let fixtures_dir = options
         .fixtures_dir
         .as_deref()
         .map(PathBuf::from)
         .unwrap_or_else(default_fixtures_dir);
 
-    let report = compute_coverage(registries, Some(&fixtures_dir));
+    let report = unified_coverage(&fixtures_dir);
 
     // --generate-matrix: write LINT-MATRIX.md and exit.
     if options.generate_matrix {
