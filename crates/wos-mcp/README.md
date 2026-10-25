@@ -62,7 +62,9 @@ WOS_MCP_CLIENT_EVIDENCE=/tmp/wos-mcp-client \
 ```
 
 Both read `WOS_MCP_UV` (default `uv`): uv versions its cache buckets, so the
-offline run uses the uv that filled the cache. Root CI pins its version.
+offline run uses the uv that filled the cache. work-spec's `uv.toml` pins that
+uv's version: uv refuses any other under work-spec, the bootstrap target names
+the mismatch, and root CI installs the pinned uv from that file.
 
 The test selects `CARGO_BIN_EXE_wos-mcp`, exercises discovery, native edits,
 selected Definition/Mapping validation, reviewed failure/repair, and export into
