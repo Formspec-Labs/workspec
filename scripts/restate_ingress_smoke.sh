@@ -9,11 +9,29 @@
 # Run from any cwd; resolves the wos-spec workspace root from this script's location.
 # wos-server-runtime-restate has moved to workspec-server (chore 3.2); cargo commands
 # below use --manifest-path to address the workspec-server workspace instead.
+#
+# WOS_RESTATE_SMOKE_DRY_RUN=1 builds the worker, prints its path and stops before Docker.
 set -euo pipefail
 
 WOS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FLOWSPEC_SERVER_ROOT="$(cd "$WOS_ROOT/../workspec-server" && pwd)"
 cd "$WOS_ROOT"
+
+echo "Building wos-restate-worker..."
+cargo build --manifest-path "$FLOWSPEC_SERVER_ROOT/Cargo.toml" -p wos-server-runtime-restate --bin wos-restate-worker
+# The binary lands in CARGO_TARGET_DIR / build.target-dir (the stack's .cargo/config.toml sets
+# .cargo-target), not a fixed workspec-server/target.
+TARGET_DIR="$(cargo metadata --manifest-path "$FLOWSPEC_SERVER_ROOT/Cargo.toml" --format-version 1 --no-deps |
+  python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])')"
+WORKER_BIN="$TARGET_DIR/debug/wos-restate-worker"
+if [[ ! -x "$WORKER_BIN" ]]; then
+  echo "wos-restate-worker not found at $WORKER_BIN" >&2
+  exit 1
+fi
+if [[ "${WOS_RESTATE_SMOKE_DRY_RUN:-}" == "1" ]]; then
+  echo "Dry run: worker at $WORKER_BIN; skipping Docker."
+  exit 0
+fi
 
 RESTATE_IMAGE="${WOS_RESTATE_SERVER_IMAGE:-docker.restate.dev/restatedev/restate:1.7.13}"
 NAME="${WOS_RESTATE_DOCKER_NAME:-wos-restate-ci-$$}"
@@ -68,11 +86,8 @@ if ! curl -sf "http://127.0.0.1:9070/deployments" >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Building wos-restate-worker..."
-cargo build --manifest-path "$FLOWSPEC_SERVER_ROOT/Cargo.toml" -p wos-server-runtime-restate --bin wos-restate-worker
-
 echo "Starting worker on :9080..."
-"$FLOWSPEC_SERVER_ROOT/target/debug/wos-restate-worker" &
+"$WORKER_BIN" &
 WORKER_PID=$!
 
 # Worker serves HTTP/2 prior-knowledge; probe TCP listen (nc when available, else bash /dev/tcp on Linux).
