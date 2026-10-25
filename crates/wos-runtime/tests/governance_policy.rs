@@ -1754,11 +1754,13 @@ fn generated_d1_native_policy_qualifies_exact_workflow_delivery_and_mapping_sele
         integration: Some(serde_json::from_value(read("integration.json")).unwrap()),
     })
     .expect("deployed D1 seed selection must qualify");
+    let human_decisions = &policy.selection().rules.human_decisions;
     assert!(
-        policy
-            .selection()
-            .rules
-            .human_decisions
+        !human_decisions.is_empty(),
+        "the D1 seed must bind human decisions"
+    );
+    assert!(
+        human_decisions
             .iter()
             .all(|binding| binding.evidence_mapping.is_some())
     );
