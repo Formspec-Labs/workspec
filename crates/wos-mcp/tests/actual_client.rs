@@ -137,8 +137,8 @@ async fn compare_dispatch(evidence: &Path) {
 /// uv versions its cache buckets (for example `wheels-v5` and `wheels-v6`), so
 /// a different uv can miss what the bootstrap cached; the offline run uses the
 /// uv that filled the cache. The work-spec Makefile exports this for its
-/// bootstrap and test targets; work-spec's `uv.toml` pins the version, which
-/// root CI's `astral-sh/setup-uv` installs. Unset, it is `uv` on `PATH`.
+/// bootstrap and test targets at the version `uv.toml` pins (installing that
+/// uv under `.tools/` when the one on `PATH` differs). Unset, it is `uv` on `PATH`.
 const UV_VARIABLE: &str = "WOS_MCP_UV";
 
 /// Tells a developer how to fill the offline cache this test requires.

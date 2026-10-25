@@ -7,11 +7,17 @@ PYTHON = python3
 # a globally installed pytest11 plugin with a broken dependency otherwise aborts collection.
 PYTEST = PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 $(PYTHON) -m pytest
 # The uv that fills and then reads the wos-mcp official client's offline cache
-# (crates/wos-mcp/tests/actual_client.rs reads it); uv versions its cache buckets,
-# so both use one binary, at the version uv.toml pins (root CI installs it from there).
-WOS_MCP_UV ?= uv
-export WOS_MCP_UV
+# (crates/wos-mcp/tests/actual_client.rs reads WOS_MCP_UV); uv versions its cache buckets,
+# so both use one binary, at the version uv.toml pins (root CI's setup-uv installs it from
+# there). A WOS_MCP_UV (default: `uv` on PATH) at any other version is replaced by the
+# digest-checked install scripts/install-uv.sh makes under .tools/ (wos-mcp-client-bootstrap).
 WOS_MCP_UV_VERSION := $(shell sed -n 's/^required-version *= *"==\([^"]*\)"$$/\1/p' uv.toml)
+WOS_MCP_UV_LOCAL := $(CURDIR)/.tools/uv-$(WOS_MCP_UV_VERSION)/uv
+WOS_MCP_UV ?= uv
+ifneq ($(shell $(WOS_MCP_UV) --version 2>/dev/null | cut -d' ' -f2),$(WOS_MCP_UV_VERSION))
+override WOS_MCP_UV := $(WOS_MCP_UV_LOCAL)
+endif
+export WOS_MCP_UV
 
 # Targets
 .PHONY: all build test test-core lint clean help \
@@ -72,11 +78,9 @@ test-core: rust-test python-test
 
 # Fills the uv cache from tests/support/official_client.py.lock; the test then runs it offline.
 wos-mcp-client-bootstrap:
-	@actual=$$($(WOS_MCP_UV) --version 2>/dev/null | cut -d' ' -f2); \
-	if [ -z "$(WOS_MCP_UV_VERSION)" ] || [ "$$actual" != "$(WOS_MCP_UV_VERSION)" ]; then \
-		echo "wos-mcp-client-bootstrap: WOS_MCP_UV=$(WOS_MCP_UV) is uv $${actual:-(not runnable)}; uv.toml pins uv $(WOS_MCP_UV_VERSION). Install that uv and set WOS_MCP_UV to it." >&2; \
-		exit 1; \
-	fi
+ifeq ($(WOS_MCP_UV),$(WOS_MCP_UV_LOCAL))
+	scripts/install-uv.sh $(dir $(WOS_MCP_UV_LOCAL))
+endif
 	$(WOS_MCP_UV) sync --script crates/wos-mcp/tests/support/official_client.py --locked
 
 rust-test: wos-mcp-client-bootstrap

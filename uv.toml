@@ -1,5 +1,6 @@
 # The one uv version for work-spec: the wos-mcp official client's offline cache is filled and read
 # by this uv (uv versions its cache buckets). uv refuses to run any other version under this
-# directory; `make wos-mcp-client-bootstrap` checks WOS_MCP_UV against it, and root CI's
-# astral-sh/setup-uv installs it from this file (`version-file`).
+# directory; the Makefile uses WOS_MCP_UV only at this version and otherwise installs it
+# (scripts/install-uv.sh, digest-checked, under .tools/); root CI's astral-sh/setup-uv installs it
+# from this file (`version-file`).
 required-version = "==0.8.22"

@@ -1,0 +1,8 @@
+# sha256 of uv release archives, keyed by <version>/<archive>, copied from each archive's
+# https://github.com/astral-sh/uv/releases/download/<version>/<archive>.sha256 and confirmed against
+# GitHub's asset digest and the downloaded archive. scripts/install-uv.sh refuses an archive missing
+# here, so bumping uv.toml's required-version needs that release's lines added.
+3f61099e261e449527141dbf125629fab33ad696468c8c90cebbac40185a306c  0.8.22/uv-aarch64-apple-darwin.tar.gz
+76638fdcfa91357858771551a1c88de1f7c3b270b33ab1866f8a0618d9e442d8  0.8.22/uv-x86_64-apple-darwin.tar.gz
+726b72a137fda33565143325f7d31c42cd30ff9ccdf067e00d124d37b4081cb2  0.8.22/uv-aarch64-unknown-linux-gnu.tar.gz
+741ff1f5742c5a4a25d2f829e8395355e43f7a5ae2ebc6368e9ae2df0efb69cf  0.8.22/uv-x86_64-unknown-linux-gnu.tar.gz

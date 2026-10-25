@@ -20,3 +20,5 @@ studio/dist/
 studio/node_modules/
 studio/playwright-report/
 studio/test-results/
+# Tools scripts/install-uv.sh installs (the uv uv.toml pins)
+/.tools/
