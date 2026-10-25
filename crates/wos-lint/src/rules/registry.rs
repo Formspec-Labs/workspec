@@ -2,10 +2,10 @@
 
 //! Rule metadata registry for all currently-implemented lint rules.
 //!
-//! The registry is the single source of truth for "what rules exist in code"
-//! — separate from [`LINT-MATRIX.md`], which is the source of truth for
-//! "what rules the spec normatively requires." Gaps between the two are
-//! rule-coverage gaps.
+//! The registry is the single source of truth for which lint rules exist in
+//! code. `LINT-MATRIX.md` is generated from it and the `wos-conformance`
+//! registry by `cargo run -p wos-conformance --bin wos-rule-coverage --
+//! --generate-matrix`; the `lint_matrix` test fails when the file drifts.
 //!
 //! Every rule currently starts at [`Graduation::Draft`] with an empty
 //! [`RuleMetadata::fixtures`] list. Promotion through the ladder
@@ -23,7 +23,7 @@ use crate::diagnostic::LintSeverity;
 
 /// Verification tier a rule belongs to.
 ///
-/// See [`LINT-MATRIX.md`] for the authoritative tier catalog.
+/// `LINT-MATRIX.md` groups the generated rule catalog by this tier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tier {
     /// Single-document structural checks (`wos-lint`).
@@ -88,9 +88,8 @@ pub fn all_lint_rules() -> &'static [RuleMetadata] {
 ///
 /// Entries are derived from the concrete `LintDiagnostic::{t1_error,t2_error,...}`
 /// call sites in `tier1.rs`, `tier2.rs`, `fel_analysis.rs`, and
-/// `schema_doc.rs`. Rules listed in `LINT-MATRIX.md` but not yet emitted by
-/// code are intentionally absent — the registry describes present reality,
-/// not the normative catalog.
+/// `schema_doc.rs`. Normative requirements no code emits yet are absent: the
+/// registry describes present reality, not the normative catalog.
 static ALL_LINT_RULES: &[RuleMetadata] = &[
     // --- AG (Advanced Governance) -------------------------------------
     RuleMetadata {
