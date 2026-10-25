@@ -137,8 +137,8 @@ cargo nextest run -p wos-lint
 cargo nextest run -p wos-conformance
 cargo nextest run -p wos-conformance --test signature_profile   # Signature Profile suite
 
-# Python schema-conformance
-python3 -m pytest tests/schemas -q
+# Python schema-conformance plus the CI check scripts (canonical seams, record-kind parity)
+make python-test
 
 # Full workspace
 cargo nextest run --workspace
