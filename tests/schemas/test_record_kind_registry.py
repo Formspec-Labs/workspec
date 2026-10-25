@@ -224,3 +224,24 @@ def test_registry_event_literal_mappings_drive_workflow_api_and_log_guards():
     # event-conditioned payload guards.
     assert _api_event_guard_mappings() == {}
     assert _provenance_log_event_guard_mappings().items() <= mappings.items()
+
+
+def test_parity_walk_skips_instance_keywords_only_in_keyword_position():
+    """A property, pattern or definition may be named `default` or `examples`
+    (wos-tooling has an `examples` property); its subschema is still walked,
+    while the value of the `default`/`examples`/`const`/`enum` keyword is data."""
+    pins = runpy.run_path(str(PARITY_SCRIPT))["iter_record_kind_pins"]
+    pin = {"properties": {"recordKind": {"const": "bogusKind"}}}
+    named = {
+        "properties": {"default": pin, "examples": pin},
+        "patternProperties": {"^const$": pin},
+        "$defs": {"enum": pin},
+    }
+    assert sorted(pins(named)) == [
+        ("/$defs/enum", "bogusKind"),
+        ("/patternProperties/^const$", "bogusKind"),
+        ("/properties/default", "bogusKind"),
+        ("/properties/examples", "bogusKind"),
+    ]
+    keyword_values = {"default": pin, "examples": [pin], "const": pin, "enum": [pin]}
+    assert list(pins(keyword_values)) == []

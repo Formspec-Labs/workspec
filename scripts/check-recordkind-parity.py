@@ -184,6 +184,11 @@ def extract_registry_pin_required(registry: dict) -> set[str]:
 
 # JSON Schema keywords whose values are instance data, not subschemas.
 INSTANCE_VALUE_KEYWORDS = frozenset({"const", "enum", "default", "examples"})
+# Keywords whose values map names to subschemas. Their keys are property,
+# pattern or definition names, so a name such as `default` is not a keyword.
+SCHEMA_MAP_KEYWORDS = frozenset(
+    {"properties", "patternProperties", "$defs", "definitions", "dependentSchemas"}
+)
 
 
 def pinned_record_kind(subschema: dict) -> str | None:
@@ -202,19 +207,28 @@ def pinned_record_kind(subschema: dict) -> str | None:
     return None
 
 
-def iter_record_kind_pins(node: object, pointer: str = "") -> Iterable[tuple[str, str]]:
+def iter_record_kind_pins(
+    node: object, pointer: str = "", names: bool = False
+) -> Iterable[tuple[str, str]]:
     """Yield (JSON Pointer, literal) for every subschema at any depth that
     pins `recordKind`: under `$defs`, `properties`, `allOf`/`anyOf`/`oneOf`,
     `if`/`then`/`else`, `items`, and the rest. Instance-valued keywords are
-    not descended into, because their contents are data, not schemas."""
+    not descended into in keyword position, because their contents are data;
+    `names` marks a name map (the value of a SCHEMA_MAP_KEYWORDS keyword),
+    whose every value is a subschema whatever its name."""
     if isinstance(node, dict):
-        literal = pinned_record_kind(node)
+        literal = None if names else pinned_record_kind(node)
         if literal is not None:
             yield (pointer or "/", literal)
         for key, child in node.items():
-            if key not in INSTANCE_VALUE_KEYWORDS:
-                escaped = key.replace("~", "~0").replace("/", "~1")
-                yield from iter_record_kind_pins(child, f"{pointer}/{escaped}")
+            if not names and key in INSTANCE_VALUE_KEYWORDS:
+                continue
+            escaped = key.replace("~", "~0").replace("/", "~1")
+            yield from iter_record_kind_pins(
+                child,
+                f"{pointer}/{escaped}",
+                names=not names and key in SCHEMA_MAP_KEYWORDS,
+            )
     elif isinstance(node, list):
         for index, child in enumerate(node):
             yield from iter_record_kind_pins(child, f"{pointer}/{index}")
