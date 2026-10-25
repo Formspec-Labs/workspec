@@ -257,7 +257,7 @@ WOS did not invent lifecycle modeling. It combines proven concepts with novel go
 |----------|---------------|
 | [`TODO.md`](TODO.md) | Live backlog and sequencing |
 | [`WOS-IMPLEMENTATION-STATUS.md`](WOS-IMPLEMENTATION-STATUS.md) | Crate maturity and technical roadmap |
-| [`LINT-MATRIX.md`](LINT-MATRIX.md) | All 197 constraints with test status and citations |
+| [`LINT-MATRIX.md`](LINT-MATRIX.md) | Every lint and conformance rule with its graduation tier and fixture evidence; regenerate with `cargo run -p wos-conformance --bin wos-rule-coverage -- --generate-matrix` |
 | [`WOS-FEATURE-MATRIX.md`](WOS-FEATURE-MATRIX.md) | Sixteen-way competitive comparison |
 | [`enterprise-feature-gaps.md`](enterprise-feature-gaps.md) | Formspec SaaS gaps vs enterprise vendors |
 | [`enterprise-implementation-roadmap.md`](enterprise-implementation-roadmap.md) | Six-phase SaaS plan |
