@@ -24,7 +24,8 @@
             "id": "aiAssistance",
             "contentType": "text",
             "title": "Use of Automated Assistance",
-            "content": "An automated system assisted with a preliminary assessment of your application. Human reviewers made this decision."
+            "content": "An automated system assisted with a preliminary assessment of your application. Human reviewers made this decision.",
+            "condition": "present(caseFile.eligibilityScore)"
           },
           {
             "id": "appealRights",

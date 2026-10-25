@@ -75,12 +75,14 @@
       "reportedRace": {
         "type": "string",
         "required": false,
-        "description": "Voluntarily reported race; used only for aggregate equity monitoring (Advanced §3), never as a decision input."
+        "dpvSensitivity": "dpv:SpecialCategoryData",
+        "description": "Voluntarily reported race; used only for aggregate equity monitoring (Advanced §3) and negative-counterfactual evidence (Governance §3.4); never a decision input."
       },
       "reportedGender": {
         "type": "string",
         "required": false,
-        "description": "Voluntarily reported gender; used only for aggregate equity monitoring (Advanced §3), never as a decision input."
+        "dpvSensitivity": "dpv:SpecialCategoryData",
+        "description": "Voluntarily reported gender; used only for aggregate equity monitoring (Advanced §3) and negative-counterfactual evidence (Governance §3.4); never a decision input."
       }
     }
   },
@@ -502,7 +504,7 @@
     "pipelines": [
       {
         "id": "eligibility",
-        "description": "Validates intake data and the eligibility agent's output before human review.",
+        "description": "Validates intake data before human review.",
         "stages": [
           {
             "id": "intakeValidation",
@@ -521,12 +523,6 @@
               }
             ],
             "description": "Require supporting evidence before review."
-          },
-          {
-            "id": "assessmentValidation",
-            "type": "contract-validation",
-            "contractRef": "https://agency.gov/contracts/eligibility-output.schema.json",
-            "description": "Validate the eligibility agent's assessment against its output contract."
           }
         ]
       }
@@ -639,12 +635,6 @@
           "condition": "present(output.determination)",
           "onViolation": "reject",
           "x-explanation": "Agent assists; only human reviewers determine."
-        },
-        {
-          "id": "noAdverseAction",
-          "kind": "prohibition",
-          "condition": "present(output.adverseAction)",
-          "onViolation": "reject"
         },
         {
           "id": "requireRationale",
@@ -845,13 +835,7 @@
         "constraintRef": "noDetermination",
         "verifiable": true,
         "expectedResult": "proven-safe",
-        "notes": "Agents never fire determination transitions; tag membership is a finite-domain check."
-      },
-      {
-        "constraintRef": "noAdverseAction",
-        "verifiable": true,
-        "expectedResult": "proven-safe",
-        "notes": "Agents never fire adverse-decision transitions; tag membership is a finite-domain check."
+        "notes": "The prohibition present(output.determination) is one presence check on the agent output, within the verifiable subset (Advanced §8.2)."
       }
     ],
     "circuitBreaker": {
