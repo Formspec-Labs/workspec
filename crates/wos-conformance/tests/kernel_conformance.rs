@@ -81,6 +81,44 @@ fn assert_retired_provenance_not_supported(name: &str) {
     }
 }
 
+/// Migrated rights-impacting kernels declare required notice, which the reference
+/// route refuses before any later operation (fs-hltb). That refusal masks the
+/// DCR-zone and companion-conflict refusals these historical fixtures reached
+/// before; `constraint_zones_refuse_without_governance` and
+/// `conflicting_governance_companion_refuses` still reach them directly.
+const NOTICE_REQUIRED: &str = "/governance/dueProcess/adverseDecisionPolicy/noticeRequired";
+
+/// Historical bytes refuse at `pointer`, the first unsupported operation they reach.
+fn assert_retired_provenance_refused_at(name: &str, pointer: &str) {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let source =
+        std::fs::read_to_string(root.join("fixtures/historical-provenance").join(name)).unwrap();
+    assert_refused_at(
+        name,
+        run_fixture(&source, root.join("tests/fixtures").to_str().unwrap()),
+        pointer,
+    );
+}
+
+/// Asserts `result` is the reference route's refusal located at `pointer`.
+fn assert_refused_at(
+    name: &str,
+    result: Result<wos_conformance::ConformanceResult, wos_conformance::ConformanceError>,
+    pointer: &str,
+) {
+    match result {
+        Err(wos_conformance::ConformanceError::UnsupportedOperation(reason)) => assert!(
+            reason.starts_with(&format!("{pointer}: ")),
+            "{name}: expected refusal at {pointer}, got {reason}"
+        ),
+        Err(error) => panic!("{name}: expected refusal at {pointer}, got {error}"),
+        Ok(result) => panic!(
+            "{name}: expected refusal at {pointer}, ran with passed={}",
+            result.passed
+        ),
+    }
+}
+
 fn assert_historical_due_process_refused(name: &str) {
     let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let source =
@@ -230,13 +268,15 @@ fn k045_timer_tolerance_violation() {
 /// G-030: Entering a hold-tagged state starts the hold timer (WG S12.4).
 #[test]
 fn g030_hold_timer_start() {
-    assert_retired_provenance_not_supported("g-030-hold-timer-start.json");
+    // Required notice refuses first and masks this fixture's own refusal.
+    assert_retired_provenance_refused_at("g-030-hold-timer-start.json", NOTICE_REQUIRED);
 }
 
 /// G-054: Resume trigger cancels the hold timer before it fires (WG S12.4).
 #[test]
 fn g054_resume_cancels_hold_timer() {
-    assert_retired_provenance_not_supported("g-054-resume-cancels-hold-timer.json");
+    // Required notice refuses first and masks this fixture's own refusal.
+    assert_retired_provenance_refused_at("g-054-resume-cancels-hold-timer.json", NOTICE_REQUIRED);
 }
 
 // ── Batch 3: Deontic enforcement ────────────────────────────────
@@ -706,19 +746,22 @@ fn k035_history_cleared_on_exit() {
 /// AG-001: Equity guardrails do not block individual actions (AdvGov S3.3).
 #[test]
 fn ag001_equity_no_block_individual() {
-    assert_retired_provenance_not_supported("ag-001-equity-no-block-individual.json");
+    // Required notice refuses first and masks this fixture's own refusal.
+    assert_retired_provenance_refused_at("ag-001-equity-no-block-individual.json", NOTICE_REQUIRED);
 }
 
 /// AG-002: Excluding a pending activity raises resolution error (AdvGov S4.4).
 #[test]
 fn ag002_exclude_pending_error() {
-    assert_retired_provenance_not_supported("ag-002-exclude-pending-error.json");
+    // Required notice refuses first and masks this fixture's own refusal.
+    assert_retired_provenance_refused_at("ag-002-exclude-pending-error.json", NOTICE_REQUIRED);
 }
 
 /// AG-003: Zone satisfied when all pending executed (AdvGov S4.5).
 #[test]
 fn ag003_zone_satisfaction() {
-    assert_retired_provenance_not_supported("ag-003-zone-satisfaction.json");
+    // Required notice refuses first and masks this fixture's own refusal.
+    assert_retired_provenance_refused_at("ag-003-zone-satisfaction.json", NOTICE_REQUIRED);
 }
 
 // ── Batch 13: Provenance completeness ───────────────────────────
@@ -740,19 +783,28 @@ fn ai048_narrative_not_dispositive_retired_input_refused() {
 /// VR-001: Verification report is immutable once produced (VerifReport S1).
 #[test]
 fn vr001_report_immutable() {
-    assert_retired_provenance_not_supported("vr-001-report-immutable.json");
+    // Required notice refuses first and masks this fixture's own refusal.
+    assert_retired_provenance_refused_at("vr-001-report-immutable.json", NOTICE_REQUIRED);
 }
 
 /// VR-002: Proven-unsafe prevents workflow activation (VerifReport S1).
 #[test]
 fn vr002_proven_unsafe_blocks_activation() {
-    assert_retired_provenance_not_supported("vr-002-proven-unsafe-blocks-activation.json");
+    // Required notice refuses first and masks this fixture's own refusal.
+    assert_retired_provenance_refused_at(
+        "vr-002-proven-unsafe-blocks-activation.json",
+        NOTICE_REQUIRED,
+    );
 }
 
 /// AG-015: Proven-unsafe constraint blocks workflow activation (AdvGov S8.3).
 #[test]
 fn ag015_proven_unsafe_blocks_active() {
-    assert_retired_provenance_not_supported("ag-015-proven-unsafe-blocks-active.json");
+    // Required notice refuses first and masks this fixture's own refusal.
+    assert_retired_provenance_refused_at(
+        "ag-015-proven-unsafe-blocks-active.json",
+        NOTICE_REQUIRED,
+    );
 }
 
 // ── Batch 15: Sidecar runtime ───────────────────────────────────
@@ -760,7 +812,8 @@ fn ag015_proven_unsafe_blocks_active() {
 /// G-061: Processor ignores expired calendar, falls back to wall-clock (BC S8.1).
 #[test]
 fn g061_expired_calendar_ignored() {
-    assert_retired_provenance_not_supported("g-061-expired-calendar-ignored.json");
+    // Required notice refuses first and masks this fixture's own refusal.
+    assert_retired_provenance_refused_at("g-061-expired-calendar-ignored.json", NOTICE_REQUIRED);
 }
 
 /// G-064: Processor does not send notification when required variables missing (NT S5.3).
@@ -880,6 +933,67 @@ fn k047_relationship_isolation() {
 #[test]
 fn kdet001_determination_snapshot() {
     assert_historical_due_process_refused("k-det-001-determination-snapshot.json");
+}
+
+/// Runs an inline operational kernel (no due process) with optional companions.
+fn run_inline(
+    kernel: serde_json::Value,
+    companions: serde_json::Value,
+) -> Result<wos_conformance::ConformanceResult, wos_conformance::ConformanceError> {
+    let mut documents = serde_json::json!({"kernel": "inline"});
+    let mut inline = serde_json::json!({"kernel": kernel});
+    for (role, document) in companions.as_object().unwrap() {
+        documents[role] = serde_json::json!("inline");
+        inline[role] = document.clone();
+    }
+    let fixture = serde_json::json!({
+        "id": "masked-refusal-owner", "rule": "K-ADMISSION", "description": "Admission refusal reached without required notice",
+        "documents": documents, "inline_documents": inline,
+        "event_sequence": [], "expected_transitions": []
+    });
+    run_fixture(&fixture.to_string(), ".")
+}
+
+fn operational_kernel(blocks: serde_json::Value) -> serde_json::Value {
+    let mut kernel = serde_json::json!({
+        "$wosWorkflow": "1.0", "url": "urn:test:masked-refusal", "title": "Masked refusal owner",
+        "version": "1.0.0", "impactLevel": "operational", "actors": [{"id": "operator", "type": "human"}],
+        "lifecycle": {"initialState": "open", "states": {
+            "open": {"type": "atomic", "transitions": [{"event": {"kind": "message", "name": "close"}, "target": "done"}]},
+            "done": {"type": "final"}
+        }}
+    });
+    for (key, block) in blocks.as_object().unwrap() {
+        kernel[key] = block.clone();
+    }
+    kernel
+}
+
+/// Advanced §3 DCR execution still refuses when no required notice masks it.
+#[test]
+fn constraint_zones_refuse_without_governance() {
+    let kernel = operational_kernel(serde_json::json!({"advanced": {"constraintZones": [{
+        "id": "investigationZone",
+        "activities": [{"id": "collectEvidence", "initialIncluded": true, "initialPending": true}],
+        "relations": []
+    }]}}));
+    assert_refused_at(
+        "dcr",
+        run_inline(kernel, serde_json::json!({})),
+        "/advanced/constraintZones",
+    );
+}
+
+/// A selected governance companion that differs from the embedded block refuses.
+#[test]
+fn conflicting_governance_companion_refuses() {
+    let kernel = operational_kernel(serde_json::json!({"governance": {"reviewProtocols": []}}));
+    let companion = serde_json::json!({"$wosWorkflow": "1.0", "governance": {}});
+    assert_refused_at(
+        "conflict",
+        run_inline(kernel, serde_json::json!({"governance": companion})),
+        "/governance",
+    );
 }
 
 // ── Fixture parse validation ────────────────────────────────────
