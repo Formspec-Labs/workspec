@@ -498,9 +498,11 @@ fn g005_false_counterfactual_required_flagged() {
 }
 
 // ========================================================================
-// G-009: adverseDecisionPolicy requires kernel adverse-decision transitions.
+// G-009: adverseDecisionPolicy with no adverse-decision transition is inert.
 // ========================================================================
 
+/// Governance §3.1-§3.4 still require the policy for rights-impacting work, so a
+/// policy no transition triggers is a warning, not an invalid declaration.
 #[test]
 fn g009_adverse_policy_without_kernel_tag_flagged() {
     // Make a kernel with no adverse-decision tagged transitions.
@@ -523,7 +525,11 @@ fn g009_adverse_policy_without_kernel_tag_flagged() {
     gov["dueProcess"] = json!({ "adverseDecisionPolicy": {} });
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
-    assert!(has_rule(&diags, "G-009"), "expected G-009: {diags:?}");
+    assert_eq!(
+        severity_of(&diags, "G-009"),
+        Some(LintSeverity::Warning),
+        "expected inert-policy G-009 warning: {diags:?}"
+    );
 }
 
 // ========================================================================

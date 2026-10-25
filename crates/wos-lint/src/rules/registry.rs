@@ -406,8 +406,8 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-009",
         tier: Tier::T2,
-        severity: LintSeverity::Error,
-        summary: "Transitions tagged `adverse-decision` MUST trigger due process policy enforcement.",
+        severity: LintSeverity::Warning,
+        summary: "`adverseDecisionPolicy` declared with no `adverse-decision` transition is inert.",
         fixtures: &[],
         graduation: Graduation::Draft,
         spec_ref: None,

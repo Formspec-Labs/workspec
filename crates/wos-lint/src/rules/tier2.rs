@@ -24,7 +24,7 @@
 //! | G-004 | error   | explanationLevel MUST be `individualized` for rights-impacting       |
 //! | G-005 | error   | Counterfactuals section with positive + negative entries required     |
 //! | G-008 | warning | continuationOfServices requires a `hold`-tagged kernel state         |
-//! | G-009 | error   | adverseDecisionPolicy requires kernel adverse-decision transitions   |
+//! | G-009 | warning | adverseDecisionPolicy with no adverse-decision transition is inert   |
 //! | G-014 | error   | Reasoning tier required for determination-tagged kernel transitions  |
 //! | G-015 | error   | Counterfactual tier required for adverse-decision in rights-impacting|
 //!
@@ -1331,13 +1331,15 @@ fn check_continuation_of_services(
 }
 
 // ---------------------------------------------------------------------------
-// G-009: adverse-decision tag transitions must enforce due process policy
+// G-009: an adverseDecisionPolicy no adverse-decision transition triggers is inert
 // ---------------------------------------------------------------------------
 
-/// G-009: When governance declares `dueProcess.adverseDecisionPolicy`, the
-/// kernel MUST have at least one transition tagged `adverse-decision`.
+/// G-009: Warns when governance declares `dueProcess.adverseDecisionPolicy` but
+/// the kernel has no `adverse-decision` tag for it to attach to (Governance §3.7).
 ///
-/// The runtime enforcement side of this rule is T3.
+/// A warning, not an error: Governance §3.1-§3.4 still require the policy for
+/// rights-impacting work (G-004/G-005), so a policy without a trigger is inert,
+/// not invalid. The runtime enforcement side of this rule is T3.
 fn check_adverse_decision_due_process(
     policy: &wos_core::GovernanceDocument,
     kernel_tags: &std::collections::HashSet<String>,
@@ -1348,10 +1350,10 @@ fn check_adverse_decision_due_process(
         .as_ref()
         .is_some_and(|due| due.adverse_decision_policy.is_some());
     if declared && !kernel_tags.contains("adverse-decision") {
-        diagnostics.push(LintDiagnostic::t2_error(
+        diagnostics.push(LintDiagnostic::t2_warning(
             "G-009",
             "/governance/dueProcess/adverseDecisionPolicy",
-            "governance declares adverseDecisionPolicy but kernel has no transition tagged 'adverse-decision'",
+            "governance declares adverseDecisionPolicy but kernel has no transition tagged 'adverse-decision'; the policy is inert",
         ));
     }
 }
