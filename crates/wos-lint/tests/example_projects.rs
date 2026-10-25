@@ -9,40 +9,61 @@
 use std::path::{Path, PathBuf};
 use wos_lint::LintSeverity;
 
-/// Retained historical bytes; `tests/schemas/test_example_workflows.py` names
-/// the tests that pin their refusals.
-const HISTORICAL: [&str; 2] = [
-    "d1-passport.workflow.json",
-    "d1-passport-complete-deferred.workflow.json",
-];
-
-/// Maintained sets with known Tier 2 errors, pinned as a ratchet by rule id.
+/// Maintained sets with known Tier 2 errors, pinned as a ratchet by (rule, path).
 ///
-/// The D1 seed's own test (`wos-conformance/tests/d1_complete_workflow.rs`)
-/// runs only Tier 1 (`lint_document`); as a project with its delivery sidecar,
-/// Tier 2 reports these. Fixing one fails this test until the entry shrinks.
-const KNOWN_ERROR_RULES: [(&str, &[&str]); 1] = [(
+/// fs-a6om item 1: the D1 0.3.0 example lacks counterfactualRequired and the
+/// audit tiers, and its denial templates lack appealInstructions. Its own test
+/// (`wos-conformance/tests/d1_complete_workflow.rs`) runs only Tier 1; as a
+/// project with its delivery sidecar, Tier 2 reports these. A new error, even
+/// of a listed rule, or a fixed one fails this test until the entry changes.
+const KNOWN_ERRORS: [(&str, &[(&str, &str)]); 1] = [(
     "d1-passport-complete",
-    &["G-005", "G-014", "G-015", "G-062"],
+    &[
+        (
+            "G-005",
+            "/governance/dueProcess/adverseDecisionPolicy/counterfactualRequired",
+        ),
+        ("G-014", "/governance/audit/reasoningTier"),
+        ("G-015", "/governance/audit/counterfactualTier"),
+        ("G-062", "/notifications/templates/d1DeniedEnUS"),
+        ("G-062", "/notifications/templates/d1DeniedEsUS"),
+        ("G-062", "/notifications/templates/d1NoResponseDeniedEnUS"),
+        ("G-062", "/notifications/templates/d1NoResponseDeniedEsUS"),
+    ],
 )];
 
 fn examples_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples")
 }
 
+/// Historical examples, exempt by name; the shared list
+/// `examples/historical-examples.json` names the test that pins each refusal.
+fn historical(dir: &Path) -> Vec<String> {
+    let list: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.join("historical-examples.json")).unwrap(),
+    )
+    .unwrap();
+    list["historicalExamples"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .cloned()
+        .collect()
+}
+
 /// Stems of every maintained `*.workflow.json` in `dir`.
-fn maintained_stems(dir: &Path) -> Vec<String> {
+fn maintained_stems(dir: &Path, historical: &[String]) -> Vec<String> {
     let mut stems: Vec<String> = std::fs::read_dir(dir)
         .unwrap()
         .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
-        .filter(|name| name.ends_with(".workflow.json") && !HISTORICAL.contains(&name.as_str()))
+        .filter(|name| name.ends_with(".workflow.json") && !historical.contains(name))
         .map(|name| name.trim_end_matches(".workflow.json").to_owned())
         .collect();
     stems.sort();
     stems
 }
 
-/// Lints one example set and returns its Error diagnostics as (rule, detail).
+/// Lints one example set and returns its Error diagnostics as sorted (rule, path).
 fn example_errors(dir: &Path, stem: &str) -> Vec<(String, String)> {
     let project = tempfile::tempdir().unwrap();
     for kind in ["workflow", "delivery"] {
@@ -51,42 +72,39 @@ fn example_errors(dir: &Path, stem: &str) -> Vec<(String, String)> {
             std::fs::copy(dir.join(&name), project.path().join(&name)).unwrap();
         }
     }
-    wos_lint::lint_project(project.path())
+    let mut errors: Vec<(String, String)> = wos_lint::lint_project(project.path())
         .unwrap()
         .into_iter()
         .filter(|diagnostic| diagnostic.severity == LintSeverity::Error)
-        .map(|diagnostic| {
-            (
-                diagnostic.rule_id.to_owned(),
-                format!("{}: {}", diagnostic.path, diagnostic.message),
-            )
-        })
-        .collect()
+        .map(|diagnostic| (diagnostic.rule_id.to_owned(), diagnostic.path))
+        .collect();
+    errors.sort();
+    errors
 }
 
 #[test]
 fn maintained_example_sets_lint_without_errors() {
     let dir = examples_dir();
-    for name in HISTORICAL {
+    let historical = historical(&dir);
+    for name in &historical {
         assert!(
             dir.join(name).is_file(),
             "historical exemption {name} is stale"
         );
     }
-    let stems = maintained_stems(&dir);
+    let stems = maintained_stems(&dir, &historical);
     assert!(
         stems.iter().any(|stem| stem == "benefits-adjudication"),
         "{stems:?}"
     );
     for stem in stems {
-        let errors = example_errors(&dir, &stem);
-        let known = KNOWN_ERROR_RULES
+        let known: Vec<(String, String)> = KNOWN_ERRORS
             .iter()
             .find(|(known_stem, _)| *known_stem == stem)
-            .map_or(&[][..], |(_, rules)| *rules);
-        let mut rules: Vec<&str> = errors.iter().map(|(rule, _)| rule.as_str()).collect();
-        rules.sort_unstable();
-        rules.dedup();
-        assert_eq!(rules, known, "{stem}: {errors:#?}");
+            .map_or(&[][..], |(_, errors)| *errors)
+            .iter()
+            .map(|(rule, path)| ((*rule).to_owned(), (*path).to_owned()))
+            .collect();
+        assert_eq!(example_errors(&dir, &stem), known, "{stem}");
     }
 }

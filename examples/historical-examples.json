@@ -1,0 +1,7 @@
+{
+  "$comment": "Retained historical example bytes, exempt from the maintained-example checks (tests/schemas/test_example_workflows.py, crates/wos-lint/tests/example_projects.rs). Each maps to the test that pins its exact current-schema refusal.",
+  "historicalExamples": {
+    "d1-passport.workflow.json": "tests/schemas/test_d1_workflow.py",
+    "d1-passport-complete-deferred.workflow.json": "tests/schemas/test_deferred_callback_shape.py"
+  }
+}

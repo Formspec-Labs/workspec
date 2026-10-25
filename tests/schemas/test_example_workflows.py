@@ -4,8 +4,9 @@ The examples define the product-tier ladder (ADR 0076 D-9) that authors and
 authoring agents copy from, so a drifted example is a factory for invalid
 workflows. Each `*.workflow.json` must carry `$wosWorkflow`, and every
 `$wos*`-marked example (workflows and their delivery sidecars) validates.
-Retained historical evidence is exempt only by name: its bytes are pinned, and
-the targeted test named beside each entry asserts its precise refusal.
+Retained historical evidence is exempt only by name, through
+`examples/historical-examples.json`: its bytes are pinned, and the test each
+entry names asserts its precise refusal.
 """
 from __future__ import annotations
 
@@ -16,12 +17,12 @@ import pytest
 from tests.schemas.conftest import WOS_SPEC_ROOT, classify
 
 EXAMPLES_ROOT = WOS_SPEC_ROOT / "examples"
-HISTORICAL_EXAMPLES = frozenset(
-    {
-        "d1-passport.workflow.json",  # test_d1_workflow.py
-        "d1-passport-complete-deferred.workflow.json",  # test_deferred_callback_shape.py
-    }
-)
+# One list, shared with crates/wos-lint/tests/example_projects.rs: each
+# historical example maps to the test that pins its refusal.
+HISTORICAL_OWNERS = json.loads((EXAMPLES_ROOT / "historical-examples.json").read_text())[
+    "historicalExamples"
+]
+HISTORICAL_EXAMPLES = frozenset(HISTORICAL_OWNERS)
 EXAMPLE_MARKERS = {
     path: classify(json.loads(path.read_text())) for path in sorted(EXAMPLES_ROOT.glob("*.json"))
 }
@@ -35,6 +36,8 @@ MAINTAINED_EXAMPLES = [
 def test_example_inventory_is_explicit():
     names = {path.name for path in EXAMPLE_MARKERS}
     assert HISTORICAL_EXAMPLES <= names
+    for owner in HISTORICAL_OWNERS.values():
+        assert (WOS_SPEC_ROOT / owner).is_file(), owner
     unmarked = [
         path.name
         for path, marker in EXAMPLE_MARKERS.items()
