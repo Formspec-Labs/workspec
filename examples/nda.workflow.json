@@ -3,7 +3,7 @@
   "url": "https://example.org/wf/nda",
   "version": "1.0.0",
   "title": "Mutual NDA",
-  "description": "DocuSign-tier signature workflow. Sequential two-party signing with 30-day expiry, reminder cadence, and audit certificate. signature block is load-bearing: signing order IS the workflow. ~85 lines.",
+  "description": "DocuSign-tier signature workflow. Sequential two-party signing with a 30-day expiry timer, reminder cadence, decline path and audit certificate. The signature block is load-bearing: its signing flow orders the signing tasks the lifecycle creates (Signature Profile §2.3).",
   "impactLevel": "operational",
   "caseFile": {
     "fields": {
@@ -48,6 +48,13 @@
       "role": "externalSigner"
     }
   ],
+  "contracts": {
+    "ndaSignature": {
+      "binding": "formspec",
+      "ref": "https://example.org/forms/nda-signature",
+      "definitionVersion": "1.0.0"
+    }
+  },
   "lifecycle": {
     "initialState": "drafted",
     "states": {
@@ -55,7 +62,11 @@
         "type": "atomic",
         "transitions": [
           {
-            "target": "awaiting-requester",
+            "event": {
+              "kind": "message",
+              "name": "authoringCompleted"
+            },
+            "target": "signing",
             "actor": "requester",
             "tags": [
               "authorCompleted"
@@ -63,53 +74,95 @@
           }
         ]
       },
-      "awaiting-requester": {
-        "type": "atomic",
-        "stateTimeout": "P30D",
-        "transitions": [
+      "signing": {
+        "type": "compound",
+        "tags": [
+          "awaiting-signature"
+        ],
+        "initialState": "pending",
+        "states": {
+          "pending": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": {
+                  "kind": "message",
+                  "name": "signature.reminderDue"
+                },
+                "target": "pending"
+              }
+            ]
+          }
+        },
+        "onEntry": [
           {
-            "target": "awaiting-counterparty",
-            "on": {
-              "kind": "signature",
-              "actorId": "requester"
+            "action": "createTask",
+            "taskRef": "requesterSignature",
+            "assignTo": "requester",
+            "contractRef": "ndaSignature",
+            "completionEvent": "signature.completed",
+            "failureEvent": "signature.voided",
+            "extensions": {
+              "x-wos-signature-profile-key": "signatureProfile",
+              "x-wos-signature-step-id": "requesterSigns"
             }
           },
           {
-            "target": "voided",
-            "on": {
-              "kind": "timer"
+            "action": "createTask",
+            "taskRef": "counterpartySignature",
+            "assignTo": "counterparty",
+            "contractRef": "ndaSignature",
+            "completionEvent": "signature.completed",
+            "failureEvent": "signature.voided",
+            "extensions": {
+              "x-wos-signature-profile-key": "signatureProfile",
+              "x-wos-signature-step-id": "counterpartySigns"
+            }
+          },
+          {
+            "action": "startTimer",
+            "timerId": "signatureExpiry",
+            "duration": "P30D",
+            "event": {
+              "kind": "timer",
+              "timerId": "signatureExpiry",
+              "source": "custom",
+              "firesAs": "signature.expired"
             }
           }
-        ]
-      },
-      "awaiting-counterparty": {
-        "type": "atomic",
-        "stateTimeout": "P30D",
+        ],
         "transitions": [
           {
-            "target": "fully-signed",
-            "on": {
-              "kind": "signature",
-              "actorId": "counterparty"
+            "event": {
+              "kind": "message",
+              "name": "signature.completed"
             },
+            "target": "fully-signed",
             "tags": [
               "determination",
               "binding"
             ]
           },
           {
-            "target": "declined",
-            "on": {
-              "kind": "signal",
-              "name": "decline"
+            "event": {
+              "kind": "message",
+              "name": "signature.declined"
             },
-            "actor": "counterparty"
+            "target": "declined"
           },
           {
-            "target": "voided",
-            "on": {
-              "kind": "timer"
-            }
+            "event": {
+              "kind": "message",
+              "name": "signature.expired"
+            },
+            "target": "expired"
+          },
+          {
+            "event": {
+              "kind": "message",
+              "name": "signature.voided"
+            },
+            "target": "voided"
           }
         ]
       },
@@ -117,60 +170,135 @@
         "type": "final",
         "outcomeCode": "executed",
         "tags": [
+          "signature-complete",
           "determination",
           "binding"
         ]
       },
       "declined": {
         "type": "final",
-        "outcomeCode": "declined"
+        "outcomeCode": "declined",
+        "tags": [
+          "signature-declined"
+        ]
+      },
+      "expired": {
+        "type": "final",
+        "outcomeCode": "expired",
+        "tags": [
+          "signature-expired"
+        ]
       },
       "voided": {
         "type": "final",
-        "outcomeCode": "voided"
+        "outcomeCode": "voided",
+        "tags": [
+          "signature-voided"
+        ]
       }
     }
   },
   "signature": {
-    "order": "sequential",
-    "signers": [
+    "description": "Requester signs first, then the counterparty. Each signer affirms the consent text at consentTextRef: \"I have authority to bind my organization to this agreement.\"",
+    "roles": [
       {
+        "id": "requesterSigner",
+        "role": "signer",
         "actorId": "requester",
-        "identityVerification": "emailLink",
-        "consentText": "I have authority to bind my organization to this agreement.",
-        "signingMethod": "click"
+        "required": true,
+        "authenticationPolicyKey": "emailOtp"
       },
       {
+        "id": "counterpartySigner",
+        "role": "signer",
         "actorId": "counterparty",
-        "identityVerification": "emailLink",
-        "consentText": "I have authority to bind my organization to this agreement.",
-        "signingMethod": "click"
+        "required": true,
+        "authenticationPolicyKey": "emailOtp"
       }
     ],
-    "reminders": [
+    "documents": [
       {
-        "after": "P3D",
-        "channel": "email"
-      },
-      {
-        "after": "P7D",
-        "channel": "email"
-      },
-      {
-        "after": "P14D",
-        "channel": "email"
+        "id": "mutualNda",
+        "documentRef": "https://example.org/documents/mutual-nda-v1.pdf",
+        "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "documentHashAlgorithm": "sha-256"
       }
     ],
-    "voidConditions": [
-      "@case.elapsedDays > 30"
+    "authenticationPolicies": [
+      {
+        "key": "emailOtp",
+        "method": "email-otp",
+        "assuranceLevel": "standard"
+      }
     ],
-    "auditCertificate": {
-      "writeScope": [
-        "auditCertificateRef",
-        "signedAt"
+    "signingFlow": {
+      "type": "sequential",
+      "steps": [
+        {
+          "id": "requesterSigns",
+          "roleId": "requesterSigner",
+          "documentId": "mutualNda",
+          "signingIntent": "urn:wos:signing-intent:applicant-signature"
+        },
+        {
+          "id": "counterpartySigns",
+          "roleId": "counterpartySigner",
+          "documentId": "mutualNda",
+          "signingIntent": "urn:wos:signing-intent:counter-signature",
+          "dependsOn": [
+            "requesterSigns"
+          ]
+        }
       ],
-      "mutationSource": "system-fetched",
-      "verificationLevel": "attested"
+      "completion": {
+        "type": "all-required"
+      }
+    },
+    "evidence": {
+      "requiredFields": [
+        "response.signature.acceptedAt",
+        "response.signature.affirmed",
+        "response.signature.documentHash"
+      ],
+      "consentReference": {
+        "consentTextRef": "https://example.org/consent/nda-signing-authority",
+        "consentVersion": "1.0.0",
+        "acceptedAtPath": "response.signature.acceptedAt",
+        "affirmationPath": "response.signature.affirmed"
+      },
+      "identityBinding": {
+        "method": "email-otp",
+        "assuranceLevel": "standard"
+      },
+      "custodyHookEligible": true
+    },
+    "reminders": {
+      "eventName": "signature.reminderDue",
+      "schedule": [
+        "P3D",
+        "P7D",
+        "P14D"
+      ]
+    },
+    "expiryPolicy": {
+      "eventName": "signature.expired",
+      "after": "P30D"
+    },
+    "declinePolicy": {
+      "transitionId": "signature.declined",
+      "reasonRequired": true
+    },
+    "voidPolicy": {
+      "authorizedActorIds": [
+        "requester"
+      ],
+      "reasonRequired": true
+    },
+    "auditCertificate": {
+      "format": "json",
+      "includeActorMetadata": true,
+      "includeEvidenceLinks": true,
+      "signingMode": "sequential"
     }
   },
   "provenance": {
@@ -183,6 +311,14 @@
         "signedAt"
       ],
       "mutationSource": "computed",
+      "verificationLevel": "attested"
+    },
+    {
+      "on": "fully-signed",
+      "writeScope": [
+        "auditCertificateRef"
+      ],
+      "mutationSource": "system-fetched",
       "verificationLevel": "attested"
     }
   ]
