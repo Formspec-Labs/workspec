@@ -1,0 +1,57 @@
+{
+  "$wosDelivery": "1.0",
+  "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
+  "notifications": {
+    "templates": {
+      "adverseDecisionNotice": {
+        "category": "adverse-decision",
+        "description": "Adverse benefits decision notice: individualized determination and reasons, AI-assistance disclosure, and the right to an independent appeal (Governance §3.2, §3.5).",
+        "subject": "Notice of Decision: {{programName}} - Case {{caseId}}",
+        "sections": [
+          {
+            "id": "determination",
+            "contentType": "structured",
+            "title": "Decision",
+            "content": "Your application for {{programName}} benefits has been {{determination}}."
+          },
+          {
+            "id": "reasons",
+            "contentType": "structured",
+            "title": "Reason(s) for This Decision",
+            "content": "This decision rests on the specific facts of your case:\n\n{{reasonCodes}}"
+          },
+          {
+            "id": "aiAssistance",
+            "contentType": "text",
+            "title": "Use of Automated Assistance",
+            "content": "An automated system assisted with a preliminary assessment of your application. Human reviewers made this decision."
+          },
+          {
+            "id": "appealRights",
+            "contentType": "appeal-rights",
+            "title": "Your Right to Appeal",
+            "content": "You may appeal this decision by {{appealDeadline}}. An appeal officer who was not involved in the original decision will review your appeal."
+          },
+          {
+            "id": "appealInstructions",
+            "contentType": "action-required",
+            "title": "How to File an Appeal",
+            "content": "Submit a written appeal to {{appealAddress}} by {{appealDeadline}}."
+          }
+        ],
+        "requiredVariables": [
+          "caseId",
+          "programName",
+          "determination",
+          "reasonCodes",
+          "appealDeadline",
+          "appealAddress"
+        ],
+        "deliveryChannels": [
+          "postal",
+          "portal"
+        ]
+      }
+    }
+  }
+}

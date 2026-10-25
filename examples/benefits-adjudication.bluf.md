@@ -5,9 +5,10 @@
 ## What this fixture proves
 
 - Every ADR 0076 D-2 embedded block is present (`governance`, `agents`, `aiOversight`, `signature`, `custody`, `advanced`, `assurance`).
-- The conditional schema rules fire (rights-impacting `impactLevel` requires `governance`; agent-typed actor requires `agents`; signature-gated transition requires `signature`).
-- Cross-references resolve (`actors[*].type=='agent'` matches `agents[*].id`; signature-gated transitions covered by `signature.signers[]`).
-- The 316-line size is illustrative, not production.
+- The conditional schema rules fire (rights-impacting `impactLevel` requires `governance` and `custody`; agent-typed actor requires `agents`). `tests/schemas/test_example_workflows.py` validates it against the workflow schema.
+- Cross-references resolve (`actors[*].type=='agent'` matches `agents[*].id`; the supervisor's signing task selects `signature.signingFlow` step `supervisorSigns` through `x-wos-signature-step-id`; `noticeTemplateKey` resolves to the adverse-decision template in [`benefits-adjudication.delivery.json`](benefits-adjudication.delivery.json)).
+- Due process is canonical Governance §3: transitions tagged `adverse-decision` get before-effect notice, individualized counterfactual explanation and an appeal reviewed independently of the original decider.
+- The size is illustrative, not production.
 
 ## What this fixture does NOT prove
 
@@ -17,7 +18,7 @@ An LLM authoring against this fixture **WILL ship workflows that schema-validate
 
 ## What's coming
 
-A `benefits-adjudication.minimum-viable.workflow.json` companion (production-scaffold size) is queued for after the ADR 0076 spec absorption pass stabilizes. Growing the fixture before absorption finishes means rewriting it once absorption surfaces what real workflows need (e.g., the cross-referencing of `notificationTemplateKey` between governance and the merged `wos-delivery` sidecar isn't yet exercised here).
+A `benefits-adjudication.minimum-viable.workflow.json` companion (production-scaffold size) is queued for after the ADR 0076 spec absorption pass stabilizes. Growing the fixture before absorption finishes means rewriting it once absorption surfaces what real workflows need.
 
 ## Until then
 
@@ -29,7 +30,7 @@ If you are forking this fixture as a starting point for an SBA pilot or producti
 
 ## See also
 
-- [`timeoff.workflow.json`](timeoff.workflow.json) — Forms+ tier (~30 lines, structural)
-- [`nda.workflow.json`](nda.workflow.json) — DocuSign tier (~85 lines, signature-load-bearing)
+- [`timeoff.workflow.json`](timeoff.workflow.json) — Forms+ tier (structural)
+- [`nda.workflow.json`](nda.workflow.json) — DocuSign tier (signature-load-bearing)
 - [ADR 0076 §D-9](../../thoughts/adr/0076-product-tier-consolidation.md) — examples define the tier ladder
 - [`CONVENTIONS.md`](../CONVENTIONS.md) — three-section rubric (layered-sieve specs only)

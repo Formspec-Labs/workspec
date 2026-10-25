@@ -3,8 +3,8 @@
   "url": "https://agency.gov/workflows/benefits-adjudication",
   "version": "1.0.0",
   "title": "Benefits Adjudication",
-  "description": "Case-management tier. Multi-stage adjudication of a rights-impacting benefits decision with AI-assisted eligibility review, dual-blind human review, due process (notice + hearing + appeal), statutory deadlines, equity monitoring, and signed determination. Demonstrates every embedded block: governance, agents, aiOversight, signature, advanced, assurance. ~600 lines, abbreviated in places to show shape rather than exhaustively populate sub-blocks.",
-  "impactLevel": "rightsImpacting",
+  "description": "Case-management tier. Multi-stage adjudication of a rights-impacting benefits decision with AI-assisted eligibility review, dual-blind human review, due process (notice + hearing + appeal), statutory deadlines, equity monitoring, and signed determination. Demonstrates every embedded block: governance, agents, aiOversight, signature, advanced, assurance. Abbreviated in places to show shape rather than exhaustively populate sub-blocks.",
+  "impactLevel": "rights-impacting",
   "status": "active",
   "intake": {
     "contractRef": "https://agency.gov/forms/benefits-application.formspec.json",
@@ -71,6 +71,16 @@
       "appealDeadline": {
         "type": "datetime",
         "required": false
+      },
+      "reportedRace": {
+        "type": "string",
+        "required": false,
+        "description": "Voluntarily reported race; used only for aggregate equity monitoring (Advanced §3), never as a decision input."
+      },
+      "reportedGender": {
+        "type": "string",
+        "required": false,
+        "description": "Voluntarily reported gender; used only for aggregate equity monitoring (Advanced §3), never as a decision input."
       }
     }
   },
@@ -127,6 +137,10 @@
         "stateTimeout": "P5D",
         "transitions": [
           {
+            "event": {
+              "kind": "message",
+              "name": "intakeAccepted"
+            },
             "target": "preliminaryReview",
             "actor": "intakeClerk",
             "tags": [
@@ -134,10 +148,14 @@
             ]
           },
           {
+            "event": {
+              "kind": "message",
+              "name": "intakeRejected"
+            },
             "target": "intakeRejected",
             "actor": "intakeClerk",
             "tags": [
-              "adverseAction"
+              "adverse-decision"
             ]
           }
         ]
@@ -147,11 +165,12 @@
         "stateTimeout": "P3D",
         "transitions": [
           {
-            "target": "dualReview",
-            "on": {
-              "kind": "completion",
-              "actorId": "eligibilityAgent"
-            }
+            "event": {
+              "kind": "message",
+              "name": "preliminaryAssessmentCompleted"
+            },
+            "actor": "eligibilityAgent",
+            "target": "dualReview"
           }
         ]
       },
@@ -170,6 +189,10 @@
                 "stateTimeout": "P10D",
                 "transitions": [
                   {
+                    "event": {
+                      "kind": "message",
+                      "name": "primaryReviewCompleted"
+                    },
                     "target": "reviewer1Done",
                     "actor": "reviewer1",
                     "tags": [
@@ -191,6 +214,10 @@
                 "stateTimeout": "P10D",
                 "transitions": [
                   {
+                    "event": {
+                      "kind": "message",
+                      "name": "independentReviewCompleted"
+                    },
                     "target": "reviewer2Done",
                     "actor": "reviewer2",
                     "tags": [
@@ -207,18 +234,22 @@
         },
         "transitions": [
           {
-            "target": "reconciliation",
-            "on": {
-              "kind": "completion"
+            "event": {
+              "kind": "signal",
+              "name": "$join",
+              "scope": "instance"
             },
-            "guard": "$caseFile.reviewer1Decision == $caseFile.reviewer2Decision"
+            "target": "reconciliation",
+            "guard": "caseFile.reviewer1Decision = caseFile.reviewer2Decision"
           },
           {
-            "target": "supervisorReview",
-            "on": {
-              "kind": "completion"
+            "event": {
+              "kind": "signal",
+              "name": "$join",
+              "scope": "instance"
             },
-            "guard": "$caseFile.reviewer1Decision != $caseFile.reviewer2Decision",
+            "target": "supervisorReview",
+            "guard": "caseFile.reviewer1Decision != caseFile.reviewer2Decision",
             "tags": [
               "disagreement"
             ]
@@ -229,6 +260,10 @@
         "type": "atomic",
         "transitions": [
           {
+            "event": {
+              "kind": "message",
+              "name": "reconciled"
+            },
             "target": "determination",
             "actor": "caseSystem",
             "tags": [
@@ -242,6 +277,10 @@
         "stateTimeout": "P5D",
         "transitions": [
           {
+            "event": {
+              "kind": "message",
+              "name": "supervisorDecided"
+            },
             "target": "determination",
             "actor": "supervisor",
             "tags": [
@@ -253,19 +292,45 @@
       "determination": {
         "type": "atomic",
         "tags": [
-          "determinationDraft"
+          "determinationDraft",
+          "awaiting-signature"
         ],
         "transitions": [
           {
-            "target": "noticeIssued",
-            "on": {
-              "kind": "signature",
-              "actorId": "supervisor"
+            "event": {
+              "kind": "message",
+              "name": "signature.completed"
             },
+            "target": "noticeIssued",
             "tags": [
               "determination",
-              "signedDetermination"
+              "signedDetermination",
+              "adverse-decision",
+              "signature-complete"
             ]
+          },
+          {
+            "event": {
+              "kind": "message",
+              "name": "signature.declined"
+            },
+            "target": "supervisorReview",
+            "tags": [
+              "signature-declined"
+            ]
+          }
+        ],
+        "onEntry": [
+          {
+            "action": "createTask",
+            "taskRef": "signDetermination",
+            "assignTo": "supervisor",
+            "contractRef": "determinationSignature",
+            "completionEvent": "signature.completed",
+            "extensions": {
+              "x-wos-signature-profile-key": "signatureProfile",
+              "x-wos-signature-step-id": "supervisorSigns"
+            }
           }
         ]
       },
@@ -278,18 +343,20 @@
         "stateTimeout": "P30D",
         "transitions": [
           {
-            "target": "appealUnderReview",
-            "on": {
-              "kind": "signal",
+            "event": {
+              "kind": "message",
               "name": "appealFiled"
             },
+            "target": "appealUnderReview",
             "actor": "applicant"
           },
           {
-            "target": "finalized",
-            "on": {
-              "kind": "timer"
+            "event": {
+              "kind": "timer",
+              "timerId": "state",
+              "source": "state"
             },
+            "target": "finalized",
             "tags": [
               "appealWindowClosed"
             ]
@@ -301,6 +368,10 @@
         "stateTimeout": "P30D",
         "transitions": [
           {
+            "event": {
+              "kind": "message",
+              "name": "appealResolved"
+            },
             "target": "finalized",
             "actor": "appealOfficer",
             "tags": [
@@ -310,6 +381,35 @@
         ]
       },
       "intakeRejected": {
+        "type": "atomic",
+        "tags": [
+          "adverseDecisionNotice",
+          "appealEligible"
+        ],
+        "stateTimeout": "P30D",
+        "transitions": [
+          {
+            "event": {
+              "kind": "message",
+              "name": "appealFiled"
+            },
+            "target": "appealUnderReview",
+            "actor": "applicant"
+          },
+          {
+            "event": {
+              "kind": "timer",
+              "timerId": "state",
+              "source": "state"
+            },
+            "target": "intakeClosed",
+            "tags": [
+              "appealWindowClosed"
+            ]
+          }
+        ]
+      },
+      "intakeClosed": {
         "type": "final",
         "outcomeCode": "intakeRejected"
       },
@@ -324,8 +424,14 @@
   },
   "contracts": {
     "eligibilityRules": {
-      "contractRef": "https://agency.gov/contracts/eligibility-policy.json",
-      "version": "2026.04"
+      "binding": "formspec",
+      "ref": "https://agency.gov/contracts/eligibility-policy.json",
+      "definitionVersion": "2026.04"
+    },
+    "determinationSignature": {
+      "binding": "formspec",
+      "ref": "https://agency.gov/forms/determination-signature.formspec.json",
+      "definitionVersion": "1.0.0"
     }
   },
   "bindings": [
@@ -355,81 +461,121 @@
   },
   "governance": {
     "dueProcess": {
-      "noticeRequired": true,
-      "noticeTemplateRef": "https://agency.gov/templates/adverse-decision-notice.json",
-      "opportunityToBeHeard": {
-        "mode": "writtenSubmission",
-        "deadline": "P30D"
-      },
-      "appealMechanism": {
-        "deadline": "P30D",
-        "appealOfficerActor": "appealOfficer",
-        "stayOfDetermination": false
-      },
       "adverseDecisionPolicy": {
-        "tagsRequiringNotice": [
-          "adverseAction",
-          "intakeRejected",
-          "determination"
-        ]
+        "noticeRequired": true,
+        "noticeTiming": "beforeEffective",
+        "noticeGracePeriod": "P30D",
+        "noticeTemplateKey": "adverseDecisionNotice",
+        "explanationLevel": "individualized",
+        "counterfactualRequired": true,
+        "appealMechanism": {
+          "enabled": true,
+          "appealWindow": "P30D",
+          "reviewerConstraint": "independentFromOriginal",
+          "reviewerRoles": [
+            "appellateReview"
+          ],
+          "continuationOfServices": false
+        }
       }
     },
     "reviewProtocols": [
       {
-        "id": "dualBlind",
-        "appliesToTags": [
+        "tags": [
           "dualBlind"
         ],
-        "blindingRules": {
-          "reviewerSeparation": true,
-          "preliminaryAssessmentVisibility": "hidden"
-        }
+        "protocols": [
+          "dualBlind"
+        ],
+        "description": "Primary and independent reviewers decide without seeing each other's work or the preliminary agent assessment."
       },
       {
-        "id": "independentFirst",
-        "appliesToTags": [
+        "tags": [
           "independentReview"
         ],
-        "ordering": "independentBeforePrimary"
+        "protocols": [
+          "independentFirst"
+        ],
+        "description": "The independent reviewer records a judgment before any recommendation is visible."
       }
     ],
     "pipelines": [
       {
         "id": "eligibility",
+        "description": "Validates intake data and the eligibility agent's output before human review.",
         "stages": [
           {
             "id": "intakeValidation",
-            "kind": "contractValidation",
-            "contractRef": "https://agency.gov/contracts/intake.formspec.json"
+            "type": "contract-validation",
+            "contractRef": "https://agency.gov/contracts/intake.formspec.json",
+            "description": "Validate the application against the intake contract."
           },
           {
             "id": "evidenceCheck",
-            "kind": "assertionGate",
-            "expression": "size($caseFile.supportingEvidence) >= 1"
+            "type": "assertion-gate",
+            "assertions": [
+              {
+                "type": "range",
+                "expression": "count(supportingEvidence) >= 1",
+                "description": "At least one supporting evidence document is attached."
+              }
+            ],
+            "description": "Require supporting evidence before review."
           },
           {
-            "id": "policyEvaluation",
-            "kind": "decisionService",
-            "serviceRef": "https://agency.gov/services/eligibility-decision"
+            "id": "assessmentValidation",
+            "type": "contract-validation",
+            "contractRef": "https://agency.gov/contracts/eligibility-output.schema.json",
+            "description": "Validate the eligibility agent's assessment against its output contract."
           }
         ]
       }
     ],
     "taskCatalog": [
       {
-        "id": "primaryReview",
-        "actorRole": "primaryReview",
-        "slaPerInstance": "P10D"
+        "pattern": "primaryReview",
+        "verifiable": "no",
+        "verificationMethod": "Requires domain expertise; dual-blind review supplies the cross-check.",
+        "description": "Primary eligibility review.",
+        "slaDefinitions": [
+          {
+            "id": "decision",
+            "expectedDuration": "P10D",
+            "calendarType": "business",
+            "calendarRef": "https://agency.gov/calendars/federal-2026.json",
+            "startAt": "assignment"
+          }
+        ]
       },
       {
-        "id": "independentReview",
-        "actorRole": "independentReview",
-        "slaPerInstance": "P10D"
+        "pattern": "independentReview",
+        "verifiable": "no",
+        "verificationMethod": "Requires domain expertise; dual-blind review supplies the cross-check.",
+        "description": "Independent eligibility review.",
+        "slaDefinitions": [
+          {
+            "id": "decision",
+            "expectedDuration": "P10D",
+            "calendarType": "business",
+            "calendarRef": "https://agency.gov/calendars/federal-2026.json",
+            "startAt": "assignment"
+          }
+        ]
       },
       {
-        "id": "supervisorReview",
-        "actorRole": "determinationAuthority",
-        "slaPerInstance": "P5D"
+        "pattern": "supervisorReview",
+        "verifiable": "no",
+        "verificationMethod": "Requires domain expertise; dual-blind review supplies the cross-check.",
+        "description": "Supervisor determination when reviewers disagree.",
+        "slaDefinitions": [
+          {
+            "id": "decision",
+            "expectedDuration": "P5D",
+            "calendarType": "business",
+            "calendarRef": "https://agency.gov/calendars/federal-2026.json",
+            "startAt": "assignment"
+          }
+        ]
       }
     ],
     "delegation": {
@@ -465,7 +611,20 @@
         "trigger": "P7D",
         "target": "regionalDirector"
       }
-    ]
+    ],
+    "audit": {
+      "reasoningTier": {
+        "requiredForTags": [
+          "determination"
+        ]
+      },
+      "counterfactualTier": {
+        "requiredForTags": [
+          "adverse-decision"
+        ],
+        "requireProtectedCharacteristics": true
+      }
+    }
   },
   "agents": [
     {
@@ -477,20 +636,20 @@
         {
           "id": "noDetermination",
           "kind": "prohibition",
-          "condition": "@transition.tags includes 'determination'",
+          "condition": "present(output.determination)",
           "onViolation": "reject",
           "x-explanation": "Agent assists; only human reviewers determine."
         },
         {
           "id": "noAdverseAction",
           "kind": "prohibition",
-          "condition": "@transition.tags includes 'adverseAction'",
+          "condition": "present(output.adverseAction)",
           "onViolation": "reject"
         },
         {
           "id": "requireRationale",
           "kind": "obligation",
-          "requirement": "@output.eligibilityRationale != null && size(@output.eligibilityRationale) > 0",
+          "requirement": "present(output.eligibilityRationale) and length(output.eligibilityRationale) > 0",
           "onViolation": "reject"
         },
         {
@@ -567,50 +726,132 @@
     }
   },
   "signature": {
-    "order": "sequential",
-    "signers": [
+    "description": "The supervisor signs the determination. The consent text at consentTextRef reads: \"I attest that I have reviewed the case and the determination is consistent with applicable policy and statute.\"",
+    "roles": [
       {
+        "id": "supervisorSigner",
+        "role": "signer",
         "actorId": "supervisor",
-        "identityVerification": "idDocument",
-        "consentText": "I attest that I have reviewed the case and the determination is consistent with applicable policy and statute.",
-        "signingMethod": "certificate"
+        "required": true,
+        "authenticationPolicyKey": "supervisorCredential"
       }
     ],
-    "auditCertificate": {
-      "writeScope": [
-        "determinationDate"
-      ],
-      "mutationSource": "system-fetched",
-      "verificationLevel": "authoritative"
-    }
-  },
-  "advanced": {
-    "equity": {
-      "biasCaps": [
+    "documents": [
+      {
+        "id": "determination",
+        "documentRef": "urn:agency.gov:documents:benefits-determination:v1",
+        "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "documentHashAlgorithm": "sha-256"
+      }
+    ],
+    "authenticationPolicies": [
+      {
+        "key": "supervisorCredential",
+        "method": "credential",
+        "assuranceLevel": "ial2",
+        "requiresCredentialEvidence": true
+      }
+    ],
+    "signingFlow": {
+      "type": "sequential",
+      "steps": [
         {
-          "dimension": "race",
-          "metric": "demographicParity",
-          "threshold": 0.05
-        },
-        {
-          "dimension": "gender",
-          "metric": "demographicParity",
-          "threshold": 0.05
+          "id": "supervisorSigns",
+          "roleId": "supervisorSigner",
+          "documentId": "determination",
+          "signingIntent": "urn:wos:signing-intent:agent-as-officer"
         }
       ],
-      "monitoringWindow": "P90D",
-      "actionOnBreach": "suspendAgentDecisioning"
+      "completion": {
+        "type": "all-required"
+      }
+    },
+    "evidence": {
+      "requiredFields": [
+        "response.signature.acceptedAt",
+        "response.signature.affirmed",
+        "response.signature.documentHash"
+      ],
+      "consentReference": {
+        "consentTextRef": "urn:agency.gov:consent:determination-attestation:v1",
+        "consentVersion": "1.0.0",
+        "acceptedAtPath": "response.signature.acceptedAt",
+        "affirmationPath": "response.signature.affirmed"
+      },
+      "identityBinding": {
+        "method": "credential",
+        "assuranceLevel": "ial2"
+      },
+      "custodyHookEligible": true
+    },
+    "declinePolicy": {
+      "transitionId": "signature.declined",
+      "reasonRequired": true
+    },
+    "auditCertificate": {
+      "format": "json",
+      "includeActorMetadata": true,
+      "includeEvidenceLinks": true,
+      "signingMode": "sequential"
+    }
+  },
+  "custody": {
+    "trustProfileRef": "https://agency.gov/trellis/profiles/public-benefits-trust",
+    "anchorRequirements": [
+      {
+        "on": "signatureAffirmed",
+        "anchor": "required"
+      },
+      {
+        "on": "adverse-decision",
+        "anchor": "required"
+      }
+    ],
+    "exportBundleRef": "https://agency.gov/wos/export-bundles/benefits-evidence"
+  },
+  "advanced": {
+    "equityGuardrails": {
+      "monitors": [
+        {
+          "id": "approvalRateByRace",
+          "metric": "approvalRate",
+          "groupBy": "caseFile.reportedRace",
+          "maxDisparity": 0.05,
+          "evaluationWindow": "P90D",
+          "minimumSampleSize": 100,
+          "onViolation": "suspend",
+          "monitorTags": [
+            "determination"
+          ],
+          "reason": "Demographic parity of approvals by race; applies to human and agent decisions alike."
+        },
+        {
+          "id": "approvalRateByGender",
+          "metric": "approvalRate",
+          "groupBy": "caseFile.reportedGender",
+          "maxDisparity": 0.05,
+          "evaluationWindow": "P90D",
+          "minimumSampleSize": 100,
+          "onViolation": "suspend",
+          "monitorTags": [
+            "determination"
+          ],
+          "reason": "Demographic parity of approvals by gender; applies to human and agent decisions alike."
+        }
+      ]
     },
     "verifiableConstraints": [
       {
-        "id": "noDeterminationByAgent",
-        "expression": "forall mutations m where m.path == 'determination': m.mutationSource != 'agent-extracted'",
-        "verifier": "smt"
+        "constraintRef": "noDetermination",
+        "verifiable": true,
+        "expectedResult": "proven-safe",
+        "notes": "Agents never fire determination transitions; tag membership is a finite-domain check."
       },
       {
-        "id": "appealAlwaysAvailableOnAdverse",
-        "expression": "forall states s where s.tags includes 'adverseAction': exists transition t where t.on.name == 'appealFiled'",
-        "verifier": "smt"
+        "constraintRef": "noAdverseAction",
+        "verifiable": true,
+        "expectedResult": "proven-safe",
+        "notes": "Agents never fire adverse-decision transitions; tag membership is a finite-domain check."
       }
     ],
     "circuitBreaker": {
