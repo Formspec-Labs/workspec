@@ -1,10 +1,10 @@
 # WOS Verification Matrix
 
-> **Regenerated from code registries** (commit `89039bd5e96f21f8e555d6c34a8e17dd30add2cf`). 136 rules across 50 T1 / 77 T2 / 9 T3 (1 LoadBearing, 0 Stable, 20 Tested, 115 Draft).
+> **Regenerated from code registries** (commit `4f1c5ac1cd9a852628993c168c919cff67482337`). 144 rules across 58 T1 / 77 T2 / 9 T3 (1 LoadBearing, 0 Stable, 20 Tested, 123 Draft).
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
-│  Tier 1: wos-lint (static)            50 rules                  │
+│  Tier 1: wos-lint (static)            58 rules                  │
 │  Single-document structural checks. Pattern matching and graph  │
 │  walks over the JSON document tree. No parsing, no cross-doc.   │
 ├─────────────────────────────────────────────────────────────────┤
@@ -80,10 +80,18 @@
 | `WOS-AI-NATIVE-001` | WOS-AI-NATIVE | draft | Native AI declarations must load through the shared owning policy model. | — |
 | `WOS-EMBED-IDENTITY-001` | WOS-EMBED-IDENTITY | tested | Embedded blocks MUST NOT declare independent `url` or `version`. The enclosing $wosWorkflow envelope is the sole identity. | — |
 | `WOS-EMBED-TARGET-001` | WOS-EMBED-TARGET | tested | Embedded blocks (governance, agents, aiOversight, signature, custody, advanced, assurance) MUST NOT declare `targetWorkflow`. | — |
+| `WOS-FLOW-001` | WOS-FLOW | draft | Globally resolved lifecycle state IDs must be unambiguous. | — |
+| `WOS-FLOW-002` | WOS-FLOW | draft | States must be reachable in the conservative structural may-reach graph. | — |
+| `WOS-FLOW-003` | WOS-FLOW | draft | Supported reachable nonfinal configurations must have a structural exit. | — |
+| `WOS-FLOW-004` | WOS-FLOW | draft | Supported reachable cycles must not be structurally closed without a scope outcome. | — |
+| `WOS-FLOW-005` | WOS-FLOW | draft | Unsupported constructs or exhausted graph bounds leave control-flow coverage incomplete. | — |
+| `WOS-FLOW-006` | WOS-FLOW | draft | Guarded and ordered choices are possible graph edges, not proved feasible paths. | — |
+| `WOS-FLOW-007` | WOS-FLOW | draft | Regional business finality with a permanent callback receipt region is not process completion. | — |
+| `WOS-GOVERNANCE-SHAPE-001` | WOS-GOVERNANCE-SHAPE | draft | Governance MUST validate against its owning schema and typed model. | — |
 | `WOS-SIDECAR-TARGET-001` | WOS-SIDECAR-TARGET | tested | Sidecar documents ($wosDelivery, $wosOntologyAlignment) MUST declare `targetWorkflow` as a non-empty workflow URI. | — |
 | `WOS-VER-LEVEL-001` | WOS-VER-LEVEL | tested | Agents declaring `fallbackChain` SHOULD have at least one `verificationLevel` declared on output bindings. | — |
 
-**T1 total: 50** (0 LoadBearing, 0 Stable, 14 Tested, 36 Draft)
+**T1 total: 58** (0 LoadBearing, 0 Stable, 14 Tested, 44 Draft)
 
 ---
 
@@ -117,7 +125,7 @@
 | `G-004` | G | draft | Explanation level MUST be `individualized` when kernel impact is `rights-impacting`. | — |
 | `G-005` | G | draft | Adverse decisions MUST include positive and negative counterfactuals when rights-impacting. | — |
 | `G-008` | G | draft | `continuationOfServices: true` requires kernel topology to freeze adverse impacts. | — |
-| `G-009` | G | draft | Transitions tagged `adverse-decision` MUST trigger due process policy enforcement. | — |
+| `G-009` | G | draft | `adverseDecisionPolicy` declared with no `adverse-decision` transition is inert. | — |
 | `G-011` | G | draft | Review protocol tags MUST match tags declared in the target kernel. | — |
 | `G-014` | G | draft | Reasoning tier MUST be present for `determination`-tagged transitions. | — |
 | `G-015` | G | draft | Counterfactual tier MUST be present for `adverse-decision` transitions in rights-impacting workflows. | — |
@@ -195,8 +203,8 @@
 
 | Tier | Total | LoadBearing | Stable | Tested | Draft |
 |------|-------|-------------|--------|--------|-------|
-| T1 | 50 | 0 | 0 | 14 | 36 |
+| T1 | 58 | 0 | 0 | 14 | 44 |
 | T2 | 77 | 1 | 0 | 5 | 71 |
 | T3 | 9 | 0 | 0 | 1 | 8 |
-| **Total** | **136** | **1** | **0** | **20** | **115** |
+| **Total** | **144** | **1** | **0** | **20** | **123** |
 
