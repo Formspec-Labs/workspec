@@ -418,10 +418,11 @@ impl WosRuntime {
             &definition_version,
         )?;
         self.validate_governance_selection(&kernel)?;
-        let mut evaluator = Evaluator::with_time_and_case_state_and_actor(
+        let mut evaluator = Evaluator::with_temporal_context(
             kernel.clone(),
             &minter,
             now_ms,
+            self.evaluation_timezone(),
             initial_case_state.as_ref(),
             initial_initiating_actor_id,
         )

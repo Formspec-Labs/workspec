@@ -68,6 +68,7 @@ pub(super) fn records(
     snapshot: &Value,
     guard: &GuardEvaluation,
     now: &str,
+    timezone: Option<&str>,
 ) -> Result<Vec<ProvenanceRecord>, RefusalCode> {
     let original = observation(guard)?;
     let policy = &binding.explanation;
@@ -82,12 +83,13 @@ pub(super) fn records(
     {
         return Err(RefusalCode::ExplanationRejected);
     }
-    let replay = Evaluator::evaluate_reference_alternative(
+    let replay = Evaluator::evaluate_reference_alternative_with_timezone(
         kernel,
         minter,
         &binding.transition,
         snapshot,
         timestamp(&determination.determined_at)?,
+        timezone,
     )
     .map_err(|_| RefusalCode::ExplanationRejected)?;
     if observation(&replay)? != original {
@@ -137,12 +139,13 @@ pub(super) fn records(
                 }
                 *value = change.value.value();
             }
-            let alternate = Evaluator::evaluate_reference_alternative(
+            let alternate = Evaluator::evaluate_reference_alternative_with_timezone(
                 kernel,
                 minter,
                 &binding.transition,
                 &changed,
                 timestamp(&determination.determined_at)?,
+                timezone,
             )
             .map_err(|_| RefusalCode::ExplanationRejected)?;
             let alternate = observation(&alternate)?;

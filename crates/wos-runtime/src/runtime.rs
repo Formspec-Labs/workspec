@@ -720,6 +720,8 @@ pub struct WosRuntime {
     deferred_callback_max_bytes: usize,
     /// Attached business calendar for SLA deadline computation (BC.1).
     business_calendar: Option<BusinessCalendarDocument>,
+    /// Declared deployment timezone; a selected calendar takes precedence.
+    deployment_timezone: Option<String>,
     bindings: BindingRegistry,
     /// Host deployment minter for intake records that belong to no case yet
     /// (rejected or deferred handoffs). Cases and processes never use it.
@@ -790,6 +792,7 @@ impl WosRuntime {
             deferred_callback_max_count: 1000,
             deferred_callback_max_bytes: 1024 * 1024,
             business_calendar: None,
+            deployment_timezone: None,
             bindings,
             deployment_minter: None,
             intake_acceptors: IntakeAcceptanceRegistry::new(),
@@ -845,6 +848,20 @@ impl WosRuntime {
         self.deferred_callback_max_count = count.min(1000);
         self.deferred_callback_max_bytes = bytes.min(1024 * 1024);
         self
+    }
+
+    /// Declare the deployment timezone used by FEL temporal expressions.
+    ///
+    /// An attached business calendar takes precedence. Invalid IANA names refuse
+    /// lifecycle evaluation; omission makes temporal expressions hard-refuse.
+    pub fn with_deployment_timezone(mut self, timezone: impl Into<String>) -> Self {
+        self.deployment_timezone = Some(timezone.into());
+        self
+    }
+
+    fn evaluation_timezone(&self) -> Option<&str> {
+        self.business_calendar.as_ref().map(|calendar| calendar.timezone.as_str())
+            .or(self.deployment_timezone.as_deref())
     }
 
     /// Attach a Business Calendar document for SLA deadline computation (BC.1).
@@ -2785,6 +2802,92 @@ mod tests {
                     serde_json::to_value(marker).unwrap()
                 );
             }
+        }
+    }
+
+    mod temporal_guards {
+        use super::*;
+
+        const NOW_MS: u64 = 1_767_232_800_000; // 2026-01-01T02:00:00Z.
+
+        fn kernel(automatic: bool) -> KernelDocument {
+            serde_json::from_value(serde_json::json!({
+                "$wosWorkflow": "1.0", "url": "urn:test:temporal", "version": "1.0.0",
+                "lifecycle": {"initialState": "waiting", "states": {
+                    "waiting": {"type": if automatic {"foreach"} else {"atomic"}, "collection": "[]", "transitions": [
+                        {"event": if automatic {serde_json::Value::Null} else {serde_json::json!("go")},
+                            "target": "done", "guard": "today() = @2025-12-31 and now() = @2025-12-31T21:00:00"},
+                        {"event": if automatic {serde_json::Value::Null} else {serde_json::json!("go")}, "target": "fallback"}
+                    ]}, "done": {"type": "final"}, "fallback": {"type": "final"}
+                }}
+            })).unwrap()
+        }
+
+        fn runtime(automatic: bool) -> WosRuntime {
+            let mut runtime = runtime_with_kernel(kernel(automatic));
+            runtime.clock = Box::new(FixedClock { now_ms: NOW_MS });
+            runtime
+        }
+
+        fn create(runtime: &mut WosRuntime) -> Result<WorkflowProcess, RuntimeError> {
+            runtime.create_process(CreateProcessRequest {
+                process_id: test_process_id("temporal").into(), tenant: None,
+                definition_url: "urn:test:temporal".into(), definition_version: "1.0.0".into(),
+                initial_case_state: None,
+            })
+        }
+
+        #[test]
+        fn initial_automatic_and_default_guards_use_declared_timezone() {
+            let mut local = runtime(true).with_deployment_timezone("America/New_York");
+            assert_eq!(create(&mut local).unwrap().configuration, ["done"]);
+            let mut utc = runtime(true).with_deployment_timezone("UTC");
+            assert_eq!(create(&mut utc).unwrap().configuration, ["fallback"]);
+        }
+
+        #[test]
+        fn selected_calendar_timezone_precedes_deployment() {
+            let calendar = serde_json::from_value(serde_json::json!({
+                "timezone": "America/New_York", "workWeek": ["monday", "tuesday", "wednesday", "thursday", "friday"]
+            })).unwrap();
+            let mut runtime = runtime(true).with_deployment_timezone("UTC").with_business_calendar(calendar);
+            assert_eq!(create(&mut runtime).unwrap().configuration, ["done"]);
+        }
+
+        #[test]
+        fn missing_and_invalid_timezone_creation_refuses_without_persistence() {
+            for timezone in [None, Some("Mars/Olympus")] {
+                let mut runtime = runtime(true);
+                if let Some(timezone) = timezone { runtime = runtime.with_deployment_timezone(timezone); }
+                assert!(create(&mut runtime).is_err());
+                assert!(runtime.store.load_record(test_process_id("temporal")).is_err());
+            }
+        }
+
+        #[test]
+        fn restored_drain_uses_supplied_time_and_missing_timezone_preserves_queue() {
+            let mut runtime = runtime(false).with_deployment_timezone("America/New_York");
+            create(&mut runtime).unwrap();
+            runtime.enqueue_event(test_process_id("temporal"), PendingEvent {
+                origin: None, event: "go".into(), actor_id: None, data: None,
+                timestamp: "2026-01-01T02:00:00Z".into(), idempotency_token: None,
+            }).unwrap();
+            let record = runtime.store.load_record(test_process_id("temporal")).unwrap();
+            let mut missing = self::runtime(false);
+            let mut missing_store = InMemoryStore::default();
+            missing_store.restore_record(record.clone()).unwrap();
+            missing.store = Box::new(missing_store);
+            assert!(missing.drain_once(test_process_id("temporal")).is_err());
+            let retained = missing.store.load_record(test_process_id("temporal")).unwrap();
+            assert_eq!(serde_json::to_value(&retained.process).unwrap(), serde_json::to_value(&record.process).unwrap());
+            assert_eq!(retained.provenance_log.len(), record.provenance_log.len());
+            let mut restored = self::runtime(false).with_deployment_timezone("America/New_York");
+            let mut restored_store = InMemoryStore::default();
+            restored_store.restore_record(record).unwrap();
+            restored.store = Box::new(restored_store);
+            let result = restored.drain_once(test_process_id("temporal")).unwrap();
+            assert_eq!(result.transitions[0].to, "done");
+            assert_eq!(result.guard_evaluations.len(), 1);
         }
     }
 
