@@ -115,6 +115,8 @@ When a workflow produces an adverse decision (denial, reduction, termination, or
 
 ### 3.2 Notice
 
+The maintained [notice requirement matrix](notice-requirement-matrix.md) maps the supported uses below to canonical schemas, selected host admission and executable controls.
+
 The affected individual MUST be given notice satisfying the selected original observation before the decision takes effect. The notice MUST include:
 
 1. The specific determination made.
