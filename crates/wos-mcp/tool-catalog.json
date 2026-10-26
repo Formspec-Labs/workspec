@@ -6345,7 +6345,18 @@
                         "properties": {
                           "class": {
                             "type": "string",
-                            "description": "Formspec Access-Class Registry token (`unclassified`, `protected`, or a registered-prefix token such as `cui.privacy`). Treated as an opaque string by WOS; Formspec validates it.",
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  "unclassified",
+                                  "protected"
+                                ]
+                              },
+                              {
+                                "pattern": "^(cui|hipaa)(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*)+$"
+                              }
+                            ],
+                            "description": "Formspec Access-Class Registry token (extension-registry.md §3.2.3). The enum and pattern copy formspec common.schema.json `$defs/AccessClass`; change them together.",
                             "examples": [
                               "protected"
                             ],
@@ -6577,7 +6588,18 @@
                         "properties": {
                           "class": {
                             "type": "string",
-                            "description": "Formspec Access-Class Registry token (`unclassified`, `protected`, or a registered-prefix token such as `cui.privacy`). Treated as an opaque string by WOS; Formspec validates it.",
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  "unclassified",
+                                  "protected"
+                                ]
+                              },
+                              {
+                                "pattern": "^(cui|hipaa)(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*)+$"
+                              }
+                            ],
+                            "description": "Formspec Access-Class Registry token (extension-registry.md §3.2.3). The enum and pattern copy formspec common.schema.json `$defs/AccessClass`; change them together.",
                             "examples": [
                               "protected"
                             ],
