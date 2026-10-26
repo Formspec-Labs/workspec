@@ -6333,7 +6333,7 @@
                   },
                   "statementField": {
                     "type": "object",
-                    "description": "Optional metadata governing how the dispute `statement` text is treated. Carries an `accessControl.class` declaration per ADR-0074 §1 so safe-* and other audience-policy classes can compose with the lifecycle event payload (per FW-0049 composition).",
+                    "description": "Optional metadata governing how the dispute `statement` text is treated. Carries an `accessControl.class` token from the Formspec Access-Class Registry (extension-registry.md §3.2.3) so `protected` and other classes compose with the lifecycle event payload (FW-0049).",
                     "additionalProperties": false,
                     "properties": {
                       "accessControl": {
@@ -6345,7 +6345,7 @@
                         "properties": {
                           "class": {
                             "type": "string",
-                            "description": "Audience-policy class token per ADR-0074 §1. Treated as an opaque string by WOS; resolves through the Formspec Access-Class Registry.",
+                            "description": "Formspec Access-Class Registry token (`unclassified`, `protected`, or a registered-prefix token such as `cui.privacy`). Treated as an opaque string by WOS; Formspec validates it.",
                             "examples": [
                               "protected"
                             ],
@@ -6565,7 +6565,7 @@
                   },
                   "reasonField": {
                     "type": "object",
-                    "description": "Optional metadata governing how the correction `reason` text is treated. Carries an `accessControl.class` declaration per ADR-0074 §1 so safe-* and other audience-policy classes can compose with the lifecycle event payload (per FW-0049 composition). When absent, the reason text inherits the default audience policy of the workflow.",
+                    "description": "Optional metadata governing how the correction `reason` text is treated. Carries an `accessControl.class` token from the Formspec Access-Class Registry (extension-registry.md §3.2.3) so `protected` and other classes compose with the lifecycle event payload (FW-0049). When absent, the reason text inherits the default audience policy of the workflow.",
                     "additionalProperties": false,
                     "properties": {
                       "accessControl": {
@@ -6577,9 +6577,9 @@
                         "properties": {
                           "class": {
                             "type": "string",
-                            "description": "Audience-policy class token per ADR-0074 §1. Treated as an opaque string by WOS; resolves through the Formspec Access-Class Registry (e.g., `safe-address`, `safe-contact`, `protected`).",
+                            "description": "Formspec Access-Class Registry token (`unclassified`, `protected`, or a registered-prefix token such as `cui.privacy`). Treated as an opaque string by WOS; Formspec validates it.",
                             "examples": [
-                              "safe-address"
+                              "protected"
                             ],
                             "x-wos": {
                               "openStringKind": "identifier"
@@ -6637,7 +6637,7 @@
                     "kernelMode": "correction",
                     "reasonField": {
                       "accessControl": {
-                        "class": "safe-address"
+                        "class": "protected"
                       }
                     }
                   }

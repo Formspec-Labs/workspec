@@ -45,7 +45,7 @@
         "kernelMode": "correction",
         "reasonField": {
           "accessControl": {
-            "class": "safe-address"
+            "class": "protected"
           }
         }
       },
