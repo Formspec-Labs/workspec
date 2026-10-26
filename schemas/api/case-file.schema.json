@@ -192,7 +192,8 @@
           "tsType": "unknown"
         },
         "response": {
-          "$ref": "#/$defs/AcceptedResponse"
+          "$ref": "#/$defs/AcceptedResponse",
+          "description": "Exact full accepted Response, including original signatures, pins and answers; validate maintained full responseHash."
         },
         "validationReport": {
           "description": "Original retained report selected by handoff validationReportRef; never reevaluated at read time.",
