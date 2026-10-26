@@ -1794,6 +1794,7 @@ fn validate_required_envelope_fields(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use integrity_cose::COSE_ALG_EDDSA;
 
     const TEST_CASE_LEDGER_ID: &str = "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc";
 
@@ -2166,11 +2167,6 @@ mod tests {
     /// signature payload is a 64-byte zero-filled stub — the binding only does
     /// partial decode; cryptographic verification is deferred until
     /// `FORMSPEC-SIGN-HELPER-001` ships.
-    /// COSE algorithm identifier for EdDSA (RFC 9053; matches Trellis Phase-1
-    /// envelope discipline and Formspec sig-method registry entry
-    /// `urn:formspec:sig-method:ed25519-cose-sign1@1`).
-    const COSE_ALG_EDDSA: i32 = -8;
-
     fn cose_sign1_b64_with_method_uri(method_uri: &str) -> String {
         let protected = integrity_cose::detached_signature_protected_header(
             COSE_ALG_EDDSA,
