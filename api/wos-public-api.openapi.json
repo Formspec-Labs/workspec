@@ -3738,14 +3738,14 @@
         "type": "object"
       },
       "ErrorCode": {
-        "description": "Stable machine-readable stack error code. Prefixes are governed by ADR 0092a.",
+        "description": "Stable machine-readable stack error code: a prefix from the closed set ADR 0092a governs, then four digits. Adding a prefix amends ADR 0092a and this pattern together.",
         "examples": [
           "WOS-1404",
           "FORMSPEC-4001",
           "STUDIO-4091",
           "INFRA-5000"
         ],
-        "pattern": "^[A-Z]+-\\d{4}$",
+        "pattern": "^(FORMSPEC|WOS|STUDIO|INFRA)-\\d{4}$",
         "type": "string"
       },
       "EvaluationOutcomeEventName": {
