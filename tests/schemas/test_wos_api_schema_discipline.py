@@ -284,7 +284,10 @@ def test_api_facts_record_kind_reserved_literals_match_kernel():
 
     api_schema = load_schema(API_SCHEMA_DIR / "provenance.schema.json")
     api_record_kind = api_schema["$defs"]["FactsRecordKind"]
-    arms = api_record_kind["oneOf"]
+    arms = [
+        api_schema["$defs"][arm["$ref"].removeprefix("#/$defs/")]
+        for arm in api_record_kind["oneOf"]
+    ]
     reserved_arms = [
         arm for arm in arms if isinstance(arm, dict) and isinstance(arm.get("enum"), list)
     ]
@@ -329,7 +332,7 @@ def test_api_facts_require_native_kind_with_canonical_seed_events():
     schema = load_schema(API_SCHEMA_DIR / "provenance.schema.json")
     validator = validator_for_api_def(schema, "FactsTierRecord", api_referencing_registry())
     non_facts = set(
-        schema["$defs"]["FactsTierRecordWithData"]["properties"]["recordKind"]["not"]["enum"]
+        schema["$defs"]["FactsTierReservedRecordKind"]["not"]["enum"]
     )
 
     for record_kind, event in event_literal_mappings().items():
