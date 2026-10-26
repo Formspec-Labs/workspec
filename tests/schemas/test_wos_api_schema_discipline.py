@@ -364,6 +364,9 @@ def test_api_provenance_native_dependencies_resolve_to_actual_local_owners():
         assert pointer_exists(registry.contents(schema_id), pointer), ref
         assert isinstance(registry.resolver().lookup(ref).contents, dict), ref
     native = load_schema(SCHEMA_DIR / "wos-native-provenance-event.schema.json")
+    snapshot_ref = "https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/CaseFileSnapshot"
+    assert schema["$defs"]["CaseFileSnapshot"]["$ref"] == snapshot_ref
+    assert registry.resolver().lookup(snapshot_ref).contents == native["$defs"]["CaseFileSnapshot"]
     timestamp_ref = f"{native['$id']}#/properties/record/properties/timestamp"
     assert registry.resolver().lookup(timestamp_ref).contents == native["properties"]["record"]["properties"]["timestamp"]
 

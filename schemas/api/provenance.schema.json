@@ -639,41 +639,8 @@
       }
     },
     "CaseFileSnapshot": {
-      "type": "object",
-      "additionalProperties": false,
-      "description": "Canonical case-file snapshot captured at determination time (kernel S8.2.1). Mirrors `wos-workflow.schema.json#/$defs/CaseFileSnapshot`.",
-      "x-wos": {
-        "mirror": {
-          "source": "wos-workflow.schema.json",
-          "path": "$defs/CaseFileSnapshot"
-        }
-      },
-      "required": [
-        "value",
-        "jcsCanonical",
-        "sha256"
-      ],
-      "properties": {
-        "value": {
-          "description": "Raw case-file JSON value observed immediately before the determination transition fires."
-        },
-        "jcsCanonical": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Canonical JSON string per JCS (RFC 8785).",
-          "examples": [
-            "{\"eligible\":true,\"income\":17500}"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
-        },
-        "sha256": {
-          "type": "string",
-          "pattern": "^[a-f0-9]{64}$",
-          "description": "Lowercase SHA-256 hex digest of jcsCanonical."
-        }
-      }
+      "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/CaseFileSnapshot",
+      "description": "Canonical case-file snapshot captured at determination time (kernel S8.2.1). Mirrors `wos-workflow.schema.json#/$defs/CaseFileSnapshot`."
     },
     "IntegrityDigest": {
       "type": "object",
