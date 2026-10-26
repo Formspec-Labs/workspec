@@ -333,7 +333,7 @@ pub(crate) fn resolve_signature(
                     id: key.method_uri.clone().into(),
                     suite: "ed25519".into(),
                     wire: "cose-sign1".into(),
-                    alg: Some(-8),
+                    alg: Some(integrity_cose::COSE_ALG_EDDSA),
                     status: "registered".into(),
                     deprecation_notice: None,
                 }],

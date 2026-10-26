@@ -876,7 +876,7 @@ fn verification_receipt_evidence_from_ref(
             "undecodable",
         ));
     };
-    if envelope.alg() != Some(-8) {
+    if envelope.alg() != Some(integrity_cose::COSE_ALG_EDDSA) {
         return VerificationReceiptEvidence::Unusable(verification_receipt_failure(
             "Ed25519 receipt COSE algorithm",
             "unsupported_alg",

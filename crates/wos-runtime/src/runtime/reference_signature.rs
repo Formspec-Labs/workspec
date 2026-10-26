@@ -139,7 +139,7 @@ fn verify_subject(
         decode_cose_sign1(&signature_bytes).map_err(|_| RefusalCode::SignatureRejected)?;
     let header = decode_protected_header(envelope.protected_header())
         .map_err(|_| RefusalCode::SignatureRejected)?;
-    if envelope.alg() != Some(-8)
+    if envelope.alg() != Some(integrity_cose::COSE_ALG_EDDSA)
         || envelope.kid() != Some(decode(&key.kid_base64)?.as_slice())
         || header.method_uri.as_deref() != Some(key.method_uri.as_str())
     {
@@ -172,7 +172,7 @@ fn verify_subject(
                     id: METHOD.into(),
                     suite: "ed25519".into(),
                     wire: "cose-sign1".into(),
-                    alg: Some(-8),
+                    alg: Some(integrity_cose::COSE_ALG_EDDSA),
                     status: "registered".into(),
                     deprecation_notice: None,
                 }],

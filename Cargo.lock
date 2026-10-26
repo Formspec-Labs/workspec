@@ -6054,6 +6054,7 @@ dependencies = [
  "insta",
  "integrity-bundle-fixtures",
  "integrity-canonical",
+ "integrity-cose",
  "integrity-signature",
  "integrity-signature-ring",
  "jsonschema 0.46.1",
