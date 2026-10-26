@@ -2666,8 +2666,8 @@
                 "class": {
                   "type": "string",
                   "anyOf": [
-                    { "enum": ["unclassified", "protected"] },
-                    { "pattern": "^(cui|hipaa)(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*)+$" }
+                    { "type": "string", "enum": ["unclassified", "protected"] },
+                    { "type": "string", "pattern": "^(cui|hipaa)(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*)+$" }
                   ],
                   "description": "Formspec Access-Class Registry token (extension-registry.md §3.2.3). The enum and pattern copy formspec common.schema.json `$defs/AccessClass`; change them together.",
                   "examples": [
@@ -2883,8 +2883,8 @@
                 "class": {
                   "type": "string",
                   "anyOf": [
-                    { "enum": ["unclassified", "protected"] },
-                    { "pattern": "^(cui|hipaa)(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*)+$" }
+                    { "type": "string", "enum": ["unclassified", "protected"] },
+                    { "type": "string", "pattern": "^(cui|hipaa)(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*)+$" }
                   ],
                   "description": "Formspec Access-Class Registry token (extension-registry.md §3.2.3). The enum and pattern copy formspec common.schema.json `$defs/AccessClass`; change them together.",
                   "examples": [

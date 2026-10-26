@@ -6347,12 +6347,14 @@
                             "type": "string",
                             "anyOf": [
                               {
+                                "type": "string",
                                 "enum": [
                                   "unclassified",
                                   "protected"
                                 ]
                               },
                               {
+                                "type": "string",
                                 "pattern": "^(cui|hipaa)(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*)+$"
                               }
                             ],
@@ -6590,12 +6592,14 @@
                             "type": "string",
                             "anyOf": [
                               {
+                                "type": "string",
                                 "enum": [
                                   "unclassified",
                                   "protected"
                                 ]
                               },
                               {
+                                "type": "string",
                                 "pattern": "^(cui|hipaa)(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*)+$"
                               }
                             ],

@@ -56,6 +56,5 @@ def test_unregistered_tokens_refused(value):
 @pytest.mark.skipif(not FORMSPEC_COMMON.exists(), reason="formspec sibling not checked out")
 def test_copy_matches_formspec_common_access_class():
     common = json.loads(FORMSPEC_COMMON.read_text("utf-8"))["$defs"]["AccessClass"]["anyOf"]
-    canonical = [{k: v for k, v in branch.items() if k != "type"} for branch in common]
     for node in CLASS_NODES:
-        assert node["anyOf"] == canonical
+        assert node["anyOf"] == common
