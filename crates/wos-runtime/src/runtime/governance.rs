@@ -401,6 +401,7 @@ impl WosRuntime {
                     &snapshot.value,
                     matching[0],
                     now,
+                    self.evaluation_timezone(),
                 )?);
                 state.determinations.push(determination);
             } else if transition.tags.iter().any(|t| t == "adverse-decision") {

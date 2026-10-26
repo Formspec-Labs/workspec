@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.formspec.io/wos-api/provenance/v1",
   "title": "WOS API Provenance",
-  "description": "Public API resource schema for WOS provenance records. ProvenanceRecord is a tier-discriminated union over Facts (kernel S8), Reasoning (governance S6.2), Counterfactual (governance S6.4), and Narrative (AI integration S13). The wire shape is a closed oneOf keyed by `tier` -- each variant is a complete object with no shared envelope, so codegen produces a typed Rust enum and a typed TypeScript discriminated union without hand-edits (ADR 0082 D-5, Notes section). Identity is carried by the URN `actorRef` (D-9); the legacy nested `actor: {id,type,name}` shape is not expressible.",
+  "description": "Public WOS provenance records distinguish audit tier from native recordKind. Closed native variants preserve actual processor evidence; authored explanation variants preserve their richer required fields. Read conversion does not change signed storage payloads.",
   "oneOf": [
     {
       "$ref": "#/$defs/ProvenanceRecord"
@@ -28,155 +28,187 @@
       "description": "Provenance record category. The full reserved-literal set mirrors schemas/record-kind-registry.json: 138 recognized kinds, 27 with schema-validated payloads and 111 flat. Audit tier is distinct from category; native reference and attributable human explanation kinds retain separate meanings. The ^x-[a-z][a-z0-9-]*$ arm permits vendor extensions. scripts/check-recordkind-parity.py checks literal parity.",
       "oneOf": [
         {
-          "enum": [
-            "actionExecuted",
-            "activationBlocked",
-            "actorTypeViolation",
-            "agentOutput",
-            "agentProvenanceAnnotation",
-            "agentStateTransition",
-            "agentVersionChange",
-            "amendmentAuthorized",
-            "appealFiled",
-            "arazzoStep",
-            "authorizationAttestation",
-            "authorizationRejected",
-            "autonomyCapped",
-            "autonomyComputed",
-            "autonomyDemotion",
-            "autonomyEscalation",
-            "autonomyViolation",
-            "calendarIgnored",
-            "callbackPending",
-            "callbackReceived",
-            "capabilityInvocation",
-            "caseCreated",
-            "caseStateMutation",
-            "circuitBreakerReset",
-            "circuitBreakerTripped",
-            "clockResolved",
-            "clockSkewObserved",
-            "clockStarted",
-            "commitAttemptFailure",
-            "compensationExecuted",
-            "compensationLogEntry",
-            "compensationScopeBoundary",
-            "confidenceDecay",
-            "confidenceViolation",
-            "configurationWarning",
-            "consistencyViolation",
-            "constraintTamperBlocked",
-            "continuationOfServicesActivated",
-            "contractValidation",
-            "convergenceCapReached",
-            "correctionAuthorized",
-            "cumulativeConfidenceViolation",
-            "dataMapping",
-            "dcrActivityExecuted",
-            "dcrRelationEvaluated",
-            "dcrResolutionError",
-            "dcrZoneViolation",
-            "delegationViolation",
-            "deonticBypass",
-            "deonticEvaluation",
-            "deonticResolution",
-            "deonticViolation",
-            "determinationAmended",
-            "determinationCounterfactual",
-            "determinationReasoning",
-            "determinationRescinded",
-            "dispositiveViolation",
-            "driftAlert",
-            "driftReclassification",
-            "equityAlert",
-            "escalationPending",
-            "eventConsumed",
-            "eventEmitted",
-            "fallbackAttempt",
-            "fallbackTerminal",
-            "fallbackTriggered",
-            "forEachCompleted",
-            "forEachIterationCompleted",
-            "forEachIterationStarted",
-            "groundTruthLabel",
-            "historyCleared",
-            "humanTaskCreated",
-            "idempotencyDedup",
-            "identityAttestation",
-            "immutabilityViolation",
-            "independentFirstEnforced",
-            "instanceMigrated",
-            "instanceResumed",
-            "instanceSuspended",
-            "instanceTerminated",
-            "intakeAccepted",
-            "intakeDeferred",
-            "intakeRejected",
-            "invalidDuration",
-            "keyRebind",
-            "legalHoldDestructionRejected",
-            "legalHoldPlaced",
-            "legalHoldReleased",
-            "migrationPinChanged",
-            "milestoneFired",
-            "narrativeTierRecorded",
-            "noteAdded",
-            "noticeSent",
-            "notificationSuppressed",
-            "onEntry",
-            "onExit",
-            "overrideRecorded",
-            "overrideViolation",
-            "parameterResolved",
-            "pipelineRejection",
-            "pipelineRiskProfile",
-            "pipelineStageCompleted",
-            "policyDecision",
-            "protocolViolation",
-            "proxyInvocation",
-            "reinstated",
-            "relationshipChanged",
-            "reportTimedOut",
-            "rescissionAuthorized",
-            "rightsViolation",
-            "samplingDecision",
-            "separationViolation",
-            "sessionPaused",
-            "shadowModeDivergence",
-            "signatureAdmissionFailed",
-            "signatureAffirmation",
-            "stateTransition",
-            "stepResultPersisted",
-            "taskCompleted",
-            "taskCreated",
-            "taskDismissed",
-            "taskDraftPersisted",
-            "taskFailed",
-            "taskPresented",
-            "taskResponseRejected",
-            "taskResponseSubmitted",
-            "taskSkipped",
-            "timerCancelled",
-            "timerCreated",
-            "timerFired",
-            "toleranceViolation",
-            "toolInvoked",
-            "toolViolation",
-            "unmatchedEvent",
-            "verificationReportProduced",
-            "zoneSatisfied",
-            "reasoningTierRecorded",
-            "counterfactualTierRecorded"
-          ]
+          "$ref": "#/$defs/ReservedRecordKind"
         },
         {
-          "type": "string",
-          "pattern": "^x-[a-z][a-z0-9-]*$"
+          "$ref": "#/$defs/VendorRecordKind"
         }
       ],
       "examples": [
         "stateTransition",
         "caseStateMutation"
+      ]
+    },
+    "ReservedRecordKind": {
+      "description": "Recognized native provenance categories, maintained in parity with the canonical record-kind registry.",
+      "enum": [
+        "actionExecuted",
+        "activationBlocked",
+        "actorTypeViolation",
+        "agentOutput",
+        "agentProvenanceAnnotation",
+        "agentStateTransition",
+        "agentVersionChange",
+        "amendmentAuthorized",
+        "appealFiled",
+        "arazzoStep",
+        "authorizationAttestation",
+        "authorizationRejected",
+        "autonomyCapped",
+        "autonomyComputed",
+        "autonomyDemotion",
+        "autonomyEscalation",
+        "autonomyViolation",
+        "calendarIgnored",
+        "callbackPending",
+        "callbackReceived",
+        "capabilityInvocation",
+        "caseCreated",
+        "caseStateMutation",
+        "circuitBreakerReset",
+        "circuitBreakerTripped",
+        "clockResolved",
+        "clockSkewObserved",
+        "clockStarted",
+        "commitAttemptFailure",
+        "compensationExecuted",
+        "compensationLogEntry",
+        "compensationScopeBoundary",
+        "confidenceDecay",
+        "confidenceViolation",
+        "configurationWarning",
+        "consistencyViolation",
+        "constraintTamperBlocked",
+        "continuationOfServicesActivated",
+        "contractValidation",
+        "convergenceCapReached",
+        "correctionAuthorized",
+        "cumulativeConfidenceViolation",
+        "dataMapping",
+        "dcrActivityExecuted",
+        "dcrRelationEvaluated",
+        "dcrResolutionError",
+        "dcrZoneViolation",
+        "delegationViolation",
+        "deonticBypass",
+        "deonticEvaluation",
+        "deonticResolution",
+        "deonticViolation",
+        "determinationAmended",
+        "determinationCounterfactual",
+        "determinationReasoning",
+        "determinationRescinded",
+        "dispositiveViolation",
+        "driftAlert",
+        "driftReclassification",
+        "equityAlert",
+        "escalationPending",
+        "eventConsumed",
+        "eventEmitted",
+        "fallbackAttempt",
+        "fallbackTerminal",
+        "fallbackTriggered",
+        "forEachCompleted",
+        "forEachIterationCompleted",
+        "forEachIterationStarted",
+        "groundTruthLabel",
+        "historyCleared",
+        "humanTaskCreated",
+        "idempotencyDedup",
+        "identityAttestation",
+        "immutabilityViolation",
+        "independentFirstEnforced",
+        "instanceMigrated",
+        "instanceResumed",
+        "instanceSuspended",
+        "instanceTerminated",
+        "intakeAccepted",
+        "intakeDeferred",
+        "intakeRejected",
+        "invalidDuration",
+        "keyRebind",
+        "legalHoldDestructionRejected",
+        "legalHoldPlaced",
+        "legalHoldReleased",
+        "migrationPinChanged",
+        "milestoneFired",
+        "narrativeTierRecorded",
+        "noteAdded",
+        "noticeSent",
+        "notificationSuppressed",
+        "onEntry",
+        "onExit",
+        "overrideRecorded",
+        "overrideViolation",
+        "parameterResolved",
+        "pipelineRejection",
+        "pipelineRiskProfile",
+        "pipelineStageCompleted",
+        "policyDecision",
+        "protocolViolation",
+        "proxyInvocation",
+        "reinstated",
+        "relationshipChanged",
+        "reportTimedOut",
+        "rescissionAuthorized",
+        "rightsViolation",
+        "samplingDecision",
+        "separationViolation",
+        "sessionPaused",
+        "shadowModeDivergence",
+        "signatureAdmissionFailed",
+        "signatureAffirmation",
+        "stateTransition",
+        "stepResultPersisted",
+        "taskCompleted",
+        "taskCreated",
+        "taskDismissed",
+        "taskDraftPersisted",
+        "taskFailed",
+        "taskPresented",
+        "taskResponseRejected",
+        "taskResponseSubmitted",
+        "taskSkipped",
+        "timerCancelled",
+        "timerCreated",
+        "timerFired",
+        "toleranceViolation",
+        "toolInvoked",
+        "toolViolation",
+        "unmatchedEvent",
+        "verificationReportProduced",
+        "zoneSatisfied",
+        "reasoningTierRecorded",
+        "counterfactualTierRecorded"
+      ]
+    },
+    "VendorRecordKind": {
+      "description": "Vendor provenance category using the existing extension namespace.",
+      "type": "string",
+      "pattern": "^x-[a-z][a-z0-9-]*$"
+    },
+    "FactsTierReservedRecordKind": {
+      "description": "Recognized native categories represented by the Facts tier; the five native explanation categories retain their named tier variants.",
+      "$ref": "#/$defs/ReservedRecordKind",
+      "not": {
+        "enum": [
+          "narrativeTierRecorded",
+          "reasoningTierRecorded",
+          "counterfactualTierRecorded",
+          "determinationReasoning",
+          "determinationCounterfactual"
+        ]
+      }
+    },
+    "FactsTierRecordKind": {
+      "description": "Facts-tier native or vendor category, distinct from the optional real triggering event.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/FactsTierReservedRecordKind"
+        },
+        {
+          "$ref": "#/$defs/VendorRecordKind"
+        }
       ]
     },
     "SourceAuthority": {
@@ -607,41 +639,8 @@
       }
     },
     "CaseFileSnapshot": {
-      "type": "object",
-      "additionalProperties": false,
-      "description": "Canonical case-file snapshot captured at determination time (kernel S8.2.1). Mirrors `wos-workflow.schema.json#/$defs/CaseFileSnapshot`.",
-      "x-wos": {
-        "mirror": {
-          "source": "wos-workflow.schema.json",
-          "path": "$defs/CaseFileSnapshot"
-        }
-      },
-      "required": [
-        "value",
-        "jcsCanonical",
-        "sha256"
-      ],
-      "properties": {
-        "value": {
-          "description": "Raw case-file JSON value observed immediately before the determination transition fires."
-        },
-        "jcsCanonical": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Canonical JSON string per JCS (RFC 8785).",
-          "examples": [
-            "{\"eligible\":true,\"income\":17500}"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
-        },
-        "sha256": {
-          "type": "string",
-          "pattern": "^[a-f0-9]{64}$",
-          "description": "Lowercase SHA-256 hex digest of jcsCanonical."
-        }
-      }
+      "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/CaseFileSnapshot",
+      "description": "Canonical case-file snapshot captured at determination time (kernel S8.2.1). Mirrors `wos-workflow.schema.json#/$defs/CaseFileSnapshot`."
     },
     "IntegrityDigest": {
       "type": "object",
@@ -680,23 +679,29 @@
       }
     },
     "FactsTierRecord": {
+      "description": "Facts-tier native processor record. recordKind identifies the maintained category; event, when present, retains the actual triggering or canonical event. Native metadata and data are preserved without changing the signed storage payload. Data presence variants retain absent data separately from explicit JSON null without changing the flat wire shape.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/FactsTierRecordWithData"
+        },
+        {
+          "$ref": "#/$defs/FactsTierRecordWithoutData"
+        }
+      ]
+    },
+    "FactsTierRecordWithData": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Facts-tier provenance record (kernel S8). Authoritative, immutable layer recording what happened. The wire shape carries the kernel `FactsTierRecord` envelope; the API layer renames `id`, `processId`, and `actorRef` to URNs (D-4, D-9). Each tier variant is fully self-contained -- no shared envelope or `allOf` composition -- so codegen produces a clean discriminated union.",
+      "description": "Facts-tier native processor record. recordKind identifies the maintained category; event, when present, retains the actual triggering or canonical event. Native metadata and data are preserved without changing the signed storage payload.",
       "required": [
         "tier",
         "id",
         "processId",
         "timestamp",
         "definitionVersion",
-        "event"
+        "recordKind",
+        "data"
       ],
-      "not": {
-        "required": [
-          "recordKind"
-        ],
-        "description": "D26 removed the inner recordKind discriminator from API facts records; use the required event literal."
-      },
       "properties": {
         "tier": {
           "const": "facts",
@@ -711,305 +716,62 @@
           "description": "Workflow process URN this record belongs to."
         },
         "timestamp": {
-          "type": "string",
-          "format": "date-time",
-          "description": "UTC RFC 3339 timestamp when the recorded action occurred (ADR 0069).",
-          "examples": [
-            "2026-04-19T12:00:00Z"
-          ]
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/timestamp",
+          "description": "Actual processor timestamp of the original native provenance record, retained as an RFC 3339 timestamp without reinterpretation."
         },
         "definitionVersion": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Version of the governing Kernel Document at append time.",
-          "examples": [
-            "1.0.0"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/definitionVersion",
+          "description": "Exact workflow definition version selected by the native processor when it recorded this original provenance occurrence."
         },
         "actorRef": {
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
           "description": "Actor URN responsible for the action (D-9). Omitted when the processor cannot name a concrete actor."
         },
         "event": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Triggering event or reserved event literal carried by the record category.",
-          "examples": [
-            "decide",
-            "wos.kernel.intake_accepted"
-          ],
-          "x-wos": {
-            "openStringKind": "tagLabel"
-          }
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/event",
+          "description": "Original native event label recorded for this provenance occurrence, preserved without remapping to an invented event family."
         },
         "fromState": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Lifecycle state immediately before the recorded transition.",
-          "examples": [
-            "review"
-          ],
-          "x-wos": {
-            "openStringKind": "tagLabel"
-          }
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/fromState",
+          "description": "Original source lifecycle state identifier recorded for this occurrence when the native event concerns a state transition."
         },
         "toState": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Lifecycle state immediately after the recorded transition.",
-          "examples": [
-            "decided"
-          ],
-          "x-wos": {
-            "openStringKind": "tagLabel"
-          }
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/toState",
+          "description": "Original target lifecycle state identifier recorded for this occurrence when the native event concerns a state transition."
         },
         "lifecycleState": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Lifecycle state at the time of the action.",
-          "x-wos": {
-            "openStringKind": "tagLabel"
-          }
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/lifecycleState",
+          "description": "Actual lifecycle state identifier associated with this retained processor fact when no source and target transition pair applies."
         },
         "transitionTags": {
-          "type": "array",
-          "description": "Semantic tags copied from the firing transition (kernel S4.9.12). REQUIRED when the firing transition carries tags.",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "x-wos": {
-              "openStringKind": "tagLabel"
-            }
-          },
-          "examples": [
-            [
-              "determination"
-            ]
-          ]
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/transitionTags",
+          "description": "Semantic tags copied from the firing transition when this record represents a state transition. The presence of 'determination' makes caseFileSnapshot mandatory."
         },
         "caseFileSnapshot": {
-          "$ref": "#/$defs/CaseFileSnapshot",
-          "description": "Canonical case-file snapshot. REQUIRED when transitionTags include `determination` (kernel S8.2.1)."
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/caseFileSnapshot",
+          "description": "Canonical case-file snapshot captured immediately before a determination-tagged transition fires. The value is the factual input to the determination; jcsCanonical and sha256 make the snapshot stable and tamper-evident for notices, appeals, and audit export."
         },
         "outcome": {
-          "oneOf": [
-            {
-              "enum": [
-                "preconditionNotSatisfied",
-                "convergenceCapReached"
-              ]
-            },
-            {
-              "type": "string",
-              "pattern": "^x-[a-z][a-z0-9-]*$"
-            }
-          ],
-          "description": "Reserved outcome literal recorded by the processor (kernel S8.2.2). Open enum with vendor-prefix extension."
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/outcome",
+          "description": "Preserves maintained native TaskFailed expiry facts. The expired literal is allowed only with TaskFailed; other outcomes retain the shared provenance outcome rules."
         },
         "integrity": {
           "$ref": "#/$defs/IntegrityDigest",
           "description": "Tamper-detection digest pair (kernel S8.3)."
         },
         "inputs": {
-          "type": "array",
-          "description": "Input entity references used by this activity.",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$"
-          }
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/inputs",
+          "description": "Input entity references used by this activity."
         },
         "outputs": {
-          "type": "array",
-          "description": "Output entity references generated by this activity.",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$"
-          }
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/outputs",
+          "description": "Output entity references generated by this activity."
         },
         "data": {
-          "type": "object",
-          "description": "Event-specific structured payload. Discriminated by `event`. Common fields surface here; kind-specific structured contracts are pinned via the dedicated typed sub-shape fields (`overrideRecord`, `noticeSent`) and the kernel `CapabilityInvocationRecord` `invocationBlocked` if/then guard. Carries the AI §3.3.1 `invocationBlocked` discriminator for `capabilityInvocation` records, AI §3.4 `agentVersionChange` `priorVersion` / `newVersion`, AI §5.5 `autonomyDemotion` `trigger` / `newLevel`, AI §7.5 `confidenceDecay` `halfLife` / `effectiveConfidence`, AI §7.7 cumulative-confidence pause `cumulative` / `floor`, governance §7.1 `samplingDecision` `method` / `bucket`, advanced equity guardrail breach (`equityAlert`) carrying `guardrailId`, `protectedCategoryId`, `disparityScore`, `threshold`, and `occurredAt`, and similar lightweight payloads. Heavier structured contracts (override, notice) MUST use the dedicated typed sub-shape fields above.",
-          "additionalProperties": false,
-          "properties": {
-            "invocationBlocked": {
-              "type": "boolean",
-              "description": "AI §3.3.1: true when the processor declined to invoke the capability because a precondition evaluated false. Pairs with `outcome: \"preconditionNotSatisfied\"` on the parent envelope. Present only when the corresponding event literal is present."
-            },
-            "capabilityId": {
-              "type": "string",
-              "minLength": 1,
-              "description": "AI §3.3.1: identifier of the capability being invoked or blocked. Present only when the corresponding event literal is present.",
-              "x-wos": {
-                "openStringKind": "identifier"
-              }
-            },
-            "milestoneId": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Kernel S4.13: identifier of the milestone that fired. Present only when the corresponding event literal is present.",
-              "x-wos": {
-                "openStringKind": "identifier"
-              }
-            },
-            "timerId": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Kernel S9.7.7: identifier of the timer. Present only when the corresponding event literal is present.",
-              "x-wos": {
-                "openStringKind": "identifier"
-              }
-            },
-            "priorVersion": {
-              "type": "string",
-              "minLength": 1,
-              "description": "AI §3.4: prior model version string before the change. Present only when the corresponding event literal is present.",
-              "x-wos": {
-                "openStringKind": "identifier"
-              }
-            },
-            "newVersion": {
-              "type": "string",
-              "minLength": 1,
-              "description": "AI §3.4: new model version string after the change. Present only when the corresponding event literal is present.",
-              "x-wos": {
-                "openStringKind": "identifier"
-              }
-            },
-            "trigger": {
-              "type": "string",
-              "minLength": 1,
-              "description": "AI §5.5 / §7.5: identifier of the trigger that fired (autonomy demotion trigger, confidence decay trigger). Open-string with named seam for codegen.",
-              "x-wos": {
-                "openStringKind": "tagLabel"
-              }
-            },
-            "newLevel": {
-              "type": "string",
-              "enum": [
-                "none",
-                "suggest",
-                "recommend",
-                "act-with-review",
-                "autonomous"
-              ],
-              "description": "AI §5.5: effective autonomy level after demotion. Closed enum mirrors `governance.schema.json#/$defs/AutonomyLevel`."
-            },
-            "halfLife": {
-              "type": "string",
-              "minLength": 1,
-              "description": "AI §7.5: ISO 8601 duration string for the confidence half-life. Present only when the corresponding event literal is present.",
-              "x-wos": {
-                "openStringKind": "duration"
-              }
-            },
-            "effectiveConfidence": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 1,
-              "description": "AI §7.5 / §7.7: effective confidence after decay or cumulative computation. Present on `confidenceDecay` and `cumulativeConfidenceViolation` records."
-            },
-            "cumulative": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 1,
-              "description": "AI §7.7: cumulative-confidence value at the moment of pause. Present only when the corresponding event literal is present."
-            },
-            "floor": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 1,
-              "description": "AI §7.4: confidence floor against which `effectiveConfidence` / `cumulative` was compared."
-            },
-            "method": {
-              "oneOf": [
-                {
-                  "enum": [
-                    "random",
-                    "stratified",
-                    "adversarial"
-                  ]
-                },
-                {
-                  "type": "string",
-                  "pattern": "^x-[a-z][a-z0-9-]*$"
-                }
-              ],
-              "description": "Governance §7.1 / AI §11.2: sampling method used to select this case for review. Present only when the corresponding event literal is present. Closed-with-vendor-extension."
-            },
-            "bucket": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Governance §7.1 / AI §11.2: stratification bucket identifier when `method == \"stratified\"`.",
-              "x-wos": {
-                "openStringKind": "tagLabel"
-              }
-            },
-            "constraintId": {
-              "type": "string",
-              "minLength": 1,
-              "description": "AI §4.7: identifier of the deontic constraint being bypassed. Present only when the corresponding event literal is present.",
-              "x-wos": {
-                "openStringKind": "identifier"
-              }
-            },
-            "rationale": {
-              "type": "string",
-              "minLength": 1,
-              "description": "AI §4.7: structured rationale for a deontic bypass. Present only when the corresponding event literal is present. Distinct from the heavier `OverrideRecord.rationale` which carries citations.",
-              "x-wos": {
-                "openStringKind": "prose"
-              }
-            },
-            "fallbackOption": {
-              "oneOf": [
-                {
-                  "enum": [
-                    "escalateToHuman",
-                    "retry",
-                    "alternateAgent",
-                    "fail"
-                  ]
-                },
-                {
-                  "type": "string",
-                  "pattern": "^x-[a-z][a-z0-9-]*$"
-                }
-              ],
-              "description": "AI §8.2.4: fallback option taken on this attempt. Present only when the corresponding event literal is present."
-            },
-            "attemptIndex": {
-              "type": "integer",
-              "minimum": 0,
-              "description": "AI §8.2.4: zero-based index of this fallback attempt within the chain. Present only when the corresponding event literal is present."
-            },
-            "succeeded": {
-              "type": "boolean",
-              "description": "AI §8.2.4: whether this fallback attempt succeeded. Present only when the corresponding event literal is present."
-            },
-            "zoneId": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Advanced §4: identifier of the constraint zone whose satisfaction is being recorded. Present only when the corresponding event literal is present.",
-              "x-wos": {
-                "openStringKind": "identifier"
-              }
-            },
-            "agentRef": {
-              "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
-              "description": "AI / advanced: agent URN this record applies to. Present on AI lifecycle / drift / autonomy / fallback records."
-            }
-          },
-          "patternProperties": {
-            "^x-[a-z]+-": {
-              "$comment": "Vendor-extension fields permitted under the closed-with-vendor-extension stance (ADR 0082 D-12)."
-            }
-          }
+          "description": "Original native event-specific JSON value, retained without changing null, scalar, array or object values.",
+          "allOf": [
+            {}
+          ]
         },
         "overrideRecord": {
           "$ref": "#/$defs/OverrideRecord",
@@ -1054,6 +816,177 @@
         "quorumReduction": {
           "$ref": "#/$defs/QuorumReductionRecord",
           "description": "Typed payload when a governance operation explicitly reduces a quorum requirement. Optional only because the wire envelope is shared across all Facts-tier kinds; servers recording quorum reduction MUST populate this and use an explicit policy-transition `event` rather than silently changing quorum state."
+        },
+        "recordKind": {
+          "$ref": "#/$defs/FactsTierRecordKind",
+          "description": "Native closed category, distinct from the optional real triggering event. Non-Facts native categories use their named tier variants."
+        },
+        "actorId": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/actorId",
+          "description": "Actual admitted actor identifier recorded by the processor for this native provenance occurrence when an actor is known."
+        },
+        "actorType": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/actorType",
+          "description": "Actor classification when the processor can resolve one canonically. Reserved literals are `human`, `system`, and `agent`; extension values MUST use an `x-` prefix."
+        },
+        "inputDigest": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/inputDigest",
+          "description": "Original processor digest text for the admitted input, retained without changing its algorithm or reconstructing original bytes."
+        },
+        "outputDigest": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/outputDigest",
+          "description": "Original processor digest text for the actual output, retained without changing its algorithm or reconstructing output bytes."
+        },
+        "canonicalEventHash": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/canonicalEventHash",
+          "description": "Trellis `canonical_event_hash` text stamped after custody admission, when present. Current Trellis service receipts use `sha256:<lowercase hex>`; older local fixtures may use bare lowercase hex."
+        }
+      }
+    },
+    "FactsTierRecordWithoutData": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Facts-tier native processor record. recordKind identifies the maintained category; event, when present, retains the actual triggering or canonical event. Native metadata and data are preserved without changing the signed storage payload.",
+      "required": [
+        "tier",
+        "id",
+        "processId",
+        "timestamp",
+        "definitionVersion",
+        "recordKind"
+      ],
+      "properties": {
+        "tier": {
+          "const": "facts",
+          "description": "Discriminator literal for this variant."
+        },
+        "id": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Stable URN for this provenance record."
+        },
+        "processId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Workflow process URN this record belongs to."
+        },
+        "timestamp": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/timestamp",
+          "description": "Actual processor timestamp of the original native provenance record, retained as an RFC 3339 timestamp without reinterpretation."
+        },
+        "definitionVersion": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/definitionVersion",
+          "description": "Exact workflow definition version selected by the native processor when it recorded this original provenance occurrence."
+        },
+        "actorRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+          "description": "Actor URN responsible for the action (D-9). Omitted when the processor cannot name a concrete actor."
+        },
+        "event": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/event",
+          "description": "Original native event label recorded for this provenance occurrence, preserved without remapping to an invented event family."
+        },
+        "fromState": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/fromState",
+          "description": "Original source lifecycle state identifier recorded for this occurrence when the native event concerns a state transition."
+        },
+        "toState": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/toState",
+          "description": "Original target lifecycle state identifier recorded for this occurrence when the native event concerns a state transition."
+        },
+        "lifecycleState": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/lifecycleState",
+          "description": "Actual lifecycle state identifier associated with this retained processor fact when no source and target transition pair applies."
+        },
+        "transitionTags": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/transitionTags",
+          "description": "Semantic tags copied from the firing transition when this record represents a state transition. The presence of 'determination' makes caseFileSnapshot mandatory."
+        },
+        "caseFileSnapshot": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/caseFileSnapshot",
+          "description": "Canonical case-file snapshot captured immediately before a determination-tagged transition fires. The value is the factual input to the determination; jcsCanonical and sha256 make the snapshot stable and tamper-evident for notices, appeals, and audit export."
+        },
+        "outcome": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/outcome",
+          "description": "Preserves maintained native TaskFailed expiry facts. The expired literal is allowed only with TaskFailed; other outcomes retain the shared provenance outcome rules."
+        },
+        "integrity": {
+          "$ref": "#/$defs/IntegrityDigest",
+          "description": "Tamper-detection digest pair (kernel S8.3)."
+        },
+        "inputs": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/inputs",
+          "description": "Input entity references used by this activity."
+        },
+        "outputs": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/outputs",
+          "description": "Output entity references generated by this activity."
+        },
+        "overrideRecord": {
+          "$ref": "#/$defs/OverrideRecord",
+          "description": "Typed payload when the corresponding event literal is present (governance §7.3). Carries the structured rationale, authority verification, and supporting evidence required for an override to be auditable. Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting `overrideRecorded` MUST populate this."
+        },
+        "noticeSent": {
+          "$ref": "#/$defs/NoticeSentRecord",
+          "description": "Typed payload when the corresponding event literal is present (governance §3.2, workflow-governance.md:127). Carries the byte-deterministic notice metadata so applicants can retrieve the notice that was actually sent with verifiable hash equality. Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting `noticeSent` MUST populate this."
+        },
+        "authorizationRejectedRecord": {
+          "$ref": "#/$defs/AuthorizationRejectedRecord",
+          "description": "Typed payload when `event == \"wos.governance.authorization_rejected\"` (ADR 0070 D-3). Optional on the shared API envelope because typify cannot consume event-conditioned `if`/`then` guards; kernel and provenance-log schemas enforce the event-to-payload binding."
+        },
+        "keyRebindRecord": {
+          "$ref": "#/$defs/KeyRebindRecord",
+          "description": "Typed payload when `event == \"wos.assurance.key_rebind\"` (ADR 0091). Optional on the shared API envelope because typify cannot consume event-conditioned `if`/`then` guards; kernel and provenance-log schemas enforce the event-to-payload binding."
+        },
+        "legalHoldRecord": {
+          "$ref": "#/$defs/LegalHoldRecord",
+          "description": "Typed payload when the corresponding event literal is present. Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting any legal-hold literal MUST populate this."
+        },
+        "circuitBreakerEvent": {
+          "$ref": "#/$defs/CircuitBreakerEventRecord",
+          "description": "Typed payload when the corresponding event literal is present.md circuit breaker). Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting a circuit-breaker literal MUST populate this."
+        },
+        "shadowModeDivergence": {
+          "$ref": "#/$defs/ShadowModeDivergenceRecord",
+          "description": "Typed payload when the corresponding event literal is present (advanced-governance.md shadow mode). Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting `shadowModeDivergence` MUST populate this."
+        },
+        "dcrZoneViolation": {
+          "$ref": "#/$defs/DcrZoneViolationRecord",
+          "description": "Typed payload when the corresponding event literal is present (advanced-governance.md DCR constraint zones). Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting `dcrZoneViolation` MUST populate this."
+        },
+        "driftAlert": {
+          "$ref": "#/$defs/DriftAlertRecord",
+          "description": "Typed payload when the corresponding event literal is present (advanced-governance.md drift monitoring). Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting `driftAlert` MUST populate this."
+        },
+        "reportTimedOut": {
+          "$ref": "#/$defs/ReportTimedOutRecord",
+          "description": "Typed payload when the corresponding event literal is present (reports.md WOS-1408). Optional only because the wire envelope is shared across all Facts-tier kinds; servers emitting `reportTimedOut` MUST populate this."
+        },
+        "quorumReduction": {
+          "$ref": "#/$defs/QuorumReductionRecord",
+          "description": "Typed payload when a governance operation explicitly reduces a quorum requirement. Optional only because the wire envelope is shared across all Facts-tier kinds; servers recording quorum reduction MUST populate this and use an explicit policy-transition `event` rather than silently changing quorum state."
+        },
+        "recordKind": {
+          "$ref": "#/$defs/FactsTierRecordKind",
+          "description": "Native closed category, distinct from the optional real triggering event. Non-Facts native categories use their named tier variants."
+        },
+        "actorId": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/actorId",
+          "description": "Actual admitted actor identifier recorded by the processor for this native provenance occurrence when an actor is known."
+        },
+        "actorType": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/actorType",
+          "description": "Actor classification when the processor can resolve one canonically. Reserved literals are `human`, `system`, and `agent`; extension values MUST use an `x-` prefix."
+        },
+        "inputDigest": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/inputDigest",
+          "description": "Original processor digest text for the admitted input, retained without changing its algorithm or reconstructing original bytes."
+        },
+        "outputDigest": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/outputDigest",
+          "description": "Original processor digest text for the actual output, retained without changing its algorithm or reconstructing output bytes."
+        },
+        "canonicalEventHash": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/canonicalEventHash",
+          "description": "Trellis `canonical_event_hash` text stamped after custody admission, when present. Current Trellis service receipts use `sha256:<lowercase hex>`; older local fixtures may use bare lowercase hex."
         }
       }
     },
@@ -2022,12 +1955,24 @@
         },
         {
           "$ref": "#/$defs/NarrativeTierRecord"
+        },
+        {
+          "$ref": "#/$defs/NativeReasoningEvidenceRecord"
+        },
+        {
+          "$ref": "#/$defs/NativeCounterfactualEvidenceRecord"
+        },
+        {
+          "$ref": "#/$defs/NativeDeterminationReasoningRecord"
+        },
+        {
+          "$ref": "#/$defs/NativeDeterminationCounterfactualRecord"
+        },
+        {
+          "$ref": "#/$defs/NativeNarrativeAnnotationRecord"
         }
       ],
-      "discriminator": {
-        "propertyName": "tier"
-      },
-      "description": "Tier-discriminated provenance record union (ADR 0082 D-5). The four tiers correspond to kernel Facts (S8), governance Reasoning (S6.2) and Counterfactual (S6.4), and AI integration Narrative (S13). The legacy single-envelope shape with four optional tier blocks (current `case-portal` `ProvenanceRecord`) is structurally inexpressible: every variant requires its own `tier` const literal and tier-specific fields are non-optional within their variant."
+      "description": "Closed union of Facts, authored explanation, and named native evidence variants. Native variants discriminate on both tier and recordKind; authored variants retain their required rich evidence and exclude recordKind."
     },
     "ProvenanceTimeRange": {
       "type": "object",
@@ -2143,6 +2088,648 @@
         "hasMore": {
           "type": "boolean",
           "description": "True when another page is available from the server."
+        }
+      }
+    },
+    "NativeReasoningEvidenceRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Native reasoningTierRecorded evidence in the reasoning audit tier. Retains the owning native shape and original metadata; does not fabricate authored explanation fields.",
+      "required": [
+        "tier",
+        "recordKind",
+        "id",
+        "processId",
+        "timestamp",
+        "definitionVersion",
+        "data"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Stable URN for this provenance record."
+        },
+        "processId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Workflow process URN this record belongs to."
+        },
+        "timestamp": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/timestamp",
+          "description": "Actual processor timestamp of the original native provenance record, retained as an RFC 3339 timestamp without reinterpretation."
+        },
+        "definitionVersion": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/definitionVersion",
+          "description": "Exact workflow definition version selected by the native processor when it recorded this original provenance occurrence."
+        },
+        "actorRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+          "description": "Actor URN responsible for the action (D-9). Omitted when the processor cannot name a concrete actor."
+        },
+        "actorId": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/actorId",
+          "description": "Actual admitted actor identifier recorded by the processor for this native provenance occurrence when an actor is known."
+        },
+        "fromState": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/fromState",
+          "description": "Original source lifecycle state identifier recorded for this occurrence when the native event concerns a state transition."
+        },
+        "toState": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/toState",
+          "description": "Original target lifecycle state identifier recorded for this occurrence when the native event concerns a state transition."
+        },
+        "event": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/event",
+          "description": "Original native event label recorded for this provenance occurrence, preserved without remapping to an invented event family."
+        },
+        "actorType": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/actorType",
+          "description": "Actor classification when the processor can resolve one canonically. Reserved literals are `human`, `system`, and `agent`; extension values MUST use an `x-` prefix."
+        },
+        "lifecycleState": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/lifecycleState",
+          "description": "Actual lifecycle state identifier associated with this retained processor fact when no source and target transition pair applies."
+        },
+        "inputDigest": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/inputDigest",
+          "description": "Original processor digest text for the admitted input, retained without changing its algorithm or reconstructing original bytes."
+        },
+        "outputDigest": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/outputDigest",
+          "description": "Original processor digest text for the actual output, retained without changing its algorithm or reconstructing output bytes."
+        },
+        "canonicalEventHash": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/canonicalEventHash",
+          "description": "Trellis `canonical_event_hash` text stamped after custody admission, when present. Current Trellis service receipts use `sha256:<lowercase hex>`; older local fixtures may use bare lowercase hex."
+        },
+        "outcome": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/outcome",
+          "description": "Preserves maintained native TaskFailed expiry facts. The expired literal is allowed only with TaskFailed; other outcomes retain the shared provenance outcome rules."
+        },
+        "inputs": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/inputs",
+          "description": "Input entity references used by this activity."
+        },
+        "outputs": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/outputs",
+          "description": "Output entity references generated by this activity."
+        },
+        "transitionTags": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/transitionTags",
+          "description": "Semantic tags copied from the firing transition when this record represents a state transition. The presence of 'determination' makes caseFileSnapshot mandatory."
+        },
+        "caseFileSnapshot": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/caseFileSnapshot",
+          "description": "Canonical case-file snapshot captured immediately before a determination-tagged transition fires. The value is the factual input to the determination; jcsCanonical and sha256 make the snapshot stable and tamper-evident for notices, appeals, and audit export."
+        },
+        "tier": {
+          "const": "reasoning",
+          "description": "Audit tier assigned by the maintained native provenance kind classifier."
+        },
+        "recordKind": {
+          "const": "reasoningTierRecorded",
+          "description": "Original native provenance category, distinct from the optional actual triggering event."
+        },
+        "data": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/$defs/ReasoningEvidence",
+          "description": "Structured Reasoning-tier provenance payload linking a determination to its facts record, snapshot digest, rules, evidence, and criteria."
+        }
+      }
+    },
+    "NativeCounterfactualEvidenceRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Native counterfactualTierRecorded evidence in the counterfactual audit tier. Retains the owning native shape and original metadata; does not fabricate authored explanation fields.",
+      "required": [
+        "tier",
+        "recordKind",
+        "id",
+        "processId",
+        "timestamp",
+        "definitionVersion",
+        "data"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Stable URN for this provenance record."
+        },
+        "processId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Workflow process URN this record belongs to."
+        },
+        "timestamp": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/timestamp",
+          "description": "Actual processor timestamp of the original native provenance record, retained as an RFC 3339 timestamp without reinterpretation."
+        },
+        "definitionVersion": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/definitionVersion",
+          "description": "Exact workflow definition version selected by the native processor when it recorded this original provenance occurrence."
+        },
+        "actorRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+          "description": "Actor URN responsible for the action (D-9). Omitted when the processor cannot name a concrete actor."
+        },
+        "actorId": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/actorId",
+          "description": "Actual admitted actor identifier recorded by the processor for this native provenance occurrence when an actor is known."
+        },
+        "fromState": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/fromState",
+          "description": "Original source lifecycle state identifier recorded for this occurrence when the native event concerns a state transition."
+        },
+        "toState": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/toState",
+          "description": "Original target lifecycle state identifier recorded for this occurrence when the native event concerns a state transition."
+        },
+        "event": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/event",
+          "description": "Original native event label recorded for this provenance occurrence, preserved without remapping to an invented event family."
+        },
+        "actorType": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/actorType",
+          "description": "Actor classification when the processor can resolve one canonically. Reserved literals are `human`, `system`, and `agent`; extension values MUST use an `x-` prefix."
+        },
+        "lifecycleState": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/lifecycleState",
+          "description": "Actual lifecycle state identifier associated with this retained processor fact when no source and target transition pair applies."
+        },
+        "inputDigest": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/inputDigest",
+          "description": "Original processor digest text for the admitted input, retained without changing its algorithm or reconstructing original bytes."
+        },
+        "outputDigest": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/outputDigest",
+          "description": "Original processor digest text for the actual output, retained without changing its algorithm or reconstructing output bytes."
+        },
+        "canonicalEventHash": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/canonicalEventHash",
+          "description": "Trellis `canonical_event_hash` text stamped after custody admission, when present. Current Trellis service receipts use `sha256:<lowercase hex>`; older local fixtures may use bare lowercase hex."
+        },
+        "outcome": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/outcome",
+          "description": "Preserves maintained native TaskFailed expiry facts. The expired literal is allowed only with TaskFailed; other outcomes retain the shared provenance outcome rules."
+        },
+        "inputs": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/inputs",
+          "description": "Input entity references used by this activity."
+        },
+        "outputs": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/outputs",
+          "description": "Output entity references generated by this activity."
+        },
+        "transitionTags": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/transitionTags",
+          "description": "Semantic tags copied from the firing transition when this record represents a state transition. The presence of 'determination' makes caseFileSnapshot mandatory."
+        },
+        "caseFileSnapshot": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/caseFileSnapshot",
+          "description": "Canonical case-file snapshot captured immediately before a determination-tagged transition fires. The value is the factual input to the determination; jcsCanonical and sha256 make the snapshot stable and tamper-evident for notices, appeals, and audit export."
+        },
+        "tier": {
+          "const": "counterfactual",
+          "description": "Audit tier assigned by the maintained native provenance kind classifier."
+        },
+        "recordKind": {
+          "const": "counterfactualTierRecorded",
+          "description": "Original native provenance category, distinct from the optional actual triggering event."
+        },
+        "data": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/$defs/CounterfactualEvidence",
+          "description": "Structured Counterfactual-tier provenance payload recording positive and negative counterfactuals for a determination."
+        }
+      }
+    },
+    "NativeDeterminationReasoningRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Native determinationReasoning evidence in the reasoning audit tier. Retains the owning native shape and original metadata; does not fabricate authored explanation fields.",
+      "required": [
+        "tier",
+        "recordKind",
+        "id",
+        "processId",
+        "timestamp",
+        "definitionVersion",
+        "data"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Stable URN for this provenance record."
+        },
+        "processId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Workflow process URN this record belongs to."
+        },
+        "timestamp": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/timestamp",
+          "description": "Actual processor timestamp of the original native provenance record, retained as an RFC 3339 timestamp without reinterpretation."
+        },
+        "definitionVersion": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/definitionVersion",
+          "description": "Exact workflow definition version selected by the native processor when it recorded this original provenance occurrence."
+        },
+        "actorRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+          "description": "Actor URN responsible for the action (D-9). Omitted when the processor cannot name a concrete actor."
+        },
+        "actorId": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/actorId",
+          "description": "Actual admitted actor identifier recorded by the processor for this native provenance occurrence when an actor is known."
+        },
+        "fromState": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/fromState",
+          "description": "Original source lifecycle state identifier recorded for this occurrence when the native event concerns a state transition."
+        },
+        "toState": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/toState",
+          "description": "Original target lifecycle state identifier recorded for this occurrence when the native event concerns a state transition."
+        },
+        "event": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/event",
+          "description": "Original native event label recorded for this provenance occurrence, preserved without remapping to an invented event family."
+        },
+        "actorType": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/actorType",
+          "description": "Actor classification when the processor can resolve one canonically. Reserved literals are `human`, `system`, and `agent`; extension values MUST use an `x-` prefix."
+        },
+        "lifecycleState": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/lifecycleState",
+          "description": "Actual lifecycle state identifier associated with this retained processor fact when no source and target transition pair applies."
+        },
+        "inputDigest": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/inputDigest",
+          "description": "Original processor digest text for the admitted input, retained without changing its algorithm or reconstructing original bytes."
+        },
+        "outputDigest": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/outputDigest",
+          "description": "Original processor digest text for the actual output, retained without changing its algorithm or reconstructing output bytes."
+        },
+        "canonicalEventHash": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/canonicalEventHash",
+          "description": "Trellis `canonical_event_hash` text stamped after custody admission, when present. Current Trellis service receipts use `sha256:<lowercase hex>`; older local fixtures may use bare lowercase hex."
+        },
+        "outcome": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/outcome",
+          "description": "Preserves maintained native TaskFailed expiry facts. The expired literal is allowed only with TaskFailed; other outcomes retain the shared provenance outcome rules."
+        },
+        "inputs": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/inputs",
+          "description": "Input entity references used by this activity."
+        },
+        "outputs": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/outputs",
+          "description": "Output entity references generated by this activity."
+        },
+        "transitionTags": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/transitionTags",
+          "description": "Semantic tags copied from the firing transition when this record represents a state transition. The presence of 'determination' makes caseFileSnapshot mandatory."
+        },
+        "caseFileSnapshot": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/caseFileSnapshot",
+          "description": "Canonical case-file snapshot captured immediately before a determination-tagged transition fires. The value is the factual input to the determination; jcsCanonical and sha256 make the snapshot stable and tamper-evident for notices, appeals, and audit export."
+        },
+        "tier": {
+          "const": "reasoning",
+          "description": "Audit tier assigned by the maintained native provenance kind classifier."
+        },
+        "recordKind": {
+          "const": "determinationReasoning",
+          "description": "Original native provenance category, distinct from the optional actual triggering event."
+        },
+        "data": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/DeterminationReasoningData",
+          "description": "Closed DeterminationReasoningData shape from Governance native reference execution."
+        }
+      }
+    },
+    "NativeDeterminationCounterfactualRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Native determinationCounterfactual evidence in the counterfactual audit tier. Retains the owning native shape and original metadata; does not fabricate authored explanation fields.",
+      "required": [
+        "tier",
+        "recordKind",
+        "id",
+        "processId",
+        "timestamp",
+        "definitionVersion",
+        "data"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Stable URN for this provenance record."
+        },
+        "processId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Workflow process URN this record belongs to."
+        },
+        "timestamp": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/timestamp",
+          "description": "Actual processor timestamp of the original native provenance record, retained as an RFC 3339 timestamp without reinterpretation."
+        },
+        "definitionVersion": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/definitionVersion",
+          "description": "Exact workflow definition version selected by the native processor when it recorded this original provenance occurrence."
+        },
+        "actorRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+          "description": "Actor URN responsible for the action (D-9). Omitted when the processor cannot name a concrete actor."
+        },
+        "actorId": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/actorId",
+          "description": "Actual admitted actor identifier recorded by the processor for this native provenance occurrence when an actor is known."
+        },
+        "fromState": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/fromState",
+          "description": "Original source lifecycle state identifier recorded for this occurrence when the native event concerns a state transition."
+        },
+        "toState": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/toState",
+          "description": "Original target lifecycle state identifier recorded for this occurrence when the native event concerns a state transition."
+        },
+        "event": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/event",
+          "description": "Original native event label recorded for this provenance occurrence, preserved without remapping to an invented event family."
+        },
+        "actorType": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/actorType",
+          "description": "Actor classification when the processor can resolve one canonically. Reserved literals are `human`, `system`, and `agent`; extension values MUST use an `x-` prefix."
+        },
+        "lifecycleState": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/lifecycleState",
+          "description": "Actual lifecycle state identifier associated with this retained processor fact when no source and target transition pair applies."
+        },
+        "inputDigest": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/inputDigest",
+          "description": "Original processor digest text for the admitted input, retained without changing its algorithm or reconstructing original bytes."
+        },
+        "outputDigest": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/outputDigest",
+          "description": "Original processor digest text for the actual output, retained without changing its algorithm or reconstructing output bytes."
+        },
+        "canonicalEventHash": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/canonicalEventHash",
+          "description": "Trellis `canonical_event_hash` text stamped after custody admission, when present. Current Trellis service receipts use `sha256:<lowercase hex>`; older local fixtures may use bare lowercase hex."
+        },
+        "outcome": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/outcome",
+          "description": "Preserves maintained native TaskFailed expiry facts. The expired literal is allowed only with TaskFailed; other outcomes retain the shared provenance outcome rules."
+        },
+        "inputs": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/inputs",
+          "description": "Input entity references used by this activity."
+        },
+        "outputs": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/outputs",
+          "description": "Output entity references generated by this activity."
+        },
+        "transitionTags": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/transitionTags",
+          "description": "Semantic tags copied from the firing transition when this record represents a state transition. The presence of 'determination' makes caseFileSnapshot mandatory."
+        },
+        "caseFileSnapshot": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/caseFileSnapshot",
+          "description": "Canonical case-file snapshot captured immediately before a determination-tagged transition fires. The value is the factual input to the determination; jcsCanonical and sha256 make the snapshot stable and tamper-evident for notices, appeals, and audit export."
+        },
+        "tier": {
+          "const": "counterfactual",
+          "description": "Audit tier assigned by the maintained native provenance kind classifier."
+        },
+        "recordKind": {
+          "const": "determinationCounterfactual",
+          "description": "Original native provenance category, distinct from the optional actual triggering event."
+        },
+        "data": {
+          "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/DeterminationCounterfactualData",
+          "description": "Closed DeterminationCounterfactualData shape from Governance native reference execution."
+        }
+      }
+    },
+    "NativeNarrativeAnnotationRecord": {
+      "description": "Native narrativeTierRecorded evidence in the narrative audit tier. Retains the owning native shape and original metadata; does not fabricate authored explanation fields. Data presence variants retain absent data separately from explicit JSON null without changing the flat wire shape.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/NativeNarrativeAnnotationRecordWithData"
+        },
+        {
+          "$ref": "#/$defs/NativeNarrativeAnnotationRecordWithoutData"
+        }
+      ]
+    },
+    "NativeNarrativeAnnotationRecordWithData": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Native narrativeTierRecorded evidence in the narrative audit tier. Retains the owning native shape and original metadata; does not fabricate authored explanation fields.",
+      "required": [
+        "tier",
+        "recordKind",
+        "id",
+        "processId",
+        "timestamp",
+        "definitionVersion",
+        "authoritative",
+        "data"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Stable URN for this provenance record."
+        },
+        "processId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Workflow process URN this record belongs to."
+        },
+        "timestamp": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/timestamp",
+          "description": "Actual processor timestamp of the original native provenance record, retained as an RFC 3339 timestamp without reinterpretation."
+        },
+        "definitionVersion": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/definitionVersion",
+          "description": "Exact workflow definition version selected by the native processor when it recorded this original provenance occurrence."
+        },
+        "actorRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+          "description": "Actor URN responsible for the action (D-9). Omitted when the processor cannot name a concrete actor."
+        },
+        "actorId": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/actorId",
+          "description": "Actual admitted actor identifier recorded by the processor for this native provenance occurrence when an actor is known."
+        },
+        "fromState": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/fromState",
+          "description": "Original source lifecycle state identifier recorded for this occurrence when the native event concerns a state transition."
+        },
+        "toState": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/toState",
+          "description": "Original target lifecycle state identifier recorded for this occurrence when the native event concerns a state transition."
+        },
+        "event": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/event",
+          "description": "Original native event label recorded for this provenance occurrence, preserved without remapping to an invented event family."
+        },
+        "actorType": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/actorType",
+          "description": "Actor classification when the processor can resolve one canonically. Reserved literals are `human`, `system`, and `agent`; extension values MUST use an `x-` prefix."
+        },
+        "lifecycleState": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/lifecycleState",
+          "description": "Actual lifecycle state identifier associated with this retained processor fact when no source and target transition pair applies."
+        },
+        "inputDigest": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/inputDigest",
+          "description": "Original processor digest text for the admitted input, retained without changing its algorithm or reconstructing original bytes."
+        },
+        "outputDigest": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/outputDigest",
+          "description": "Original processor digest text for the actual output, retained without changing its algorithm or reconstructing output bytes."
+        },
+        "canonicalEventHash": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/canonicalEventHash",
+          "description": "Trellis `canonical_event_hash` text stamped after custody admission, when present. Current Trellis service receipts use `sha256:<lowercase hex>`; older local fixtures may use bare lowercase hex."
+        },
+        "outcome": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/outcome",
+          "description": "Preserves maintained native TaskFailed expiry facts. The expired literal is allowed only with TaskFailed; other outcomes retain the shared provenance outcome rules."
+        },
+        "inputs": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/inputs",
+          "description": "Input entity references used by this activity."
+        },
+        "outputs": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/outputs",
+          "description": "Output entity references generated by this activity."
+        },
+        "transitionTags": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/transitionTags",
+          "description": "Semantic tags copied from the firing transition when this record represents a state transition. The presence of 'determination' makes caseFileSnapshot mandatory."
+        },
+        "caseFileSnapshot": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/caseFileSnapshot",
+          "description": "Canonical case-file snapshot captured immediately before a determination-tagged transition fires. The value is the factual input to the determination; jcsCanonical and sha256 make the snapshot stable and tamper-evident for notices, appeals, and audit export."
+        },
+        "tier": {
+          "const": "narrative",
+          "description": "Audit tier assigned by the maintained native provenance kind classifier."
+        },
+        "recordKind": {
+          "const": "narrativeTierRecorded",
+          "description": "Original native provenance category, distinct from the optional actual triggering event."
+        },
+        "data": {
+          "description": "Original native event-specific JSON value, retained without changing null, scalar, array or object values.",
+          "allOf": [
+            {}
+          ]
+        },
+        "authoritative": {
+          "const": false,
+          "description": "Native narrative annotations do not establish decision authority."
+        }
+      }
+    },
+    "NativeNarrativeAnnotationRecordWithoutData": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Native narrativeTierRecorded evidence in the narrative audit tier. Retains the owning native shape and original metadata; does not fabricate authored explanation fields.",
+      "required": [
+        "tier",
+        "recordKind",
+        "id",
+        "processId",
+        "timestamp",
+        "definitionVersion",
+        "authoritative"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Stable URN for this provenance record."
+        },
+        "processId": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+          "description": "Workflow process URN this record belongs to."
+        },
+        "timestamp": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/timestamp",
+          "description": "Actual processor timestamp of the original native provenance record, retained as an RFC 3339 timestamp without reinterpretation."
+        },
+        "definitionVersion": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/definitionVersion",
+          "description": "Exact workflow definition version selected by the native processor when it recorded this original provenance occurrence."
+        },
+        "actorRef": {
+          "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+          "description": "Actor URN responsible for the action (D-9). Omitted when the processor cannot name a concrete actor."
+        },
+        "actorId": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/actorId",
+          "description": "Actual admitted actor identifier recorded by the processor for this native provenance occurrence when an actor is known."
+        },
+        "fromState": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/fromState",
+          "description": "Original source lifecycle state identifier recorded for this occurrence when the native event concerns a state transition."
+        },
+        "toState": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/toState",
+          "description": "Original target lifecycle state identifier recorded for this occurrence when the native event concerns a state transition."
+        },
+        "event": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/event",
+          "description": "Original native event label recorded for this provenance occurrence, preserved without remapping to an invented event family."
+        },
+        "actorType": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/actorType",
+          "description": "Actor classification when the processor can resolve one canonically. Reserved literals are `human`, `system`, and `agent`; extension values MUST use an `x-` prefix."
+        },
+        "lifecycleState": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/lifecycleState",
+          "description": "Actual lifecycle state identifier associated with this retained processor fact when no source and target transition pair applies."
+        },
+        "inputDigest": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/inputDigest",
+          "description": "Original processor digest text for the admitted input, retained without changing its algorithm or reconstructing original bytes."
+        },
+        "outputDigest": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/outputDigest",
+          "description": "Original processor digest text for the actual output, retained without changing its algorithm or reconstructing output bytes."
+        },
+        "canonicalEventHash": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/canonicalEventHash",
+          "description": "Trellis `canonical_event_hash` text stamped after custody admission, when present. Current Trellis service receipts use `sha256:<lowercase hex>`; older local fixtures may use bare lowercase hex."
+        },
+        "outcome": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/outcome",
+          "description": "Preserves maintained native TaskFailed expiry facts. The expired literal is allowed only with TaskFailed; other outcomes retain the shared provenance outcome rules."
+        },
+        "inputs": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/inputs",
+          "description": "Input entity references used by this activity."
+        },
+        "outputs": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/outputs",
+          "description": "Output entity references generated by this activity."
+        },
+        "transitionTags": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/transitionTags",
+          "description": "Semantic tags copied from the firing transition when this record represents a state transition. The presence of 'determination' makes caseFileSnapshot mandatory."
+        },
+        "caseFileSnapshot": {
+          "$ref": "https://wos-spec.org/schemas/wos-native-provenance-event.schema.json#/properties/record/properties/caseFileSnapshot",
+          "description": "Canonical case-file snapshot captured immediately before a determination-tagged transition fires. The value is the factual input to the determination; jcsCanonical and sha256 make the snapshot stable and tamper-evident for notices, appeals, and audit export."
+        },
+        "tier": {
+          "const": "narrative",
+          "description": "Audit tier assigned by the maintained native provenance kind classifier."
+        },
+        "recordKind": {
+          "const": "narrativeTierRecorded",
+          "description": "Original native provenance category, distinct from the optional actual triggering event."
+        },
+        "authoritative": {
+          "const": false,
+          "description": "Native narrative annotations do not establish decision authority."
         }
       }
     }

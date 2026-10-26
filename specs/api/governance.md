@@ -40,7 +40,7 @@ The two-shape decomposition matches ADR 0082 D-3 — pagination scales per resou
 
 ### `AgentView`
 
-Carries `id` (URN), `actorRef` (the underlying `Actor` URN), `workflowUrl`/`workflowVersion` (governing declaration), `modelIdentifier`/`modelVersion` (deployed model), `autonomyLevel` (closed `AutonomyLevel`), `invokerKind` REQUIRED (closed-with-vendor-extension `anthropic | claudeAgentSdk | mcp | a2a | http | stub` per ADR 0064 §2.2-§2.3), `lifecycleState` REQUIRED (closed-with-vendor-extension `active | degraded | suspended | retired` per advanced-governance.md §7.1), `agentType` (closed-with-vendor-extension `deterministic | statistical | generative` per ai-integration.md §3.1; structural discriminator gating downstream calibration / validation requirements per §3.2), `deonticConstraints` (`DeonticConstraintSummary[]`), `confidenceFloor`, `confidenceDecay` (closed `ConfidenceDecaySpec` — half-life and floor projection per §7.5), `driftStatus` (closed `AgentDriftStatus`), `cascadingInvocations` (closed `CascadingInvocationsSpec` per §3.7.3 — present iff the agent is declared `autonomous` and authorised to invoke other autonomous agents), `volumeConstraints` (closed `VolumeConstraintsSpec` per §11.1), `shadowMode` (closed `ShadowModeSpec` per advanced-governance.md:370-385), `circuitBreaker` (closed `CircuitBreakerSpec` per advanced-governance.md:387-400), `activeSessions` (`MultiStepSessionState[]` per advanced-governance.md §5 multi-step sessions), `capabilities`, `fallbackChain`, `discloseThatAgentAssisted` (boolean — projected from `aiOversight.disclosure`; OMB M-24-10 and EU AI Act Art. 13 transparency obligation), `discloseModelIdentity` (boolean — projected from `aiOversight.disclosure`; OMB M-24-10 and EU AI Act Art. 13), `discloseConfidence` (boolean — projected from `aiOversight.disclosure`; OMB M-24-10 and EU AI Act Art. 13), `reviewWindow` (ISO 8601 duration — supervisory review window, present when `autonomyLevel == act-with-review`), `suppressedPendingIndependentReview` (boolean — agent output held pending independent-first review). The underlying actor identity is referenced via `actorRef` — display name, principal class, and lifecycle status live on the `Actor` resource; this view carries only the agent-specific operational state the kernel `agents` block holds.
+Carries `id` (`AgentDeclarationId`: exact nonempty authored `agents[].id`, scoped by `workflowUrl` and `workflowVersion`), `actorRef` (the underlying `Actor` URN), `workflowUrl`/`workflowVersion` (governing declaration), `modelIdentifier`/`modelVersion` (deployed model), `autonomyLevel` (closed `AutonomyLevel`), `invokerKind` REQUIRED (closed-with-vendor-extension `anthropic | claudeAgentSdk | mcp | a2a | http | stub` per ADR 0064 §2.2-§2.3), `lifecycleState` REQUIRED (closed-with-vendor-extension `active | degraded | suspended | retired` per advanced-governance.md §7.1), `agentType` (closed-with-vendor-extension `deterministic | statistical | generative` per ai-integration.md §3.1; structural discriminator gating downstream calibration / validation requirements per §3.2), `deonticConstraints` (`DeonticConstraintSummary[]`), `confidenceFloor`, `confidenceDecay` (closed `ConfidenceDecaySpec` — half-life and floor projection per §7.5), `driftStatus` (closed `AgentDriftStatus`), `cascadingInvocations` (closed `CascadingInvocationsSpec` per §3.7.3 — present iff the agent is declared `autonomous` and authorised to invoke other autonomous agents), `volumeConstraints` (closed `VolumeConstraintsSpec` per §11.1), `shadowMode` (closed `ShadowModeSpec` per advanced-governance.md:370-385), `circuitBreaker` (closed `CircuitBreakerSpec` per advanced-governance.md:387-400), `activeSessions` (`MultiStepSessionState[]` per advanced-governance.md §5 multi-step sessions), `capabilities`, `fallbackChain`, `discloseThatAgentAssisted` (boolean — projected from `aiOversight.disclosure`; OMB M-24-10 and EU AI Act Art. 13 transparency obligation), `discloseModelIdentity` (boolean — projected from `aiOversight.disclosure`; OMB M-24-10 and EU AI Act Art. 13), `discloseConfidence` (boolean — projected from `aiOversight.disclosure`; OMB M-24-10 and EU AI Act Art. 13), `reviewWindow` (ISO 8601 duration — supervisory review window, present when `autonomyLevel == act-with-review`), `suppressedPendingIndependentReview` (boolean — agent output held pending independent-first review). The underlying actor identity is referenced via `actorRef` — display name, principal class, and lifecycle status live on the `Actor` resource; this view carries only the agent-specific operational state the kernel `agents` block holds.
 
 `invokerKind` is REQUIRED so operability tooling (telemetry, capability planning, multi-agent dispatch) can branch on the underlying adapter without inspecting the workflow document — this is the cross-spec observability commitment per ADR 0064. `lifecycleState` is REQUIRED so portals can render the live four-state machine (advanced-governance.md §7.1) without reconstructing from the per-event `agentStateTransition` provenance stream; the runtime event literal records transitions, this declarative field carries the current state.
 
@@ -80,13 +80,12 @@ Carries `id` (provenance-record URN), `processId` (case URN), `taskId?` (task UR
 
 ### `AutonomyEvent`
 
-Carries `id` (URN), `agentId` (URN of the agent declaration whose autonomy changed), `eventKind` (closed `escalated | demoted | restored`), `occurredAt` (RFC 3339 UTC), `previousLevel` / `newLevel` (closed `AutonomyLevel`), `trigger` (closed `drift | confidence-breach | circuit-breaker | manual | calibration-expired`), and optional `rationale` (prose; present when `trigger == manual`). Read-only at the public API layer — the runtime emits these; per-event detail lives in the Facts-tier `autonomyEscalation` and `autonomyDemotion` provenance records. Companion shape to `AgentView` — the aggregate query surface for "show me every autonomy change for agent X since calibration".
+Carries `id` (URN), `agentId` (`AgentDeclarationId`: exact authored identifier of the declaration whose autonomy changed, within its governing workflow), `eventKind` (closed `escalated | demoted | restored`), `occurredAt` (RFC 3339 UTC), `previousLevel` / `newLevel` (closed `AutonomyLevel`), `trigger` (closed `drift | confidence-breach | circuit-breaker | manual | calibration-expired`), and optional `rationale` (prose; present when `trigger == manual`). Read-only at the public API layer — the runtime emits these; per-event detail lives in the Facts-tier `autonomyEscalation` and `autonomyDemotion` provenance records. Companion shape to `AgentView` — the aggregate query surface for "show me every autonomy change for agent X since calibration".
 
 ## Endpoints
 
 ```
-GET   /api/v1/governance/agents                                         -> AgentPage
-GET   /api/v1/governance/agents/{urn}                                   -> AgentView
+GET   /api/v1/governance/{url}/agents                                  -> AgentView[]
 GET   /api/v1/governance/delegations                                    -> DelegationPage
 GET   /api/v1/governance/delegations/{urn}                              -> Delegation
 POST  /api/v1/governance/delegations                                    -> Delegation             (Idempotency-Key REQUIRED)
@@ -95,7 +94,7 @@ GET   /api/v1/governance/policies/{policyUrl}/versions                  -> Polic
 GET   /api/v1/governance/policies/{policyUrl}/versions/{version}        -> PolicyVersion
 ```
 
-`{policyUrl}` is the URL-encoded governing workflow URL.
+`{url}` and `{policyUrl}` are URL-encoded governing workflow URLs.
 
 Per-case scoped delegations remain accessible via the workflow-process subresource per ADR 0082 D-3:
 
@@ -104,7 +103,7 @@ GET   /api/v1/cases/{case_id}/processes/{process_id}/governance                 
 GET   /api/v1/cases/{case_id}/processes/{process_id}?include=governance                         -> WorkflowProcessWithIncludes (instance.schema.json)
 ```
 
-`GET /api/v1/governance/agents` accepts `AgentListOptions`: `workflowUrl?`, `autonomyLevel?`, `driftStatus?`, `cursor?`, `limit?`. Returns `AgentPage` (cursor envelope per `pagination.schema.json`, ADR 0082 D-7). Default ordering is `id` ascending.
+`GET /api/v1/governance/{url}/agents` returns the selected workflow’s embedded `agents[]` declarations in authored order. Repeated reads preserve each exact authored identifier; reads do not mint identifiers. Missing workflows and workflows without declarations return an empty list. A stored declaration with a missing, empty, or nonstring `id` fails the whole request with `503 Service Unavailable`; the server does not fabricate identifiers or return partial success. `AgentListOptions` and `AgentPage` describe an aggregate query shape; this route returns an unpaginated array.
 
 `GET /api/v1/governance/delegations` accepts `DelegationListOptions`: `delegatorUrn?`, `delegateeUrn?`, `authority?`, `active?`, `workflowUrl?`, `cursor?`, `limit?`. Returns `DelegationPage`. Default ordering is `createdAt` ascending. The `active` flag combines effective-date, expiration-date (including the `"never"` sentinel), and revocation state into a single derived predicate; servers MAY treat `workflowUrl` as best-effort filtering when scope predicates require runtime evaluation.
 
@@ -116,7 +115,9 @@ GET   /api/v1/cases/{case_id}/processes/{process_id}?include=governance         
 
 ## Identifier Scheme
 
-URNs follow ADR 0082 D-4: `urn:wos:<entity-type>:<workflow-or-scope-id>:<date>:<short-hash>`. This domain uses the `agent`, `delegation`, and `provenance-record` entity-type literals (the last for `EscalationEvent`, since escalation events are tier-typed provenance records per governance §S6). All three literals are already part of the closed taxonomy ratified at `_common.schema.json#/$defs/WosResourceUrn`.
+URNs follow ADR 0082 D-4: `urn:wos:<entity-type>:<workflow-or-scope-id>:<date>:<short-hash>`. This domain uses the `delegation` and `provenance-record` entity-type literals (the last for `EscalationEvent`, since escalation events are tier-typed provenance records per governance §S6). Both literals are already part of the closed taxonomy ratified at `_common.schema.json#/$defs/WosResourceUrn`.
+
+`AgentView.id` preserves the native nonempty `agents[].id` string without trimming or imposing URN syntax. `(workflowUrl, workflowVersion, id)` qualifies a declaration across workflows; `actorRef` separately identifies its principal. `AutonomyEvent.agentId` uses the same authored identifier within the governing workflow.
 
 `PolicyVersion` is identified by the `(policyUrl, version)` pair, not a URN — policy versions are workflow-scoped and the `version` label is the stable identifier consumers cite. The `policyUrl` segment is URL-encoded in the path.
 
@@ -124,7 +125,7 @@ URNs follow ADR 0082 D-4: `urn:wos:<entity-type>:<workflow-or-scope-id>:<date>:<
 
 ## Pagination
 
-`GET /api/v1/governance/agents`, `GET /api/v1/governance/delegations`, and `GET /api/v1/governance/policies/{policyUrl}/versions` use cursor pagination per `api/pagination.schema.json` (ADR 0082 D-7). Cursors are opaque, single-use within the issuing deploy; cursor expiry returns `410 Gone` with `WOS-1410`. No `total`, `page`, or `pageSize` echo.
+`GET /api/v1/governance/delegations` and `GET /api/v1/governance/policies/{policyUrl}/versions` use cursor pagination per `api/pagination.schema.json` (ADR 0082 D-7). Cursors are opaque, single-use within the issuing deploy; cursor expiry returns `410 Gone` with `WOS-1410`. No `total`, `page`, or `pageSize` echo.
 
 ## Idempotency
 

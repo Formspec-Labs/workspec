@@ -133,6 +133,8 @@ pub struct Evaluator {
     /// Simulated time in milliseconds (for timer tests).
     simulated_time_ms: u64,
 
+    timezone: Option<chrono_tz::Tz>,
+
     /// All transitions that fired during execution.
     transitions: Vec<ObservedTransition>,
 
@@ -274,6 +276,14 @@ pub struct ObservedAction {
 /// Errors from the evaluation algorithm.
 #[derive(Debug, thiserror::Error)]
 pub enum EvalError {
+    /// Temporal evaluation has no declared timezone.
+    #[error(transparent)]
+    MissingTimezoneContext(#[from] fel_core::error::MissingTimezoneContextError),
+
+    /// The declared timezone or clock is invalid.
+    #[error("evaluation time context: {0}")]
+    TimeContext(String),
+
     /// Guard expression failed to parse or evaluate.
     #[error("guard evaluation error: {0}")]
     Guard(String),
@@ -304,6 +314,29 @@ struct TimerTiming {
     duration_ms: u64,
     deadline_ms: u64,
     origin_at: Option<String>,
+}
+
+/// Validate a declared IANA timezone before admitting runtime configuration.
+///
+/// # Errors
+/// Returns [`EvalError::TimeContext`] for unknown timezone identifiers.
+pub fn validate_evaluation_timezone(timezone: &str) -> Result<(), EvalError> {
+    parse_evaluation_timezone(Some(timezone)).map(|_| ())
+}
+
+fn parse_evaluation_timezone(timezone: Option<&str>) -> Result<Option<chrono_tz::Tz>, EvalError> {
+    timezone.map(|name| name.parse().map_err(|_| {
+        EvalError::TimeContext(format!("invalid IANA timezone '{name}'"))
+    })).transpose()
+}
+
+fn require_timezone_context(result: &fel_core::EvalResult) -> Result<(), EvalError> {
+    for diagnostic in &result.diagnostics {
+        if let Some(fel_core::error::DiagnosticKind::MissingTimezoneContext { reason, .. }) = &diagnostic.kind {
+            return Err(fel_core::error::MissingTimezoneContextError { reason: reason.clone() }.into());
+        }
+    }
+    Ok(())
 }
 
 fn transition_matches_dispatch(
@@ -379,6 +412,26 @@ impl Evaluator {
         initial_case_state: Option<&serde_json::Value>,
         initial_initiating_actor_id: Option<&str>,
     ) -> Result<Self, EvalError> {
+        Self::with_temporal_context(kernel, minter, current_time_ms, None,
+            initial_case_state, initial_initiating_actor_id)
+    }
+
+    /// Initialize lifecycle evaluation with an explicit timezone and retained command time.
+    ///
+    /// The timezone must be an IANA identifier. Absence permits non-temporal expressions;
+    /// `today()` and `now()` abort evaluation when no timezone was supplied.
+    ///
+    /// # Errors
+    /// Refuses invalid timezones, clocks, and initial lifecycle evaluation failures.
+    pub fn with_temporal_context(
+        kernel: KernelDocument,
+        minter: &TypeIdMinter,
+        current_time_ms: u64,
+        timezone: Option<&str>,
+        initial_case_state: Option<&serde_json::Value>,
+        initial_initiating_actor_id: Option<&str>,
+    ) -> Result<Self, EvalError> {
+        let timezone = parse_evaluation_timezone(timezone)?;
         let initial = kernel.lifecycle.initial_state.clone();
         let state_index = build_state_index(&kernel);
         let case_state = build_default_case_state(&kernel);
@@ -405,6 +458,7 @@ impl Evaluator {
             provenance: ProvenanceLog::default(),
             minter: minter.clone(),
             simulated_time_ms: current_time_ms,
+            timezone,
             transitions: Vec::new(),
             executed_actions: Vec::new(),
             action_case_states: Vec::new(),
@@ -429,6 +483,20 @@ impl Evaluator {
         instance: &WorkflowProcess,
         current_time_ms: u64,
     ) -> Result<Self, EvalError> {
+        Self::from_instance_with_timezone(kernel, instance, current_time_ms, None)
+    }
+
+    /// Restore lifecycle evaluation using a declared timezone and retained command time.
+    ///
+    /// # Errors
+    /// Refuses invalid timezones, process identity, and persisted timers.
+    pub fn from_instance_with_timezone(
+        kernel: KernelDocument,
+        instance: &WorkflowProcess,
+        current_time_ms: u64,
+        timezone: Option<&str>,
+    ) -> Result<Self, EvalError> {
+        let timezone = parse_evaluation_timezone(timezone)?;
         let minter = TypeIdMinter::for_parent(&instance.process_id).ok_or_else(|| {
             EvalError::Internal(format!(
                 "process id `{}` carries no tenant to mint under",
@@ -472,6 +540,7 @@ impl Evaluator {
             provenance: ProvenanceLog::default(),
             minter,
             simulated_time_ms: current_time_ms,
+            timezone,
             transitions: Vec::new(),
             executed_actions: Vec::new(),
             action_case_states: Vec::new(),
@@ -581,6 +650,22 @@ impl Evaluator {
         case_state: &serde_json::Value,
         now_ms: u64,
     ) -> Result<GuardEvaluation, String> {
+        Self::evaluate_reference_alternative_with_timezone(kernel, minter, location, case_state, now_ms, None)
+    }
+
+    /// Evaluate an isolated guard with the original command time and declared timezone.
+    ///
+    /// # Errors
+    /// Refuses invalid temporal context, unresolved guards, and evaluation failures.
+    pub fn evaluate_reference_alternative_with_timezone(
+        kernel: &KernelDocument,
+        minter: &TypeIdMinter,
+        location: &TransitionLocation,
+        case_state: &serde_json::Value,
+        now_ms: u64,
+        timezone: Option<&str>,
+    ) -> Result<GuardEvaluation, String> {
+        let timezone = parse_evaluation_timezone(timezone).map_err(|error| error.to_string())?;
         let definition = serde_json::to_value(kernel).map_err(|error| error.to_string())?;
         let state = definition
             .pointer(&location.state_pointer)
@@ -609,6 +694,7 @@ impl Evaluator {
             timers: Timers::default(),
             provenance: ProvenanceLog::default(),
             simulated_time_ms: now_ms,
+            timezone,
             transitions: Vec::new(),
             executed_actions: Vec::new(),
             action_case_states: Vec::new(),
@@ -1907,8 +1993,9 @@ impl Evaluator {
         let parsed = parse(expression)
             .map_err(|error| fail(format!("anchor expression parse error: {error}")))?;
         let environment =
-            EvalContext::from_case_state(&self.case_state, event_data).to_fel_environment();
+            self.evaluation_environment(event_data)?;
         let result = evaluate(&parsed, &environment);
+        require_timezone_context(&result)?;
         if !result.diagnostics.is_empty() {
             return Err(fail(
                 "anchor expression evaluation reported diagnostics".into(),
@@ -1949,6 +2036,15 @@ impl Evaluator {
         })
     }
 
+    fn evaluation_environment(
+        &self,
+        event_data: Option<&serde_json::Value>,
+    ) -> Result<fel_core::MapEnvironment, EvalError> {
+        EvalContext::from_case_state(&self.case_state, event_data)
+            .to_fel_environment_with_time(self.simulated_time_ms, self.timezone)
+            .map_err(EvalError::TimeContext)
+    }
+
     /// Evaluate a FEL guard expression. Missing guard = always true.
     ///
     /// Records a [`GuardEvaluation`] on every call that actually tests a
@@ -1968,13 +2064,13 @@ impl Evaluator {
             None => return Ok(true),
         };
 
-        let ctx = EvalContext::from_case_state(&self.case_state, event_data);
-        let env = ctx.to_fel_environment();
+        let env = self.evaluation_environment(event_data)?;
 
         let parsed = parse(guard_expr)
             .map_err(|e| EvalError::Guard(format!("parse error in '{guard_expr}': {e}")))?;
 
         let result = evaluate(&parsed, &env);
+        require_timezone_context(&result)?;
         let passed = matches!(result.value, Value::Boolean(true));
 
         let inputs = build_guard_inputs(&parsed, &self.case_state, event_data);
@@ -2006,14 +2102,14 @@ impl Evaluator {
         expression: &str,
         event_data: Option<&serde_json::Value>,
     ) -> Result<Vec<serde_json::Value>, EvalError> {
-        let ctx = EvalContext::from_case_state(&self.case_state, event_data);
-        let env = ctx.to_fel_environment();
+        let env = self.evaluation_environment(event_data)?;
 
         let parsed = parse(expression).map_err(|e| EvalError::ForEach {
             state: state_id.to_string(),
             message: format!("collection parse error in '{expression}': {e}"),
         })?;
         let result = evaluate(&parsed, &env);
+        require_timezone_context(&result)?;
 
         let value = fel_to_json(&result.value);
         match value {
@@ -2038,14 +2134,14 @@ impl Evaluator {
         expression: &str,
         event_data: Option<&serde_json::Value>,
     ) -> Result<bool, EvalError> {
-        let ctx = EvalContext::from_case_state(&self.case_state, event_data);
-        let env = ctx.to_fel_environment();
+        let env = self.evaluation_environment(event_data)?;
 
         let parsed = parse(expression).map_err(|e| EvalError::ForEach {
             state: state_id.to_string(),
             message: format!("breakCondition parse error in '{expression}': {e}"),
         })?;
         let result = evaluate(&parsed, &env);
+        require_timezone_context(&result)?;
         Ok(matches!(result.value, Value::Boolean(true)))
     }
 
@@ -2516,8 +2612,7 @@ impl Evaluator {
         // context (caseFile + event); the result is bound under the input's
         // declared name in a fresh, namespace-free MapEnvironment used for
         // every row's cell evaluation.
-        let outer_ctx = EvalContext::from_case_state(&self.case_state, event_data);
-        let outer_env = outer_ctx.to_fel_environment();
+        let outer_env = self.evaluation_environment(event_data)?;
 
         let mut row_scope_fields: HashMap<String, Value> = HashMap::new();
         for input_decl in &table.inputs {
@@ -2534,10 +2629,13 @@ impl Evaluator {
                 ))
             })?;
             let bound = evaluate(&parsed, &outer_env);
+            require_timezone_context(&bound)?;
             row_scope_fields.insert(input_decl.name.clone(), bound.value);
         }
 
-        let row_env = fel_core::MapEnvironment::with_fields(row_scope_fields.clone());
+        let row_env = fel_core::MapEnvironment::with_fields(row_scope_fields.clone())
+            .without_clock()
+            .with_current_datetime(outer_env.current_datetime.clone());
 
         // ── Step 3: collect matching rows in document order.
         let mut matches: Vec<usize> = Vec::new();
@@ -2555,6 +2653,7 @@ impl Evaluator {
                     ))
                 })?;
                 let result = evaluate(&parsed, &row_env);
+                require_timezone_context(&result)?;
                 match result.value {
                     Value::Boolean(true) => {}
                     Value::Boolean(false) => {
@@ -2719,6 +2818,7 @@ impl Evaluator {
             ))
         })?;
         let result = evaluate(&parsed_out, &row_env);
+        require_timezone_context(&result)?;
         let passed = match result.value {
             Value::Boolean(b) => b,
             other => {
@@ -3826,6 +3926,122 @@ fn insert_nested(
 mod tests {
     use super::*;
     use stack_common_typeid::testing::fixture_minter;
+
+    #[test]
+    fn temporal_guard_without_timezone_refuses_even_when_coalesced() {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosWorkflow": "1.0",
+            "lifecycle": { "initialState": "waiting", "states": {
+                "waiting": { "type": "atomic" }
+            } }
+        })).unwrap();
+        let mut evaluator = Evaluator::with_time(kernel, &fixture_minter(), 1_767_232_800_000).unwrap();
+        for expression in ["today() = today()", "coalesce(now(), true) != null"] {
+            let result = evaluator.evaluate_guard(Some(expression), None, "waiting", "done", "go");
+            assert!(result.is_err(), "missing timezone must abort '{expression}', got {result:?}");
+        }
+    }
+
+    mod temporal_context {
+        use super::*;
+
+        const NEW_YEAR_UTC_MS: u64 = 1_767_232_800_000; // 2026-01-01T02:00:00Z.
+
+        fn kernel() -> KernelDocument {
+            serde_json::from_value(serde_json::json!({
+                "$wosWorkflow": "1.0",
+                "lifecycle": { "initialState": "waiting", "states": {
+                    "waiting": { "type": "atomic" }
+                } }
+            })).unwrap()
+        }
+
+        fn evaluator(now_ms: u64, timezone: Option<&str>) -> Result<Evaluator, EvalError> {
+            Evaluator::with_temporal_context(kernel(), &fixture_minter(), now_ms, timezone, None, None)
+        }
+
+        #[test]
+        fn supplied_clock_uses_new_york_date_and_now() {
+            let mut eval = evaluator(NEW_YEAR_UTC_MS, Some("America/New_York")).unwrap();
+            for expression in [
+                "today() = @2025-12-31",
+                "now() = @2025-12-31T21:00:00",
+            ] {
+                assert!(eval.evaluate_guard(Some(expression), None, "waiting", "done", "go").unwrap(), "{expression}");
+            }
+            eval.advance_time(3 * 60 * 60 * 1000, None).unwrap();
+            assert!(eval.evaluate_guard(Some("today() = @2026-01-01"), None, "waiting", "done", "go").unwrap());
+        }
+
+        #[test]
+        fn timezone_conversion_observes_daylight_saving_boundary() {
+            for (instant, expression) in [
+                ("2026-03-08T06:59:59Z", "now() = @2026-03-08T01:59:59"),
+                ("2026-03-08T07:00:00Z", "now() = @2026-03-08T03:00:00"),
+            ] {
+                let millis = chrono::DateTime::parse_from_rfc3339(instant).unwrap().timestamp_millis() as u64;
+                let mut eval = evaluator(millis, Some("America/New_York")).unwrap();
+                assert!(eval.evaluate_guard(Some(expression), None, "waiting", "done", "go").unwrap());
+            }
+        }
+
+        #[test]
+        fn missing_timezone_is_typed_and_invalid_timezone_refuses() {
+            let mut eval = evaluator(NEW_YEAR_UTC_MS, None).unwrap();
+            assert!(matches!(eval.evaluate_guard(Some("coalesce(today(), true) != null"), None, "waiting", "done", "go"), Err(EvalError::MissingTimezoneContext(_))));
+            assert!(matches!(evaluator(NEW_YEAR_UTC_MS, Some("Mars/Olympus")), Err(EvalError::TimeContext(_))));
+        }
+
+        #[test]
+        fn decision_table_binding_row_output_and_reference_replay_share_time() {
+            for (binding, cell, output) in [
+                ("today()", "day = @2025-12-31", "true"),
+                ("@2025-12-31", "today() = day", "true"),
+                ("@2025-12-31", "true", "today() = day"),
+            ] {
+                let doc: KernelDocument = serde_json::from_value(serde_json::json!({
+                    "$wosWorkflow": "1.0",
+                    "decisionTables": [{"id": "dates", "hitPolicy": "first",
+                        "inputs": [{"name": "day", "type": "date"}],
+                        "outputs": [{"name": "eligible", "type": "boolean"}],
+                        "rows": [{"id": "local", "inputCells": [cell], "outputCells": [output]}]}],
+                    "lifecycle": {"initialState": "waiting", "states": {
+                        "waiting": {"type": "atomic", "transitions": [{"event": "go", "target": "done",
+                            "guard": {"kind": "decisionTable", "ref": "dates", "outputColumn": "eligible", "inputBindings": {"day": binding}}}]},
+                        "done": {"type": "final"}
+                    }}
+                })).unwrap();
+                let mut eval = Evaluator::with_temporal_context(doc.clone(), &fixture_minter(), NEW_YEAR_UTC_MS,
+                    Some("America/New_York"), None, None).unwrap();
+                assert!(eval.process_event("go", None, None).unwrap());
+                let replay = Evaluator::evaluate_reference_alternative_with_timezone(&doc, &fixture_minter(),
+                    &TransitionLocation {state_pointer: "/lifecycle/states/waiting".into(), transition_index: 0},
+                    &serde_json::json!({}), NEW_YEAR_UTC_MS, Some("America/New_York")).unwrap();
+                assert!(replay.result);
+                assert_eq!(replay.decision_table.unwrap().selected_row_id.as_deref(), Some("local"));
+                let mut missing = Evaluator::with_time(doc, &fixture_minter(), NEW_YEAR_UTC_MS).unwrap();
+                assert!(matches!(missing.process_event("go", None, None), Err(EvalError::MissingTimezoneContext(_))));
+            }
+        }
+
+        #[test]
+        fn initial_automatic_guard_receives_clock_before_entry() {
+            let doc: KernelDocument = serde_json::from_value(serde_json::json!({
+                "$wosWorkflow": "1.0",
+                "lifecycle": { "initialState": "batch", "states": {
+                    "batch": { "type": "foreach", "collection": "[]", "transitions": [
+                        {"target": "done", "guard": "today() = @2025-12-31"},
+                        {"target": "fallback"}
+                    ] },
+                    "done": { "type": "final" }, "fallback": { "type": "final" }
+                } }
+            })).unwrap();
+            let create = |timezone| Evaluator::with_temporal_context(doc.clone(), &fixture_minter(), NEW_YEAR_UTC_MS, timezone, None, None);
+            assert!(create(Some("America/New_York")).unwrap().configuration().contains("done"));
+            assert!(create(Some("UTC")).unwrap().configuration().contains("fallback"));
+            assert!(matches!(create(None), Err(EvalError::MissingTimezoneContext(_))));
+        }
+    }
 
     mod initial_initiating_actor {
         use super::*;

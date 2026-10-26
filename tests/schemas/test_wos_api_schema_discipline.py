@@ -72,12 +72,16 @@ def api_schema_registry() -> dict[str, dict]:
 
 
 def api_referencing_registry() -> Registry:
-    resources = [
-        (schema_id, DRAFT202012.create_resource(schema))
-        for schema_id, schema in api_schema_registry().items()
-    ]
-    workflow = load_schema(SCHEMA_DIR / "wos-workflow.schema.json")
-    resources.append((workflow["$id"], DRAFT202012.create_resource(workflow)))
+    # Public resources reuse native owners and their transitive local dependencies.
+    # Register the actual schemas by identity; no network retrieval or replacement shapes.
+    resources = []
+    registered_ids = set()
+    for path in sorted(SCHEMA_DIR.rglob("*.schema.json")):
+        schema = load_schema(path)
+        if schema_id := schema.get("$id"):
+            assert schema_id not in registered_ids, f"duplicate local schema identity: {schema_id}"
+            registered_ids.add(schema_id)
+            resources.append((schema_id, DRAFT202012.create_resource(schema)))
     return Registry().with_resources(resources)
 
 
@@ -280,7 +284,10 @@ def test_api_facts_record_kind_reserved_literals_match_kernel():
 
     api_schema = load_schema(API_SCHEMA_DIR / "provenance.schema.json")
     api_record_kind = api_schema["$defs"]["FactsRecordKind"]
-    arms = api_record_kind["oneOf"]
+    arms = [
+        api_schema["$defs"][arm["$ref"].removeprefix("#/$defs/")]
+        for arm in api_record_kind["oneOf"]
+    ]
     reserved_arms = [
         arm for arm in arms if isinstance(arm, dict) and isinstance(arm.get("enum"), list)
     ]
@@ -296,6 +303,7 @@ def test_api_facts_record_kind_reserved_literals_match_kernel():
 def _api_facts_record(record_kind: str, event: str) -> dict:
     record = {
         "tier": "facts",
+        "recordKind": record_kind,
         "id": "urn:wos:agency-gov_prov_01jqrxabcd3f8xtx9qxkkv3raa",
         "processId": "urn:wos:sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc",
         "timestamp": "2026-04-23T12:00:00Z",
@@ -320,23 +328,65 @@ def _api_facts_record(record_kind: str, event: str) -> dict:
     return record
 
 
-def test_api_facts_record_kind_event_literals_agree_for_d26_seed():
+def test_api_facts_require_native_kind_with_canonical_seed_events():
     schema = load_schema(API_SCHEMA_DIR / "provenance.schema.json")
-    validator = validator_for_api_def(
-        schema,
-        "FactsTierRecord",
-        api_referencing_registry(),
+    validator = validator_for_api_def(schema, "FactsTierRecord", api_referencing_registry())
+    non_facts = set(
+        schema["$defs"]["FactsTierReservedRecordKind"]["not"]["enum"]
     )
 
     for record_kind, event in event_literal_mappings().items():
         valid = _api_facts_record(record_kind, event)
+        if record_kind in non_facts:
+            assert list(validator.iter_errors(valid)), (
+                f"{record_kind} must use its named native audit-tier representation"
+            )
+            continue
         assert list(validator.iter_errors(valid)) == []
+        missing_kind = dict(valid)
+        missing_kind.pop("recordKind")
+        assert list(validator.iter_errors(missing_kind)), f"{record_kind} needs recordKind"
+        unknown_kind = {**valid, "recordKind": "unknownNativeKind"}
+        assert list(validator.iter_errors(unknown_kind)), "unknown native kinds must fail"
 
-        legacy = _api_facts_record(record_kind, event)
-        legacy["recordKind"] = record_kind
-        assert list(validator.iter_errors(legacy)), (
-            f"{record_kind} must reject legacy inner recordKind"
-        )
+
+def test_api_provenance_native_dependencies_resolve_to_actual_local_owners():
+    schema = load_schema(API_SCHEMA_DIR / "provenance.schema.json")
+    registry = api_referencing_registry()
+    refs = {
+        node["$ref"] for _, node in walk(schema)
+        if isinstance(node.get("$ref"), str)
+        and node["$ref"].startswith("https://wos-spec.org/schemas/")
+    }
+    assert refs, "native owner references must remain present"
+    for ref in refs:
+        schema_id, _, pointer = ref.partition("#")
+        assert pointer_exists(registry.contents(schema_id), pointer), ref
+        assert isinstance(registry.resolver().lookup(ref).contents, dict), ref
+    native = load_schema(SCHEMA_DIR / "wos-native-provenance-event.schema.json")
+    snapshot_ref = "https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/CaseFileSnapshot"
+    assert schema["$defs"]["CaseFileSnapshot"]["$ref"] == snapshot_ref
+    assert registry.resolver().lookup(snapshot_ref).contents == native["$defs"]["CaseFileSnapshot"]
+    timestamp_ref = f"{native['$id']}#/properties/record/properties/timestamp"
+    assert registry.resolver().lookup(timestamp_ref).contents == native["properties"]["record"]["properties"]["timestamp"]
+
+
+def test_api_native_raw_data_preserves_json_value_and_presence_domains():
+    schema = load_schema(API_SCHEMA_DIR / "provenance.schema.json")
+    registry = api_referencing_registry()
+    for def_name, kind, tier in [
+        ("FactsTierRecord", "onEntry", "facts"),
+        ("NativeNarrativeAnnotationRecord", "narrativeTierRecorded", "narrative"),
+    ]:
+        validator = validator_for_api_def(schema, def_name, registry)
+        record = _api_facts_record(kind, "native.recorded")
+        record.pop("event")
+        record["tier"] = tier
+        if tier == "narrative":
+            record["authoritative"] = False
+        assert not list(validator.iter_errors(record)), "absent data remains valid"
+        for value in [None, False, 0, 1.25, "native value", [], [None, {"nested": False}], {}, {"native": [0, None]}]:
+            assert not list(validator.iter_errors({**record, "data": value})), (def_name, value)
 
 
 def test_api_def_examples_validate_against_their_own_definitions():

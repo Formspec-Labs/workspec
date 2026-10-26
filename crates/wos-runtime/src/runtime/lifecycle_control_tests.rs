@@ -141,28 +141,128 @@ fn lifecycle_control_follows_the_status_table_and_records_each_operation() {
     assert_eq!(lifecycle[1].data, None);
 }
 
+fn assert_lifecycle_provenance(
+    runtime: &WosRuntime,
+    id: &str,
+    actor: &str,
+    expected: &[(ProvenanceKind, Option<&str>)],
+) {
+    let records: Vec<_> = runtime
+        .store
+        .load_record(id)
+        .unwrap()
+        .provenance_log
+        .into_iter()
+        .filter(|record| {
+            matches!(
+                record.record_kind,
+                ProvenanceKind::InstanceSuspended | ProvenanceKind::InstanceTerminated
+            )
+        })
+        .collect();
+    assert_eq!(records.len(), expected.len());
+    for (record, (kind, reason)) in records.iter().zip(expected) {
+        assert_eq!(record.record_kind, *kind);
+        assert_eq!(record.actor_id.as_deref(), Some(actor));
+        assert_eq!(record.audit_layer.as_deref(), Some("facts"));
+        assert!(!record.timestamp.is_empty());
+        assert_eq!(
+            record.data,
+            reason.map(|reason| serde_json::json!({"reason": reason}))
+        );
+    }
+}
+
 #[test]
 fn a_workflow_that_requires_a_reason_refuses_suspend_and_terminate_without_one() {
     let mut runtime = runtime_with_kernels(vec![kernel("1.0.0", true)]);
     let id = created(&mut runtime, "lc-reason");
-    for (control, blank) in [
-        (LifecycleControl::Suspend, None),
-        (LifecycleControl::Terminate, Some("  ")),
-    ] {
-        assert!(matches!(
-            runtime.control_lifecycle(&id, control, "op", blank),
-            Err(RuntimeError::LifecycleReasonRequired(_))
-        ));
-    }
+    let actor = "actor:human:lifecycle-manager";
     let before = runtime.store.load_record(&id).unwrap();
-    assert_eq!(before.process.status, InstanceStatus::Active);
+    let before = serde_json::to_value((&before.process, &before.provenance_log)).unwrap();
+    for control in [LifecycleControl::Suspend, LifecycleControl::Terminate] {
+        for reason in [None, Some(" \t\n ")] {
+            assert!(matches!(
+                runtime.control_lifecycle(&id, control, actor, reason),
+                Err(RuntimeError::LifecycleReasonRequired(_))
+            ));
+            let after = runtime.store.load_record(&id).unwrap();
+            assert_eq!(
+                serde_json::to_value((&after.process, &after.provenance_log)).unwrap(),
+                before,
+                "{control:?} with {reason:?} must leave state and provenance unchanged"
+            );
+        }
+    }
+    let suspend_reason = "  Awaiting the applicant's documents.  ";
+    let terminate_reason = "  Applicant withdrew the request.  ";
     runtime
-        .control_lifecycle(&id, LifecycleControl::Suspend, "op", Some("audit"))
+        .control_lifecycle(&id, LifecycleControl::Suspend, actor, Some(suspend_reason))
         .unwrap();
+    assert_lifecycle_provenance(
+        &runtime,
+        &id,
+        actor,
+        &[(ProvenanceKind::InstanceSuspended, Some(suspend_reason))],
+    );
     // Resume carries no workflow policy (Kernel S11.3 input "(none)").
     runtime
-        .control_lifecycle(&id, LifecycleControl::Resume, "op", None)
+        .control_lifecycle(&id, LifecycleControl::Resume, actor, None)
         .unwrap();
+    runtime
+        .control_lifecycle(
+            &id,
+            LifecycleControl::Terminate,
+            actor,
+            Some(terminate_reason),
+        )
+        .unwrap();
+    assert_lifecycle_provenance(
+        &runtime,
+        &id,
+        actor,
+        &[
+            (ProvenanceKind::InstanceSuspended, Some(suspend_reason)),
+            (ProvenanceKind::InstanceTerminated, Some(terminate_reason)),
+        ],
+    );
+}
+
+#[test]
+fn optional_lifecycle_reasons_are_absent_or_retained_exactly_in_persisted_provenance() {
+    let mut runtime = runtime_with_kernels(vec![kernel("1.0.0", false)]);
+    let actor = "actor:human:lifecycle-manager";
+    for (label, suspend_reason, terminate_reason) in [
+        ("lc-optional-absent", None, None),
+        (
+            "lc-optional-present",
+            Some("  Optional review hold.  "),
+            Some("  Optional withdrawal.  "),
+        ),
+    ] {
+        let id = created(&mut runtime, label);
+        runtime
+            .control_lifecycle(&id, LifecycleControl::Suspend, actor, suspend_reason)
+            .unwrap();
+        assert_lifecycle_provenance(
+            &runtime,
+            &id,
+            actor,
+            &[(ProvenanceKind::InstanceSuspended, suspend_reason)],
+        );
+        runtime
+            .control_lifecycle(&id, LifecycleControl::Terminate, actor, terminate_reason)
+            .unwrap();
+        assert_lifecycle_provenance(
+            &runtime,
+            &id,
+            actor,
+            &[
+                (ProvenanceKind::InstanceSuspended, suspend_reason),
+                (ProvenanceKind::InstanceTerminated, terminate_reason),
+            ],
+        );
+    }
 }
 
 #[test]

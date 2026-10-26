@@ -142,7 +142,9 @@ impl WosRuntime {
             &now_iso,
         )?);
 
-        let mut evaluator = Evaluator::from_instance(kernel.clone(), &record.process, now_ms)
+        let mut evaluator = Evaluator::from_instance_with_timezone(
+            kernel.clone(), &record.process, now_ms, self.evaluation_timezone(),
+        )
             .map_err(|error| RuntimeError::Evaluator(error.to_string()))?;
         evaluator
             .process_event(&event.event, event.actor_id.as_deref(), event.data.as_ref())

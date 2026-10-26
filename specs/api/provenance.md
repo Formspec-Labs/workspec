@@ -12,7 +12,7 @@ Provenance records are the public read-shape for the WOS audit trail of a single
 
 ## Resource Shape
 
-`ProvenanceRecord` is a `oneOf` over four tier-typed variants discriminated by the literal `tier` field. Each variant is a complete object with no shared `allOf` envelope — the schema is greenfield-flat by design so codegen on both sides produces a typed discriminated union without hand-edits (ADR 0082 Notes section).
+`ProvenanceRecord` is a closed `oneOf` over audit tiers and their named native evidence variants. Native records carry both `tier` and `recordKind`; the optional `event` preserves the actual triggering event or the required canonical event for that kind. `onEntry` need not name an event; `unmatchedEvent` retains the unmatched input name, such as `noop`. The response stays flat. Authored explanation variants retain their richer required fields.
 
 | Variant | `tier` literal | Spec source | Authoritative |
 |---|---|---|---|
@@ -20,11 +20,16 @@ Provenance records are the public read-shape for the WOS audit trail of a single
 | `ReasoningTierRecord` | `reasoning` | Governance §6.2 | yes |
 | `CounterfactualTierRecord` | `counterfactual` | Governance §6.4 | yes |
 | `NarrativeTierRecord` | `narrative` | AI Integration §13 | NO (`authoritative: false`) |
+| `NativeReasoningEvidenceRecord` | `reasoning` | Native `ReasoningEvidence` (`reasoningTierRecorded`) | attributable source evidence |
+| `NativeCounterfactualEvidenceRecord` | `counterfactual` | Native `CounterfactualEvidence` (`counterfactualTierRecorded`) | attributable source evidence |
+| `NativeDeterminationReasoningRecord` | `reasoning` | Native `DeterminationReasoningData` (`determinationReasoning`) | machine evaluation evidence |
+| `NativeDeterminationCounterfactualRecord` | `counterfactual` | Native `DeterminationCounterfactualData` (`determinationCounterfactual`) | hypothetical machine evaluation |
+| `NativeNarrativeAnnotationRecord` | `narrative` | Native `narrativeTierRecorded` annotation/reference | NO (`authoritative: false`) |
 
-Identity uses URNs throughout (ADR 0082 D-4, D-9):
+Public resource identity uses URNs (ADR 0082 D-4, D-9):
 
 - `id` and `processId` are WOS resource URNs (`urn:wos:<typeid>`) per ADR 0092 D-1.
-- `actorRef` is an `actor:<class>:<id>` URN. The legacy nested `actor: { id, type, name }` shape is not part of this contract; identity details live once in the identity / governance subsystem and every record references them by URN.
+- `actorRef` is an `actor:<class>:<id>` URN. Native records also retain their original `actorId` and optional `actorType`. A workflow-local actor name MUST NOT become an invented principal URN; `actorRef` appears only when the existing native identifier is already a valid canonical actor reference.
 - `factsRecordRef` (on Reasoning, Counterfactual, Narrative variants) points to the Facts-tier record being interpreted, narrated, or analyzed.
 
 `recordKind` exposes the kernel `FactsTierRecord.recordKind` enum (kernel S8.2.3 + ADRs 0066/0070/0071) as a closed taxonomy with vendor-prefix extension (`x-…`). Reserved literals MUST appear here when their kernel definitions ratify; vendor extensions never break compatibility.
@@ -33,7 +38,9 @@ Identity uses URNs throughout (ADR 0082 D-4, D-9):
 
 ### Facts typed payload obligations
 
-`FactsTierRecord` stays one shared envelope. JSON Schema does not encode brittle `if recordKind then required payload` rules at the public boundary; the obligations are normative here and validators enforce the object shapes when the typed field is present.
+Native Facts records retain the original `data` value and native metadata. Kind-specific evidence keeps its existing owner and validator; public conversion MUST NOT relabel or manufacture evidence. The optional dedicated typed fields below remain available for authored public resources. Their required-field obligations apply when that authored representation is used; native stored evidence remains in its owning `data` shape.
+
+`FactsTierRecord` and `NativeNarrativeAnnotationRecord` each have disjoint with-data and without-data schema variants. A present `data` field is required in the with-data variant, so generated serialization preserves explicit JSON `null`; the other variant omits it. This changes no JSON field names and keeps absent data distinct from a recorded null. Native data can also be a scalar, array, or object. Closed record fields do not become an unknown-record fallback.
 
 | `recordKind` | REQUIRED typed field | Semantics |
 |---|---|---|
@@ -55,12 +62,16 @@ Lifecycle-control public literals are `instanceSuspended`, `instanceResumed`, an
 
 ### Tier-specific required fields
 
-The variants are flattened, not composed: each variant's `required` array enumerates exactly the fields it needs. Cold-read summary:
+Each flat variant declares its required fields. The authored explanation variants retain these obligations:
 
-- **Facts.** `tier`, `id`, `processId`, `recordKind`, `timestamp`, `definitionVersion`, `event`. `actorRef` is optional (kernel S8 leaves the actor optional when the processor cannot name one). `caseFileSnapshot` is REQUIRED when `transitionTags` includes `determination` (kernel S8.2.1) — enforced at the runtime append path; the API schema records this as a `description`-level obligation rather than a conditional `if/then` because the kernel envelope already enforces it on the persisted log shape.
+- **Facts.** `tier`, `id`, `processId`, `recordKind`, `timestamp`, `definitionVersion`. `event` is optional and retains its original meaning. `actorRef` is optional (kernel S8 leaves the actor optional when the processor cannot name one). `caseFileSnapshot` is REQUIRED when `transitionTags` includes `determination` (kernel S8.2.1) — enforced at the runtime append path; the API schema records this as a `description`-level obligation rather than a conditional `if/then` because the kernel envelope already enforces it on the persisted log shape.
 - **Reasoning.** Adds `rulesApplied` (`min 1`), `evidenceConsulted`, `criteriaChecked`. Required for `determination`-tagged transitions. Optional `assertionGates: AssertionGateResult[]` (governance §5.4 — closed `gateKind: source-grounded | arithmetic | range | consistency | format | cross-document | temporal` + `gatePassed: boolean` + `evidenceRefs: EvidenceReference[]`) and optional `confidenceReport: ConfidenceReport` ([AI Integration §7.1](../ai/ai-integration.md#71-confidence-report) — required `overall` and `method`; optional `explanation` and `fieldLevel`).
 - **Counterfactual.** Adds `positiveCounterfactuals`, `negativeCounterfactuals`. Required for `adverse-decision`-tagged transitions in `rights-impacting` workflows.
 - **Narrative.** Adds `narrative`, `authoritative` (MUST be the literal `false`), `modelIdentifier`, `modelVersion`. Per AI Integration §13.2, every implementation MUST treat narrative content as non-authoritative; the schema makes this structurally enforced via the `const false` discriminant. Optional `confidenceReport: ConfidenceReport` (ai-integration.md §7.1 applies to narrative output too — every agent output carries one).
+
+Native evidence variants require their exact `recordKind` and the maintained native audit tier. Their `data` references the owning native schema directly; machine determination data does not stand in for authored `rulesApplied` or counterfactual prose. A narrative annotation does not acquire a fabricated `narrative`, `modelIdentifier`, or `modelVersion`. Its non-authoritative status remains explicit.
+
+The maintained `ProvenanceKind` inventory and audit-tier classifier define native coverage. No native kind is excluded from the public read surface. A canonical kind with the wrong canonical event, a contradictory stored tier, an unknown kind, malformed known evidence, or an invalid API record MUST refuse the entire page. Conversion MUST NOT silently omit rows. Public resource identifiers use the original native record ID and owning process ID, normalized through the existing WOS resource URN rules. Storage payloads, hashes, and signatures remain unchanged.
 
 ### Resource shape — `AssembledExplanation`
 

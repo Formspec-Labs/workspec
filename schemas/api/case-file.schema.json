@@ -192,12 +192,7 @@
           "tsType": "unknown"
         },
         "response": {
-          "description": "Exact full accepted Response, including original signatures, pins and answers; validate maintained full responseHash.",
-          "x-wos": {
-            "ownerSchema": "https://formspec.org/schemas/response/1.0",
-            "validationOwner": "Formspec trusted accepted-evidence resolver; WOS must refuse unqualified source values"
-          },
-          "tsType": "unknown"
+          "$ref": "#/$defs/AcceptedResponse"
         },
         "validationReport": {
           "description": "Original retained report selected by handoff validationReportRef; never reevaluated at read time.",
@@ -417,6 +412,14 @@
           }
         }
       ]
+    },
+    "AcceptedResponse": {
+      "description": "Exact full accepted Response, including original signatures, pins and answers; validate maintained full responseHash.",
+      "x-wos": {
+        "ownerSchema": "https://formspec.org/schemas/response/1.0",
+        "validationOwner": "Formspec trusted accepted-evidence resolver; WOS must refuse unqualified source values"
+      },
+      "tsType": "unknown"
     }
   }
 }

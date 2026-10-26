@@ -5,6 +5,7 @@
 //! Constructs the evaluation context from case state, event data, and
 //! instance metadata. Layers enrich the context through seams (S7.3).
 
+use chrono::{Datelike, Timelike};
 use indexmap::IndexMap;
 use std::collections::HashMap;
 
@@ -63,6 +64,26 @@ impl EvalContext {
             output: None,
             env: HashMap::new(),
         }
+    }
+
+    /// Build lifecycle FEL input using the admitted command time and timezone.
+    pub(crate) fn to_fel_environment_with_time(
+        &self,
+        current_time_ms: u64,
+        timezone: Option<chrono_tz::Tz>,
+    ) -> Result<fel_core::MapEnvironment, String> {
+        let current_datetime = timezone.map(|timezone| {
+            let millis = i64::try_from(current_time_ms)
+                .map_err(|_| "evaluation clock is out of range".to_string())?;
+            let instant = chrono::DateTime::from_timestamp_millis(millis)
+                .ok_or_else(|| "evaluation clock is out of range".to_string())?;
+            let local = instant.with_timezone(&timezone);
+            Ok::<_, String>(fel_core::types::Date::DateTime {
+                year: local.year(), month: local.month(), day: local.day(),
+                hour: local.hour(), minute: local.minute(), second: local.second(),
+            })
+        }).transpose()?;
+        Ok(self.to_fel_environment().without_clock().with_current_datetime(current_datetime))
     }
 
     /// Build a `fel_core::MapEnvironment` from this context.
@@ -128,4 +149,16 @@ impl EvalContext {
 /// JSON types including nested objects and arrays.
 fn json_to_fel_value(value: &serde_json::Value) -> fel_core::Value {
     fel_core::json_to_fel(value)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shared_environment_keeps_existing_clock_policy_outside_lifecycle_evaluation() {
+        let context = EvalContext::default();
+        assert_eq!(context.to_fel_environment().current_datetime, fel_core::MapEnvironment::new().current_datetime);
+        assert!(context.to_fel_environment_with_time(0, None).unwrap().current_datetime.is_none());
+    }
 }
