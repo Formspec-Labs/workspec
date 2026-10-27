@@ -2290,6 +2290,106 @@
         ],
         "type": "object"
       },
+      "CaseRetainedNoticePage": {
+        "description": "One current page for the independently authorized filing process. No frozen complete-history claim across pages.",
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "description": "The current final page, including an authorized empty page.",
+            "properties": {
+              "caseLedgerId": {
+                "description": "Independently authorized durable case ledger URN.",
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^urn:wos:[a-z][a-z0-9-]*_case_[0-9a-hjkmnp-tv-z]{26}$",
+                "type": "string",
+                "x-wos": {
+                  "openStringKind": "prose"
+                }
+              },
+              "hasMore": {
+                "const": false,
+                "description": "A same-process next candidate existed in this statement snapshot.",
+                "type": "boolean"
+              },
+              "items": {
+                "items": {
+                  "$ref": "#/components/schemas/RetainedNoticeContent"
+                },
+                "maxItems": 1,
+                "type": "array"
+              },
+              "processId": {
+                "description": "Independently authorized retained filing process URN.",
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^urn:wos:[a-z][a-z0-9-]*_process_[0-9a-hjkmnp-tv-z]{26}$",
+                "type": "string",
+                "x-wos": {
+                  "openStringKind": "prose"
+                }
+              }
+            },
+            "required": [
+              "caseLedgerId",
+              "processId",
+              "items",
+              "hasMore"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "description": "One complete returned notice and a same-process next candidate.",
+            "properties": {
+              "caseLedgerId": {
+                "description": "Independently authorized durable case ledger URN.",
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^urn:wos:[a-z][a-z0-9-]*_case_[0-9a-hjkmnp-tv-z]{26}$",
+                "type": "string",
+                "x-wos": {
+                  "openStringKind": "prose"
+                }
+              },
+              "cursor": {
+                "$ref": "#/components/schemas/RetainedNoticeCursor"
+              },
+              "hasMore": {
+                "const": true,
+                "description": "A same-process next candidate existed in this statement snapshot.",
+                "type": "boolean"
+              },
+              "items": {
+                "items": {
+                  "$ref": "#/components/schemas/RetainedNoticeContent"
+                },
+                "maxItems": 1,
+                "minItems": 1,
+                "type": "array"
+              },
+              "processId": {
+                "description": "Independently authorized retained filing process URN.",
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^urn:wos:[a-z][a-z0-9-]*_process_[0-9a-hjkmnp-tv-z]{26}$",
+                "type": "string",
+                "x-wos": {
+                  "openStringKind": "prose"
+                }
+              }
+            },
+            "required": [
+              "caseLedgerId",
+              "processId",
+              "items",
+              "hasMore",
+              "cursor"
+            ],
+            "type": "object"
+          }
+        ]
+      },
       "CaseStateMutation": {
         "additionalProperties": false,
         "description": "Single field-level case-state mutation event (ADR 0082 D-6). Replaces the explicit anti-design `caseStateMutations: Record<string, unknown>` from the prior `case-portal/src/ports/types.ts`: the wire shape requires `fieldPath`, `newValue`, `mutationKind`, and `verificationLevel`, so an open-taxonomy mutation bag is structurally inexpressible.",
@@ -8556,6 +8656,158 @@
           }
         ]
       },
+      "RetainedNoticeContent": {
+        "additionalProperties": false,
+        "description": "One exact immutable retained plaintext notice. Retention does not assert sending, delivery or recipient acknowledgment.",
+        "properties": {
+          "attemptId": {
+            "description": "Exact original attempt identity; distinct attempts remain distinct.",
+            "maxLength": 256,
+            "minLength": 1,
+            "pattern": "^[\\x21-\\x7e]+$",
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "prose"
+            }
+          },
+          "body": {
+            "description": "Exact original plaintext; at most 262144 UTF-8 bytes, with whitespace and Unicode preserved.",
+            "maxLength": 262144,
+            "minLength": 1,
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "prose"
+            }
+          },
+          "bodySha256": {
+            "description": "Digest of exact TextEncoder UTF-8 plaintext bytes.",
+            "maxLength": 71,
+            "minLength": 1,
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "prose"
+            }
+          },
+          "intentId": {
+            "$ref": "#/components/schemas/RetainedNoticeCursor"
+          },
+          "language": {
+            "description": "Exact original language tag, never inferred from the viewer.",
+            "maxLength": 63,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$",
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "prose"
+            }
+          },
+          "sourceIdentity": {
+            "$ref": "#/components/schemas/RetainedNoticeSourceIdentity"
+          },
+          "subject": {
+            "description": "Exact original subject, bounded to 998 UTF-8 bytes by the reader.",
+            "maxLength": 998,
+            "minLength": 1,
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "prose"
+            }
+          }
+        },
+        "required": [
+          "intentId",
+          "attemptId",
+          "subject",
+          "language",
+          "body",
+          "bodySha256",
+          "sourceIdentity"
+        ],
+        "type": "object"
+      },
+      "RetainedNoticeCursor": {
+        "description": "Exclusive last returned intent identity. A selector only; not authority. Intent order is not chronological.",
+        "maxLength": 256,
+        "minLength": 1,
+        "pattern": "^[\\x21-\\x7e]+$",
+        "type": "string",
+        "x-wos": {
+          "openStringKind": "prose"
+        }
+      },
+      "RetainedNoticeSourceIdentity": {
+        "additionalProperties": false,
+        "description": "Finite identities of the original notice source and template; no private variables or witnesses.",
+        "properties": {
+          "documentSha256": {
+            "description": "Digest of exact original sidecar source bytes.",
+            "maxLength": 71,
+            "minLength": 1,
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "prose"
+            }
+          },
+          "documentVersion": {
+            "description": "Original sidecar document version.",
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "prose"
+            }
+          },
+          "templateKey": {
+            "description": "Original selected template identity.",
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "prose"
+            }
+          },
+          "templateSha256": {
+            "description": "Canonical digest of original selected template.",
+            "maxLength": 71,
+            "minLength": 1,
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "prose"
+            }
+          },
+          "workflowUrl": {
+            "description": "Original workflow absolute URI, checked against original outbound binding.",
+            "format": "uri",
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "prose"
+            }
+          },
+          "workflowVersion": {
+            "description": "Original outbound workflow version.",
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "prose"
+            }
+          }
+        },
+        "required": [
+          "documentSha256",
+          "documentVersion",
+          "workflowUrl",
+          "workflowVersion",
+          "templateKey",
+          "templateSha256"
+        ],
+        "type": "object"
+      },
       "ReviewProtocolKind": {
         "description": "Closed-with-vendor-extension review-protocol classification (governance §4.1 Protocol Definitions, §4.2 Protocol Combination; workflow-governance.md:248-260). Reserved literals: `independentFirst` (the reviewer's independent assessment MUST be recorded before any agent/upstream recommendation is accessible — §4.2 enforcement obligation); `considerOpposite` (the reviewer is required to consider the opposite outcome before settling); `calibratedConfidence` (the reviewer's confidence is calibrated against historical accuracy); `dualBlind` (two independent reviewers without cross-visibility); `unassisted` (the reviewer is not exposed to upstream recommendations). Vendor extensions MUST use an `^x-[a-z][a-z0-9-]*$` prefix per ADR 0082 D-12.",
         "examples": [
@@ -12862,6 +13114,232 @@
         "x-access": {
           "detail": [
             "wos.workflow.manage"
+          ],
+          "kind": "scope"
+        }
+      }
+    },
+    "/api/v1/cases/{case_id}/notices": {
+      "get": {
+        "operationId": "retained_notice_page",
+        "parameters": [
+          {
+            "description": "Case ledger identifier, bare or `urn:wos:`.",
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Exclusive last returned intent, bounded and checked before storage.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "pattern": "^[!-~]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseRetainedNoticePage"
+                }
+              }
+            },
+            "description": "One complete retained content page for the independently admitted filing process; no delivery claim.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Invalid closed query or case selector.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Current authentication refused.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Output not selected or current filing reader refused.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Case or process unavailable.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Retained association changed.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Retained integrity failure.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Storage capability unsupported.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Notice page unavailable, oversized or timed out.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [
+              "wos.case.read"
+            ]
+          }
+        ],
+        "tags": [
+          "case-file"
+        ],
+        "x-access": {
+          "detail": [
+            "wos.case.read"
           ],
           "kind": "scope"
         }

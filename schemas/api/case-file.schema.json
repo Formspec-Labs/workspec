@@ -21,6 +21,15 @@
     },
     {
       "$ref": "#/$defs/IntakeHandoffReceipt"
+    },
+    {
+      "$ref": "#/$defs/RetainedNoticeContent"
+    },
+    {
+      "$ref": "#/$defs/RetainedNoticeSourceIdentity"
+    },
+    {
+      "$ref": "#/$defs/CaseRetainedNoticePage"
     }
   ],
   "$defs": {
@@ -421,6 +430,258 @@
         "validationOwner": "Formspec trusted accepted-evidence resolver; WOS must refuse unqualified source values"
       },
       "tsType": "unknown"
+    },
+    "RetainedNoticeCursor": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Exclusive last returned intent identity. A selector only; not authority. Intent order is not chronological.",
+      "x-wos": {
+        "openStringKind": "prose"
+      },
+      "pattern": "^[\\x21-\\x7e]+$"
+    },
+    "RetainedNoticeSourceIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Finite identities of the original notice source and template; no private variables or witnesses.",
+      "required": [
+        "documentSha256",
+        "documentVersion",
+        "workflowUrl",
+        "workflowVersion",
+        "templateKey",
+        "templateSha256"
+      ],
+      "properties": {
+        "documentSha256": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 71,
+          "description": "Digest of exact original sidecar source bytes.",
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "documentVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Original sidecar document version.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "workflowUrl": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048,
+          "description": "Original workflow absolute URI, checked against original outbound binding.",
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "format": "uri"
+        },
+        "workflowVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Original outbound workflow version.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "templateKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Original selected template identity.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "templateSha256": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 71,
+          "description": "Canonical digest of original selected template.",
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "RetainedNoticeContent": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One exact immutable retained plaintext notice. Retention does not assert sending, delivery or recipient acknowledgment.",
+      "required": [
+        "intentId",
+        "attemptId",
+        "subject",
+        "language",
+        "body",
+        "bodySha256",
+        "sourceIdentity"
+      ],
+      "properties": {
+        "intentId": {
+          "$ref": "#/$defs/RetainedNoticeCursor"
+        },
+        "attemptId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Exact original attempt identity; distinct attempts remain distinct.",
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "pattern": "^[\\x21-\\x7e]+$"
+        },
+        "subject": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 998,
+          "description": "Exact original subject, bounded to 998 UTF-8 bytes by the reader.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "language": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 63,
+          "description": "Exact original language tag, never inferred from the viewer.",
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "pattern": "^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$"
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 262144,
+          "description": "Exact original plaintext; at most 262144 UTF-8 bytes, with whitespace and Unicode preserved.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "bodySha256": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 71,
+          "description": "Digest of exact TextEncoder UTF-8 plaintext bytes.",
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "sourceIdentity": {
+          "$ref": "#/$defs/RetainedNoticeSourceIdentity"
+        }
+      }
+    },
+    "CaseRetainedNoticePage": {
+      "description": "One current page for the independently authorized filing process. No frozen complete-history claim across pages.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The current final page, including an authorized empty page.",
+          "required": [
+            "caseLedgerId",
+            "processId",
+            "items",
+            "hasMore"
+          ],
+          "properties": {
+            "caseLedgerId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "description": "Independently authorized durable case ledger URN.",
+              "x-wos": {
+                "openStringKind": "prose"
+              },
+              "pattern": "^urn:wos:[a-z][a-z0-9-]*_case_[0-9a-hjkmnp-tv-z]{26}$"
+            },
+            "processId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "description": "Independently authorized retained filing process URN.",
+              "x-wos": {
+                "openStringKind": "prose"
+              },
+              "pattern": "^urn:wos:[a-z][a-z0-9-]*_process_[0-9a-hjkmnp-tv-z]{26}$"
+            },
+            "items": {
+              "type": "array",
+              "maxItems": 1,
+              "items": {
+                "$ref": "#/$defs/RetainedNoticeContent"
+              }
+            },
+            "hasMore": {
+              "type": "boolean",
+              "description": "A same-process next candidate existed in this statement snapshot.",
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "One complete returned notice and a same-process next candidate.",
+          "required": [
+            "caseLedgerId",
+            "processId",
+            "items",
+            "hasMore",
+            "cursor"
+          ],
+          "properties": {
+            "caseLedgerId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "description": "Independently authorized durable case ledger URN.",
+              "x-wos": {
+                "openStringKind": "prose"
+              },
+              "pattern": "^urn:wos:[a-z][a-z0-9-]*_case_[0-9a-hjkmnp-tv-z]{26}$"
+            },
+            "processId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "description": "Independently authorized retained filing process URN.",
+              "x-wos": {
+                "openStringKind": "prose"
+              },
+              "pattern": "^urn:wos:[a-z][a-z0-9-]*_process_[0-9a-hjkmnp-tv-z]{26}$"
+            },
+            "items": {
+              "type": "array",
+              "maxItems": 1,
+              "items": {
+                "$ref": "#/$defs/RetainedNoticeContent"
+              },
+              "minItems": 1
+            },
+            "hasMore": {
+              "type": "boolean",
+              "description": "A same-process next candidate existed in this statement snapshot.",
+              "const": true
+            },
+            "cursor": {
+              "$ref": "#/$defs/RetainedNoticeCursor"
+            }
+          }
+        }
+      ]
     }
   }
 }

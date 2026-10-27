@@ -43,3 +43,26 @@ Owner-native fields explicitly set the maintained `json-schema-to-typescript` an
 Attachment `fieldPath` is an RFC 6901 JSON Pointer rooted at the accepted `Response.data` value. D1 photo uses `/photo`; a repeated photo uses `/household/0/photo`. The source records the actual traversal pointer, preserves `~0`/`~1` escaping and verifies that resolving this pointer from `Response.data` yields the original accepted attachment descriptor. Consumers use that exact basis without stripping a `/data` prefix or converting a dotted item path. This WOS attachment association pointer is distinct from Formspec signature scope paths and metadata map keys.
 
 Attachment `fileName` preserves the `filename` value at the recorded pointer in the exact accepted Response, frozen at acceptance. It identifies the name as filed. A display name may have changed before signing; this field does not claim an independently persisted upload-time filename. Do not invent a historical upload name from current metadata.
+
+
+## Process-scoped retained notices
+
+### Normative Contract
+
+`GET /api/v1/cases/{case_id}/notices` returns one complete `CaseRetainedNoticePage` for the filing process independently admitted by the maintained filing reader. It grants no whole-case or applicant visibility. The separately selected `retainedNoticeOutput: "direct-reviewer-process-retained-notices-v1"` is disabled when absent and does not enable later-review task fallback or change existing filing policy IDs. Configuration capability is not permission activation. Current CaseRead authority, configured canonical human reviewer, retained reservation/source/workflow/process and qualified task-witness rules remain mandatory. Recheck the exact reservation/process/witness view and original reader after awaited work before buffered output.
+
+Only the finite canonical notice content and source-identity fields may be returned. Preserve exact original plaintext and digest. Do not disclose recipient/sender addresses, credentials, private variables, command payloads or witnesses. Retention does not prove sending, delivery or acknowledgment; reads perform no business, receipt, grant, sender, worker or clock effects.
+
+The only query member is an optional exclusive last-returned-intent `cursor` (printable ASCII, at most 256 bytes). Reject unknown/duplicate/empty/malformed query members and encoded query over 1024 bytes. Select by exact scope/case/admitted process before cursor, LIMIT, budget and next-row sentinel. Return one body plus a metadata-only same-process sentinel from one SQL statement snapshot. Intent order is deterministic, not chronological. Later insertions can sort before an old cursor; refresh starts again without cursor, and page traversal claims no frozen complete history.
+
+Bound the selected retained blob before transfer/decode to 8 MiB, exact UTF-8 body to 262144 bytes and serialized public response to 2 MiB. Do not fetch the full census then trim, skip oversized content, truncate text, return partial success or convert failure to empty. A huge sentinel blob is not fetched on this page. Existing 8192-notice census behavior remains separate and unchanged. Bound asynchronous server reading to five seconds; preserve cancellation/pool cleanup and final currentness.
+
+Authorized zero returns 200 with `items: []`, `hasMore: false` and no cursor. Permission failure, unavailable/unsupported capability, corrupt retained evidence, timeout and capacity are canonical problems with no content, not empty success. Use no-store and nosniff. Case-level permissions never follow from cursor possession, role labels or mailbox equality.
+
+### Composition
+
+The existing NoticeDeliveryStore/PostgreSQL join and mapper own retention and integrity. FilingReadAuthorizer owns the independently selected output. The adjacent request and Portal panel keep notice failure independent of case/task data and authored-template loading. Portal uses the same injected browser session and bounded HTTP client through streaming, parsing, hashing and publication. Each page owns a ten-second in-flight deadline, canceled after verified adoption; actual session/visit/case/process currentness governs displayed data and the reusable visit. Every next page reauthorizes; retirement clears protected text.
+
+### Conformance
+
+Qualify default/old-output denial and original/active/explicit-later witness rules separately from real PostgreSQL tests. Test same-case foreign-process rows before all page/budget operations, exact body/digest/provenance, count/cursor/raw/public bounds, maximum valid escaping, post-await authority changes and zero effects. Distinguish authorized empty from refusal/unavailable and verify template-independent UI plus retirement during body parsing/hash. Source tests are not ordinary-auth deployment or delivery proof.
