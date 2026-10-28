@@ -691,15 +691,11 @@
     "AgentView": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Public WOS agent governance view. Projects the kernel `agents[]` declaration into the cross-case authoritative shape consumers (governance review UIs, audit timelines, AI-oversight dashboards) read. The underlying actor identity is referenced via `actorRef` (canonical `Actor` resource at `actor.schema.json`); this view carries the agent-specific operational fields (model identity, autonomy level, deontic constraints summary, confidence floor, drift status, capabilities) that the kernel `agents` block holds. Greenfield projection — kernel `AgentDeclaration` (`wos-workflow.schema.json#/$defs/AgentDeclaration`) is prior art (ADR 0064: agents as first-class actor kind).",
+      "description": "Declared native agent settings with optional verified operational state. declaration preserves the owning Workflow AgentDeclaration unchanged; convenience fields derive only from that declaration. Absent principal or runtime fields mean unavailable, never inferred identity or healthy state.",
       "required": [
         "id",
-        "actorRef",
         "workflowUrl",
-        "autonomyLevel",
-        "driftStatus",
-        "invokerKind",
-        "lifecycleState"
+        "declaration"
       ],
       "properties": {
         "id": {
@@ -708,7 +704,7 @@
         },
         "actorRef": {
           "$ref": "#/$defs/ActorRef",
-          "description": "URN-form reference to the underlying `Actor` (principal-class segment MUST be `service-account` or `workload`). The agent's identity-display state lives on the `actor` resource; this view carries the agent-specific operational state."
+          "description": "Verified operational value, present only when its owning runtime or principal mapping supplies it. Omission means unavailable."
         },
         "workflowUrl": {
           "$ref": "#/$defs/WorkflowUrl",
@@ -750,7 +746,7 @@
         },
         "autonomyLevel": {
           "$ref": "#/$defs/AutonomyLevel",
-          "description": "Closed-with-vendor-extension autonomy posture (governance S2 / agents block)."
+          "description": "Verified operational value, present only when its owning runtime or principal mapping supplies it. Omission means unavailable."
         },
         "deonticConstraints": {
           "type": "array",
@@ -763,14 +759,14 @@
           "type": "number",
           "minimum": 0,
           "maximum": 1,
-          "description": "Minimum calibrated confidence the agent must meet before its output may be used at the configured autonomy level (governance S2 confidenceFloor). Omitted when the kernel declaration does not pin a floor.",
+          "description": "Declared confidenceFloor.threshold; onViolation and metadata remain in declaration.confidenceFloor. Absent when no floor is authored.",
           "examples": [
             0.86
           ]
         },
         "driftStatus": {
           "$ref": "#/$defs/AgentDriftStatus",
-          "description": "Current drift posture of the deployed model relative to its calibration baseline (governance S2 driftMonitoring). `unknown` is the cold-start posture for newly-declared agents."
+          "description": "Verified operational value, present only when its owning runtime or principal mapping supplies it. Omission means unavailable."
         },
         "agentType": {
           "$ref": "#/$defs/AgentType",
@@ -778,11 +774,11 @@
         },
         "invokerKind": {
           "$ref": "#/$defs/InvokerKind",
-          "description": "REQUIRED closed-with-vendor-extension invoker substrate (ADR 0064 §2.2 / §2.3 — `AgentInvoker` port + agents block `invoker` discriminator). Reserved literals: `anthropic | claudeAgentSdk | mcp | a2a | http | stub`. Operability tooling (telemetry, capability planning, multi-agent dispatch) reads this to branch on the underlying adapter without inspecting the workflow document."
+          "description": "Actual native declaration invoker.kind, absent when no invoker is authored."
         },
         "lifecycleState": {
           "$ref": "#/$defs/AgentLifecycleState",
-          "description": "REQUIRED closed-with-vendor-extension declarative lifecycle posture (advanced-governance.md §7.1; advanced-governance.md:250-257). Reserved literals: `active | degraded | suspended | retired`. Distinct from the runtime event literal `agentStateTransition` on `provenance.schema.json` which records per-transition events; this field carries the live current state so portals can filter \"show me retired agents\" without reconstructing from the transition stream."
+          "description": "Verified operational value, present only when its owning runtime or principal mapping supplies it. Omission means unavailable."
         },
         "activeSessions": {
           "type": "array",
@@ -813,7 +809,7 @@
         },
         "capabilities": {
           "type": "array",
-          "description": "Capability identifiers the agent is permitted to exercise (governance S2 capabilities).",
+          "description": "Exact capability ids from declaration.capabilities; structured settings remain in declaration.",
           "items": {
             "$ref": "#/$defs/AgentCapability"
           }
@@ -853,6 +849,10 @@
         "suppressedPendingIndependentReview": {
           "type": "boolean",
           "description": "When true, the agent's current output is suppressed pending independent review per the independentFirst review protocol (governance §4.2). The case portal MUST NOT display agent recommendations while this flag is true."
+        },
+        "declaration": {
+          "$ref": "https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/AgentDeclaration",
+          "description": "Complete native authored agent declaration, including structured capabilities, restrictions, model selection, confidence and invocation policy, and descriptive x-* metadata. This is the authority for declared policy; optional operational fields are not inferred from it."
         }
       }
     },
