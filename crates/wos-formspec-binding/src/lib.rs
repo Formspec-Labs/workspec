@@ -1238,7 +1238,6 @@ fn is_valid_hash_string(value: &str) -> bool {
 // Source uses this URI namespace for canonical Formspec Response identities.
 // Percent-encode the opaque id so arbitrary UTF-8 ids remain valid URI references.
 fn canonical_response_reference(response: &serde_json::Value) -> Result<String, BindingError> {
-    use std::fmt::Write as _;
     let id = response
         .get("id")
         .and_then(serde_json::Value::as_str)
@@ -1246,6 +1245,11 @@ fn canonical_response_reference(response: &serde_json::Value) -> Result<String, 
         .ok_or_else(|| {
             BindingError::InvalidInput("signed Formspec Response requires nonblank id".into())
         })?;
+    Ok(canonical_response_reference_id(id))
+}
+
+fn canonical_response_reference_id(id: &str) -> String {
+    use std::fmt::Write as _;
     let mut reference = String::from("urn:formspec:response:");
     for byte in id.bytes() {
         if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
@@ -1254,7 +1258,7 @@ fn canonical_response_reference(response: &serde_json::Value) -> Result<String, 
             write!(reference, "%{byte:02X}").expect("writing to String cannot fail");
         }
     }
-    Ok(reference)
+    reference
 }
 
 /// Formspec processor abstraction used by the binding adapter.
@@ -1362,6 +1366,61 @@ impl<P> FormspecBinding<P> {
         &self,
         source: &ResponseJson,
     ) -> Result<Option<Vec<SignatureEvidence>>, BindingError> {
+        self.original_response_signature_evidence_with_reference(source, None)
+    }
+
+    /// Extracts original signatures for an already qualified Source record association.
+    ///
+    /// The record reference is independent of the signed authored Response identifier.
+    /// The caller owns Source qualification; this method preserves all original signed bytes.
+    ///
+    /// # Errors
+    /// Refuses malformed Source references, conflicting explicit aliases, or original evidence.
+    pub fn original_response_signature_evidence_for_source(
+        &self,
+        source: &ResponseJson,
+        qualified_source_response_ref: &str,
+    ) -> Result<Option<Vec<SignatureEvidence>>, BindingError> {
+        // Qualified Source record locators are literal canonical namespace members.
+        // Reuse the existing encoder to reject URI delimiters/escapes without
+        // introducing another encoding policy or changing either retained identity.
+        let locator = qualified_source_response_ref
+            .strip_prefix("urn:formspec:response:")
+            .filter(|id| !id.trim().is_empty())
+            .ok_or_else(|| {
+                BindingError::InvalidInput("qualified Source response reference is invalid".into())
+            })?;
+        if canonical_response_reference_id(locator) != qualified_source_response_ref {
+            return Err(BindingError::InvalidInput(
+                "qualified Source response reference is invalid".into(),
+            ));
+        }
+        // Explicit aliases remain claims about this exact Source record, never
+        // permission to substitute a document-derived or unrelated association.
+        for name in ["sourceResponseRef", "formspecResponseRef"] {
+            if source
+                .value()
+                .get(name)
+                .is_some_and(|value| value.as_str() != Some(qualified_source_response_ref))
+            {
+                return Err(BindingError::InvalidInput(
+                    "explicit source response reference conflicts with qualified Source record"
+                        .into(),
+                ));
+            }
+        }
+        canonical_response_reference(source.value())?;
+        self.original_response_signature_evidence_with_reference(
+            source,
+            Some(qualified_source_response_ref),
+        )
+    }
+
+    fn original_response_signature_evidence_with_reference(
+        &self,
+        source: &ResponseJson,
+        qualified_source_response_ref: Option<&str>,
+    ) -> Result<Option<Vec<SignatureEvidence>>, BindingError> {
         let response = source.value();
         if document_attestations::has_document_claims(response) {
             return Err(BindingError::Unsupported(
@@ -1373,19 +1432,22 @@ impl<P> FormspecBinding<P> {
         if signatures.is_empty() {
             return Ok(None);
         }
-        let reference = match response
-            .get("sourceResponseRef")
-            .or_else(|| response.get("formspecResponseRef"))
-        {
-            Some(serde_json::Value::String(reference)) if !reference.trim().is_empty() => {
-                reference.clone()
-            }
-            Some(_) => {
-                return Err(BindingError::InvalidInput(
-                    "explicit source response reference must be a nonblank string".into(),
-                ));
-            }
-            None => canonical_response_reference(response)?,
+        let reference = match qualified_source_response_ref {
+            Some(reference) => reference.to_owned(),
+            None => match response
+                .get("sourceResponseRef")
+                .or_else(|| response.get("formspecResponseRef"))
+            {
+                Some(serde_json::Value::String(reference)) if !reference.trim().is_empty() => {
+                    reference.clone()
+                }
+                Some(_) => {
+                    return Err(BindingError::InvalidInput(
+                        "explicit source response reference must be a nonblank string".into(),
+                    ));
+                }
+                None => canonical_response_reference(response)?,
+            },
         };
         self.response_signature_evidence(response, signatures, Some(reference))
     }
@@ -3270,6 +3332,157 @@ mod tests {
             error.to_string().contains("signedPayload.responseId"),
             "unexpected error: {error}"
         );
+    }
+
+    #[test]
+    fn contextual_original_signature_uses_qualified_record_without_changing_signed_document() {
+        // Controlled COSE metadata exercises the actual extractor, not cryptographic admission.
+        let response = signed_response();
+        let source = integrity_canonical::ResponseJson::from_value(&response).unwrap();
+        let original = source.clone();
+        let record = "urn:formspec:response:tenant_response_record";
+        let binding = FormspecBinding::new(StubProcessor);
+        let legacy = binding
+            .original_response_signature_evidence(&source)
+            .unwrap()
+            .unwrap();
+        let contextual = binding
+            .original_response_signature_evidence_for_source(&source, record)
+            .unwrap()
+            .unwrap();
+        let mut expected = legacy;
+        expected[0].source_response_ref = Some(record.into());
+        assert_eq!(contextual, expected);
+        assert_eq!(contextual[0].source_response_ref.as_deref(), Some(record));
+        assert!(contextual[0].admission_failure.is_none());
+        assert_eq!(source, original);
+        assert_eq!(source.value()["id"], "resp-2026-0001");
+        assert_eq!(
+            source.value()["authoredSignatures"][0]["signedPayload"]["responseId"],
+            "resp-2026-0001"
+        );
+    }
+
+    #[test]
+    fn contextual_original_signature_preserves_matching_explicit_aliases() {
+        let record = "urn:formspec:response:tenant_response_record";
+        for fields in [
+            vec!["sourceResponseRef"],
+            vec!["formspecResponseRef"],
+            vec!["sourceResponseRef", "formspecResponseRef"],
+        ] {
+            let mut response = signed_response();
+            for field in fields {
+                response[field] = serde_json::json!(record);
+            }
+            response["authoredSignatures"][0]["signedPayload"]["digest"] = serde_json::json!(
+                build_signed_payload(response.to_string().as_bytes(), DigestAlgorithm::Sha256)
+                    .unwrap()
+                    .digest
+            );
+            let source = ResponseJson::from_value(&response).unwrap();
+            let evidence = FormspecBinding::new(StubProcessor)
+                .original_response_signature_evidence_for_source(&source, record)
+                .unwrap()
+                .unwrap();
+            assert_eq!(evidence[0].source_response_ref.as_deref(), Some(record));
+            assert!(evidence[0].admission_failure.is_none());
+            assert_eq!(source.value(), &response);
+        }
+    }
+
+    #[test]
+    fn contextual_original_signature_refuses_invalid_context_and_explicit_aliases() {
+        let binding = FormspecBinding::new(StubProcessor);
+        let record = "urn:formspec:response:tenant_response_record";
+        for context in [
+            "",
+            " ",
+            "urn:foreign:record",
+            "urn:formspec:response:",
+            "urn:formspec:response:bad record",
+            "urn:formspec:response:bad#fragment",
+            "urn:formspec:response:bad?query",
+            "urn:formspec:response:bad%ZZ",
+        ] {
+            assert!(
+                binding
+                    .original_response_signature_evidence_for_source(
+                        &ResponseJson::from_value(&signed_response()).unwrap(),
+                        context
+                    )
+                    .is_err(),
+                "{context}"
+            );
+        }
+        for field in ["sourceResponseRef", "formspecResponseRef"] {
+            for value in [
+                serde_json::Value::Null,
+                serde_json::json!(false),
+                serde_json::json!(""),
+                serde_json::json!(" "),
+                serde_json::json!("urn:formspec:response:foreign"),
+                serde_json::json!("not a URI"),
+            ] {
+                let mut response = signed_response();
+                response[field] = value;
+                // A matching first alias cannot conceal a conflicting second alias.
+                if field == "formspecResponseRef" {
+                    response["sourceResponseRef"] = serde_json::json!(record);
+                }
+                response["authoredSignatures"][0]["signedPayload"]["digest"] = serde_json::json!(
+                    build_signed_payload(response.to_string().as_bytes(), DigestAlgorithm::Sha256)
+                        .unwrap()
+                        .digest
+                );
+                assert!(
+                    binding
+                        .original_response_signature_evidence_for_source(
+                            &ResponseJson::from_value(&response).unwrap(),
+                            record
+                        )
+                        .is_err()
+                );
+            }
+        }
+        for id in [
+            serde_json::Value::Null,
+            serde_json::json!(""),
+            serde_json::json!(" "),
+        ] {
+            let mut response = signed_response();
+            response["id"] = id;
+            response["sourceResponseRef"] = serde_json::json!(record);
+            assert!(
+                binding
+                    .original_response_signature_evidence_for_source(
+                        &ResponseJson::from_value(&response).unwrap(),
+                        record
+                    )
+                    .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn contextual_original_signature_retains_pin_and_digest_admission_failures() {
+        for (field, value) in [
+            ("responseId", "foreign"),
+            ("definitionUrl", "urn:foreign"),
+            ("definitionVersion", "foreign"),
+            ("digest", "wrong"),
+        ] {
+            let mut response = signed_response();
+            response["authoredSignatures"][0]["signedPayload"][field] = serde_json::json!(value);
+            let evidence = FormspecBinding::new(StubProcessor)
+                .original_response_signature_evidence_for_source(
+                    &ResponseJson::from_value(&response).unwrap(),
+                    "urn:formspec:response:tenant_response_record",
+                )
+                .unwrap()
+                .unwrap();
+            assert!(evidence[0].admission_failure.is_some(), "{field}");
+        }
     }
 
     #[test]
