@@ -305,10 +305,10 @@ impl ImmutableFormspecProcessor {
             .as_object()
             .ok_or_else(|| invalid("Response data must be an object"))?
             .iter()
-            .map(|(key, value)| (key.clone(), value.clone()))
+            .map(|(key, value)| (key.clone(), value.clone().into()))
             .collect();
         let result = formspec_eval::evaluate(
-            definition,
+            &definition.clone().into(),
             &fields,
             &EvalOptions::default()
                 .trigger(EvalTrigger::Submit)
@@ -328,7 +328,9 @@ impl ImmutableFormspecProcessor {
                 result.diagnostics
             )));
         }
-        Ok(formspec_eval::evaluation_result_to_json_value(&result))
+        // This legacy port accepts already-parsed JSON and consumes the validation report.
+        serde_json::from_str(&formspec_eval::evaluation_result_to_json_value(&result).to_string())
+            .map_err(|error| invalid(error.to_string()))
     }
 }
 
