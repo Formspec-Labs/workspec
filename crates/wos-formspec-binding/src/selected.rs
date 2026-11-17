@@ -4,6 +4,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use formspec_core::{DocumentType, MappingDirection, MappingDocument};
+use formspec_eval::exact_json::Value as EvaluatedValue;
 use formspec_eval::{EvalContext, EvalOptions, EvalTrigger};
 use formspec_lint::{LintOptions, LintSeverity};
 use serde::{Deserialize, Serialize};
@@ -106,17 +107,12 @@ impl ImmutableFormspecProcessor {
                     )));
                 }
             }
-            if !document["items"].as_array().is_some_and(|items| {
-                items.iter().all(|item| {
-                    matches!(item["type"].as_str(), Some("field" | "display"))
-                        && ["children", "repeatable", "prePopulate"]
-                            .iter()
-                            .all(|field| item.get(*field).is_none())
-                })
-            }) {
+            if !document["items"]
+                .as_array()
+                .is_some_and(|items| response_items_supported(items))
+            {
                 return Err(BindingError::Unsupported(
-                    "selected Definition nested/repeated response reconstruction is unavailable"
-                        .into(),
+                    "selected Definition item structure or creation sources are unsupported".into(),
                 ));
             }
             for expression in formspec_lint::expressions::compile_expressions(&document).compiled {
@@ -317,9 +313,14 @@ impl ImmutableFormspecProcessor {
                     ..EvalContext::default()
                 }),
         );
-        if result.values != fields {
+        // `values` uses flat paths; `data` has the nested shape of the filed Response.
+        if result.data != *data && {
+            let mut comparable = data.clone();
+            include_projected_empty_repeats(&definition["items"], &mut comparable, &result.data);
+            result.data != comparable
+        } {
             return Err(BindingError::Unsupported(
-                "selected evaluation changed Response values; reconstruction is unavailable".into(),
+                "filed Response data differs from its evaluation".into(),
             ));
         }
         if !result.diagnostics.is_empty() {
@@ -472,6 +473,64 @@ fn nonempty(value: &Value) -> bool {
         Value::Object(fields) => !fields.is_empty(),
         Value::Null => false,
         _ => true,
+    }
+}
+
+fn response_items_supported(items: &[Value]) -> bool {
+    items.iter().all(|item| {
+        if item.get("prePopulate").is_some() || item.get("seedFrom").is_some() {
+            return false;
+        }
+        match item["type"].as_str() {
+            Some("group") => item["children"]
+                .as_array()
+                .is_some_and(|children| response_items_supported(children)),
+            Some("field" | "display") => {
+                item.get("children").is_none() && item.get("repeatable").is_none()
+            }
+            _ => false,
+        }
+    })
+}
+
+/// Adds only omitted declared empty repeats to a comparison copy of filed data.
+fn include_projected_empty_repeats(items: &Value, data: &mut Value, evaluated: &EvaluatedValue) {
+    let Some(fields) = data.as_object_mut() else {
+        return;
+    };
+    for item in items.as_array().into_iter().flatten() {
+        if item["type"] != "group" {
+            continue;
+        }
+        let Some(key) = item["key"].as_str() else {
+            continue;
+        };
+        let Some(projected) = evaluated.get(key) else {
+            continue;
+        };
+        if item["repeatable"] == true {
+            let Some(rows) = projected.as_array() else {
+                continue;
+            };
+            if let Some(existing) = fields.get_mut(key) {
+                if let Some(existing_rows) = existing.as_array_mut() {
+                    for (row, projected_row) in existing_rows.iter_mut().zip(rows) {
+                        include_projected_empty_repeats(&item["children"], row, projected_row);
+                    }
+                }
+            } else if rows.is_empty() {
+                fields.insert(key.into(), json!([]));
+            }
+        } else if let Some(existing) = fields.get_mut(key) {
+            include_projected_empty_repeats(&item["children"], existing, projected);
+        } else {
+            let mut group = json!({});
+            include_projected_empty_repeats(&item["children"], &mut group, projected);
+            // An absent group may appear only to hold the allowed empty repeats.
+            if group.as_object().is_some_and(|fields| !fields.is_empty()) {
+                fields.insert(key.into(), group);
+            }
+        }
     }
 }
 
