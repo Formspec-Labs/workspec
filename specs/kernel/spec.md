@@ -2373,7 +2373,7 @@ Controls which actors can perform which operations.
 | `canTransition` | actorId: string, transition: Transition | boolean | Whether the actor can trigger this transition. |
 | `canDelegate` | delegatorId: string, delegateId: string, scope: DelegationScope | boolean | Whether the delegator can delegate authority to the delegate within the given scope. |
 
-A processor MAY use a permissive default implementation (all operations return `true`) for single-user or testing deployments. Production deployments with multiple actors SHOULD use a restrictive implementation.
+A processor MAY use the permissive `AccessControl` default (all operations return `true`) for tests or single-user use. Amended 2026-11-18 by [ADR 0176](../../../thoughts/adr/0176-authorization-engine-and-deployment-model.md) §7. A production composition MUST NOT select this default. [RecordsSpec Operational Companion §25.6, OC-122](../../../trellis/specs/trellis-operational-companion.md#256-behavior-under-stale-missing-inconsistent-or-unavailable-state) forbids silent fail-open when evaluator state cannot be consulted.
 
 ### 16.6 ProvenanceSigner
 
