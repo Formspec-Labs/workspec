@@ -2587,6 +2587,39 @@
         }
       }
     },
+    "AccessClass": {
+      "type": "string",
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "unclassified",
+            "protected"
+          ],
+          "description": "A core access class labels correction reasons and dispute statements with a built-in registry token.",
+          "examples": [
+            "unclassified",
+            "protected"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^(cui|hipaa)(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*)+$",
+          "description": "A prefixed access class names a category in the Formspec Access-Class Registry.",
+          "examples": [
+            "cui.privacy",
+            "hipaa.phi"
+          ]
+        }
+      ],
+      "description": "Formspec Access-Class Registry token (extension-registry.md §3.2.3). The enum and pattern copy formspec common.schema.json `$defs/AccessClass`; change them together.",
+      "examples": [
+        "protected"
+      ],
+      "x-wos": {
+        "openStringKind": "identifier"
+      }
+    },
     "CorrectableAffordance": {
       "type": "object",
       "description": "Per-act configuration for the respondent `correct` affordance per ADR-0066 D-6.2 + FW-0034 design §6.3. Pairs with `amendmentTaxonomy` containing `\"correction\"` (or `\"amendment\"` for substantive overflow). When `enabled: true`, `correctableFieldSet` MUST be authored to bound which fields the respondent may correct -- author-time policy, not respondent-side inference (per FW-0034 design §3.2 rejection of field-graph-analysis-driven scope).",
@@ -2664,18 +2697,7 @@
               ],
               "properties": {
                 "class": {
-                  "type": "string",
-                  "anyOf": [
-                    { "type": "string", "enum": ["unclassified", "protected"] },
-                    { "type": "string", "pattern": "^(cui|hipaa)(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*)+$" }
-                  ],
-                  "description": "Formspec Access-Class Registry token (extension-registry.md §3.2.3). The enum and pattern copy formspec common.schema.json `$defs/AccessClass`; change them together.",
-                  "examples": [
-                    "protected"
-                  ],
-                  "x-wos": {
-                    "openStringKind": "identifier"
-                  }
+                  "$ref": "#/$defs/AccessClass"
                 }
               }
             }
@@ -2881,18 +2903,7 @@
               ],
               "properties": {
                 "class": {
-                  "type": "string",
-                  "anyOf": [
-                    { "type": "string", "enum": ["unclassified", "protected"] },
-                    { "type": "string", "pattern": "^(cui|hipaa)(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*)+$" }
-                  ],
-                  "description": "Formspec Access-Class Registry token (extension-registry.md §3.2.3). The enum and pattern copy formspec common.schema.json `$defs/AccessClass`; change them together.",
-                  "examples": [
-                    "protected"
-                  ],
-                  "x-wos": {
-                    "openStringKind": "identifier"
-                  }
+                  "$ref": "#/$defs/AccessClass"
                 }
               }
             }

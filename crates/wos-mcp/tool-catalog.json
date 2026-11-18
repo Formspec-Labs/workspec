@@ -6344,27 +6344,7 @@
                         ],
                         "properties": {
                           "class": {
-                            "type": "string",
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "unclassified",
-                                  "protected"
-                                ]
-                              },
-                              {
-                                "type": "string",
-                                "pattern": "^(cui|hipaa)(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*)+$"
-                              }
-                            ],
-                            "description": "Formspec Access-Class Registry token (extension-registry.md §3.2.3). The enum and pattern copy formspec common.schema.json `$defs/AccessClass`; change them together.",
-                            "examples": [
-                              "protected"
-                            ],
-                            "x-wos": {
-                              "openStringKind": "identifier"
-                            }
+                            "$ref": "#/$defs/AccessClass"
                           }
                         }
                       }
@@ -6386,6 +6366,39 @@
                     }
                   }
                 ]
+              },
+              "AccessClass": {
+                "type": "string",
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "unclassified",
+                      "protected"
+                    ],
+                    "description": "A core access class labels correction reasons and dispute statements with a built-in registry token.",
+                    "examples": [
+                      "unclassified",
+                      "protected"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^(cui|hipaa)(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*)+$",
+                    "description": "A prefixed access class names a category in the Formspec Access-Class Registry.",
+                    "examples": [
+                      "cui.privacy",
+                      "hipaa.phi"
+                    ]
+                  }
+                ],
+                "description": "Formspec Access-Class Registry token (extension-registry.md §3.2.3). The enum and pattern copy formspec common.schema.json `$defs/AccessClass`; change them together.",
+                "examples": [
+                  "protected"
+                ],
+                "x-wos": {
+                  "openStringKind": "identifier"
+                }
               },
               "WithdrawableAffordance": {
                 "type": "object",
@@ -6589,27 +6602,7 @@
                         ],
                         "properties": {
                           "class": {
-                            "type": "string",
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "unclassified",
-                                  "protected"
-                                ]
-                              },
-                              {
-                                "type": "string",
-                                "pattern": "^(cui|hipaa)(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*)+$"
-                              }
-                            ],
-                            "description": "Formspec Access-Class Registry token (extension-registry.md §3.2.3). The enum and pattern copy formspec common.schema.json `$defs/AccessClass`; change them together.",
-                            "examples": [
-                              "protected"
-                            ],
-                            "x-wos": {
-                              "openStringKind": "identifier"
-                            }
+                            "$ref": "#/$defs/AccessClass"
                           }
                         }
                       }
