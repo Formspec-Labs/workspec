@@ -1,44 +1,20 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$defs": {
-    "CompletionExportVocabularyId": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 64,
-      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?![\\s\\S])",
-      "description": "Identifier grammar for members of the deployment's purpose and recipient-class vocabularies."
-    },
     "CompletionExportRequest": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "processId",
-        "purpose",
-        "recipientClass"
+        "processId"
       ],
       "properties": {
         "processId": {
           "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ProcessPathId",
           "description": "Actual workflow process selected by full process URN or bare process TypeID."
-        },
-        "purpose": {
-          "$ref": "#/$defs/CompletionExportVocabularyId",
-          "description": "Purpose declared by the authenticated requester. The server validates it against the deployment's declared purpose vocabulary and records it with the authorization decision. This declaration grants no authority."
-        },
-        "recipientClass": {
-          "$ref": "#/$defs/CompletionExportVocabularyId",
-          "description": "Recipient class declared by the authenticated requester. The server validates it against the deployment's declared recipient-class vocabulary and records it with the authorization decision. This declaration grants no authority."
         }
       },
       "title": "CompletionExportRequest",
-      "description": "Request to export one workflow process for a declared purpose and recipient class.",
-      "examples": [
-        {
-          "processId": "default_process_01hw7rm71vfay8vvw14d2pf2db",
-          "purpose": "quality-review",
-          "recipientClass": "oversight"
-        }
-      ]
+      "description": "One actual workflow process selector for a completion export job. The current human credential is a transport input for the request only; the server mints the job identity and a signed job grant."
     },
     "CompletionExportJob": {
       "oneOf": [
@@ -51,14 +27,6 @@
             "processId": {
               "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ProcessPathId/oneOf/0",
               "description": "Canonical full URN of the actual workflow process."
-            },
-            "purpose": {
-              "$ref": "#/$defs/CompletionExportVocabularyId",
-              "description": "Purpose declared in the accepted request for this job."
-            },
-            "recipientClass": {
-              "$ref": "#/$defs/CompletionExportVocabularyId",
-              "description": "Recipient class declared in the accepted request for this job."
             },
             "jobId": {
               "type": "string",
@@ -73,8 +41,6 @@
           "required": [
             "status",
             "processId",
-            "purpose",
-            "recipientClass",
             "jobId"
           ],
           "description": "The server holds the export and no custody receipt or failure is recorded yet. The caller can leave the page and poll later."
@@ -88,14 +54,6 @@
             "processId": {
               "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ProcessPathId/oneOf/0",
               "description": "Canonical full URN of the actual workflow process."
-            },
-            "purpose": {
-              "$ref": "#/$defs/CompletionExportVocabularyId",
-              "description": "Purpose declared in the accepted request for this job."
-            },
-            "recipientClass": {
-              "$ref": "#/$defs/CompletionExportVocabularyId",
-              "description": "Recipient class declared in the accepted request for this job."
             },
             "jobId": {
               "type": "string",
@@ -118,8 +76,6 @@
           "required": [
             "status",
             "processId",
-            "purpose",
-            "recipientClass",
             "jobId",
             "checkpointRef"
           ],
@@ -134,14 +90,6 @@
             "processId": {
               "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ProcessPathId/oneOf/0",
               "description": "Canonical full URN of the actual workflow process."
-            },
-            "purpose": {
-              "$ref": "#/$defs/CompletionExportVocabularyId",
-              "description": "Purpose declared in the accepted request for this job."
-            },
-            "recipientClass": {
-              "$ref": "#/$defs/CompletionExportVocabularyId",
-              "description": "Recipient class declared in the accepted request for this job."
             },
             "jobId": {
               "type": "string",
@@ -167,8 +115,6 @@
           "required": [
             "status",
             "processId",
-            "purpose",
-            "recipientClass",
             "jobId",
             "failureCode"
           ],
@@ -176,16 +122,7 @@
         }
       ],
       "title": "CompletionExportJob",
-      "description": "Durable whole-case completion export job with the declarations from its accepted request.",
-      "examples": [
-        {
-          "status": "running",
-          "processId": "urn:wos:default_process_01hw7rm71vfay8vvw14d2pf2db",
-          "purpose": "quality-review",
-          "recipientClass": "oversight",
-          "jobId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-        }
-      ]
+      "description": "Durable whole-case completion export job. Exactly three states: running, succeeded, failed."
     },
     "CompletionExportJobList": {
       "type": "object",
@@ -205,158 +142,9 @@
       },
       "title": "CompletionExportJobList",
       "description": "Running and finished export jobs for one process and caller."
-    },
-    "CompletionExportRequestConflict": {
-      "title": "CompletionExportRequestConflict",
-      "description": "HTTP 409 problem returned when the requester already has an active job for this process with a different purpose or recipient class.",
-      "$comment": "Keep the constrained properties here so code generators associate them with this response type.",
-      "allOf": [
-        {
-          "$ref": "https://schemas.formspec.io/wos-api/error/v1#/$defs/Problem"
-        }
-      ],
-      "properties": {
-        "type": {
-          "type": "string",
-          "const": "https://schemas.formspec.io/wos-api/errors/WOS-2409",
-          "description": "Documented URI for the active completion export conflict."
-        },
-        "status": {
-          "type": "integer",
-          "const": 409,
-          "description": "HTTP status for an active completion export conflict."
-        },
-        "error_code": {
-          "type": "string",
-          "const": "WOS-2409",
-          "description": "Registered problem code for an active completion export with different declarations."
-        }
-      },
-      "examples": [
-        {
-          "type": "https://schemas.formspec.io/wos-api/errors/WOS-2409",
-          "title": "Active completion export conflict",
-          "status": 409,
-          "error_code": "WOS-2409"
-        }
-      ]
-    },
-    "CompletionExportAuthorizationContext": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["reason_code"],
-      "description": "Public context for a refused completion export authorization decision.",
-      "properties": {
-        "reason_code": {
-          "type": "string",
-          "enum": [
-            "package_unavailable",
-            "binding_changed",
-            "facts_missing",
-            "facts_invalid",
-            "not_entitled",
-            "authority_unavailable",
-            "projection_stale",
-            "relationship_unavailable",
-            "relationship_error",
-            "policy_forbidden",
-            "policy_not_permitted",
-            "policy_error",
-            "budget_exceeded"
-          ],
-          "description": "Closed public reason code for a denied or indeterminate authorization decision (ADR 0176, Authorization Contract §§4.2–4.3)."
-        }
-      }
-    },
-    "CompletionExportAuthorizationDenied": {
-      "title": "CompletionExportAuthorizationDenied",
-      "description": "HTTP 403 problem for a completion export authorization decision that denied the request.",
-      "allOf": [
-        {
-          "$ref": "https://schemas.formspec.io/wos-api/error/v1#/$defs/Problem"
-        }
-      ],
-      "required": ["context"],
-      "properties": {
-        "type": {
-          "type": "string",
-          "const": "https://schemas.formspec.io/wos-api/errors/WOS-1403",
-          "description": "Documented URI for the forbidden problem."
-        },
-        "status": {
-          "type": "integer",
-          "const": 403,
-          "description": "HTTP status for a denied authorization decision."
-        },
-        "error_code": {
-          "type": "string",
-          "const": "WOS-1403",
-          "description": "Registered problem code for a forbidden request."
-        },
-        "context": {
-          "$ref": "#/$defs/CompletionExportAuthorizationContext",
-          "description": "Public authorization reason for the denial."
-        }
-      },
-      "examples": [
-        {
-          "type": "https://schemas.formspec.io/wos-api/errors/WOS-1403",
-          "title": "Forbidden",
-          "status": 403,
-          "error_code": "WOS-1403",
-          "context": { "reason_code": "policy_forbidden" }
-        }
-      ]
-    },
-    "CompletionExportAuthorizationIndeterminate": {
-      "title": "CompletionExportAuthorizationIndeterminate",
-      "description": "HTTP 503 problem for a completion export authorization decision that could not be reached. The HTTP response carries Retry-After.",
-      "allOf": [
-        {
-          "$ref": "https://schemas.formspec.io/wos-api/error/v1#/$defs/Problem"
-        }
-      ],
-      "required": ["context"],
-      "properties": {
-        "type": {
-          "type": "string",
-          "const": "https://schemas.formspec.io/wos-api/errors/WOS-1503",
-          "description": "Documented URI for the service unavailable problem."
-        },
-        "status": {
-          "type": "integer",
-          "const": 503,
-          "description": "HTTP status for an indeterminate authorization decision."
-        },
-        "error_code": {
-          "type": "string",
-          "const": "WOS-1503",
-          "description": "Registered problem code for a temporarily unavailable operation."
-        },
-        "context": {
-          "$ref": "#/$defs/CompletionExportAuthorizationContext",
-          "description": "Public authorization reason for the indeterminate decision."
-        }
-      },
-      "examples": [
-        {
-          "type": "https://schemas.formspec.io/wos-api/errors/WOS-1503",
-          "title": "Service unavailable",
-          "status": 503,
-          "error_code": "WOS-1503",
-          "context": { "reason_code": "facts_invalid" }
-        },
-        {
-          "type": "https://schemas.formspec.io/wos-api/errors/WOS-1503",
-          "title": "Service unavailable",
-          "status": 503,
-          "error_code": "WOS-1503",
-          "context": { "reason_code": "package_unavailable" }
-        }
-      ]
     }
   },
-  "description": "Public request, job and problem shapes for browser completion exports.",
+  "description": "Resolve wos-common to the owning work-spec/schemas/api/_common.schema.json. POST accepts a job and returns HTTP 202 immediately; status reads report running, succeeded or failed. Human credentials are transport-only; no retry key is client-held and no bearer is stored.",
   "$id": "https://schemas.formspec.io/wos-api/completion-exports/v1",
   "title": "WOS API Browser Completion Exports",
   "oneOf": [
@@ -368,15 +156,6 @@
     },
     {
       "$ref": "#/$defs/CompletionExportJobList"
-    },
-    {
-      "$ref": "#/$defs/CompletionExportRequestConflict"
-    },
-    {
-      "$ref": "#/$defs/CompletionExportAuthorizationDenied"
-    },
-    {
-      "$ref": "#/$defs/CompletionExportAuthorizationIndeterminate"
     }
   ]
 }

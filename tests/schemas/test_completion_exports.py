@@ -1,18 +1,15 @@
-"""Completion export requests, public jobs and problems."""
+"""Completion export request and job selectors retain exact process identity."""
 import pytest
-from jsonschema import Draft202012Validator, FormatChecker
+from jsonschema import Draft202012Validator
 
 from .test_wos_api_schema_discipline import (
-    API_SCHEMA_DIR, API_SPEC_DIR, api_referencing_registry, load_openapi, load_schema,
+    API_SCHEMA_DIR, api_referencing_registry, load_openapi, load_schema,
     validator_for_api_def,
 )
 
 PROCESS = "default_process_01hw7rm71vfay8vvw14d2pf2db"
 PROCESS_URN = "urn:wos:" + PROCESS
 JOB_ID = "a" * 32
-DECLARATIONS = {"purpose": "quality-review", "recipientClass": "oversight"}
-ACTIVE_JOB_CONFLICT = "WOS-2409"
-PROBLEM_URI = "https://schemas.formspec.io/wos-api/errors/"
 STATES = {
     "running": {},
     "succeeded": {"checkpointRef": "retained-checkpoint"},
@@ -22,7 +19,7 @@ STATES = {
 
 def job(status, **overrides):
     return {"status": status, "processId": PROCESS_URN, "jobId": JOB_ID,
-            **DECLARATIONS, **STATES[status], **overrides}
+            **STATES[status], **overrides}
 
 
 @pytest.fixture
@@ -44,43 +41,18 @@ def test_job_variants_are_complete_closed_objects_for_maintained_generators():
 
 
 @pytest.mark.parametrize("process", [PROCESS, PROCESS_URN])
-def test_request_accepts_actual_process_selector_and_declarations_only(checks, process):
+def test_request_accepts_only_actual_process_selector(checks, process):
     check = checks["CompletionExportRequest"]
-    # The former process-only request now requires both authorization declarations.
-    request = {"processId": process, **DECLARATIONS}
-    check.validate(request)
+    check.validate({"processId": process})
     for field in ("jobId", "checkpointRef", "actor", "scope", "token", "Idempotency-Key"):
-        assert not check.is_valid({**request, field: "invented"})
+        assert not check.is_valid({"processId": process, field: "invented"})
 
 
 @pytest.mark.parametrize("value", [{}, {"processId": None}, {"processId": "invented"},
                                    {"processId": "urn:wos:" + PROCESS.replace("_process_", "_case_")},
                                    {"processId": PROCESS_URN + "/tasks/respond"}])
 def test_request_refuses_missing_or_wrong_resource_identity(checks, value):
-    assert not checks["CompletionExportRequest"].is_valid({**DECLARATIONS, **value})
-
-
-@pytest.mark.parametrize("field", DECLARATIONS)
-def test_request_requires_each_declaration(checks, field):
-    request = {"processId": PROCESS, **DECLARATIONS}
-    del request[field]
-    assert not checks["CompletionExportRequest"].is_valid(request)
-    assert not checks["CompletionExportRequest"].is_valid({"processId": PROCESS})
-
-
-@pytest.mark.parametrize("field", DECLARATIONS)
-def test_declaration_syntax_applies_to_requests_and_jobs(checks, field):
-    request = {"processId": PROCESS, **DECLARATIONS}
-    variants = [(checks["CompletionExportRequest"], request)]
-    variants.extend((checks["CompletionExportJob"], job(status)) for status in STATES)
-    for check, body in variants:
-        # Syntax is shared and the values are open to deployment vocabularies.
-        for value in ("a", "a" * 64, "review-2"):
-            check.validate({**body, field: value})
-        for value in (None, 1, "", "a" * 65, "Quality-review", "quality review",
-                      "quality/review", "quality--review", "-review", "review-",
-                      "2-review", "réview", "review\n"):
-            assert not check.is_valid({**body, field: value}), (field, value)
+    assert not checks["CompletionExportRequest"].is_valid(value)
 
 
 @pytest.mark.parametrize("status", list(STATES))
@@ -107,7 +79,7 @@ def test_job_requires_complete_state_and_canonical_process_identity(checks, stat
     {"status": "ready"},
 ])
 def test_job_refuses_inconsistent_or_invented_states(checks, value):
-    base = {"processId": PROCESS_URN, "jobId": JOB_ID, **DECLARATIONS}
+    base = {"processId": PROCESS_URN, "jobId": JOB_ID}
     assert not checks["CompletionExportJob"].is_valid({**base, **value})
 
 
@@ -123,63 +95,6 @@ def test_job_list_is_bounded_closed_array_of_jobs(checks):
     check.validate({"jobs": [job(status) for status in STATES]})
     assert not check.is_valid({"jobs": [job("running")], "extra": 1})
     assert not check.is_valid({"jobs": [job("running")] * 51})
-    incomplete = job("running")
-    del incomplete["recipientClass"]
-    assert not check.is_valid({"jobs": [incomplete]})
-
-
-def test_active_job_conflict_has_a_registered_http_problem_shape():
-    schema = load_schema(API_SCHEMA_DIR / "completion-exports.schema.json")
-    check = validator_for_api_def(schema, "CompletionExportRequestConflict", api_referencing_registry())
-    problem = {
-        "type": PROBLEM_URI + ACTIVE_JOB_CONFLICT,
-        "title": "Active completion export conflict",
-        "status": 409,
-        "error_code": ACTIVE_JOB_CONFLICT,
-    }
-    check.validate(problem)
-    assert not check.is_valid({**problem, "status": 403})
-    assert not check.is_valid({**problem, "error_code": "WOS-1409"})
-    assert not check.is_valid({**problem, "type": PROBLEM_URI + "WOS-1403"})
-    assert not check.is_valid({**problem, "jobId": JOB_ID})
-    assert not check.is_valid({key: value for key, value in problem.items() if key != "title"})
-    registry = (API_SPEC_DIR / "error-registry.md").read_text()
-    assert f"| `{ACTIVE_JOB_CONFLICT}` | 409 |" in registry
-
-
-def test_public_root_exports_the_active_job_conflict():
-    schema = load_schema(API_SCHEMA_DIR / "completion-exports.schema.json")
-    check = Draft202012Validator(schema, registry=api_referencing_registry(),
-                                format_checker=FormatChecker())
-    example, = schema["$defs"]["CompletionExportRequestConflict"]["examples"]
-    check.validate(example)
-
-
-@pytest.mark.parametrize("status, code, title, reason", [
-    (403, "WOS-1403", "Forbidden", "policy_forbidden"),
-    (503, "WOS-1503", "Service unavailable", "facts_invalid"),
-    (503, "WOS-1503", "Service unavailable", "package_unavailable"),
-])
-def test_public_authorization_problem_requires_a_safe_reason(status, code, title, reason):
-    schema = load_schema(API_SCHEMA_DIR / "completion-exports.schema.json")
-    check = Draft202012Validator(schema, registry=api_referencing_registry(),
-                                format_checker=FormatChecker())
-    problem = {"type": PROBLEM_URI + code, "title": title, "status": status, "error_code": code}
-    check.validate({**problem, "context": {"reason_code": reason}})
-    assert not check.is_valid(problem)
-    for context in ({}, {"reason_code": "allowed"}, {"reason_code": "invented"},
-                    {"reason_code": reason, "policy_id": "private-policy"}):
-        assert not check.is_valid({**problem, "context": context})
-
-
-def test_status_reads_tell_clients_to_keep_polling_during_a_provider_outage():
-    spec = (API_SPEC_DIR / "completion-exports.md").read_text()
-    status_section = spec.split("## Status and download\n", 1)[1]
-    read_spec = status_section.split("`GET /api/v1/processes/{process_id}/completion-exports/{job_id}/download`", 1)[0]
-    outage_rule = next((line for line in read_spec.splitlines()
-                        if "provider outage" in line.lower()), "")
-    assert "503" in outage_rule, "status reads must map provider outages to unavailability"
-    assert "keep polling" in outage_rule, "clients need the recovery rule for a status outage"
 
 
 def test_routes_declare_job_acceptance_without_a_client_retry_header():
