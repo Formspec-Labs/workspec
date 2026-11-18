@@ -1,6 +1,7 @@
 """Reference replay input schemas share the exact maintained executable fixture."""
 import copy
 import json
+import pytest
 from jsonschema import Draft202012Validator
 from tests.schemas.conftest import SCHEMAS_ROOT, WOS_SPEC_ROOT, _REGISTRY
 
@@ -43,3 +44,25 @@ def test_selector_and_review_claims_remain_closed():
     assert not validator('NativeSelector').is_valid(selector)
     assert not validator('EngineeringClaim').is_valid('section508Certified')
     assert validator('EngineeringClaim').is_valid('accessibilityStructureReview')
+
+
+@pytest.mark.parametrize(("schema_name", "definition", "field"), [
+    ("reference-replay", "FixtureReceiptSigner", "kidBase64"),
+    ("reference-replay", "FixtureReceiptSigner", "publicKeyBase64"),
+    ("reference-replay", "FixtureSigningCapability", "pkcs8Base64"),
+    ("reference-replay", "FixtureSigningCapability", "receiptPkcs8Base64"),
+    ("reference-replay", "DocumentSigningKey", "kidBase64"),
+    ("reference-replay", "DocumentSigningKey", "publicKeyBase64"),
+    ("reference-replay", "EvidenceSelection", "bytesBase64"),
+    ("reference-due-process", "NoticeState", "artifactBytesBase64"),
+    ("reference-due-process", "PendingNoticeWork", "artifactBytesBase64"),
+])
+def test_reference_base64_fields_require_canonical_encoding(schema_name, definition, field):
+    schema = json.loads((SCHEMAS_ROOT / f"wos-{schema_name}.schema.json").read_text())
+    field_schema = schema["$defs"][definition]["properties"][field]
+    check = Draft202012Validator(field_schema)
+    for example in field_schema["examples"]:
+        assert check.is_valid(example)
+    for invalid in ("Zg", "Zh==", "Zm9=", "Zg==\n", "Zm9v\n", "_w==", "Z g=="):
+        assert not check.is_valid(invalid), repr(invalid)
+    assert check.is_valid("") == (field == "bytesBase64")

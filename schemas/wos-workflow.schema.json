@@ -2190,7 +2190,10 @@
               "type": "string",
               "minLength": 1,
               "pattern": "\\S",
-              "description": "Exact version of the Formspec Definition named by ref, independent of the workflow version. Required when this entry backs a createTask action; processors validate referenced task contracts at process admission."
+              "description": "Exact version of the Formspec Definition named by ref, independent of the workflow version. Required when this entry backs a createTask action; processors validate referenced task contracts at process admission.",
+              "examples": [
+                "1.2.0"
+              ]
             }
           }
         }
@@ -5256,7 +5259,13 @@
                   "transitionEvent": {
                     "type": "string",
                     "minLength": 1,
-                    "description": "Kernel workflow event that triggered the transition; distinct from the canonical D26 record event literal."
+                    "description": "Kernel workflow event that triggered the transition; distinct from the canonical D26 record event literal.",
+                    "examples": [
+                      "approve"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "identifier"
+                    }
                   }
                 },
                 "additionalProperties": true
@@ -5912,7 +5921,11 @@
       "description": "Shape constraint layered on Facts-tier provenance records emitted by the AI §3.3.1 capability-invocation path. A record representing a precondition-blocked invocation (`event == \"capabilityInvocation\"` AND `data.invocationBlocked == true`) MUST carry `outcome: \"preconditionNotSatisfied\"` so audit tooling can distinguish a declarative precondition gate from an agent failure. This `$def` is composed into `FactsTierRecord.allOf` below; runtime provenance logs that `$ref` this schema's `FactsTierRecord` (for example `wos-provenance-log.schema.json`) inherit the same MUST. Records with other `event` values or absent `data.invocationBlocked` fall outside the guard and are unaffected.",
       "not": {
         "type": "object",
-        "maxProperties": 0
+        "maxProperties": 0,
+        "description": "Matches an empty object, which a capability invocation record must never be.",
+        "examples": [
+          {}
+        ]
       },
       "examples": [
         {
@@ -6239,7 +6252,10 @@
                   "correctionTargetEventHash": {
                     "type": "string",
                     "pattern": "^[a-f0-9]{64}$",
-                    "description": "Lowercase hex SHA-256 of the canonical event being corrected."
+                    "description": "Lowercase hexadecimal SHA-256 of the canonical event this correction is authorized to change.",
+                    "examples": [
+                      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                    ]
                   },
                   "correctedFieldSet": {
                     "type": "array",
@@ -6248,16 +6264,33 @@
                     "items": {
                       "type": "string",
                       "pattern": "^/",
-                      "description": "RFC 6901 JSON Pointer."
+                      "description": "JSON Pointer to one field that the authorization permits the correction to change.",
+                      "examples": [
+                        "/household/address"
+                      ]
                     }
                   },
                   "reason": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "description": "Human-readable explanation of why the actor authorized this action.",
+                    "examples": [
+                      "The retained case evidence supports this action."
+                    ],
+                    "x-wos": {
+                      "openStringKind": "prose"
+                    }
                   },
                   "authorizingActorId": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "description": "Canonical identifier of the actor who authorized this action.",
+                    "examples": [
+                      "actor:human:supervisor"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "identifier"
+                    }
                   },
                   "authorityBasis": {
                     "$ref": "#/$defs/AuthorityBasis"
@@ -6321,19 +6354,41 @@
                 "properties": {
                   "amendmentTargetEventHash": {
                     "type": "string",
-                    "pattern": "^[a-f0-9]{64}$"
+                    "pattern": "^[a-f0-9]{64}$",
+                    "description": "Lowercase hexadecimal SHA-256 of the event targeted by the amendment authorization.",
+                    "examples": [
+                      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                    ]
                   },
                   "priorDeterminationHash": {
                     "type": "string",
-                    "pattern": "^[a-f0-9]{64}$"
+                    "pattern": "^[a-f0-9]{64}$",
+                    "description": "Lowercase hexadecimal SHA-256 of the prior determination whose amendment is authorized.",
+                    "examples": [
+                      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                    ]
                   },
                   "reason": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "description": "Human-readable explanation of why the actor authorized this action.",
+                    "examples": [
+                      "The retained case evidence supports this action."
+                    ],
+                    "x-wos": {
+                      "openStringKind": "prose"
+                    }
                   },
                   "authorizingActorId": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "description": "Canonical identifier of the actor who authorized this action.",
+                    "examples": [
+                      "actor:human:supervisor"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "identifier"
+                    }
                   },
                   "authorityBasis": {
                     "$ref": "#/$defs/AuthorityBasis"
@@ -6393,7 +6448,11 @@
                 "properties": {
                   "priorDeterminationHash": {
                     "type": "string",
-                    "pattern": "^[a-f0-9]{64}$"
+                    "pattern": "^[a-f0-9]{64}$",
+                    "description": "Lowercase hexadecimal SHA-256 of the determination event this action supersedes.",
+                    "examples": [
+                      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                    ]
                   },
                   "newDeterminationValue": {
                     "description": "New determination payload. Shape is workflow-contract-defined (object, scalar, array, or null) -- the kernel pins only that the field is present."
@@ -6401,7 +6460,10 @@
                   "amendmentAuthorizationEventHash": {
                     "type": "string",
                     "pattern": "^[a-f0-9]{64}$",
-                    "description": "Hash of the paired `amendmentAuthorized` event. Verifiers MUST resolve this back-reference."
+                    "description": "Hash of the paired `amendmentAuthorized` event. Verifiers MUST resolve this back-reference.",
+                    "examples": [
+                      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                    ]
                   }
                 }
               }
@@ -6493,19 +6555,41 @@
                 "properties": {
                   "rescissionTargetEventHash": {
                     "type": "string",
-                    "pattern": "^[a-f0-9]{64}$"
+                    "pattern": "^[a-f0-9]{64}$",
+                    "description": "Lowercase hexadecimal SHA-256 of the event targeted by the rescission authorization.",
+                    "examples": [
+                      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                    ]
                   },
                   "priorDeterminationHash": {
                     "type": "string",
-                    "pattern": "^[a-f0-9]{64}$"
+                    "pattern": "^[a-f0-9]{64}$",
+                    "description": "Lowercase hexadecimal SHA-256 of the determination whose rescission is authorized.",
+                    "examples": [
+                      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                    ]
                   },
                   "reason": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "description": "Human-readable explanation of why the actor authorized this action.",
+                    "examples": [
+                      "The retained case evidence supports this action."
+                    ],
+                    "x-wos": {
+                      "openStringKind": "prose"
+                    }
                   },
                   "authorizingActorId": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "description": "Canonical identifier of the actor who authorized this action.",
+                    "examples": [
+                      "actor:human:supervisor"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "identifier"
+                    }
                   },
                   "authorityBasis": {
                     "$ref": "#/$defs/AuthorityBasis"
@@ -6522,7 +6606,11 @@
                     "properties": {
                       "newChainPinEventHash": {
                         "type": "string",
-                        "pattern": "^[a-f0-9]{64}$"
+                        "pattern": "^[a-f0-9]{64}$",
+                        "description": "Lowercase hexadecimal SHA-256 of the new chain pin event named in the rescission.",
+                        "examples": [
+                          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                        ]
                       },
                       "priorPinSet": {
                         "$ref": "#/$defs/MigrationPinSet"
@@ -6582,12 +6670,19 @@
                 "properties": {
                   "priorDeterminationHash": {
                     "type": "string",
-                    "pattern": "^[a-f0-9]{64}$"
+                    "pattern": "^[a-f0-9]{64}$",
+                    "description": "Lowercase hexadecimal SHA-256 of the determination made non-operative by this rescission.",
+                    "examples": [
+                      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                    ]
                   },
                   "rescissionAuthorizationEventHash": {
                     "type": "string",
                     "pattern": "^[a-f0-9]{64}$",
-                    "description": "Hash of the paired `rescissionAuthorized` event. Verifiers MUST resolve this back-reference."
+                    "description": "Hash of the paired `rescissionAuthorized` event. Verifiers MUST resolve this back-reference.",
+                    "examples": [
+                      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                    ]
                   }
                 }
               }
@@ -6641,15 +6736,30 @@
                 "properties": {
                   "priorRescissionEventHash": {
                     "type": "string",
-                    "pattern": "^[a-f0-9]{64}$"
+                    "pattern": "^[a-f0-9]{64}$",
+                    "description": "Lowercase hexadecimal SHA-256 of the rescission event that the reinstatement reverses.",
+                    "examples": [
+                      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                    ]
                   },
                   "reactivationAuthorizationEventHash": {
                     "type": "string",
-                    "pattern": "^[a-f0-9]{64}$"
+                    "pattern": "^[a-f0-9]{64}$",
+                    "description": "Lowercase hexadecimal SHA-256 of the authorization event permitting this reactivation.",
+                    "examples": [
+                      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                    ]
                   },
                   "reason": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "description": "Human-readable explanation of the basis for reinstating the rescinded determination.",
+                    "examples": [
+                      "The appeal decision authorized reinstatement."
+                    ],
+                    "x-wos": {
+                      "openStringKind": "prose"
+                    }
                   }
                 }
               }
@@ -6721,7 +6831,14 @@
                 "properties": {
                   "authorizingActorId": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "description": "Canonical identifier of the actor who authorized this action.",
+                    "examples": [
+                      "actor:human:supervisor"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "identifier"
+                    }
                   },
                   "authorityBasis": {
                     "$ref": "#/$defs/AuthorityBasis"
@@ -6758,7 +6875,10 @@
                       "high",
                       "very-high"
                     ],
-                    "description": "OPTIONAL assurance strength for the authority claim. When present, mirrors the SignatureIdentityBinding closed enum so policy review tooling can rank attestations."
+                    "description": "OPTIONAL assurance strength for the authority claim. When present, mirrors the SignatureIdentityBinding closed enum so policy review tooling can rank attestations.",
+                    "examples": [
+                      "high"
+                    ]
                   }
                 }
               }
@@ -6832,7 +6952,13 @@
                   "clockId": {
                     "type": "string",
                     "minLength": 1,
-                    "description": "Stable clock identity used for correlation with the matching `clockResolved` event."
+                    "description": "Stable clock identity used for correlation with the matching `clockResolved` event.",
+                    "examples": [
+                      "clock-appeal-001"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "identifier"
+                    }
                   },
                   "clockKind": {
                     "type": "string",
@@ -6854,26 +6980,51 @@
                   "originEventHash": {
                     "type": "string",
                     "pattern": "^[a-f0-9]{64}$",
-                    "description": "Hash of the event that started the clock (e.g. determination event for an AppealClock)."
+                    "description": "Hash of the event that started the clock (e.g. determination event for an AppealClock).",
+                    "examples": [
+                      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                    ]
                   },
                   "duration": {
                     "type": "string",
                     "pattern": "^P(?:\\d+Y)?(?:\\d+M)?(?:\\d+W)?(?:\\d+D)?(?:T(?:\\d+H)?(?:\\d+M)?(?:\\d+(?:\\.\\d+)?S)?)?$",
-                    "description": "ISO-8601 duration string."
+                    "description": "ISO 8601 duration applied by the processor when computing the recorded deadline.",
+                    "examples": [
+                      "P30D"
+                    ]
                   },
                   "computedDeadline": {
                     "type": "string",
-                    "format": "date-time"
+                    "format": "date-time",
+                    "description": "Timestamp the processor computed for the end of the clock's selected duration.",
+                    "examples": [
+                      "2026-05-04T18:00:00Z"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "timestamp"
+                    }
                   },
                   "calendarRef": {
                     "type": "string",
                     "format": "uri",
-                    "description": "OPTIONAL business-calendar reference applied when computing deadline (handles weekends, holidays)."
+                    "description": "OPTIONAL business-calendar reference applied when computing deadline (handles weekends, holidays).",
+                    "examples": [
+                      "https://example.gov/calendars/office-days"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "uri"
+                    }
                   },
                   "statuteReference": {
                     "type": "string",
                     "format": "uri",
-                    "description": "OPTIONAL regulatory-source reference grounding the duration."
+                    "description": "OPTIONAL regulatory-source reference grounding the duration.",
+                    "examples": [
+                      "https://example.gov/rules/appeals"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "uri"
+                    }
                   }
                 }
               }
@@ -6955,12 +7106,22 @@
                 "properties": {
                   "clockId": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "description": "Stable clock identifier carried forward from the paired clock-started event.",
+                    "examples": [
+                      "clock-appeal-001"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "identifier"
+                    }
                   },
                   "originClockHash": {
                     "type": "string",
                     "pattern": "^[a-f0-9]{64}$",
-                    "description": "Hash of the paired `clockStarted` event for chain-replay correlation."
+                    "description": "Hash of the paired `clockStarted` event for chain-replay correlation.",
+                    "examples": [
+                      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                    ]
                   },
                   "resolution": {
                     "type": "string",
@@ -6970,16 +7131,29 @@
                       "paused",
                       "cancelled"
                     ],
-                    "description": "Closed enum -- vendor extensions are deliberately not permitted on clock resolution to keep audit semantics uniform."
+                    "description": "Closed enum -- vendor extensions are deliberately not permitted on clock resolution to keep audit semantics uniform.",
+                    "examples": [
+                      "elapsed"
+                    ]
                   },
                   "resolvedAt": {
                     "type": "string",
-                    "format": "date-time"
+                    "format": "date-time",
+                    "description": "Timestamp at which the clock was satisfied, elapsed, paused or cancelled.",
+                    "examples": [
+                      "2026-05-04T18:00:00Z"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "timestamp"
+                    }
                   },
                   "resolvingEventHash": {
                     "type": "string",
                     "pattern": "^[a-f0-9]{64}$",
-                    "description": "OPTIONAL hash of the event that resolved the clock. REQUIRED when `resolution = \"paused\"` (the pause event itself). Absence with `resolution = \"elapsed\"` indicates a synthetic-elapsed emission per Q11 maximalist."
+                    "description": "OPTIONAL hash of the event that resolved the clock. REQUIRED when `resolution = \"paused\"` (the pause event itself). Absence with `resolution = \"elapsed\"` indicates a synthetic-elapsed emission per Q11 maximalist.",
+                    "examples": [
+                      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                    ]
                   }
                 }
               }
@@ -7094,7 +7268,13 @@
                   "subjectGlobalId": {
                     "type": "string",
                     "minLength": 1,
-                    "description": "Tenant-independent global identifier for the subject (Q31). Format: opaque resolvable identifier (e.g., `globalid:<uuid>`, DID, urn). MUST be stable across tenants so cross-tenant supersession (kernel-level caseRelationships; ADR 0066 / 0068) preserves subject continuity."
+                    "description": "Tenant-independent global identifier for the subject (Q31). Format: opaque resolvable identifier (e.g., `globalid:<uuid>`, DID, urn). MUST be stable across tenants so cross-tenant supersession (kernel-level caseRelationships; ADR 0066 / 0068) preserves subject continuity.",
+                    "examples": [
+                      "urn:example:subject:42"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "identifier"
+                    }
                   },
                   "assuranceLevel": {
                     "type": "string",
@@ -7115,15 +7295,36 @@
                   },
                   "attestationProvider": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "description": "Identifier of the provider that attested the retained subject identity claims.",
+                    "examples": [
+                      "urn:example:identity:provider"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "identifier"
+                    }
                   },
                   "providerAttestationId": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "description": "Attestation identifier assigned by the provider for the evidence it issued.",
+                    "examples": [
+                      "attestation-42"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "identifier"
+                    }
                   },
                   "attestedAt": {
                     "type": "string",
-                    "format": "date-time"
+                    "format": "date-time",
+                    "description": "Timestamp for the attestation supplied by the named identity provider.",
+                    "examples": [
+                      "2026-05-04T18:00:00Z"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "timestamp"
+                    }
                   },
                   "attestedPredicates": {
                     "type": "array",
@@ -7131,13 +7332,26 @@
                     "description": "Open list of predicate strings the provider attested over the subject (e.g. `legal-name-verified`, `age-of-majority`, `ssn-verified`).",
                     "items": {
                       "type": "string",
-                      "minLength": 1
+                      "minLength": 1,
+                      "description": "One identity claim the attestation provider confirms for the named subject.",
+                      "examples": [
+                        "legal-name-verified"
+                      ],
+                      "x-wos": {
+                        "openStringKind": "tagLabel"
+                      }
                     }
                   },
                   "validUntil": {
                     "type": "string",
                     "format": "date-time",
-                    "description": "OPTIONAL expiry. When absent, attestation is treated as point-in-time."
+                    "description": "OPTIONAL expiry. When absent, attestation is treated as point-in-time.",
+                    "examples": [
+                      "2027-05-04T18:00:00Z"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "timestamp"
+                    }
                   }
                 }
               }
@@ -7197,12 +7411,18 @@
                   "priorKid": {
                     "type": "string",
                     "pattern": "^[a-f0-9]{32}$",
-                    "description": "Sixteen-byte lowercase-hex key identifier for the prior signing key."
+                    "description": "Sixteen-byte lowercase-hex key identifier for the prior signing key.",
+                    "examples": [
+                      "12121212121212121212121212121212"
+                    ]
                   },
                   "newKid": {
                     "type": "string",
                     "pattern": "^[a-f0-9]{32}$",
-                    "description": "Sixteen-byte lowercase-hex key identifier for the replacement signing key."
+                    "description": "Sixteen-byte lowercase-hex key identifier for the replacement signing key.",
+                    "examples": [
+                      "34343434343434343434343434343434"
+                    ]
                   },
                   "priorAssurance": {
                     "$ref": "#/$defs/KeyRebindAssuranceLevel"
@@ -7214,7 +7434,13 @@
                   "rebindAttestationRef": {
                     "type": "string",
                     "format": "uri",
-                    "description": "URI for the recovery attestation evidence, such as an in-person clerk ceremony, IdP claim, or recovery-code proof."
+                    "description": "URI for the recovery attestation evidence, such as an in-person clerk ceremony, IdP claim, or recovery-code proof.",
+                    "examples": [
+                      "https://example.gov/key-recovery/42"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "uri"
+                    }
                   },
                   "reason": {
                     "type": "string",
@@ -7222,7 +7448,10 @@
                     "x-wos": {
                       "openStringKind": "prose"
                     },
-                    "description": "Human-readable recovery rationale."
+                    "description": "Human-readable rationale for recovering or replacing the prior signing key.",
+                    "examples": [
+                      "The subject recovered access through the clerk ceremony."
+                    ]
                   }
                 }
               }
@@ -7297,25 +7526,48 @@
                 "properties": {
                   "processorAuthoredAt": {
                     "type": "string",
-                    "format": "date-time"
+                    "format": "date-time",
+                    "description": "Timestamp the processor assigned to the event being checked for clock skew.",
+                    "examples": [
+                      "2026-05-04T17:59:58Z"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "timestamp"
+                    }
                   },
                   "substrateCreatedAt": {
                     "type": "string",
-                    "format": "date-time"
+                    "format": "date-time",
+                    "description": "Timestamp the substrate recorded for the same event being checked for clock skew.",
+                    "examples": [
+                      "2026-05-04T18:00:00Z"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "timestamp"
+                    }
                   },
                   "skewMilliseconds": {
                     "type": "integer",
-                    "description": "Signed delta: substrate - processor in milliseconds. Negative values indicate processor clock ahead of substrate."
+                    "description": "Signed delta: substrate - processor in milliseconds. Negative values indicate processor clock ahead of substrate.",
+                    "examples": [
+                      2000
+                    ]
                   },
                   "thresholdMilliseconds": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "Deployment-configured threshold above which a skew event is emitted (default 1000ms per ADR-0069)."
+                    "description": "Deployment-configured threshold above which a skew event is emitted (default 1000ms per ADR-0069).",
+                    "examples": [
+                      1000
+                    ]
                   },
                   "eventHash": {
                     "type": "string",
                     "pattern": "^[a-f0-9]{64}$",
-                    "description": "Hash of the event whose timestamps disagreed."
+                    "description": "Lowercase hexadecimal SHA-256 of the event whose recorded timestamps disagreed.",
+                    "examples": [
+                      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                    ]
                   }
                 }
               }
@@ -7387,7 +7639,11 @@
                 "properties": {
                   "targetEventHash": {
                     "type": "string",
-                    "pattern": "^[a-f0-9]{64}$"
+                    "pattern": "^[a-f0-9]{64}$",
+                    "description": "Lowercase hexadecimal SHA-256 of the event the processor attempted to commit.",
+                    "examples": [
+                      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                    ]
                   },
                   "failureKind": {
                     "type": "string",
@@ -7397,15 +7653,26 @@
                       "hashConflict",
                       "other"
                     ],
-                    "description": "Closed enum -- new commit-failure modes require a spec amendment so monitoring tooling stays uniform."
+                    "description": "Closed enum -- new commit-failure modes require a spec amendment so monitoring tooling stays uniform.",
+                    "examples": [
+                      "networkTimeout"
+                    ]
                   },
                   "attemptCount": {
                     "type": "integer",
-                    "minimum": 0
+                    "minimum": 0,
+                    "description": "Number of commit attempts recorded for the event at the time of this failure.",
+                    "examples": [
+                      3
+                    ]
                   },
                   "retryBudgetRemainingMs": {
                     "type": "integer",
-                    "minimum": 0
+                    "minimum": 0,
+                    "description": "Milliseconds of retry time remaining when the processor recorded this commit failure.",
+                    "examples": [
+                      5000
+                    ]
                   },
                   "errorPayload": {
                     "description": "OPTIONAL diagnostic payload. Shape unconstrained -- structured by kernel implementation."
@@ -7477,24 +7744,54 @@
                 "properties": {
                   "attemptedActorId": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "description": "Identifier of the actor associated with the action that authorization rejected.",
+                    "examples": [
+                      "actor:human:case-worker"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "identifier"
+                    }
                   },
                   "attemptedAction": {
                     "type": "string",
                     "pattern": "^[a-z][a-zA-Z0-9-]*:[a-z][a-zA-Z0-9-]*$",
-                    "description": "Action identifier in `<verb>:<resource-noun>` form (e.g. `transition:approve`, `submit:taskResponse`, `create:case`). Both halves are camelCase / kebab-case identifiers."
+                    "description": "Action identifier in `<verb>:<resource-noun>` form (e.g. `transition:approve`, `submit:taskResponse`, `create:case`). Both halves are camelCase / kebab-case identifiers.",
+                    "examples": [
+                      "transition:approve"
+                    ]
                   },
                   "targetResourceId": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "description": "Identifier of the resource on which the rejected action was attempted.",
+                    "examples": [
+                      "case-42"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "identifier"
+                    }
                   },
                   "rejectionReason": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "description": "Human-readable explanation of the policy decision that rejected the attempted action.",
+                    "examples": [
+                      "The actor does not hold the assigned reviewer role."
+                    ],
+                    "x-wos": {
+                      "openStringKind": "prose"
+                    }
                   },
                   "policyDecisionRef": {
                     "type": "string",
-                    "description": "OPTIONAL reference to the policy-decision artifact that produced the rejection (URN, URI, or vendor opaque)."
+                    "description": "OPTIONAL reference to the policy-decision artifact that produced the rejection (URN, URI, or vendor opaque).",
+                    "examples": [
+                      "urn:example:policy-decision:42"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "identifier"
+                    }
                   }
                 }
               }
@@ -7571,14 +7868,28 @@
                   },
                   "authorizingActorId": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "description": "Canonical identifier of the actor who authorized this action.",
+                    "examples": [
+                      "actor:human:supervisor"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "identifier"
+                    }
                   },
                   "authorityBasis": {
                     "$ref": "#/$defs/AuthorityBasis"
                   },
                   "migrationRationale": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "description": "Human-readable reason for changing the pinned conformance class on the chain.",
+                    "examples": [
+                      "The case moved to the newly approved conformance class."
+                    ],
+                    "x-wos": {
+                      "openStringKind": "prose"
+                    }
                   }
                 }
               }
@@ -11510,7 +11821,11 @@
               "serviceRef": {
                 "type": "string",
                 "minLength": 1,
-                "pattern": "\\S"
+                "pattern": "\\S",
+                "description": "Service identifier used to resolve the integration binding for this lifecycle action.",
+                "examples": [
+                  "eligibility-service"
+                ]
               }
             }
           }
@@ -11550,7 +11865,10 @@
                 "format": "duration",
                 "examples": [
                   "P90D"
-                ]
+                ],
+                "x-wos": {
+                  "openStringKind": "identifier"
+                }
               }
             },
             "not": {

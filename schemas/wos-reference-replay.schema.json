@@ -72,24 +72,22 @@
         "kidBase64": {
           "type": "string",
           "contentEncoding": "base64",
-          "description": "Base64-encoded key identifier used to select the trusted fixture receipt signer.",
+          "description": "Canonical standard base64-encoded key identifier used to select the trusted fixture receipt signer.",
           "examples": [
             "cmVjZWlwdA=="
           ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
+          "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/][AQgw]==|[A-Za-z0-9+/]{2}[AEIMQUYcgkosw048]=)?(?![\\s\\S])",
+          "minLength": 4
         },
         "publicKeyBase64": {
           "type": "string",
           "contentEncoding": "base64",
-          "description": "Base64-encoded raw Ed25519 public key used to verify the fixture receipt signature.",
+          "description": "Canonical standard base64-encoded raw Ed25519 public key used to verify the fixture receipt signature.",
           "examples": [
             "PUAXw+hDiVqStwqnTRt+vJyYLM8uxJaMwM1V8Sr0Zgw="
           ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
+          "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/][AQgw]==|[A-Za-z0-9+/]{2}[AEIMQUYcgkosw048]=)?(?![\\s\\S])",
+          "minLength": 4
         },
         "methodUri": {
           "const": "urn:formspec:receipt-method:ed25519-cose-sign1@1"
@@ -172,13 +170,12 @@
         "pkcs8Base64": {
           "type": "string",
           "contentEncoding": "base64",
-          "description": "Base64-encoded PKCS #8 Ed25519 private key for synthetic fixture document signing; a local software capability, never a production key.",
+          "description": "Canonical standard base64-encoded PKCS #8 Ed25519 private key for synthetic fixture document signing; a local software capability, never a production key.",
           "examples": [
             "MFECAQEwBQYDK2VwBCIEIJ1hsZ3v/VpguoRK9JLsLMREScVpezJpGXA7rAMcrn9ggSEA11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo="
           ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
+          "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/][AQgw]==|[A-Za-z0-9+/]{2}[AEIMQUYcgkosw048]=)?(?![\\s\\S])",
+          "minLength": 4
         },
         "receiptSignerRef": {
           "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Id"
@@ -186,13 +183,12 @@
         "receiptPkcs8Base64": {
           "type": "string",
           "contentEncoding": "base64",
-          "description": "Base64-encoded PKCS #8 Ed25519 private key for synthetic fixture receipt signing; a local software capability, never a production key.",
+          "description": "Canonical standard base64-encoded PKCS #8 Ed25519 private key for synthetic fixture receipt signing; a local software capability, never a production key.",
           "examples": [
             "MFECAQEwBQYDK2VwBCIEIEzNCJso/5banbbDRuwRTg9bijGfNaumJNqM9u1PuKb7gSEAPUAXw+hDiVqStwqnTRt+vJyYLM8uxJaMwM1V8Sr0Zgw="
           ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
+          "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/][AQgw]==|[A-Za-z0-9+/]{2}[AEIMQUYcgkosw048]=)?(?![\\s\\S])",
+          "minLength": 4
         }
       }
     },
@@ -220,24 +216,22 @@
         "kidBase64": {
           "type": "string",
           "contentEncoding": "base64",
-          "description": "Base64-encoded key identifier that must match the protected document-signing key ID.",
+          "description": "Canonical standard base64-encoded key identifier that must match the protected document-signing key ID.",
           "examples": [
             "ZG9jdW1lbnQ="
           ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
+          "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/][AQgw]==|[A-Za-z0-9+/]{2}[AEIMQUYcgkosw048]=)?(?![\\s\\S])",
+          "minLength": 4
         },
         "publicKeyBase64": {
           "type": "string",
           "contentEncoding": "base64",
-          "description": "Base64-encoded raw Ed25519 public key for the selected fixture document signer.",
+          "description": "Canonical standard base64-encoded raw Ed25519 public key for the selected fixture document signer.",
           "examples": [
             "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo="
           ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
+          "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/][AQgw]==|[A-Za-z0-9+/]{2}[AEIMQUYcgkosw048]=)?(?![\\s\\S])",
+          "minLength": 4
         },
         "methodUri": {
           "const": "urn:formspec:sig-method:ed25519-cose-sign1@1"
@@ -268,13 +262,11 @@
         "bytesBase64": {
           "type": "string",
           "contentEncoding": "base64",
-          "description": "Base64 representation of the exact retained evidence bytes checked against the selected digest.",
+          "description": "Canonical standard base64 representation of the exact retained evidence bytes checked against the selected digest.",
           "examples": [
             "ZXhhbXBsZSBmaXh0dXJlIGV2aWRlbmNl"
           ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
+          "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/][AQgw]==|[A-Za-z0-9+/]{2}[AEIMQUYcgkosw048]=)?(?![\\s\\S])"
         },
         "sha256": {
           "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Digest"

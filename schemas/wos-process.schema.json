@@ -33,7 +33,11 @@
         "propertyNames": {
           "type": "string",
           "minLength": 1,
-          "pattern": "\\S"
+          "pattern": "\\S",
+          "description": "Exact callback subject that indexes the pending callback registration in this process.",
+          "examples": [
+            "default_process_01hw7rm71vfay8vvw14d2pf2db:eligibility:default_process_01hw7rm71vfay8vvw14d2pf2db:eligibility:deferred:0"
+          ]
         },
         "additionalProperties": {
           "$ref": "#/$defs/PendingCallback"
@@ -57,7 +61,11 @@
         "propertyNames": {
           "type": "string",
           "minLength": 1,
-          "pattern": "\\S"
+          "pattern": "\\S",
+          "description": "Exact callback subject shared by this deferred outbound event and its callback registration.",
+          "examples": [
+            "default_process_01hw7rm71vfay8vvw14d2pf2db:eligibility:default_process_01hw7rm71vfay8vvw14d2pf2db:eligibility:deferred:0"
+          ]
         },
         "additionalProperties": {
           "$ref": "#/$defs/PendingOutboundEvent"
@@ -884,7 +892,11 @@
                 "callbackEventType": {
                   "type": "string",
                   "minLength": 1,
-                  "pattern": "\\S"
+                  "pattern": "\\S",
+                  "description": "Inbound event type expected when the retained integration binding completes by callback.",
+                  "examples": [
+                    "verification.completed"
+                  ]
                 }
               }
             }

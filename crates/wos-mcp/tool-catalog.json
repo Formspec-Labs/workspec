@@ -2933,14 +2933,14 @@
                 "properties": {
                   "profile": {
                     "$ref": "#/$defs/ReferenceProfile",
-                    "description": "Retained profile value under referenceDueProcess/1."
+                    "description": "Versioned marker for the supported native due-process execution profile."
                   },
                   "determinations": {
                     "type": "array",
                     "items": {
                       "$ref": "#/$defs/DeterminationBinding"
                     },
-                    "description": "Retained determinations value under referenceDueProcess/1.",
+                    "description": "Exact bindings for reachable adverse-decision transitions in the selected workflow.",
                     "minItems": 1,
                     "uniqueItems": true
                   },
@@ -2949,25 +2949,25 @@
                     "items": {
                       "$ref": "#/$defs/OperationBinding"
                     },
-                    "description": "Retained operations value under referenceDueProcess/1.",
+                    "description": "Governed operations bound to their actual workflow transitions.",
                     "minItems": 1,
                     "uniqueItems": true
                   },
                   "notice": {
                     "$ref": "#/$defs/NoticePolicy",
-                    "description": "Retained notice value under referenceDueProcess/1."
+                    "description": "Selected policy for rendering, staging and qualifying an adverse-decision notice."
                   },
                   "appeal": {
                     "$ref": "#/$defs/AppealPolicy",
-                    "description": "Retained appeal value under referenceDueProcess/1."
+                    "description": "Selected policy for appeals, independent hearings and continuation of services."
                   },
                   "preNoticeExtension": {
                     "$ref": "#/$defs/ExtensionPolicy",
-                    "description": "Retained preNoticeExtension value under referenceDueProcess/1."
+                    "description": "Policy authorizing bounded extensions of the retained pre-notice timer, when configured."
                   },
                   "limits": {
                     "$ref": "#/$defs/Limits",
-                    "description": "Retained limits value under referenceDueProcess/1."
+                    "description": "Bounds for retained records, outstanding work, transport attempts and rendered notice bytes."
                   }
                 }
               },
@@ -3024,7 +3024,7 @@
                   "maxOutstandingNoticeWork": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "Maximum number of outstanding notice work entries permitted for the process.",
+                    "description": "Maximum retained notices without a qualified receipt before the runtime refuses to stage another.",
                     "maximum": 100000,
                     "examples": [
                       10
@@ -3063,14 +3063,14 @@
                 "properties": {
                   "timerId": {
                     "$ref": "#/$defs/Id",
-                    "description": "Retained timerId value under referenceDueProcess/1."
+                    "description": "Identifier of the native pre-notice timer whose existing deadline may be extended."
                   },
                   "allowedStatePointers": {
                     "type": "array",
                     "items": {
                       "$ref": "#/$defs/Pointer"
                     },
-                    "description": "Retained allowedStatePointers value under referenceDueProcess/1.",
+                    "description": "Workflow state pointers in which the pre-notice extension may be admitted.",
                     "minItems": 1,
                     "uniqueItems": true
                   },
@@ -3082,7 +3082,7 @@
                     "items": {
                       "$ref": "#/$defs/SourceRef"
                     },
-                    "description": "Retained sourceRefs value under referenceDueProcess/1.",
+                    "description": "Retained sources grounding the pre-notice extension and its cumulative limit.",
                     "minItems": 1,
                     "uniqueItems": true
                   }
@@ -3100,7 +3100,7 @@
                 "properties": {
                   "sourceVersion": {
                     "$ref": "#/$defs/Id",
-                    "description": "Retained sourceVersion value under referenceDueProcess/1."
+                    "description": "Selected evidence ID used to locate the retained bytes with the required role."
                   },
                   "sectionAnchor": {
                     "type": "string",
@@ -3116,7 +3116,7 @@
                   },
                   "retainedSha256": {
                     "$ref": "#/$defs/Digest",
-                    "description": "Retained retainedSha256 value under referenceDueProcess/1."
+                    "description": "SHA-256 digest of the exact retained bytes addressed by this source reference."
                   }
                 }
               },
@@ -3177,7 +3177,7 @@
                     "items": {
                       "$ref": "#/$defs/Channel"
                     },
-                    "description": "Retained channels value under referenceDueProcess/1.",
+                    "description": "Filing channels available for appeals under this selected policy.",
                     "minItems": 1,
                     "uniqueItems": true
                   },
@@ -3186,7 +3186,7 @@
                     "items": {
                       "$ref": "#/$defs/Id"
                     },
-                    "description": "Retained standingActors value under referenceDueProcess/1.",
+                    "description": "Declared household actors eligible to file an appeal, subject to identity and access checks.",
                     "minItems": 1,
                     "uniqueItems": true
                   },
@@ -3195,28 +3195,28 @@
                     "items": {
                       "$ref": "#/$defs/Id"
                     },
-                    "description": "Retained reviewerActors value under referenceDueProcess/1.",
+                    "description": "Declared reviewer actors eligible to act, subject to canonical independence checks.",
                     "minItems": 1,
                     "uniqueItems": true
                   },
                   "excludedDeterminationActors": {
                     "$ref": "#/$defs/ExcludedDeterminationActors",
-                    "description": "Retained excludedDeterminationActors value under referenceDueProcess/1."
+                    "description": "Independence rule excluding the determining human and the signing supervisor from review."
                   },
                   "hearingDeadline": {
                     "$ref": "#/$defs/HearingDeadline",
-                    "description": "Retained hearingDeadline value under referenceDueProcess/1."
+                    "description": "Maximum calendar days from filing to the actual holding of the hearing."
                   },
                   "continuation": {
                     "$ref": "#/$defs/ContinuationPolicy",
-                    "description": "Retained continuation value under referenceDueProcess/1."
+                    "description": "Selected rule for retaining current services while the appeal is pending."
                   },
                   "sourceRefs": {
                     "type": "array",
                     "items": {
                       "$ref": "#/$defs/SourceRef"
                     },
-                    "description": "Retained sourceRefs value under referenceDueProcess/1.",
+                    "description": "Retained sources grounding the selected appeal and service-continuation terms.",
                     "minItems": 1,
                     "uniqueItems": true
                   }
@@ -3234,15 +3234,15 @@
                 "properties": {
                   "choice": {
                     "$ref": "#/$defs/ContinuationChoicePolicy",
-                    "description": "Retained choice value under referenceDueProcess/1."
+                    "description": "Rule for when the household must elect continuation or may waive it."
                   },
                   "scope": {
                     "$ref": "#/$defs/ContinuationScope",
-                    "description": "Retained scope value under referenceDueProcess/1."
+                    "description": "Current level of services protected while the continuation rule applies."
                   },
                   "endsOn": {
                     "$ref": "#/$defs/ContinuationEnd",
-                    "description": "Retained endsOn value under referenceDueProcess/1."
+                    "description": "Disposition or permitted household termination ends frozen continuation."
                   }
                 }
               },
@@ -3292,7 +3292,7 @@
                   },
                   "purpose": {
                     "$ref": "#/$defs/HearingPurpose",
-                    "description": "Retained purpose value under referenceDueProcess/1."
+                    "description": "Hearing milestone that must occur by the selected deadline."
                   }
                 }
               },
@@ -3345,39 +3345,39 @@
                 "properties": {
                   "recipientPointer": {
                     "$ref": "#/$defs/Pointer",
-                    "description": "Retained recipientPointer value under referenceDueProcess/1."
+                    "description": "JSON Pointer used to read the recipient from the retained determination snapshot."
                   },
                   "deliveryChannel": {
                     "$ref": "#/$defs/DeliveryChannel",
-                    "description": "Retained deliveryChannel value under referenceDueProcess/1."
+                    "description": "Selected channel for staging notice work and using the fixture transport."
                   },
                   "templates": {
                     "type": "array",
                     "items": {
                       "$ref": "#/$defs/NoticeTemplateSelection"
                     },
-                    "description": "Retained templates value under referenceDueProcess/1.",
+                    "description": "Ordered Delivery template variants with review evidence, including the primary template first.",
                     "minItems": 1,
                     "uniqueItems": true
                   },
                   "evidenceClass": {
                     "$ref": "#/$defs/EvidenceClass",
-                    "description": "Retained evidenceClass value under referenceDueProcess/1."
+                    "description": "Required class of receipt evidence before the grace clock can qualify."
                   },
                   "appealAnchor": {
                     "$ref": "#/$defs/AppealAnchor",
-                    "description": "Retained appealAnchor value under referenceDueProcess/1."
+                    "description": "Notice issuance is the starting point for the appeal window."
                   },
                   "graceAnchor": {
                     "$ref": "#/$defs/GraceAnchor",
-                    "description": "Retained graceAnchor value under referenceDueProcess/1."
+                    "description": "Qualified receipt is the starting point for the adverse-effect grace period."
                   },
                   "sourceRefs": {
                     "type": "array",
                     "items": {
                       "$ref": "#/$defs/SourceRef"
                     },
-                    "description": "Retained sourceRefs value under referenceDueProcess/1.",
+                    "description": "Retained sources grounding the selected notice policy.",
                     "minItems": 1,
                     "uniqueItems": true
                   }
@@ -3435,11 +3435,11 @@
                   },
                   "templateKey": {
                     "$ref": "#/$defs/Id",
-                    "description": "Retained templateKey value under referenceDueProcess/1."
+                    "description": "Key of the selected Delivery template to render for this locale."
                   },
                   "review": {
                     "$ref": "#/$defs/ReviewRef",
-                    "description": "Retained review value under referenceDueProcess/1."
+                    "description": "Reference to the retained review evidence for this selected template variant."
                   }
                 }
               },
@@ -3454,11 +3454,11 @@
                 "properties": {
                   "id": {
                     "$ref": "#/$defs/Id",
-                    "description": "Retained id value under referenceDueProcess/1."
+                    "description": "ID of the selected retained review evidence."
                   },
                   "sha256": {
                     "$ref": "#/$defs/Digest",
-                    "description": "Retained sha256 value under referenceDueProcess/1."
+                    "description": "SHA-256 digest of the exact review bytes selected by this reference."
                   }
                 }
               },
@@ -3491,22 +3491,22 @@
                 "properties": {
                   "id": {
                     "$ref": "#/$defs/Id",
-                    "description": "Retained id value under referenceDueProcess/1."
+                    "description": "Authored operation identifier supplied by requests and recorded on successful operations."
                   },
                   "kind": {
                     "$ref": "#/$defs/OperationKind",
-                    "description": "Retained kind value under referenceDueProcess/1."
+                    "description": "Governed command or workflow-owned action this binding authorizes."
                   },
                   "determinationRef": {
                     "$ref": "#/$defs/Id",
-                    "description": "Retained determinationRef value under referenceDueProcess/1."
+                    "description": "Authored determination binding ID this operation applies to."
                   },
                   "actors": {
                     "type": "array",
                     "items": {
                       "$ref": "#/$defs/Id"
                     },
-                    "description": "Retained actors value under referenceDueProcess/1.",
+                    "description": "Declared workflow actors eligible for this operation, subject to native authorization.",
                     "minItems": 1,
                     "uniqueItems": true
                   },
@@ -3515,7 +3515,7 @@
                     "items": {
                       "$ref": "#/$defs/Pointer"
                     },
-                    "description": "Retained requiredStatePointers value under referenceDueProcess/1.",
+                    "description": "Workflow pointers to active states in which the operation may run.",
                     "minItems": 1,
                     "uniqueItems": true
                   },
@@ -3531,14 +3531,14 @@
                   },
                   "transition": {
                     "$ref": "#/$defs/TransitionLocation",
-                    "description": "Retained transition value under referenceDueProcess/1."
+                    "description": "Exact workflow transition location that the trusted operation must select."
                   },
                   "sourceRefs": {
                     "type": "array",
                     "items": {
                       "$ref": "#/$defs/SourceRef"
                     },
-                    "description": "Retained sourceRefs value under referenceDueProcess/1.",
+                    "description": "Retained sources grounding the operation and its preconditions.",
                     "minItems": 1,
                     "uniqueItems": true
                   }
@@ -3555,7 +3555,7 @@
                 "properties": {
                   "statePointer": {
                     "$ref": "#/$defs/Pointer",
-                    "description": "Retained statePointer value under referenceDueProcess/1."
+                    "description": "JSON Pointer to the owning state in the selected workflow."
                   },
                   "transitionIndex": {
                     "type": "integer",
@@ -3602,22 +3602,22 @@
                 "properties": {
                   "id": {
                     "$ref": "#/$defs/Id",
-                    "description": "Retained id value under referenceDueProcess/1."
+                    "description": "Authored identifier used by operation bindings and retained determination records."
                   },
                   "transition": {
                     "$ref": "#/$defs/TransitionLocation",
-                    "description": "Retained transition value under referenceDueProcess/1."
+                    "description": "Exact state and transition index that produces this determination when it fires."
                   },
                   "pendingStatePointer": {
                     "$ref": "#/$defs/Pointer",
-                    "description": "Retained pendingStatePointer value under referenceDueProcess/1."
+                    "description": "Workflow pointer to the determining transition's immediate target before adverse effect."
                   },
                   "appliedStatePointers": {
                     "type": "array",
                     "items": {
                       "$ref": "#/$defs/Pointer"
                     },
-                    "description": "Retained appliedStatePointers value under referenceDueProcess/1.",
+                    "description": "Workflow state pointers that may be entered through the authorized adverse-effect operation.",
                     "minItems": 1,
                     "uniqueItems": true
                   },
@@ -3626,24 +3626,24 @@
                     "items": {
                       "$ref": "#/$defs/Pointer"
                     },
-                    "description": "Retained servicePointers value under referenceDueProcess/1.",
+                    "description": "Case-state pointers whose retained values are protected until adverse effect is admitted.",
                     "minItems": 1,
                     "uniqueItems": true
                   },
                   "signatureTaskRef": {
                     "$ref": "#/$defs/Id",
-                    "description": "Retained signatureTaskRef value under referenceDueProcess/1."
+                    "description": "Workflow task reference for the verified signature bound to this exact determination."
                   },
                   "explanation": {
                     "$ref": "#/$defs/ExplanationBinding",
-                    "description": "Retained explanation value under referenceDueProcess/1."
+                    "description": "Decision table, reasons and counterfactuals used to produce the determination explanation."
                   },
                   "sourceRefs": {
                     "type": "array",
                     "items": {
                       "$ref": "#/$defs/SourceRef"
                     },
-                    "description": "Retained sourceRefs value under referenceDueProcess/1.",
+                    "description": "Retained sources grounding the selected determination binding.",
                     "minItems": 1,
                     "uniqueItems": true
                   }
@@ -3664,22 +3664,22 @@
                 "properties": {
                   "tableRef": {
                     "$ref": "#/$defs/Id",
-                    "description": "Retained tableRef value under referenceDueProcess/1."
+                    "description": "Identifier of the native decision table used by the determining transition's guard."
                   },
                   "outputColumn": {
                     "$ref": "#/$defs/Id",
-                    "description": "Retained outputColumn value under referenceDueProcess/1."
+                    "description": "Output column of the selected decision table used to compare alternative outcomes."
                   },
                   "beneficialOutput": {
                     "$ref": "#/$defs/Scalar",
-                    "description": "Retained beneficialOutput value under referenceDueProcess/1."
+                    "description": "Result that the selected output column must produce in a successful positive alternative."
                   },
                   "reasons": {
                     "type": "array",
                     "items": {
                       "$ref": "#/$defs/ReasonBinding"
                     },
-                    "description": "Retained reasons value under referenceDueProcess/1.",
+                    "description": "Reason bindings keyed by the actual row selected by the native decision table.",
                     "minItems": 1,
                     "uniqueItems": true
                   },
@@ -3688,7 +3688,7 @@
                     "items": {
                       "$ref": "#/$defs/CaseAlternative"
                     },
-                    "description": "Retained positive value under referenceDueProcess/1.",
+                    "description": "Alternatives evaluated for a different outcome and the configured beneficial result.",
                     "minItems": 1,
                     "uniqueItems": true
                   },
@@ -3697,7 +3697,7 @@
                     "items": {
                       "$ref": "#/$defs/CaseAlternative"
                     },
-                    "description": "Retained negative value under referenceDueProcess/1.",
+                    "description": "Isolated protected-value changes that each preserve the original output and adverse guard result.",
                     "minItems": 1,
                     "uniqueItems": true
                   },
@@ -3749,14 +3749,14 @@
                 "properties": {
                   "id": {
                     "$ref": "#/$defs/Id",
-                    "description": "Retained id value under referenceDueProcess/1."
+                    "description": "Authored identifier for this alternative within the selected explanation."
                   },
                   "changes": {
                     "type": "array",
                     "items": {
                       "$ref": "#/$defs/CaseChange"
                     },
-                    "description": "Retained changes value under referenceDueProcess/1.",
+                    "description": "Scalar replacements evaluated together on a private clone of the retained snapshot.",
                     "minItems": 1,
                     "uniqueItems": true
                   },
@@ -3777,7 +3777,7 @@
                     "items": {
                       "$ref": "#/$defs/SourceRef"
                     },
-                    "description": "Retained sourceRefs value under referenceDueProcess/1.",
+                    "description": "Retained sources grounding the selection of this alternative and its changes.",
                     "minItems": 1,
                     "uniqueItems": true
                   }
@@ -3794,11 +3794,11 @@
                 "properties": {
                   "casePointer": {
                     "$ref": "#/$defs/Pointer",
-                    "description": "Retained casePointer value under referenceDueProcess/1."
+                    "description": "JSON Pointer to the existing scalar field in the determination snapshot to vary."
                   },
                   "value": {
                     "$ref": "#/$defs/Scalar",
-                    "description": "Retained value value under referenceDueProcess/1."
+                    "description": "Replacement scalar used only in the isolated counterfactual evaluation."
                   }
                 }
               },
@@ -3887,7 +3887,7 @@
                 "properties": {
                   "tableRef": {
                     "$ref": "#/$defs/Id",
-                    "description": "Retained tableRef value under referenceDueProcess/1."
+                    "description": "Identifier of the native decision table whose selected row supplies the reason."
                   },
                   "rowId": {
                     "type": "string",
@@ -3903,11 +3903,11 @@
                   },
                   "reasonCode": {
                     "$ref": "#/$defs/Id",
-                    "description": "Retained reasonCode value under referenceDueProcess/1."
+                    "description": "Authored reason identifier recorded as the reasoning rule ID for this row."
                   },
                   "sourceAuthority": {
                     "$ref": "#/$defs/SourceAuthority",
-                    "description": "Retained sourceAuthority value under referenceDueProcess/1."
+                    "description": "Classification of the policy authority that supports this reason."
                   },
                   "description": {
                     "type": "string",
@@ -3926,7 +3926,7 @@
                     "items": {
                       "$ref": "#/$defs/SourceRef"
                     },
-                    "description": "Retained sourceRefs value under referenceDueProcess/1.",
+                    "description": "Retained sources supporting the reason text and its claimed authority.",
                     "minItems": 1,
                     "uniqueItems": true
                   }
@@ -7263,7 +7263,11 @@
                         "serviceRef": {
                           "type": "string",
                           "minLength": 1,
-                          "pattern": "\\S"
+                          "pattern": "\\S",
+                          "description": "Service identifier used to resolve the integration binding for this lifecycle action.",
+                          "examples": [
+                            "eligibility-service"
+                          ]
                         }
                       }
                     }
@@ -7303,7 +7307,10 @@
                           "format": "duration",
                           "examples": [
                             "P90D"
-                          ]
+                          ],
+                          "x-wos": {
+                            "openStringKind": "identifier"
+                          }
                         }
                       },
                       "not": {
@@ -8178,7 +8185,10 @@
                         "type": "string",
                         "minLength": 1,
                         "pattern": "\\S",
-                        "description": "Exact version of the Formspec Definition named by ref, independent of the workflow version. Required when this entry backs a createTask action; processors validate referenced task contracts at process admission."
+                        "description": "Exact version of the Formspec Definition named by ref, independent of the workflow version. Required when this entry backs a createTask action; processors validate referenced task contracts at process admission.",
+                        "examples": [
+                          "1.2.0"
+                        ]
                       }
                     }
                   }

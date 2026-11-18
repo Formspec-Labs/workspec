@@ -300,10 +300,10 @@ pub enum FailureCode {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TransitionLocation {
-    /// Retained `state_pointer` value.
+    /// JSON Pointer to the owning state in the selected workflow.
     #[serde(alias = "state", alias = "state_pointer")]
     pub state_pointer: String,
-    /// Retained `transition_index` value.
+    /// Zero-based position of the transition in the source state's authored transition list.
     pub transition_index: usize,
 }
 
@@ -311,11 +311,11 @@ pub struct TransitionLocation {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct FiringRef {
-    /// Retained `definition_sha256` value.
+    /// Canonical SHA-256 digest of the immutable workflow that supplied the transition.
     pub definition_sha256: String,
-    /// Retained `location` value.
+    /// Owning state pointer and transition index captured by the evaluator at selection.
     pub location: TransitionLocation,
-    /// Retained `provenance_record_id` value.
+    /// ID of the actual saved state-transition provenance record for this firing.
     pub provenance_record_id: String,
 }
 
@@ -340,11 +340,11 @@ pub enum Scalar {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SourceRef {
-    /// Retained `source_version` value.
+    /// Selected evidence ID used to locate the retained bytes with the required role.
     pub source_version: String,
-    /// Retained `section_anchor` value.
+    /// Section locator within the selected evidence.
     pub section_anchor: String,
-    /// Retained `retained_sha256` value.
+    /// SHA-256 digest of the exact retained bytes addressed by this source reference.
     pub retained_sha256: String,
 }
 
@@ -352,9 +352,9 @@ pub struct SourceRef {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReviewRef {
-    /// Retained `id` value.
+    /// ID of the selected retained review evidence.
     pub id: String,
-    /// Retained `sha256` value.
+    /// SHA-256 digest of the exact review bytes selected by this reference.
     pub sha256: String,
 }
 
@@ -362,9 +362,9 @@ pub struct ReviewRef {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CaseChange {
-    /// Retained `case_pointer` value.
+    /// JSON Pointer to the existing scalar field in the determination snapshot to vary.
     pub case_pointer: String,
-    /// Retained `value` value.
+    /// Replacement scalar used only in the isolated counterfactual evaluation.
     pub value: Scalar,
 }
 
@@ -372,13 +372,14 @@ pub struct CaseChange {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CaseAlternative {
-    /// Retained `id` value.
+    /// Authored identifier for this alternative within the selected explanation.
     pub id: String,
-    /// Retained `changes` value.
+    /// Scalar replacements evaluated together on a private clone of the retained snapshot.
     pub changes: Vec<CaseChange>,
-    /// Retained `description` value.
+    /// Authored policy text describing this hypothetical set of case changes, copied verbatim into
+    /// counterfactual provenance; it is not an evaluation result.
     pub description: String,
-    /// Retained `source_refs` value.
+    /// Retained sources grounding the selection of this alternative and its changes.
     pub source_refs: Vec<SourceRef>,
 }
 
@@ -386,17 +387,17 @@ pub struct CaseAlternative {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReasonBinding {
-    /// Retained `table_ref` value.
+    /// Identifier of the native decision table whose selected row supplies the reason.
     pub table_ref: String,
-    /// Retained `row_id` value.
+    /// Identifier of the authored decision table row associated with this reason binding.
     pub row_id: String,
-    /// Retained `reason_code` value.
+    /// Authored reason identifier recorded as the reasoning rule ID for this row.
     pub reason_code: String,
-    /// Retained `source_authority` value.
+    /// Classification of the policy authority that supports this reason.
     pub source_authority: SourceAuthority,
-    /// Retained `description` value.
+    /// Explanation of the authored reason associated with a decision table row.
     pub description: String,
-    /// Retained `source_refs` value.
+    /// Retained sources supporting the reason text and its claimed authority.
     pub source_refs: Vec<SourceRef>,
 }
 
@@ -417,17 +418,18 @@ pub struct ExplanationBinding {
     /// Selected protected scalars; rights-impacting execution requires isolated evidence for each.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub protected_characteristics: Vec<ProtectedCharacteristicBinding>,
-    /// Retained `table_ref` value.
+    /// Identifier of the native decision table used by the determining transition's guard.
     pub table_ref: String,
-    /// Retained `output_column` value.
+    /// Output column of the selected decision table used to compare alternative outcomes.
     pub output_column: String,
-    /// Retained `beneficial_output` value.
+    /// Result that the selected output column must produce in a successful positive alternative.
     pub beneficial_output: Scalar,
-    /// Retained `reasons` value.
+    /// Reason bindings keyed by the actual row selected by the native decision table.
     pub reasons: Vec<ReasonBinding>,
-    /// Retained `positive` value.
+    /// Alternatives evaluated for a different outcome and the configured beneficial result.
     pub positive: Vec<CaseAlternative>,
-    /// Retained `negative` value.
+    /// Isolated protected-value changes that each preserve the original output and adverse guard
+    /// result.
     pub negative: Vec<CaseAlternative>,
 }
 
@@ -435,21 +437,21 @@ pub struct ExplanationBinding {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DeterminationBinding {
-    /// Retained `id` value.
+    /// Authored identifier used by operation bindings and retained determination records.
     pub id: String,
-    /// Retained `transition` value.
+    /// Exact state and transition index that produces this determination when it fires.
     pub transition: TransitionLocation,
-    /// Retained `pending_state_pointer` value.
+    /// Workflow pointer to the determining transition's immediate target before adverse effect.
     pub pending_state_pointer: String,
-    /// Retained `applied_state_pointers` value.
+    /// Workflow state pointers that may be entered through the authorized adverse-effect operation.
     pub applied_state_pointers: Vec<String>,
-    /// Retained `service_pointers` value.
+    /// Case-state pointers whose retained values are protected until adverse effect is admitted.
     pub service_pointers: Vec<String>,
-    /// Retained `signature_task_ref` value.
+    /// Workflow task reference for the verified signature bound to this exact determination.
     pub signature_task_ref: String,
-    /// Retained `explanation` value.
+    /// Decision table, reasons and counterfactuals used to produce the determination explanation.
     pub explanation: ExplanationBinding,
-    /// Retained `source_refs` value.
+    /// Retained sources grounding the selected determination binding.
     pub source_refs: Vec<SourceRef>,
 }
 
@@ -457,21 +459,22 @@ pub struct DeterminationBinding {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct OperationBinding {
-    /// Retained `id` value.
+    /// Authored operation identifier supplied by requests and recorded on successful operations.
     pub id: String,
-    /// Retained `kind` value.
+    /// Governed command or workflow-owned action this binding authorizes.
     pub kind: OperationKind,
-    /// Retained `determination_ref` value.
+    /// Authored determination binding ID this operation applies to.
     pub determination_ref: String,
-    /// Retained `actors` value.
+    /// Declared workflow actors eligible for this operation, subject to native authorization.
     pub actors: Vec<String>,
-    /// Retained `required_state_pointers` value.
+    /// Workflow pointers to active states in which the operation may run.
     pub required_state_pointers: Vec<String>,
-    /// Retained `trigger_event` value.
+    /// Workflow event that triggers the transition associated with this governance operation
+    /// binding.
     pub trigger_event: String,
-    /// Retained `transition` value.
+    /// Exact workflow transition location that the trusted operation must select.
     pub transition: TransitionLocation,
-    /// Retained `source_refs` value.
+    /// Retained sources grounding the operation and its preconditions.
     pub source_refs: Vec<SourceRef>,
 }
 
@@ -479,11 +482,11 @@ pub struct OperationBinding {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NoticeTemplateSelection {
-    /// Retained `locale` value.
+    /// Locale tag used to select the notice template for a required language variant.
     pub locale: String,
-    /// Retained `template_key` value.
+    /// Key of the selected Delivery template to render for this locale.
     pub template_key: String,
-    /// Retained `review` value.
+    /// Reference to the retained review evidence for this selected template variant.
     pub review: ReviewRef,
 }
 
@@ -491,19 +494,20 @@ pub struct NoticeTemplateSelection {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NoticePolicy {
-    /// Retained `recipient_pointer` value.
+    /// JSON Pointer used to read the recipient from the retained determination snapshot.
     pub recipient_pointer: String,
-    /// Retained `delivery_channel` value.
+    /// Selected channel for staging notice work and using the fixture transport.
     pub delivery_channel: DeliveryChannel,
-    /// Retained `templates` value.
+    /// Ordered Delivery template variants with review evidence, including the primary template
+    /// first.
     pub templates: Vec<NoticeTemplateSelection>,
-    /// Retained `evidence_class` value.
+    /// Required class of receipt evidence before the grace clock can qualify.
     pub evidence_class: EvidenceClass,
-    /// Retained `appeal_anchor` value.
+    /// Notice issuance is the starting point for the appeal window.
     pub appeal_anchor: AppealAnchor,
-    /// Retained `grace_anchor` value.
+    /// Qualified receipt is the starting point for the adverse-effect grace period.
     pub grace_anchor: GraceAnchor,
-    /// Retained `source_refs` value.
+    /// Retained sources grounding the selected notice policy.
     pub source_refs: Vec<SourceRef>,
 }
 
@@ -511,9 +515,9 @@ pub struct NoticePolicy {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct HearingDeadline {
-    /// Retained `calendar_days` value.
+    /// Maximum days from admission of the appeal to holding the hearing.
     pub calendar_days: u32,
-    /// Retained `purpose` value.
+    /// Hearing milestone that must occur by the selected deadline.
     pub purpose: HearingPurpose,
 }
 
@@ -521,11 +525,11 @@ pub struct HearingDeadline {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ContinuationPolicy {
-    /// Retained `choice` value.
+    /// Rule for when the household must elect continuation or may waive it.
     pub choice: ContinuationChoicePolicy,
-    /// Retained `scope` value.
+    /// Current level of services protected while the continuation rule applies.
     pub scope: ContinuationScope,
-    /// Retained `ends_on` value.
+    /// Disposition or permitted household termination ends frozen continuation.
     pub ends_on: ContinuationEnd,
 }
 
@@ -533,19 +537,19 @@ pub struct ContinuationPolicy {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AppealPolicy {
-    /// Retained `channels` value.
+    /// Filing channels available for appeals under this selected policy.
     pub channels: Vec<Channel>,
-    /// Retained `standing_actors` value.
+    /// Declared household actors eligible to file an appeal, subject to identity and access checks.
     pub standing_actors: Vec<String>,
-    /// Retained `reviewer_actors` value.
+    /// Declared reviewer actors eligible to act, subject to canonical independence checks.
     pub reviewer_actors: Vec<String>,
-    /// Retained `excluded_determination_actors` value.
+    /// Independence rule excluding the determining human and the signing supervisor from review.
     pub excluded_determination_actors: ExcludedDeterminationActors,
-    /// Retained `hearing_deadline` value.
+    /// Maximum calendar days from filing to the actual holding of the hearing.
     pub hearing_deadline: HearingDeadline,
-    /// Retained `continuation` value.
+    /// Selected rule for retaining current services while the appeal is pending.
     pub continuation: ContinuationPolicy,
-    /// Retained `source_refs` value.
+    /// Retained sources grounding the selected appeal and service-continuation terms.
     pub source_refs: Vec<SourceRef>,
 }
 
@@ -553,13 +557,13 @@ pub struct AppealPolicy {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExtensionPolicy {
-    /// Retained `timer_id` value.
+    /// Identifier of the native pre-notice timer whose existing deadline may be extended.
     pub timer_id: String,
-    /// Retained `allowed_state_pointers` value.
+    /// Workflow state pointers in which the pre-notice extension may be admitted.
     pub allowed_state_pointers: Vec<String>,
-    /// Retained `max_cumulative_calendar_days` value.
+    /// Cap on the sum of extensions accepted for the retained timer.
     pub max_cumulative_calendar_days: u32,
-    /// Retained `source_refs` value.
+    /// Retained sources grounding the pre-notice extension and its cumulative limit.
     pub source_refs: Vec<SourceRef>,
 }
 
@@ -567,19 +571,19 @@ pub struct ExtensionPolicy {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Limits {
-    /// Retained `max_determinations` value.
+    /// Maximum number of determination records the native governor may retain for one process.
     pub max_determinations: usize,
-    /// Retained `max_notices` value.
+    /// Maximum number of notice records the native governor may retain for one process.
     pub max_notices: usize,
-    /// Retained `max_appeals` value.
+    /// Maximum number of appeal records the native governor may retain for one process.
     pub max_appeals: usize,
-    /// Retained `max_operations` value.
+    /// Maximum number of operation records the native governor may retain for one process.
     pub max_operations: usize,
-    /// Retained `max_outstanding_notice_work` value.
+    /// Maximum retained notices without a qualified receipt before the runtime refuses to stage another.
     pub max_outstanding_notice_work: usize,
-    /// Retained `max_transport_attempts` value.
+    /// Maximum number of transport attempts permitted for a single retained notice.
     pub max_transport_attempts: usize,
-    /// Retained `max_notice_bytes` value.
+    /// Maximum size in bytes of one rendered notice artifact admitted by the native governor.
     pub max_notice_bytes: usize,
 }
 
@@ -587,24 +591,24 @@ pub struct Limits {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DueProcessExecution {
-    /// Retained `profile` value.
+    /// Versioned marker for the supported native due-process execution profile.
     pub profile: ReferenceProfile,
-    /// Retained `determinations` value.
+    /// Exact bindings for reachable adverse-decision transitions in the selected workflow.
     pub determinations: Vec<DeterminationBinding>,
-    /// Retained `operations` value.
+    /// Governed operations bound to their actual workflow transitions.
     pub operations: Vec<OperationBinding>,
-    /// Retained `notice` value.
+    /// Selected policy for rendering, staging and qualifying an adverse-decision notice.
     pub notice: NoticePolicy,
-    /// Retained `appeal` value.
+    /// Selected policy for appeals, independent hearings and continuation of services.
     pub appeal: AppealPolicy,
-    /// Retained `pre_notice_extension` value.
+    /// Policy authorizing bounded extensions of the retained pre-notice timer, when configured.
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
         deserialize_with = "present"
     )]
     pub pre_notice_extension: Option<ExtensionPolicy>,
-    /// Retained `limits` value.
+    /// Bounds for retained records, outstanding work, transport attempts and rendered notice bytes.
     pub limits: Limits,
 }
 
@@ -612,9 +616,10 @@ pub struct DueProcessExecution {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GovernanceActor {
-    /// Retained `declared_actor` value.
+    /// Workflow actor slot checked against the request's canonical acting identity.
     pub declared_actor: String,
-    /// Retained `acting_actor` value.
+    /// Independently admitted actual actor: the retained canonical human for a human role, or the
+    /// exact declared nonhuman actor otherwise. A request cannot authenticate its own actor.
     pub acting_actor: String,
 }
 
@@ -671,20 +676,20 @@ pub enum GovernanceCommand {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GovernanceRequest {
-    /// Retained `operation_ref` value.
+    /// Authored operation binding ID that the native dispatcher must resolve.
     pub operation_ref: String,
-    /// Retained `determination_id` value.
+    /// Saved determination ID targeted by the request. Omitted for a pre-notice extension.
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
         deserialize_with = "present"
     )]
     pub determination_id: Option<String>,
-    /// Retained `idempotency_token` value.
+    /// Process-local token for replaying the exact accepted request and its original result.
     pub idempotency_token: String,
-    /// Retained `actor` value.
+    /// Declared workflow actor and canonical acting identity submitted for native admission.
     pub actor: GovernanceActor,
-    /// Retained `command` value.
+    /// Typed operation arguments the dispatcher checks against the selected operation binding.
     pub command: GovernanceCommand,
 }
 
@@ -746,9 +751,9 @@ pub enum GovernanceResult {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SnapshotRef {
-    /// Retained `record_id` value.
+    /// Actual provenance record that owns the retained pre-transition snapshot.
     pub record_id: String,
-    /// Retained `sha256` value.
+    /// SHA-256 of the canonical retained snapshot, encoded as lowercase hexadecimal.
     pub sha256: String,
 }
 
@@ -756,13 +761,13 @@ pub struct SnapshotRef {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DeterminationSignature {
-    /// Retained `task_id` value.
+    /// Identity of the original task that supplied the admitted signature for this determination.
     pub task_id: String,
-    /// Retained `affirmation_record_id` value.
+    /// Provenance record ID of the accepted, verified SignatureAffirmation.
     pub affirmation_record_id: String,
-    /// Retained `supervisor_human` value.
+    /// Canonical human identity established by the accepted supervisor signature.
     pub supervisor_human: String,
-    /// Retained `signed_content_sha256` value.
+    /// SHA-256 digest of the full signed Formspec Response payload.
     pub signed_content_sha256: String,
 }
 
@@ -770,9 +775,9 @@ pub struct DeterminationSignature {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AdverseEffect {
-    /// Retained `operation_record_id` value.
+    /// Provenance ID of the actual admitted transition that applied the adverse effect.
     pub operation_record_id: String,
-    /// Retained `applied_at` value.
+    /// Time the adverse-effect operation applied the previously retained determination.
     pub applied_at: String,
 }
 
@@ -780,28 +785,28 @@ pub struct AdverseEffect {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DeterminationState {
-    /// Retained `id` value.
+    /// Actual determining transition's saved provenance record ID.
     pub id: String,
-    /// Retained `binding_ref` value.
+    /// Authored determination binding ID used by the actual determining transition.
     pub binding_ref: String,
-    /// Retained `firing` value.
+    /// Exact location, workflow digest and provenance identity of the determining transition.
     pub firing: FiringRef,
-    /// Retained `determined_at` value.
+    /// Time of the actual determining transition.
     pub determined_at: String,
-    /// Retained `snapshot` value.
+    /// Reference to the pre-transition case snapshot that supports this determination.
     pub snapshot: SnapshotRef,
-    /// Retained `determining_human` value.
+    /// Canonical human whose admitted transition produced the determination.
     pub determining_human: String,
-    /// Retained `service_pointers` value.
+    /// Protected case-state fields retained from the selected determination binding.
     pub service_pointers: Vec<String>,
-    /// Retained `signature` value.
+    /// Verified signature bound to this determination and its retained Formspec Response.
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
         deserialize_with = "present"
     )]
     pub signature: Option<DeterminationSignature>,
-    /// Retained `effect` value.
+    /// Saved operation and time when the adverse effect was applied, if it occurred.
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -814,15 +819,15 @@ pub struct DeterminationState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NoticeVariant {
-    /// Retained `locale` value.
+    /// Locale tag identifying the language variant represented by the rendered notice body.
     pub locale: String,
-    /// Retained `template_key` value.
+    /// Key of the selected Delivery template that produced the rendered body.
     pub template_key: String,
-    /// Retained `review` value.
+    /// Retained review evidence selected for this template and locale.
     pub review: ReviewRef,
-    /// Retained `body` value.
+    /// Original rendered body text for this locale in the retained notice artifact.
     pub body: String,
-    /// Retained `body_sha256` value.
+    /// SHA-256 digest of the exact rendered body bytes for this locale.
     pub body_sha256: String,
 }
 
@@ -830,21 +835,21 @@ pub struct NoticeVariant {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TransportAcknowledgement {
-    /// Retained `kind` value.
+    /// Discriminator for a fixture transport report of acceptance.
     pub kind: AcknowledgementKind,
-    /// Retained `notice_id` value.
+    /// Notice ID reported by the fixture transport when it accepted the work.
     pub notice_id: String,
-    /// Retained `transport_key` value.
+    /// Stable key for execution and recovery of the exact staged transport work.
     pub transport_key: String,
-    /// Retained `correlation` value.
+    /// Correlation token that must match the staged notice and its transport work.
     pub correlation: String,
-    /// Retained `artifact_sha256` value.
+    /// SHA-256 digest of the staged notice bytes acknowledged by the transport.
     pub artifact_sha256: String,
-    /// Retained `channel` value.
+    /// Transport channel reported for the accepted notice work.
     pub channel: DeliveryChannel,
-    /// Retained `accepted_at` value.
+    /// Acceptance time reported by the fixture transport.
     pub accepted_at: String,
-    /// Retained `adapter_result_id` value.
+    /// Adapter-assigned identity for the retained successful transport result.
     pub adapter_result_id: String,
 }
 
@@ -852,23 +857,23 @@ pub struct TransportAcknowledgement {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct QualifiedNoticeReceipt {
-    /// Retained `kind` value.
+    /// Discriminator for the fixture transport's receipt claim.
     pub kind: ReceiptKind,
-    /// Retained `notice_id` value.
+    /// Staged notice ID reported in the fixture transport receipt.
     pub notice_id: String,
-    /// Retained `transport_key` value.
+    /// Transport work key reported in the fixture transport receipt.
     pub transport_key: String,
-    /// Retained `correlation` value.
+    /// Correlation token the fixture transport reports for this receipt.
     pub correlation: String,
-    /// Retained `artifact_sha256` value.
+    /// SHA-256 digest the fixture transport reports for the staged notice bytes.
     pub artifact_sha256: String,
-    /// Retained `channel` value.
+    /// Transport channel reported in the fixture transport receipt.
     pub channel: DeliveryChannel,
-    /// Retained `evidence_class` value.
+    /// Evidence class reported by the fixture transport for this receipt.
     pub evidence_class: EvidenceClass,
-    /// Retained `qualified_at` value.
+    /// Qualification time reported by the fixture transport for this receipt.
     pub qualified_at: String,
-    /// Retained `adapter_result_id` value.
+    /// Result ID the fixture transport reports for this receipt.
     pub adapter_result_id: String,
 }
 
@@ -876,9 +881,9 @@ pub struct QualifiedNoticeReceipt {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TransportFailure {
-    /// Retained `kind` value.
+    /// Discriminator indicating a confirmed failure without an external effect.
     pub kind: FailureKind,
-    /// Retained `code` value.
+    /// Failure reason distinguishing an injected no-effect failure from exhausted attempts.
     pub code: FailureCode,
 }
 
@@ -908,48 +913,51 @@ pub enum TransportResult {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NoticeState {
-    /// Retained `id` value.
+    /// Saved state-transition provenance ID of the operation that staged this notice.
     pub id: String,
-    /// Retained `determination_id` value.
+    /// Saved determination ID that this rendered notice addresses.
     pub determination_id: String,
-    /// Retained `artifact_sha256` value.
+    /// SHA-256 digest of the exact rendered notice artifact retained for delivery.
     pub artifact_sha256: String,
-    /// Retained `artifact_bytes_base64` value.
+    /// Exact rendered notice artifact bytes encoded as canonical standard base64.
     pub artifact_bytes_base64: String,
-    /// Retained `issue_at` value.
+    /// Time the issue operation staged the notice. Only an admitted qualified receipt establishes
+    /// issuance at this time.
     pub issue_at: String,
-    /// Retained `appeal_deadline` value.
+    /// Filing deadline computed at staging and effective once issuance qualifies.
     pub appeal_deadline: String,
-    /// Retained `effect_eligible_at` value.
+    /// Proposed adverse-effect threshold computed from staging time and grace, usable only after
+    /// qualification.
     pub effect_eligible_at: String,
-    /// Retained `recipient` value.
+    /// Exact nonblank recipient value resolved from the notice policy's recipientPointer in the
+    /// retained determination snapshot.
     pub recipient: String,
-    /// Retained `channel` value.
+    /// Selected fixture channel retained with the immutable staged notice.
     pub channel: DeliveryChannel,
-    /// Retained `variants` value.
+    /// Reviewed locale variants rendered into the retained notice artifact.
     pub variants: Vec<NoticeVariant>,
-    /// Retained `transport_key` value.
+    /// Stable transport work key saved with the staged notice, reused on retries.
     pub transport_key: String,
-    /// Retained `correlation` value.
+    /// Token binding transport results to this staged notice.
     pub correlation: String,
-    /// Retained `status` value.
+    /// Current delivery state after staging, transport admission or attempt exhaustion.
     pub status: NoticeStatus,
-    /// Retained `attempts` value.
+    /// Count of transport attempts already recorded for this notice in native execution.
     pub attempts: usize,
-    /// Retained `acknowledgements` value.
+    /// Actual transport acceptances retained against this notice.
     pub acknowledgements: Vec<TransportAcknowledgement>,
     /// Distinct actual typed results in first saved runtime observation order.
     ///
     /// These diagnostics grant no delivery qualification or invocation count.
     pub transport_results: Vec<TransportResult>,
-    /// Retained `receipt` value.
+    /// Admitted fixture receipt that qualifies the notice and anchors the grace period.
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
         deserialize_with = "present"
     )]
     pub receipt: Option<QualifiedNoticeReceipt>,
-    /// Retained `failure` value.
+    /// Retained no-effect failure or exhausted-attempts status, if recorded.
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -962,15 +970,15 @@ pub struct NoticeState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct HearingSchedule {
-    /// Retained `operation_record_id` value.
+    /// Saved transition provenance ID of the operation that scheduled the hearing.
     pub operation_record_id: String,
-    /// Retained `scheduled_at` value.
+    /// Actual time the schedule operation committed.
     pub scheduled_at: String,
-    /// Retained `scheduled_for` value.
+    /// Hearing appointment time chosen in the accepted scheduling operation.
     pub scheduled_for: String,
-    /// Retained `reviewer_actor` value.
+    /// Declared workflow actor selected to conduct the hearing.
     pub reviewer_actor: String,
-    /// Retained `reviewer_human` value.
+    /// Canonical human bound to the selected independent reviewer.
     pub reviewer_human: String,
 }
 
@@ -978,13 +986,13 @@ pub struct HearingSchedule {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct HeldHearing {
-    /// Retained `operation_record_id` value.
+    /// Saved transition provenance ID of the operation that held the hearing.
     pub operation_record_id: String,
-    /// Retained `held_at` value.
+    /// Actual recorded time of the admitted hearing.
     pub held_at: String,
-    /// Retained `reviewer_human` value.
+    /// Canonical human who conducted the hearing after the independence check.
     pub reviewer_human: String,
-    /// Retained `evidence_refs` value.
+    /// Retained hearing evidence submitted for the admitted hearing operation.
     pub evidence_refs: Vec<SourceRef>,
 }
 
@@ -992,15 +1000,15 @@ pub struct HeldHearing {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Disposition {
-    /// Retained `operation_record_id` value.
+    /// Saved transition provenance ID of the operation that recorded the disposition.
     pub operation_record_id: String,
-    /// Retained `recorded_at` value.
+    /// Time the independent reviewer's disposition was recorded.
     pub recorded_at: String,
-    /// Retained `outcome` value.
+    /// Whether the disposition upheld or reversed the determination.
     pub outcome: DispositionOutcome,
-    /// Retained `rationale` value.
+    /// Reason retained with the disposition to explain the reviewer's decision on the appeal.
     pub rationale: String,
-    /// Retained `evidence_refs` value.
+    /// Retained hearing evidence cited in the disposition.
     pub evidence_refs: Vec<SourceRef>,
 }
 
@@ -1008,13 +1016,13 @@ pub struct Disposition {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct HouseholdTermination {
-    /// Retained `operation_record_id` value.
+    /// Saved transition provenance ID of the accepted service-termination request.
     pub operation_record_id: String,
-    /// Retained `requested_at` value.
+    /// Time of the accepted household request to terminate service continuation.
     pub requested_at: String,
-    /// Retained `requested_by` value.
+    /// Canonical human whose household authority was checked for the request.
     pub requested_by: String,
-    /// Retained `rationale` value.
+    /// Reason retained with the household's completed request to end continuation of service.
     pub rationale: String,
 }
 
@@ -1022,46 +1030,46 @@ pub struct HouseholdTermination {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AppealState {
-    /// Retained `id` value.
+    /// ID of the saved AppealFiled provenance record for the admitted appeal.
     pub id: String,
-    /// Retained `determination_id` value.
+    /// Saved determination ID challenged by this appeal.
     pub determination_id: String,
-    /// Retained `notice_id` value.
+    /// ID of the issued notice from which appeal eligibility was checked.
     pub notice_id: String,
-    /// Retained `filed_at` value.
+    /// Actual time the appeal filing was admitted.
     pub filed_at: String,
-    /// Retained `filed_by` value.
+    /// Canonical human whose standing and access were checked for the filing.
     pub filed_by: String,
-    /// Retained `channel` value.
+    /// Selected filing channel actually used for the admitted appeal.
     pub channel: Channel,
-    /// Retained `continuation_choice` value.
+    /// Household election, waiver or unspecified choice recorded at filing.
     pub continuation_choice: ContinuationChoice,
-    /// Retained `continuation` value.
+    /// Current service-continuation status under the selected policy and saved milestones.
     pub continuation: ContinuationStatus,
-    /// Retained `hearing_deadline` value.
+    /// Deadline for actually holding the hearing, calculated from the admitted filing time.
     pub hearing_deadline: String,
-    /// Retained `schedule` value.
+    /// Accepted appointment and independent reviewer for the hearing, if scheduled.
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
         deserialize_with = "present"
     )]
     pub schedule: Option<HearingSchedule>,
-    /// Retained `hearing` value.
+    /// Saved reviewer, time and retained evidence from the actual hearing, if held.
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
         deserialize_with = "present"
     )]
     pub hearing: Option<HeldHearing>,
-    /// Retained `disposition` value.
+    /// Saved disposition and evidence from the independent reviewer, if recorded.
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
         deserialize_with = "present"
     )]
     pub disposition: Option<Disposition>,
-    /// Retained `termination` value.
+    /// Saved authorized household request to end frozen continuation, if recorded.
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -1074,7 +1082,7 @@ pub struct AppealState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct OverrideRationale {
-    /// Retained `summary` value.
+    /// Human-readable rationale supplied for the accepted extension.
     pub summary: String,
 }
 
@@ -1082,13 +1090,13 @@ pub struct OverrideRationale {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct OverrideAuthorityVerification {
-    /// Retained `actor_id` value.
+    /// Canonical identity whose authority to extend the timer was verified.
     pub actor_id: String,
-    /// Retained `method` value.
+    /// How the runtime verified the actor's override authority.
     pub method: OverrideAuthorityMethod,
-    /// Retained `verified_at` value.
+    /// Time the runtime verified the actor's override authority.
     pub verified_at: String,
-    /// Retained `authority_source` value.
+    /// Workflow definition URI and declared actor role used to verify authority.
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -1109,11 +1117,11 @@ pub enum OverrideAuthorityMethod {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct OverrideEvidenceReference {
-    /// Retained `kind` value.
+    /// Category of the artifact supporting the accepted override.
     pub kind: OverrideEvidenceKind,
-    /// Retained `uri` value.
+    /// Reference URI identifying the retained supporting document by its digest.
     pub uri: String,
-    /// Retained `summary` value.
+    /// Optional human-readable description of what the cited evidence shows.
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -1134,15 +1142,15 @@ pub enum OverrideEvidenceKind {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct OverrideRecord {
-    /// Retained `id` value.
+    /// Identity minted for this canonical override record.
     pub id: String,
-    /// Retained `case_id` value.
+    /// Identity of the governed case ledger to which the override belongs.
     pub case_id: String,
-    /// Retained `rationale` value.
+    /// Human rationale for the override, supplied with the accepted command.
     pub rationale: OverrideRationale,
-    /// Retained `authority_verification` value.
+    /// Saved identity and role verification that authorized the override.
     pub authority_verification: OverrideAuthorityVerification,
-    /// Retained `supporting_evidence` value.
+    /// References to the retained documents cited by the accepted override.
     pub supporting_evidence: Vec<OverrideEvidenceReference>,
 }
 
@@ -1150,21 +1158,21 @@ pub struct OverrideRecord {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExtensionState {
-    /// Retained `operation_record_id` value.
+    /// Saved transition provenance ID of the accepted extension operation.
     pub operation_record_id: String,
-    /// Retained `determination_binding_ref` value.
+    /// Authored determination binding to which the extension operation belongs.
     pub determination_binding_ref: String,
-    /// Retained `timer_id` value.
+    /// Identifier of the actual retained timer whose deadline was extended.
     pub timer_id: String,
-    /// Retained `calendar_days` value.
+    /// Calendar days added to the timer deadline by this operation.
     pub calendar_days: u32,
-    /// Retained `cumulative_calendar_days` value.
+    /// Total accepted extension days for this timer including this operation.
     pub cumulative_calendar_days: u32,
-    /// Retained `prior_deadline` value.
+    /// Retained timer deadline immediately before this extension.
     pub prior_deadline: String,
-    /// Retained `new_deadline` value.
+    /// Prior deadline plus the calendar days accepted for this extension.
     pub new_deadline: String,
-    /// Retained `override_record` value.
+    /// Canonical OverrideRecord emitted for the extension and retained in operation state.
     pub override_record: OverrideRecord,
 }
 
@@ -1172,26 +1180,26 @@ pub struct ExtensionState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct OperationState {
-    /// Retained `record_id` value.
+    /// Actual saved state-transition provenance ID for the accepted operation.
     pub record_id: String,
-    /// Retained `operation_ref` value.
+    /// Authored binding ID used to admit and dispatch the operation.
     pub operation_ref: String,
-    /// Retained `determination_id` value.
+    /// Saved determination targeted by the operation, when it has a determination target.
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
         deserialize_with = "present"
     )]
     pub determination_id: Option<String>,
-    /// Retained `kind` value.
+    /// Selected native operation executed at the bound transition.
     pub kind: OperationKind,
-    /// Retained `performed_at` value.
+    /// Time of the actual state transition that performed the operation.
     pub performed_at: String,
-    /// Retained `actor` value.
+    /// Declared actor and canonical identity admitted for the operation.
     pub actor: GovernanceActor,
-    /// Retained `firing` value.
+    /// Exact selected transition and provenance ID of the recorded operation firing.
     pub firing: FiringRef,
-    /// Retained `outcome` value.
+    /// Typed result of the already committed native operation.
     pub outcome: GovernanceOutcome,
 }
 
@@ -1199,9 +1207,9 @@ pub struct OperationState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReplayState {
-    /// Retained `request` value.
+    /// Exact accepted public request retained for idempotent replay.
     pub request: GovernanceRequest,
-    /// Retained `result` value.
+    /// Original committed result returned on exact replay of the accepted request.
     pub result: GovernanceResult,
 }
 
@@ -1209,17 +1217,18 @@ pub struct ReplayState {
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DueProcessState {
-    /// Retained `determinations` value.
+    /// Retained determination facts, snapshot references and accepted signature or effect
+    /// milestones.
     pub determinations: Vec<DeterminationState>,
-    /// Retained `notices` value.
+    /// Retained rendered notices and their delivery attempts, results and clock anchors.
     pub notices: Vec<NoticeState>,
-    /// Retained `appeals` value.
+    /// Admitted appeals and their continuation, hearing and disposition milestones.
     pub appeals: Vec<AppealState>,
-    /// Retained `extensions` value.
+    /// Accepted pre-notice timer extensions and their canonical override records.
     pub extensions: Vec<ExtensionState>,
-    /// Retained `operations` value.
+    /// Committed native operations and their actual transition provenance links.
     pub operations: Vec<OperationState>,
-    /// Retained `replays` value.
+    /// Exact accepted public requests and original results retained for idempotent replay.
     pub replays: Vec<ReplayState>,
 }
 
@@ -1227,25 +1236,25 @@ pub struct DueProcessState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PendingNoticeWork {
-    /// Retained `process_id` value.
+    /// Identity of the native process that owns this pending item of notice transport work.
     pub process_id: String,
-    /// Retained `notice_id` value.
+    /// ID of the staged notice whose exact bytes are submitted to the adapter.
     pub notice_id: String,
-    /// Retained `determination_id` value.
+    /// Saved determination ID bound to the staged notice work.
     pub determination_id: String,
-    /// Retained `transport_key` value.
+    /// Stable key used with the process ID to look up and recover transport results.
     pub transport_key: String,
-    /// Retained `correlation` value.
+    /// Token the adapter result must echo to bind it to this staged work.
     pub correlation: String,
-    /// Retained `artifact_sha256` value.
+    /// SHA-256 digest of the exact staged notice artifact supplied to the adapter.
     pub artifact_sha256: String,
-    /// Retained `artifact_bytes_base64` value.
+    /// Rendered notice artifact bytes supplied to transport as canonical standard base64.
     pub artifact_bytes_base64: String,
-    /// Retained `recipient` value.
+    /// Exact recipient value of the issued notice that this pending transport work must deliver.
     pub recipient: String,
-    /// Retained `channel` value.
+    /// Fixture channel selected for the staged notice work.
     pub channel: DeliveryChannel,
-    /// Retained `issue_at` value.
+    /// Saved time the notice was originally staged for transport.
     pub issue_at: String,
 }
 
@@ -1253,9 +1262,9 @@ pub struct PendingNoticeWork {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NamedScalar {
-    /// Retained `name` value.
+    /// Name of the decision-table input or output represented by this value.
     pub name: String,
-    /// Retained `value` value.
+    /// Scalar actually observed for the named decision-table input or output.
     pub value: Scalar,
 }
 
@@ -1263,24 +1272,24 @@ pub struct NamedScalar {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NativeDecisionEvaluation {
-    /// Retained `location` value.
+    /// Exact workflow state and transition index where the guard was evaluated.
     pub location: TransitionLocation,
-    /// Retained `table_ref` value.
+    /// Identifier of the native decision table invoked by the guard.
     pub table_ref: String,
-    /// Retained `inputs` value.
+    /// Concrete input names and values passed to the native decision table.
     pub inputs: Vec<NamedScalar>,
-    /// Retained `matched_row_ids` value.
+    /// IDs of the rows the decision table actually matched during evaluation.
     pub matched_row_ids: Vec<String>,
-    /// Retained `selected_row_id` value.
+    /// Identifier of the decision table row selected by the retained native evaluation.
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
         deserialize_with = "present"
     )]
     pub selected_row_id: Option<String>,
-    /// Retained `outputs` value.
+    /// Concrete output names and values returned by the native decision table.
     pub outputs: Vec<NamedScalar>,
-    /// Retained `guard_result` value.
+    /// Actual Boolean result of the transition guard in the retained native evaluation.
     pub guard_result: bool,
 }
 
@@ -1288,21 +1297,22 @@ pub struct NativeDecisionEvaluation {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DeterminationReasoningData {
-    /// Retained `tier` value.
+    /// Audit tier that identifies this native determination reasoning payload.
     pub tier: ReasoningTier,
-    /// Retained `related_transition` value.
+    /// Identity of the saved determination whose firing the retained reasoning evidence explains.
     pub related_transition: String,
-    /// Retained `rule_id` value.
+    /// Selected reason code corresponding to the actual matched decision-table row.
     pub rule_id: String,
-    /// Retained `authority` value.
+    /// Source authority recorded from the selected reason binding.
     pub authority: SourceAuthority,
-    /// Retained `description` value.
+    /// The selected row's reason binding description, copied verbatim as policy text; actual inputs
+    /// and outputs are retained separately in evaluation.
     pub description: String,
-    /// Retained `timestamp` value.
+    /// Timestamp of the determining transition this reasoning explains.
     pub timestamp: String,
-    /// Retained `evaluation` value.
+    /// Actual decision-table evaluation whose selected row supplied the reason.
     pub evaluation: NativeDecisionEvaluation,
-    /// Retained `source_refs` value.
+    /// Retained sources carried from the selected reason binding.
     pub source_refs: Vec<SourceRef>,
 }
 
@@ -1310,28 +1320,29 @@ pub struct DeterminationReasoningData {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DeterminationCounterfactualData {
-    /// Retained `tier` value.
+    /// Audit tier that identifies this native determination counterfactual payload.
     pub tier: CounterfactualTier,
-    /// Retained `related_transition` value.
+    /// Identity of the saved determination whose firing the counterfactual evidence describes.
     pub related_transition: String,
-    /// Retained `kind` value.
+    /// Positive outcome change or negative outcome preservation verified for this alternative.
     #[serde(rename = "type")]
     pub kind: CounterfactualKind,
-    /// Retained `factor` value.
+    /// Authored alternative ID copied into the counterfactual factor field.
     pub factor: String,
-    /// Retained `description` value.
+    /// The selected alternative's authored description, copied verbatim; the evaluation results are
+    /// retained separately in originalEvaluation and alternateEvaluation.
     pub description: String,
-    /// Retained `alternative` value.
+    /// Selected alternative and its scalar changes applied to a private snapshot clone.
     pub alternative: CaseAlternative,
-    /// Retained `original_snapshot_sha256` value.
+    /// Lowercase hexadecimal SHA-256 of the original retained determination snapshot.
     pub original_snapshot_sha256: String,
-    /// Retained `alternate_snapshot_sha256` value.
+    /// Lowercase hexadecimal SHA-256 of the snapshot with the alternative applied.
     pub alternate_snapshot_sha256: String,
-    /// Retained `original_evaluation` value.
+    /// Actual decision-table observation for the original determination.
     pub original_evaluation: NativeDecisionEvaluation,
-    /// Retained `alternate_evaluation` value.
+    /// Decision-table observation obtained after evaluating the isolated alternative.
     pub alternate_evaluation: NativeDecisionEvaluation,
-    /// Retained `source_refs` value.
+    /// Retained sources carried from the selected counterfactual alternative.
     pub source_refs: Vec<SourceRef>,
 }
 

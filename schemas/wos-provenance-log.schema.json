@@ -191,7 +191,13 @@
               },
               "outputs": {
                 "type": "array",
-                "minItems": 1
+                "minItems": 1,
+                "description": "References emitted for the governed case created by this event. At least one output is required.",
+                "examples": [
+                  [
+                    "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc"
+                  ]
+                ]
               },
               "data": {
                 "$ref": "#/$defs/CaseCreatedData"
@@ -250,7 +256,13 @@
               },
               "outputs": {
                 "type": "array",
-                "minItems": 1
+                "minItems": 1,
+                "description": "Governed-case output references produced by successful intake acceptance. At least one output is required.",
+                "examples": [
+                  [
+                    "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc"
+                  ]
+                ]
               },
               "data": {
                 "$ref": "#/$defs/IntakeAcceptedData"
@@ -835,7 +847,13 @@
                   "transitionEvent": {
                     "type": "string",
                     "minLength": 1,
-                    "description": "Kernel workflow event that triggered the transition; distinct from the canonical D26 record event literal."
+                    "description": "Kernel workflow event that triggered the transition; distinct from the canonical D26 record event literal.",
+                    "examples": [
+                      "approve"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "identifier"
+                    }
                   }
                 },
                 "additionalProperties": true

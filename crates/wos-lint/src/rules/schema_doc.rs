@@ -23,12 +23,17 @@
 //!   - `description.len() >= 140`.
 //!   - `examples` has at least 2 entries.
 //!
-//! A *leaf property* is a schema node that declares a concrete `type` and
-//! has no `properties`, `items`, `oneOf`, `anyOf`, or `allOf` direct
-//! children (those are composite nodes, not leaves). The walk skips leaf
-//! checks at `$ref` sites and visits their authored child schemas.
+//! A *leaf property* declares a concrete `type` without a structural schema
+//! keyword such as `properties`, `items`, or `allOf`. Reference sites and
+//! conditional property refinements use the documentation on their declarations.
+//! A `then`, `else`, or `dependentSchemas` branch can refine a property
+//! declared at the same instance path by the enclosing schema, including across
+//! a combinator or nested `properties`. A first declaration still needs its
+//! own annotations. Tests such as `if`, `not`, and `contains` and subschemas
+//! for other instance locations are checked independently.
+//! Placeholder descriptions are rejected at every authored schema node.
 
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 use crate::diagnostic::LintDiagnostic;
 
@@ -71,8 +76,22 @@ const OPEN_STRING_KIND_VALUES: [&str; 8] = [
 ///
 /// The caller is expected to have already parsed the schema file.
 pub fn check_schema(root: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
-    for_each_subschema(root, "", &mut |obj, pointer| {
-        if is_leaf(obj) {
+    for_each_subschema(root, &mut |obj, pointer, refines_property| {
+        if obj
+            .get("description")
+            .and_then(Value::as_str)
+            .is_some_and(|description| {
+                description.contains(" value under referenceDueProcess/1")
+                    && description.trim_start().starts_with("Retained ")
+            })
+        {
+            diagnostics.push(LintDiagnostic::t1_error(
+                RULE_ID,
+                pointer.to_string(),
+                "`description` contains a retained-value placeholder; describe the field's meaning or omit the redundant annotation",
+            ));
+        }
+        if !refines_property && is_leaf(obj) {
             check_leaf(obj, pointer, diagnostics);
         }
     });
@@ -104,8 +123,8 @@ pub fn check_schema(root: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
 /// assert!(diagnostics.is_empty());
 /// ```
 pub fn check_open_string_kinds(root: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
-    for_each_subschema(root, "", &mut |obj, pointer| {
-        if is_open_string_leaf(obj) {
+    for_each_subschema(root, &mut |obj, pointer, refines_property| {
+        if !refines_property && is_open_string_leaf(obj) {
             check_open_string_kind(obj, pointer, diagnostics);
         }
     });
@@ -118,8 +137,8 @@ pub fn check_open_string_kinds(root: &Value, diagnostics: &mut Vec<LintDiagnosti
 /// need denominator data rather than per-property findings.
 pub fn count_leaves(root: &Value) -> usize {
     let mut count = 0usize;
-    for_each_subschema(root, "", &mut |obj, _| {
-        if is_leaf(obj) {
+    for_each_subschema(root, &mut |obj, _, refines_property| {
+        if !refines_property && is_leaf(obj) {
             count += 1;
         }
     });
@@ -128,10 +147,7 @@ pub fn count_leaves(root: &Value) -> usize {
 
 /// Counts string-shaped leaf nodes vs those with an explicit value constraint.
 ///
-/// Uses the same leaf definition as [`check_schema`]: concrete `type`,
-/// no `properties` / `items` / combinators at that node. Fields such as
-/// `holdType` that express closed vocabulary via `oneOf` are structural nodes,
-/// not leaves — they are excluded here (schema-doc treats them separately).
+/// Uses the same leaf definition and refinement rule as [`check_schema`].
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct StringLeafInventory {
     /// `type` includes `string` at a leaf node.
@@ -152,8 +168,8 @@ impl StringLeafInventory {
 /// Walk `root` and tally string vocabulary shape for schema hardening passes.
 pub fn inventory_string_leaves(root: &Value) -> StringLeafInventory {
     let mut inv = StringLeafInventory::default();
-    for_each_subschema(root, "", &mut |obj, _| {
-        if is_leaf(obj) && is_string_schema(obj) {
+    for_each_subschema(root, &mut |obj, _, refines_property| {
+        if !refines_property && is_leaf(obj) && is_string_schema(obj) {
             inv.string_leaves += 1;
             if leaf_string_has_value_constraint(obj) {
                 inv.constrained_string_leaves += 1;
@@ -181,8 +197,8 @@ pub struct OpenStringLeafRow {
 #[must_use]
 pub fn collect_open_string_leaves(root: &Value) -> Vec<OpenStringLeafRow> {
     let mut rows = Vec::new();
-    for_each_subschema(root, "", &mut |obj, pointer| {
-        if is_open_string_leaf(obj) {
+    for_each_subschema(root, &mut |obj, pointer, refines_property| {
+        if !refines_property && is_open_string_leaf(obj) {
             let description = obj.get("description").and_then(Value::as_str).unwrap_or("");
             rows.push(OpenStringLeafRow {
                 pointer: pointer.to_string(),
@@ -283,58 +299,142 @@ fn has_listed_open_string_kind(obj: &serde_json::Map<String, Value>) -> bool {
 /// Rule identifier for `SCHEMA-OPEN-001`.
 const OPEN_STRING_KIND_RULE_ID: &str = "SCHEMA-OPEN-001";
 
-/// Visit `node` and, depth-first, every subschema the schema-doc passes read:
-/// `properties`, `patternProperties`, `$defs`, `definitions`, `items`, an object
-/// `additionalProperties`, and `oneOf` / `anyOf` / `allOf` members. `pointer` is
-/// the JSON Pointer of `node` within its document.
-///
-/// Every pass shares this one walk. A `$ref` site is visited like any node: under
-/// JSON Schema 2020-12 its sibling keywords still apply, and `$defs` beside a root
-/// `$ref` stay reachable. [`is_leaf`] keeps the reference site out of leaf checks.
-fn for_each_subschema(
+/// Declarations that can apply to the instance at the current schema node.
+#[derive(Default)]
+struct Scope<'a> {
+    declarations: &'a [&'a Map<String, Value>],
+    conditional: bool,
+    refines_property: bool,
+}
+
+/// Visit every authored subschema, including sibling keywords at `$ref` sites.
+fn for_each_subschema(root: &Value, visit: &mut impl FnMut(&Map<String, Value>, &str, bool)) {
+    walk_subschema(root, "", Scope::default(), visit);
+}
+
+fn walk_subschema(
     node: &Value,
     pointer: &str,
-    visit: &mut impl FnMut(&serde_json::Map<String, Value>, &str),
+    scope: Scope<'_>,
+    visit: &mut impl FnMut(&Map<String, Value>, &str, bool),
 ) {
     let Some(obj) = node.as_object() else {
         return;
     };
-    visit(obj, pointer);
-    for keyword in ["properties", "patternProperties", "$defs", "definitions"] {
+    visit(obj, pointer, scope.refines_property);
+
+    let mut same_instance = scope.declarations.to_vec();
+    same_instance.push(obj);
+    for keyword in [
+        "properties",
+        "patternProperties",
+        "$defs",
+        "definitions",
+        "dependentSchemas",
+    ] {
         if let Some(children) = obj.get(keyword).and_then(Value::as_object) {
             for (name, child) in children {
                 let child_pointer = format!("{pointer}/{keyword}/{}", escape_pointer(name));
-                for_each_subschema(child, &child_pointer, visit);
+                let property_declarations;
+                let child_scope = match keyword {
+                    "properties" => {
+                        property_declarations = scope
+                            .declarations
+                            .iter()
+                            .filter_map(|schema| schema.get("properties")?.get(name)?.as_object())
+                            .collect::<Vec<_>>();
+                        Scope {
+                            declarations: &property_declarations,
+                            conditional: scope.conditional,
+                            refines_property: scope.conditional
+                                && property_declarations
+                                    .iter()
+                                    .any(|owner| documents_property(owner)),
+                        }
+                    }
+                    "dependentSchemas" => Scope {
+                        declarations: &same_instance,
+                        conditional: true,
+                        ..Scope::default()
+                    },
+                    _ => Scope::default(),
+                };
+                walk_subschema(child, &child_pointer, child_scope, visit);
             }
         }
     }
-    match obj.get("items") {
-        Some(items @ Value::Object(_)) => {
-            for_each_subschema(items, &format!("{pointer}/items"), visit);
-        }
-        Some(Value::Array(items)) => {
-            for (i, child) in items.iter().enumerate() {
-                for_each_subschema(child, &format!("{pointer}/items/{i}"), visit);
+    for keyword in [
+        "items",
+        "additionalProperties",
+        "if",
+        "then",
+        "else",
+        "not",
+        "propertyNames",
+        "contains",
+    ] {
+        match obj.get(keyword) {
+            Some(child @ Value::Object(_)) => {
+                let child_scope = match keyword {
+                    "then" | "else" => Scope {
+                        declarations: &same_instance,
+                        conditional: true,
+                        ..Scope::default()
+                    },
+                    _ => Scope::default(),
+                };
+                walk_subschema(child, &format!("{pointer}/{keyword}"), child_scope, visit);
             }
+            // Drafts before 2020-12 also allowed tuple schemas under `items`.
+            Some(Value::Array(items)) if keyword == "items" => {
+                for (i, child) in items.iter().enumerate() {
+                    walk_subschema(
+                        child,
+                        &format!("{pointer}/items/{i}"),
+                        Scope::default(),
+                        visit,
+                    );
+                }
+            }
+            _ => {}
         }
-        _ => {}
     }
-    if let Some(additional) = obj.get("additionalProperties")
-        && additional.is_object()
-    {
-        for_each_subschema(
-            additional,
-            &format!("{pointer}/additionalProperties"),
-            visit,
-        );
-    }
-    for combinator in ["oneOf", "anyOf", "allOf"] {
-        if let Some(Value::Array(members)) = obj.get(combinator) {
+    for keyword in ["oneOf", "anyOf", "allOf", "prefixItems"] {
+        if let Some(Value::Array(members)) = obj.get(keyword) {
             for (i, child) in members.iter().enumerate() {
-                for_each_subschema(child, &format!("{pointer}/{combinator}/{i}"), visit);
+                let child_scope = if keyword == "prefixItems" {
+                    Scope::default()
+                } else {
+                    Scope {
+                        declarations: &same_instance,
+                        conditional: scope.conditional,
+                        ..Scope::default()
+                    }
+                };
+                walk_subschema(
+                    child,
+                    &format!("{pointer}/{keyword}/{i}"),
+                    child_scope,
+                    visit,
+                );
             }
         }
     }
+}
+
+/// A declaration can own the documentation for a later typed refinement.
+fn documents_property(obj: &Map<String, Value>) -> bool {
+    // An empty schema or a title alone can reserve a name without describing it.
+    is_leaf(obj)
+        || obj.contains_key("$ref")
+        || (obj
+            .get("description")
+            .and_then(Value::as_str)
+            .is_some_and(|description| description.chars().count() >= BASELINE_DESCRIPTION_MIN)
+            && obj
+                .get("examples")
+                .and_then(Value::as_array)
+                .is_some_and(|examples| !examples.is_empty()))
 }
 
 /// A string leaf with no `enum` / `const` / `pattern` and no listed
@@ -356,6 +456,10 @@ fn is_leaf(obj: &serde_json::Map<String, Value>) -> bool {
         "properties",
         "patternProperties",
         "items",
+        "prefixItems",
+        "contains",
+        "propertyNames",
+        "dependentSchemas",
         "oneOf",
         "anyOf",
         "allOf",
@@ -889,6 +993,139 @@ mod tests {
         let diagnostics = lint(schema);
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
         assert_eq!(diagnostics[0].path, "/properties/state/properties/note");
+    }
+
+    fn assert_walk_reaches(schema: Value, pointer: &str) {
+        let diagnostics = lint(schema.clone());
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].path, pointer);
+
+        let mut diagnostics = Vec::new();
+        check_open_string_kinds(&schema, &mut diagnostics);
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].path, pointer);
+        assert_eq!(count_leaves(&schema), 1);
+        assert_eq!(inventory_string_leaves(&schema).open_string_leaves(), 1);
+        assert_eq!(collect_open_string_leaves(&schema)[0].pointer, pointer);
+    }
+
+    macro_rules! schema_keyword_test {
+        ($name:ident, $pointer:literal, |$leaf:ident| $schema:expr) => {
+            #[test]
+            fn $name() {
+                let $leaf = json!({"type": "string", "examples": ["value"]});
+                assert_walk_reaches($schema, $pointer);
+            }
+        };
+    }
+
+    schema_keyword_test!(walk_visits_if, "/if", |leaf| json!({"if": leaf}));
+    schema_keyword_test!(
+        walk_visits_then,
+        "/then",
+        |leaf| json!({"if": true, "then": leaf})
+    );
+    schema_keyword_test!(
+        walk_visits_else,
+        "/else",
+        |leaf| json!({"if": false, "else": leaf})
+    );
+    schema_keyword_test!(walk_visits_not, "/not", |leaf| json!({"not": leaf}));
+    schema_keyword_test!(
+        walk_visits_property_names,
+        "/propertyNames",
+        |leaf| json!({"propertyNames": leaf})
+    );
+    schema_keyword_test!(
+        walk_visits_contains,
+        "/contains",
+        |leaf| json!({"contains": leaf})
+    );
+    schema_keyword_test!(
+        walk_visits_prefix_items,
+        "/prefixItems/1",
+        |leaf| json!({"prefixItems": [true, leaf]})
+    );
+    schema_keyword_test!(
+        walk_visits_dependent_schemas,
+        "/dependentSchemas/a~1b",
+        |leaf| json!({"dependentSchemas": {"a/b": leaf}})
+    );
+
+    #[test]
+    fn conditional_property_refinements_use_the_declaration_at_the_same_instance_path() {
+        let schema = json!({
+            "properties": {
+                "data": { "properties": {
+                    "known": {
+                        "type": "string", "description": description_60(),
+                        "examples": ["baseline"], "x-wos": { "openStringKind": "identifier" }
+                    }
+                }}
+            },
+            "allOf": [{
+                "if": { "required": ["test"] },
+                "then": { "properties": { "data": { "properties": {
+                    "known": { "type": "string", "const": "specific" },
+                    "new": { "type": "string" }
+                }}}},
+                "else": { "properties": { "other": { "properties": {
+                    "known": { "type": "string" }
+                }}}}
+            }]
+        });
+        let diagnostics = lint(schema.clone());
+        assert_eq!(diagnostics.len(), 4, "{diagnostics:?}");
+        assert_eq!(
+            diagnostics[0].path,
+            "/allOf/0/else/properties/other/properties/known"
+        );
+        assert_eq!(
+            diagnostics[2].path,
+            "/allOf/0/then/properties/data/properties/new"
+        );
+        assert_eq!(count_leaves(&schema), 3);
+    }
+
+    #[test]
+    fn untyped_property_sites_do_not_hide_first_typed_declarations() {
+        for base in [json!({}), json!({"title": "Status"}), json!(true)] {
+            assert_walk_reaches(
+                json!({
+                    "properties": {"status": base},
+                    "if": true,
+                    "then": {"properties": {
+                        "status": {"type": "string", "examples": ["active"]}
+                    }}
+                }),
+                "/then/properties/status",
+            );
+        }
+    }
+
+    #[test]
+    fn placeholder_descriptions_are_rejected_on_reference_sites_and_composites() {
+        let diagnostics = lint(json!({
+            "properties": {
+                "link": {
+                    "$ref": "#/$defs/Target",
+                    "description": "Retained link value under referenceDueProcess/1."
+                },
+                "entries": {
+                    "type": "array", "items": { "$ref": "#/$defs/Target" },
+                    "description": "Retained entries value under referenceDueProcess/1."
+                }
+            },
+            "$defs": { "Target": { "type": "object", "properties": {} } }
+        }));
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].path, "/properties/entries");
+        assert_eq!(diagnostics[1].path, "/properties/link");
+        assert!(
+            diagnostics
+                .iter()
+                .all(|d| d.message.contains("placeholder"))
+        );
     }
 
     #[test]

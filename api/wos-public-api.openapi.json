@@ -1893,7 +1893,7 @@
         "description": "Closed CaseAlternative shape from Governance native reference execution.",
         "properties": {
           "changes": {
-            "description": "Retained changes value under referenceDueProcess/1.",
+            "description": "Scalar replacements evaluated together on a private clone of the retained snapshot.",
             "items": {
               "$ref": "#/components/schemas/CaseChange"
             },
@@ -1915,10 +1915,10 @@
           },
           "id": {
             "$ref": "#/components/schemas/Id",
-            "description": "Retained id value under referenceDueProcess/1."
+            "description": "Authored identifier for this alternative within the selected explanation."
           },
           "sourceRefs": {
-            "description": "Retained sourceRefs value under referenceDueProcess/1.",
+            "description": "Retained sources grounding the selection of this alternative and its changes.",
             "items": {
               "$ref": "#/components/schemas/SourceRef"
             },
@@ -1980,11 +1980,11 @@
         "properties": {
           "casePointer": {
             "$ref": "#/components/schemas/Pointer",
-            "description": "Retained casePointer value under referenceDueProcess/1."
+            "description": "JSON Pointer to the existing scalar field in the determination snapshot to vary."
           },
           "value": {
             "$ref": "#/components/schemas/Scalar",
-            "description": "Retained value value under referenceDueProcess/1."
+            "description": "Replacement scalar used only in the isolated counterfactual evaluation."
           }
         },
         "required": [
@@ -3946,15 +3946,15 @@
         "properties": {
           "alternateEvaluation": {
             "$ref": "#/components/schemas/NativeDecisionEvaluation",
-            "description": "Retained alternateEvaluation value under referenceDueProcess/1."
+            "description": "Decision-table observation obtained after evaluating the isolated alternative."
           },
           "alternateSnapshotSha256": {
             "$ref": "#/components/schemas/SnapshotDigest",
-            "description": "Retained alternateSnapshotSha256 value under referenceDueProcess/1."
+            "description": "Lowercase hexadecimal SHA-256 of the snapshot with the alternative applied."
           },
           "alternative": {
             "$ref": "#/components/schemas/CaseAlternative",
-            "description": "Retained alternative value under referenceDueProcess/1."
+            "description": "Selected alternative and its scalar changes applied to a private snapshot clone."
           },
           "description": {
             "description": "The selected alternative's authored description, copied verbatim; the evaluation results are retained separately in originalEvaluation and alternateEvaluation.",
@@ -3970,15 +3970,15 @@
           },
           "factor": {
             "$ref": "#/components/schemas/Id",
-            "description": "Retained factor value under referenceDueProcess/1."
+            "description": "Authored alternative ID copied into the counterfactual factor field."
           },
           "originalEvaluation": {
             "$ref": "#/components/schemas/NativeDecisionEvaluation",
-            "description": "Retained originalEvaluation value under referenceDueProcess/1."
+            "description": "Actual decision-table observation for the original determination."
           },
           "originalSnapshotSha256": {
             "$ref": "#/components/schemas/SnapshotDigest",
-            "description": "Retained originalSnapshotSha256 value under referenceDueProcess/1."
+            "description": "Lowercase hexadecimal SHA-256 of the original retained determination snapshot."
           },
           "relatedTransition": {
             "description": "Identity of the saved determination whose firing the counterfactual evidence describes.",
@@ -3991,7 +3991,7 @@
             }
           },
           "sourceRefs": {
-            "description": "Retained sourceRefs value under referenceDueProcess/1.",
+            "description": "Retained sources carried from the selected counterfactual alternative.",
             "items": {
               "$ref": "#/components/schemas/SourceRef"
             },
@@ -4001,11 +4001,11 @@
           },
           "tier": {
             "$ref": "#/components/schemas/CounterfactualTier",
-            "description": "Retained tier value under referenceDueProcess/1."
+            "description": "Audit tier that identifies this native determination counterfactual payload."
           },
           "type": {
             "$ref": "#/components/schemas/CounterfactualKind",
-            "description": "Retained kindType value under referenceDueProcess/1."
+            "description": "Positive outcome change or negative outcome preservation verified for this alternative."
           }
         },
         "required": [
@@ -4029,7 +4029,7 @@
         "properties": {
           "authority": {
             "$ref": "#/components/schemas/SourceAuthority",
-            "description": "Retained authority value under referenceDueProcess/1."
+            "description": "Source authority recorded from the selected reason binding."
           },
           "description": {
             "description": "The selected row's reason binding description, copied verbatim as policy text; actual inputs and outputs are retained separately in evaluation.",
@@ -4045,7 +4045,7 @@
           },
           "evaluation": {
             "$ref": "#/components/schemas/NativeDecisionEvaluation",
-            "description": "Retained evaluation value under referenceDueProcess/1."
+            "description": "Actual decision-table evaluation whose selected row supplied the reason."
           },
           "relatedTransition": {
             "description": "Identity of the saved determination whose firing the retained reasoning evidence explains.",
@@ -4059,10 +4059,10 @@
           },
           "ruleId": {
             "$ref": "#/components/schemas/Id",
-            "description": "Retained ruleId value under referenceDueProcess/1."
+            "description": "Selected reason code corresponding to the actual matched decision-table row."
           },
           "sourceRefs": {
-            "description": "Retained sourceRefs value under referenceDueProcess/1.",
+            "description": "Retained sources carried from the selected reason binding.",
             "items": {
               "$ref": "#/components/schemas/SourceRef"
             },
@@ -4072,11 +4072,11 @@
           },
           "tier": {
             "$ref": "#/components/schemas/ReasoningTier",
-            "description": "Retained tier value under referenceDueProcess/1."
+            "description": "Audit tier that identifies this native determination reasoning payload."
           },
           "timestamp": {
             "$ref": "#/components/schemas/Timestamp",
-            "description": "Retained timestamp value under referenceDueProcess/1."
+            "description": "Timestamp of the determining transition this reasoning explains."
           }
         },
         "required": [
@@ -5952,11 +5952,11 @@
         "properties": {
           "name": {
             "$ref": "#/components/schemas/Id",
-            "description": "Retained name value under referenceDueProcess/1."
+            "description": "Name of the decision-table input or output represented by this value."
           },
           "value": {
             "$ref": "#/components/schemas/Scalar",
-            "description": "Retained value value under referenceDueProcess/1."
+            "description": "Scalar actually observed for the named decision-table input or output."
           }
         },
         "required": [
@@ -6179,7 +6179,7 @@
             "type": "boolean"
           },
           "inputs": {
-            "description": "Retained inputs value under referenceDueProcess/1.",
+            "description": "Concrete input names and values passed to the native decision table.",
             "items": {
               "$ref": "#/components/schemas/NamedScalar"
             },
@@ -6187,10 +6187,10 @@
           },
           "location": {
             "$ref": "#/components/schemas/TransitionLocation",
-            "description": "Retained location value under referenceDueProcess/1."
+            "description": "Exact workflow state and transition index where the guard was evaluated."
           },
           "matchedRowIds": {
-            "description": "Retained matchedRowIds value under referenceDueProcess/1.",
+            "description": "IDs of the rows the decision table actually matched during evaluation.",
             "items": {
               "description": "Identifier of a decision table row matched during the retained native evaluation.",
               "examples": [
@@ -6204,7 +6204,7 @@
             "type": "array"
           },
           "outputs": {
-            "description": "Retained outputs value under referenceDueProcess/1.",
+            "description": "Concrete output names and values returned by the native decision table.",
             "items": {
               "$ref": "#/components/schemas/NamedScalar"
             },
@@ -6222,7 +6222,7 @@
           },
           "tableRef": {
             "$ref": "#/components/schemas/Id",
-            "description": "Retained tableRef value under referenceDueProcess/1."
+            "description": "Identifier of the native decision table invoked by the guard."
           }
         },
         "required": [
@@ -9425,7 +9425,7 @@
         "properties": {
           "retainedSha256": {
             "$ref": "#/components/schemas/Digest",
-            "description": "Retained retainedSha256 value under referenceDueProcess/1."
+            "description": "SHA-256 digest of the exact retained bytes addressed by this source reference."
           },
           "sectionAnchor": {
             "description": "Section identifier within the retained source version that supports this policy reference.",
@@ -9441,7 +9441,7 @@
           },
           "sourceVersion": {
             "$ref": "#/components/schemas/Id",
-            "description": "Retained sourceVersion value under referenceDueProcess/1."
+            "description": "Selected evidence ID used to locate the retained bytes with the required role."
           }
         },
         "required": [
@@ -10510,7 +10510,7 @@
         "properties": {
           "statePointer": {
             "$ref": "#/components/schemas/Pointer",
-            "description": "Retained statePointer value under referenceDueProcess/1."
+            "description": "JSON Pointer to the owning state in the selected workflow."
           },
           "transitionIndex": {
             "description": "Zero-based position of the transition in the source state's authored transition list.",
