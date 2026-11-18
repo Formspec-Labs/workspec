@@ -24,11 +24,20 @@ def validator(name):
     )
 
 
+def native_document_schema(field_schema):
+    # AcceptedResponse keeps its owner and codegen annotations on the named schema.
+    if '$ref' in field_schema:
+        return REGISTRY.resolver(SCHEMA['$id']).lookup(field_schema['$ref']).contents
+    return field_schema
+
+
 def test_native_documents_retain_owner_authority_without_cloned_fields():
     props = SCHEMA['$defs']['AcceptedIntakeEvidence']['properties']
     for field in ('handoff', 'response', 'validationReport', 'materialHistory'):
         assert 'properties' not in props[field]
-        assert props[field]['x-wos']['ownerSchema'].startswith('https://formspec.org/')
+        source = native_document_schema(props[field])
+        assert 'properties' not in source
+        assert source['x-wos']['ownerSchema'].startswith('https://formspec.org/')
     assert 'originalEvaluation' in SCHEMA['$defs']['AcceptedIntakeEvidence']['required']
     assert 'displayedLocale' not in SCHEMA['$defs']['AcceptedIntakeEvidence']['required']
 
@@ -68,8 +77,10 @@ def test_native_codegen_annotation_preserves_json_without_shape_assertions():
                ('handoff', 'response', 'validationReport', 'materialHistory', 'originalEvaluation')]
     for model, field in fields:
         boundary = SCHEMA['$defs'][model]['properties'][field]
-        assert boundary['tsType'] == 'unknown'
-        check = Draft202012Validator(boundary)
+        assert native_document_schema(boundary)['tsType'] == 'unknown'
+        check = Draft202012Validator(
+            {'$ref': f"{SCHEMA['$id']}#/$defs/{model}/properties/{field}"}, registry=REGISTRY,
+        )
         for value in ({'native': {'answer': None}}, ['native', None], 'opaque', None):
             check.validate(value)
 
