@@ -4,8 +4,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use formspec_core::{DocumentType, MappingDirection, MappingDocument};
-use formspec_eval::exact_json::Value as EvaluatedValue;
-use formspec_eval::{EvalContext, EvalOptions, EvalTrigger};
+use formspec_eval::{EvalContext, EvalOptions, EvalTrigger, filed_response_data_matches};
 use formspec_lint::{LintOptions, LintSeverity};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -303,8 +302,9 @@ impl ImmutableFormspecProcessor {
             .iter()
             .map(|(key, value)| (key.clone(), value.clone().into()))
             .collect();
+        let definition = definition.clone().into();
         let result = formspec_eval::evaluate(
-            &definition.clone().into(),
+            &definition,
             &fields,
             &EvalOptions::default()
                 .trigger(EvalTrigger::Submit)
@@ -313,12 +313,8 @@ impl ImmutableFormspecProcessor {
                     ..EvalContext::default()
                 }),
         );
-        // `values` uses flat paths; `data` has the nested shape of the filed Response.
-        if result.data != *data && {
-            let mut comparable = data.clone();
-            include_projected_empty_repeats(&definition["items"], &mut comparable, &result.data);
-            result.data != comparable
-        } {
+        let filed = formspec_eval::exact_json::Value::Object(fields.into_iter().collect());
+        if !filed_response_data_matches(&definition, &filed, &result.data) {
             return Err(BindingError::Unsupported(
                 "filed Response data differs from its evaluation".into(),
             ));
@@ -491,47 +487,6 @@ fn response_items_supported(items: &[Value]) -> bool {
             _ => false,
         }
     })
-}
-
-/// Adds only omitted declared empty repeats to a comparison copy of filed data.
-fn include_projected_empty_repeats(items: &Value, data: &mut Value, evaluated: &EvaluatedValue) {
-    let Some(fields) = data.as_object_mut() else {
-        return;
-    };
-    for item in items.as_array().into_iter().flatten() {
-        if item["type"] != "group" {
-            continue;
-        }
-        let Some(key) = item["key"].as_str() else {
-            continue;
-        };
-        let Some(projected) = evaluated.get(key) else {
-            continue;
-        };
-        if item["repeatable"] == true {
-            let Some(rows) = projected.as_array() else {
-                continue;
-            };
-            if let Some(existing) = fields.get_mut(key) {
-                if let Some(existing_rows) = existing.as_array_mut() {
-                    for (row, projected_row) in existing_rows.iter_mut().zip(rows) {
-                        include_projected_empty_repeats(&item["children"], row, projected_row);
-                    }
-                }
-            } else if rows.is_empty() {
-                fields.insert(key.into(), json!([]));
-            }
-        } else if let Some(existing) = fields.get_mut(key) {
-            include_projected_empty_repeats(&item["children"], existing, projected);
-        } else {
-            let mut group = json!({});
-            include_projected_empty_repeats(&item["children"], &mut group, projected);
-            // An absent group may appear only to hold the allowed empty repeats.
-            if group.as_object().is_some_and(|fields| !fields.is_empty()) {
-                fields.insert(key.into(), group);
-            }
-        }
-    }
 }
 
 fn admit(
