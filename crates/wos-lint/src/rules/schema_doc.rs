@@ -870,6 +870,28 @@ mod tests {
     }
 
     #[test]
+    fn nested_ref_site_children_are_walked() {
+        // 2020-12 applies keywords beside a `$ref`; the site is not a leaf,
+        // but its own `properties` still are.
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "state": {
+                    "$ref": "#/$defs/Base",
+                    "type": "object",
+                    "properties": { "note": { "type": "string", "examples": ["x"] } }
+                }
+            },
+            "$defs": {
+                "Base": { "type": "object", "description": description_60(), "examples": [{}] }
+            }
+        });
+        let diagnostics = lint(schema);
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].path, "/properties/state/properties/note");
+    }
+
+    #[test]
     fn items_leaves_are_walked() {
         let schema = json!({
             "type": "object",
