@@ -3,123 +3,36 @@
 
 use std::sync::LazyLock;
 
-use serde_json::{Value, json};
+use serde_json::Value;
 
-static SOURCE_CONTEXT: LazyLock<formspec_lint::MappingSourceContext> =
-    LazyLock::new(build_source_context);
+static SOURCE_CONTEXT: LazyLock<formspec_lint::MappingSourceContext> = LazyLock::new(|| {
+    let context: InitialIntakeMappingContext = serde_json::from_str(include_str!(
+        "../../../schemas/lint/initial-intake-mapping-context.json"
+    ))
+    .expect("bundled initial intake Mapping context is valid JSON");
+    formspec_lint::MappingSourceContext {
+        schema: context.schema,
+        data_path: context.data_path,
+    }
+});
 
-/// Builds WOS's host-owned input shape, separate from the Mapping's Definition identity.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct InitialIntakeMappingContext {
+    schema: Value,
+    data_path: String,
+}
+
+/// Loads the WOS input shape used to check initial-case Mapping paths.
 ///
 /// The source reader still owns full accepted-evidence validation. Opaque retained
 /// evidence is declared at its original member; nested answer paths are checked
 /// against the genuine selected Definition by Formspec, never a generated one.
 ///
 /// # Panics
-/// Panics if a bundled owner schema contains invalid JSON or lacks its declared properties.
+/// Panics if the bundled context is invalid JSON or lacks its declared fields.
 pub fn source_context() -> formspec_lint::MappingSourceContext {
     SOURCE_CONTEXT.clone()
-}
-
-fn build_source_context() -> formspec_lint::MappingSourceContext {
-    let evidence: Value =
-        serde_json::from_str(include_str!("../../../schemas/api/case-file.schema.json"))
-            .expect("canonical accepted evidence schema is valid JSON");
-    let handoff: Value = serde_json::from_str(include_str!(
-        "../../../../formspec/schemas/intake-handoff.schema.json"
-    ))
-    .expect("canonical handoff schema is valid JSON");
-    let response: Value = serde_json::from_str(include_str!(
-        "../../../../formspec/schemas/response.schema.json"
-    ))
-    .expect("canonical response schema is valid JSON");
-    let mut schema = declared_shape(&evidence["$defs"]["AcceptedIntakeEvidence"]);
-    schema["$id"] = json!("https://wos-spec.org/schemas/initial-intake-mapping-context/1.0");
-    // These three descriptor schemas are the only WOS-local references reachable
-    // from accepted evidence. Read models and HTTP resources remain separate.
-    schema["$defs"] = json!({
-        "AcceptedAuthoredArtifact":declared_shape(&evidence["$defs"]["AcceptedAuthoredArtifact"]),
-        "AcceptedSignatureVerification":declared_shape(&evidence["$defs"]["AcceptedSignatureVerification"]),
-        "AcceptedAttachmentDescriptor":declared_shape(&evidence["$defs"]["AcceptedAttachmentDescriptor"]),
-        "Handoff": local_resource(handoff, "#/$defs/Handoff"),
-        "Response": local_resource(response, "#/$defs/Response"),
-    });
-    schema["properties"]["handoff"] = json!({"$ref":"#/$defs/Handoff"});
-    schema["properties"]["response"] = json!({"$ref":"#/$defs/Response"});
-    schema["properties"]["caseReservation"] = json!({"type":"object","required":["caseLedgerId","caseReference"],
-        "properties":{"caseLedgerId":{"type":"string","minLength":1},"caseReference":{"type":"string","minLength":1}},"additionalProperties":false});
-    // The source reader already qualifies the complete evidence record. This
-    // checker requires the protected inputs used to bind and execute a Mapping.
-    schema["required"] = json!(["handoff", "response", "definition", "caseReservation"]);
-    formspec_lint::MappingSourceContext {
-        schema,
-        data_path: "response.data".into(),
-    }
-}
-
-// Reuse declared property/item shapes without reimplementing the source reader's
-// conditional validation. This is a host path schema, not a second source admission.
-fn declared_shape(schema: &Value) -> Value {
-    let mut shape = serde_json::Map::new();
-    for keyword in ["type", "$ref", "additionalProperties"] {
-        if let Some(value) = schema.get(keyword) {
-            shape.insert(keyword.into(), value.clone());
-        }
-    }
-    for keyword in ["properties", "$defs"] {
-        if let Some(values) = schema.get(keyword).and_then(Value::as_object) {
-            shape.insert(
-                keyword.into(),
-                Value::Object(
-                    values
-                        .iter()
-                        .map(|(key, value)| (key.clone(), declared_shape(value)))
-                        .collect(),
-                ),
-            );
-        }
-    }
-    if let Some(items) = schema.get("items") {
-        shape.insert("items".into(), declared_shape(items));
-    }
-    if let Some(alternatives) = schema.get("oneOf").and_then(Value::as_array) {
-        shape.insert(
-            "oneOf".into(),
-            Value::Array(alternatives.iter().map(declared_shape).collect()),
-        );
-    }
-    Value::Object(shape)
-}
-
-// Bundle owner-declared shapes into one resource for the existing path resolver.
-// Only schema fragment references change; source documents remain immutable.
-fn local_resource(schema: Value, root: &str) -> Value {
-    let mut schema = declared_shape(&schema);
-    fn relocate(value: &mut Value, root: &str) {
-        match value {
-            Value::Object(object) => {
-                if let Some(Value::String(reference)) = object.get_mut("$ref")
-                    && let Some(fragment) = reference.strip_prefix('#')
-                {
-                    *reference = format!("{root}{fragment}");
-                }
-                for child in object.values_mut() {
-                    relocate(child, root);
-                }
-            }
-            Value::Array(values) => {
-                for child in values {
-                    relocate(child, root);
-                }
-            }
-            _ => {}
-        }
-    }
-    schema
-        .as_object_mut()
-        .expect("canonical schema is an object")
-        .remove("$id");
-    relocate(&mut schema, root);
-    schema
 }
 
 /// Checks the immutable Mapping against its actual Definition and protected input representation.
@@ -177,4 +90,135 @@ pub fn validate_input(
         return Err("initial case Mapping input /definition/kind is not definition".into());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn build_source_context() -> formspec_lint::MappingSourceContext {
+        let evidence: Value =
+            serde_json::from_str(include_str!("../../../schemas/api/case-file.schema.json"))
+                .expect("canonical accepted evidence schema is valid JSON");
+        let handoff: Value = serde_json::from_str(include_str!(
+            "../../../../formspec/schemas/intake-handoff.schema.json"
+        ))
+        .expect("canonical handoff schema is valid JSON");
+        let response: Value = serde_json::from_str(include_str!(
+            "../../../../formspec/schemas/response.schema.json"
+        ))
+        .expect("canonical response schema is valid JSON");
+        let mut schema = declared_shape(&evidence["$defs"]["AcceptedIntakeEvidence"]);
+        schema["$id"] = json!("https://wos-spec.org/schemas/initial-intake-mapping-context/1.0");
+        // These three descriptor schemas are the only WOS-local references reachable
+        // from accepted evidence. Read models and HTTP resources remain separate.
+        schema["$defs"] = json!({
+            "AcceptedAuthoredArtifact":declared_shape(&evidence["$defs"]["AcceptedAuthoredArtifact"]),
+            "AcceptedSignatureVerification":declared_shape(&evidence["$defs"]["AcceptedSignatureVerification"]),
+            "AcceptedAttachmentDescriptor":declared_shape(&evidence["$defs"]["AcceptedAttachmentDescriptor"]),
+            "Handoff": local_resource(handoff, "#/$defs/Handoff"),
+            "Response": local_resource(response, "#/$defs/Response"),
+        });
+        schema["properties"]["handoff"] = json!({"$ref":"#/$defs/Handoff"});
+        schema["properties"]["response"] = json!({"$ref":"#/$defs/Response"});
+        schema["properties"]["caseReservation"] = json!({"type":"object","required":["caseLedgerId","caseReference"],
+            "properties":{"caseLedgerId":{"type":"string","minLength":1},"caseReference":{"type":"string","minLength":1}},"additionalProperties":false});
+        // The source reader already qualifies the complete evidence record. This
+        // checker requires the protected inputs used to bind and execute a Mapping.
+        schema["required"] = json!(["handoff", "response", "definition", "caseReservation"]);
+        formspec_lint::MappingSourceContext {
+            schema,
+            data_path: "response.data".into(),
+        }
+    }
+
+    // Reuse declared property/item shapes without reimplementing the source reader's
+    // conditional validation. This is a host path schema, not a second source admission.
+    fn declared_shape(schema: &Value) -> Value {
+        let mut shape = serde_json::Map::new();
+        for keyword in ["type", "$ref", "additionalProperties"] {
+            if let Some(value) = schema.get(keyword) {
+                shape.insert(keyword.into(), value.clone());
+            }
+        }
+        for keyword in ["properties", "$defs"] {
+            if let Some(values) = schema.get(keyword).and_then(Value::as_object) {
+                shape.insert(
+                    keyword.into(),
+                    Value::Object(
+                        values
+                            .iter()
+                            .map(|(key, value)| (key.clone(), declared_shape(value)))
+                            .collect(),
+                    ),
+                );
+            }
+        }
+        if let Some(items) = schema.get("items") {
+            shape.insert("items".into(), declared_shape(items));
+        }
+        if let Some(alternatives) = schema.get("oneOf").and_then(Value::as_array) {
+            shape.insert(
+                "oneOf".into(),
+                Value::Array(alternatives.iter().map(declared_shape).collect()),
+            );
+        }
+        Value::Object(shape)
+    }
+
+    // Bundle owner-declared shapes into one resource for the existing path resolver.
+    // Only schema fragment references change; source documents remain immutable.
+    fn local_resource(schema: Value, root: &str) -> Value {
+        let mut schema = declared_shape(&schema);
+        fn relocate(value: &mut Value, root: &str) {
+            match value {
+                Value::Object(object) => {
+                    if let Some(Value::String(reference)) = object.get_mut("$ref")
+                        && let Some(fragment) = reference.strip_prefix('#')
+                    {
+                        *reference = format!("{root}{fragment}");
+                    }
+                    for child in object.values_mut() {
+                        relocate(child, root);
+                    }
+                }
+                Value::Array(values) => {
+                    for child in values {
+                        relocate(child, root);
+                    }
+                }
+                _ => {}
+            }
+        }
+        schema
+            .as_object_mut()
+            .expect("canonical schema is an object")
+            .remove("$id");
+        relocate(&mut schema, root);
+        schema
+    }
+
+    #[test]
+    fn initial_intake_mapping_context_matches_owner_schemas() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../schemas/lint/initial-intake-mapping-context.json");
+        let rebuilt = build_source_context();
+        let expected = json!({"schema": rebuilt.schema, "dataPath": rebuilt.data_path});
+        let generated = serde_json::to_string_pretty(&expected).expect("serialize context") + "\n";
+        let write = std::env::var_os("WOS_WRITE_INITIAL_INTAKE_MAPPING_CONTEXT").is_some();
+        if write {
+            std::fs::create_dir_all(path.parent().expect("context path has a parent"))
+                .expect("create the context directory");
+            std::fs::write(&path, &generated).expect("write the checked-in context");
+        }
+        let checked_in = std::fs::read_to_string(path).expect("read the checked-in context");
+        assert_eq!(checked_in, generated);
+        // Write mode can replace the file after the embedded bytes were compiled.
+        if !write {
+            let loaded = source_context();
+            assert_eq!(loaded.schema, rebuilt.schema);
+            assert_eq!(loaded.data_path, rebuilt.data_path);
+        }
+    }
 }

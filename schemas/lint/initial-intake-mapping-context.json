@@ -1,0 +1,885 @@
+{
+  "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "handoff": {
+        "$ref": "#/$defs/Handoff"
+      },
+      "response": {
+        "$ref": "#/$defs/Response"
+      },
+      "validationReport": {},
+      "definition": {
+        "$ref": "#/$defs/AcceptedAuthoredArtifact"
+      },
+      "definitionHash": {
+        "type": "string"
+      },
+      "displayedLocale": {
+        "$ref": "#/$defs/AcceptedAuthoredArtifact"
+      },
+      "artifacts": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/AcceptedAuthoredArtifact"
+        }
+      },
+      "materialHistory": {},
+      "signatureVerification": {
+        "$ref": "#/$defs/AcceptedSignatureVerification"
+      },
+      "attachments": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/AcceptedAttachmentDescriptor"
+        }
+      },
+      "originalEvaluation": {},
+      "caseReservation": {
+        "type": "object",
+        "required": [
+          "caseLedgerId",
+          "caseReference"
+        ],
+        "properties": {
+          "caseLedgerId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "caseReference": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "$id": "https://wos-spec.org/schemas/initial-intake-mapping-context/1.0",
+    "$defs": {
+      "AcceptedAuthoredArtifact": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {},
+          "url": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "hash": {
+            "type": "string"
+          },
+          "document": {}
+        }
+      },
+      "AcceptedSignatureVerification": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "status": {},
+          "profile": {
+            "type": "string"
+          },
+          "keyId": {
+            "type": "string"
+          },
+          "signedPayloadDigest": {
+            "type": "string"
+          },
+          "details": {}
+        }
+      },
+      "AcceptedAttachmentDescriptor": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "attachmentId": {
+            "type": "string"
+          },
+          "fieldPath": {
+            "type": "string"
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "mediaType": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer"
+          },
+          "hash": {
+            "type": "string"
+          }
+        }
+      },
+      "Handoff": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "$formspecIntakeHandoff": {
+            "type": "string"
+          },
+          "handoffId": {
+            "type": "string"
+          },
+          "initiationMode": {
+            "type": "string"
+          },
+          "caseRef": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/Handoff/$defs/Ref"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "definitionRef": {
+            "$ref": "#/$defs/Handoff/$defs/DefinitionRef"
+          },
+          "responseRef": {
+            "$ref": "#/$defs/Handoff/$defs/Ref"
+          },
+          "responseHash": {
+            "$ref": "#/$defs/Handoff/$defs/HashString"
+          },
+          "validationReportRef": {
+            "$ref": "#/$defs/Handoff/$defs/Ref"
+          },
+          "intakeSessionId": {
+            "type": "string"
+          },
+          "actorRef": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/Handoff/$defs/Ref"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "subjectRef": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/Handoff/$defs/Ref"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ledgerHeadRef": {
+            "$ref": "#/$defs/Handoff/$defs/Ref"
+          },
+          "occurredAt": {
+            "type": "string"
+          },
+          "extensions": {
+            "$ref": "#/$defs/Handoff/$defs/Extensions"
+          }
+        },
+        "$defs": {
+          "DefinitionRef": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "url": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              }
+            }
+          },
+          "Ref": {
+            "type": "string"
+          },
+          "HashString": {
+            "type": "string"
+          },
+          "Extensions": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "Response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "$formspecResponse": {
+            "type": "string"
+          },
+          "definitionUrl": {
+            "type": "string"
+          },
+          "definitionVersion": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/$defs/Response/$defs/ResponseStatus"
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "metadata": {
+            "$ref": "#/$defs/Response/$defs/ResponseMetadata"
+          },
+          "authored": {
+            "type": "string"
+          },
+          "displayedIssuer": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "url": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              }
+            }
+          },
+          "displayedLocale": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "url": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              },
+              "locale": {
+                "type": "string"
+              }
+            }
+          },
+          "id": {
+            "type": "string"
+          },
+          "author": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "keys": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": [
+                    "string",
+                    "integer"
+                  ]
+                }
+              }
+            }
+          },
+          "validationResults": {
+            "type": "array",
+            "items": {
+              "$ref": "https://formspec.org/schemas/validationResult/1.0"
+            }
+          },
+          "resolvedInstances": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Response/$defs/ResolvedInstance"
+            }
+          },
+          "resolvedDocuments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Response/$defs/ResolvedDocument"
+            }
+          },
+          "authoredSignatures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Response/$defs/AuthoredSignature"
+            }
+          },
+          "extensions": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "x-formspec-signing-content": {
+                "$ref": "#/$defs/Response/$defs/SigningContentCommitment"
+              },
+              "x-formspec-document-attestations": {
+                "$ref": "#/$defs/Response/$defs/DocumentAttestationCommitment"
+              }
+            }
+          }
+        },
+        "$defs": {
+          "SigningContentCommitment": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "version": {},
+              "issuer": {
+                "type": "string"
+              },
+              "draftId": {
+                "type": "string"
+              },
+              "draftVersion": {
+                "type": "integer"
+              },
+              "actorRef": {
+                "type": "string"
+              },
+              "signerName": {
+                "type": "string"
+              },
+              "signedAt": {
+                "type": "string"
+              },
+              "consentAccepted": {},
+              "content": {
+                "$ref": "https://formspec.org/schemas/common/1.0#/$defs/SigningContent"
+              },
+              "documentHash": {
+                "type": "string"
+              },
+              "documentHashAlgorithm": {}
+            }
+          },
+          "Sha256Digest": {
+            "type": "string"
+          },
+          "ResolvedInstanceRecord": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "responseId": {
+                "type": "string"
+              },
+              "definitionVersion": {
+                "type": "string"
+              },
+              "responseHash": {
+                "$ref": "#/$defs/Response/$defs/Sha256Digest"
+              }
+            }
+          },
+          "ResolvedInstance": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "instance": {
+                "type": "string"
+              },
+              "records": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Response/$defs/ResolvedInstanceRecord"
+                }
+              },
+              "valueDigest": {
+                "$ref": "#/$defs/Response/$defs/Sha256Digest"
+              },
+              "none": {
+                "type": "boolean"
+              },
+              "pinned": {
+                "type": "boolean"
+              },
+              "mapping": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "url": {
+                    "type": "string"
+                  },
+                  "digest": {
+                    "$ref": "#/$defs/Response/$defs/Sha256Digest"
+                  }
+                }
+              }
+            }
+          },
+          "SubjectPredicate": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "op": {
+                "type": "string"
+              },
+              "from": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "subject": {
+                    "type": "string"
+                  },
+                  "routeParam": {
+                    "type": "string"
+                  }
+                },
+                "oneOf": [
+                  {},
+                  {}
+                ]
+              },
+              "offset": {
+                "type": "integer"
+              }
+            }
+          },
+          "ResponseSelection": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "definition": {
+                "$ref": "https://formspec.org/schemas/common/1.0#/$defs/TargetDefinition"
+              },
+              "subject": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Response/$defs/SubjectPredicate"
+                }
+              },
+              "status": {
+                "type": "string"
+              },
+              "disposition": {
+                "type": "string"
+              },
+              "whenNone": {
+                "type": "string"
+              },
+              "cardinality": {
+                "type": "string"
+              },
+              "pin": {
+                "type": "string"
+              },
+              "mapping": {
+                "type": "string"
+              }
+            }
+          },
+          "ResponseStatus": {
+            "type": "string"
+          },
+          "ResponseMetadataPathKey": {
+            "type": "string"
+          },
+          "ResponseMetadata": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "provenance": {
+                "type": "object",
+                "additionalProperties": {
+                  "$ref": "#/$defs/Response/$defs/ResponseProvenanceEntry"
+                }
+              },
+              "derivations": {
+                "type": "object",
+                "additionalProperties": {
+                  "$ref": "#/$defs/Response/$defs/ResponseDerivationEntry"
+                }
+              },
+              "disclosuresShown": {
+                "type": "object",
+                "additionalProperties": {
+                  "$ref": "#/$defs/Response/$defs/ResponseDisclosureShownEntry"
+                }
+              }
+            }
+          },
+          "ResponseProvenanceEntry": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "class": {
+                "$ref": "https://formspec.org/schemas/common/1.0#/$defs/ValueClass"
+              },
+              "sourceRef": {
+                "type": "string"
+              },
+              "capturedAt": {
+                "type": "string"
+              },
+              "attestedBy": {
+                "type": "string"
+              }
+            }
+          },
+          "ResponseDerivationEntry": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "expression": {
+                "type": "string"
+              },
+              "dependsOn": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Response/$defs/ResponseMetadataPathKey"
+                }
+              },
+              "value": {},
+              "capturedAt": {
+                "type": "string"
+              },
+              "trace": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "kind": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "ResponseDisclosureShownEntry": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "disclosureRef": {
+                "type": "string"
+              },
+              "shownAt": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              },
+              "channel": {
+                "type": "string"
+              }
+            }
+          },
+          "AuthoredSignatureIdentityBinding": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "method": {
+                "type": "string"
+              },
+              "assuranceLevel": {
+                "type": "string"
+              },
+              "providerRef": {
+                "type": "string"
+              },
+              "externalAttestationRef": {
+                "type": "string"
+              }
+            }
+          },
+          "AuthoredSignatureSignedPayload": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "canonicalization": {
+                "type": "string"
+              },
+              "digestAlgorithm": {
+                "type": "string"
+              },
+              "digest": {
+                "type": "string"
+              },
+              "responseId": {
+                "type": "string"
+              },
+              "signedAt": {
+                "type": "string"
+              },
+              "signingIntent": {
+                "type": "string"
+              },
+              "definitionUrl": {
+                "type": "string"
+              },
+              "definitionVersion": {
+                "type": "string"
+              }
+            }
+          },
+          "ResolvedItemPath": {
+            "type": "string"
+          },
+          "DocumentReference": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "documentId": {
+                "$ref": "https://formspec.org/schemas/definition/1.0#/$defs/DocumentId"
+              },
+              "locale": {
+                "$ref": "https://formspec.org/schemas/definition/1.0#/$defs/DocumentLocale"
+              }
+            }
+          },
+          "PresentationHash": {
+            "type": "string"
+          },
+          "ResolvedDocument": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "documentId": {
+                "$ref": "https://formspec.org/schemas/definition/1.0#/$defs/DocumentId"
+              },
+              "locale": {
+                "$ref": "https://formspec.org/schemas/definition/1.0#/$defs/DocumentLocale"
+              },
+              "source": {
+                "$ref": "https://formspec.org/schemas/definition/1.0#/$defs/DocumentSource"
+              },
+              "mediaType": {
+                "$ref": "https://formspec.org/schemas/definition/1.0#/$defs/DocumentVariant/properties/mediaType"
+              },
+              "documentHash": {
+                "$ref": "https://formspec.org/schemas/definition/1.0#/$defs/DocumentVariant/properties/documentHash"
+              },
+              "pinnedAt": {
+                "type": "string"
+              },
+              "presentationHash": {
+                "$ref": "#/$defs/Response/$defs/PresentationHash"
+              }
+            }
+          },
+          "WitnessedSignatureReference": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "responseId": {
+                "$ref": "#/$defs/Response/$defs/AuthoredSignatureSignedPayload/properties/responseId"
+              },
+              "signatureId": {
+                "$ref": "#/$defs/Response/$defs/AuthoredSignature/properties/signatureId"
+              },
+              "signedPayloadDigest": {
+                "type": "string"
+              }
+            }
+          },
+          "DocumentAttestationSelection": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "signatureId": {
+                "$ref": "#/$defs/Response/$defs/AuthoredSignature/properties/signatureId"
+              },
+              "documentRef": {
+                "$ref": "#/$defs/Response/$defs/DocumentReference"
+              },
+              "witnessedSignatureRef": {
+                "$ref": "#/$defs/Response/$defs/AuthoredSignature/properties/witnessedSignatureRef"
+              }
+            }
+          },
+          "DocumentAttestationCommitment": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "version": {},
+              "signingActId": {
+                "$ref": "#/$defs/Response/$defs/AuthoredSignature/properties/signingActId"
+              },
+              "fieldPath": {
+                "$ref": "#/$defs/Response/$defs/ResolvedItemPath"
+              },
+              "signerId": {
+                "$ref": "#/$defs/Response/$defs/AuthoredSignature/properties/signerId"
+              },
+              "signerName": {
+                "$ref": "#/$defs/Response/$defs/AuthoredSignature/properties/signerName"
+              },
+              "signedAt": {
+                "$ref": "#/$defs/Response/$defs/AuthoredSignatureSignedPayload/properties/signedAt"
+              },
+              "signingIntent": {
+                "$ref": "#/$defs/Response/$defs/AuthoredSignature/properties/signingIntent"
+              },
+              "consentAccepted": {
+                "$ref": "#/$defs/Response/$defs/AuthoredSignature/properties/consentAccepted"
+              },
+              "consentTextRef": {
+                "$ref": "#/$defs/Response/$defs/AuthoredSignature/properties/consentTextRef"
+              },
+              "consentVersion": {
+                "$ref": "#/$defs/Response/$defs/AuthoredSignature/properties/consentVersion"
+              },
+              "affirmationText": {
+                "$ref": "#/$defs/Response/$defs/AuthoredSignature/properties/affirmationText"
+              },
+              "signatureProvider": {
+                "$ref": "#/$defs/Response/$defs/AuthoredSignature/properties/signatureProvider"
+              },
+              "ceremonyId": {
+                "$ref": "#/$defs/Response/$defs/AuthoredSignature/properties/ceremonyId"
+              },
+              "signerEvidence": {
+                "$ref": "#/$defs/Response/$defs/AuthoredSignature/properties/signerEvidence"
+              },
+              "identityProofRef": {
+                "$ref": "#/$defs/Response/$defs/AuthoredSignature/properties/identityProofRef"
+              },
+              "identityBinding": {
+                "$ref": "#/$defs/Response/$defs/AuthoredSignature/properties/identityBinding"
+              },
+              "attestations": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Response/$defs/DocumentAttestationSelection"
+                }
+              }
+            }
+          },
+          "AuthoredSignature": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "signingActId": {
+                "type": "string"
+              },
+              "documentRef": {
+                "$ref": "#/$defs/Response/$defs/DocumentReference"
+              },
+              "presentationHash": {
+                "$ref": "#/$defs/Response/$defs/PresentationHash"
+              },
+              "witnessedSignatureRef": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/$defs/Response/$defs/WitnessedSignatureReference"
+                  }
+                ]
+              },
+              "partyRole": {
+                "type": "string"
+              },
+              "coveredPaths": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Response/$defs/ResolvedItemPath"
+                }
+              },
+              "signatureId": {
+                "type": "string"
+              },
+              "documentId": {
+                "type": "string"
+              },
+              "signingIntent": {
+                "type": "string"
+              },
+              "signatureValue": {
+                "type": "string"
+              },
+              "signerId": {
+                "type": "string"
+              },
+              "signerName": {
+                "type": "string"
+              },
+              "signerEvidence": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  }
+                }
+              },
+              "verificationReceipt": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "$ref": "https://formspec.org/schemas/verification-receipt/1.0"
+                  }
+                ]
+              },
+              "consentAccepted": {
+                "type": "boolean"
+              },
+              "consentTextRef": {
+                "type": "string"
+              },
+              "consentVersion": {
+                "type": "string"
+              },
+              "affirmationText": {
+                "type": "string"
+              },
+              "signedPayload": {
+                "$ref": "#/$defs/Response/$defs/AuthoredSignatureSignedPayload"
+              },
+              "documentHash": {
+                "type": "string"
+              },
+              "documentHashAlgorithm": {
+                "type": "string"
+              },
+              "identityProofRef": {
+                "type": "string"
+              },
+              "identityBinding": {
+                "$ref": "#/$defs/Response/$defs/AuthoredSignatureIdentityBinding"
+              },
+              "signatureProvider": {
+                "type": "string"
+              },
+              "ceremonyId": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "required": [
+      "handoff",
+      "response",
+      "definition",
+      "caseReservation"
+    ]
+  },
+  "dataPath": "response.data"
+}
