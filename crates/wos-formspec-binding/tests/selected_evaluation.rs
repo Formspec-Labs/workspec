@@ -217,7 +217,7 @@ fn absent_group_with_calculated_value_beside_empty_repeat_is_refused() {
 }
 
 #[test]
-fn omitted_min_repeat_is_refused() {
+fn saved_response_with_no_rows_keeps_zero_rows_and_reports_min_repeat() {
     let mut rows = repeat();
     rows["minRepeat"] = json!(1);
     let definition = definition(json!([rows]), json!([]));
@@ -226,12 +226,15 @@ fn omitted_min_repeat_is_refused() {
         &Default::default(),
         &formspec_eval::EvalOptions::default().trigger(formspec_eval::EvalTrigger::Submit),
     );
-    assert_eq!(evaluated.data, json!({"rows":[{}]}));
-    // Once fs-i731 stops padding, expect a MIN_REPEAT finding instead of a data mismatch refusal.
-    assert!(
-        matches!(processor(&definition).validate_definition(URL, VERSION, &json!({})),
-        Err(BindingError::Unsupported(message)) if message == "filed Response data differs from its evaluation")
-    );
+    assert_eq!(evaluated.data, json!({"rows":[]}));
+    // A saved Response keeps its zero rows and receives a cardinality finding.
+    let findings = processor(&definition)
+        .validate_definition(URL, VERSION, &json!({}))
+        .unwrap()
+        .unwrap();
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0]["path"], "rows");
+    assert_eq!(findings[0]["code"], "MIN_REPEAT");
 }
 
 #[test]

@@ -17,6 +17,8 @@ use wos_runtime::{BindingError, CaseMutationBundle, Clock};
 
 use crate::FormspecProcessor;
 
+const _: () = assert!(!formspec_eval::CREATION_COMPILED);
+
 /// An exact Definition selected independently of a Mapping's version range.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
