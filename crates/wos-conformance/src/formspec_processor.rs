@@ -70,11 +70,11 @@ impl FormspecProcessor for FixtureFormspecProcessor {
         Ok(errs)
     }
 
-    fn validate_definition(
+    fn validate_response_definition(
         &self,
         _definition_url: &str,
         _definition_version: &str,
-        _data: &serde_json::Value,
+        _response: &serde_json::Value,
     ) -> Result<Option<Vec<serde_json::Value>>, BindingError> {
         if self.definition_errors.is_empty() {
             Ok(None)

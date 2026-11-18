@@ -141,11 +141,11 @@ impl FormspecProcessor for IntakeRuntimeProcessor {
         Ok(Vec::new())
     }
 
-    fn validate_definition(
+    fn validate_response_definition(
         &self,
         _definition_url: &str,
         _definition_version: &str,
-        _data: &serde_json::Value,
+        _response: &serde_json::Value,
     ) -> Result<Option<Vec<serde_json::Value>>, BindingError> {
         Ok(None)
     }

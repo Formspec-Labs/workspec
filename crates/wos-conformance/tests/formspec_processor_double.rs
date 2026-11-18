@@ -34,7 +34,7 @@ fn processor_with_definition_errors_returns_canned_errors() {
         vec![serde_json::json!({ "code": "definitionInvalid", "message": "missing field" })],
     );
     let result = proc
-        .validate_definition("urn:fx:form", "1.0.0", &serde_json::json!({}))
+        .validate_response_definition("urn:fx:form", "1.0.0", &serde_json::json!({"data":{}}))
         .unwrap();
     assert_eq!(
         result,
@@ -48,7 +48,7 @@ fn processor_with_definition_errors_returns_canned_errors() {
 fn processor_without_definition_errors_returns_none() {
     let proc = FixtureFormspecProcessor::new("urn:fx:form", "1.0.0");
     let result = proc
-        .validate_definition("urn:fx:form", "1.0.0", &serde_json::json!({}))
+        .validate_response_definition("urn:fx:form", "1.0.0", &serde_json::json!({"data":{}}))
         .unwrap();
     assert_eq!(result, None);
 }

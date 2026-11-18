@@ -1282,12 +1282,12 @@ pub trait FormspecProcessor {
         ))
     }
 
-    /// Validate `response.data` against the pinned Definition.
-    fn validate_definition(
+    /// Validate a filed Response against the pinned Definition, including its subject.
+    fn validate_response_definition(
         &self,
         definition_url: &str,
         definition_version: &str,
-        data: &serde_json::Value,
+        response: &serde_json::Value,
     ) -> Result<Option<Vec<serde_json::Value>>, BindingError>;
 
     /// Validate a complete Response using the actual task context.
@@ -1302,13 +1302,13 @@ pub trait FormspecProcessor {
         task: &ActiveTask,
         response: &serde_json::Value,
     ) -> Result<Option<Vec<serde_json::Value>>, BindingError> {
-        let data = response
-            .get("data")
-            .ok_or_else(|| BindingError::InvalidInput("response.data missing".to_string()))?;
-        self.validate_definition(
+        if response.get("data").is_none() {
+            return Err(BindingError::InvalidInput("response.data missing".into()));
+        }
+        self.validate_response_definition(
             task.definition_url.as_deref().unwrap_or_default(),
             task.definition_version.as_deref().unwrap_or_default(),
-            data,
+            response,
         )
     }
 
@@ -1882,13 +1882,13 @@ mod tests {
             Ok(Vec::new())
         }
 
-        fn validate_definition(
+        fn validate_response_definition(
             &self,
             _definition_url: &str,
             _definition_version: &str,
-            data: &serde_json::Value,
+            response: &serde_json::Value,
         ) -> Result<Option<Vec<serde_json::Value>>, BindingError> {
-            let valid = data
+            let valid = response["data"]
                 .get("approved")
                 .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false);
@@ -1970,13 +1970,13 @@ mod tests {
             StubProcessor.validate_envelope(response)
         }
 
-        fn validate_definition(
+        fn validate_response_definition(
             &self,
             _: &str,
             _: &str,
             _: &serde_json::Value,
         ) -> Result<Option<Vec<serde_json::Value>>, BindingError> {
-            panic!("task-aware validation must not fall back to data-only validation")
+            panic!("task-aware validation must not fall back to Definition-only validation")
         }
 
         fn compute_prefill(

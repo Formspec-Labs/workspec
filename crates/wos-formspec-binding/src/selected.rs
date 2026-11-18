@@ -285,7 +285,7 @@ impl ImmutableFormspecProcessor {
         Ok(selected)
     }
 
-    fn evaluate(&self, url: &str, version: &str, data: &Value) -> Result<Value, BindingError> {
+    fn evaluate(&self, url: &str, version: &str, response: &Value) -> Result<Value, BindingError> {
         let definition = self
             .definitions
             .get(&(url.into(), version.into()))
@@ -298,13 +298,15 @@ impl ImmutableFormspecProcessor {
             .map_err(|error| invalid(error.to_string()))?
             .format(&Rfc3339)
             .map_err(|error| invalid(error.to_string()))?;
-        let fields = data
+        let fields = response["data"]
             .as_object()
             .ok_or_else(|| invalid("Response data must be an object"))?
             .iter()
             .map(|(key, value)| (key.clone(), value.clone().into()))
             .collect();
         let definition = definition.clone().into();
+        let stored_subject = response.get("subject").cloned().map(Into::into);
+        let subject = formspec_eval::EvalSubject::for_response(&definition, stored_subject.as_ref());
         let result = formspec_eval::evaluate(
             &definition,
             &fields,
@@ -312,11 +314,12 @@ impl ImmutableFormspecProcessor {
                 .trigger(EvalTrigger::Submit)
                 .context(EvalContext {
                     now_iso: Some(now),
+                    subject,
                     ..EvalContext::default()
                 }),
         );
         let filed = formspec_eval::exact_json::Value::Object(fields.into_iter().collect());
-        if !filed_response_data_matches(&definition, &filed, &result.data) {
+        if !result.input_refused && !filed_response_data_matches(&definition, &filed, &result.data) {
             return Err(BindingError::Unsupported(
                 "filed Response data differs from its evaluation".into(),
             ));
@@ -369,13 +372,13 @@ impl FormspecProcessor for ImmutableFormspecProcessor {
         self.validate_envelope(response)
     }
 
-    fn validate_definition(
+    fn validate_response_definition(
         &self,
         url: &str,
         version: &str,
-        data: &Value,
+        response: &Value,
     ) -> Result<Option<Vec<Value>>, BindingError> {
-        let evaluation = self.evaluate(url, version, data)?;
+        let evaluation = self.evaluate(url, version, response)?;
         let errors: Vec<_> = evaluation["validations"]
             .as_array()
             .into_iter()
@@ -434,10 +437,10 @@ impl FormspecProcessor for ImmutableFormspecProcessor {
             ));
         }
         if self
-            .validate_definition(
+            .validate_response_definition(
                 &selected.definition.url,
                 &selected.definition.version,
-                &response["data"],
+                response,
             )?
             .is_some()
         {
@@ -527,7 +530,7 @@ fn execute(
     Ok(result.output)
 }
 
-fn admit_expression(expression: &str, clock_available: bool) -> Result<(), BindingError> {
+fn admit_expression(expression: &str, in_definition: bool) -> Result<(), BindingError> {
     let ast = fel_core::parse(expression).map_err(|error| invalid(error.to_string()))?;
     let dependencies = fel_core::extract_dependencies(&ast);
     if !dependencies.context_refs.is_empty()
@@ -545,7 +548,7 @@ fn admit_expression(expression: &str, clock_available: bool) -> Result<(), Bindi
             .any(|entry| {
                 entry.name == function
                     && (entry.deterministic
-                        || (clock_available && matches!(function.as_str(), "now" | "today")))
+                        || (in_definition && matches!(function.as_str(), "now" | "today" | "subject")))
             })
     }) {
         return Err(BindingError::Unsupported(

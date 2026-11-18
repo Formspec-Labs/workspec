@@ -31,7 +31,7 @@ impl FormspecProcessor for UnusedProcessor {
     fn validate_envelope(&self, _: &Value) -> Result<Vec<Value>, BindingError> {
         Ok(vec![])
     }
-    fn validate_definition(
+    fn validate_response_definition(
         &self,
         _: &str,
         _: &str,

@@ -28,8 +28,8 @@ fn definition(items: Value, binds: Value) -> Value {
 fn processor(definition: &Value) -> ImmutableFormspecProcessor {
     ImmutableFormspecProcessor::new(&[SelectedDocument {
         kind: SelectedDocumentKind::Definition,
-        url: URL.into(),
-        version: VERSION.into(),
+        url: definition["url"].as_str().unwrap().into(),
+        version: definition["version"].as_str().unwrap().into(),
         bytes: serde_json::to_vec(definition).unwrap(),
         definition: None,
     }])
@@ -54,7 +54,7 @@ fn nested_group_and_repeat_response_passes_selected_recheck() {
     );
     assert_eq!(
         processor(&definition)
-            .validate_definition(URL, VERSION, &json!({"g":{"a":"filed", "rows":[{"x":3}]}}))
+            .validate_response_definition(URL, VERSION, &json!({"data":{"g":{"a":"filed", "rows":[{"x":3}]}}}))
             .unwrap(),
         None
     );
@@ -65,7 +65,7 @@ fn repeat_response_passes_selected_recheck() {
     let definition = definition(json!([repeat()]), json!([]));
     assert_eq!(
         processor(&definition)
-            .validate_definition(URL, VERSION, &json!({"rows":[{"x":3},{"x":5}]}))
+            .validate_response_definition(URL, VERSION, &json!({"data":{"rows":[{"x":3},{"x":5}]}}))
             .unwrap(),
         None
     );
@@ -76,7 +76,7 @@ fn nested_calculated_field_passes_when_filed_value_matches() {
     let definition = calculated_definition();
     assert_eq!(
         processor(&definition)
-            .validate_definition(URL, VERSION, &json!({"g":{"a":3,"double":6}}))
+            .validate_response_definition(URL, VERSION, &json!({"data":{"g":{"a":3,"double":6}}}))
             .unwrap(),
         None
     );
@@ -98,7 +98,7 @@ fn calculated_definition() -> Value {
 fn changed_or_missing_calculated_value_is_still_refused() {
     let processor = processor(&calculated_definition());
     for data in [json!({"g":{"a":3,"double":7}}), json!({"g":{"a":3}})] {
-        assert!(matches!(processor.validate_definition(URL, VERSION, &data),
+        assert!(matches!(processor.validate_response_definition(URL, VERSION, &json!({"data":data})),
             Err(BindingError::Unsupported(message)) if message == "filed Response data differs from its evaluation"));
     }
 }
@@ -125,7 +125,7 @@ fn omitted_empty_repeat_and_its_enclosing_groups_are_unchanged() {
         json!({"topRows":[],"g":{"inner":{"rows":[]}}}),
     ] {
         assert_eq!(
-            processor.validate_definition(URL, VERSION, &data).unwrap(),
+            processor.validate_response_definition(URL, VERSION, &json!({"data":data})).unwrap(),
             None
         );
     }
@@ -142,7 +142,7 @@ fn omitted_empty_repeat_beside_a_non_relevant_repeat_is_unchanged() {
     );
     assert_eq!(
         processor(&definition)
-            .validate_definition(URL, VERSION, &json!({}))
+            .validate_response_definition(URL, VERSION, &json!({"data":{}}))
             .unwrap(),
         None
     );
@@ -157,7 +157,7 @@ fn removal_of_a_filed_value_is_still_refused() {
         json!([{"path":"hidden", "relevant":"false"}]),
     );
     assert!(
-        matches!(processor(&definition).validate_definition(URL, VERSION, &json!({"hidden":"filed"})),
+        matches!(processor(&definition).validate_response_definition(URL, VERSION, &json!({"data":{"hidden":"filed"}})),
         Err(BindingError::Unsupported(message)) if message == "filed Response data differs from its evaluation")
     );
 }
@@ -173,7 +173,7 @@ fn omitted_empty_repeat_inside_existing_rows_is_unchanged() {
     );
     assert_eq!(
         processor(&definition)
-            .validate_definition(URL, VERSION, &json!({"outer":[{}, {"g":{"rows":[]}}]}))
+            .validate_response_definition(URL, VERSION, &json!({"data":{"outer":[{}, {"g":{"rows":[]}}]}}))
             .unwrap(),
         None
     );
@@ -188,7 +188,7 @@ fn empty_repeat_exception_does_not_allow_a_missing_calculated_value() {
         json!([{"path":"added", "calculate":"42"}]),
     );
     assert!(
-        matches!(processor(&definition).validate_definition(URL, VERSION, &json!({})),
+        matches!(processor(&definition).validate_response_definition(URL, VERSION, &json!({"data":{}})),
         Err(BindingError::Unsupported(message)) if message == "filed Response data differs from its evaluation")
     );
 }
@@ -211,7 +211,7 @@ fn absent_group_with_calculated_value_beside_empty_repeat_is_refused() {
     );
     assert_eq!(evaluated.data, json!({"g":{"c":42,"rows":[]}}));
     assert!(
-        matches!(processor(&definition).validate_definition(URL, VERSION, &json!({})),
+        matches!(processor(&definition).validate_response_definition(URL, VERSION, &json!({"data":{}})),
         Err(BindingError::Unsupported(message)) if message == "filed Response data differs from its evaluation")
     );
 }
@@ -229,7 +229,7 @@ fn saved_response_with_no_rows_keeps_zero_rows_and_reports_min_repeat() {
     assert_eq!(evaluated.data, json!({"rows":[]}));
     // A saved Response keeps its zero rows and receives a cardinality finding.
     let findings = processor(&definition)
-        .validate_definition(URL, VERSION, &json!({}))
+        .validate_response_definition(URL, VERSION, &json!({"data":{}}))
         .unwrap()
         .unwrap();
     assert_eq!(findings.len(), 1);
@@ -248,7 +248,7 @@ fn nested_required_error_reaches_the_task_caller() {
         json!([{"path":"g.a", "required":"true"}]),
     );
     let errors = processor(&definition)
-        .validate_definition(URL, VERSION, &json!({"g":{"a":null}}))
+        .validate_response_definition(URL, VERSION, &json!({"data":{"g":{"a":null}}}))
         .unwrap()
         .unwrap();
     assert!(
@@ -257,4 +257,36 @@ fn nested_required_error_reaches_the_task_caller() {
             .any(|error| error["path"] == "g.a" && error["code"] == "REQUIRED"),
         "{errors:?}"
     );
+}
+
+#[test]
+fn stored_subject_survives_native_task_recheck() {
+    let fixture: Value = serde_json::from_str(include_str!(
+        "../../../../formspec/tests/conformance/fixtures/subject-recheck.json"
+    )).unwrap();
+    let definition = &fixture["definition"];
+    let response = &fixture["response"];
+    let task: wos_core::instance::ActiveTask = serde_json::from_value(json!({
+        "taskId":"subject-recheck", "taskRef":"review", "status":"assigned", "binding":"formspec",
+        "definitionUrl":response["definitionUrl"], "definitionVersion":response["definitionVersion"],
+        "createdAt":"2026-01-01T00:00:00Z", "updatedAt":"2026-01-01T00:00:00Z"
+    })).unwrap();
+    let processor = processor(definition);
+    assert_eq!(processor.validate_task_definition(&task, response).unwrap(), None);
+    let mut invalid = response.clone();
+    invalid["subject"]["keys"]["serial"] = json!("wrong type");
+    let findings = processor.validate_task_definition(&task, &invalid).unwrap().unwrap();
+    assert_eq!(findings[0]["path"], "#subjectKeys.serial");
+    invalid["subject"]["keys"]["serial"] = json!(9_007_199_254_740_993_i64);
+    let findings = processor.validate_response_definition(
+        response["definitionUrl"].as_str().unwrap(),
+        response["definitionVersion"].as_str().unwrap(),
+        &invalid,
+    ).unwrap().unwrap();
+    assert_eq!(findings[0]["path"], "#subjectKeys.serial");
+    assert!(findings[0]["message"].as_str().unwrap().contains("I-JSON"));
+    let mut changed = response.clone();
+    changed["data"]["serial"] = json!(4);
+    assert!(matches!(processor.validate_task_definition(&task, &changed),
+        Err(BindingError::Unsupported(_))));
 }
