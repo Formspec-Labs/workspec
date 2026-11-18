@@ -534,7 +534,7 @@ fn admit_expression(expression: &str, in_definition: bool) -> Result<(), Binding
     let ast = fel_core::parse(expression).map_err(|error| invalid(error.to_string()))?;
     let dependencies = fel_core::extract_dependencies(&ast);
     if !dependencies.context_refs.is_empty()
-        || !dependencies.instance_refs.is_empty()
+        || !dependencies.instance_reads.is_empty()
         || dependencies.uses_prev_next
     {
         return Err(BindingError::Unsupported(
