@@ -1,9 +1,11 @@
 """Record-lifecycle reason/statement classes copy Formspec's AccessClass constraint.
 
 `reasonField` / `statementField` `accessControl.class` carry a Formspec
-Access-Class Registry token (formspec extension-registry.md §3.2.3). WOS copies
-the enum and pattern of formspec common.schema.json `$defs/AccessClass`; this
-test pins the copy against the sibling checkout when present.
+Access-Class Registry token (formspec extension-registry.md §3.2.3). Both slots
+reference one WOS `$defs/AccessClass`, which copies the enum and pattern of
+formspec common.schema.json `$defs/AccessClass`; this test pins the copy against
+the sibling checkout when present. Branch examples are validated by
+test_examples_validate.py, and their presence by wos-lint SCHEMA-DOC-001.
 """
 from __future__ import annotations
 
@@ -18,17 +20,25 @@ WORKFLOW = json.loads((WOS_SPEC_ROOT / "schemas" / "wos-workflow.schema.json").r
 FORMSPEC_COMMON = WOS_SPEC_ROOT.parent / "formspec" / "schemas" / "common.schema.json"
 
 
-CLASS_NODES = [
-    WORKFLOW["$defs"][affordance]["properties"][field]["properties"]["accessControl"]
-    ["properties"]["class"]
-    for affordance, field in [
-        ("CorrectableAffordance", "reasonField"),
-        ("DisputableAffordance", "statementField"),
-    ]
-]
+def _class_nodes(node, out):
+    if isinstance(node, dict):
+        props = node.get("properties", {})
+        ac = props.get("accessControl", {})
+        if isinstance(ac, dict) and "class" in ac.get("properties", {}):
+            out.append(ac["properties"]["class"])
+        for value in node.values():
+            _class_nodes(value, out)
+    elif isinstance(node, list):
+        for value in node:
+            _class_nodes(value, out)
+    return out
+
+
+CLASS_NODES = _class_nodes(WORKFLOW, [])
 
 
 def test_both_lifecycle_class_slots_are_constrained():
+    assert len(CLASS_NODES) == 2
     for node in CLASS_NODES:
         assert node == {"$ref": "#/$defs/AccessClass"}
 
@@ -57,9 +67,3 @@ def test_copy_matches_formspec_common_access_class():
         ]
 
     assert constraints(WORKFLOW["$defs"]["AccessClass"]["anyOf"]) == constraints(common)
-
-
-def test_documented_tokens_match_their_branch():
-    for branch in WORKFLOW["$defs"]["AccessClass"]["anyOf"]:
-        assert branch["examples"]
-        assert all(Draft202012Validator(branch).is_valid(value) for value in branch["examples"])
