@@ -621,7 +621,7 @@
             },
             "items": {
               "type": "array",
-              "description": "The final retained notice in the authorized process, or an empty array when no candidate remains.",
+              "description": "Zero or one retained notice: the last candidate for the authorized process in this statement snapshot.",
               "maxItems": 1,
               "items": {
                 "$ref": "#/$defs/RetainedNoticeContent"

@@ -148,11 +148,11 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable description of the alternative outcome considered in the determination.",
+          "description": "Authored policy text describing this hypothetical set of case changes, copied verbatim into counterfactual provenance; it is not an evaluation result.",
           "minLength": 1,
           "maxLength": 4096,
           "examples": [
-            "The application would remain open while the missing evidence is reviewed."
+            "Verified household income at or below the program limit."
           ],
           "x-wos": {
             "openStringKind": "prose"
@@ -212,7 +212,7 @@
           "minLength": 1,
           "maxLength": 4096,
           "examples": [
-            "The matching row shows verified income exceeds the threshold."
+            "Countable household income exceeds the program limit."
           ],
           "x-wos": {
             "openStringKind": "prose"
@@ -1487,101 +1487,6 @@
         }
       }
     },
-    "OverrideRationale": {
-      "type": "object",
-      "description": "Closed OverrideRationale shape from Governance native reference execution.",
-      "additionalProperties": false,
-      "required": [
-        "summary"
-      ],
-      "properties": {
-        "summary": {
-          "type": "string",
-          "description": "Summary of the reason the authorizing actor gave for the documented override.",
-          "examples": [
-            "Additional review is required to verify the new supporting evidence."
-          ],
-          "x-wos": {
-            "openStringKind": "prose"
-          }
-        }
-      }
-    },
-    "OverrideAuthorityVerification": {
-      "type": "object",
-      "description": "Closed OverrideAuthorityVerification shape from Governance native reference execution.",
-      "additionalProperties": false,
-      "required": [
-        "actorId",
-        "method",
-        "verifiedAt"
-      ],
-      "properties": {
-        "actorId": {
-          "type": "string",
-          "description": "Canonical identity of the actor whose authority was checked before admitting the override.",
-          "examples": [
-            "actor:human:supervisor"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
-        },
-        "method": {
-          "$ref": "#/$defs/OverrideAuthorityMethod",
-          "description": "Retained method value under referenceDueProcess/1."
-        },
-        "verifiedAt": {
-          "$ref": "#/$defs/Timestamp",
-          "description": "Retained verifiedAt value under referenceDueProcess/1."
-        },
-        "authoritySource": {
-          "type": "string",
-          "description": "Authority source consulted for the roleAssignment check: the workflow definition URL and the declared actor ID, joined by '#'.",
-          "examples": [
-            "https://agency.example/workflows/benefits-review#supervisor"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
-        }
-      }
-    },
-    "OverrideEvidenceReference": {
-      "type": "object",
-      "description": "Closed OverrideEvidenceReference shape from Governance native reference execution.",
-      "additionalProperties": false,
-      "required": [
-        "kind",
-        "uri"
-      ],
-      "properties": {
-        "kind": {
-          "$ref": "#/$defs/OverrideEvidenceKind",
-          "description": "Retained kind value under referenceDueProcess/1."
-        },
-        "uri": {
-          "type": "string",
-          "description": "URI identifying a retained supporting document cited as evidence for the override.",
-          "examples": [
-            "urn:fixture:extension-evidence"
-          ],
-          "x-wos": {
-            "openStringKind": "uri"
-          }
-        },
-        "summary": {
-          "type": "string",
-          "description": "Human-readable summary of the supporting document cited as evidence for the override.",
-          "examples": [
-            "Signed review checklist showing the remaining verification steps."
-          ],
-          "x-wos": {
-            "openStringKind": "prose"
-          }
-        }
-      }
-    },
     "OverrideRecord": {
       "$ref": "wos-workflow.schema.json#/$defs/OverrideRecord"
     },
@@ -1777,7 +1682,7 @@
           "type": "string",
           "description": "Identity of the native process that owns this pending item of notice transport work.",
           "examples": [
-            "process-1"
+            "default_process_01hw7rm71vfay8vvw14d2pf2db"
           ],
           "x-wos": {
             "openStringKind": "identifier"
@@ -1943,7 +1848,7 @@
           "type": "string",
           "description": "Identity of the saved determination whose firing the retained reasoning evidence explains.",
           "examples": [
-            "determination-1"
+            "default_prov_01m5bkbfjke3r9p9589gy8zggh"
           ],
           "x-wos": {
             "openStringKind": "identifier"
@@ -1959,11 +1864,11 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable explanation of the decision logic retained for this determination.",
+          "description": "The selected row's reason binding description, copied verbatim as policy text; actual inputs and outputs are retained separately in evaluation.",
           "minLength": 1,
           "maxLength": 4096,
           "examples": [
-            "The decision table matched the row for verified income above the limit."
+            "Countable household income exceeds the program limit."
           ],
           "x-wos": {
             "openStringKind": "prose"
@@ -2014,7 +1919,7 @@
           "type": "string",
           "description": "Identity of the saved determination whose firing the counterfactual evidence describes.",
           "examples": [
-            "determination-1"
+            "default_prov_01m5bkbfjke3r9p9589gy8zggh"
           ],
           "x-wos": {
             "openStringKind": "identifier"
@@ -2030,11 +1935,11 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable explanation of the retained counterfactual evaluation linked to this determination.",
+          "description": "The selected alternative's authored description, copied verbatim; the evaluation results are retained separately in originalEvaluation and alternateEvaluation.",
           "minLength": 1,
           "maxLength": 4096,
           "examples": [
-            "With verified income below the threshold, the alternate evaluation did not trigger denial."
+            "Verified household income at or below the program limit."
           ],
           "x-wos": {
             "openStringKind": "prose"
@@ -2246,7 +2151,7 @@
       "enum": [
         "determinerAndSupervisor"
       ],
-      "description": "Determination roles excluded from serving as the independent appeal reviewer.",
+      "description": "Excludes the determining human and the signing supervisor from serving as the appeal reviewer, compared by canonical human identity.",
       "examples": [
         "determinerAndSupervisor"
       ]
@@ -2295,7 +2200,7 @@
         "policy",
         "guideline"
       ],
-      "description": "Category of authority declared by the retained source cited in the policy.",
+      "description": "Category of legal authority that a reason binding declares for its cited source text.",
       "examples": [
         "regulation",
         "policy"
@@ -2501,7 +2406,7 @@
               "type": "string",
               "description": "Identity of the existing appeal whose hearing the caller requests to schedule.",
               "examples": [
-                "appeal-1"
+                "default_prov_01m5bkbfjke3r9p9589gy8zggh"
               ],
               "x-wos": {
                 "openStringKind": "identifier"
@@ -2540,7 +2445,7 @@
               "type": "string",
               "description": "Identity of the existing appeal whose scheduled hearing the caller records as held.",
               "examples": [
-                "appeal-1"
+                "default_prov_01m5bkbfjke3r9p9589gy8zggh"
               ],
               "x-wos": {
                 "openStringKind": "identifier"
@@ -2574,7 +2479,7 @@
               "type": "string",
               "description": "Identity of the existing appeal for which the caller records a disposition.",
               "examples": [
-                "appeal-1"
+                "default_prov_01m5bkbfjke3r9p9589gy8zggh"
               ],
               "x-wos": {
                 "openStringKind": "identifier"
@@ -2620,7 +2525,7 @@
               "type": "string",
               "description": "Identity of the existing appeal for the request to end continuation of service.",
               "examples": [
-                "appeal-1"
+                "default_prov_01m5bkbfjke3r9p9589gy8zggh"
               ],
               "x-wos": {
                 "openStringKind": "identifier"
@@ -2749,7 +2654,7 @@
               "type": "string",
               "description": "Identity of the appeal associated with the successfully scheduled hearing.",
               "examples": [
-                "appeal-1"
+                "default_prov_01m5bkbfjke3r9p9589gy8zggh"
               ],
               "x-wos": {
                 "openStringKind": "identifier"
@@ -2778,7 +2683,7 @@
               "type": "string",
               "description": "Identity of the appeal associated with the hearing recorded as held.",
               "examples": [
-                "appeal-1"
+                "default_prov_01m5bkbfjke3r9p9589gy8zggh"
               ],
               "x-wos": {
                 "openStringKind": "identifier"
@@ -2807,7 +2712,7 @@
               "type": "string",
               "description": "Identity of the appeal to which the recorded disposition applies.",
               "examples": [
-                "appeal-1"
+                "default_prov_01m5bkbfjke3r9p9589gy8zggh"
               ],
               "x-wos": {
                 "openStringKind": "identifier"
@@ -2852,9 +2757,9 @@
             },
             "overrideRecordId": {
               "type": "string",
-              "description": "Identity of the retained override record for the approved extension.",
+              "description": "Provenance record ID of the OverrideRecorded entry for the approved extension; distinct from the id inside the OverrideRecord it carries.",
               "examples": [
-                "override-1"
+                "default_prov_01m5bkbfjke3r9p9589gy8zggh"
               ],
               "x-wos": {
                 "openStringKind": "identifier"
@@ -2903,9 +2808,9 @@
             },
             "operationRecordId": {
               "type": "string",
-              "description": "Identity of the retained governance operation returned upon successful admission.",
+              "description": "Provenance record ID of the bound operation transition that committed this request; equal to OperationState.recordId.",
               "examples": [
-                "operation-1"
+                "default_prov_01m5bkbfjke3r9p9589gy8zggh"
               ],
               "x-wos": {
                 "openStringKind": "identifier"
@@ -3000,26 +2905,6 @@
         }
       ]
     },
-    "OverrideAuthorityMethod": {
-      "type": "string",
-      "enum": [
-        "roleAssignment"
-      ],
-      "description": "Verification method used to establish the actor's authorized role for the override.",
-      "examples": [
-        "roleAssignment"
-      ]
-    },
-    "OverrideEvidenceKind": {
-      "type": "string",
-      "enum": [
-        "document"
-      ],
-      "description": "Category of the retained supporting evidence cited to justify an override.",
-      "examples": [
-        "document"
-      ]
-    },
     "Id": {
       "type": "string",
       "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
@@ -3084,9 +2969,9 @@
     "RecordId": {
       "type": "string",
       "minLength": 1,
-      "description": "Identity used to reference a retained record produced by the native governor.",
+      "description": "Minted provenance record ID of a retained native record, such as a determining transition, appeal filing or operation; never a predictable authored name.",
       "examples": [
-        "determination-1"
+        "default_prov_01m5bkbfjke3r9p9589gy8zggh"
       ],
       "x-wos": {
         "openStringKind": "identifier"
@@ -3096,7 +2981,7 @@
       "type": "integer",
       "minimum": 1,
       "maximum": 36500,
-      "description": "Number of whole calendar days in a window configured by the reference due-process policy.",
+      "description": "Whole number of calendar days used by reference due-process policy windows and by extension requests.",
       "examples": [
         10,
         30

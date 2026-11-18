@@ -3142,7 +3142,7 @@
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 36500,
-                "description": "Number of whole calendar days in a window configured by the reference due-process policy.",
+                "description": "Whole number of calendar days used by reference due-process policy windows and by extension requests.",
                 "examples": [
                   10,
                   30
@@ -3311,7 +3311,7 @@
                 "enum": [
                   "determinerAndSupervisor"
                 ],
-                "description": "Determination roles excluded from serving as the independent appeal reviewer.",
+                "description": "Excludes the determining human and the signing supervisor from serving as the appeal reviewer, compared by canonical human identity.",
                 "examples": [
                   "determinerAndSupervisor"
                 ]
@@ -3762,11 +3762,11 @@
                   },
                   "description": {
                     "type": "string",
-                    "description": "Human-readable description of the alternative outcome considered in the determination.",
+                    "description": "Authored policy text describing this hypothetical set of case changes, copied verbatim into counterfactual provenance; it is not an evaluation result.",
                     "minLength": 1,
                     "maxLength": 4096,
                     "examples": [
-                      "The application would remain open while the missing evidence is reviewed."
+                      "Verified household income at or below the program limit."
                     ],
                     "x-wos": {
                       "openStringKind": "prose"
@@ -3915,7 +3915,7 @@
                     "minLength": 1,
                     "maxLength": 4096,
                     "examples": [
-                      "The matching row shows verified income exceeds the threshold."
+                      "Countable household income exceeds the program limit."
                     ],
                     "x-wos": {
                       "openStringKind": "prose"
@@ -3940,7 +3940,7 @@
                   "policy",
                   "guideline"
                 ],
-                "description": "Category of authority declared by the retained source cited in the policy.",
+                "description": "Category of legal authority that a reason binding declares for its cited source text.",
                 "examples": [
                   "regulation",
                   "policy"

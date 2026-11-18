@@ -756,7 +756,7 @@
         },
         "targetWorkflow": {
           "type": "string",
-          "description": "Canonical workflow URL selected as the target of this fixture notification template document.",
+          "description": "Canonical workflow URL that this fixture notification template document declares as its target.",
           "examples": [
             "urn:fixture:review-workflow"
           ],
@@ -1543,7 +1543,7 @@
               "minLength": 1,
               "description": "Identity of the saved determination whose actual notice and delivery evidence are selected.",
               "examples": [
-                "determination-1"
+                "default_prov_01m5bkbfjke3r9p9589gy8zggh"
               ],
               "x-wos": {
                 "openStringKind": "identifier"
@@ -1583,7 +1583,7 @@
               "minLength": 1,
               "description": "Identity of the saved determination whose actual appeal and hearing state are selected.",
               "examples": [
-                "determination-1"
+                "default_prov_01m5bkbfjke3r9p9589gy8zggh"
               ],
               "x-wos": {
                 "openStringKind": "identifier"
@@ -1650,7 +1650,7 @@
         "url": {
           "type": "string",
           "minLength": 1,
-          "description": "Canonical URL of the exact Formspec Definition selected as the source for replay.",
+          "description": "Canonical URL of the exact Formspec Definition paired with this selected Mapping dependency, chosen independently of the Mapping's version range.",
           "examples": [
             "urn:fixture:review-definition"
           ],
@@ -1661,7 +1661,7 @@
         "version": {
           "type": "string",
           "minLength": 1,
-          "description": "Version of the selected Formspec Definition pinned beside its canonical URL.",
+          "description": "Exact version of the Formspec Definition paired with the selected Mapping, pinned beside its canonical URL.",
           "examples": [
             "1.0.0"
           ],
@@ -1796,7 +1796,7 @@
           "items": {
             "type": "string",
             "minLength": 1,
-            "description": "Name of a native observation that must be present for this replay run.",
+            "description": "Name of a supported native observation category this run requests; unsupported names refuse, and the list binds into replay identity.",
             "examples": [
               "configuration"
             ],

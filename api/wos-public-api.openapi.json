@@ -1902,9 +1902,9 @@
             "uniqueItems": true
           },
           "description": {
-            "description": "Human-readable description of the alternative outcome considered in the determination.",
+            "description": "Authored policy text describing this hypothetical set of case changes, copied verbatim into counterfactual provenance; it is not an evaluation result.",
             "examples": [
-              "The application would remain open while the missing evidence is reviewed."
+              "Verified household income at or below the program limit."
             ],
             "maxLength": 4096,
             "minLength": 1,
@@ -2319,7 +2319,7 @@
                 "type": "boolean"
               },
               "items": {
-                "description": "The final retained notice in the authorized process, or an empty array when no candidate remains.",
+                "description": "Zero or one retained notice: the last candidate for the authorized process in this statement snapshot.",
                 "items": {
                   "$ref": "#/components/schemas/RetainedNoticeContent"
                 },
@@ -3957,9 +3957,9 @@
             "description": "Retained alternative value under referenceDueProcess/1."
           },
           "description": {
-            "description": "Human-readable explanation of the retained counterfactual evaluation linked to this determination.",
+            "description": "The selected alternative's authored description, copied verbatim; the evaluation results are retained separately in originalEvaluation and alternateEvaluation.",
             "examples": [
-              "With verified income below the threshold, the alternate evaluation did not trigger denial."
+              "Verified household income at or below the program limit."
             ],
             "maxLength": 4096,
             "minLength": 1,
@@ -3983,7 +3983,7 @@
           "relatedTransition": {
             "description": "Identity of the saved determination whose firing the counterfactual evidence describes.",
             "examples": [
-              "determination-1"
+              "default_prov_01m5bkbfjke3r9p9589gy8zggh"
             ],
             "type": "string",
             "x-wos": {
@@ -4032,9 +4032,9 @@
             "description": "Retained authority value under referenceDueProcess/1."
           },
           "description": {
-            "description": "Human-readable explanation of the decision logic retained for this determination.",
+            "description": "The selected row's reason binding description, copied verbatim as policy text; actual inputs and outputs are retained separately in evaluation.",
             "examples": [
-              "The decision table matched the row for verified income above the limit."
+              "Countable household income exceeds the program limit."
             ],
             "maxLength": 4096,
             "minLength": 1,
@@ -4050,7 +4050,7 @@
           "relatedTransition": {
             "description": "Identity of the saved determination whose firing the retained reasoning evidence explains.",
             "examples": [
-              "determination-1"
+              "default_prov_01m5bkbfjke3r9p9589gy8zggh"
             ],
             "type": "string",
             "x-wos": {
