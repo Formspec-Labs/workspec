@@ -4274,6 +4274,7 @@ dependencies = [
  "jsonwebtoken 9.3.1",
  "oauth2",
  "openidconnect",
+ "percent-encoding",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
