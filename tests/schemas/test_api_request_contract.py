@@ -52,3 +52,15 @@ def test_error_registry_lists_the_codes_the_server_emits():
     codes = set(re.findall(r"^\| `(WOS-\d{4})` \|", registry, re.MULTILINE))
     assert "WOS-1501" in codes, "the server answers WOS-1501 for storage that cannot run an operation"
     assert "WOS-1453" not in codes, "nothing emits WOS-1453"
+
+
+def test_error_docs_name_the_wire_code_field():
+    schema = json.loads((API_SCHEMA_DIR / "error.schema.json").read_text())
+    code_field, = (name for name, field in schema["$defs"]["Problem"]["properties"].items()
+                   if field.get("$ref") == "#/$defs/ErrorCode")
+    spec = (ROOT / "specs/api/error.md").read_text()
+    required_section = spec.split("`Problem` requires:\n", 1)[1].split("Optional fields:", 1)[0]
+    required_fields = set(re.findall(r"^- `([^`]+)`:", required_section, re.MULTILINE))
+    assert required_fields == set(schema["$defs"]["Problem"]["required"])
+    registry = (ROOT / "specs/api/error-registry.md").read_text()
+    assert f"`{code_field}`" in registry

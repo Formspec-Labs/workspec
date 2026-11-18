@@ -1,6 +1,6 @@
 # WOS Public API Error Registry
 
-This registry owns stable `wosErrorCode` values for the public REST API. Error responses use RFC 7807 `application/problem+json` and conform to `schemas/api/error.schema.json`.
+This registry owns stable `error_code` values for the public REST API. Error responses use RFC 7807 `application/problem+json` and conform to `schemas/api/error.schema.json`.
 
 | Code | HTTP | Title | Meaning |
 |---|---:|---|---|

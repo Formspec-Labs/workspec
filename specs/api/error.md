@@ -16,7 +16,7 @@ Every non-2xx WOS public REST API response uses RFC 7807 problem details with co
 - `type`: dereferenceable URI for the documented error type.
 - `title`: short human-readable summary.
 - `status`: HTTP status code, 400 through 599.
-- `wosErrorCode`: stable machine-readable code from `error-registry.md`.
+- `error_code`: stable machine-readable code from `error-registry.md`.
 
 Optional fields:
 
@@ -26,8 +26,8 @@ Optional fields:
 
 ## Codes
 
-`wosErrorCode` values are stable once published. New codes are added to `error-registry.md`; existing codes are not repurposed. Server implementations map internal errors to the closest registered public code and must not expose legacy `{ "error": ... }` envelopes on the public API surface.
+`error_code` values are stable once published. Add new codes to `error-registry.md`. Server implementations map internal errors to registered public codes and use the `Problem` body for public errors.
 
 ## OpenAPI Binding
 
-The OpenAPI snapshot at [`wos-public-api.openapi.json`](../../api/wos-public-api.openapi.json) references this schema through `components.responses.Problem`. Endpoint-specific default error responses use that component unless a narrower response is specified.
+The OpenAPI snapshot at [`wos-public-api.openapi.json`](../../api/wos-public-api.openapi.json) publishes the shared shape as `components.schemas.Problem`. Operations can declare narrower problem shapes for specific responses.
