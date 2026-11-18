@@ -19,6 +19,13 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry
 
 
+_MAP_SUBSCHEMAS = {"properties", "patternProperties", "$defs", "definitions", "dependentSchemas"}
+_DIRECT_SUBSCHEMAS = {
+    "items", "additionalProperties", "if", "then", "else", "not", "propertyNames", "contains",
+}
+_LIST_SUBSCHEMAS = {"oneOf", "anyOf", "allOf", "prefixItems", "items"}
+
+
 def _validator_for_fragment(
     marker: str,
     pointer: str,
@@ -36,10 +43,11 @@ def _validator_for_fragment(
     the same way as validating against the full schema document.
     """
     host = schemas_by_marker.get(marker)
+    definitions = {key: host[key] for key in ("$defs", "definitions") if host and key in host}
     if (
         host
         and pointer
-        and host.get("$defs")
+        and definitions
         and id(sub_schema) != id(host)
     ):
         safe = pointer.replace("/", "_").replace("~", "_") or "sub"
@@ -48,7 +56,7 @@ def _validator_for_fragment(
                 "$schema", "https://json-schema.org/draft/2020-12/schema"
             ),
             "$id": f"{host.get('$id', 'urn:wos:fragment')}#fragment{safe}",
-            "$defs": host["$defs"],
+            **definitions,
         }
         composed.update(sub_schema)
         return Draft202012Validator(
@@ -68,30 +76,23 @@ def _walk_schema_with_pointer(
 ) -> Iterator[tuple[str, dict[str, Any]]]:
     """Yield (json_pointer, sub_schema) for every object node in a schema.
 
-    Visits the root, every `properties.<key>` value, every `$defs.<key>` value,
-    every `items` value, every `additionalProperties` schema, and every
-    branch of `oneOf` / `anyOf` / `allOf` / `if` / `then` / `else`. The
-    pointer is built relative to the host schema root.
+    Uses the same authored subschema keywords as the Rust schema-doc lint.
+    Pointers are relative to the host schema root.
     """
     if isinstance(node, dict):
         yield pointer, node
         for key, child in node.items():
             child_pointer = f"{pointer}/{_escape_pointer(key)}"
-            if key in {"properties", "$defs", "patternProperties"} and isinstance(child, dict):
+            if key in _MAP_SUBSCHEMAS and isinstance(child, dict):
                 for sub_key, sub_child in child.items():
                     yield from _walk_schema_with_pointer(
                         sub_child, f"{child_pointer}/{_escape_pointer(sub_key)}"
                     )
-            elif key == "items" and isinstance(child, dict):
+            elif key in _DIRECT_SUBSCHEMAS and isinstance(child, dict):
                 yield from _walk_schema_with_pointer(child, child_pointer)
-            elif key in {"oneOf", "anyOf", "allOf"} and isinstance(child, list):
+            elif key in _LIST_SUBSCHEMAS and isinstance(child, list):
                 for i, sub_child in enumerate(child):
                     yield from _walk_schema_with_pointer(sub_child, f"{child_pointer}/{i}")
-            elif key in {"if", "then", "else", "not", "additionalProperties"} and isinstance(
-                child, dict
-            ):
-                yield from _walk_schema_with_pointer(child, child_pointer)
-
 
 def _escape_pointer(token: str) -> str:
     return token.replace("~", "~0").replace("/", "~1")
@@ -103,18 +104,22 @@ def _is_validatable_subschema(node: dict[str, Any]) -> bool:
     Skip metadata-only nodes that happen to carry an `examples` array but no
     constraint surface (rare in practice but defensive).
     """
-    return (
-        "type" in node
-        or "enum" in node
-        or "const" in node
-        or "$ref" in node
-        or "oneOf" in node
-        or "anyOf" in node
-        or "allOf" in node
-        or "properties" in node
-        or "items" in node
-        or "pattern" in node
-    )
+    return bool(node.keys() & {
+        "type", "enum", "const", "$ref", "pattern",
+        *(_MAP_SUBSCHEMAS - {"$defs", "definitions"}), *_DIRECT_SUBSCHEMAS, *_LIST_SUBSCHEMAS,
+    })
+
+
+@pytest.mark.parametrize(("schema", "expected"), [
+    ({"definitions": {"a/b": {"type": "string"}}}, "/definitions/a~1b"),
+    ({"dependentSchemas": {"a/b": {"type": "string"}}}, "/dependentSchemas/a~1b"),
+    ({"propertyNames": {"type": "string"}}, "/propertyNames"),
+    ({"contains": {"type": "string"}}, "/contains"),
+    ({"prefixItems": [True, {"type": "string"}]}, "/prefixItems/1"),
+    ({"items": [True, {"type": "string"}]}, "/items/1"),
+])
+def test_example_walk_reaches_schema_keywords(schema, expected):
+    assert [pointer for pointer, _ in _walk_schema_with_pointer(schema)] == ["", expected]
 
 
 def test_every_schema_example_validates_against_its_fragment(
