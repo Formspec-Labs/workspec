@@ -1113,7 +1113,12 @@ fn visit_children(expr: &Expr, f: &mut impl FnMut(&Expr)) {
             f(container.as_ref());
         }
 
-        Expr::NullCoalesce { left, right } => {
+        Expr::NullCoalesce { left, right }
+        | Expr::RowLookup {
+            source: left,
+            key: right,
+            ..
+        } => {
             f(left.as_ref());
             f(right.as_ref());
         }
@@ -1308,6 +1313,17 @@ mod tests {
                 .any(|d| d.rule_id == "K-019" && d.severity == LintSeverity::Warning),
             "expected K-019 warning, got: {diag:?}"
         );
+    }
+
+    #[test]
+    fn keyed_lookup_checks_functions_in_the_source_and_key() {
+        let expr = fel_core::parse("sourceExtension()[id = keyExtension()].label").unwrap();
+        let mut diagnostics = Vec::new();
+        check_only_builtin_functions(&expr, "K-019", "/guard", &mut diagnostics);
+
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+        assert!(diagnostics[0].message.contains("sourceExtension"));
+        assert!(diagnostics[1].message.contains("keyExtension"));
     }
 
     #[test]
