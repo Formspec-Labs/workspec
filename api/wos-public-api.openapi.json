@@ -11319,7 +11319,7 @@
         "operationId": "application_case_lookup",
         "parameters": [
           {
-            "description": "Source-owned draft ID: native draft_ plus compact lowercase UUIDv7, or canonical\nhyphenated UUID.",
+            "description": "Opaque Source record locator for the draft.\n\nContains 1 to 255 ASCII letters, digits, underscores, hyphens, or periods.\nA single period or two periods alone are invalid.",
             "in": "path",
             "name": "draft_uuid",
             "required": true,
