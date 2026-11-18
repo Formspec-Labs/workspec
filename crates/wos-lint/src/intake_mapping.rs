@@ -218,7 +218,8 @@ mod tests {
                            "document": {"url": url, "version": version}},
             "caseReservation": {"caseLedgerId": "ledger-1", "caseReference": "case-1"}
         });
-        validate_input(&input, url, version, response_ref).expect("accept the Response explanation");
+        validate_input(&input, url, version, response_ref)
+            .expect("accept the Response explanation");
     }
 
     #[test]
