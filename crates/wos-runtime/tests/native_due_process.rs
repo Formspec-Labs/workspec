@@ -2622,11 +2622,30 @@ fn delayed_child_extension_uses_parent_original_deadline_and_cumulative_cap() {
             extension.override_record.authority_verification.actor_id,
             "actor:human:supervisor"
         );
-        assert!(!extension.override_record.supporting_evidence.is_empty());
+        assert_eq!(
+            serde_json::to_value(&extension.override_record.supporting_evidence).unwrap(),
+            json!([{
+                "kind": "document",
+                "uri": format!("urn:wos:retained:{}", bytes_digest(b"retained extension exhibit"))
+            }])
+        );
         assert!(record.provenance_log.iter().any(|p| p.record_kind
             == wos_core::ProvenanceKind::OverrideRecorded
             && p.data.as_ref()
                 == Some(&serde_json::to_value(&extension.override_record).unwrap())));
+    }
+    for token in ["extension1", "extension2"] {
+        let replay = state
+            .replays
+            .iter()
+            .find(|replay| replay.request.idempotency_token == token)
+            .unwrap();
+        let GovernanceCommand::ExtendPreNoticeWindow { evidence_refs, .. } =
+            &replay.request.command
+        else {
+            panic!("expected the saved extension command");
+        };
+        assert_eq!(evidence_refs[0].section_anchor, "exhibit.1");
     }
 }
 

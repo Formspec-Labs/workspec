@@ -631,7 +631,10 @@ the selected window or staff request cannot end continuation.
 actual bound timer, native actor authority and the existing OverrideAuthority
 requirements. Accepted commands append the existing canonical OverrideRecord
 with actual authorityVerification, rationale and supportingEvidence; they MUST
-validate against that owning schema. Sum accepted extensions cumulatively; refuse
+validate against that owning schema. Supporting evidence uses the retained digest
+URI `urn:wos:retained:<retainedSha256>`. The exact accepted request retains each
+section locator in `command.evidenceRefs[].sectionAnchor`. The reference governor
+leaves the optional human-readable evidence summary absent. Sum accepted extensions cumulatively; refuse
 beyond the selected cap. Add days to the retained timer deadline, never now.
 The operation cannot change notice grace, appeal/hearing clocks, sent bytes or
 service rights. Repeated token returns original evidence without a second add.

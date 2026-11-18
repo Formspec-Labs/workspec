@@ -650,7 +650,7 @@ pub(super) fn apply(
                     .map(|e| OverrideEvidenceReference {
                         kind: OverrideEvidenceKind::Document,
                         uri: format!("urn:wos:retained:{}", e.retained_sha256),
-                        summary: Some(e.section_anchor.clone()),
+                        summary: None,
                     })
                     .collect(),
             };
