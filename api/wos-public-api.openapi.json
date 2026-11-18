@@ -1902,10 +1902,16 @@
             "uniqueItems": true
           },
           "description": {
-            "description": "Retained description value under referenceDueProcess/1.",
+            "description": "Human-readable description of the alternative outcome considered in the determination.",
+            "examples": [
+              "The application would remain open while the missing evidence is reviewed."
+            ],
             "maxLength": 4096,
             "minLength": 1,
-            "type": "string"
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "prose"
+            }
           },
           "id": {
             "$ref": "#/components/schemas/Id",
@@ -3405,7 +3411,12 @@
         "type": "object"
       },
       "CounterfactualKind": {
+        "description": "Direction of a tested case change in the reference determination's counterfactual evidence.",
         "enum": [
+          "positive",
+          "negative"
+        ],
+        "examples": [
           "positive",
           "negative"
         ],
@@ -3422,7 +3433,11 @@
         ]
       },
       "CounterfactualTier": {
+        "description": "Field disclosure tier for the counterfactual evidence attached to the original determination.",
         "enum": [
+          "counterfactual"
+        ],
+        "examples": [
           "counterfactual"
         ],
         "type": "string"
@@ -3942,10 +3957,16 @@
             "description": "Retained alternative value under referenceDueProcess/1."
           },
           "description": {
-            "description": "Retained description value under referenceDueProcess/1.",
+            "description": "Human-readable explanation of the retained counterfactual evaluation linked to this determination.",
+            "examples": [
+              "With verified income below the threshold, the alternate evaluation did not trigger denial."
+            ],
             "maxLength": 4096,
             "minLength": 1,
-            "type": "string"
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "prose"
+            }
           },
           "factor": {
             "$ref": "#/components/schemas/Id",
@@ -3960,8 +3981,14 @@
             "description": "Retained originalSnapshotSha256 value under referenceDueProcess/1."
           },
           "relatedTransition": {
-            "description": "Retained relatedTransition value under referenceDueProcess/1.",
-            "type": "string"
+            "description": "Identity of the saved determination whose firing the counterfactual evidence describes.",
+            "examples": [
+              "determination-1"
+            ],
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
           },
           "sourceRefs": {
             "description": "Retained sourceRefs value under referenceDueProcess/1.",
@@ -4005,18 +4032,30 @@
             "description": "Retained authority value under referenceDueProcess/1."
           },
           "description": {
-            "description": "Retained description value under referenceDueProcess/1.",
+            "description": "Human-readable explanation of the decision logic retained for this determination.",
+            "examples": [
+              "The decision table matched the row for verified income above the limit."
+            ],
             "maxLength": 4096,
             "minLength": 1,
-            "type": "string"
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "prose"
+            }
           },
           "evaluation": {
             "$ref": "#/components/schemas/NativeDecisionEvaluation",
             "description": "Retained evaluation value under referenceDueProcess/1."
           },
           "relatedTransition": {
-            "description": "Retained relatedTransition value under referenceDueProcess/1.",
-            "type": "string"
+            "description": "Identity of the saved determination whose firing the retained reasoning evidence explains.",
+            "examples": [
+              "determination-1"
+            ],
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
           },
           "ruleId": {
             "$ref": "#/components/schemas/Id",
@@ -4053,6 +4092,10 @@
         "type": "object"
       },
       "Digest": {
+        "description": "SHA-256 digest encoded with a sha256 prefix and lowercase hexadecimal bytes.",
+        "examples": [
+          "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
         "pattern": "^sha256:[0-9a-f]{64}$",
         "type": "string"
       },
@@ -4924,6 +4967,10 @@
         "type": "object"
       },
       "Id": {
+        "description": "Authored identifier starting with a letter and scoped to the containing reference document.",
+        "examples": [
+          "appeal-review"
+        ],
         "maxLength": 128,
         "minLength": 1,
         "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
@@ -6125,7 +6172,10 @@
         "description": "Closed NativeDecisionEvaluation shape from Governance native reference execution.",
         "properties": {
           "guardResult": {
-            "description": "Retained guardResult value under referenceDueProcess/1.",
+            "description": "Actual Boolean result of the transition guard in the retained native evaluation.",
+            "examples": [
+              true
+            ],
             "type": "boolean"
           },
           "inputs": {
@@ -6142,7 +6192,14 @@
           "matchedRowIds": {
             "description": "Retained matchedRowIds value under referenceDueProcess/1.",
             "items": {
-              "type": "string"
+              "description": "Identifier of a decision table row matched during the retained native evaluation.",
+              "examples": [
+                "income-over-limit"
+              ],
+              "type": "string",
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
             },
             "type": "array"
           },
@@ -6154,8 +6211,14 @@
             "type": "array"
           },
           "selectedRowId": {
-            "description": "Retained selectedRowId value under referenceDueProcess/1.",
-            "type": "string"
+            "description": "Identifier of the decision table row selected by the retained native evaluation.",
+            "examples": [
+              "income-over-limit"
+            ],
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
           },
           "tableRef": {
             "$ref": "#/components/schemas/Id",
@@ -7064,6 +7127,11 @@
         "type": "object"
       },
       "Pointer": {
+        "description": "JSON Pointer that selects a location in the JSON document identified by the containing field.",
+        "examples": [
+          "/householdSize",
+          "/lifecycle/states/review"
+        ],
         "minLength": 1,
         "pattern": "^(?:/(?:[^~]|~[01])*)+$",
         "type": "string"
@@ -7566,7 +7634,11 @@
         "type": "object"
       },
       "ReasoningTier": {
+        "description": "Field disclosure tier for the reasoning evidence attached to the original determination.",
         "enum": [
+          "reasoning"
+        ],
+        "examples": [
           "reasoning"
         ],
         "type": "string"
@@ -9021,8 +9093,14 @@
                 "const": "string"
               },
               "value": {
-                "description": "Retained value value under referenceDueProcess/1.",
-                "type": "string"
+                "description": "String value compared without conversion when the selector declares the string branch.",
+                "examples": [
+                  "pending-review"
+                ],
+                "type": "string",
+                "x-wos": {
+                  "openStringKind": "tagLabel"
+                }
               }
             },
             "required": [
@@ -9039,7 +9117,10 @@
                 "const": "number"
               },
               "value": {
-                "description": "Retained value value under referenceDueProcess/1.",
+                "description": "Numeric value compared without conversion when the selector declares the number branch.",
+                "examples": [
+                  125
+                ],
                 "type": "number"
               }
             },
@@ -9057,7 +9138,10 @@
                 "const": "boolean"
               },
               "value": {
-                "description": "Retained value value under referenceDueProcess/1.",
+                "description": "Boolean value compared without conversion when the selector declares the boolean branch.",
+                "examples": [
+                  true
+                ],
                 "type": "boolean"
               }
             },
@@ -9314,6 +9398,10 @@
         "type": "object"
       },
       "SnapshotDigest": {
+        "description": "SHA-256 digest of a retained snapshot using lowercase hexadecimal without an algorithm prefix.",
+        "examples": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
         "pattern": "^[0-9a-f]{64}$",
         "type": "string"
       },
@@ -9340,10 +9428,16 @@
             "description": "Retained retainedSha256 value under referenceDueProcess/1."
           },
           "sectionAnchor": {
-            "description": "Retained sectionAnchor value under referenceDueProcess/1.",
+            "description": "Section identifier within the retained source version that supports this policy reference.",
+            "examples": [
+              "eligibility-review"
+            ],
             "maxLength": 1024,
             "minLength": 1,
-            "type": "string"
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
           },
           "sourceVersion": {
             "$ref": "#/components/schemas/Id",
@@ -10345,6 +10439,10 @@
         "type": "object"
       },
       "Timestamp": {
+        "description": "UTC date and time in the canonical format required for native reference records.",
+        "examples": [
+          "2026-01-15T12:00:00Z"
+        ],
         "format": "date-time",
         "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{0,2}[1-9])?Z$",
         "type": "string"
@@ -10415,7 +10513,10 @@
             "description": "Retained statePointer value under referenceDueProcess/1."
           },
           "transitionIndex": {
-            "description": "Retained transitionIndex value under referenceDueProcess/1.",
+            "description": "Zero-based position of the transition in the source state's authored transition list.",
+            "examples": [
+              0
+            ],
             "minimum": 0,
             "type": "integer"
           }

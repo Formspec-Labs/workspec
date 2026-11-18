@@ -15,11 +15,19 @@
       "properties": {
         "beforeEventIndex": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Zero-based index of the fixture event before which the native replay clock advances.",
+          "examples": [
+            1
+          ]
         },
         "duration": {
           "type": "string",
-          "pattern": "^P(?:[1-9]|[1-9][0-9]{1,3}|[12][0-9]{4}|3[0-5][0-9]{3}|36[0-4][0-9]{2}|36500)D$"
+          "pattern": "^P(?:[1-9]|[1-9][0-9]{1,3}|[12][0-9]{4}|3[0-5][0-9]{3}|36[0-4][0-9]{2}|36500)D$",
+          "description": "Positive ISO 8601 duration in whole days added to the native replay clock before that event.",
+          "examples": [
+            "P30D"
+          ]
         }
       }
     },
@@ -36,7 +44,11 @@
         },
         "firingOccurrence": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Zero-based occurrence of an actual saved determining firing for the named binding.",
+          "examples": [
+            0
+          ]
         }
       }
     },
@@ -59,11 +71,25 @@
         },
         "kidBase64": {
           "type": "string",
-          "contentEncoding": "base64"
+          "contentEncoding": "base64",
+          "description": "Base64-encoded key identifier used to select the trusted fixture receipt signer.",
+          "examples": [
+            "cmVjZWlwdA=="
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "publicKeyBase64": {
           "type": "string",
-          "contentEncoding": "base64"
+          "contentEncoding": "base64",
+          "description": "Base64-encoded raw Ed25519 public key used to verify the fixture receipt signature.",
+          "examples": [
+            "PUAXw+hDiVqStwqnTRt+vJyYLM8uxJaMwM1V8Sr0Zgw="
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "methodUri": {
           "const": "urn:formspec:receipt-method:ed25519-cose-sign1@1"
@@ -80,7 +106,11 @@
       "properties": {
         "attempt": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "description": "One-based transport attempt number at which the fixture injects its configured failure.",
+          "examples": [
+            1
+          ]
         },
         "outcome": {
           "const": "noEffectFailure"
@@ -141,14 +171,28 @@
         },
         "pkcs8Base64": {
           "type": "string",
-          "contentEncoding": "base64"
+          "contentEncoding": "base64",
+          "description": "Base64-encoded PKCS #8 private key from a public test vector for synthetic document signing only.",
+          "examples": [
+            "MFECAQEwBQYDK2VwBCIEIJ1hsZ3v/VpguoRK9JLsLMREScVpezJpGXA7rAMcrn9ggSEA11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo="
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "receiptSignerRef": {
           "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Id"
         },
         "receiptPkcs8Base64": {
           "type": "string",
-          "contentEncoding": "base64"
+          "contentEncoding": "base64",
+          "description": "Base64-encoded PKCS #8 private key from a public test vector for synthetic receipt signing only.",
+          "examples": [
+            "MFECAQEwBQYDK2VwBCIEIEzNCJso/5banbbDRuwRTg9bijGfNaumJNqM9u1PuKb7gSEAPUAXw+hDiVqStwqnTRt+vJyYLM8uxJaMwM1V8Sr0Zgw="
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         }
       }
     },
@@ -175,11 +219,25 @@
         },
         "kidBase64": {
           "type": "string",
-          "contentEncoding": "base64"
+          "contentEncoding": "base64",
+          "description": "Base64-encoded key identifier that must match the protected document-signing key ID.",
+          "examples": [
+            "ZG9jdW1lbnQ="
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "publicKeyBase64": {
           "type": "string",
-          "contentEncoding": "base64"
+          "contentEncoding": "base64",
+          "description": "Base64-encoded raw Ed25519 public key for the selected fixture document signer.",
+          "examples": [
+            "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo="
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "methodUri": {
           "const": "urn:formspec:sig-method:ed25519-cose-sign1@1"
@@ -209,7 +267,14 @@
         },
         "bytesBase64": {
           "type": "string",
-          "contentEncoding": "base64"
+          "contentEncoding": "base64",
+          "description": "Base64 representation of the exact retained evidence bytes checked against the selected digest.",
+          "examples": [
+            "ZXhhbXBsZSBmaXh0dXJlIGV2aWRlbmNl"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "sha256": {
           "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Digest"
@@ -254,7 +319,11 @@
         "maxInvocations": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 1000
+          "maximum": 1000,
+          "description": "Maximum number of actual calls the fixture permits for this service selection.",
+          "examples": [
+            1
+          ]
         }
       }
     },
@@ -274,11 +343,25 @@
             },
             "documentRef": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "Reference to the OpenAPI document that describes the operation selected for replay.",
+              "examples": [
+                "urn:fixture:income-openapi"
+              ],
+              "x-wos": {
+                "openStringKind": "uri"
+              }
             },
             "operationRef": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "Named OpenAPI operation within the selected document for this fixture invocation.",
+              "examples": [
+                "verifyIncome"
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
             }
           }
         },
@@ -295,7 +378,14 @@
             },
             "endpoint": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "Endpoint identity for the Open Policy Agent invocation selected by the fixture.",
+              "examples": [
+                "urn:fixture:fraud-opa"
+              ],
+              "x-wos": {
+                "openStringKind": "uri"
+              }
             }
           }
         }
@@ -328,15 +418,41 @@
           "type": "object",
           "additionalProperties": {
             "type": "string",
-            "minLength": 1
-          }
+            "minLength": 1,
+            "description": "Formspec Expression Language (FEL) expression used to compute this named invocation input value.",
+            "examples": [
+              "caseFile.income"
+            ],
+            "x-wos": {
+              "openStringKind": "fel"
+            }
+          },
+          "description": "Named request fields and their Formspec Expression Language (FEL) expressions for the fixture invocation.",
+          "examples": [
+            {
+              "income": "caseFile.income"
+            }
+          ]
         },
         "outputBinding": {
           "type": "object",
           "additionalProperties": {
             "type": "string",
-            "minLength": 1
-          }
+            "minLength": 1,
+            "description": "Response selector that supplies the value written to the named workflow destination.",
+            "examples": [
+              "$.verified"
+            ],
+            "x-wos": {
+              "openStringKind": "pathExpression"
+            }
+          },
+          "description": "Workflow destinations and the corresponding response selectors for the actual fixture invocation output.",
+          "examples": [
+            {
+              "caseFile.external": "$.verified"
+            }
+          ]
         }
       }
     },
@@ -369,16 +485,34 @@
       "properties": {
         "id": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Authored identifier of a section within the selected fixture notification template.",
+          "examples": [
+            "appeal-rights"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "title": {
           "anyOf": [
             {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "Authored heading that labels the section in the rendered fixture notice.",
+              "examples": [
+                "How to appeal"
+              ],
+              "x-wos": {
+                "openStringKind": "prose"
+              }
             },
             {
-              "type": "null"
+              "type": "null",
+              "description": "The authored fixture notice section explicitly supplies no displayed heading.",
+              "examples": [
+                null
+              ]
             }
           ]
         },
@@ -394,24 +528,50 @@
         "content": {
           "anyOf": [
             {
-              "type": "string"
+              "type": "string",
+              "description": "Authored section body text, optionally containing placeholders for rendered variables.",
+              "examples": [
+                "Your review is complete."
+              ],
+              "x-wos": {
+                "openStringKind": "prose"
+              }
             },
             {
-              "type": "null"
+              "type": "null",
+              "description": "The authored template section explicitly supplies no body text for rendering.",
+              "examples": [
+                null
+              ]
             }
           ]
         },
         "required": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether the section must supply body content for native notice rendering to succeed.",
+          "examples": [
+            true
+          ]
         },
         "condition": {
           "anyOf": [
             {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "Authored section visibility expression. Native replay refuses a selected notice template with a conditional section.",
+              "examples": [
+                "true"
+              ],
+              "x-wos": {
+                "openStringKind": "fel"
+              }
             },
             {
-              "type": "null"
+              "type": "null",
+              "description": "The authored template section explicitly supplies no visibility condition.",
+              "examples": [
+                null
+              ]
             }
           ]
         }
@@ -439,10 +599,21 @@
           "anyOf": [
             {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "Human-readable description of the purpose of this fixture notice template.",
+              "examples": [
+                "Notice that a completed review changed the case status."
+              ],
+              "x-wos": {
+                "openStringKind": "prose"
+              }
             },
             {
-              "type": "null"
+              "type": "null",
+              "description": "The selected fixture notice template explicitly supplies no description text.",
+              "examples": [
+                null
+              ]
             }
           ]
         },
@@ -450,10 +621,21 @@
           "anyOf": [
             {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "Authored subject line for the fixture notice, optionally including variable placeholders.",
+              "examples": [
+                "Review outcome for {{determinationId}}"
+              ],
+              "x-wos": {
+                "openStringKind": "prose"
+              }
             },
             {
-              "type": "null"
+              "type": "null",
+              "description": "The selected fixture notice template explicitly supplies no authored subject line.",
+              "examples": [
+                null
+              ]
             }
           ]
         },
@@ -467,7 +649,14 @@
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Name of a variable that the rendering context must supply for this notice template.",
+            "examples": [
+              "determinationId"
+            ],
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
           }
         },
         "deliveryChannels": {
@@ -486,10 +675,21 @@
           "anyOf": [
             {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "Locale tag that must match the required variant when replay selects this notice template.",
+              "examples": [
+                "en-US"
+              ],
+              "x-wos": {
+                "openStringKind": "tagLabel"
+              }
             },
             {
-              "type": "null"
+              "type": "null",
+              "description": "The selected fixture notice template explicitly supplies no locale-specific variant reference.",
+              "examples": [
+                null
+              ]
             }
           ]
         },
@@ -497,16 +697,31 @@
           "anyOf": [
             {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "Authored authority reference explaining why the selected notice template is used.",
+              "examples": [
+                "Fixture policy section 4"
+              ],
+              "x-wos": {
+                "openStringKind": "prose"
+              }
             },
             {
-              "type": "null"
+              "type": "null",
+              "description": "The selected fixture notice template explicitly supplies no authority reference.",
+              "examples": [
+                null
+              ]
             }
           ]
         },
         "extensions": {
           "type": "object",
-          "maxProperties": 0
+          "maxProperties": 0,
+          "description": "Empty extension map because the native replay template adapter supports no extension keys.",
+          "examples": [
+            {}
+          ]
         }
       }
     },
@@ -521,24 +736,53 @@
           "anyOf": [
             {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "Optional schema URI declared by this fixture adapter's notification template document.",
+              "examples": [
+                "https://wos-spec.org/schemas/wos-reference-replay.schema.json#/$defs/NotificationTemplateDocument"
+              ],
+              "x-wos": {
+                "openStringKind": "uri"
+              }
             },
             {
-              "type": "null"
+              "type": "null",
+              "description": "The fixture notification template document explicitly supplies no schema URI.",
+              "examples": [
+                null
+              ]
             }
           ]
         },
         "targetWorkflow": {
-          "type": "string"
+          "type": "string",
+          "description": "Canonical workflow URL selected as the target of this fixture notification template document.",
+          "examples": [
+            "urn:fixture:review-workflow"
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          }
         },
         "version": {
           "anyOf": [
             {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "Version identifying the fixture notification template document selected for replay.",
+              "examples": [
+                "1.0.0"
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
             },
             {
-              "type": "null"
+              "type": "null",
+              "description": "The fixture notification template document explicitly supplies no version value.",
+              "examples": [
+                null
+              ]
             }
           ]
         },
@@ -546,10 +790,21 @@
           "anyOf": [
             {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "Human-readable title of the notification template document used for native replay.",
+              "examples": [
+                "Fixture review notices"
+              ],
+              "x-wos": {
+                "openStringKind": "prose"
+              }
             },
             {
-              "type": "null"
+              "type": "null",
+              "description": "The fixture notification template document explicitly supplies no human-readable title.",
+              "examples": [
+                null
+              ]
             }
           ]
         },
@@ -557,10 +812,21 @@
           "anyOf": [
             {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "Human-readable description of the fixture notification template document's purpose.",
+              "examples": [
+                "Templates used by replay of the fixture review workflow."
+              ],
+              "x-wos": {
+                "openStringKind": "prose"
+              }
             },
             {
-              "type": "null"
+              "type": "null",
+              "description": "The fixture notification template document explicitly supplies no description text.",
+              "examples": [
+                null
+              ]
             }
           ]
         },
@@ -568,11 +834,31 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/NotificationTemplate"
-          }
+          },
+          "description": "Map from the authored template keys used by the workflow to the fixture notice templates.",
+          "examples": [
+            {
+              "review-status": {
+                "category": "adverse-decision",
+                "localeRef": "en-US",
+                "sections": [
+                  {
+                    "id": "status",
+                    "contentType": "text",
+                    "content": "Your review is complete."
+                  }
+                ]
+              }
+            }
+          ]
         },
         "extensions": {
           "type": "object",
-          "maxProperties": 0
+          "maxProperties": 0,
+          "description": "Empty extension map because replay supports no extension keys at the template document level.",
+          "examples": [
+            {}
+          ]
         }
       },
       "description": "Maintained native NotificationTemplateDocument adapter DTO; not a complete canonical Delivery document."
@@ -700,7 +986,11 @@
             "calendarDaysFromFiling": {
               "type": "integer",
               "minimum": 0,
-              "maximum": 36500
+              "maximum": 36500,
+              "description": "Whole UTC calendar days the recipe adds to the native appeal filing time to schedule a hearing.",
+              "examples": [
+                14
+              ]
             }
           }
         },
@@ -745,7 +1035,14 @@
             },
             "rationale": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "Reason the recipe supplies to explain the reviewer's proposed appeal disposition.",
+              "examples": [
+                "The hearing record established that the household met the limit."
+              ],
+              "x-wos": {
+                "openStringKind": "prose"
+              }
             },
             "evidenceRefs": {
               "type": "array",
@@ -769,7 +1066,14 @@
             },
             "rationale": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "Reason the recipe supplies for the household's request to end continued service.",
+              "examples": [
+                "The household submitted a signed request to end continued service."
+              ],
+              "x-wos": {
+                "openStringKind": "prose"
+              }
             }
           }
         },
@@ -791,7 +1095,14 @@
             },
             "rationale": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "Reason the recipe supplies for extending the time before issuing the notice.",
+              "examples": [
+                "Additional time is needed to verify the newly submitted evidence."
+              ],
+              "x-wos": {
+                "openStringKind": "prose"
+              }
             },
             "evidenceRefs": {
               "type": "array",
@@ -864,51 +1175,135 @@
       "properties": {
         "signatureId": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Authored signature identity carried into the actual Formspec signature record.",
+          "examples": [
+            "fixture-source-signature"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "documentId": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Identity of the signing document declared in the selected Signature Profile.",
+          "examples": [
+            "determination"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "signingIntent": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Authored signature intent that must agree with the intent for the selected signing step.",
+          "examples": [
+            "urn:wos:signing-intent:approval"
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          }
         },
         "documentHash": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Authored document digest that must agree with the selected Signature Profile document.",
+          "examples": [
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+          ],
+          "x-wos": {
+            "openStringKind": "hash"
+          }
         },
         "documentHashAlgorithm": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Digest algorithm named in the selected Signature Profile for the authored document hash.",
+          "examples": [
+            "sha-256"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "signatureProvider": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Identity of the selected signature provider recorded with the authored metadata.",
+          "examples": [
+            "urn:fixture:document-provider"
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          }
         },
         "ceremonyId": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Identity of the fixture ceremony associated with the authored signature metadata.",
+          "examples": [
+            "governance-approval"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "signerId": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Canonical human actor identity that must agree with the fixture task's signer.",
+          "examples": [
+            "actor:human:supervisor"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "signerName": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Display name supplied for the signer in the authored fixture ceremony metadata.",
+          "examples": [
+            "Fixture supervisor"
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         },
         "consentTextRef": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Reference to the exact authored consent text accepted for this fixture signature.",
+          "examples": [
+            "urn:fixture:signer-consent"
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          }
         },
         "consentVersion": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Version of the consent text identified by the authored consent reference.",
+          "examples": [
+            "1.0.0"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "affirmationText": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Exact authored statement that the signer affirmed in the selected fixture ceremony.",
+          "examples": [
+            "I approve this determination."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         },
         "consentAccepted": {
           "const": true
@@ -947,7 +1342,11 @@
       "properties": {
         "eventIndex": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Zero-based position of the original event associated with the actual native attempt.",
+          "examples": [
+            0
+          ]
         },
         "kind": {
           "enum": [
@@ -960,7 +1359,11 @@
         },
         "occurrence": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Zero-based occurrence of the attempt within the selected event index and attempt kind.",
+          "examples": [
+            0
+          ]
         }
       }
     },
@@ -983,7 +1386,11 @@
             },
             "firingOccurrence": {
               "type": "integer",
-              "minimum": 0
+              "minimum": 0,
+              "description": "Zero-based occurrence of a saved determining firing under the selected binding.",
+              "examples": [
+                0
+              ]
             }
           }
         },
@@ -1004,7 +1411,11 @@
             },
             "evaluationOccurrence": {
               "type": "integer",
-              "minimum": 0
+              "minimum": 0,
+              "description": "Zero-based occurrence of the evaluation for the selected transition, whether it fired or not.",
+              "examples": [
+                0
+              ]
             }
           }
         },
@@ -1025,7 +1436,11 @@
             },
             "operationOccurrence": {
               "type": "integer",
-              "minimum": 0
+              "minimum": 0,
+              "description": "Zero-based occurrence of the actual governed operation for the selected operation reference.",
+              "examples": [
+                0
+              ]
             }
           }
         },
@@ -1046,7 +1461,11 @@
             },
             "taskOccurrence": {
               "type": "integer",
-              "minimum": 0
+              "minimum": 0,
+              "description": "Zero-based occurrence of an actual native task under the selected task reference.",
+              "examples": [
+                0
+              ]
             }
           }
         },
@@ -1064,11 +1483,22 @@
             },
             "timerId": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "Identity of the native timer as recorded in the saved execution's timer history.",
+              "examples": [
+                "appeal-deadline"
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
             },
             "timerOccurrence": {
               "type": "integer",
-              "minimum": 0
+              "minimum": 0,
+              "description": "Zero-based occurrence of a recorded timer lifetime with the selected timer identity.",
+              "examples": [
+                0
+              ]
             }
           }
         },
@@ -1089,7 +1519,11 @@
             },
             "operationOccurrence": {
               "type": "integer",
-              "minimum": 0
+              "minimum": 0,
+              "description": "Zero-based occurrence of the actual governed operation associated with the retained override.",
+              "examples": [
+                0
+              ]
             }
           }
         },
@@ -1106,7 +1540,14 @@
             },
             "determinationId": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "Identity of the saved determination whose actual notice and delivery evidence are selected.",
+              "examples": [
+                "determination-1"
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
             }
           }
         },
@@ -1139,7 +1580,14 @@
             },
             "determinationId": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "Identity of the saved determination whose actual appeal and hearing state are selected.",
+              "examples": [
+                "determination-1"
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
             }
           }
         },
@@ -1201,11 +1649,25 @@
       "properties": {
         "url": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Canonical URL of the exact Formspec Definition selected as the source for replay.",
+          "examples": [
+            "urn:fixture:review-definition"
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          }
         },
         "version": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Version of the selected Formspec Definition pinned beside its canonical URL.",
+          "examples": [
+            "1.0.0"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         }
       }
     },
@@ -1220,20 +1682,46 @@
       "properties": {
         "role": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Role that identifies how native replay should interpret the selected dependency's original bytes.",
+          "examples": [
+            "definition",
+            "delivery"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "url": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Canonical URL identifying the resolved dependency whose original bytes accompany the request.",
+          "examples": [
+            "urn:fixture:review-definition"
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          }
         },
         "version": {
           "anyOf": [
             {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "Version pin for the resolved dependency when it has a separately selected version.",
+              "examples": [
+                "1.0.0"
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
             },
             {
-              "type": "null"
+              "type": "null",
+              "description": "The selected replay dependency explicitly supplies no version pin in its descriptor.",
+              "examples": [
+                null
+              ]
             }
           ]
         },
@@ -1242,7 +1730,11 @@
           "items": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 255
+            "maximum": 255,
+            "description": "One unsigned byte in the exact original document bytes supplied for this dependency.",
+            "examples": [
+              123
+            ]
           }
         },
         "definition": {
@@ -1267,7 +1759,11 @@
           "items": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 255
+            "maximum": 255,
+            "description": "One unsigned byte from the exact candidate workflow document in its original order.",
+            "examples": [
+              123
+            ]
           }
         },
         "dependencies": {
@@ -1278,17 +1774,35 @@
         },
         "fixtureJson": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Serialized JSON text of the selected fixture input, including its original event sequence.",
+          "examples": [
+            "{\"id\":\"sample\",\"rule\":\"review\",\"description\":\"Synthetic replay\",\"initial_case_state\":{},\"event_sequence\":[{\"event\":\"start\",\"actor\":\"worker\"}]}"
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         },
         "clockStartMs": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Initial native replay clock expressed in milliseconds since the Unix epoch.",
+          "examples": [
+            0
+          ]
         },
         "requiredObservations": {
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Name of a native observation that must be present for this replay run.",
+            "examples": [
+              "configuration"
+            ],
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
           }
         },
         "expectations": {
@@ -1370,7 +1884,11 @@
         "thresholdPercentagePoints": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Exclusive upper bound in percentage points on the absolute approval-rate difference between paired groups.",
+          "examples": [
+            5
+          ]
         },
         "sourceRefs": {
           "type": "array",
@@ -1441,7 +1959,11 @@
         "thresholdPercentagePoints": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Reviewed exclusive upper bound on the absolute approval-rate difference in percentage points.",
+          "examples": [
+            5
+          ]
         },
         "sourceRefs": {
           "type": "array",
@@ -1483,11 +2005,25 @@
         },
         "id": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Identity of the model reviewer responsible for the fixture engineering review.",
+          "examples": [
+            "synthetic-reviewer"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "method": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Review method used by the named model to examine the retained fixture evidence.",
+          "examples": [
+            "Compared the exact rendered text and the date shown in each variant."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         }
       }
     },
@@ -1521,7 +2057,14 @@
         },
         "rationale": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Concrete basis for the engineering review decision on this exact metric descriptor.",
+          "examples": [
+            "Reviewed each matched pair and verified the strict five-point threshold against the fixture source."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         },
         "descriptor": {
           "$ref": "#/$defs/MetricDescriptor"
@@ -1552,7 +2095,14 @@
         },
         "observations": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Concrete observations explaining the verdict for one engineering review claim.",
+          "examples": [
+            "Both language variants show the same appeal deadline."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         }
       }
     },
@@ -1566,7 +2116,14 @@
       "properties": {
         "locale": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Exact locale tag used to associate a reviewed body digest with a rendered notice variant.",
+          "examples": [
+            "en-US"
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
         },
         "bodySha256": {
           "$ref": "https://wos-spec.org/schemas/wos-reference-due-process.schema.json#/$defs/Digest"
@@ -1620,13 +2177,29 @@
           },
           "additionalProperties": {
             "$ref": "#/$defs/EngineeringObservation"
-          }
+          },
+          "description": "Claim-keyed verdicts and concrete observations for the exact retained notice reviewed.",
+          "examples": [
+            {
+              "plainLanguageEngineeringReview": {
+                "verdict": "supported",
+                "observations": "The next action is stated in the opening paragraph."
+              }
+            }
+          ]
         },
         "limitations": {
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "One concrete boundary on what the engineering fixture review establishes.",
+            "examples": [
+              "The review covers the retained fixture text and makes no accessibility compliance claim."
+            ],
+            "x-wos": {
+              "openStringKind": "prose"
+            }
           },
           "minItems": 1
         }
@@ -1670,7 +2243,11 @@
           "items": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 255
+            "maximum": 255,
+            "description": "One unsigned byte from the original selected review document in its retained order.",
+            "examples": [
+              123
+            ]
           }
         },
         "reviewSha256": {
@@ -1678,7 +2255,11 @@
         },
         "comparisonClockMs": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Admitted comparison time in Unix epoch milliseconds used to bound the retained review time.",
+          "examples": [
+            1768478400000
+          ]
         }
       }
     },
@@ -1687,7 +2268,16 @@
         "string",
         "boolean",
         "number"
-      ]
+      ],
+      "description": "Exact string, Boolean or numeric case value used to distinguish paired comparison members.",
+      "examples": [
+        "left",
+        true,
+        42
+      ],
+      "x-wos": {
+        "openStringKind": "tagLabel"
+      }
     }
   }
 }

@@ -2988,44 +2988,65 @@
                   "maxDeterminations": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "Retained maxDeterminations value under referenceDueProcess/1.",
-                    "maximum": 100000
+                    "description": "Maximum number of determination records the native governor may retain for one process.",
+                    "maximum": 100000,
+                    "examples": [
+                      20
+                    ]
                   },
                   "maxNotices": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "Retained maxNotices value under referenceDueProcess/1.",
-                    "maximum": 100000
+                    "description": "Maximum number of notice records the native governor may retain for one process.",
+                    "maximum": 100000,
+                    "examples": [
+                      20
+                    ]
                   },
                   "maxAppeals": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "Retained maxAppeals value under referenceDueProcess/1.",
-                    "maximum": 100000
+                    "description": "Maximum number of appeal records the native governor may retain for one process.",
+                    "maximum": 100000,
+                    "examples": [
+                      20
+                    ]
                   },
                   "maxOperations": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "Retained maxOperations value under referenceDueProcess/1.",
-                    "maximum": 100000
+                    "description": "Maximum number of operation records the native governor may retain for one process.",
+                    "maximum": 100000,
+                    "examples": [
+                      100
+                    ]
                   },
                   "maxOutstandingNoticeWork": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "Retained maxOutstandingNoticeWork value under referenceDueProcess/1.",
-                    "maximum": 100000
+                    "description": "Maximum number of outstanding notice work entries permitted for the process.",
+                    "maximum": 100000,
+                    "examples": [
+                      10
+                    ]
                   },
                   "maxTransportAttempts": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "Retained maxTransportAttempts value under referenceDueProcess/1.",
-                    "maximum": 100000
+                    "description": "Maximum number of transport attempts permitted for a single retained notice.",
+                    "maximum": 100000,
+                    "examples": [
+                      3
+                    ]
                   },
                   "maxNoticeBytes": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "Retained maxNoticeBytes value under referenceDueProcess/1.",
-                    "maximum": 10485760
+                    "description": "Maximum size in bytes of one rendered notice artifact admitted by the native governor.",
+                    "maximum": 10485760,
+                    "examples": [
+                      65536
+                    ]
                   }
                 }
               },
@@ -3083,9 +3104,15 @@
                   },
                   "sectionAnchor": {
                     "type": "string",
-                    "description": "Retained sectionAnchor value under referenceDueProcess/1.",
+                    "description": "Section identifier within the retained source version that supports this policy reference.",
                     "minLength": 1,
-                    "maxLength": 1024
+                    "maxLength": 1024,
+                    "examples": [
+                      "eligibility-review"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "identifier"
+                    }
                   },
                   "retainedSha256": {
                     "$ref": "#/$defs/Digest",
@@ -3095,23 +3122,41 @@
               },
               "Digest": {
                 "type": "string",
-                "pattern": "^sha256:[0-9a-f]{64}$"
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "description": "SHA-256 digest encoded with a sha256 prefix and lowercase hexadecimal bytes.",
+                "examples": [
+                  "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                ]
               },
               "Id": {
                 "type": "string",
                 "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
                 "minLength": 1,
-                "maxLength": 128
+                "maxLength": 128,
+                "description": "Authored identifier starting with a letter and scoped to the containing reference document.",
+                "examples": [
+                  "appeal-review"
+                ]
               },
               "Days": {
                 "type": "integer",
                 "minimum": 1,
-                "maximum": 36500
+                "maximum": 36500,
+                "description": "Number of whole calendar days in a window configured by the reference due-process policy.",
+                "examples": [
+                  10,
+                  30
+                ]
               },
               "Pointer": {
                 "type": "string",
                 "minLength": 1,
-                "pattern": "^(?:/(?:[^~]|~[01])*)+$"
+                "pattern": "^(?:/(?:[^~]|~[01])*)+$",
+                "description": "JSON Pointer that selects a location in the JSON document identified by the containing field.",
+                "examples": [
+                  "/householdSize",
+                  "/lifecycle/states/review"
+                ]
               },
               "AppealPolicy": {
                 "type": "object",
@@ -3205,17 +3250,30 @@
                 "type": "string",
                 "enum": [
                   "dispositionOrHouseholdTermination"
+                ],
+                "description": "Which events can end continued service during an appeal under the selected policy.",
+                "examples": [
+                  "dispositionOrHouseholdTermination"
                 ]
               },
               "ContinuationScope": {
                 "type": "string",
                 "enum": [
                   "currentLevel"
+                ],
+                "description": "Level of service protected when the appeal policy grants continuation to the household.",
+                "examples": [
+                  "currentLevel"
                 ]
               },
               "ContinuationChoicePolicy": {
                 "type": "string",
                 "enum": [
+                  "electionRequired",
+                  "defaultUnlessWaived"
+                ],
+                "description": "Whether continuation requires an affirmative election or applies unless the household waives it.",
+                "examples": [
                   "electionRequired",
                   "defaultUnlessWaived"
                 ]
@@ -3242,11 +3300,19 @@
                 "type": "string",
                 "enum": [
                   "hearingHeld"
+                ],
+                "description": "Purpose of the clock that tracks the requirement to hold an appeal hearing.",
+                "examples": [
+                  "hearingHeld"
                 ]
               },
               "ExcludedDeterminationActors": {
                 "type": "string",
                 "enum": [
+                  "determinerAndSupervisor"
+                ],
+                "description": "Determination roles excluded from serving as the independent appeal reviewer.",
+                "examples": [
                   "determinerAndSupervisor"
                 ]
               },
@@ -3255,6 +3321,11 @@
                 "enum": [
                   "phone",
                   "in-person",
+                  "written"
+                ],
+                "description": "Channel through which the household filed the appeal in the selected reference policy.",
+                "examples": [
+                  "phone",
                   "written"
                 ]
               },
@@ -3316,17 +3387,29 @@
                 "type": "string",
                 "enum": [
                   "qualifiedReceipt"
+                ],
+                "description": "Observation that anchors the grace period in the selected reference due-process policy.",
+                "examples": [
+                  "qualifiedReceipt"
                 ]
               },
               "AppealAnchor": {
                 "type": "string",
                 "enum": [
                   "noticeIssued"
+                ],
+                "description": "Event that anchors the appeal window for the selected reference due-process policy.",
+                "examples": [
+                  "noticeIssued"
                 ]
               },
               "EvidenceClass": {
                 "type": "string",
                 "enum": [
+                  "fixtureQualifiedReceipt"
+                ],
+                "description": "Evidence class used when a qualified receipt comes from the reference software fixture.",
+                "examples": [
                   "fixtureQualifiedReceipt"
                 ]
               },
@@ -3342,7 +3425,13 @@
                 "properties": {
                   "locale": {
                     "type": "string",
-                    "description": "Retained locale value under referenceDueProcess/1."
+                    "description": "Locale tag used to select the notice template for a required language variant.",
+                    "examples": [
+                      "en-US"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "tagLabel"
+                    }
                   },
                   "templateKey": {
                     "$ref": "#/$defs/Id",
@@ -3376,6 +3465,11 @@
               "DeliveryChannel": {
                 "type": "string",
                 "enum": [
+                  "mail",
+                  "portal"
+                ],
+                "description": "Channel selected for issuing a notice under the reference due-process policy.",
+                "examples": [
                   "mail",
                   "portal"
                 ]
@@ -3427,7 +3521,13 @@
                   },
                   "triggerEvent": {
                     "type": "string",
-                    "description": "Retained triggerEvent value under referenceDueProcess/1."
+                    "description": "Workflow event that triggers the transition associated with this governance operation binding.",
+                    "examples": [
+                      "schedule-hearing"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "identifier"
+                    }
                   },
                   "transition": {
                     "$ref": "#/$defs/TransitionLocation",
@@ -3460,7 +3560,10 @@
                   "transitionIndex": {
                     "type": "integer",
                     "minimum": 0,
-                    "description": "Retained transitionIndex value under referenceDueProcess/1."
+                    "description": "Zero-based position of the transition in the source state's authored transition list.",
+                    "examples": [
+                      0
+                    ]
                   }
                 }
               },
@@ -3475,6 +3578,11 @@
                   "requestServiceTermination",
                   "extendPreNoticeWindow",
                   "applyAdverseEffect"
+                ],
+                "description": "Named governed action bound to a workflow transition by the reference policy.",
+                "examples": [
+                  "issueNotice",
+                  "fileAppeal"
                 ]
               },
               "DeterminationBinding": {
@@ -3654,9 +3762,15 @@
                   },
                   "description": {
                     "type": "string",
-                    "description": "Retained description value under referenceDueProcess/1.",
+                    "description": "Human-readable description of the alternative outcome considered in the determination.",
                     "minLength": 1,
-                    "maxLength": 4096
+                    "maxLength": 4096,
+                    "examples": [
+                      "The application would remain open while the missing evidence is reviewed."
+                    ],
+                    "x-wos": {
+                      "openStringKind": "prose"
+                    }
                   },
                   "sourceRefs": {
                     "type": "array",
@@ -3703,8 +3817,14 @@
                         "const": "string"
                       },
                       "value": {
-                        "description": "Retained value value under referenceDueProcess/1.",
-                        "type": "string"
+                        "description": "String value compared without conversion when the selector declares the string branch.",
+                        "type": "string",
+                        "examples": [
+                          "pending-review"
+                        ],
+                        "x-wos": {
+                          "openStringKind": "tagLabel"
+                        }
                       }
                     }
                   },
@@ -3721,8 +3841,11 @@
                         "const": "number"
                       },
                       "value": {
-                        "description": "Retained value value under referenceDueProcess/1.",
-                        "type": "number"
+                        "description": "Numeric value compared without conversion when the selector declares the number branch.",
+                        "type": "number",
+                        "examples": [
+                          125
+                        ]
                       }
                     }
                   },
@@ -3739,8 +3862,11 @@
                         "const": "boolean"
                       },
                       "value": {
-                        "description": "Retained value value under referenceDueProcess/1.",
-                        "type": "boolean"
+                        "description": "Boolean value compared without conversion when the selector declares the boolean branch.",
+                        "type": "boolean",
+                        "examples": [
+                          true
+                        ]
                       }
                     }
                   }
@@ -3765,9 +3891,15 @@
                   },
                   "rowId": {
                     "type": "string",
-                    "description": "Retained rowId value under referenceDueProcess/1.",
+                    "description": "Identifier of the authored decision table row associated with this reason binding.",
                     "minLength": 1,
-                    "maxLength": 128
+                    "maxLength": 128,
+                    "examples": [
+                      "income-over-limit"
+                    ],
+                    "x-wos": {
+                      "openStringKind": "identifier"
+                    }
                   },
                   "reasonCode": {
                     "$ref": "#/$defs/Id",
@@ -3779,9 +3911,15 @@
                   },
                   "description": {
                     "type": "string",
-                    "description": "Retained description value under referenceDueProcess/1.",
+                    "description": "Explanation of the authored reason associated with a decision table row.",
                     "minLength": 1,
-                    "maxLength": 4096
+                    "maxLength": 4096,
+                    "examples": [
+                      "The matching row shows verified income exceeds the threshold."
+                    ],
+                    "x-wos": {
+                      "openStringKind": "prose"
+                    }
                   },
                   "sourceRefs": {
                     "type": "array",
@@ -3801,11 +3939,20 @@
                   "regulation",
                   "policy",
                   "guideline"
+                ],
+                "description": "Category of authority declared by the retained source cited in the policy.",
+                "examples": [
+                  "regulation",
+                  "policy"
                 ]
               },
               "ReferenceProfile": {
                 "type": "string",
                 "enum": [
+                  "referenceDueProcess/1"
+                ],
+                "description": "Versioned profile identifier selecting the reference due-process execution semantics.",
+                "examples": [
                   "referenceDueProcess/1"
                 ]
               }
