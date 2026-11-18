@@ -24,6 +24,11 @@ impl Clock for Time {
         self.0.load(Ordering::SeqCst)
     }
 }
+impl integrity_signature::ClockPort for Time {
+    fn now_utc(&self) -> chrono::DateTime<chrono::Utc> {
+        chrono::DateTime::from_timestamp_millis(i64::try_from(self.now_ms()).unwrap()).unwrap()
+    }
+}
 struct Resolver(KernelDocument);
 impl DocumentResolver for Resolver {
     type Error = std::io::Error;
@@ -395,6 +400,7 @@ struct Signing {
     source_pkcs8: Vec<u8>,
     receipt_pkcs8: Vec<u8>,
     receipt_public: Vec<u8>,
+    receipt_clock: Time,
 }
 fn signed_runtime() -> (WosRuntime, Time, Signing) {
     signed_runtime_with_access(DefaultRuntime::new())
@@ -483,9 +489,9 @@ fn signed_runtime_with_policy(
         sha256: bytes_digest(b"actual retained hearing exhibit"),
     });
     runtime.configure_reference_due_process(cap).unwrap();
-    let clock = integrity_signature::FixedClock::at_rfc3339("1970-01-01T00:00:00Z").unwrap();
+    let receipt_clock = Time(Arc::new(AtomicU64::new(0)));
     let verifier = RingVerifier::new_with_clock_config_and_receipt_signer(
-        Arc::new(clock),
+        Arc::new(receipt_clock.clone()),
         RingVerifierConfig::new("urn:formspec:sig-method:")
             .with_adapter_id("urn:formspec:adapter:ring@1")
             .with_adapter_version("0.1.0")
@@ -501,6 +507,7 @@ fn signed_runtime_with_policy(
             source_pkcs8,
             receipt_pkcs8,
             receipt_public: public,
+            receipt_clock,
         },
     )
 }
@@ -510,7 +517,7 @@ fn signed_response(runtime: &WosRuntime, process: &str, signing: &Signing) -> (S
     };
     use ring::signature::KeyPair;
     let record = runtime.load_reference_record(process).unwrap();
-    let d = &record
+    let determinations = &record
         .process
         .governance_state
         .as_ref()
@@ -518,14 +525,16 @@ fn signed_response(runtime: &WosRuntime, process: &str, signing: &Signing) -> (S
         .due_process
         .as_ref()
         .unwrap()
-        .determinations[0];
+        .determinations;
+    let d = determinations.last().unwrap();
+    let sequence = determinations.len();
     let task = record
         .process
         .active_tasks
         .iter()
         .find(|t| t.task_ref == "supervisor-signature")
         .unwrap();
-    let mut response = json!({"$formspecResponse":"1.0","id":"actual-signed-response","definitionUrl":"urn:test:supervisor-form","definitionVersion":"1.0.0","status":"completed","authored":"1970-01-01T00:00:00Z","data":{"determinationId":d.id,"determinationSnapshotSha256":d.snapshot.sha256,"determinationFiringRecordId":d.firing.provenance_record_id,"signatureTaskId":task.task_id,"acceptedAt":"1970-01-01T00:00:00Z","affirmed":true}});
+    let mut response = json!({"$formspecResponse":"1.0","id":format!("actual-signed-response-{sequence}"),"definitionUrl":"urn:test:supervisor-form","definitionVersion":"1.0.0","status":"completed","authored":"1970-01-01T00:00:00Z","data":{"determinationId":d.id,"determinationSnapshotSha256":d.snapshot.sha256,"determinationFiringRecordId":d.firing.provenance_record_id,"signatureTaskId":task.task_id,"acceptedAt":"1970-01-01T00:00:00Z","affirmed":true}});
     let payload = integrity_canonical::build_signed_payload(
         response.to_string().as_bytes(),
         integrity_canonical::DigestAlgorithm::Sha256,
@@ -564,7 +573,7 @@ fn signed_response(runtime: &WosRuntime, process: &str, signing: &Signing) -> (S
         receipt.result,
         integrity_signature::VerificationResult::Verified
     );
-    response["authoredSignatures"] = json!([{"signatureId":"actual-source-signature","documentId":"determination","signingIntent":"urn:wos:signing-intent:approval","signatureValue":STANDARD.encode(cose),"signerId":"actor:human:supervisor","signerName":"Fixture supervisor","consentAccepted":true,"consentTextRef":"urn:test:consent","consentVersion":"1.0.0","affirmationText":"I approve this actual determination.","signedPayload":{"canonicalization":integrity_canonical::CANONICALIZATION_PROFILE,"digestAlgorithm":"sha-256","digest":payload.digest,"responseId":response["id"],"definitionUrl":"urn:test:supervisor-form","definitionVersion":"1.0.0","signedAt":"1970-01-01T00:00:00Z","signingIntent":"urn:wos:signing-intent:approval"},"documentHash":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","documentHashAlgorithm":"sha-256","signatureProvider":"urn:test:source-provider","ceremonyId":"actual-governance-approval","verificationReceipt":receipt}]);
+    response["authoredSignatures"] = json!([{"signatureId":format!("actual-source-signature-{sequence}"),"documentId":"determination","signingIntent":"urn:wos:signing-intent:approval","signatureValue":STANDARD.encode(cose),"signerId":"actor:human:supervisor","signerName":"Fixture supervisor","consentAccepted":true,"consentTextRef":"urn:test:consent","consentVersion":"1.0.0","affirmationText":"I approve this actual determination.","signedPayload":{"canonicalization":integrity_canonical::CANONICALIZATION_PROFILE,"digestAlgorithm":"sha-256","digest":payload.digest,"responseId":response["id"],"definitionUrl":"urn:test:supervisor-form","definitionVersion":"1.0.0","signedAt":"1970-01-01T00:00:00Z","signingIntent":"urn:wos:signing-intent:approval"},"documentHash":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","documentHashAlgorithm":"sha-256","signatureProvider":"urn:test:source-provider","ceremonyId":format!("actual-governance-approval-{sequence}"),"verificationReceipt":receipt}]);
     (task.task_id.clone(), response)
 }
 fn command(
@@ -2125,6 +2134,93 @@ fn repeated_failures_deduplicate_and_exhaustion_adds_no_invented_result() {
         );
         assert_notice_schema(&final_notice);
     }
+}
+
+#[test]
+fn exhausted_notice_frees_outstanding_work_without_removing_history() {
+    let mut raw = signed_fixture();
+    raw["lifecycle"]["states"]["pending"]["transitions"][0]["target"] = json!("open");
+    raw["governance"]["dueProcess"]["execution"]["limits"]["maxOutstandingNoticeWork"] = json!(1);
+    let (mut runtime, _, signing) = signed_runtime_with_policy(raw.clone(), DefaultRuntime::new());
+    let mut cap = selected_capability(&signing, DeterministicNoticeTransport::new([1, 2, 3]));
+    cap.workflow_bytes = serde_json::to_vec(&raw).unwrap();
+    runtime.configure_reference_due_process(cap).unwrap();
+    let process = create(&mut runtime).unwrap();
+
+    let determine = |runtime: &mut WosRuntime, token: &str| {
+        enqueue(runtime, &process, "decide", "actor:human:determiner");
+        let drains = runtime.drain_until_idle(&process).unwrap();
+        assert_eq!(
+            drains
+                .iter()
+                .filter(|drain| !drain.transitions.is_empty())
+                .count(),
+            1
+        );
+        let (task, response) = signed_response(runtime, &process, &signing);
+        let result = runtime
+            .submit_task_response(
+                &task,
+                integrity_canonical::ResponseJson::from_value(&response).unwrap(),
+                "actor:human:supervisor",
+                Some(token),
+            )
+            .unwrap();
+        assert!(
+            matches!(result, wos_runtime::TaskSubmissionResult::Completed { .. }),
+            "{result:?}"
+        );
+        response["data"]["determinationId"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    };
+    let issue = |runtime: &mut WosRuntime, determination: String, token: &str| {
+        runtime
+            .governance_operation(
+                &process,
+                "actor:human:supervisor",
+                GovernanceRequest {
+                    operation_ref: "issue".into(),
+                    determination_id: Some(determination),
+                    idempotency_token: token.into(),
+                    actor: GovernanceActor {
+                        declared_actor: "supervisor".into(),
+                        acting_actor: "actor:human:supervisor".into(),
+                    },
+                    command: GovernanceCommand::IssueNotice,
+                },
+            )
+            .unwrap()
+    };
+    let first = determine(&mut runtime, "signed.first");
+    let issued = issue(&mut runtime, first, "issue.first");
+    assert!(
+        matches!(issued, GovernanceResult::Committed { .. }),
+        "{issued:?}"
+    );
+    assert_eq!(notice(&runtime, &process).status, NoticeStatus::Pending);
+
+    signing.receipt_clock.0.store(1000, Ordering::SeqCst);
+    let second = determine(&mut runtime, "signed.second");
+    assert_eq!(
+        issue(&mut runtime, second.clone(), "issue.second"),
+        GovernanceResult::Refused {
+            code: RefusalCode::LimitReached,
+        }
+    );
+    runtime.deliver_pending_notices(&process).unwrap();
+    runtime.deliver_pending_notices(&process).unwrap();
+    let exhausted = notice(&runtime, &process);
+    assert_eq!(exhausted.status, NoticeStatus::Exhausted);
+    assert!(exhausted.receipt.is_none());
+
+    let issued = issue(&mut runtime, second, "issue.second");
+    assert!(
+        matches!(issued, GovernanceResult::Committed { .. }),
+        "{issued:?}"
+    );
+    assert_eq!(notice(&runtime, &process), exhausted);
 }
 
 fn blocked_record_with_failure_then_receipt() -> wos_runtime::store::RuntimeRecord {

@@ -182,7 +182,14 @@ pub(super) fn apply(
                 return Err(RefusalCode::OperationStateRejected);
             }
             if state.notices.len() >= policy.limits.max_notices
-                || state.notices.iter().filter(|n| n.receipt.is_none()).count()
+                || state
+                    .notices
+                    .iter()
+                    .filter(|n| {
+                        n.receipt.is_none()
+                            && matches!(n.status, NoticeStatus::Pending | NoticeStatus::Blocked)
+                    })
+                    .count()
                     >= policy.limits.max_outstanding_notice_work
             {
                 return Err(RefusalCode::LimitReached);
