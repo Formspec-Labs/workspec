@@ -265,16 +265,7 @@
             "type": "string"
           },
           "author": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              }
-            }
+            "$ref": "#/$defs/Response/$defs/Author"
           },
           "subject": {
             "type": "object",
@@ -292,7 +283,9 @@
                   "type": [
                     "string",
                     "integer"
-                  ]
+                  ],
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
                 }
               }
             }
@@ -313,6 +306,12 @@
             "type": "array",
             "items": {
               "$ref": "#/$defs/Response/$defs/ResolvedDocument"
+            }
+          },
+          "explanations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Response/$defs/Explanation"
             }
           },
           "authoredSignatures": {
@@ -631,8 +630,77 @@
               }
             }
           },
+          "Author": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
           "ResolvedItemPath": {
             "type": "string"
+          },
+          "ExplanationPath": {},
+          "Explanation": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "shapeId": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "$ref": "#/$defs/Response/$defs/ExplanationPath"
+                  },
+                  "basis": {
+                    "$ref": "#/$defs/Response/$defs/Sha256Digest"
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "author": {
+                    "$ref": "#/$defs/Response/$defs/Author"
+                  },
+                  "recorded": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "group": {},
+                  "paths": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/Response/$defs/ExplanationPath"
+                    }
+                  },
+                  "basis": {
+                    "$ref": "#/$defs/Response/$defs/Sha256Digest"
+                  },
+                  "author": {
+                    "$ref": "#/$defs/Response/$defs/Author"
+                  },
+                  "recorded": {
+                    "type": "string"
+                  },
+                  "partyRef": {
+                    "type": "string"
+                  }
+                }
+              }
+            ]
           },
           "DocumentReference": {
             "type": "object",

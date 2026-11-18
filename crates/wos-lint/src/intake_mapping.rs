@@ -200,6 +200,28 @@ mod tests {
     }
 
     #[test]
+    fn initial_intake_accepts_a_response_with_a_warning_explanation() {
+        let url = "https://example.org/intake";
+        let version = "1.0.0";
+        let response_ref = "urn:example:response:1";
+        let input = json!({
+            "handoff": {"definitionRef": {"url": url, "version": version}, "responseRef": response_ref},
+            "response": {
+                "definitionUrl": url, "definitionVersion": version, "data": {"amount": 10},
+                "explanations": [{
+                    "shapeId": "amountWarning", "path": "amount", "text": "Estimate confirmed",
+                    "basis": format!("sha256:{}", "a".repeat(64)),
+                    "author": {"id": "respondent"}, "recorded": "2026-01-01T00:00:00Z"
+                }]
+            },
+            "definition": {"kind": "definition", "url": url, "version": version,
+                           "document": {"url": url, "version": version}},
+            "caseReservation": {"caseLedgerId": "ledger-1", "caseReference": "case-1"}
+        });
+        validate_input(&input, url, version, response_ref).expect("accept the Response explanation");
+    }
+
+    #[test]
     fn initial_intake_mapping_context_matches_owner_schemas() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../schemas/lint/initial-intake-mapping-context.json");
