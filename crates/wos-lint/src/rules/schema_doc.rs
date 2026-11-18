@@ -71,7 +71,11 @@ const OPEN_STRING_KIND_VALUES: [&str; 8] = [
 ///
 /// The caller is expected to have already parsed the schema file.
 pub fn check_schema(root: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
-    walk(root, "", diagnostics);
+    for_each_subschema(root, "", &mut |obj, pointer| {
+        if is_leaf(obj) {
+            check_leaf(obj, pointer, diagnostics);
+        }
+    });
 }
 
 /// Walk a parsed JSON Schema document and collect `SCHEMA-OPEN-001`
@@ -100,7 +104,11 @@ pub fn check_schema(root: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
 /// assert!(diagnostics.is_empty());
 /// ```
 pub fn check_open_string_kinds(root: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
-    walk_open_string_kinds(root, "", diagnostics);
+    for_each_subschema(root, "", &mut |obj, pointer| {
+        if is_open_string_leaf(obj) {
+            check_open_string_kind(obj, pointer, diagnostics);
+        }
+    });
 }
 
 /// Count the total number of leaf properties in the parsed schema.
@@ -110,7 +118,11 @@ pub fn check_open_string_kinds(root: &Value, diagnostics: &mut Vec<LintDiagnosti
 /// need denominator data rather than per-property findings.
 pub fn count_leaves(root: &Value) -> usize {
     let mut count = 0usize;
-    walk_count(root, &mut count);
+    for_each_subschema(root, "", &mut |obj, _| {
+        if is_leaf(obj) {
+            count += 1;
+        }
+    });
     count
 }
 
@@ -140,7 +152,14 @@ impl StringLeafInventory {
 /// Walk `root` and tally string vocabulary shape for schema hardening passes.
 pub fn inventory_string_leaves(root: &Value) -> StringLeafInventory {
     let mut inv = StringLeafInventory::default();
-    walk_string_inventory(root, &mut inv);
+    for_each_subschema(root, "", &mut |obj, _| {
+        if is_leaf(obj) && is_string_schema(obj) {
+            inv.string_leaves += 1;
+            if leaf_string_has_value_constraint(obj) {
+                inv.constrained_string_leaves += 1;
+            }
+        }
+    });
     inv
 }
 
@@ -162,74 +181,21 @@ pub struct OpenStringLeafRow {
 #[must_use]
 pub fn collect_open_string_leaves(root: &Value) -> Vec<OpenStringLeafRow> {
     let mut rows = Vec::new();
-    walk_open_string_leaves(root, "", &mut rows);
+    for_each_subschema(root, "", &mut |obj, pointer| {
+        if is_open_string_leaf(obj) {
+            let description = obj.get("description").and_then(Value::as_str).unwrap_or("");
+            rows.push(OpenStringLeafRow {
+                pointer: pointer.to_string(),
+                def_context: def_context_from_pointer(pointer),
+                description_snippet: description_snippet(description, 160),
+                has_format: obj.contains_key("format"),
+                has_min_length: obj.contains_key("minLength"),
+                has_max_length: obj.contains_key("maxLength"),
+            });
+        }
+    });
     rows.sort_by(|a, b| a.pointer.cmp(&b.pointer));
     rows
-}
-
-fn walk_open_string_leaves(node: &Value, pointer: &str, rows: &mut Vec<OpenStringLeafRow>) {
-    let Some(obj) = node.as_object() else {
-        return;
-    };
-    if is_leaf(obj) && is_string_schema(obj) && !leaf_string_has_value_constraint(obj) {
-        let description = obj.get("description").and_then(Value::as_str).unwrap_or("");
-        let snippet = description_snippet(description, 160);
-        rows.push(OpenStringLeafRow {
-            pointer: pointer.to_string(),
-            def_context: def_context_from_pointer(pointer),
-            description_snippet: snippet,
-            has_format: obj.contains_key("format"),
-            has_min_length: obj.contains_key("minLength"),
-            has_max_length: obj.contains_key("maxLength"),
-        });
-    }
-    if let Some(Value::Object(props)) = obj.get("properties") {
-        for (name, child) in props {
-            let child_pointer = format!("{pointer}/properties/{}", escape_pointer(name));
-            walk_open_string_leaves(child, &child_pointer, rows);
-        }
-    }
-    if let Some(Value::Object(pp)) = obj.get("patternProperties") {
-        for (name, child) in pp {
-            let child_pointer = format!("{pointer}/patternProperties/{}", escape_pointer(name));
-            walk_open_string_leaves(child, &child_pointer, rows);
-        }
-    }
-    if let Some(defs) = obj.get("$defs").and_then(Value::as_object) {
-        for (name, child) in defs {
-            let child_pointer = format!("{pointer}/$defs/{}", escape_pointer(name));
-            walk_open_string_leaves(child, &child_pointer, rows);
-        }
-    }
-    if let Some(defs) = obj.get("definitions").and_then(Value::as_object) {
-        for (name, child) in defs {
-            let child_pointer = format!("{pointer}/definitions/{}", escape_pointer(name));
-            walk_open_string_leaves(child, &child_pointer, rows);
-        }
-    }
-    if let Some(items) = obj.get("items") {
-        match items {
-            Value::Object(_) => walk_open_string_leaves(items, &format!("{pointer}/items"), rows),
-            Value::Array(arr) => {
-                for (i, child) in arr.iter().enumerate() {
-                    walk_open_string_leaves(child, &format!("{pointer}/items/{i}"), rows);
-                }
-            }
-            _ => {}
-        }
-    }
-    if let Some(additional) = obj.get("additionalProperties")
-        && additional.is_object()
-    {
-        walk_open_string_leaves(additional, &format!("{pointer}/additionalProperties"), rows);
-    }
-    for combinator in ["oneOf", "anyOf", "allOf"] {
-        if let Some(Value::Array(arr)) = obj.get(combinator) {
-            for (i, child) in arr.iter().enumerate() {
-                walk_open_string_leaves(child, &format!("{pointer}/{combinator}/{i}"), rows);
-            }
-        }
-    }
 }
 
 fn description_snippet(text: &str, max_chars: usize) -> String {
@@ -257,118 +223,6 @@ fn def_context_from_pointer(pointer: &str) -> String {
 
 fn unescape_json_pointer_token(segment: &str) -> String {
     segment.replace("~1", "/").replace("~0", "~")
-}
-
-fn walk_count(node: &Value, count: &mut usize) {
-    let Some(obj) = node.as_object() else { return };
-    if is_leaf(obj) {
-        *count += 1;
-    }
-    if let Some(Value::Object(props)) = obj.get("properties") {
-        for (_, child) in props {
-            walk_count(child, count);
-        }
-    }
-    if let Some(Value::Object(pp)) = obj.get("patternProperties") {
-        for (_, child) in pp {
-            walk_count(child, count);
-        }
-    }
-    if let Some(defs) = obj.get("$defs").and_then(Value::as_object) {
-        for (_, child) in defs {
-            walk_count(child, count);
-        }
-    }
-    if let Some(defs) = obj.get("definitions").and_then(Value::as_object) {
-        for (_, child) in defs {
-            walk_count(child, count);
-        }
-    }
-    if let Some(items) = obj.get("items") {
-        match items {
-            Value::Object(_) => walk_count(items, count),
-            Value::Array(arr) => {
-                for child in arr {
-                    walk_count(child, count);
-                }
-            }
-            _ => {}
-        }
-    }
-    if let Some(additional) = obj.get("additionalProperties")
-        && additional.is_object()
-    {
-        walk_count(additional, count);
-    }
-    for combinator in ["oneOf", "anyOf", "allOf"] {
-        if let Some(Value::Array(arr)) = obj.get(combinator) {
-            for child in arr {
-                walk_count(child, count);
-            }
-        }
-    }
-}
-
-fn walk_open_string_kinds(node: &Value, pointer: &str, diagnostics: &mut Vec<LintDiagnostic>) {
-    let Some(obj) = node.as_object() else {
-        return;
-    };
-    if is_leaf(obj) && is_string_schema(obj) && !leaf_string_has_value_constraint(obj) {
-        check_open_string_kind(obj, pointer, diagnostics);
-    }
-    if let Some(Value::Object(props)) = obj.get("properties") {
-        for (name, child) in props {
-            let child_pointer = format!("{pointer}/properties/{}", escape_pointer(name));
-            walk_open_string_kinds(child, &child_pointer, diagnostics);
-        }
-    }
-    if let Some(Value::Object(pp)) = obj.get("patternProperties") {
-        for (name, child) in pp {
-            let child_pointer = format!("{pointer}/patternProperties/{}", escape_pointer(name));
-            walk_open_string_kinds(child, &child_pointer, diagnostics);
-        }
-    }
-    if let Some(defs) = obj.get("$defs").and_then(Value::as_object) {
-        for (name, child) in defs {
-            let child_pointer = format!("{pointer}/$defs/{}", escape_pointer(name));
-            walk_open_string_kinds(child, &child_pointer, diagnostics);
-        }
-    }
-    if let Some(defs) = obj.get("definitions").and_then(Value::as_object) {
-        for (name, child) in defs {
-            let child_pointer = format!("{pointer}/definitions/{}", escape_pointer(name));
-            walk_open_string_kinds(child, &child_pointer, diagnostics);
-        }
-    }
-    if let Some(items) = obj.get("items") {
-        match items {
-            Value::Object(_) => {
-                walk_open_string_kinds(items, &format!("{pointer}/items"), diagnostics)
-            }
-            Value::Array(arr) => {
-                for (i, child) in arr.iter().enumerate() {
-                    walk_open_string_kinds(child, &format!("{pointer}/items/{i}"), diagnostics);
-                }
-            }
-            _ => {}
-        }
-    }
-    if let Some(additional) = obj.get("additionalProperties")
-        && additional.is_object()
-    {
-        walk_open_string_kinds(
-            additional,
-            &format!("{pointer}/additionalProperties"),
-            diagnostics,
-        );
-    }
-    for combinator in ["oneOf", "anyOf", "allOf"] {
-        if let Some(Value::Array(arr)) = obj.get(combinator) {
-            for (i, child) in arr.iter().enumerate() {
-                walk_open_string_kinds(child, &format!("{pointer}/{combinator}/{i}"), diagnostics);
-            }
-        }
-    }
 }
 
 fn check_open_string_kind(
@@ -407,61 +261,6 @@ fn open_string_kind(obj: &serde_json::Map<String, Value>) -> Option<&str> {
         .and_then(Value::as_str)
 }
 
-fn walk_string_inventory(node: &Value, inv: &mut StringLeafInventory) {
-    let Some(obj) = node.as_object() else {
-        return;
-    };
-    if is_leaf(obj) && is_string_schema(obj) {
-        inv.string_leaves += 1;
-        if leaf_string_has_value_constraint(obj) {
-            inv.constrained_string_leaves += 1;
-        }
-    }
-    if let Some(Value::Object(props)) = obj.get("properties") {
-        for (_, child) in props {
-            walk_string_inventory(child, inv);
-        }
-    }
-    if let Some(Value::Object(pp)) = obj.get("patternProperties") {
-        for (_, child) in pp {
-            walk_string_inventory(child, inv);
-        }
-    }
-    if let Some(defs) = obj.get("$defs").and_then(Value::as_object) {
-        for (_, child) in defs {
-            walk_string_inventory(child, inv);
-        }
-    }
-    if let Some(defs) = obj.get("definitions").and_then(Value::as_object) {
-        for (_, child) in defs {
-            walk_string_inventory(child, inv);
-        }
-    }
-    if let Some(items) = obj.get("items") {
-        match items {
-            Value::Object(_) => walk_string_inventory(items, inv),
-            Value::Array(arr) => {
-                for child in arr {
-                    walk_string_inventory(child, inv);
-                }
-            }
-            _ => {}
-        }
-    }
-    if let Some(additional) = obj.get("additionalProperties")
-        && additional.is_object()
-    {
-        walk_string_inventory(additional, inv);
-    }
-    for combinator in ["oneOf", "anyOf", "allOf"] {
-        if let Some(Value::Array(arr)) = obj.get(combinator) {
-            for child in arr {
-                walk_string_inventory(child, inv);
-            }
-        }
-    }
-}
-
 /// Value constraints meaningful for a string leaf (`enum` / `const` / `pattern`),
 /// plus an honest-open declaration audited by SCHEMA-OPEN-001.
 ///
@@ -484,70 +283,64 @@ fn has_listed_open_string_kind(obj: &serde_json::Map<String, Value>) -> bool {
 /// Rule identifier for `SCHEMA-OPEN-001`.
 const OPEN_STRING_KIND_RULE_ID: &str = "SCHEMA-OPEN-001";
 
-/// Recurse into a schema node. `pointer` is the JSON Pointer to `node`
-/// within the containing schema document.
-fn walk(node: &Value, pointer: &str, diagnostics: &mut Vec<LintDiagnostic>) {
+/// Visit `node` and, depth-first, every subschema the schema-doc passes read:
+/// `properties`, `patternProperties`, `$defs`, `definitions`, `items`, an object
+/// `additionalProperties`, and `oneOf` / `anyOf` / `allOf` members. `pointer` is
+/// the JSON Pointer of `node` within its document.
+///
+/// Every pass shares this one walk. A `$ref` site is visited like any node: under
+/// JSON Schema 2020-12 its sibling keywords still apply, and `$defs` beside a root
+/// `$ref` stay reachable. [`is_leaf`] keeps the reference site out of leaf checks.
+fn for_each_subschema(
+    node: &Value,
+    pointer: &str,
+    visit: &mut impl FnMut(&serde_json::Map<String, Value>, &str),
+) {
     let Some(obj) = node.as_object() else {
         return;
     };
-
-    // If this node itself is a leaf property, check it.
-    if is_leaf(obj) {
-        check_leaf(obj, pointer, diagnostics);
-    }
-
-    // Recurse into every known sub-schema container.
-    if let Some(Value::Object(props)) = obj.get("properties") {
-        for (name, child) in props {
-            let child_pointer = format!("{pointer}/properties/{}", escape_pointer(name));
-            walk(child, &child_pointer, diagnostics);
-        }
-    }
-    if let Some(Value::Object(pattern_props)) = obj.get("patternProperties") {
-        for (name, child) in pattern_props {
-            let child_pointer = format!("{pointer}/patternProperties/{}", escape_pointer(name));
-            walk(child, &child_pointer, diagnostics);
-        }
-    }
-    if let Some(defs) = obj.get("$defs").and_then(Value::as_object) {
-        for (name, child) in defs {
-            let child_pointer = format!("{pointer}/$defs/{}", escape_pointer(name));
-            walk(child, &child_pointer, diagnostics);
-        }
-    }
-    if let Some(defs) = obj.get("definitions").and_then(Value::as_object) {
-        for (name, child) in defs {
-            let child_pointer = format!("{pointer}/definitions/{}", escape_pointer(name));
-            walk(child, &child_pointer, diagnostics);
-        }
-    }
-    if let Some(items) = obj.get("items") {
-        match items {
-            Value::Object(_) => walk(items, &format!("{pointer}/items"), diagnostics),
-            Value::Array(arr) => {
-                for (i, child) in arr.iter().enumerate() {
-                    walk(child, &format!("{pointer}/items/{i}"), diagnostics);
-                }
+    visit(obj, pointer);
+    for keyword in ["properties", "patternProperties", "$defs", "definitions"] {
+        if let Some(children) = obj.get(keyword).and_then(Value::as_object) {
+            for (name, child) in children {
+                let child_pointer = format!("{pointer}/{keyword}/{}", escape_pointer(name));
+                for_each_subschema(child, &child_pointer, visit);
             }
-            _ => {}
         }
+    }
+    match obj.get("items") {
+        Some(items @ Value::Object(_)) => {
+            for_each_subschema(items, &format!("{pointer}/items"), visit);
+        }
+        Some(Value::Array(items)) => {
+            for (i, child) in items.iter().enumerate() {
+                for_each_subschema(child, &format!("{pointer}/items/{i}"), visit);
+            }
+        }
+        _ => {}
     }
     if let Some(additional) = obj.get("additionalProperties")
         && additional.is_object()
     {
-        walk(
+        for_each_subschema(
             additional,
             &format!("{pointer}/additionalProperties"),
-            diagnostics,
+            visit,
         );
     }
     for combinator in ["oneOf", "anyOf", "allOf"] {
-        if let Some(Value::Array(arr)) = obj.get(combinator) {
-            for (i, child) in arr.iter().enumerate() {
-                walk(child, &format!("{pointer}/{combinator}/{i}"), diagnostics);
+        if let Some(Value::Array(members)) = obj.get(combinator) {
+            for (i, child) in members.iter().enumerate() {
+                for_each_subschema(child, &format!("{pointer}/{combinator}/{i}"), visit);
             }
         }
     }
+}
+
+/// A string leaf with no `enum` / `const` / `pattern` and no listed
+/// `x-wos.openStringKind`: the leaves SCHEMA-OPEN-001 audits.
+fn is_open_string_leaf(obj: &serde_json::Map<String, Value>) -> bool {
+    is_leaf(obj) && is_string_schema(obj) && !leaf_string_has_value_constraint(obj)
 }
 
 /// A node is a leaf if it declares a concrete `type` and has no composite
