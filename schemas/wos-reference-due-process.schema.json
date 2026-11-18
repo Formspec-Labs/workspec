@@ -443,7 +443,7 @@
             "en-US"
           ],
           "x-wos": {
-            "openStringKind": "tagLabel"
+            "openStringKind": "identifier"
           }
         },
         "templateKey": {
@@ -801,7 +801,7 @@
         },
         "actingActor": {
           "type": "string",
-          "description": "Canonical identity of the human actor actually admitted to perform the declared operation.",
+          "description": "Independently admitted actual actor: the retained canonical human for a human role, or the exact declared nonhuman actor otherwise. A request cannot authenticate its own actor.",
           "examples": [
             "actor:human:reviewer"
           ],
@@ -993,7 +993,7 @@
             "en-US"
           ],
           "x-wos": {
-            "openStringKind": "tagLabel"
+            "openStringKind": "identifier"
           }
         },
         "templateKey": {
@@ -1201,9 +1201,9 @@
         },
         "recipient": {
           "type": "string",
-          "description": "Designated recipient recorded on the notice when the native governor issued it.",
+          "description": "Exact nonblank recipient value resolved from the notice policy's recipientPointer in the retained determination snapshot.",
           "examples": [
-            "actor:human:applicant"
+            "household"
           ],
           "x-wos": {
             "openStringKind": "identifier"
@@ -1537,9 +1537,9 @@
         },
         "authoritySource": {
           "type": "string",
-          "description": "Retained reference to the source used when verifying the actor's override authority.",
+          "description": "Authority source consulted for the roleAssignment check: the workflow definition URL and the declared actor ID, joined by '#'.",
           "examples": [
-            "supervisor-assignment"
+            "https://agency.example/workflows/benefits-review#supervisor"
           ],
           "x-wos": {
             "openStringKind": "identifier"
@@ -1815,9 +1815,9 @@
         },
         "recipient": {
           "type": "string",
-          "description": "Designated recipient for the notice artifact associated with this pending transport work.",
+          "description": "Exact recipient value of the issued notice that this pending transport work must deliver.",
           "examples": [
-            "actor:human:applicant"
+            "household"
           ],
           "x-wos": {
             "openStringKind": "identifier"
@@ -2318,7 +2318,7 @@
       "enum": [
         "reasoning"
       ],
-      "description": "Field disclosure tier for the reasoning evidence attached to the original determination.",
+      "description": "Structured audit tier marking this record as Reasoning-tier provenance for the original determination.",
       "examples": [
         "reasoning"
       ]
@@ -2328,7 +2328,7 @@
       "enum": [
         "counterfactual"
       ],
-      "description": "Field disclosure tier for the counterfactual evidence attached to the original determination.",
+      "description": "Structured audit tier marking this record as Counterfactual-tier provenance for the original determination.",
       "examples": [
         "counterfactual"
       ]
@@ -2390,7 +2390,7 @@
               "const": "string"
             },
             "value": {
-              "description": "String value compared without conversion when the selector declares the string branch.",
+              "description": "String value carried by a scalar whose kind is \"string\"; used exactly as written, without type conversion.",
               "type": "string",
               "examples": [
                 "pending-review"
@@ -2414,7 +2414,7 @@
               "const": "number"
             },
             "value": {
-              "description": "Numeric value compared without conversion when the selector declares the number branch.",
+              "description": "Numeric value carried by a scalar whose kind is \"number\"; used exactly as written, without type conversion.",
               "type": "number",
               "examples": [
                 125
@@ -2435,7 +2435,7 @@
               "const": "boolean"
             },
             "value": {
-              "description": "Boolean value compared without conversion when the selector declares the boolean branch.",
+              "description": "Boolean value carried by a scalar whose kind is \"boolean\"; used exactly as written, without type conversion.",
               "type": "boolean",
               "examples": [
                 true
@@ -2509,9 +2509,9 @@
             },
             "reviewerActor": {
               "type": "string",
-              "description": "Canonical human identity requested for independent assignment to the appeal hearing.",
+              "description": "Declared workflow actor ID assigned to hold the hearing; it must be one of the appeal policy's reviewerActors.",
               "examples": [
-                "actor:human:reviewer"
+                "appealReviewer"
               ],
               "x-wos": {
                 "openStringKind": "identifier"

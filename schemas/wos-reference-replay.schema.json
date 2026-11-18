@@ -172,7 +172,7 @@
         "pkcs8Base64": {
           "type": "string",
           "contentEncoding": "base64",
-          "description": "Base64-encoded PKCS #8 private key from a public test vector for synthetic document signing only.",
+          "description": "Base64-encoded PKCS #8 Ed25519 private key for synthetic fixture document signing; a local software capability, never a production key.",
           "examples": [
             "MFECAQEwBQYDK2VwBCIEIJ1hsZ3v/VpguoRK9JLsLMREScVpezJpGXA7rAMcrn9ggSEA11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo="
           ],
@@ -186,7 +186,7 @@
         "receiptPkcs8Base64": {
           "type": "string",
           "contentEncoding": "base64",
-          "description": "Base64-encoded PKCS #8 private key from a public test vector for synthetic receipt signing only.",
+          "description": "Base64-encoded PKCS #8 Ed25519 private key for synthetic fixture receipt signing; a local software capability, never a production key.",
           "examples": [
             "MFECAQEwBQYDK2VwBCIEIEzNCJso/5banbbDRuwRTg9bijGfNaumJNqM9u1PuKb7gSEAPUAXw+hDiVqStwqnTRt+vJyYLM8uxJaMwM1V8Sr0Zgw="
           ],
@@ -681,7 +681,7 @@
                 "en-US"
               ],
               "x-wos": {
-                "openStringKind": "tagLabel"
+                "openStringKind": "identifier"
               }
             },
             {
@@ -698,7 +698,7 @@
             {
               "type": "string",
               "minLength": 1,
-              "description": "Authored authority reference explaining why the selected notice template is used.",
+              "description": "Regulatory or statutory authority requiring this notification, as authored in the fixture template.",
               "examples": [
                 "Fixture policy section 4"
               ],
@@ -2122,7 +2122,7 @@
             "en-US"
           ],
           "x-wos": {
-            "openStringKind": "tagLabel"
+            "openStringKind": "identifier"
           }
         },
         "bodySha256": {

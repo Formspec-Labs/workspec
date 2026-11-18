@@ -3430,7 +3430,7 @@
                       "en-US"
                     ],
                     "x-wos": {
-                      "openStringKind": "tagLabel"
+                      "openStringKind": "identifier"
                     }
                   },
                   "templateKey": {
@@ -3817,7 +3817,7 @@
                         "const": "string"
                       },
                       "value": {
-                        "description": "String value compared without conversion when the selector declares the string branch.",
+                        "description": "String value carried by a scalar whose kind is \"string\"; used exactly as written, without type conversion.",
                         "type": "string",
                         "examples": [
                           "pending-review"
@@ -3841,7 +3841,7 @@
                         "const": "number"
                       },
                       "value": {
-                        "description": "Numeric value compared without conversion when the selector declares the number branch.",
+                        "description": "Numeric value carried by a scalar whose kind is \"number\"; used exactly as written, without type conversion.",
                         "type": "number",
                         "examples": [
                           125
@@ -3862,7 +3862,7 @@
                         "const": "boolean"
                       },
                       "value": {
-                        "description": "Boolean value compared without conversion when the selector declares the boolean branch.",
+                        "description": "Boolean value carried by a scalar whose kind is \"boolean\"; used exactly as written, without type conversion.",
                         "type": "boolean",
                         "examples": [
                           true

@@ -629,7 +629,7 @@
             },
             "hasMore": {
               "type": "boolean",
-              "description": "No further candidate existed in the authorized process at the time of this read.",
+              "description": "No same-process next candidate existed in this statement snapshot.",
               "const": false
             }
           }

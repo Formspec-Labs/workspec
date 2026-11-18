@@ -2315,7 +2315,7 @@
               },
               "hasMore": {
                 "const": false,
-                "description": "No further candidate existed in the authorized process at the time of this read.",
+                "description": "No same-process next candidate existed in this statement snapshot.",
                 "type": "boolean"
               },
               "items": {
@@ -3433,7 +3433,7 @@
         ]
       },
       "CounterfactualTier": {
-        "description": "Field disclosure tier for the counterfactual evidence attached to the original determination.",
+        "description": "Structured audit tier marking this record as Counterfactual-tier provenance for the original determination.",
         "enum": [
           "counterfactual"
         ],
@@ -7634,7 +7634,7 @@
         "type": "object"
       },
       "ReasoningTier": {
-        "description": "Field disclosure tier for the reasoning evidence attached to the original determination.",
+        "description": "Structured audit tier marking this record as Reasoning-tier provenance for the original determination.",
         "enum": [
           "reasoning"
         ],
@@ -9093,7 +9093,7 @@
                 "const": "string"
               },
               "value": {
-                "description": "String value compared without conversion when the selector declares the string branch.",
+                "description": "String value carried by a scalar whose kind is \"string\"; used exactly as written, without type conversion.",
                 "examples": [
                   "pending-review"
                 ],
@@ -9117,7 +9117,7 @@
                 "const": "number"
               },
               "value": {
-                "description": "Numeric value compared without conversion when the selector declares the number branch.",
+                "description": "Numeric value carried by a scalar whose kind is \"number\"; used exactly as written, without type conversion.",
                 "examples": [
                   125
                 ],
@@ -9138,7 +9138,7 @@
                 "const": "boolean"
               },
               "value": {
-                "description": "Boolean value compared without conversion when the selector declares the boolean branch.",
+                "description": "Boolean value carried by a scalar whose kind is \"boolean\"; used exactly as written, without type conversion.",
                 "examples": [
                   true
                 ],
