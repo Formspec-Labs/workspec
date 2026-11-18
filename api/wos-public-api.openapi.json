@@ -2309,10 +2309,11 @@
               },
               "hasMore": {
                 "const": false,
-                "description": "A same-process next candidate existed in this statement snapshot.",
+                "description": "No further candidate existed in the authorized process at the time of this read.",
                 "type": "boolean"
               },
               "items": {
+                "description": "The final retained notice in the authorized process, or an empty array when no candidate remains.",
                 "items": {
                   "$ref": "#/components/schemas/RetainedNoticeContent"
                 },
@@ -2353,7 +2354,8 @@
                 }
               },
               "cursor": {
-                "$ref": "#/components/schemas/RetainedNoticeCursor"
+                "$ref": "#/components/schemas/RetainedNoticeCursor",
+                "description": "Pass the returned notice's intent identity to read the next page, starting after this notice."
               },
               "hasMore": {
                 "const": true,
@@ -2361,6 +2363,7 @@
                 "type": "boolean"
               },
               "items": {
+                "description": "The complete retained notice selected for this page of the authorized process.",
                 "items": {
                   "$ref": "#/components/schemas/RetainedNoticeContent"
                 },
@@ -8690,7 +8693,8 @@
             }
           },
           "intentId": {
-            "$ref": "#/components/schemas/RetainedNoticeCursor"
+            "$ref": "#/components/schemas/RetainedNoticeCursor",
+            "description": "Identity of the original notice intent. This value orders notices within the authorized process."
           },
           "language": {
             "description": "Exact original language tag, never inferred from the viewer.",
@@ -8703,7 +8707,8 @@
             }
           },
           "sourceIdentity": {
-            "$ref": "#/components/schemas/RetainedNoticeSourceIdentity"
+            "$ref": "#/components/schemas/RetainedNoticeSourceIdentity",
+            "description": "Identity and digests of the source document and template used to render the original notice."
           },
           "subject": {
             "description": "Exact original subject, bounded to 998 UTF-8 bytes by the reader.",

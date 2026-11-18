@@ -528,7 +528,8 @@
       ],
       "properties": {
         "intentId": {
-          "$ref": "#/$defs/RetainedNoticeCursor"
+          "$ref": "#/$defs/RetainedNoticeCursor",
+          "description": "Identity of the original notice intent. This value orders notices within the authorized process."
         },
         "attemptId": {
           "type": "string",
@@ -579,7 +580,8 @@
           "pattern": "^sha256:[0-9a-f]{64}$"
         },
         "sourceIdentity": {
-          "$ref": "#/$defs/RetainedNoticeSourceIdentity"
+          "$ref": "#/$defs/RetainedNoticeSourceIdentity",
+          "description": "Identity and digests of the source document and template used to render the original notice."
         }
       }
     },
@@ -619,6 +621,7 @@
             },
             "items": {
               "type": "array",
+              "description": "The final retained notice in the authorized process, or an empty array when no candidate remains.",
               "maxItems": 1,
               "items": {
                 "$ref": "#/$defs/RetainedNoticeContent"
@@ -626,7 +629,7 @@
             },
             "hasMore": {
               "type": "boolean",
-              "description": "A same-process next candidate existed in this statement snapshot.",
+              "description": "No further candidate existed in the authorized process at the time of this read.",
               "const": false
             }
           }
@@ -665,6 +668,7 @@
             },
             "items": {
               "type": "array",
+              "description": "The complete retained notice selected for this page of the authorized process.",
               "maxItems": 1,
               "items": {
                 "$ref": "#/$defs/RetainedNoticeContent"
@@ -677,7 +681,8 @@
               "const": true
             },
             "cursor": {
-              "$ref": "#/$defs/RetainedNoticeCursor"
+              "$ref": "#/$defs/RetainedNoticeCursor",
+              "description": "Pass the returned notice's intent identity to read the next page, starting after this notice."
             }
           }
         }
