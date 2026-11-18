@@ -319,7 +319,7 @@ impl ImmutableFormspecProcessor {
                 }),
         );
         let filed = formspec_eval::exact_json::Value::Object(fields.into_iter().collect());
-        if !result.input_refused && !filed_response_data_matches(&definition, &filed, &result.data) {
+        if !result.refused && !filed_response_data_matches(&definition, &filed, &result.data) {
             return Err(BindingError::Unsupported(
                 "filed Response data differs from its evaluation".into(),
             ));
