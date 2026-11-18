@@ -1255,7 +1255,9 @@ dependencies = [
 name = "formspec-core"
 version = "0.2.0"
 dependencies = [
+ "chrono",
  "fel-core",
+ "integrity-canonical",
  "rust_decimal",
  "semver_rs",
  "serde",
