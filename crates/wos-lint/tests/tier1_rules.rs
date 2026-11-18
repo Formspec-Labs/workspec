@@ -2126,7 +2126,9 @@ fn minimal_valid_kernel_has_only_structural_coverage_information() {
     let doc = minimal_kernel();
     let diags = lint(doc);
     assert!(
-        diags.iter().all(|d| d.rule_id == "WOS-FLOW-006" && d.severity == LintSeverity::Info),
+        diags
+            .iter()
+            .all(|d| d.rule_id == "WOS-FLOW-006" && d.severity == LintSeverity::Info),
         "minimal valid kernel should have only structural coverage information, got: {diags:?}"
     );
 }

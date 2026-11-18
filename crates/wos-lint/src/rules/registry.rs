@@ -1480,7 +1480,9 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         fixtures: &[],
         graduation: Graduation::Draft,
         spec_ref: Some("specs/kernel/spec.md §4.3"),
-        suggested_fix: Some("Give globally indexed states distinct IDs and update their references."),
+        suggested_fix: Some(
+            "Give globally indexed states distinct IDs and update their references.",
+        ),
     },
     RuleMetadata {
         id: "WOS-FLOW-002",
@@ -1490,7 +1492,9 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         fixtures: &[],
         graduation: Graduation::Draft,
         spec_ref: Some("specs/kernel/spec.md §4.3"),
-        suggested_fix: Some("Connect the state through an authored entry/transition path or remove it."),
+        suggested_fix: Some(
+            "Connect the state through an authored entry/transition path or remove it.",
+        ),
     },
     RuleMetadata {
         id: "WOS-FLOW-003",
@@ -1500,7 +1504,9 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         fixtures: &[],
         graduation: Graduation::Draft,
         spec_ref: Some("specs/profiles/semantic.md SP-01"),
-        suggested_fix: Some("Declare a local/inherited transition or an appropriate final outcome."),
+        suggested_fix: Some(
+            "Declare a local/inherited transition or an appropriate final outcome.",
+        ),
     },
     RuleMetadata {
         id: "WOS-FLOW-004",
@@ -1510,7 +1516,9 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         fixtures: &[],
         graduation: Graduation::Draft,
         spec_ref: None,
-        suggested_fix: Some("Add an authored exit to the cycle or declare its supported scope outcome."),
+        suggested_fix: Some(
+            "Add an authored exit to the cycle or declare its supported scope outcome.",
+        ),
     },
     RuleMetadata {
         id: "WOS-FLOW-005",
@@ -1520,7 +1528,9 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         fixtures: &[],
         graduation: Graduation::Draft,
         spec_ref: None,
-        suggested_fix: Some("Qualify the unsupported behavior separately; do not claim liveness verification."),
+        suggested_fix: Some(
+            "Qualify the unsupported behavior separately; do not claim liveness verification.",
+        ),
     },
     RuleMetadata {
         id: "WOS-FLOW-006",

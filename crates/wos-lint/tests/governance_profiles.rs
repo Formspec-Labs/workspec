@@ -59,11 +59,23 @@ fn general_explanation_obligations_do_not_select_reference_execution() {
             .find(|stage| stage.name == name)
             .unwrap_or_else(|| panic!("missing stage {name}: {report:?}"))
     };
-    assert_eq!(stage("candidate-schema").status, CheckStatus::Pass, "{report:?}");
+    assert_eq!(
+        stage("candidate-schema").status,
+        CheckStatus::Pass,
+        "{report:?}"
+    );
     assert_eq!(stage("t1").status, CheckStatus::Pass, "{report:?}");
-    assert_eq!(stage("project-resolution").status, CheckStatus::Pass, "{report:?}");
+    assert_eq!(
+        stage("project-resolution").status,
+        CheckStatus::Pass,
+        "{report:?}"
+    );
     assert_eq!(stage("t2").status, CheckStatus::Pass, "{report:?}");
-    assert_eq!(stage("selected-governance").status, CheckStatus::NotRun, "{report:?}");
+    assert_eq!(
+        stage("selected-governance").status,
+        CheckStatus::NotRun,
+        "{report:?}"
+    );
     assert_eq!(input, original);
 }
 
