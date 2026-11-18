@@ -25,8 +25,8 @@
 //!
 //! A *leaf property* is a schema node that declares a concrete `type` and
 //! has no `properties`, `items`, `oneOf`, `anyOf`, or `allOf` direct
-//! children (those are composite nodes, not leaves). Nodes with `$ref` are
-//! skipped — the check applies at the ref target.
+//! children (those are composite nodes, not leaves). The walk skips leaf
+//! checks at `$ref` sites and visits their authored child schemas.
 
 use serde_json::Value;
 
@@ -171,9 +171,6 @@ fn walk_open_string_leaves(node: &Value, pointer: &str, rows: &mut Vec<OpenStrin
     let Some(obj) = node.as_object() else {
         return;
     };
-    if obj.contains_key("$ref") {
-        return;
-    }
     if is_leaf(obj) && is_string_schema(obj) && !leaf_string_has_value_constraint(obj) {
         let description = obj.get("description").and_then(Value::as_str).unwrap_or("");
         let snippet = description_snippet(description, 160);
@@ -264,9 +261,6 @@ fn unescape_json_pointer_token(segment: &str) -> String {
 
 fn walk_count(node: &Value, count: &mut usize) {
     let Some(obj) = node.as_object() else { return };
-    if obj.contains_key("$ref") {
-        return;
-    }
     if is_leaf(obj) {
         *count += 1;
     }
@@ -319,9 +313,6 @@ fn walk_open_string_kinds(node: &Value, pointer: &str, diagnostics: &mut Vec<Lin
     let Some(obj) = node.as_object() else {
         return;
     };
-    if obj.contains_key("$ref") {
-        return;
-    }
     if is_leaf(obj) && is_string_schema(obj) && !leaf_string_has_value_constraint(obj) {
         check_open_string_kind(obj, pointer, diagnostics);
     }
@@ -420,9 +411,6 @@ fn walk_string_inventory(node: &Value, inv: &mut StringLeafInventory) {
     let Some(obj) = node.as_object() else {
         return;
     };
-    if obj.contains_key("$ref") {
-        return;
-    }
     if is_leaf(obj) && is_string_schema(obj) {
         inv.string_leaves += 1;
         if leaf_string_has_value_constraint(obj) {
@@ -503,11 +491,6 @@ fn walk(node: &Value, pointer: &str, diagnostics: &mut Vec<LintDiagnostic>) {
         return;
     };
 
-    // A `$ref` replaces the schema entirely — the target is the thing to check.
-    if obj.contains_key("$ref") {
-        return;
-    }
-
     // If this node itself is a leaf property, check it.
     if is_leaf(obj) {
         check_leaf(obj, pointer, diagnostics);
@@ -570,7 +553,9 @@ fn walk(node: &Value, pointer: &str, diagnostics: &mut Vec<LintDiagnostic>) {
 /// A node is a leaf if it declares a concrete `type` and has no composite
 /// children that would make it a structural node.
 fn is_leaf(obj: &serde_json::Map<String, Value>) -> bool {
-    if !obj.contains_key("type") {
+    // In JSON Schema 2020-12, a reference can have sibling schema keywords.
+    // Exclude the reference site from leaf checks while keeping traversal intact.
+    if obj.contains_key("$ref") || !obj.contains_key("type") {
         return false;
     }
     // Composite containers disqualify leaf status.
@@ -1051,6 +1036,44 @@ mod tests {
         let diagnostics = lint(schema);
         assert_eq!(diagnostics.len(), 2); // missing description + missing examples
         assert!(diagnostics.iter().all(|d| d.path == "/$defs/Id"));
+    }
+
+    #[test]
+    fn root_ref_preserves_sibling_definitions() {
+        let schema = json!({
+            "$ref": "#/$defs/Name",
+            "type": "string",
+            "$defs": {
+                "Name": { "type": "string", "examples": ["sample"] }
+            },
+            "definitions": {
+                "Level": {
+                    "type": "integer",
+                    "description": description_60(),
+                    "examples": [1]
+                }
+            }
+        });
+
+        let mut diagnostics = Vec::new();
+        check_schema(&schema, &mut diagnostics);
+        assert_eq!(diagnostics.len(), 1, "expected the missing description");
+        assert_eq!(diagnostics[0].path, "/$defs/Name");
+
+        diagnostics.clear();
+        check_open_string_kinds(&schema, &mut diagnostics);
+        assert_eq!(
+            diagnostics.len(),
+            1,
+            "expected the missing open string kind"
+        );
+        assert_eq!(diagnostics[0].path, "/$defs/Name");
+
+        assert_eq!(count_leaves(&schema), 2);
+        assert_eq!(inventory_string_leaves(&schema).open_string_leaves(), 1);
+        let rows = collect_open_string_leaves(&schema);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].pointer, "/$defs/Name");
     }
 
     #[test]
