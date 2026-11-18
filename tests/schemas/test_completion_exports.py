@@ -83,9 +83,10 @@ def test_job_refuses_inconsistent_or_invented_states(checks, value):
     assert not checks["CompletionExportJob"].is_valid({**base, **value})
 
 
-@pytest.mark.parametrize("job_id", [None, "a" * 31, "A" * 32, "g" * 32, "../request"])
-def test_job_identity_is_exact_lowercase_hex(checks, job_id):
-    assert not checks["CompletionExportJob"].is_valid(job("running", jobId=job_id))
+@pytest.mark.parametrize("status", STATES)
+@pytest.mark.parametrize("job_id", [None, "a" * 31, JOB_ID + "\n", "A" * 32, "g" * 32, "../request"])
+def test_job_identity_is_exact_lowercase_hex(checks, status, job_id):
+    assert not checks["CompletionExportJob"].is_valid(job(status, jobId=job_id))
 
 
 def test_job_list_is_bounded_closed_array_of_jobs(checks):
