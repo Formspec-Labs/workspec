@@ -4937,6 +4937,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "trellis-admission-authority"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "hex",
+ "integrity-cbor",
+ "jsonschema 0.46.1",
+ "serde_json",
+ "stack-common-error",
+ "trellis-server-ports",
+ "trellis-types",
+]
+
+[[package]]
 name = "trellis-admission-formspec"
 version = "0.1.0"
 dependencies = [
@@ -5030,6 +5044,7 @@ dependencies = [
  "stack-common-error",
  "stack-common-object-store",
  "stack-common-scope",
+ "trellis-admission-authority",
  "trellis-admission-formspec",
  "trellis-admission-wos",
  "trellis-export-profile-wos",
