@@ -13,6 +13,9 @@
 
 use assert_cmd::Command;
 use std::path::{Path, PathBuf};
+use wos_conformance::slugify;
+
+const PASSING_FIXTURE_ID: &str = "K-011-determinism";
 
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -29,7 +32,7 @@ fn t3_fixtures_dir() -> PathBuf {
 }
 
 fn passing_fixture() -> PathBuf {
-    t3_fixtures_dir().join("K-011-determinism.json")
+    t3_fixtures_dir().join(format!("{PASSING_FIXTURE_ID}.json"))
 }
 
 fn failing_fixture() -> PathBuf {
@@ -37,10 +40,11 @@ fn failing_fixture() -> PathBuf {
     t3_fixtures_dir().join("K-001-negative-final-transitions.json")
 }
 
-fn golden_trace(name: &str) -> PathBuf {
+fn passing_fixture_golden() -> PathBuf {
+    let slug = slugify(PASSING_FIXTURE_ID);
     workspace_root()
         .join("fixtures/conformance/expected-traces")
-        .join(name)
+        .join(format!("{slug}.json"))
 }
 
 // ── wos-conformance-explain ──────────────────────────────────────────────────
@@ -83,7 +87,7 @@ fn explain_no_args_exits_2() {
 /// Golden trace matches fresh run → exit 0 and stdout "OK".
 #[test]
 fn diff_matching_traces_exits_0_and_prints_ok() {
-    let golden = golden_trace("K-011-determinism.json");
+    let golden = passing_fixture_golden();
     Command::cargo_bin("wos-conformance-diff")
         .unwrap()
         .arg(golden)
@@ -99,7 +103,7 @@ fn diff_matching_traces_exits_0_and_prints_ok() {
 #[test]
 fn diff_diverging_traces_exits_1_and_prints_divergence() {
     // Write a mutated golden to a tempfile: flip state_after of step 0 to "rejected".
-    let golden_path = golden_trace("K-011-determinism.json");
+    let golden_path = passing_fixture_golden();
     let golden_json = std::fs::read_to_string(&golden_path)
         .unwrap_or_else(|e| panic!("cannot read golden trace: {e}"));
     let mut golden: serde_json::Value = serde_json::from_str(&golden_json).expect("parse golden");
