@@ -2719,6 +2719,8 @@
             "properties": {
               "jobId": {
                 "description": "Server-minted export job identity as 32 lowercase hexadecimal characters; the status and download path parameter.",
+                "maxLength": 32,
+                "minLength": 32,
                 "pattern": "^[0-9a-f]{32}$",
                 "type": "string"
               },
@@ -2752,6 +2754,8 @@
               },
               "jobId": {
                 "description": "Server-minted export job identity as 32 lowercase hexadecimal characters; the status and download path parameter.",
+                "maxLength": 32,
+                "minLength": 32,
                 "pattern": "^[0-9a-f]{32}$",
                 "type": "string"
               },
@@ -2789,6 +2793,8 @@
               },
               "jobId": {
                 "description": "Server-minted export job identity as 32 lowercase hexadecimal characters; the status and download path parameter.",
+                "maxLength": 32,
+                "minLength": 32,
                 "pattern": "^[0-9a-f]{32}$",
                 "type": "string"
               },
