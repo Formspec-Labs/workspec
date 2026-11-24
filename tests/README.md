@@ -31,3 +31,12 @@ disables globally installed pytest plugins that can abort collection:
 make python-test                  # from work-spec/
 make -C work-spec python-test     # from the formspec-stack root
 ```
+
+## Rule coverage in the assembled stack
+
+Run `make test-work-spec` from the `formspec-stack` root. This runs both
+Rust rule registry suites and checks `LINT-MATRIX.md` alongside the other
+Workspec tests. The required stack `make test` gate runs the same target
+with the stack's pinned sibling workspaces. When a rule has promotion
+evidence, the stack CI uploads `rule-coverage-promotion-candidates.txt`
+and includes the report in the pull request job summary.

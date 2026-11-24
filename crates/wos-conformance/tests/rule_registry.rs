@@ -327,8 +327,8 @@ fn append_rs_files(dir: &Path, buffer: &mut String) {
 /// the candidates also print to stdout so CI job logs surface them directly.
 ///
 /// This test intentionally does not assert — it is purely a data-collection
-/// step. CI wires the output file into a PR annotation (see
-/// `.github/workflows/rule-coverage.yml`). The failing gates are in
+/// step. The assembled stack's CI publishes the report in its pull request summary.
+/// The failing gates are in
 /// `every_promoted_conformance_rule_has_executable_or_annotated_evidence`
 /// (Tested/Stable) and `every_load_bearing_conformance_rule_has_at_least_two_executable_fixtures`
 /// (LoadBearing).
