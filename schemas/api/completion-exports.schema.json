@@ -8,6 +8,46 @@
       "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?![\\s\\S])",
       "description": "Identifier grammar for members of the deployment's purpose and recipient-class vocabularies."
     },
+    "CompletionExportOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "purposes",
+        "recipientClasses"
+      ],
+      "properties": {
+        "purposes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CompletionExportVocabularyId"
+          },
+          "uniqueItems": true,
+          "description": "Declared purpose identifiers configured for completion exports in the admitted scope."
+        },
+        "recipientClasses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CompletionExportVocabularyId"
+          },
+          "uniqueItems": true,
+          "description": "Declared recipient-class identifiers configured for completion exports in the admitted scope."
+        }
+      },
+      "title": "CompletionExportOptions",
+      "description": "Declared completion-export vocabulary options configured for the admitted scope.",
+      "examples": [
+        {
+          "purposes": [
+            "quality-review",
+            "oversight-transfer"
+          ],
+          "recipientClasses": [
+            "internal",
+            "oversight"
+          ]
+        }
+      ]
+    },
     "CompletionExportRequest": {
       "type": "object",
       "additionalProperties": false,
@@ -360,6 +400,9 @@
   "$id": "https://schemas.formspec.io/wos-api/completion-exports/v1",
   "title": "WOS API Browser Completion Exports",
   "oneOf": [
+    {
+      "$ref": "#/$defs/CompletionExportOptions"
+    },
     {
       "$ref": "#/$defs/CompletionExportRequest"
     },

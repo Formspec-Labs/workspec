@@ -1619,6 +1619,112 @@
           }
         ]
       },
+      "AuthorityAction": {
+        "description": "Which canonical authority mutation the command requests.",
+        "enum": [
+          "grant",
+          "revoke"
+        ],
+        "type": "string"
+      },
+      "AuthorityCommandRequest": {
+        "additionalProperties": false,
+        "description": "Wire body matching `https://formspec.org/schemas/authorization/authority-command.schema.json`.",
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "relation": {
+            "type": "string"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/AuthoritySubject"
+          }
+        },
+        "required": [
+          "subject",
+          "relation",
+          "object",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "AuthorityCommandResponse": {
+        "additionalProperties": false,
+        "description": "Committed canonical authority position and projection status.",
+        "properties": {
+          "checkpointRef": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "projected": {
+            "type": "boolean"
+          },
+          "replayed": {
+            "type": "boolean"
+          },
+          "treeHeadHash": {
+            "type": "string"
+          },
+          "treeSize": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "treeSize",
+          "treeHeadHash",
+          "projected",
+          "replayed"
+        ],
+        "type": "object"
+      },
+      "AuthorityIdentity": {
+        "additionalProperties": false,
+        "description": "Typed identity grantee matching `authority-command.schema.json#/$defs/identity`.",
+        "properties": {
+          "iss": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/AuthorityPrincipalKind"
+          },
+          "sub": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "iss",
+          "sub"
+        ],
+        "type": "object"
+      },
+      "AuthorityPrincipalKind": {
+        "description": "Principal credential kind matching `authority-command.schema.json`.",
+        "enum": [
+          "user",
+          "service"
+        ],
+        "type": "string"
+      },
+      "AuthoritySubject": {
+        "description": "Subject of an authority command: a typed identity or a non-principal relationship subject reference.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/AuthorityIdentity"
+          },
+          {
+            "type": "string"
+          }
+        ]
+      },
       "AuthorizationRejectedRecord": {
         "additionalProperties": false,
         "description": "Typed public payload for `FactsTierRecord.authorizationRejectedRecord` when `event == \"wos.governance.authorization_rejected\"` (ADR 0070 D-3). Captures who attempted which action against which resource and why policy denied it.",
@@ -2711,7 +2817,16 @@
         "type": "object"
       },
       "CompletionExportJob": {
-        "description": "Durable whole-case completion export job. Exactly three states: running, succeeded, failed.",
+        "description": "Durable whole-case completion export job with the declarations from its accepted request.",
+        "examples": [
+          {
+            "jobId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "processId": "urn:wos:default_process_01hw7rm71vfay8vvw14d2pf2db",
+            "purpose": "quality-review",
+            "recipientClass": "oversight",
+            "status": "running"
+          }
+        ],
         "oneOf": [
           {
             "additionalProperties": false,
@@ -2728,6 +2843,14 @@
                 "$ref": "#/components/schemas/ProcessPathIdOneOf0",
                 "description": "Canonical full URN of the actual workflow process."
               },
+              "purpose": {
+                "$ref": "#/components/schemas/CompletionExportVocabularyId",
+                "description": "Purpose declared in the accepted request for this job."
+              },
+              "recipientClass": {
+                "$ref": "#/components/schemas/CompletionExportVocabularyId",
+                "description": "Recipient class declared in the accepted request for this job."
+              },
               "status": {
                 "const": "running",
                 "description": "Closed job state: running, succeeded or failed."
@@ -2736,6 +2859,8 @@
             "required": [
               "status",
               "processId",
+              "purpose",
+              "recipientClass",
               "jobId"
             ],
             "type": "object"
@@ -2763,6 +2888,14 @@
                 "$ref": "#/components/schemas/ProcessPathIdOneOf0",
                 "description": "Canonical full URN of the actual workflow process."
               },
+              "purpose": {
+                "$ref": "#/components/schemas/CompletionExportVocabularyId",
+                "description": "Purpose declared in the accepted request for this job."
+              },
+              "recipientClass": {
+                "$ref": "#/components/schemas/CompletionExportVocabularyId",
+                "description": "Recipient class declared in the accepted request for this job."
+              },
               "status": {
                 "const": "succeeded",
                 "description": "Closed job state: running, succeeded or failed."
@@ -2771,6 +2904,8 @@
             "required": [
               "status",
               "processId",
+              "purpose",
+              "recipientClass",
               "jobId",
               "checkpointRef"
             ],
@@ -2802,6 +2937,14 @@
                 "$ref": "#/components/schemas/ProcessPathIdOneOf0",
                 "description": "Canonical full URN of the actual workflow process."
               },
+              "purpose": {
+                "$ref": "#/components/schemas/CompletionExportVocabularyId",
+                "description": "Purpose declared in the accepted request for this job."
+              },
+              "recipientClass": {
+                "$ref": "#/components/schemas/CompletionExportVocabularyId",
+                "description": "Recipient class declared in the accepted request for this job."
+              },
               "status": {
                 "const": "failed",
                 "description": "Closed job state: running, succeeded or failed."
@@ -2810,6 +2953,8 @@
             "required": [
               "status",
               "processId",
+              "purpose",
+              "recipientClass",
               "jobId",
               "failureCode"
             ],
@@ -2837,20 +2982,84 @@
         "title": "CompletionExportJobList",
         "type": "object"
       },
+      "CompletionExportOptions": {
+        "additionalProperties": false,
+        "description": "Declared completion-export vocabulary options configured for the admitted scope.",
+        "examples": [
+          {
+            "purposes": [
+              "quality-review",
+              "oversight-transfer"
+            ],
+            "recipientClasses": [
+              "internal",
+              "oversight"
+            ]
+          }
+        ],
+        "properties": {
+          "purposes": {
+            "description": "Declared purpose identifiers configured for completion exports in the admitted scope.",
+            "items": {
+              "$ref": "#/components/schemas/CompletionExportVocabularyId"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "recipientClasses": {
+            "description": "Declared recipient-class identifiers configured for completion exports in the admitted scope.",
+            "items": {
+              "$ref": "#/components/schemas/CompletionExportVocabularyId"
+            },
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "purposes",
+          "recipientClasses"
+        ],
+        "title": "CompletionExportOptions",
+        "type": "object"
+      },
       "CompletionExportRequest": {
         "additionalProperties": false,
-        "description": "One actual workflow process selector for a completion export job. The current human credential is a transport input for the request only; the server mints the job identity and a signed job grant.",
+        "description": "Request to export one workflow process for a declared purpose and recipient class.",
+        "examples": [
+          {
+            "processId": "default_process_01hw7rm71vfay8vvw14d2pf2db",
+            "purpose": "quality-review",
+            "recipientClass": "oversight"
+          }
+        ],
         "properties": {
           "processId": {
             "$ref": "#/components/schemas/ProcessPathId",
             "description": "Actual workflow process selected by full process URN or bare process TypeID."
+          },
+          "purpose": {
+            "$ref": "#/components/schemas/CompletionExportVocabularyId",
+            "description": "Purpose declared by the authenticated requester. The server validates it against the deployment's declared purpose vocabulary and records it with the authorization decision. This declaration grants no authority."
+          },
+          "recipientClass": {
+            "$ref": "#/components/schemas/CompletionExportVocabularyId",
+            "description": "Recipient class declared by the authenticated requester. The server validates it against the deployment's declared recipient-class vocabulary and records it with the authorization decision. This declaration grants no authority."
           }
         },
         "required": [
-          "processId"
+          "processId",
+          "purpose",
+          "recipientClass"
         ],
         "title": "CompletionExportRequest",
         "type": "object"
+      },
+      "CompletionExportVocabularyId": {
+        "description": "Identifier grammar for members of the deployment's purpose and recipient-class vocabularies.",
+        "maxLength": 64,
+        "minLength": 1,
+        "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?![\\s\\S])",
+        "type": "string"
       },
       "ConfidenceReport": {
         "additionalProperties": false,
@@ -12363,6 +12572,147 @@
         "x-max-request-bytes": 2097152
       }
     },
+    "/api/v1/authority/{action}": {
+      "post": {
+        "operationId": "admitAuthorityCommand",
+        "parameters": [
+          {
+            "description": "Mutation action: `grant` or `revoke`.",
+            "in": "path",
+            "name": "action",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/AuthorityAction"
+            }
+          },
+          {
+            "description": "Opaque token; keep its exact bytes across retries of the same request.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthorityCommandRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorityCommandResponse"
+                }
+              }
+            },
+            "description": "Canonical authority change admitted (or idempotently replayed).",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid authority command or missing Idempotency-Key.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Caller is not authorized to administer this relation (`context.reason_code`).",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency-Key belongs to a different authority command.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authority ledger, policy package, or evaluator unavailable; retry with the same Idempotency-Key.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [
+              "wos.workflow.manage"
+            ]
+          }
+        ],
+        "summary": "Admits one canonical authority grant or revocation to the scope's shared `authority` ledger.",
+        "tags": [
+          "authority"
+        ],
+        "x-access": {
+          "detail": [
+            "wos.workflow.manage"
+          ],
+          "kind": "scope"
+        },
+        "x-max-request-bytes": 16384
+      }
+    },
     "/api/v1/bundles": {
       "get": {
         "operationId": "bundle_list",
@@ -15390,7 +15740,7 @@
                 }
               }
             },
-            "description": "Job accepted, or the caller's active job for this process.",
+            "description": "Job accepted, or the caller's active job for this process with identical declarations.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -15409,7 +15759,7 @@
             }
           },
           "400": {
-            "description": "Invalid process.",
+            "description": "Invalid process, purpose, or recipientClass.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -15422,7 +15772,20 @@
             }
           },
           "403": {
-            "description": "Current human archive permission refused.",
+            "description": "Current human archive permission refused (`context.reason_code`).",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "An active completion export already exists for this caller and process with different declarations (`WOS-2409`).",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -15448,7 +15811,7 @@
             }
           },
           "503": {
-            "description": "Owner, authority or job engine unavailable; retry the request.",
+            "description": "Owner, authority or job engine unavailable (`context.reason_code`, `Retry-After`); retry the request.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -15478,6 +15841,89 @@
           "kind": "scope"
         },
         "x-max-request-bytes": 4096
+      }
+    },
+    "/api/v1/completion-exports/options": {
+      "get": {
+        "operationId": "getCompletionExportOptions",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompletionExportOptions"
+                }
+              }
+            },
+            "description": "Declared completion-export purpose and recipient-class options for the admitted scope.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Caller is not eligible for completion exports.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Scope authorization policy package is unavailable; retry the request.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [
+              "wos.completion.read"
+            ]
+          }
+        ],
+        "summary": "Returns the deployment's declared `Purpose` and `RecipientClass` vocabulary members for\ncompletion exports in the admitted scope.",
+        "tags": [
+          "completion"
+        ],
+        "x-access": {
+          "detail": [
+            "wos.completion.read"
+          ],
+          "kind": "scope"
+        }
       }
     },
     "/api/v1/correspondence": {
@@ -16732,7 +17178,7 @@
             }
           },
           "403": {
-            "description": "Current human archive permission refused.",
+            "description": "Current human export-status permission refused (`context.reason_code`).",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -16758,7 +17204,7 @@
             }
           },
           "503": {
-            "description": "Owner, authority or job engine unavailable; retry the request.",
+            "description": "Owner, authority or job engine unavailable (`context.reason_code`, `Retry-After`); retry the request.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -16848,7 +17294,7 @@
             }
           },
           "403": {
-            "description": "Current human archive permission refused.",
+            "description": "Current human export-status permission refused (`context.reason_code`).",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -16887,7 +17333,7 @@
             }
           },
           "503": {
-            "description": "Owner, authority or job engine unavailable; retry the request.",
+            "description": "Owner, authority or job engine unavailable (`context.reason_code`, `Retry-After`); retry the request.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -16966,7 +17412,7 @@
             }
           },
           "403": {
-            "description": "Current human archive permission refused.",
+            "description": "Current human archive release permission refused (`context.reason_code`).",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -17005,7 +17451,7 @@
             }
           },
           "503": {
-            "description": "Owner, authority or job engine unavailable; retry the request.",
+            "description": "Owner, authority, decision ledger, or job engine unavailable (`context.reason_code`, `Retry-After`); retry the request.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -18765,6 +19211,10 @@
     {
       "description": "Governance projections of stored kernel documents.",
       "name": "governance"
+    },
+    {
+      "description": "Canonical authority administration grants and revocations (ADR 0176).",
+      "name": "authority"
     }
   ]
 }

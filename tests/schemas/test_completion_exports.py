@@ -30,7 +30,20 @@ def checks():
     schema = load_schema(API_SCHEMA_DIR / "completion-exports.schema.json")
     registry = api_referencing_registry()
     return {name: validator_for_api_def(schema, name, registry) for name in
-            ("CompletionExportRequest", "CompletionExportJob", "CompletionExportJobList")}
+            ("CompletionExportOptions", "CompletionExportRequest", "CompletionExportJob", "CompletionExportJobList")}
+
+
+def test_options_exposes_closed_unique_vocabulary_arrays(checks):
+    check = checks["CompletionExportOptions"]
+    check.validate({"purposes": ["quality-review", "oversight-transfer"],
+                    "recipientClasses": ["internal", "oversight"]})
+    check.validate({"purposes": [], "recipientClasses": []})
+    assert not check.is_valid({"purposes": ["quality-review"]})
+    assert not check.is_valid({"recipientClasses": ["oversight"]})
+    assert not check.is_valid({"purposes": ["quality-review"], "recipientClasses": ["oversight"], "extra": 1})
+    assert not check.is_valid({"purposes": ["quality-review", "quality-review"], "recipientClasses": ["oversight"]})
+    assert not check.is_valid({"purposes": ["Bad_Value"], "recipientClasses": ["oversight"]})
+    assert not check.is_valid({"purposes": ["quality-review"], "recipientClasses": ["oversight\n"]})
 
 
 def test_job_variants_are_complete_closed_objects_for_maintained_generators():

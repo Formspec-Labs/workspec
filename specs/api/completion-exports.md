@@ -1,8 +1,10 @@
 # Browser completion exports
 
-`completion-exports.schema.json` (`https://schemas.formspec.io/wos-api/completion-exports/v1`) defines `CompletionExportRequest`, `CompletionExportJob`, `CompletionExportJobList` and `CompletionExportRequestConflict`. The server runs exports as durable jobs so the requester can close the browser and check the result later.
+`completion-exports.schema.json` (`https://schemas.formspec.io/wos-api/completion-exports/v1`) defines `CompletionExportOptions`, `CompletionExportRequest`, `CompletionExportJob`, `CompletionExportJobList` and `CompletionExportRequestConflict`. The server runs exports as durable jobs so the requester can close the browser and check the result later.
 
 ## Requests
+
+`GET /api/v1/completion-exports/options` returns a closed `CompletionExportOptions` document (`Cache-Control: no-store`) listing the deployment's declared `purposes` and `recipientClasses` for the admitted scope so clients render declared options without hard-coding deployment vocabulary members.
 
 `POST /api/v1/completion-exports` accepts a closed `CompletionExportRequest` with `processId`, `purpose` and `recipientClass`. `processId` selects an actual workflow process by full process URN or bare process TypeID using `ProcessPathId` from `_common.schema.json`. The authenticated requester declares a purpose and a recipient class, for example `quality-review` and `oversight`. The server MUST validate each declaration against its respective deployment vocabulary and record it with the authorization decision. The declarations grant no authority.
 
