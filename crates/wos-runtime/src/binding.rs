@@ -302,6 +302,19 @@ pub trait ContractBindingAdapter: Send + Sync {
         response: &serde_json::Value,
     ) -> Result<SubmissionValidation, BindingError>;
 
+    /// Validate a completed submission from its original raw JSON text.
+    ///
+    /// Preserves exact decimal/integer digits when the adapter evaluates raw
+    /// JSON directly; defaults to [`Self::validate_submission`] for legacy
+    /// adapters that consume only `serde_json::Value`.
+    fn validate_submission_json(
+        &self,
+        task: &ActiveTask,
+        response: &integrity_canonical::ResponseJson,
+    ) -> Result<SubmissionValidation, BindingError> {
+        self.validate_submission(task, response.value())
+    }
+
     /// Compute the proposed case mutation for a completed submission.
     fn compute_case_mutation(
         &self,

@@ -1290,6 +1290,16 @@ pub trait FormspecProcessor {
         response: &serde_json::Value,
     ) -> Result<Option<Vec<serde_json::Value>>, BindingError>;
 
+    /// Validate a filed Response from its original raw JSON text, preserving exact decimal digits.
+    fn validate_response_definition_json(
+        &self,
+        definition_url: &str,
+        definition_version: &str,
+        response: &ResponseJson,
+    ) -> Result<Option<Vec<serde_json::Value>>, BindingError> {
+        self.validate_response_definition(definition_url, definition_version, response.value())
+    }
+
     /// Validate a complete Response using the actual task context.
     ///
     /// The default preserves existing processors. Hosts that qualify named
@@ -1310,6 +1320,20 @@ pub trait FormspecProcessor {
             task.definition_version.as_deref().unwrap_or_default(),
             response,
         )
+    }
+
+    /// Validate a complete Response using the actual task context and exact raw JSON text.
+    ///
+    /// Preserves exact filed decimal values without routing through `serde_json::Value` (`f64`).
+    ///
+    /// # Errors
+    /// Returns missing data or the processor's Definition validation error.
+    fn validate_task_definition_json(
+        &self,
+        task: &ActiveTask,
+        response: &ResponseJson,
+    ) -> Result<Option<Vec<serde_json::Value>>, BindingError> {
+        self.validate_task_definition(task, response.value())
     }
 
     /// Map a complete Response using the actual task context.
@@ -1576,7 +1600,21 @@ where
         task: &ActiveTask,
         previously_submitted_response: &serde_json::Value,
     ) -> Result<SubmissionValidation, BindingError> {
-        self.run_validation(task, previously_submitted_response)
+        self.run_validation(task, previously_submitted_response, None)
+    }
+
+    /// Re-validate a previously submitted response from its exact raw JSON text, preserving
+    /// exact filed decimal precision.
+    pub fn revalidate_submission_json(
+        &self,
+        task: &ActiveTask,
+        previously_submitted_response: &ResponseJson,
+    ) -> Result<SubmissionValidation, BindingError> {
+        self.run_validation(
+            task,
+            previously_submitted_response.value(),
+            Some(previously_submitted_response),
+        )
     }
 
     /// Shared validation logic used by both `validate_submission` and
@@ -1586,6 +1624,7 @@ where
         &self,
         task: &ActiveTask,
         response: &serde_json::Value,
+        raw_response: Option<&ResponseJson>,
     ) -> Result<SubmissionValidation, BindingError> {
         let mut errors = validate_required_envelope_fields(response)?;
         errors.extend(self.processor.validate_envelope(response)?);
@@ -1601,7 +1640,10 @@ where
 
         let mut validation_results = None;
         let definition_valid = if errors.is_empty() && pin_match {
-            validation_results = self.processor.validate_task_definition(task, response)?;
+            validation_results = match raw_response {
+                Some(raw) => self.processor.validate_task_definition_json(task, raw)?,
+                None => self.processor.validate_task_definition(task, response)?,
+            };
             validation_results
                 .as_ref()
                 .is_none_or(std::vec::Vec::is_empty)
@@ -1660,7 +1702,15 @@ where
         task: &ActiveTask,
         response: &serde_json::Value,
     ) -> Result<SubmissionValidation, BindingError> {
-        self.run_validation(task, response)
+        self.run_validation(task, response, None)
+    }
+
+    fn validate_submission_json(
+        &self,
+        task: &ActiveTask,
+        response: &ResponseJson,
+    ) -> Result<SubmissionValidation, BindingError> {
+        self.run_validation(task, response.value(), Some(response))
     }
 
     fn compute_case_mutation(

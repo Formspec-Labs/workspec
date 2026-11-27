@@ -290,3 +290,331 @@ fn stored_subject_survives_native_task_recheck() {
     assert!(matches!(processor.validate_task_definition(&task, &changed),
         Err(BindingError::Unsupported(_))));
 }
+
+fn registry_doc_bytes(entries: Value) -> Vec<u8> {
+    serde_json::to_vec(&json!({
+        "$formspecRegistry": "1.1",
+        "publisher": {
+            "name": "Example Registry Publisher",
+            "url": "https://example.test/registry"
+        },
+        "published": "2026-01-01T00:00:00Z",
+        "entries": entries
+    }))
+    .unwrap()
+}
+
+#[test]
+fn selected_recheck_enforces_pinned_registry_extensions_and_rejects_invalid_registries() {
+    let def = definition(
+        json!([
+            {
+                "key": "code",
+                "type": "field",
+                "dataType": "string",
+                "label": "Code",
+                "extensions": { "x-test-code": true }
+            }
+        ]),
+        json!([]),
+    );
+    let registry_bytes = registry_doc_bytes(json!([
+        {
+            "name": "x-test-code",
+            "category": "dataType",
+            "baseType": "string",
+            "version": "1.0.0",
+            "status": "stable",
+            "description": "Patterned alphanumeric code",
+            "compatibility": { "formspecVersion": ">=1.0.0 <2.0.0" },
+            "metadata": { "displayName": "Test Code" },
+            "constraints": { "pattern": "^[A-Z]{2}-[0-9]{3}$" }
+        }
+    ]));
+
+    // Without pinned registries, Definition admission fails closed on the unresolved extension.
+    let missing = ImmutableFormspecProcessor::new(&[SelectedDocument {
+        kind: SelectedDocumentKind::Definition,
+        url: URL.into(),
+        version: VERSION.into(),
+        bytes: serde_json::to_vec(&def).unwrap(),
+        definition: None,
+    }]);
+    assert!(missing.is_err());
+
+    // With pinned registry, valid answers pass with zero UNRESOLVED_EXTENSION findings.
+    let processor = ImmutableFormspecProcessor::new(&[
+        SelectedDocument {
+            kind: SelectedDocumentKind::Registry,
+            url: "urn:test:registry:codes".into(),
+            version: "1.0.0".into(),
+            bytes: registry_bytes.clone(),
+            definition: None,
+        },
+        SelectedDocument {
+            kind: SelectedDocumentKind::Definition,
+            url: URL.into(),
+            version: VERSION.into(),
+            bytes: serde_json::to_vec(&def).unwrap(),
+            definition: None,
+        },
+    ])
+    .unwrap()
+    .with_clock(Clock);
+    assert_eq!(
+        processor
+            .validate_response_definition(URL, VERSION, &json!({"data": {"code": "AB-123"}}))
+            .unwrap(),
+        None
+    );
+
+    // Violating the pinned registry pattern produces PATTERN_MISMATCH (never UNRESOLVED_EXTENSION).
+    let findings = processor
+        .validate_response_definition(URL, VERSION, &json!({"data": {"code": "bad"}}))
+        .unwrap()
+        .unwrap();
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0]["code"], "PATTERN_MISMATCH");
+    assert_eq!(findings[0]["path"], "code");
+
+    // Duplicate extension entries across pinned registries fail closed.
+    let dup = ImmutableFormspecProcessor::new(&[
+        SelectedDocument {
+            kind: SelectedDocumentKind::Registry,
+            url: "urn:test:registry:a".into(),
+            version: "1.0.0".into(),
+            bytes: registry_bytes.clone(),
+            definition: None,
+        },
+        SelectedDocument {
+            kind: SelectedDocumentKind::Registry,
+            url: "urn:test:registry:b".into(),
+            version: "1.0.0".into(),
+            bytes: registry_bytes,
+            definition: None,
+        },
+    ]);
+    assert!(dup.is_err());
+
+    // Unsupported constraint keys fail closed.
+    let unsupported = registry_doc_bytes(json!([
+        {
+            "name": "x-test-unsupported",
+            "category": "dataType",
+            "version": "1.0.0",
+            "status": "stable",
+            "description": "Unsupported constraint key",
+            "compatibility": { "formspecVersion": ">=1.0.0 <2.0.0" },
+            "constraints": { "minLength": 2 }
+        }
+    ]));
+    assert!(
+        ImmutableFormspecProcessor::new(&[SelectedDocument {
+            kind: SelectedDocumentKind::Registry,
+            url: "urn:test:registry:unsupported".into(),
+            version: "1.0.0".into(),
+            bytes: unsupported,
+            definition: None,
+        }])
+        .is_err()
+    );
+}
+
+#[test]
+fn selected_recheck_preserves_exact_28_digit_decimals_against_exact_registry_bounds() {
+    let def = definition(
+        json!([
+            {
+                "key": "rate",
+                "type": "field",
+                "dataType": "decimal",
+                "label": "Rate",
+                "extensions": { "x-test-exact-rate": true }
+            }
+        ]),
+        json!([]),
+    );
+    // Use raw JSON text so exact 28-digit bounds are never routed through f64.
+    let registry_raw = br#"{
+        "$formspecRegistry": "1.1",
+        "publisher": {
+            "name": "Example Registry Publisher",
+            "url": "https://example.test/registry"
+        },
+        "published": "2026-01-01T00:00:00Z",
+        "entries": [
+            {
+                "name": "x-test-exact-rate",
+                "category": "dataType",
+                "version": "1.0.0",
+                "status": "stable",
+                "description": "High-precision decimal bound",
+                "compatibility": { "formspecVersion": ">=1.0.0 <2.0.0" },
+                "baseType": "decimal",
+                "constraints": {
+                    "minimum": 0.1234567890123456789012345678,
+                    "maximum": 0.1234567890123456789012345678
+                }
+            }
+        ]
+    }"#;
+
+    let processor = ImmutableFormspecProcessor::new(&[
+        SelectedDocument {
+            kind: SelectedDocumentKind::Registry,
+            url: "urn:test:registry:exact".into(),
+            version: "1.0.0".into(),
+            bytes: registry_raw.to_vec(),
+            definition: None,
+        },
+        SelectedDocument {
+            kind: SelectedDocumentKind::Definition,
+            url: URL.into(),
+            version: VERSION.into(),
+            bytes: serde_json::to_vec(&def).unwrap(),
+            definition: None,
+        },
+    ])
+    .unwrap()
+    .with_clock(Clock);
+
+    let binding = wos_formspec_binding::FormspecBinding::new(processor.clone());
+    let task: wos_core::instance::ActiveTask = serde_json::from_value(json!({
+        "taskId": "exact-decimal-task",
+        "taskRef": "review",
+        "status": "assigned",
+        "binding": "formspec",
+        "definitionUrl": URL,
+        "definitionVersion": VERSION,
+        "createdAt": "2026-01-01T00:00:00Z",
+        "updatedAt": "2026-01-01T00:00:00Z"
+    }))
+    .unwrap();
+
+    // Both numbers collapse to the same IEEE-754 f64; exact JSON must distinguish digit 28.
+    let exact_ok = integrity_canonical::ResponseJson::parse(format!(
+        r#"{{"$formspecResponse":"1.0","definitionUrl":"{URL}","definitionVersion":"{VERSION}","status":"completed","authored":"2026-01-01T00:00:00Z","data":{{"rate":0.1234567890123456789012345678}}}}"#
+    ))
+    .unwrap();
+    let exact_over = integrity_canonical::ResponseJson::parse(format!(
+        r#"{{"$formspecResponse":"1.0","definitionUrl":"{URL}","definitionVersion":"{VERSION}","status":"completed","authored":"2026-01-01T00:00:00Z","data":{{"rate":0.1234567890123456789012345679}}}}"#
+    ))
+    .unwrap();
+
+    assert_eq!(
+        processor
+            .validate_response_definition_json(URL, VERSION, &exact_ok)
+            .unwrap(),
+        None
+    );
+    let over_findings = processor
+        .validate_response_definition_json(URL, VERSION, &exact_over)
+        .unwrap()
+        .unwrap();
+    assert_eq!(over_findings.len(), 1);
+    assert_eq!(over_findings[0]["code"], "RANGE_OVERFLOW");
+    assert_eq!(over_findings[0]["path"], "rate");
+
+    let ok_outcome = wos_runtime::ContractBindingAdapter::validate_submission_json(
+        &binding, &task, &exact_ok,
+    )
+    .unwrap();
+    assert!(ok_outcome.validation_outcome.definition_valid);
+
+    let over_outcome = wos_runtime::ContractBindingAdapter::validate_submission_json(
+        &binding,
+        &task,
+        &exact_over,
+    )
+    .unwrap();
+    assert!(!over_outcome.validation_outcome.definition_valid);
+    assert_eq!(
+        over_outcome.validation_outcome.validation_results.unwrap()[0]["code"],
+        "RANGE_OVERFLOW"
+    );
+}
+
+#[test]
+fn selected_recheck_enforces_trusted_remote_option_lists_and_fails_closed_when_absent_or_tampered() {
+    let def = json!({
+        "$formspec": "1.0",
+        "url": URL,
+        "version": VERSION,
+        "status": "draft",
+        "title": "Remote options task",
+        "optionSets": {
+            "regions": {
+                "source": "https://example.test/options/regions",
+                "valueField": "code",
+                "labelField": "name"
+            }
+        },
+        "items": [
+            {
+                "key": "region",
+                "type": "field",
+                "dataType": "choice",
+                "label": "Region",
+                "optionSet": "regions"
+            },
+            {
+                "key": "category",
+                "type": "field",
+                "dataType": "choice",
+                "label": "Category",
+                "options": "urn:example:options:categories"
+            }
+        ]
+    });
+
+    // Without resolved option lists, remote option fields fail closed with OPTIONS_UNAVAILABLE.
+    let bare = processor(&def);
+    let missing = bare
+        .validate_response_definition(
+            URL,
+            VERSION,
+            &json!({"data": {"region": "north", "category": "cat-a"}}),
+        )
+        .unwrap()
+        .unwrap();
+    assert_eq!(missing.len(), 2);
+    assert!(missing.iter().all(|f| f["code"] == "OPTIONS_UNAVAILABLE"));
+
+    // With trusted resolved option lists pinned by snapshot_digest(), valid values pass and out-of-list values fail TYPE_MISMATCH.
+    let lists = formspec_eval::ResolvedOptionLists::new()
+        .with_option_set("regions", ["north", "south"])
+        .with_uri("urn:example:options:categories", ["cat-a", "cat-b"]);
+    let digest = lists.snapshot_digest().unwrap();
+
+    let trusted = bare
+        .clone()
+        .with_trusted_resolved_option_lists(lists.clone(), &digest)
+        .unwrap();
+    assert_eq!(
+        trusted
+            .validate_response_definition(
+                URL,
+                VERSION,
+                &json!({"data": {"region": "north", "category": "cat-a"}}),
+            )
+            .unwrap(),
+        None
+    );
+    let invalid = trusted
+        .validate_response_definition(
+            URL,
+            VERSION,
+            &json!({"data": {"region": "west", "category": "cat-z"}}),
+        )
+        .unwrap()
+        .unwrap();
+    assert_eq!(invalid.len(), 2);
+    assert!(invalid.iter().all(|f| f["code"] == "TYPE_MISMATCH"));
+
+    // A tampered option list against the pinned digest fails closed.
+    let tampered = lists.with_option_set("regions", ["north", "south", "west"]);
+    let err = bare
+        .with_trusted_resolved_option_lists(tampered, &digest)
+        .unwrap_err();
+    assert!(matches!(err, BindingError::InvalidInput(msg) if msg.contains("OPTIONS_UNAVAILABLE")));
+}

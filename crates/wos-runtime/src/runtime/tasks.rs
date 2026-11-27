@@ -338,7 +338,7 @@ impl WosRuntime {
             .get(binding)
             .ok_or_else(|| RuntimeError::UnsupportedBinding(binding.to_string()))?;
         self.require_native_task_binding(super::NativeTaskBindingOperation::Validate, binding)?;
-        let validation = adapter.validate_submission(&task, response.value())?;
+        let validation = adapter.validate_submission_json(&task, &response)?;
         let mut provenance = vec![ProvenanceRecord::task_lifecycle(
             &minter,
             ProvenanceKind::TaskResponseSubmitted,

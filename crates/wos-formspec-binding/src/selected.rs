@@ -1,11 +1,18 @@
 // Rust guideline compliant 2026-02-21
 //! Executes immutable selected documents through maintained native Formspec APIs.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
+    sync::Arc,
+};
 
 use formspec_core::{DocumentType, MappingDirection, MappingDocument};
-use formspec_eval::{EvalContext, EvalOptions, EvalTrigger, filed_response_data_matches};
+use formspec_eval::{
+    EvalTrigger, ResolvedOptionLists, exact_json::Value as ExactValue, filed_response_data_matches,
+    recheck_eval_options, validated_extension_constraints_from_registry_documents,
+};
 use formspec_lint::{LintOptions, LintSeverity};
+use integrity_canonical::ResponseJson;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
@@ -34,13 +41,13 @@ pub struct DefinitionSelection {
 pub struct SelectedDocument {
     /// Owning native document kind.
     pub kind: SelectedDocumentKind,
-    /// Definition URL or external Mapping resolution locator.
+    /// Definition URL, Mapping locator, or Registry locator.
     pub url: String,
     /// Exact selected version.
     pub version: String,
     /// Complete original JSON bytes.
     pub bytes: Vec<u8>,
-    /// Mandatory exact Definition pairing for a Mapping.
+    /// Mandatory exact Definition pairing for a Mapping; optional scoping for a Registry.
     pub definition: Option<DefinitionSelection>,
 }
 
@@ -51,6 +58,55 @@ pub enum SelectedDocumentKind {
     Definition,
     /// Native Formspec Mapping.
     Mapping,
+    /// Native Formspec Extension Registry document pinned for authoritative recheck.
+    Registry,
+}
+
+/// Host-supplied remote option lists optionally pinned to an expected canonical digest.
+#[derive(Debug, Clone)]
+struct TrustedOptionSnapshot {
+    lists: ResolvedOptionLists,
+    expected_digest: Option<String>,
+}
+
+impl TrustedOptionSnapshot {
+    fn unpinned(lists: ResolvedOptionLists) -> Self {
+        Self {
+            lists,
+            expected_digest: None,
+        }
+    }
+
+    fn pinned(lists: ResolvedOptionLists, expected_digest: String) -> Result<Self, BindingError> {
+        let snapshot = Self {
+            lists,
+            expected_digest: Some(expected_digest),
+        };
+        snapshot.verify()?;
+        Ok(snapshot)
+    }
+
+    fn verify(&self) -> Result<ResolvedOptionLists, BindingError> {
+        if let Some(expected) = &self.expected_digest {
+            let actual = self.lists.snapshot_digest().map_err(|error| {
+                invalid(format!("resolved option snapshot digest failed: {error}"))
+            })?;
+            if actual != *expected {
+                return Err(invalid(
+                    "OPTIONS_UNAVAILABLE: resolved option snapshot digest mismatch",
+                ));
+            }
+        }
+        Ok(self.lists.clone())
+    }
+}
+
+#[derive(Debug, Clone)]
+struct SelectedDefinition {
+    json: Value,
+    exact: ExactValue,
+    registry_documents: Vec<ExactValue>,
+    resolved_option_lists: Option<TrustedOptionSnapshot>,
 }
 
 #[derive(Debug, Clone)]
@@ -61,12 +117,15 @@ struct SelectedMapping {
 
 /// Native Formspec processor with fixed selected documents and an injected clock.
 ///
-/// Native evaluation is limited to self-contained Definitions. External instance,
-/// extension-provider and changed-Response reconstruction requirements refuse.
+/// Native evaluation is limited to self-contained Definitions plus explicitly
+/// pinned Extension Registry documents and host-supplied remote option lists.
+/// External instance, module, and changed-Response reconstruction requirements refuse.
 #[derive(Clone)]
 pub struct ImmutableFormspecProcessor {
-    definitions: BTreeMap<(String, String), Value>,
+    definitions: BTreeMap<(String, String), SelectedDefinition>,
     mappings: BTreeMap<String, SelectedMapping>,
+    registry_documents: Vec<ExactValue>,
+    resolved_option_lists: Option<TrustedOptionSnapshot>,
     clock: Option<Arc<dyn Clock + Send + Sync>>,
 }
 
@@ -76,6 +135,11 @@ impl std::fmt::Debug for ImmutableFormspecProcessor {
             .debug_struct("ImmutableFormspecProcessor")
             .field("definitions", &self.definitions.keys())
             .field("mappings", &self.mappings.keys())
+            .field("registries", &self.registry_documents.len())
+            .field(
+                "resolved_option_lists_bound",
+                &self.resolved_option_lists.is_some(),
+            )
             .field("clock_bound", &self.clock.is_some())
             .finish()
     }
@@ -89,18 +153,71 @@ impl ImmutableFormspecProcessor {
     /// Admits exact selected documents without fetching or rewriting them.
     ///
     /// # Errors
-    /// Refuses invalid documents, duplicate identities, ambiguous locators or pairing.
+    /// Refuses invalid documents, duplicate identities, invalid/duplicate registry
+    /// constraints, ambiguous locators or pairing.
     pub fn new(documents: &[SelectedDocument]) -> Result<Self, BindingError> {
-        let mut definitions = BTreeMap::new();
+        let mut global_registries_json = Vec::new();
+        let mut global_registries_exact = Vec::new();
+        let mut scoped_registries_json: BTreeMap<(String, String), Vec<Value>> = BTreeMap::new();
+        let mut scoped_registries_exact: BTreeMap<(String, String), Vec<ExactValue>> =
+            BTreeMap::new();
+        let mut seen_registries: BTreeSet<(Option<(String, String)>, String, String)> =
+            BTreeSet::new();
+
+        for selected in documents
+            .iter()
+            .filter(|document| document.kind == SelectedDocumentKind::Registry)
+        {
+            let (document, exact) = parse_registry(selected)?;
+            admit(&document, DocumentType::Registry, None, &[])?;
+            let scope = selected
+                .definition
+                .as_ref()
+                .map(|pin| (pin.url.clone(), pin.version.clone()));
+            if !seen_registries.insert((
+                scope.clone(),
+                selected.url.clone(),
+                selected.version.clone(),
+            )) {
+                return Err(invalid("duplicate selected Registry identity"));
+            }
+            if let Some(pin) = scope {
+                scoped_registries_json
+                    .entry(pin.clone())
+                    .or_default()
+                    .push(document);
+                scoped_registries_exact.entry(pin).or_default().push(exact);
+            } else {
+                global_registries_json.push(document);
+                global_registries_exact.push(exact);
+            }
+        }
+        validated_extension_constraints_from_registry_documents(&global_registries_exact)
+            .map_err(|error| invalid(format!("invalid pinned registry documents: {error}")))?;
+
+        let mut definitions: BTreeMap<(String, String), SelectedDefinition> = BTreeMap::new();
         for selected in documents
             .iter()
             .filter(|document| document.kind == SelectedDocumentKind::Definition)
         {
-            let document = parse(selected)?;
+            let (document, exact) = parse_exact(selected)?;
             if selected.definition.is_some() || document["url"] != selected.url {
                 return Err(invalid("selected Definition identity or pairing differs"));
             }
-            admit(&document, DocumentType::Definition, None)?;
+            let pin = (selected.url.clone(), selected.version.clone());
+            let mut lint_registries = global_registries_json.clone();
+            if let Some(scoped) = scoped_registries_json.get(&pin) {
+                lint_registries.extend(scoped.iter().cloned());
+            }
+            let scoped_exact = scoped_registries_exact.remove(&pin).unwrap_or_default();
+            if !scoped_exact.is_empty() {
+                let mut combined_exact = global_registries_exact.clone();
+                combined_exact.extend(scoped_exact.iter().cloned());
+                validated_extension_constraints_from_registry_documents(&combined_exact).map_err(
+                    |error| invalid(format!("invalid pinned registry documents: {error}")),
+                )?;
+            }
+            admit(&document, DocumentType::Definition, None, &lint_registries)?;
             for field in ["instances", "extensions", "modules"] {
                 if document.get(field).is_some_and(nonempty) {
                     return Err(BindingError::Unsupported(format!(
@@ -120,12 +237,24 @@ impl ImmutableFormspecProcessor {
                 admit_expression(&expression.expression, true)?;
             }
             if definitions
-                .insert((selected.url.clone(), selected.version.clone()), document)
+                .insert(
+                    pin,
+                    SelectedDefinition {
+                        json: document,
+                        exact,
+                        registry_documents: scoped_exact,
+                        resolved_option_lists: None,
+                    },
+                )
                 .is_some()
             {
                 return Err(invalid("duplicate selected Definition identity"));
             }
         }
+        if !scoped_registries_exact.is_empty() {
+            return Err(invalid("Registry Definition is not selected"));
+        }
+
         let mut mappings = BTreeMap::new();
         for selected in documents
             .iter()
@@ -148,7 +277,7 @@ impl ImmutableFormspecProcessor {
                     "selected Mapping Definition pins or version range differ",
                 ));
             }
-            admit(&document, DocumentType::Mapping, Some(definition))?;
+            admit(&document, DocumentType::Mapping, Some(&definition.json), &[])?;
             admit_mapping_expressions(&document)?;
             let parsed =
                 formspec_core::parse_mapping_document_from_value(&document).map_err(invalid)?;
@@ -168,6 +297,8 @@ impl ImmutableFormspecProcessor {
         Ok(Self {
             definitions,
             mappings,
+            registry_documents: global_registries_exact,
+            resolved_option_lists: None,
             clock: None,
         })
     }
@@ -177,6 +308,92 @@ impl ImmutableFormspecProcessor {
     pub fn with_clock(mut self, clock: impl Clock + Send + Sync + 'static) -> Self {
         self.clock = Some(Arc::new(clock));
         self
+    }
+
+    /// Pins additional raw Extension Registry JSON bytes for authoritative rechecks.
+    ///
+    /// Preserves exact decimal bounds from raw JSON bytes and fails closed on
+    /// malformed registries, duplicate extension names, or unsupported constraints.
+    ///
+    /// # Errors
+    /// Refuses invalid registry documents, duplicate extension names, or unsupported constraints.
+    pub fn with_registry_documents(
+        mut self,
+        registry_documents_bytes: &[&[u8]],
+    ) -> Result<Self, BindingError> {
+        let mut combined = self.registry_documents.clone();
+        let mut added = Vec::with_capacity(registry_documents_bytes.len());
+        for raw in registry_documents_bytes {
+            let doc_json: Value =
+                serde_json::from_slice(raw).map_err(|error| invalid(error.to_string()))?;
+            admit(&doc_json, DocumentType::Registry, None, &[])?;
+            let exact: ExactValue =
+                serde_json::from_slice(raw).map_err(|error| invalid(error.to_string()))?;
+            combined.push(exact.clone());
+            added.push(exact);
+        }
+        validated_extension_constraints_from_registry_documents(&combined)
+            .map_err(|error| invalid(format!("invalid pinned registry documents: {error}")))?;
+        for selected_def in self.definitions.values() {
+            if !selected_def.registry_documents.is_empty() {
+                let mut per_def = combined.clone();
+                per_def.extend(selected_def.registry_documents.iter().cloned());
+                validated_extension_constraints_from_registry_documents(&per_def).map_err(
+                    |error| invalid(format!("invalid pinned registry documents: {error}")),
+                )?;
+            }
+        }
+        self.registry_documents.extend(added);
+        Ok(self)
+    }
+
+    /// Binds host-supplied resolved option lists for remote `optionSets` and URI `Item.options`.
+    #[must_use]
+    pub fn with_resolved_option_lists(
+        mut self,
+        resolved_option_lists: ResolvedOptionLists,
+    ) -> Self {
+        self.resolved_option_lists = Some(TrustedOptionSnapshot::unpinned(resolved_option_lists));
+        self
+    }
+
+    /// Binds host-supplied resolved option lists verified against an expected canonical digest.
+    ///
+    /// # Errors
+    /// Refuses snapshots whose canonical [`ResolvedOptionLists::snapshot_digest`] does not match.
+    pub fn with_trusted_resolved_option_lists(
+        mut self,
+        resolved_option_lists: ResolvedOptionLists,
+        expected_digest: &str,
+    ) -> Result<Self, BindingError> {
+        let snapshot =
+            TrustedOptionSnapshot::pinned(resolved_option_lists, expected_digest.to_owned())?;
+        self.resolved_option_lists = Some(snapshot);
+        Ok(self)
+    }
+
+    /// Binds resolved option lists (optionally digest-pinned) to a single selected Definition.
+    ///
+    /// # Errors
+    /// Refuses unselected Definitions or mismatched snapshot digests.
+    pub fn with_definition_resolved_option_lists(
+        mut self,
+        definition: &DefinitionSelection,
+        resolved_option_lists: ResolvedOptionLists,
+        expected_digest: Option<&str>,
+    ) -> Result<Self, BindingError> {
+        let selected = self
+            .definitions
+            .get_mut(&(definition.url.clone(), definition.version.clone()))
+            .ok_or_else(|| invalid("task Definition is not selected"))?;
+        let snapshot = match expected_digest {
+            Some(digest) => {
+                TrustedOptionSnapshot::pinned(resolved_option_lists, digest.to_owned())?
+            }
+            None => TrustedOptionSnapshot::unpinned(resolved_option_lists),
+        };
+        selected.resolved_option_lists = Some(snapshot);
+        Ok(self)
     }
 
     /// Checks every task route and its actual Definition/Mapping relationship.
@@ -286,7 +503,28 @@ impl ImmutableFormspecProcessor {
     }
 
     fn evaluate(&self, url: &str, version: &str, response: &Value) -> Result<Value, BindingError> {
-        let definition = self
+        let exact_response: ExactValue = response.clone().into();
+        self.evaluate_exact(url, version, &exact_response)
+    }
+
+    fn evaluate_raw_json(
+        &self,
+        url: &str,
+        version: &str,
+        response: &ResponseJson,
+    ) -> Result<Value, BindingError> {
+        let exact_response: ExactValue = serde_json::from_str(response.as_str())
+            .map_err(|error| invalid(format!("invalid exact Response JSON: {error}")))?;
+        self.evaluate_exact(url, version, &exact_response)
+    }
+
+    fn evaluate_exact(
+        &self,
+        url: &str,
+        version: &str,
+        response: &ExactValue,
+    ) -> Result<Value, BindingError> {
+        let selected_def = self
             .definitions
             .get(&(url.into(), version.into()))
             .ok_or_else(|| invalid("task Definition is not selected"))?;
@@ -298,28 +536,38 @@ impl ImmutableFormspecProcessor {
             .map_err(|error| invalid(error.to_string()))?
             .format(&Rfc3339)
             .map_err(|error| invalid(error.to_string()))?;
-        let fields = response["data"]
-            .as_object()
+        let fields: HashMap<String, ExactValue> = response
+            .get("data")
+            .and_then(ExactValue::as_object)
             .ok_or_else(|| invalid("Response data must be an object"))?
             .iter()
-            .map(|(key, value)| (key.clone(), value.clone().into()))
+            .map(|(key, value)| (key.clone(), value.clone()))
             .collect();
-        let definition = definition.clone().into();
-        let stored_subject = response.get("subject").cloned().map(Into::into);
-        let subject = formspec_eval::EvalSubject::for_response(&definition, stored_subject.as_ref());
-        let result = formspec_eval::evaluate(
-            &definition,
-            &fields,
-            &EvalOptions::default()
-                .trigger(EvalTrigger::Submit)
-                .context(EvalContext {
-                    now_iso: Some(now),
-                    subject,
-                    ..EvalContext::default()
-                }),
-        );
-        let filed = formspec_eval::exact_json::Value::Object(fields.into_iter().collect());
-        if !result.refused && !filed_response_data_matches(&definition, &filed, &result.data) {
+        let stored_subject = response.get("subject");
+        let subject = formspec_eval::EvalSubject::for_response(&selected_def.exact, stored_subject);
+        let mut registries = self.registry_documents.clone();
+        registries.extend(selected_def.registry_documents.iter().cloned());
+        let resolved_options = match selected_def
+            .resolved_option_lists
+            .as_ref()
+            .or(self.resolved_option_lists.as_ref())
+        {
+            Some(snapshot) => snapshot.verify()?,
+            None => ResolvedOptionLists::default(),
+        };
+        let options = recheck_eval_options(
+            EvalTrigger::Submit,
+            Some(now),
+            HashMap::new(),
+            &registries,
+            resolved_options,
+        )
+        .map_err(|error| invalid(format!("invalid pinned registry documents: {error}")))?
+        .with_subject(subject);
+        let result = formspec_eval::evaluate(&selected_def.exact, &fields, &options);
+        let filed = ExactValue::Object(fields.into_iter().collect());
+        if !result.refused && !filed_response_data_matches(&selected_def.exact, &filed, &result.data)
+        {
             return Err(BindingError::Unsupported(
                 "filed Response data differs from its evaluation".into(),
             ));
@@ -330,7 +578,6 @@ impl ImmutableFormspecProcessor {
                 result.diagnostics
             )));
         }
-        // This legacy port accepts already-parsed JSON and consumes the validation report.
         serde_json::from_str(&formspec_eval::evaluation_result_to_json_value(&result).to_string())
             .map_err(|error| invalid(error.to_string()))
     }
@@ -343,9 +590,10 @@ impl FormspecProcessor for ImmutableFormspecProcessor {
                 response["definitionUrl"].as_str(),
                 response["definitionVersion"].as_str(),
             ) {
-                (Some(url), Some(version)) => {
-                    self.definitions.get(&(url.into(), version.into())).cloned()
-                }
+                (Some(url), Some(version)) => self
+                    .definitions
+                    .get(&(url.into(), version.into()))
+                    .map(|selected| selected.json.clone()),
                 _ => None,
             }
         } else {
@@ -379,14 +627,32 @@ impl FormspecProcessor for ImmutableFormspecProcessor {
         response: &Value,
     ) -> Result<Option<Vec<Value>>, BindingError> {
         let evaluation = self.evaluate(url, version, response)?;
-        let errors: Vec<_> = evaluation["validations"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter(|validation| validation["severity"] == "error")
-            .cloned()
-            .collect();
-        Ok((!errors.is_empty()).then_some(errors))
+        Ok(blocking_errors(&evaluation))
+    }
+
+    fn validate_response_definition_json(
+        &self,
+        url: &str,
+        version: &str,
+        response: &ResponseJson,
+    ) -> Result<Option<Vec<Value>>, BindingError> {
+        let evaluation = self.evaluate_raw_json(url, version, response)?;
+        Ok(blocking_errors(&evaluation))
+    }
+
+    fn validate_task_definition_json(
+        &self,
+        task: &ActiveTask,
+        response: &ResponseJson,
+    ) -> Result<Option<Vec<Value>>, BindingError> {
+        if response.value().get("data").is_none() {
+            return Err(invalid("response.data missing"));
+        }
+        self.validate_response_definition_json(
+            task.definition_url.as_deref().unwrap_or_default(),
+            task.definition_version.as_deref().unwrap_or_default(),
+            response,
+        )
     }
 
     fn compute_prefill(
@@ -456,6 +722,17 @@ impl FormspecProcessor for ImmutableFormspecProcessor {
     }
 }
 
+fn blocking_errors(evaluation: &Value) -> Option<Vec<Value>> {
+    let errors: Vec<_> = evaluation["validations"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|validation| validation["severity"] == "error")
+        .cloned()
+        .collect();
+    (!errors.is_empty()).then_some(errors)
+}
+
 fn parse(selected: &SelectedDocument) -> Result<Value, BindingError> {
     let value: Value =
         serde_json::from_slice(&selected.bytes).map_err(|error| invalid(error.to_string()))?;
@@ -466,6 +743,32 @@ fn parse(selected: &SelectedDocument) -> Result<Value, BindingError> {
         return Err(invalid("selected document identity differs"));
     }
     Ok(value)
+}
+
+fn parse_exact(selected: &SelectedDocument) -> Result<(Value, ExactValue), BindingError> {
+    let value = parse(selected)?;
+    let exact: ExactValue =
+        serde_json::from_slice(&selected.bytes).map_err(|error| invalid(error.to_string()))?;
+    Ok((value, exact))
+}
+
+fn parse_registry(selected: &SelectedDocument) -> Result<(Value, ExactValue), BindingError> {
+    let value: Value =
+        serde_json::from_slice(&selected.bytes).map_err(|error| invalid(error.to_string()))?;
+    if selected.url.trim().is_empty()
+        || selected.version.trim().is_empty()
+        || value
+            .get("url")
+            .is_some_and(|actual| actual != selected.url.as_str())
+        || value
+            .get("version")
+            .is_some_and(|actual| actual != selected.version.as_str())
+    {
+        return Err(invalid("selected Registry identity differs"));
+    }
+    let exact: ExactValue =
+        serde_json::from_slice(&selected.bytes).map_err(|error| invalid(error.to_string()))?;
+    Ok((value, exact))
 }
 
 fn nonempty(value: &Value) -> bool {
@@ -498,11 +801,13 @@ fn admit(
     document: &Value,
     expected: DocumentType,
     definition: Option<&Value>,
+    registry_documents: &[Value],
 ) -> Result<(), BindingError> {
     let report = formspec_lint::lint_with_options(
         document,
         &LintOptions {
             definition_document: definition.cloned(),
+            registry_documents: registry_documents.to_vec(),
             ..LintOptions::default()
         },
     );
