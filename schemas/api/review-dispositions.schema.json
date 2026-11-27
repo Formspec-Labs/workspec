@@ -1,0 +1,379 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.formspec.io/wos-api/review-dispositions/v1",
+  "title": "WOS API Review Dispositions",
+  "description": "Closed, domain-neutral public API contract for querying authorized review disposition outcomes and decision-record comments keyed by exact filing identity (`responseId`, `responseHash`) under ADR 0170 and ADR 0172. WOS outcome URIs are deployment-configured and remain outside FormSpec Core ResponseStatus.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/CanonicalDispositionState"
+    },
+    {
+      "$ref": "#/$defs/DispositionMappingStatus"
+    },
+    {
+      "$ref": "#/$defs/DispositionSourceKind"
+    },
+    {
+      "$ref": "#/$defs/DispositionFilingKey"
+    },
+    {
+      "$ref": "#/$defs/DispositionComment"
+    },
+    {
+      "$ref": "#/$defs/ReviewDisposition"
+    },
+    {
+      "$ref": "#/$defs/ReviewDispositionLookupRequest"
+    },
+    {
+      "$ref": "#/$defs/ReviewDispositionQueryRequest"
+    },
+    {
+      "$ref": "#/$defs/ReviewDispositionQueryResponse"
+    }
+  ],
+  "$defs": {
+    "ActorRef": {
+      "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+      "description": "Stable actor reference from the identity/governance subsystem."
+    },
+    "WosResourceUrn": {
+      "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+      "description": "Public WOS API resource URN."
+    },
+    "CanonicalDispositionState": {
+      "type": "string",
+      "enum": [
+        "returned",
+        "accepted",
+        "closed-without-acceptance",
+        "reopened"
+      ],
+      "description": "Closed canonical surface posture derived from a deployment-configured WOS outcome URI. Distinct from FormSpec Core ResponseStatus.",
+      "examples": [
+        "accepted",
+        "returned",
+        "closed-without-acceptance",
+        "reopened"
+      ]
+    },
+    "DispositionMappingStatus": {
+      "type": "string",
+      "enum": [
+        "mapped",
+        "unmapped"
+      ],
+      "description": "Reports whether the deployment's outcome-mapping configuration mapped the recorded outcomeUri to a CanonicalDispositionState (`mapped`) or left it unmapped (`unmapped`, with `state` omitted).",
+      "examples": [
+        "mapped",
+        "unmapped"
+      ]
+    },
+    "DispositionSourceKind": {
+      "type": "string",
+      "enum": [
+        "decision-record",
+        "imported-determination"
+      ],
+      "description": "Identifies whether the disposition was read from a native WOS decision record or a scoped imported determination.",
+      "examples": [
+        "decision-record",
+        "imported-determination"
+      ]
+    },
+    "DispositionFilingKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Exact filing identity pairing a filed Response identifier with the SHA-256 handoff digest of its canonical immutable bytes (ADR 0170).",
+      "required": [
+        "responseId",
+        "responseHash"
+      ],
+      "properties": {
+        "responseId": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Exact filed Response identifier.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "responseHash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Exact SHA-256 handoff hash of the immutable filed Response bytes (ADR 0170)."
+        }
+      },
+      "examples": [
+        {
+          "responseId": "resp_01j9example0000000000000001",
+          "responseHash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        }
+      ]
+    },
+    "DispositionComment": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One authorized review comment extracted from the filing's decision record or imported determination.",
+      "required": [
+        "id",
+        "body",
+        "recordedAt"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Stable identifier of the comment within the decision record.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Authorized human-readable comment recorded with the disposition.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "recordedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when the comment was recorded."
+        },
+        "authorRef": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Optional canonical actor URN that authored the comment."
+        },
+        "provenanceRecordRef": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Optional WOS provenance record URN carrying this decision comment."
+        }
+      },
+      "examples": [
+        {
+          "id": "comment-1",
+          "body": "Supporting verification document requires updated signature date.",
+          "recordedAt": "2026-11-27T12:00:00Z",
+          "authorRef": "actor:human:reviewer-1"
+        }
+      ]
+    },
+    "ReviewDisposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Authorized WOS review disposition and decision-record comments verified against exact filing identity (`responseId`, `responseHash`) under ADR 0170.",
+      "required": [
+        "responseId",
+        "responseHash",
+        "outcomeUri",
+        "mappingStatus",
+        "sourceKind",
+        "decidedAt",
+        "comments"
+      ],
+      "properties": {
+        "responseId": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Exact filed Response identifier verified against the immutable filing record.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "responseHash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Verified SHA-256 handoff hash of the immutable filed Response bytes (ADR 0170)."
+        },
+        "outcomeUri": {
+          "type": "string",
+          "format": "uri",
+          "description": "Deployment-configured WOS outcome URI recorded for this filing.",
+          "x-wos": {
+            "openStringKind": "uri"
+          }
+        },
+        "mappingStatus": {
+          "$ref": "#/$defs/DispositionMappingStatus",
+          "description": "Indicates whether `outcomeUri` mapped to a canonical surface state (`mapped`) or was unmapped in deployment configuration (`unmapped`)."
+        },
+        "state": {
+          "$ref": "#/$defs/CanonicalDispositionState",
+          "description": "Canonical surface disposition posture mapped from `outcomeUri`. Present when `mappingStatus` is `mapped`; omitted when `mappingStatus` is `unmapped`."
+        },
+        "sourceKind": {
+          "$ref": "#/$defs/DispositionSourceKind",
+          "description": "Source of this disposition (`decision-record` or `imported-determination`)."
+        },
+        "decidedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC 3339 timestamp when this disposition took effect."
+        },
+        "decidedBy": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "Optional canonical actor URN responsible for the recorded disposition."
+        },
+        "caseLedgerId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Optional WOS case ledger URN associated with the disposition."
+        },
+        "processId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Optional WOS workflow process URN associated with the disposition."
+        },
+        "provenanceRecordRef": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Optional WOS provenance record URN recording the decision."
+        },
+        "importedSource": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Optional deployment-configured source identifier when `sourceKind` is `imported-determination`.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "comments": {
+          "type": "array",
+          "description": "Authorized comments extracted from the decision record or imported determination. Empty when none were recorded or when `includeComments` is false.",
+          "items": {
+            "$ref": "#/$defs/DispositionComment"
+          }
+        }
+      },
+      "examples": [
+        {
+          "responseId": "resp_01j9example0000000000000001",
+          "responseHash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          "outcomeUri": "https://example.org/outcomes/accepted",
+          "mappingStatus": "mapped",
+          "state": "accepted",
+          "sourceKind": "decision-record",
+          "decidedAt": "2026-11-27T12:00:00Z",
+          "decidedBy": "actor:human:reviewer-1",
+          "comments": []
+        },
+        {
+          "responseId": "resp_01j9example0000000000000002",
+          "responseHash": "sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+          "outcomeUri": "https://example.org/outcomes/custom-hold",
+          "mappingStatus": "unmapped",
+          "sourceKind": "imported-determination",
+          "decidedAt": "2026-11-27T12:15:00Z",
+          "importedSource": "historical-register-import",
+          "comments": []
+        }
+      ]
+    },
+    "ReviewDispositionLookupRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Single-filing exact lookup request keyed by `{responseId, responseHash}`.",
+      "required": [
+        "responseId",
+        "responseHash"
+      ],
+      "properties": {
+        "responseId": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Exact filed Response identifier.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "responseHash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Exact SHA-256 handoff hash of the immutable filed Response bytes (ADR 0170)."
+        },
+        "includeComments": {
+          "type": "boolean",
+          "description": "When false, omits decision-record comments (`comments` returns empty). Defaults to true."
+        }
+      },
+      "examples": [
+        {
+          "responseId": "resp_01j9example0000000000000001",
+          "responseHash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          "includeComments": true
+        }
+      ]
+    },
+    "ReviewDispositionQueryRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Batch lookup request matching `DispositionAuthority` queries over exact `{responseId, responseHash}` filing identities.",
+      "required": [
+        "filings"
+      ],
+      "properties": {
+        "filings": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 200,
+          "description": "Exact filing identities to query within the caller's admitted scope.",
+          "items": {
+            "$ref": "#/$defs/DispositionFilingKey"
+          }
+        },
+        "includeComments": {
+          "type": "boolean",
+          "description": "When false, omits decision-record comments (`comments` returns empty). Defaults to true."
+        }
+      },
+      "examples": [
+        {
+          "filings": [
+            {
+              "responseId": "resp_01j9example0000000000000001",
+              "responseHash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            }
+          ],
+          "includeComments": true
+        }
+      ]
+    },
+    "ReviewDispositionQueryResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Batch response containing only authorized, byte-hash-verified review dispositions matching the requested `{responseId, responseHash}` keys.",
+      "required": [
+        "items"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "description": "Verified, authorized review dispositions for matched filings. Unmatched, wrong-hash, or unauthorized filings are excluded without disclosing existence.",
+          "items": {
+            "$ref": "#/$defs/ReviewDisposition"
+          }
+        }
+      },
+      "examples": [
+        {
+          "items": [
+            {
+              "responseId": "resp_01j9example0000000000000001",
+              "responseHash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+              "outcomeUri": "https://example.org/outcomes/accepted",
+              "mappingStatus": "mapped",
+              "state": "accepted",
+              "sourceKind": "decision-record",
+              "decidedAt": "2026-11-27T12:00:00Z",
+              "comments": []
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

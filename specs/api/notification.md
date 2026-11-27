@@ -66,6 +66,10 @@ The public notification feed endpoints are:
 
 `POST /api/v1/notifications/{id}/read` accepts optional `MarkNotificationReadRequest.readAt`. The server may replace client time with server receipt time. Mark-read is idempotent for the visible read model. `Idempotency-Key` REQUIRED per ADR 0082 D-16 (the status flip is an externally-visible side effect — it changes the unread count and the per-user feed state).
 
+## Send-Time Authorization
+
+Task lifecycle notifications and feed deliveries MUST re-evaluate current recipient authority through the shared authorization coordinator (`task.notify`) immediately before sending. Revoked or unauthorized recipients and indeterminate coordinator outcomes receive zero notification content and zero leaked task, process, or case identifiers. Stale connection state or prior recipient lists MUST NOT substitute for a fresh send-time decision.
+
 ## Non-Goals
 
 The notification feed does not define outbound correspondence, delivery-template rendering, durable audit evidence, or cross-case reporting. Those domains get separate `schemas/api/*.schema.json` files and `specs/api/*.md` specs.

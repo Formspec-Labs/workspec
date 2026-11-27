@@ -15,12 +15,12 @@
     "CursorToken": {
       "type": "string",
       "minLength": 1,
-      "description": "Opaque server-issued token for resuming a cursor-paginated list. Clients MUST NOT parse, persist across sessions, or share it across users.",
+      "description": "Opaque, single-use, server-sealed continuation token bound to scope, principal, query filters, sort order, and issuing deployment. Never a decimal offset or count over unauthorized rows. Clients MUST NOT parse, replay, persist across sessions, or share it across users.",
       "x-wos": {
         "openStringKind": "opaque-token"
       },
       "examples": [
-        "eyJzb3J0S2V5IjoiMjAyNi0wNS0wNVQxMjowMDowMFoifQ"
+        "woscur_v1_opaque_sealed_token_example"
       ]
     },
     "PageLimit": {
@@ -63,11 +63,15 @@
         },
         "cursor": {
           "$ref": "#/$defs/CursorToken",
-          "description": "Opaque token for the next page. Omitted when hasMore is false."
+          "description": "Opaque single-use sealed token for the next page. Omitted when hasMore is false or searchIncomplete is true."
         },
         "hasMore": {
           "type": "boolean",
-          "description": "True when another page is available from the server."
+          "description": "True when another authorized page is confirmed available from the server. False when exhausted or when searchIncomplete is true."
+        },
+        "searchIncomplete": {
+          "type": "boolean",
+          "description": "True when the per-page authorization scan budget was exhausted before establishing whether another authorized page exists. When true, hasMore MUST be false and cursor MUST be omitted; callers retry rather than assuming exhaustion."
         }
       }
     }

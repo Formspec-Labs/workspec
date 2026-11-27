@@ -1994,6 +1994,22 @@
         },
         "type": "object"
       },
+      "CanonicalDispositionState": {
+        "description": "Closed canonical surface posture derived from a deployment-configured WOS outcome URI. Distinct from FormSpec Core ResponseStatus.",
+        "enum": [
+          "returned",
+          "accepted",
+          "closed-without-acceptance",
+          "reopened"
+        ],
+        "examples": [
+          "accepted",
+          "returned",
+          "closed-without-acceptance",
+          "reopened"
+        ],
+        "type": "string"
+      },
       "CaseAlternative": {
         "additionalProperties": false,
         "description": "Closed CaseAlternative shape from Governance native reference execution.",
@@ -4312,6 +4328,111 @@
           "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         ],
         "pattern": "^sha256:[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "DispositionComment": {
+        "additionalProperties": false,
+        "description": "One authorized review comment extracted from the filing's decision record or imported determination.",
+        "examples": [
+          {
+            "authorRef": "actor:human:reviewer-1",
+            "body": "Supporting verification document requires updated signature date.",
+            "id": "comment-1",
+            "recordedAt": "2026-11-27T12:00:00Z"
+          }
+        ],
+        "properties": {
+          "authorRef": {
+            "$ref": "#/components/schemas/ActorRef",
+            "description": "Optional canonical actor URN that authored the comment."
+          },
+          "body": {
+            "description": "Authorized human-readable comment recorded with the disposition.",
+            "minLength": 1,
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "prose"
+            }
+          },
+          "id": {
+            "description": "Stable identifier of the comment within the decision record.",
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          },
+          "provenanceRecordRef": {
+            "$ref": "#/components/schemas/WosResourceUrn",
+            "description": "Optional WOS provenance record URN carrying this decision comment."
+          },
+          "recordedAt": {
+            "description": "UTC RFC 3339 timestamp when the comment was recorded.",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "body",
+          "recordedAt"
+        ],
+        "type": "object"
+      },
+      "DispositionFilingKey": {
+        "additionalProperties": false,
+        "description": "Exact filing identity pairing a filed Response identifier with the SHA-256 handoff digest of its canonical immutable bytes (ADR 0170).",
+        "examples": [
+          {
+            "responseHash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "responseId": "resp_01j9example0000000000000001"
+          }
+        ],
+        "properties": {
+          "responseHash": {
+            "description": "Exact SHA-256 handoff hash of the immutable filed Response bytes (ADR 0170).",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "responseId": {
+            "description": "Exact filed Response identifier.",
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          }
+        },
+        "required": [
+          "responseId",
+          "responseHash"
+        ],
+        "type": "object"
+      },
+      "DispositionMappingStatus": {
+        "description": "Reports whether the deployment's outcome-mapping configuration mapped the recorded outcomeUri to a CanonicalDispositionState (`mapped`) or left it unmapped (`unmapped`, with `state` omitted).",
+        "enum": [
+          "mapped",
+          "unmapped"
+        ],
+        "examples": [
+          "mapped",
+          "unmapped"
+        ],
+        "type": "string"
+      },
+      "DispositionSourceKind": {
+        "description": "Identifies whether the disposition was read from a native WOS decision record or a scoped imported determination.",
+        "enum": [
+          "decision-record",
+          "imported-determination"
+        ],
+        "examples": [
+          "decision-record",
+          "imported-determination"
+        ],
         "type": "string"
       },
       "DriftAlertRecord": {
@@ -9100,6 +9221,219 @@
         ],
         "type": "object"
       },
+      "ReviewDisposition": {
+        "additionalProperties": false,
+        "description": "Authorized WOS review disposition and decision-record comments verified against exact filing identity (`responseId`, `responseHash`) under ADR 0170.",
+        "examples": [
+          {
+            "comments": [],
+            "decidedAt": "2026-11-27T12:00:00Z",
+            "decidedBy": "actor:human:reviewer-1",
+            "mappingStatus": "mapped",
+            "outcomeUri": "https://example.org/outcomes/accepted",
+            "responseHash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "responseId": "resp_01j9example0000000000000001",
+            "sourceKind": "decision-record",
+            "state": "accepted"
+          },
+          {
+            "comments": [],
+            "decidedAt": "2026-11-27T12:15:00Z",
+            "importedSource": "historical-register-import",
+            "mappingStatus": "unmapped",
+            "outcomeUri": "https://example.org/outcomes/custom-hold",
+            "responseHash": "sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+            "responseId": "resp_01j9example0000000000000002",
+            "sourceKind": "imported-determination"
+          }
+        ],
+        "properties": {
+          "caseLedgerId": {
+            "$ref": "#/components/schemas/WosResourceUrn",
+            "description": "Optional WOS case ledger URN associated with the disposition."
+          },
+          "comments": {
+            "description": "Authorized comments extracted from the decision record or imported determination. Empty when none were recorded or when `includeComments` is false.",
+            "items": {
+              "$ref": "#/components/schemas/DispositionComment"
+            },
+            "type": "array"
+          },
+          "decidedAt": {
+            "description": "UTC RFC 3339 timestamp when this disposition took effect.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "decidedBy": {
+            "$ref": "#/components/schemas/ActorRef",
+            "description": "Optional canonical actor URN responsible for the recorded disposition."
+          },
+          "importedSource": {
+            "description": "Optional deployment-configured source identifier when `sourceKind` is `imported-determination`.",
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          },
+          "mappingStatus": {
+            "$ref": "#/components/schemas/DispositionMappingStatus",
+            "description": "Indicates whether `outcomeUri` mapped to a canonical surface state (`mapped`) or was unmapped in deployment configuration (`unmapped`)."
+          },
+          "outcomeUri": {
+            "description": "Deployment-configured WOS outcome URI recorded for this filing.",
+            "format": "uri",
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "uri"
+            }
+          },
+          "processId": {
+            "$ref": "#/components/schemas/WosResourceUrn",
+            "description": "Optional WOS workflow process URN associated with the disposition."
+          },
+          "provenanceRecordRef": {
+            "$ref": "#/components/schemas/WosResourceUrn",
+            "description": "Optional WOS provenance record URN recording the decision."
+          },
+          "responseHash": {
+            "description": "Verified SHA-256 handoff hash of the immutable filed Response bytes (ADR 0170).",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "responseId": {
+            "description": "Exact filed Response identifier verified against the immutable filing record.",
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          },
+          "sourceKind": {
+            "$ref": "#/components/schemas/DispositionSourceKind",
+            "description": "Source of this disposition (`decision-record` or `imported-determination`)."
+          },
+          "state": {
+            "$ref": "#/components/schemas/CanonicalDispositionState",
+            "description": "Canonical surface disposition posture mapped from `outcomeUri`. Present when `mappingStatus` is `mapped`; omitted when `mappingStatus` is `unmapped`."
+          }
+        },
+        "required": [
+          "responseId",
+          "responseHash",
+          "outcomeUri",
+          "mappingStatus",
+          "sourceKind",
+          "decidedAt",
+          "comments"
+        ],
+        "type": "object"
+      },
+      "ReviewDispositionLookupRequest": {
+        "additionalProperties": false,
+        "description": "Single-filing exact lookup request keyed by `{responseId, responseHash}`.",
+        "examples": [
+          {
+            "includeComments": true,
+            "responseHash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "responseId": "resp_01j9example0000000000000001"
+          }
+        ],
+        "properties": {
+          "includeComments": {
+            "description": "When false, omits decision-record comments (`comments` returns empty). Defaults to true.",
+            "type": "boolean"
+          },
+          "responseHash": {
+            "description": "Exact SHA-256 handoff hash of the immutable filed Response bytes (ADR 0170).",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "responseId": {
+            "description": "Exact filed Response identifier.",
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          }
+        },
+        "required": [
+          "responseId",
+          "responseHash"
+        ],
+        "type": "object"
+      },
+      "ReviewDispositionQueryRequest": {
+        "additionalProperties": false,
+        "description": "Batch lookup request matching `DispositionAuthority` queries over exact `{responseId, responseHash}` filing identities.",
+        "examples": [
+          {
+            "filings": [
+              {
+                "responseHash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                "responseId": "resp_01j9example0000000000000001"
+              }
+            ],
+            "includeComments": true
+          }
+        ],
+        "properties": {
+          "filings": {
+            "description": "Exact filing identities to query within the caller's admitted scope.",
+            "items": {
+              "$ref": "#/components/schemas/DispositionFilingKey"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "type": "array"
+          },
+          "includeComments": {
+            "description": "When false, omits decision-record comments (`comments` returns empty). Defaults to true.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "filings"
+        ],
+        "type": "object"
+      },
+      "ReviewDispositionQueryResponse": {
+        "additionalProperties": false,
+        "description": "Batch response containing only authorized, byte-hash-verified review dispositions matching the requested `{responseId, responseHash}` keys.",
+        "examples": [
+          {
+            "items": [
+              {
+                "comments": [],
+                "decidedAt": "2026-11-27T12:00:00Z",
+                "mappingStatus": "mapped",
+                "outcomeUri": "https://example.org/outcomes/accepted",
+                "responseHash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                "responseId": "resp_01j9example0000000000000001",
+                "sourceKind": "decision-record",
+                "state": "accepted"
+              }
+            ]
+          }
+        ],
+        "properties": {
+          "items": {
+            "description": "Verified, authorized review dispositions for matched filings. Unmatched, wrong-hash, or unauthorized filings are excluded without disclosing existence.",
+            "items": {
+              "$ref": "#/components/schemas/ReviewDisposition"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "ReviewProtocolKind": {
         "description": "Closed-with-vendor-extension review-protocol classification (governance §4.1 Protocol Definitions, §4.2 Protocol Combination; workflow-governance.md:248-260). Reserved literals: `independentFirst` (the reviewer's independent assessment MUST be recorded before any agent/upstream recommendation is accessible — §4.2 enforcement obligation); `considerOpposite` (the reviewer is required to consider the opposite outcome before settling); `calibratedConfidence` (the reviewer's confidence is calibrated against historical accuracy); `dualBlind` (two independent reviewers without cross-visibility); `unassisted` (the reviewer is not exposed to upstream recommendations). Vendor extensions MUST use an `^x-[a-z][a-z0-9-]*$` prefix per ADR 0082 D-12.",
         "examples": [
@@ -10250,7 +10584,7 @@
         "type": "object"
       },
       "TaskListOptionsCursor": {
-        "description": "Opaque resume token returned by the previous page (ADR 0082 D-7).",
+        "description": "Opaque, single-use, scope-and-principal-bound sealed continuation token returned by the previous page (ADR 0082 D-7). Never a decimal offset.",
         "minLength": 1,
         "type": "string",
         "x-wos": {
@@ -10334,10 +10668,10 @@
       },
       "TaskPage": {
         "additionalProperties": false,
-        "description": "Cursor-paginated task page (ADR 0082 D-7). Items are `TaskListItem` projections for inbox-style consumption.",
+        "description": "Cursor-paginated task page (ADR 0082 D-7). Items are `TaskListItem` projections authorized through the shared authorization coordinator; zero unauthorized totals or offsets are exposed.",
         "properties": {
           "cursor": {
-            "description": "Opaque token for the next page. Omitted when hasMore is false.",
+            "description": "Opaque single-use sealed token for the next page, bound to scope, principal, query filters, sort order, and deployment. Omitted when hasMore is false or searchIncomplete is true.",
             "minLength": 1,
             "type": "string",
             "x-wos": {
@@ -10345,15 +10679,19 @@
             }
           },
           "hasMore": {
-            "description": "True when another page is available from the server.",
+            "description": "True when another authorized page is confirmed available from the server. False when exhausted or when searchIncomplete is true.",
             "type": "boolean"
           },
           "items": {
-            "description": "Task list items in this page.",
+            "description": "Authorized task list items in this page.",
             "items": {
               "$ref": "#/components/schemas/TaskListItem"
             },
             "type": "array"
+          },
+          "searchIncomplete": {
+            "description": "True when the per-page authorization scan budget was exhausted before establishing whether another authorized page exists. When true, hasMore MUST be false and cursor MUST be omitted; callers retry rather than assuming exhaustion.",
+            "type": "boolean"
           }
         },
         "required": [
@@ -15371,7 +15709,7 @@
             }
           },
           {
-            "description": "Opaque resume token returned by the previous page (ADR 0082 D-7).",
+            "description": "Opaque, single-use, scope-and-principal-bound sealed continuation token returned by the previous page (ADR 0082 D-7). Never a decimal offset.",
             "in": "query",
             "name": "cursor",
             "required": false,
@@ -15544,8 +15882,47 @@
               }
             }
           },
+          "403": {
+            "description": "Task list access denied",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
           "404": {
             "description": "Case/process binding not found",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sealed cursor expired, replayed, tampered, or bound to a different principal/scope/query",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authorization could not reach a decision",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -18002,6 +18379,276 @@
         }
       }
     },
+    "/api/v1/review-dispositions/lookup": {
+      "post": {
+        "operationId": "review_dispositions_lookup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewDispositionLookupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewDisposition"
+                }
+              }
+            },
+            "description": "Authorized, ADR 0170 byte-hash-verified review disposition.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Authentication required.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Caller lacks disposition read authorization.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Filing or disposition not found for exact {responseId, responseHash}.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Retained filing evidence failed ADR 0170 byte-hash verification.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Authorization could not reach a decision.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [
+              "wos.case.read"
+            ]
+          }
+        ],
+        "summary": "Single-filing exact lookup of an authorized review disposition and decision-record comments.",
+        "tags": [
+          "review-dispositions"
+        ],
+        "x-access": {
+          "detail": [
+            "wos.case.read"
+          ],
+          "kind": "scope"
+        },
+        "x-max-request-bytes": 16384
+      }
+    },
+    "/api/v1/review-dispositions/query": {
+      "post": {
+        "operationId": "review_dispositions_query",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewDispositionQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewDispositionQueryResponse"
+                }
+              }
+            },
+            "description": "Authorized, ADR 0170 byte-hash-verified review dispositions.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Authentication required.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Caller lacks scope eligibility.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Authorization could not reach a decision.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [
+              "wos.case.read"
+            ]
+          }
+        ],
+        "summary": "Batch authorized lookup of review dispositions keyed by exact `{responseId, responseHash}`.",
+        "tags": [
+          "review-dispositions"
+        ],
+        "x-access": {
+          "detail": [
+            "wos.case.read"
+          ],
+          "kind": "scope"
+        },
+        "x-max-request-bytes": 131072
+      }
+    },
     "/api/v1/tasks": {
       "get": {
         "operationId": "task_list",
@@ -18023,7 +18670,7 @@
             }
           },
           {
-            "description": "Opaque resume token returned by the previous page (ADR 0082 D-7).",
+            "description": "Opaque, single-use, scope-and-principal-bound sealed continuation token returned by the previous page (ADR 0082 D-7). Never a decimal offset.",
             "in": "query",
             "name": "cursor",
             "required": false,
@@ -18171,7 +18818,7 @@
                 }
               }
             },
-            "description": "Cursor-paginated task page.",
+            "description": "Cursor-paginated task page authorized through the shared coordinator.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -18192,6 +18839,66 @@
               }
             },
             "description": "Bearer token missing or invalid.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Task list access denied.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Sealed cursor expired, replayed, tampered, or bound to a different principal/scope/query.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Authorization could not reach a decision.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -18257,6 +18964,26 @@
               }
             }
           },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Task read denied by coordinator.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
           "404": {
             "content": {
               "application/json": {
@@ -18266,6 +18993,26 @@
               }
             },
             "description": "Task not found.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Authorization could not reach a decision.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -19215,6 +19962,10 @@
     {
       "description": "Canonical authority administration grants and revocations (ADR 0176).",
       "name": "authority"
+    },
+    {
+      "description": "Authorized review disposition outcomes and decision-record comments keyed by exact filing identity (ADR 0170 / ADR 0172).",
+      "name": "review-dispositions"
     }
   ]
 }
