@@ -2181,7 +2181,7 @@ The processor MUST execute the following algorithm:
 6. Record `taskResponseSubmitted` provenance for this new completed submission attempt.
 7. Validate the full Response envelope against Formspec `response.schema.json` and Core S2.1.6, including the schema's root additional-property and `data` rules.
 8. Verify the pin: `response.definitionUrl` MUST equal the task `definitionUrl`; `response.definitionVersion` MUST equal the task `definitionVersion`.
-9. Delegate Definition validation over `response.data` to a Formspec-conformant processor (Core S1.4, S2.4, S5-S5.4).
+9. Delegate Definition validation over `response.data` to a Formspec-conformant processor (Core S1.4, S2.4, S5-S5.4). The delegation MUST preserve exact numeric precision from the original `ResponseJson` bytes into exact evaluation values (`ExactValue`, never routing through lossy binary floating-point intermediates), supply every pinned Formspec Extension Registry document governing the task's pinned Definition version, and forward any host-supplied trusted resolved option snapshot for remote option sources (verifying its canonical `formspec.option-snapshot.v1` digest when pinned, and failing closed with `OPTIONS_UNAVAILABLE` when a required remote option list is absent or fails digest verification).
 10. Record `contractValidation` provenance with the envelope, pin, and Definition validation outcome.
 11. If envelope validation, pin validation, or Definition validation fails, record `taskFailed` provenance, transition the task to `failed`, emit `failureEvent` when configured, apply Governance S8 remediation, do not map data, and do not mutate case state.
 12. If Respondent Ledger evidence is required by S15.7 and missing, reject with `ledgerEvidenceMissing`, record `taskFailed` provenance, transition the task to `failed`, emit `failureEvent` when configured, apply Governance S8 remediation, do not map data, and do not mutate case state.
@@ -2296,7 +2296,7 @@ Two conformant bindings are defined:
 
 ### 15.3 Processing Delegation
 
-WOS processors MUST delegate contract evaluation to a conformant contract processor. For Formspec bindings, this means a Formspec-conformant processor (Core S1.4). The WOS processor provides orchestration context; the contract processor provides Definition evaluation.
+WOS processors MUST delegate contract evaluation to a conformant contract processor. For Formspec bindings, this means a Formspec-conformant processor (Core S1.4). The WOS processor provides orchestration context — including exact original Response JSON bytes (`ResponseJson` parsed to exact decimals without floating-point rounding), pinned Extension Registry documents governing the pinned Definition version, the controlled runtime clock, and any digest-verified trusted resolved option snapshot (`formspec.option-snapshot.v1`, failing closed on digest mismatch or `OPTIONS_UNAVAILABLE`) — and the contract processor provides Definition evaluation.
 
 For Formspec-backed tasks, a ContractReference that backs a `createTask` action MUST declare `definitionVersion`, the exact version of the Definition named by `ref` (pin rules in S13.2), and MAY also declare `prefillMappingRef` and `responseMappingRef`. `prefillMappingRef` identifies the Mapping document used to populate the task's initial Response. `responseMappingRef` identifies the Mapping document used by Runtime Companion S15 to project a completed Response into case state. When no `responseMappingRef` is supplied, Runtime Companion S15 forbids automatic host-defined Response-to-case projection.
 

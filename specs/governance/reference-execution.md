@@ -12,23 +12,60 @@ transport, establish legal compliance or approve publication.
 Scenario replay MUST execute selected Formspec documents through
 `wos-formspec-binding::FormspecProcessor`, using the maintained Formspec
 Definition evaluator and Mapping implementation. Each selection retains
-`role`, `url`, `version` and original `bytes`. A Mapping additionally retains
+`role`, `url`, `version` and original `bytes`. Supported roles are `definition`,
+`mapping`, and `registry` (Formspec Extension Registry documents pinned for
+authoritative recheck). A Mapping additionally retains
 `definition: {url, version}` selecting an exact Definition; its authored
 Definition version range remains independently enforced. A Mapping has no body
-URL, so its selected URL is its immutable resolution locator.
+URL, so its selected URL is its immutable resolution locator. A `registry`
+selection MAY omit `definition` (applying globally across all selected
+Definitions) or retain `definition: {url, version}` scoping it to one exact
+selected Definition.
 
-Repeated `definition` and `mapping` roles are permitted. Exact duplicate
-identities, ambiguous task references, missing selections, incompatible pins or
-Mapping directions MUST refuse before process creation. A task's prefill uses
+Repeated `definition`, `mapping`, and `registry` roles are permitted. Exact duplicate
+identities, registries scoped to an unselected Definition, ambiguous task
+references, missing selections, incompatible pins, invalid or duplicate
+Extension Registry constraints (malformed documents or entries, duplicate
+extension names across active global and Definition-scoped registries,
+unsupported constraint keys outside `{pattern, maxLength, minimum, maximum}`,
+invalid regular expressions, non-integer or negative `maxLength`, non-decimal
+numeric bounds, or inverted `minimum > maximum` ranges), or incompatible
+Mapping directions MUST refuse before process creation. Extension Registry
+numeric bounds MUST be parsed from original JSON bytes as exact decimals without
+binary floating-point rounding. A task's prefill uses
 reverse mapping; its response uses forward mapping. A selected Definition and
 Mapping MUST agree with the actual task's Definition pin and Mapping reference.
 Execution MUST NOT discover or fetch replacement documents.
 
-Selected execution MUST validate the complete Response, run Definition evaluation
-with the Submit trigger at the controlled runtime clock, and retain actual
-blocking validations. Mapping MUST consume the admitted Response and preserve
-native Mapping diagnostics. This reference route supports self-contained flat fields and display items.
-Nested/repeated/prePopulate reconstruction, instances, modules/extensions and
+Selected execution MUST validate the complete Response, preserve exact decimal
+and arbitrary-precision integer fidelity by parsing original `ResponseJson`
+bytes directly into `ExactValue` (never through lossy IEEE-754 floating-point
+intermediates), run Definition evaluation through the canonical Formspec
+recheck options builder (`recheck_eval_options`) with the `Submit` trigger at
+the controlled runtime clock, the pinned Extension Registry documents (global
+plus Definition-scoped), the Response's derived `subject`, and any host-supplied
+resolved option lists, verify exact filed-data parity
+(`filed_response_data_matches`), and retain actual blocking validations.
+
+When a selected Definition declares remote option sources (a URL-backed
+`optionSet` or a URI-string `Item.options`), evaluators perform no network I/O:
+the host supplies a `ResolvedOptionLists` snapshot (with a Definition-scoped
+snapshot taking precedence over a processor-wide snapshot). When a trusted
+resolved option snapshot (`TrustedOptionSnapshot`) pins an expected canonical
+digest (`formspec.option-snapshot.v1` over canonical sorted `optionSets` and
+`uris` sets), the processor MUST verify `ResolvedOptionLists::snapshot_digest()`
+against that expected digest both at binding and before evaluation, failing
+closed with `OPTIONS_UNAVAILABLE` on any mismatch. When no resolved option list
+is supplied for a relevant answered remote `choice` or `multiChoice` field,
+Formspec evaluation emits blocking `OPTIONS_UNAVAILABLE` and task validation
+MUST fail closed rather than accepting arbitrary values or falling back to
+inline `options`.
+
+Mapping MUST consume the admitted Response and preserve
+native Mapping diagnostics. This reference route supports self-contained flat
+fields, display items, and item-level custom `dataType` extensions backed by
+pinned Extension Registry documents. Definition-level `instances`,
+`extensions`, and `modules`, nested/repeated/prePopulate reconstruction, and
 unavailable host context MUST refuse. A processor that cannot reconstruct a
 Response changed by evaluation MUST refuse that behavior. Mapping ambient time
 and provider functions MUST refuse because the maintained Mapping API does not
