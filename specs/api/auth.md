@@ -117,7 +117,7 @@ Per ADR 0082 Context section and the owner's greenfield-contracts memory: prior 
 
 ## Non-Goals
 
-- **Grant administration.** The auth API authenticates and reports scope. Grant administration is outside its scope.
+- **Grant administration.** The auth API authenticates and reports scope. Grant administration is performed through the canonical authority endpoint (`POST /api/v1/authority/{action}`) and scoped membership administration. When WOS creates, changes, or removes a principal's scope membership role, the server appends matching canonical `trellis.authority.grant.v1` and `trellis.authority.revocation.v1` facts to `<scope>.authority` so space-membership relationship facts carry verifiable canonical ledger provenance (`EventPointer`) rather than mutable stored-row trust.
 - **IdP federation configuration.** The `oidc-sso` kind assumes an external IdP is configured per-deployment; the configuration surface (issuer URLs, client IDs, JWKS endpoints) is a deployment / operations concern, not part of the public API.
 - **Service-account / workload token issuance.** Service identities do not use password login. A composition-root-injected OAuth client-credentials provider obtains audience-specific access tokens through maintained libraries; workload-attested mechanisms remain explicit deployment choices. The verified service client maps to an internal principal and resource/operation grants. Introspection reports token validity and never grants case or source access by itself.
 - **Password reset / credential recovery.** A future amendment slot — likely a `POST /api/v1/auth/recover` endpoint with its own MFA flow — when the wedge requires it. Currently out of scope.

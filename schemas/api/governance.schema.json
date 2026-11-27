@@ -26,6 +26,15 @@
       "$ref": "#/$defs/DelegationCreateRequest"
     },
     {
+      "$ref": "#/$defs/DelegationAccessSubject"
+    },
+    {
+      "$ref": "#/$defs/DelegationAccessGrant"
+    },
+    {
+      "$ref": "#/$defs/DelegationAuthorityReceipt"
+    },
+    {
       "$ref": "#/$defs/DelegationRevokeRequest"
     },
     {
@@ -1083,6 +1092,18 @@
           "$ref": "#/$defs/IndependenceVerification",
           "description": "Appeal-independence verification record (governance §3.5 item 1; workflow-governance.md:148-152). Present iff this delegation routes appeal review and the runtime has verified that the delegatee is independent of the original determination. Absent on non-appeal delegations and on appeal delegations awaiting verification — a regulator querying \"prove this appeal route is independent\" reads this field directly rather than re-deriving from provenance."
         },
+        "accessGrant": {
+          "$ref": "#/$defs/DelegationAccessGrant",
+          "description": "Optional canonical relationship access grant conferred by this delegation via the shared authorization coordinator (governance §11.7). Absent on determination-only delegations."
+        },
+        "authorityGrant": {
+          "$ref": "#/$defs/DelegationAuthorityReceipt",
+          "description": "Canonical `<scope>.authority` ledger receipt recorded when `accessGrant` was admitted. Present iff `accessGrant` was admitted on `<scope>.authority`."
+        },
+        "authorityRevocation": {
+          "$ref": "#/$defs/DelegationAuthorityReceipt",
+          "description": "Canonical `<scope>.authority` ledger receipt recorded when `accessGrant` was revoked or expired. Present iff a canonical revocation fact has been admitted on `<scope>.authority`."
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",
@@ -1214,6 +1235,117 @@
         "quorum": {
           "$ref": "#/$defs/QuorumRequirement",
           "description": "Quorum requirement for N-of-M attestation (governance §S4.9; workflow-governance.md:667-677). Present iff this delegation requires an N-of-M assembly to authorize an action; the server validates that `delegatee` references identify a quorum pool of size ≥ `quorum.totalEligible` and that `quorum.requiredCount ≤ quorum.totalEligible`."
+        },
+        "accessGrant": {
+          "$ref": "#/$defs/DelegationAccessGrant",
+          "description": "Optional relationship access grant conferred by this delegation (governance §11.7). When present, the server admits a canonical `trellis.authority.grant.v1` fact through the shared authorization coordinator before persisting the delegation, and records a matching `trellis.authority.revocation.v1` fact upon revocation or expiry."
+        }
+      }
+    },
+    "DelegationAccessSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Typed external principal identity `(kind, iss, sub)` receiving delegated relationship access through the shared authorization coordinator.",
+      "required": [
+        "kind",
+        "iss",
+        "sub"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "user",
+            "service"
+          ],
+          "description": "Canonical principal class receiving the relationship grant (`user` or `service`)."
+        },
+        "iss": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "description": "Canonical identity issuer identifier for the receiving principal.",
+          "x-wos": {
+            "openStringKind": "uri"
+          }
+        },
+        "sub": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "description": "Issuer-scoped subject identifier for the receiving principal.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        }
+      }
+    },
+    "DelegationAccessGrant": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Canonical relationship grant conferred by an access-conferring delegation and admitted onto `<scope>.authority` through the shared authorization coordinator (governance §11.7).",
+      "required": [
+        "subject",
+        "relation",
+        "object"
+      ],
+      "properties": {
+        "subject": {
+          "$ref": "#/$defs/DelegationAccessSubject",
+          "description": "Typed external principal receiving the relationship grant."
+        },
+        "relation": {
+          "type": "string",
+          "pattern": "^[a-zA-Z_][a-zA-Z0-9_]{0,49}$",
+          "description": "Directly assignable relationship model relation conferred by this delegation (for example `task_reader`, `exporter`, `event_writer`)."
+        },
+        "object": {
+          "type": "string",
+          "pattern": "^[^:#@\\s]{1,254}:[^#:\\s]{1,256}$",
+          "description": "Typed authorization object reference (`<type>:<id>`, for example `case:case_01...` or `space:<scope>`)."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "description": "Optional documentary audit reason recorded on the canonical authority ledger event.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        }
+      }
+    },
+    "DelegationAuthorityReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Committed `<scope>.authority` ledger position proving that a delegation's canonical grant or revocation was recorded.",
+      "required": [
+        "treeSize",
+        "treeHeadHash",
+        "projected"
+      ],
+      "properties": {
+        "treeSize": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Authority ledger tree size after committing the fact."
+        },
+        "treeHeadHash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Authority ledger tree head hash after committing the fact."
+        },
+        "checkpointRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional signed checkpoint reference for the committed authority ledger position.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "projected": {
+          "type": "boolean",
+          "description": "Whether this server's relationship projection had applied the fact before returning."
         }
       }
     },

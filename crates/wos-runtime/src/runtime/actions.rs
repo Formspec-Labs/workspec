@@ -148,6 +148,8 @@ impl WosRuntime {
                     if record.process.actor_bindings.is_some() {
                         details["declaredActor"] = serde_json::json!(task.declared_actor);
                         details["assignedActor"] = serde_json::json!(task.assigned_actor);
+                    } else if task.assigned_actor.is_some() {
+                        details["assignedActor"] = serde_json::json!(task.assigned_actor);
                     }
                     if task.expires_at.is_some() {
                         details["expiresAt"] = serde_json::json!(task.expires_at);

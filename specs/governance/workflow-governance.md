@@ -722,6 +722,16 @@ The cryptographic mechanism for proving quorum participation (threshold signatur
 
 Delegation enforcement attaches via `lifecycleHook` on `determination`-tagged transitions.
 
+### 11.7 Access-Conferring Delegations and Canonical Authority Facts
+
+Delegation validity for determinations (§11.4 — delegator standing, effective window, scope bounds, quorum, and separation of duties) remains a native workflow governance invariant.
+
+When a delegation additionally confers access to protected resources (declaring an `accessGrant` binding a canonical principal identity to a relationship relation and target resource), the host server MUST treat that access grant as a canonical authority fact on the scope's shared `<scope>.authority` ledger:
+
+1. **Creation**: Before persisting an access-conferring delegation, the server MUST admit a canonical `trellis.authority.grant.v1` fact through the shared authorization coordinator (`authority.grant`). If authorization refuses or cannot decide, the delegation MUST NOT be created.
+2. **Revocation**: When an access-conferring delegation is revoked, the server MUST admit a canonical `trellis.authority.revocation.v1` fact for the exact granted tuple through the shared authorization coordinator (`authority.revoke`) so delegated access ends immediately under the authority freshness gate.
+3. **Expiry**: An access-conferring delegation whose `expirationDate` is already in the past MUST be refused at creation. When an active access-conferring delegation expires, its expiry MUST be recorded as a canonical `trellis.authority.revocation.v1` fact on `<scope>.authority`. Determination-only delegations (with no `accessGrant`) continue to enforce validity natively without writing authority-ledger tuples.
+
 ---
 
 ## 12. Typed Hold Policies

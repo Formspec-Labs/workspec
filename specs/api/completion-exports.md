@@ -12,6 +12,15 @@
 
 The server MUST authorize the current request before returning an existing job or admitting a new one. Within the deployment scope, the server MUST check and admit a job atomically for the resolved process and authenticated requester. An active job is one with no recorded terminal outcome. If the requester has an active job for the process, the server MUST return that job with HTTP 202 only when both submitted declarations exactly match the job's retained declarations. If either value differs, the server MUST return HTTP 409 with a `CompletionExportRequestConflict` problem (`WOS-2409`). The conflict admits no job. If the requester has no active job for the process, the server mints the job identity, starts the job and returns HTTP 202 with its `CompletionExportJob`.
 
+### Canonical Assignment Position Witness
+
+When the active policy model derives `case.export` or `case.export.status` entitlement from the canonical `assignee` relationship fact (`case#assignee`), the server MUST supply that contextual relationship fact ONLY when BOTH conditions hold for the authenticated principal at evaluation time:
+
+1. The principal's verified actor reference matches `assignedActor` on a currently active task for the case (reassignment, completion, dismissal, or expiry immediately withdraws the derived relationship fact).
+2. A verified canonical case-ledger provenance position witness (`EventPointer` carrying the case ledger identity, event sequence, and `sha256:` canonical event hash) exists establishing that task assignment.
+
+If either condition is absent, the server MUST omit the `assignee` relationship fact without fabricating a witness; entitlement then rests solely on explicit canonical authority grants (such as per-case `exporter` or space-level `auditor`) without requiring static relationship configuration or server restarts. When `case.export` succeeds using derived `assignee` entitlement, the recorded `DecisionRecord` carries the canonical `assignee` relationship fact and its case-ledger `EventPointer` for offline verification.
+
 ## Authorization refusals
 
 Authorization refusals use `application/problem+json` and the registered `error_code` values in the [public error registry](error-registry.md). Both authorization problem types MUST carry the decision's public reason in `context.reason_code`. The schema defines the closed set of refusal reasons from the Authorization Contract §§4.2–4.3 under ADR 0176. The context contains only that reason.
