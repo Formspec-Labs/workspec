@@ -66,3 +66,7 @@ The existing NoticeDeliveryStore/PostgreSQL join and mapper own retention and in
 ### Conformance
 
 Qualify default/old-output denial and original/active/explicit-later witness rules separately from real PostgreSQL tests. Test same-case foreign-process rows before all page/budget operations, exact body/digest/provenance, count/cursor/raw/public bounds, maximum valid escaping, post-await authority changes and zero effects. Distinguish authorized empty from refusal/unavailable and verify template-independent UI plus retirement during body parsing/hash. Source tests are not ordinary-auth deployment or delivery proof.
+
+## Pinned Referenced Records (`fs-8s94`)
+
+For reviewer listing and exact `{responseId, responseHash}` inspection of filed Responses pinned to a case (the case's own verified filing and any child/referenced Responses cited in its `resolvedInstances[]`), see [`pinned-records.md`](pinned-records.md) and [`api/pinned-records.schema.json`](../../schemas/api/pinned-records.schema.json). Both endpoints enforce deployment-configured OpenFGA + Cedar authorization before hash comparison and strict ADR 0170 canonical byte-hash verification.

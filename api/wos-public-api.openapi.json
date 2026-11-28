@@ -2418,6 +2418,78 @@
         ],
         "type": "object"
       },
+      "CasePinnedRecordsResponse": {
+        "additionalProperties": false,
+        "description": "Authorized listing of exact pinned Responses referenced by a case's verified filed parent Response. Unentitled, missing, or mismatched child references are omitted without counts.",
+        "examples": [
+          {
+            "caseLedgerId": "urn:wos:example_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+            "items": [
+              {
+                "definitionUrl": "https://example.org/forms/org-report",
+                "definitionVersion": "1.0.0",
+                "instance": "referenced_filings",
+                "responseHash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                "responseId": "resp_01j9example0000000000000001"
+              }
+            ],
+            "parentDefinitionUrl": "https://example.org/forms/consolidated-summary",
+            "parentDefinitionVersion": "1.0.0",
+            "parentResponseHash": "sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+            "parentResponseId": "resp_01j9example0000000000000000"
+          }
+        ],
+        "properties": {
+          "caseLedgerId": {
+            "$ref": "#/components/schemas/WosResourceUrn",
+            "description": "Authorized WOS case ledger URN."
+          },
+          "items": {
+            "description": "Authorized, ADR 0170 byte-hash-verified pinned child/referenced Responses. Empty when none are referenced or authorized.",
+            "items": {
+              "$ref": "#/components/schemas/PinnedRecordReference"
+            },
+            "type": "array"
+          },
+          "parentDefinitionUrl": {
+            "description": "Exact Definition URL of the case's filed parent Response.",
+            "format": "uri",
+            "type": "string"
+          },
+          "parentDefinitionVersion": {
+            "description": "Exact Definition version of the case's filed parent Response.",
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          },
+          "parentResponseHash": {
+            "description": "Verified ADR 0170 SHA-256 handoff hash of the case's filed parent Response.",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "parentResponseId": {
+            "description": "Exact filed parent Response identifier for this case.",
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          }
+        },
+        "required": [
+          "caseLedgerId",
+          "parentResponseId",
+          "parentResponseHash",
+          "parentDefinitionUrl",
+          "parentDefinitionVersion",
+          "items"
+        ],
+        "type": "object"
+      },
       "CaseRetainedNoticePage": {
         "description": "One current page for the independently authorized filing process. No frozen complete-history claim across pages.",
         "oneOf": [
@@ -4880,6 +4952,142 @@
             "source": "wos-workflow.schema.json"
           }
         }
+      },
+      "ExactPinnedRecordReadRequest": {
+        "additionalProperties": false,
+        "description": "Authorized single-record read request keyed by exact {responseId, responseHash} within a case's verified filing scope.",
+        "examples": [
+          {
+            "expectedDefinitionUrl": "https://example.org/forms/org-report",
+            "expectedDefinitionVersion": "1.0.0",
+            "responseHash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "responseId": "resp_01j9example0000000000000001"
+          }
+        ],
+        "properties": {
+          "expectedDefinitionUrl": {
+            "description": "Optional pinned Definition URL that must match the verified record.",
+            "format": "uri",
+            "type": "string"
+          },
+          "expectedDefinitionVersion": {
+            "description": "Optional pinned Definition version that must match the verified record.",
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          },
+          "responseHash": {
+            "description": "Exact ADR 0170 SHA-256 handoff hash of the immutable filed Response bytes.",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "responseId": {
+            "description": "Exact filed Response identifier.",
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          }
+        },
+        "required": [
+          "responseId",
+          "responseHash"
+        ],
+        "type": "object"
+      },
+      "ExactPinnedRecordReadResponse": {
+        "additionalProperties": false,
+        "description": "Authorized, ADR 0170 byte-hash-verified exact filed Response returned for reviewer inspection.",
+        "examples": [
+          {
+            "acceptedAt": "2026-11-27T12:00:00Z",
+            "canonicalResponse": {
+              "$formspecResponse": "1.0",
+              "data": {
+                "declaredAmount": 125.5
+              },
+              "definitionUrl": "https://example.org/forms/org-report",
+              "definitionVersion": "1.0.0",
+              "id": "resp_01j9example0000000000000001",
+              "status": "completed"
+            },
+            "caseLedgerId": "urn:wos:example_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+            "definitionUrl": "https://example.org/forms/org-report",
+            "definitionVersion": "1.0.0",
+            "pinnedReferences": [],
+            "responseHash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "responseId": "resp_01j9example0000000000000001"
+          }
+        ],
+        "properties": {
+          "acceptedAt": {
+            "description": "Optional UTC RFC 3339 acceptance timestamp recorded by Source.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "canonicalResponse": {
+            "$ref": "#/components/schemas/AcceptedResponse",
+            "description": "Exact canonical Response JSON preserving ADR 0170 decimal numbers."
+          },
+          "caseLedgerId": {
+            "$ref": "#/components/schemas/WosResourceUrn",
+            "description": "Authorized WOS case ledger URN through which this exact record was inspected."
+          },
+          "definitionUrl": {
+            "description": "Exact Definition URL of the verified Response.",
+            "format": "uri",
+            "type": "string"
+          },
+          "definitionVersion": {
+            "description": "Exact Definition version of the verified Response.",
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          },
+          "pinnedReferences": {
+            "description": "Authorized pinned child/referenced Response summaries cited inside this Response's resolvedInstances[].",
+            "items": {
+              "$ref": "#/components/schemas/PinnedRecordReference"
+            },
+            "type": "array"
+          },
+          "responseHash": {
+            "description": "Verified ADR 0170 SHA-256 handoff hash of the immutable canonical Response bytes.",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "responseId": {
+            "description": "Verified filed Response identifier.",
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          },
+          "subject": {
+            "$ref": "#/components/schemas/PinnedSubject",
+            "description": "Optional verified ADR 0172 subject identity of the filed Response."
+          }
+        },
+        "required": [
+          "caseLedgerId",
+          "responseId",
+          "responseHash",
+          "definitionUrl",
+          "definitionVersion",
+          "canonicalResponse",
+          "pinnedReferences"
+        ],
+        "type": "object"
       },
       "ExpirableTimestamp": {
         "description": "RFC 3339 UTC timestamp or the literal `never` sentinel for indefinite-duration semantics (ADR 0082 D-10). Used by continuation-of-services exits and similar policy-bounded windows.",
@@ -7459,6 +7667,179 @@
         "required": [
           "processId",
           "status"
+        ],
+        "type": "object"
+      },
+      "PinnedRecordReference": {
+        "additionalProperties": false,
+        "description": "Authorized, ADR 0170 byte-hash-verified summary of a pinned filed Response.",
+        "examples": [
+          {
+            "acceptedAt": "2026-11-27T12:00:00Z",
+            "definitionUrl": "https://example.org/forms/org-report",
+            "definitionVersion": "1.0.0",
+            "instance": "referenced_filings",
+            "responseHash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "responseId": "resp_01j9example0000000000000001"
+          }
+        ],
+        "properties": {
+          "acceptedAt": {
+            "description": "Optional UTC RFC 3339 acceptance timestamp recorded by Source.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "caseLedgerId": {
+            "$ref": "#/components/schemas/WosResourceUrn",
+            "description": "Optional WOS case ledger URN when the pinned Response also has an authorized WOS case in the same scope."
+          },
+          "definitionUrl": {
+            "description": "Exact Definition URL of the pinned Response.",
+            "format": "uri",
+            "type": "string"
+          },
+          "definitionVersion": {
+            "description": "Exact Definition version of the pinned Response.",
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          },
+          "instance": {
+            "description": "Optional Definition instance name in the parent Response's resolvedInstances[] that pinned this record.",
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          },
+          "responseHash": {
+            "description": "Verified ADR 0170 SHA-256 handoff hash of the immutable filed Response bytes.",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "responseId": {
+            "description": "Exact stored Response identifier.",
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          },
+          "subject": {
+            "$ref": "#/components/schemas/PinnedSubject",
+            "description": "Optional verified ADR 0172 subject identity of the pinned Response."
+          }
+        },
+        "required": [
+          "responseId",
+          "responseHash",
+          "definitionUrl",
+          "definitionVersion"
+        ],
+        "type": "object"
+      },
+      "PinnedSubject": {
+        "additionalProperties": false,
+        "description": "Verified ADR 0172 subject identity for a pinned filed Response.",
+        "examples": [
+          {
+            "id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "keys": [
+              {
+                "dataType": "string",
+                "key": "org_id",
+                "stringValue": "org-a"
+              },
+              {
+                "dataType": "integer",
+                "integerValue": 2025,
+                "key": "period"
+              }
+            ],
+            "type": "urn:example:subject:org-period"
+          }
+        ],
+        "properties": {
+          "id": {
+            "description": "64-hex SHA-256 derived subject identifier.",
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "keys": {
+            "description": "Typed subject keys sorted deterministically by key name.",
+            "items": {
+              "$ref": "#/components/schemas/PinnedSubjectKey"
+            },
+            "type": "array"
+          },
+          "type": {
+            "description": "Definition subject type URI.",
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "keys"
+        ],
+        "type": "object"
+      },
+      "PinnedSubjectKey": {
+        "additionalProperties": false,
+        "description": "One typed subject key entry from an ADR 0172 Response subject.",
+        "examples": [
+          {
+            "dataType": "string",
+            "key": "org_id",
+            "stringValue": "org-a"
+          },
+          {
+            "dataType": "integer",
+            "integerValue": 2025,
+            "key": "period"
+          }
+        ],
+        "properties": {
+          "dataType": {
+            "description": "Declared ADR 0172 subject key scalar type.",
+            "enum": [
+              "string",
+              "integer"
+            ],
+            "type": "string"
+          },
+          "integerValue": {
+            "description": "I-JSON integer key value when dataType is integer (ADR 0172 §11 item 9).",
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "type": "integer"
+          },
+          "key": {
+            "description": "Declared subject key name.",
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          },
+          "stringValue": {
+            "description": "Key value when dataType is string.",
+            "type": "string",
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
+          }
+        },
+        "required": [
+          "key",
+          "dataType"
         ],
         "type": "object"
       },
@@ -14145,6 +14526,367 @@
         }
       }
     },
+    "/api/v1/cases/{case_id}/pinned-records": {
+      "get": {
+        "operationId": "case_pinned_records_list",
+        "parameters": [
+          {
+            "description": "Case ledger identifier, bare or `urn:wos:`.",
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CasePinnedRecordsResponse"
+                }
+              }
+            },
+            "description": "Authorized, ADR 0170 byte-hash-verified pinned child/referenced Responses.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Case TypeID or URN is invalid.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Authentication required.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Caller lacks authorized case read entitlement.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Case or filed parent record not found in scope.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Retained parent filing failed ADR 0170 byte-hash verification.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Authorization or Source could not reach a decision.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [
+              "wos.case.read"
+            ]
+          }
+        ],
+        "summary": "Authorized listing of exact pinned child/referenced Responses cited by a case's verified\nfiled parent Response.",
+        "tags": [
+          "pinned-records"
+        ],
+        "x-access": {
+          "detail": [
+            "wos.case.read"
+          ],
+          "kind": "scope"
+        }
+      }
+    },
+    "/api/v1/cases/{case_id}/pinned-records/read": {
+      "post": {
+        "operationId": "case_pinned_record_read",
+        "parameters": [
+          {
+            "description": "Case ledger identifier, bare or `urn:wos:`.",
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExactPinnedRecordReadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExactPinnedRecordReadResponse"
+                }
+              }
+            },
+            "description": "Authorized, ADR 0170 byte-hash-verified exact filed Response.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Case TypeID, URN, or exact-read request is invalid.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Authentication required.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Caller lacks authorized case or record read entitlement.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Case or referenced Response not found in scope.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Requested responseHash/version mismatched or retained bytes failed ADR 0170 verification.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Authorization or Source could not reach a decision.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "private, no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [
+              "wos.case.read"
+            ]
+          }
+        ],
+        "summary": "Authorized exact single-record read of a case's filed parent Response or a pinned child\nResponse explicitly cited in its `resolvedInstances[]`.",
+        "tags": [
+          "pinned-records"
+        ],
+        "x-access": {
+          "detail": [
+            "wos.case.read"
+          ],
+          "kind": "scope"
+        },
+        "x-max-request-bytes": 16384
+      }
+    },
     "/api/v1/cases/{case_id}/processes": {
       "get": {
         "operationId": "list_processes",
@@ -19962,6 +20704,10 @@
     {
       "description": "Canonical authority administration grants and revocations (ADR 0176).",
       "name": "authority"
+    },
+    {
+      "description": "Authorized reviewer listing and exact {responseId, responseHash} reads of pinned filed Responses (fs-8s94, ADR 0170, ADR 0172).",
+      "name": "pinned-records"
     },
     {
       "description": "Authorized review disposition outcomes and decision-record comments keyed by exact filing identity (ADR 0170 / ADR 0172).",

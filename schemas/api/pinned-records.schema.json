@@ -1,0 +1,417 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.formspec.io/wos-api/pinned-records/v1",
+  "title": "WOS API Pinned Records",
+  "description": "Closed, domain-neutral public API contract for deployment-configured reviewer listing and exact {responseId, responseHash} inspection of filed Responses pinned to a WOS case (fs-8s94, ADR 0170, ADR 0172, ADR 0176).",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/PinnedSubjectKey"
+    },
+    {
+      "$ref": "#/$defs/PinnedSubject"
+    },
+    {
+      "$ref": "#/$defs/PinnedRecordReference"
+    },
+    {
+      "$ref": "#/$defs/CasePinnedRecordsResponse"
+    },
+    {
+      "$ref": "#/$defs/ExactPinnedRecordReadRequest"
+    },
+    {
+      "$ref": "#/$defs/ExactPinnedRecordReadResponse"
+    }
+  ],
+  "$defs": {
+    "WosResourceUrn": {
+      "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+      "description": "Public WOS API resource URN."
+    },
+    "AcceptedResponse": {
+      "$ref": "https://schemas.formspec.io/wos-api/case-file/v1#/$defs/AcceptedResponse",
+      "description": "Exact canonical filed Response preserving ADR 0170 decimal number text."
+    },
+    "PinnedSubjectKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One typed subject key entry from an ADR 0172 Response subject.",
+      "required": [
+        "key",
+        "dataType"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Declared subject key name.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "dataType": {
+          "type": "string",
+          "enum": [
+            "string",
+            "integer"
+          ],
+          "description": "Declared ADR 0172 subject key scalar type."
+        },
+        "stringValue": {
+          "type": "string",
+          "description": "Key value when dataType is string.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "integerValue": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "I-JSON integer key value when dataType is integer (ADR 0172 §11 item 9)."
+        }
+      },
+      "examples": [
+        {
+          "key": "org_id",
+          "dataType": "string",
+          "stringValue": "org-a"
+        },
+        {
+          "key": "period",
+          "dataType": "integer",
+          "integerValue": 2025
+        }
+      ]
+    },
+    "PinnedSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Verified ADR 0172 subject identity for a pinned filed Response.",
+      "required": [
+        "id",
+        "type",
+        "keys"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "64-hex SHA-256 derived subject identifier."
+        },
+        "type": {
+          "type": "string",
+          "format": "uri",
+          "description": "Definition subject type URI."
+        },
+        "keys": {
+          "type": "array",
+          "description": "Typed subject keys sorted deterministically by key name.",
+          "items": {
+            "$ref": "#/$defs/PinnedSubjectKey"
+          }
+        }
+      },
+      "examples": [
+        {
+          "id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          "type": "urn:example:subject:org-period",
+          "keys": [
+            {
+              "key": "org_id",
+              "dataType": "string",
+              "stringValue": "org-a"
+            },
+            {
+              "key": "period",
+              "dataType": "integer",
+              "integerValue": 2025
+            }
+          ]
+        }
+      ]
+    },
+    "PinnedRecordReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Authorized, ADR 0170 byte-hash-verified summary of a pinned filed Response.",
+      "required": [
+        "responseId",
+        "responseHash",
+        "definitionUrl",
+        "definitionVersion"
+      ],
+      "properties": {
+        "instance": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Optional Definition instance name in the parent Response's resolvedInstances[] that pinned this record.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "responseId": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Exact stored Response identifier.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "responseHash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Verified ADR 0170 SHA-256 handoff hash of the immutable filed Response bytes."
+        },
+        "definitionUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Exact Definition URL of the pinned Response."
+        },
+        "definitionVersion": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Exact Definition version of the pinned Response.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "acceptedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Optional UTC RFC 3339 acceptance timestamp recorded by Source."
+        },
+        "subject": {
+          "$ref": "#/$defs/PinnedSubject",
+          "description": "Optional verified ADR 0172 subject identity of the pinned Response."
+        },
+        "caseLedgerId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Optional WOS case ledger URN when the pinned Response also has an authorized WOS case in the same scope."
+        }
+      },
+      "examples": [
+        {
+          "instance": "referenced_filings",
+          "responseId": "resp_01j9example0000000000000001",
+          "responseHash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          "definitionUrl": "https://example.org/forms/org-report",
+          "definitionVersion": "1.0.0",
+          "acceptedAt": "2026-11-27T12:00:00Z"
+        }
+      ]
+    },
+    "CasePinnedRecordsResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Authorized listing of exact pinned Responses referenced by a case's verified filed parent Response. Unentitled, missing, or mismatched child references are omitted without counts.",
+      "required": [
+        "caseLedgerId",
+        "parentResponseId",
+        "parentResponseHash",
+        "parentDefinitionUrl",
+        "parentDefinitionVersion",
+        "items"
+      ],
+      "properties": {
+        "caseLedgerId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Authorized WOS case ledger URN."
+        },
+        "parentResponseId": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Exact filed parent Response identifier for this case.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "parentResponseHash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Verified ADR 0170 SHA-256 handoff hash of the case's filed parent Response."
+        },
+        "parentDefinitionUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Exact Definition URL of the case's filed parent Response."
+        },
+        "parentDefinitionVersion": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Exact Definition version of the case's filed parent Response.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "items": {
+          "type": "array",
+          "description": "Authorized, ADR 0170 byte-hash-verified pinned child/referenced Responses. Empty when none are referenced or authorized.",
+          "items": {
+            "$ref": "#/$defs/PinnedRecordReference"
+          }
+        }
+      },
+      "examples": [
+        {
+          "caseLedgerId": "urn:wos:example_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+          "parentResponseId": "resp_01j9example0000000000000000",
+          "parentResponseHash": "sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+          "parentDefinitionUrl": "https://example.org/forms/consolidated-summary",
+          "parentDefinitionVersion": "1.0.0",
+          "items": [
+            {
+              "instance": "referenced_filings",
+              "responseId": "resp_01j9example0000000000000001",
+              "responseHash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+              "definitionUrl": "https://example.org/forms/org-report",
+              "definitionVersion": "1.0.0"
+            }
+          ]
+        }
+      ]
+    },
+    "ExactPinnedRecordReadRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Authorized single-record read request keyed by exact {responseId, responseHash} within a case's verified filing scope.",
+      "required": [
+        "responseId",
+        "responseHash"
+      ],
+      "properties": {
+        "responseId": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Exact filed Response identifier.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "responseHash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Exact ADR 0170 SHA-256 handoff hash of the immutable filed Response bytes."
+        },
+        "expectedDefinitionUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Optional pinned Definition URL that must match the verified record."
+        },
+        "expectedDefinitionVersion": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Optional pinned Definition version that must match the verified record.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        }
+      },
+      "examples": [
+        {
+          "responseId": "resp_01j9example0000000000000001",
+          "responseHash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          "expectedDefinitionUrl": "https://example.org/forms/org-report",
+          "expectedDefinitionVersion": "1.0.0"
+        }
+      ]
+    },
+    "ExactPinnedRecordReadResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Authorized, ADR 0170 byte-hash-verified exact filed Response returned for reviewer inspection.",
+      "required": [
+        "caseLedgerId",
+        "responseId",
+        "responseHash",
+        "definitionUrl",
+        "definitionVersion",
+        "canonicalResponse",
+        "pinnedReferences"
+      ],
+      "properties": {
+        "caseLedgerId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Authorized WOS case ledger URN through which this exact record was inspected."
+        },
+        "responseId": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Verified filed Response identifier.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "responseHash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Verified ADR 0170 SHA-256 handoff hash of the immutable canonical Response bytes."
+        },
+        "definitionUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Exact Definition URL of the verified Response."
+        },
+        "definitionVersion": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Exact Definition version of the verified Response.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "acceptedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Optional UTC RFC 3339 acceptance timestamp recorded by Source."
+        },
+        "subject": {
+          "$ref": "#/$defs/PinnedSubject",
+          "description": "Optional verified ADR 0172 subject identity of the filed Response."
+        },
+        "canonicalResponse": {
+          "$ref": "#/$defs/AcceptedResponse",
+          "description": "Exact canonical Response JSON preserving ADR 0170 decimal numbers."
+        },
+        "pinnedReferences": {
+          "type": "array",
+          "description": "Authorized pinned child/referenced Response summaries cited inside this Response's resolvedInstances[].",
+          "items": {
+            "$ref": "#/$defs/PinnedRecordReference"
+          }
+        }
+      },
+      "examples": [
+        {
+          "caseLedgerId": "urn:wos:example_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+          "responseId": "resp_01j9example0000000000000001",
+          "responseHash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          "definitionUrl": "https://example.org/forms/org-report",
+          "definitionVersion": "1.0.0",
+          "acceptedAt": "2026-11-27T12:00:00Z",
+          "canonicalResponse": {
+            "$formspecResponse": "1.0",
+            "id": "resp_01j9example0000000000000001",
+            "definitionUrl": "https://example.org/forms/org-report",
+            "definitionVersion": "1.0.0",
+            "status": "completed",
+            "data": {
+              "declaredAmount": 125.5
+            }
+          },
+          "pinnedReferences": []
+        }
+      ]
+    }
+  }
+}
